@@ -215,6 +215,12 @@ export type AggregateWindowResult = {
   last?: AggregateWindowEdge;
 };
 
+export type AppConcept = {
+  id: string;
+  title: string;
+  assets: AssetRef[];
+};
+
 export type AppEntry = {
   id: string;
   title: string;
@@ -268,6 +274,7 @@ export type Application = {
   pages: string[];
   groups?: AppGroup[];
   resources?: AssetRef[];
+  concepts?: AppConcept[];
 };
 
 export type ApplicationAgentBudget = {

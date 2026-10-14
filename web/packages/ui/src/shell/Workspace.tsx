@@ -142,8 +142,9 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
  * Tabs are grouped by application (ADR-0054 D1): each `layoutScope` has its own
  * remembered layout, swapped in when the scope changes; the recent/favorites memory is per `storageKey`; the active tab is in the URL.
  */
-export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, home, menus = [], commands = [], session, status, applications: appEntries, workspaces, rail, onActiveRoute, onEmpty, onLanguage, search }: {
+export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, menus = [], commands = [], session, status, applications: appEntries, workspaces, rail, onActiveRoute, onEmpty, onLanguage, search }: {
   product: string; productIcon?: ReactNode; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
+  navigation?: ReactNode;
   /** The application whose tabs are shown; its layout is remembered apart from the others'. */
   layoutScope?: string;
   /** The scope a route belongs to (undefined for the shell's own views, which open in any scope). */
@@ -631,9 +632,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
             {(!rail || compact) && sessionMenu}
           </div>
         </header>
-        <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen && nav.length > 0 ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
+        <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen && (nav.length > 0 || navigation) ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
           {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-0 z-20 bg-black/25" onClick={() => setMobileNavOpen(false)} />}
-          {nav.length > 0 && (!compact && navOpen || compact && mobileNavOpen) && (
+          {(nav.length > 0 || navigation) && (!compact && navOpen || compact && mobileNavOpen) && (
             <nav aria-label={t("Main")} className={cn("overflow-auto border-r border-border bg-surface p-2",
               compact && "fixed inset-y-9 left-0 z-30 w-[min(19rem,85vw)] shadow-lg")}>
               {nav.map((section) => (
@@ -651,6 +652,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
                   })}
                 </div>
               ))}
+              {navigation}
             </nav>
           )}
           <div className="platform-dock min-h-0 min-w-0 overflow-hidden">
@@ -751,7 +753,7 @@ function AppMenu({ applications, product, icon }: { applications: Applications; 
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger aria-label={t("Switch application")} className="flex h-7 min-w-0 max-w-64 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover max-sm:max-w-32 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted">
-        {current?.icon ?? icon ?? <LayoutGrid />}<span className="truncate">{current?.title ?? product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
+        {current?.icon ?? icon ?? <LayoutGrid />}<span className="truncate">{product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={4} className={cn(menuPanel, "max-h-[70vh] min-w-60 overflow-auto")}>

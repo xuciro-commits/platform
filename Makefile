@@ -107,7 +107,7 @@ test-go: ## 仅运行宿主测试；可用 PKG=./platform 或 RUN=TestName 缩�
 .PHONY: e2e
 e2e: ## 在开发宿主上运行 docs/Testing.md 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build
-	cd web && $(PNPM) --filter @platform/e2e e2e $(if $(SPEC),tests/$(SPEC).spec.ts)
+	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts)
 
 ## release - 版本发布（完整证据链；CI 在 v* 标签上运行同一检查）
 

@@ -1,10 +1,10 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, Disclosure, PageHeader, Select, StatusTag, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, PageHeader, Select, StatusTag, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { useApplicationScope } from "../projects/application-scope";
-import { resourceKinds, type ResourceKind } from "../projects/resources";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
+import { refKey, resourceKinds, resourceRef, type ResourceKind } from "../projects/resources";
 import { diagnose } from "./diagnostics";
 import { useRef, useState } from "react";
 import { MigrationWorkbench } from "./migration";
@@ -73,7 +73,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const builder = role("build") === "builder";
   const mayRelease = builder || role("build") === "publisher";
   const scope = useApplicationScope();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   const [kind, setKind] = useState<ReleaseKind>(initialKind);
   const [id, setId] = useState(initialID);
   const [review, setReview] = useState<Api.ReleasePreview>();
@@ -113,7 +113,10 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   };
   const [joint, setJoint] = useState<JointChoice[]>(() => initialDrafts.length && initialID ? merged([{ kind: initialKind, id: initialID }], initialDrafts) : initialDrafts);
   const [jointNote, setJointNote] = useState("");
-  const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20`, undefined, mayRelease);
+  const applications = useRecordInventory<Record & Api.Application>("build.app", 1000, builder);
+  const scopedApplication = scope ? applications.data?.records.find(item => item.id === scope) : undefined;
+  const held = new Set([...(scopedApplication?.resources ?? []).map(refKey), ...(scopedApplication?.pages ?? []).map(name => refKey({ app: "build", kind: "page", name }))]);
+  const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20${scopedApplication ? `&application=${encodeURIComponent(scopedApplication.name)}` : ""}`, undefined, mayRelease && (!scope || !!scopedApplication));
   const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess; // the host console answers only host administrators
   const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
   // What another environment promoted here and nobody activated yet: the
@@ -123,15 +126,13 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const query = useRecordInventory<Record>(selected.type, 1000, builder);
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
   const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
-  const applications = useRecordInventory<Record>("build.app", 1000, builder);
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
-  const records = query.isError ? [] : query.data?.records ?? [];
+  const records = (query.isError ? [] : query.data?.records ?? []).filter(record => !scope || (kind === "app" ? record.id === scope : !!scopedApplication && held.has(refKey(resourceRef(resourceKinds.find(item => item.kind === kind)!, record.name)))));
   const functionNames = (review?.included ?? []).filter((ref) => ref.app === "build" && ref.kind === "function").map((ref) => ref.name);
   const eligiblePlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
   const report = reports.isError ? undefined : reports.data?.records.find((item) => item.id === reportID);
   // The application a release review was opened from is the natural root of a
   // joint selection (ADR-0048 D1): its pages come before its own draft.
-  const scopedApplication = scope ? applications.data?.records.find((item) => item.id === scope) : undefined;
   const passedFunctions = (reports.isError ? [] : reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
   const evaluated = functionNames.every((name) => passedFunctions.includes(name));
   if (!mayRelease) {

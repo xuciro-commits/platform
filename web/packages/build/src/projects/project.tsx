@@ -1,25 +1,26 @@
-import { releaseDraftsValue } from "../releases/release";
-// Projects (ADR-0053 §5.1, ADR-0055 §2): the container of everything a builder
-// makes. A project is the host's Application (`build.app`); its tree lists what
-// it owns by the host's asset kinds, `+ New` creates a resource inside it, `Add
-// existing` brings one in, and its pages, navigation and header are its interface.
-import { ApplicationRuns, pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
+import { ReleaseReview, releaseDraftsValue } from "../releases/release";
+// ADR-0108: one application, five workspaces and builder-named concepts.
+// Membership, edits, candidates and runtime keep their original owners.
+import { ApplicationRuns, ApplicationRuntimePanel, pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, t, useUnsavedChanges, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
-import { Boxes, Braces, Database, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
+import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
 import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
-import { kindOfType, refKey, resourceGroups, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
+import { refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
-export const kindIcon: Record<string, ReactNode> = {
-  object: <Boxes />, "link-type": <Link2 />, "property-type": <Tags />, query: <Search />, page: <LayoutTemplate />, flow: <Workflow />, function: <Sparkles />, agent: <Sparkles />, "evaluation-set": <Sparkles />, compute: <Braces />,
-  connection: <Link2 />, source: <Database />, dataset: <Database />, pipeline: <Workflow />, writeback: <Link2 />, matching: <Layers />,
-};
+export { kindIcon } from "./resource-icons";
+import { kindIcon } from "./resource-icons";
+import { useProjectResources, type OwnedResource } from "./resource-inventory";
+export type { OwnedResource } from "./resource-inventory";
+import { assetDependencies, assetRoute, conceptTree, moveConceptAsset, studioArea, studioAreas, studioRoute } from "./studio-model";
+import { StudioTemplates } from "../workshop/template-ui";
+import { StudioGuide } from "./studio-guide";
 
 /** Every project the builder may open, with what each holds. */
 export function ProjectsList() {
@@ -35,15 +36,16 @@ export function ProjectsList() {
   const rows = (projects.data?.records ?? []).filter((project) => !project.archived && `${project.title} ${project.name}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid min-w-0 gap-4">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-xl font-semibold tracking-tight">{t("Projects")}</h1><p className="text-sm text-muted">{t("Projects organize drafts. Applications are delivered as one closed artifact.")}</p></div>
+      <div><h1 className="text-xl font-semibold tracking-tight">{t("Applications")}</h1><p className="text-sm text-muted">{t("Projects organize drafts. Applications are delivered as one closed artifact.")}</p></div>
       <div className="flex items-center gap-2">
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
-        {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
+        {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New application")}</Button>}
       </div>
     </div>
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
     {projects.isLoading && <p className="text-sm text-muted">{t("Loading…")}</p>}
-    {!projects.isLoading && !rows.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">{search ? t("No project matches.") : t("No projects yet. Create one to start building.")}</div>}
+    {projects.isError && <Notice tone="warning" role="alert" message={t("Applications could not be loaded.")} />}
+    {!projects.isError && !projects.isLoading && !rows.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">{search ? t("No project matches.") : t("No projects yet. Create one to start building.")}</div>}
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {rows.map((project) => <li key={project.id}>
         <Button variant="row" type="button" onClick={() => open({ view: "project", params: { id: project.id } })} className="grid w-full gap-2 border border-border bg-surface rounded-md p-4 text-left hover:border-primary focus-visible:outline-ring">
@@ -57,59 +59,14 @@ export function ProjectsList() {
   </div>;
 }
 
-export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; installed: boolean; missing: boolean };
-
-/** Inventories of every resource type, keyed by kind, resolved to the records a project names — and to
- * what the host has installed, so a published resource without a tenant draft is never called missing. */
-function useProjectResources(project?: Project) {
-  const { definitions } = useHost();
-  const inventories = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useRecordInventory<ResourceRecord>(kind.type)])) as Record<string, ReturnType<typeof useRecordInventory<ResourceRecord>>>;
-  const owned = useMemo(() => {
-    const items: OwnedResource[] = [];
-    if (!project) return items;
-    const installedKeys = new Set(definitions.map((d) => refKey(d.ref)));
-    const resolve = (kind: ResourceKindInfo, ref: Api.AssetRef, record: ResourceRecord | undefined, loaded: boolean): OwnedResource => {
-      const installed = installedKeys.has(refKey(ref));
-      const definition = installed ? definitions.find((d) => refKey(d.ref) === refKey(ref)) : undefined;
-      const title = record?.title ?? definition?.page?.title ?? definition?.entity?.title ?? definition?.query?.title ?? definition?.function?.title ?? ref.name;
-      return { kind, record, ref, title, installed, missing: !record && !installed && loaded };
-    };
-    const pages = inventories.page?.data?.records ?? [];
-    for (const name of project.pages ?? []) {
-      items.push(resolve(kindOfType("build.page")!, { app: "build", kind: "page", name }, pages.find((page) => page.name === name && !page.archived), inventories.page?.isSuccess === true));
-    }
-    for (const ref of project.resources ?? []) {
-      const kind = resourceKinds.find((item) => (item.ref ?? item.kind) === ref.kind);
-      if (!kind) continue;
-      const record = (inventories[kind.kind]?.data?.records ?? []).find((item) => !item.archived && refKey(resourceRef(kind, item.name)) === refKey(ref));
-      items.push(resolve(kind, ref, record, inventories[kind.kind]?.isSuccess === true));
-    }
-    return items;
-  }, [project, definitions, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
-  /** Records of every kind that exist but are not in the project yet: what "Add existing" offers. */
-  const available = useMemo(() => {
-    const held = new Set(owned.map((item) => refKey(item.ref)));
-    return resourceKinds.flatMap((kind) => (inventories[kind.kind]?.data?.records ?? []).filter((record) => !record.archived && record.name && !held.has(refKey(kind.kind === "page" ? { app: "build", kind: "page", name: record.name } : resourceRef(kind, record.name)))).map((record) => ({ kind, record })));
-  }, [owned, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
-  /** Object types other apps installed (the shared master data of `core`, HR's employees…): a project
-   * references them instead of defining its own (ADR-0058 A1). */
-  const shared = useMemo(() => {
-    const held = new Set(owned.map((item) => refKey(item.ref)));
-    return definitions.filter((d) => d.ref.kind === "object" && d.ref.app !== "build" && d.entity && !held.has(refKey(d.ref)))
-      .map((d) => ({ ref: d.ref, title: d.entity!.title || d.ref.name, app: d.ref.app }))
-      .sort((a, b) => (a.app === "core" ? 0 : 1) - (b.app === "core" ? 0 : 1) || a.title.localeCompare(b.title));
-  }, [owned, definitions]);
-  const loading = Object.values(inventories).some((inventory) => inventory.isLoading);
-  return { inventories, owned, available, shared, loading };
-}
-
 /** `+ New ▾`: create a resource and add it to the project in one step. */
-function NewResourceMenu({ onCreated, children, disabled }: { onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
+function NewResourceMenu({ onCreated, children, disabled, area }: { area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { role } = useHost();
   const creators = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (role("build") !== "builder") return null;
-  const commands: ContextCommand[] = resourceGroups.flatMap((group, index) => resourceKinds.filter((kind) => kind.group === group.id && creators[kind.kind]?.available)
-    .map((kind, at) => ({ id: kind.kind, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => creators[kind.kind]!.take() })));
+  const sections = area ? studioAreas.filter(section => section.id === area) : studioAreas;
+  const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && creators[kind.kind]?.available)
+    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => creators[kind.kind]!.take() })));
   return <>
     <ActionMenu label={t("New resource")} variant="primary" icon={<Plus />} commands={commands}>{children ?? t("New")}</ActionMenu>
     {Object.values(creators).map((creator, index) => <span key={index}>{creator.dialog}</span>)}
@@ -117,7 +74,8 @@ function NewResourceMenu({ onCreated, children, disabled }: { onCreated?: (kind:
 }
 
 /** The project home: resource tree, what changed, settings. */
-export function ProjectHome({ id }: { id: string }) {
+export function ProjectHome({ id, area, initialSelected, initialSection }: { id: string; area?: string; initialSelected?: string; initialSection?: string }) {
+  const activeArea = studioArea(area);
   const { client, decide, role, definitions, me } = useHost();
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
@@ -125,8 +83,13 @@ export function ProjectHome({ id }: { id: string }) {
   const { inventories, owned, available, shared, loading } = useProjectResources(project);
   const resourcesUnavailable = owned.some(resource => !resource.installed && inventories[resource.kind.kind]?.isError);
   const [filter, setFilter] = useState("");
-  const [selected, setSelected] = useState<string>();
-  const [tab, setTab] = useState<"resources" | "runs" | "roles" | "settings">("resources");
+  const [selected, setSelected] = useState<string | undefined>(initialSelected);
+  type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
+  const initialTab = initialSection === "concepts" ? "concepts" : activeArea === "verify" ? "release" : "resources";
+  const [tab, selectTab] = useState<Section>(initialTab);
+  const [visited, setVisited] = useState<Section[]>([initialTab]);
+  const visibleView = useViewVisible();
+  const setTab = (tab: Section) => { selectTab(tab); setVisited(old => old.includes(tab) ? old : [...old, tab]); };
   const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
@@ -246,34 +209,25 @@ export function ProjectHome({ id }: { id: string }) {
   const addExisting = (kind: ResourceKindInfo, record: ResourceRecord) => latestProject.current
     ? patch(changesForResource(latestProject.current, kind, record), latestProject.current.revision) : Promise.resolve(false);
   const installed = definitions.find((d) => d.ref.app === "build" && d.ref.kind === "app" && d.ref.name === project?.name);
-  const visible = owned.filter((item) => `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
-  const current = owned.find((item) => refKey(item.ref) === selected);
+  const areaKinds = studioAreas.find(area => area.id === activeArea)!.kinds as readonly string[];
+  const visible = owned.filter(item => (tab === "concepts" || areaKinds.includes(item.ref.kind)) && `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
+  const current = owned.find(item => refKey(item.ref) === selected || item.record?.id === selected || item.ref.name === selected);
+  const selectedKey = current ? refKey(current.ref) : selected;
   if (!project) return <WorkbenchFrame title={t("Project")}>{query.isError ? t("The project could not be loaded.") : t("Loading…")}</WorkbenchFrame>;
   const statusOf = (item: OwnedResource) => item.record ? (item.record.state === "published" ? undefined : t("draft")) : item.installed ? t("published") : item.missing ? t("missing") : undefined;
   const tree = <div className="grid min-w-0 content-start">
-    <div className="p-2"><Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
-    {resourceGroups.map((group) => {
-      const kinds = resourceKinds.filter((kind) => kind.group === group.id);
-      const items = visible.filter((item) => kinds.includes(item.kind));
-      if (!items.length && filter && group.id !== "interface") return null;
-      return <PanelSection key={group.id} title={t(group.label)}>
-        {group.id === "interface" && <StructureRow icon={<Layers />} label={t("Navigation and header")} meta={project.groups?.length || undefined} onClick={() => open({ view: "module", params: { id: project.id, application: project.id } })} />}
-        {kinds.map((kind) => {
-          const rows = items.filter((item) => item.kind === kind);
-          if (!rows.length) return null;
-          return <div key={kind.kind} className="grid">
-            <StructureRow icon={kindIcon[kind.kind]} label={t(kind.plural)} meta={rows.length} className="font-medium" />
-            {rows.map((item) => <StructureRow key={refKey(item.ref)} depth={1} label={item.title} selected={selected === refKey(item.ref)} meta={statusOf(item)}
-              onClick={() => { setSelected(refKey(item.ref)); setTab("resources"); if (item.record) open(resourceRoute(item.kind, item.record.id, project.id)); else if (item.installed && item.kind.kind === "object") open({ view: "object-type", params: { object: item.ref.name, application: project.id } }); }} />)}
-          </div>;
-        })}
-        {!items.length && group.id !== "interface" && <p className="px-2 text-[11px] text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
-      </PanelSection>;
-    })}
+    <div className="p-2"><Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} value={filter} onChange={event => setFilter(event.target.value)} /></div>
+    {conceptTree(project, visible).map(group => <PanelSection key={group.id} title={group.title}>
+      {group.items.map(item => <StructureRow key={refKey(item.ref)} icon={kindIcon[item.kind.kind]} label={item.title} selected={selectedKey === refKey(item.ref)} meta={statusOf(item)} onClick={() => setSelected(refKey(item.ref))} />)}
+    </PanelSection>)}
+    {!visible.length && <p className="p-3 text-xs text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
   </div>;
+  const conceptPatch = (concepts: Api.AppConcept[]) => patch({ concepts });
+  const locked = saving || dirty || !!pendingPatch || !!createdResource;
+  const dependencies = current ? assetDependencies(current.ref, definitions) : undefined;
   const header = installed?.application?.pages.find((name) => definitions.some((d) => d.ref.app === "build" && d.ref.kind === "page" && d.ref.name === name));
   return <>
-    <Workbench storageKey="project" crumbs={[{ label: t("Projects"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
+    <Workbench storageKey="project" crumbs={[{ label: t("Applications"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
@@ -294,10 +248,9 @@ export function ProjectHome({ id }: { id: string }) {
           {shared.length > 0 && <optgroup label={t("Shared object types (platform and other apps)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app}</option>)}</optgroup>}
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
-        {builder && <NewResourceMenu disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
+        {builder && <NewResourceMenu area={activeArea} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
         {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
       </>}
-      left={{ label: t("Project resources"), content: tree }}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {resourcesUnavailable && <Notice tone="warning" role="alert" message={t("Some project assets are unreadable. Membership and release selection must not be inferred from an empty inventory.")} />}
@@ -307,17 +260,32 @@ export function ProjectHome({ id }: { id: string }) {
         {createdResource && !pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
           <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
             <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>}
-        <div role="tablist" aria-label={t("Project sections")} className="flex gap-1 border-b border-border px-3 pt-2">
-          {(["resources", "runs", "roles", "settings"] as const).map((item) => <Button variant="row" key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)}
-            className={"rounded-t border-b-2 px-3 py-1.5 text-sm " + (tab === item ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{t(item === "resources" ? "Overview" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
+        <div role="tablist" aria-label={t("Application workspaces")} className="flex flex-wrap gap-1 border-b border-border px-3 py-2">
+          {studioAreas.map(item => <Button variant={activeArea === item.id ? "primary" : "ghost"} key={item.id} role="tab" aria-selected={activeArea === item.id} onClick={() => open(studioRoute(id, item.id, selected))}>{t(item.title)}</Button>)}
         </div>
+        <div role="tablist" aria-label={t("Project sections")} className="flex flex-wrap gap-1 border-b border-border px-3 py-1">
+          {(["resources", ...(activeArea === "verify" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => <Button variant="ghost" size="sm" key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
+        </div>
+        {tab === "resources" && <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-xs">
+          <strong>{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
+          {activeArea === "model" && <Button size="sm" onClick={() => open({ view: "object-type", params: { application: id } })}>{t("Open business model")}</Button>}
+          {activeArea === "interface" && <><Button size="sm" onClick={() => open({ view: "module", params: { id, application: id } })}>{t("Navigation and header")}</Button><Button size="sm" disabled={locked} onClick={() => setTab("templates")}>{t("New page from template…")}</Button></>}
+        </div>}
         {tab === "resources" && <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="grid content-start gap-4">
+            <div role="region" aria-label={t("Workspace assets")} className="rounded-md border border-border">{tree}</div>
             {current ? <div className="rounded-md border border-border p-4">
               <div className="flex items-center gap-2">{kindIcon[current.kind.kind]}<h2 className="min-w-0 flex-1 truncate font-semibold">{current.title}</h2><DraftStatus state={current.record?.state} /></div>
               <p className="mt-1 text-xs text-muted">{t(current.kind.label)} · {current.ref.name}</p>
               {!current.record && current.installed && <p className="mt-2 text-xs text-muted">{t("Published and in use, but this tenant holds no draft of it: it was defined in code or by another tenant. It is part of the release as it is.")}</p>}
               {current.missing && <p className="mt-2 text-xs text-danger">{t("Listed in the project, but nothing by this name exists. Remove it, or create it with New (same name) and it is picked up.")}</p>}
+              {current.ref.kind === "object" && current.record && <div className="mt-2 flex flex-wrap gap-1">
+                {(["actions", "lifecycle", "constraints", "sets", "data"] as const).map(section => <Button size="sm" variant="ghost" key={section} onClick={() => open({ view: "object-type", params: { id: current.record!.id, application: id, tab: section } })}>{t(section === "actions" ? "Actions and rules" : section === "lifecycle" ? "States" : section === "constraints" ? "Business constraints" : section === "sets" ? "Record sets" : "Record samples")}</Button>)}
+              </div>}
+              {dependencies && <div className="mt-2 grid gap-2 text-xs">
+                {[{ title: "Uses", refs: dependencies.requires }, { title: "Used by", refs: dependencies.usedBy }].map(group => <div key={group.title}><strong>{t(group.title)}</strong><div className="flex flex-wrap gap-1">{group.refs.map(ref => <Button key={refKey(ref)} size="sm" variant="ghost" onClick={() => open(assetRoute(ref, owned, definitions, id))}>{ref.name}</Button>)}</div></div>)}
+                {!current.installed && <p className="text-muted">{t("Draft dependencies are checked by the release owner. Published links use declared dependencies.")}</p>}
+              </div>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
                 {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}
@@ -346,12 +314,41 @@ export function ProjectHome({ id }: { id: string }) {
                 {resourceKinds.map((kind) => { const n = owned.filter((item) => item.kind === kind).length; return n ? <div key={kind.kind} className="contents"><dt className="text-muted">{t(kind.plural)}</dt><dd className="text-right">{n}</dd></div> : null; })}
               </dl>
             </div>
+            <div role="region" aria-label={t("Application progress")} className="rounded-md border border-border p-3 text-xs">
+              <h3 className="font-semibold">{t("Application progress")}</h3>
+              <p className="mt-2">{t("{models} models · {pages} pages · {drafts} unpublished assets", { models: owned.filter(item => item.ref.kind === "object").length, pages: owned.filter(item => item.ref.kind === "page").length, drafts: unpublished.length })}</p>
+              <p>{t("{count} missing assets", { count: problems.length })}</p>
+              <p className="mt-2 text-muted">{t("The release owner checks model completeness, rules and page bindings before delivery.")}</p>
+              <Button size="sm" className="mt-2" onClick={() => open(studioRoute(id, "verify", selected))}>{t("Verify application")}</Button>
+            </div>
             <div className="rounded-md border border-border p-3 text-xs text-muted">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Release")}</h3>
               <p className="mt-2">{installed ? t("A published version is in the Applications portal. Saved edits remain drafts until the next release.") : t("Not published yet. Publish reviews every draft in this project and activates them together.")}</p>
             </div>
           </aside>
         </div>}
+        {tab === "concepts" && <div className="grid gap-3 p-4" role="region" aria-label={t("Business concepts")}>
+          <p className="text-xs text-muted">{t("Name groups in your business vocabulary. Moving an asset changes navigation only.")}</p>
+          {(project.concepts ?? []).map((group, at) => <div key={group.id} className="grid gap-2 rounded-md border border-border p-3">
+            <div className="flex flex-wrap gap-2"><ConceptTitle group={group} disabled={!builder || locked} onRename={title => conceptPatch(project.concepts!.map(item => item.id === group.id ? { ...item, title } : item))} />
+              <Button size="sm" variant="ghost" aria-label={t("Move concept up")} disabled={!builder || locked || at === 0} onClick={() => { const groups = [...project.concepts!]; [groups[at - 1], groups[at]] = [groups[at]!, groups[at - 1]!]; conceptPatch(groups); }}><ArrowUp /></Button>
+              <Button size="sm" variant="ghost" aria-label={t("Move concept down")} disabled={!builder || locked || at === project.concepts!.length - 1} onClick={() => { const groups = [...project.concepts!]; [groups[at], groups[at + 1]] = [groups[at + 1]!, groups[at]!]; conceptPatch(groups); }}><ArrowDown /></Button>
+              <Button size="sm" variant="ghost" aria-label={t("Remove concept")} disabled={!builder || locked} onClick={() => conceptPatch(project.concepts!.filter(item => item.id !== group.id))}><Trash2 /></Button>
+            </div>
+            <p className="text-xs text-muted">{group.assets.map(ref => owned.find(item => refKey(item.ref) === refKey(ref))?.title).filter(Boolean).join(" · ") || t("No assets in this concept.")}</p>
+          </div>)}
+          {builder && <Button size="sm" disabled={locked || (project.concepts?.length ?? 0) >= 100} onClick={() => conceptPatch([...(project.concepts ?? []), { id: crypto.randomUUID(), title: t("New business concept"), assets: [] }])}><Plus />{t("Add business concept")}</Button>}
+          <div className="rounded-md border border-border">{tree}</div>
+          {current && <label className="grid gap-1 text-xs">{t("Move {asset} to concept", { asset: current.title })}<Select aria-label={t("Business concept for selected asset")} value={project.concepts?.find(group => group.assets.some(ref => refKey(ref) === selectedKey))?.id ?? ""} disabled={!builder || locked} onChange={event => conceptPatch(moveConceptAsset(project.concepts ?? [], current.ref, event.target.value))}>
+            <option value="">{t("Default business namespace")}</option>{project.concepts?.map(group => <option key={group.id} value={group.id}>{group.title}</option>)}
+          </Select></label>}
+        </div>}
+        {visited.includes("guide") && <div hidden={tab !== "guide"}><ViewVisibilityContext.Provider value={visibleView && tab === "guide"}><StudioGuide project={project} owned={owned} disabled={saving || !!pendingPatch || !!createdResource} intent={settings?.description ?? project.description ?? ""} onIntent={description => settings && editSettings({ ...settings, description })} onCreated={(kind, target) => void addCreated(kind, target)} /></ViewVisibilityContext.Provider></div>}
+        {visited.includes("templates") && <div hidden={tab !== "templates"} className="p-4"><ViewVisibilityContext.Provider value={visibleView && tab === "templates"}><StudioTemplates onCreated={target => void addCreated(resourceKinds.find(kind => kind.kind === "page")!, target)} /></ViewVisibilityContext.Provider></div>}
+        {visited.includes("release") && <div hidden={tab !== "release"}><ViewVisibilityContext.Provider value={visibleView && tab === "release"}><div className="grid gap-4 p-4" role="region" aria-label={t("Verification and delivery")}>
+          {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
+          <ReleaseReview initialKind="app" initialID={id} initialDrafts={importedDependencies} embedded />
+        </div></ViewVisibilityContext.Provider></div>}
         {tab === "runs" && <ApplicationRuns owner="build" name={project.name} />}
         {tab === "roles" && <ProjectRoles owned={owned} />}
         {tab === "settings" && settings && <fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
@@ -418,6 +415,16 @@ export function ProjectHome({ id }: { id: string }) {
         return confirmed;
       }} />}
   </>;
+}
+
+function ConceptTitle({ group, disabled, onRename }: { group: Api.AppConcept; disabled: boolean; onRename: (title: string) => Promise<boolean> }) {
+  const input = useDraftInput(`concept:${group.id}`, group.title);
+  const rename = async () => {
+    const title = input.text.trim();
+    if (!title || input.problem) return;
+    if (title === group.title || await onRename(title)) input.clear();
+  };
+  return <label className="grid min-w-0 flex-1 gap-1"><Input aria-label={t("Business concept title")} value={input.text} aria-invalid={!!input.problem} disabled={disabled} onChange={event => input.write(event.target.value, event.target.value.trim() ? "" : t("A business concept needs a title."))} onBlur={() => void rename()} />{input.problem && <span role="alert" className="text-xs text-danger">{input.problem}</span>}</label>;
 }
 
 function WorkbenchFrame({ title, children }: { title: string; children: ReactNode }) {

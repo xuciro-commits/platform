@@ -171,3 +171,9 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复；`TestJournalBooksFromBuilderActions` 检查账簿待过账恢复及冲销落盘后丢应答的重试；`TestJournalConcurrentOpen` 检查四个宿主同时初始化同一个测试库。测试地址不含密码，凭据仍通过受控密钥提供。
 
 全量 `make e2e` 现在就是上面 8 条路线；哪条过时就修哪条，不再有"遗留路线"。
+
+### 应用设计台（ADR-0108）
+
+工程验证：`make check`；`make test-go PKG='./platform ./apps/build'`；`make test-go PKG=. RUN='TestApplicationStudio|TestLanguages|TestAPIContract|TestJointDraft'`。分组测试核对非应用资产定义的完整字节、声明依赖、用户权限、应用候选分页以及日志重放/快照恢复。浏览器主线：`PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-studio`，在同一应用创建对象/状态动作、保留跨工作区草稿、装配页面、移动业务分组并联合发布；原 `workspaces` 和 `application-delivery` 用于导航与运行回归。
+
+人工走查：由非平台开发者从一个业务意图开始，完成模型、行为、页面、验证与交付，再自由切换五个工作区，检查资产分组词汇、依赖入口、草稿恢复和窄屏操作。记录实际任务、断点与结论；尚未完成，ADR-0108 保持“体验待验收”。截图与自动发布路线不替代该走查。

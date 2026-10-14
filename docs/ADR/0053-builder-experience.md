@@ -1,6 +1,6 @@
 # ADR-0053：构建体验重做 —— Projects、Ontology Manager、Workshop、Automate 作为一个产品
 
-**状态：** 已接受，2026-10-06。本 ADR 是**构建者（builder）侧产品结构与交互的唯一现行权威**，覆盖 Build 投影下的全部编辑器；它取代 ADR-0046 §4–§7 的页面编辑器交互描述、ADR-0047 §8 的工作区编辑说明以及 ADR-0040 的"语义构建器"交互部分（三者的数据契约与运行时语义仍有效，见 §9）。Shell、Applications 门户、三种投影归 [ADR-0052](0052-foundry-aligned-platform-experience.md)，本 ADR 不改它们。
+**状态：** 已接受，2026-10-06。本 ADR 是**构建者（builder）侧产品结构与交互的唯一现行权威**，覆盖 Build 投影下的全部编辑器；它取代 ADR-0046 §4–§7 的页面编辑器交互描述、ADR-0047 §8 的工作区编辑说明以及 ADR-0040 的"语义构建器"交互部分（三者的数据契约与运行时语义仍有效，见 §9）。Shell、Applications 门户、三种投影归 [ADR-0052](0052-foundry-aligned-platform-experience.md)，本 ADR 不改它们。 构建者内部按资产类型组织的导航骨架已由 [ADR-0108](0108-application-studio.md) 取代；原编辑器与 Shell/门户/权限/页签模型继续有效。
 
 ---
 

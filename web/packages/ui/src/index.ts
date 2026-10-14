@@ -79,7 +79,7 @@ export {RecordTimeline,type TimelineFields} from "./records/RecordTimeline";
 export {RecordKanban,type KanbanLane,type KanbanMove} from "./records/RecordKanban";
 export { humanizeKernelError } from "./lib/errors";
 
-export { useViewVisible } from "./shell/ViewVisibility";
+export { useViewVisible, ViewVisibilityContext } from "./shell/ViewVisibility";
 
 export {Spacer,RegionPresentation,LayoutRegion,LayoutStack,type LayoutSize} from "./layout/LayoutRegion";
 

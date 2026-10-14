@@ -82,7 +82,7 @@ type SavedReleaseReview struct {
 	PromotedTo           []PromotionTarget        `json:"promotedTo,omitempty"`
 }
 
-func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePage, error) {
+func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application ...string) (ReleasePage, error) {
 	if err := t.admits(m); err != nil {
 		return ReleasePage{}, err
 	}
@@ -96,6 +96,23 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePag
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	ids := t.releases.ids()
+	if len(application) > 0 && application[0] != "" {
+		ref := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: application[0]}
+		filtered := make([]string, 0, len(ids))
+		for _, id := range ids {
+			candidate, err := t.releases.candidate(id)
+			if err != nil {
+				return ReleasePage{}, err
+			}
+			for _, asset := range candidate.Assets {
+				if asset.Ref == ref {
+					filtered = append(filtered, id)
+					break
+				}
+			}
+		}
+		ids = filtered
+	}
 	reply := ReleasePage{Candidates: []ReleaseSummary{}, Total: len(ids), ActiveID: t.releases.active}
 	start := min(offset, len(ids))
 	for _, id := range ids[start : start+min(limit, len(ids)-start)] {

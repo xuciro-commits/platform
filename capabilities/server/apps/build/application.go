@@ -31,9 +31,10 @@ type Application struct {
 	Pages       []string                         `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
 	// Groups are the headings of its navigation (17b); a page in none of them
 	// sits under the application's own name.
-	Resources []platform.AssetRef `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
-	Groups    []Group             `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
-	State     string              `json:"state" field:"readonly" choices:"draft,published"`
+	Resources []platform.AssetRef   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
+	Concepts  []platform.AppConcept `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
+	Groups    []Group               `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
+	State     string                `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the application as it was last handed over: what people open,
 	// and what a restore puts back.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -47,6 +48,9 @@ func (b *Build) applicationEntity() platform.Entity {
 				return nil
 			}
 			a := record.(*Application)
+			if err := applicationDescriptor(*a).CheckConcepts(); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
 			d := platform.PageDocument{UIProfile: platform.PageUIProfile(), Variables: a.Variables}
 			if err := d.NormalizePageRules(); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -104,7 +108,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
+	return platform.Application{Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
 }
 
 // checkApplication refuses an application people could not open: a name that is

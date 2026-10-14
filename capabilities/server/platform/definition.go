@@ -296,6 +296,9 @@ type Application struct {
 	// Resources are shared owner references included in the release closure.
 	// Pages remain the sole navigation list; membership grants no permissions.
 	Resources []AssetRef `json:"resources,omitempty"`
+	// Concepts organize the studio tree only. They never add dependencies,
+	// change asset ownership, or grant access to a grouped asset.
+	Concepts []AppConcept `json:"concepts,omitempty"`
 }
 
 // CheckResources checks explicit non-navigation resource membership. Assets
@@ -322,7 +325,7 @@ func (a Application) CheckResources() error {
 		}
 		seen[ref] = true
 	}
-	return nil
+	return a.CheckConcepts()
 }
 
 // Dependencies is the single application closure path for discovery and

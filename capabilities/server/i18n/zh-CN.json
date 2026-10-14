@@ -1889,5 +1889,13 @@
   "The submission schema content version is invalid": "提交的定义版本声明无效",
   "The schema version is unknown or belongs to another family; refresh definitions": "定义版本未知或属于不同的兼容族，请刷新定义",
   "Application profile": "应用容量声明",
-  "Expected records and runs, retention and recovery declarations; actual guarantees require environment evidence": "预期记录与运行规模、保留与恢复声明；实际保证需要环境演练证据"
+  "Expected records and runs, retention and recovery declarations; actual guarantees require environment evidence": "预期记录与运行规模、保留与恢复声明；实际保证需要环境演练证据",
+  "Business concepts": "业务概念",
+  "Named studio groups; grouping changes navigation only": "命名的设计台分组；分组只改变导航",
+  "Application name; filter candidates before pagination": "应用标识；分页前筛选候选",
+  "application concepts exceed 100 groups": "应用业务概念不能超过 100 组",
+  "application concepts need unique nonempty IDs of at most 128 bytes": "应用业务概念须有唯一且非空的标识，最多 128 字节",
+  "application concepts need a title of at most 512 bytes": "应用业务概念须有名称，最多 512 字节",
+  "concept assets must be unique resources, not application roots": "概念资产须为不重复的资源，不能引用应用根",
+  "application concepts exceed 1000 grouped assets": "应用分组资产不能超过 1000 项"
 }

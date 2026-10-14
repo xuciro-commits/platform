@@ -4,17 +4,17 @@
 // it. The ReleaseReview keeps the host dialogue (preview, candidate, upgrade,
 // activation); this view is the way in and the place to pick the set.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, PageHeader, Tag, cn, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
+import { Button, PageHeader, Tag, cn, t, useUnsavedChanges } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { PackageCheck } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useApplicationScope } from "../projects/application-scope";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { kindIcon } from "../projects/project";
 import { refKey, resourceRef, resourceKinds, resourceRoute, type ResourceRecord } from "../projects/resources";
 import { ReleaseReview, releaseKinds, type ReleaseKind } from "./release";
 
 export function Changes({ initialKind, initialID }: { initialKind?: string; initialID?: string }) {
-  const { role } = useHost(), { open } = useWorkspace();
+  const { role } = useHost(), { open } = useApplicationWorkspace();
   const scope = useApplicationScope();
   const { confirmDiscard } = useUnsavedChanges(false, () => {});
   const application = useReadQuery<{ record: Api.Application }>(`/v1/records/build.app/${encodeURIComponent(scope ?? "")}`, undefined, !!scope);

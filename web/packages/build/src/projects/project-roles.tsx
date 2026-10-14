@@ -1,5 +1,6 @@
 import { useHost } from "@platform/app";
-import { Button, Checkbox, Select, t, useWorkspace } from "@platform/ui";
+import { Button, Checkbox, Select, t } from "@platform/ui";
+import { useApplicationWorkspace } from "./application-scope";
 import { useMemo } from "react";
 import type { Access, ObjectRecord } from "../ontology/object-model";
 import type { OwnedResource } from "./project";
@@ -12,7 +13,7 @@ const levels = ["all", "below", "unit", "own", "none"] as const;
 
 export function ProjectRoles({ owned }: { owned: OwnedResource[] }) {
   const host = useHost();
-  const { open } = useWorkspace();
+  const { open } = useApplicationWorkspace();
   const objects = useMemo(() => owned.filter((item) => item.kind.kind === "object" && item.record).map((item) => ({ item, record: item.record as unknown as ObjectRecord })), [owned]);
   const roles = useMemo(() => [...new Set(objects.flatMap(({ record }) => (record.access ?? []).map((a) => a.role)))].sort(), [objects]);
   const can = host.can("build.object.edit");

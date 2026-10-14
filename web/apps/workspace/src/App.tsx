@@ -118,7 +118,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
   const surface = app?.surface ?? "work";
-  const studioApplicationID = activeRoute?.view === "application" ? activeRoute.params?.id : activeRoute?.params?.application;
+  const studioApplicationID = activeRoute?.view === "project" || activeRoute?.view === "module" && activeRoute.params?.id ? activeRoute.params?.id : activeRoute?.params?.application;
   const studioApplication = studioApplications.find((record) => !record.archived && record.id === studioApplicationID);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   // Navigation and the destructive-switch guard must agree on one owner,
@@ -250,13 +250,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         workspaces={{ options: held.map((id) => ({ id, title: projections.find((p) => p.id === id)!.title(), icon: projectionIcon[id] })), current: projection, onSelect: chooseProjection }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute} onEmpty={() => setActiveRoute(undefined)}
+        navigation={app?.navigation?.(activeRoute)}
         nav={[
-          ...(surface === "studio" && host.role("build") === "builder" ? [{ label: t("Projects"), items: [
-            { label: t("All projects"), icon: <LayoutGrid />, route: { view: "projects", params: { surface: "studio" } } },
-            ...studioApplications.filter((record) => !record.archived)
-              .map((record) => ({ label: record.title || record.name, icon: <Hammer />, route: { view: "project", params: { id: record.id, surface: "studio" } } })),
-          ] }] : []),
-          ...(app?.nav(host) ?? []),
+          ...(app?.nav(host, activeRoute) ?? []),
           ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: t("Dashboards"), items: app.dashboards.filter((d) => !d.for || d.for(host))
             .map((d) => ({ label: d.title, icon: <Gauge />, route: { view: "dashboard", params: { app: app.id, id: d.id } } })) }] : []),
           ...((app?.surface ?? "work") === "work" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),

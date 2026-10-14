@@ -106,7 +106,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder and publisher saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}}, Answer: ReleasePage{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder and publisher saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}, {"application", "Application name; filter candidates before pagination"}}, Answer: ReleasePage{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := 0, 20
 		for name, target := range map[string]*int{"offset": &offset, "limit": &limit} {
 			if raw := r.URL.Query().Get(name); raw != "" {
@@ -122,7 +122,7 @@ func (h *Host) routesBuild(rt *routes) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		answer, err := t.SavedReleases(m, offset, limit)
+		answer, err := t.SavedReleases(m, offset, limit, r.URL.Query().Get("application"))
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return

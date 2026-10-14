@@ -194,7 +194,7 @@ export const entries: CatalogEntry[] = [
 export const api = [
   "iconGlyphs", "iconGroups",
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",
-  "useDraftInput", "useInputBuffers", "useInputDrafts", "defineEntity", "columnsFor", "recordSchema", "inputIssues", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "useViewTitle", "useUnsavedChanges", "notify",
+  "useDraftInput", "useInputBuffers", "useInputDrafts", "defineEntity", "columnsFor", "recordSchema", "inputIssues", "activeValues", "applyFilters", "valueOf", "useWorkspace", "useViewCall", "useViewVisible", "ViewVisibilityContext", "useViewTitle", "useUnsavedChanges", "notify",
   "routeKey", "routeToHash", "routeFromHash", "layeredLayout", "laneBands", "relationLayout", "relationLayouts", "neighborhoodPositions", "relationNodeSize",
   "arrangeFlow", "useFlowArrangement", "useCanvasLayout",
   "relationNodeClasses", "relationNodeClassOf", "relationNodeCaption",

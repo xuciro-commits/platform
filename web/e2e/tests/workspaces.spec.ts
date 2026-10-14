@@ -65,7 +65,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
 
   await switchWorkspace(page, "Builder");
-  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("Builder");
+  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("WMS entry probe");
   await page.goto(`/#/project?id=${appID}`); // preserve the supported old deep link
   await editor.release();
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
@@ -81,8 +81,8 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await switchWorkspace(page, "Runs");
   await expect(nav.getByRole("button", { name: "Workflow runs", exact: true })).toBeVisible();
   await switchWorkspace(page, "Builder");
-  await nav.getByRole("button", { name: "Release history", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Release review", exact: true })).toBeVisible();
+  await nav.getByRole("button", { name: "Verify", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Verification and delivery", exact: true })).toBeVisible();
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("tenant-operations.png"), fullPage: true });
 
   // The ordinary operator receives the released application, sees native

@@ -158,7 +158,7 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
  <div className="grid gap-3">
  {pending&&<p role="status" className="text-xs text-warning">{t("Creation is awaiting confirmation. Retry the original target and values; editing the ID could create another record.")}</p>}
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
- {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}<GeneratedForm type={type} submitLabel={pending?t("Retry confirmation"):t("Create")} locked={pending} onCancel={onClose} onBusy={setSubmitting} issues={issues} onSubmit={async values=>{
+ {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}<GeneratedForm type={type} initial={initial} submitLabel={pending?t("Retry confirmation"):t("Create")} locked={pending} onCancel={onClose} onBusy={setSubmitting} issues={issues} onSubmit={async values=>{
    request.current??={target:{...target},values:structuredClone(values),revision:options.expectedRevision};
    const submitted=request.current;let reason="";setPending(true);
    const ok=!!submitted.target.id&&await decide(declared.schema,submitted.target,submitted.values,{...options,expectedRevision:submitted.revision,onRefused:message=>{reason=message;}});
@@ -205,10 +205,13 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
  * dialog that takes the chosen one. */
 export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void) {
   const { catalog } = useHost();
-  const [taking, setTaking] = useState<ActionDeclaration>();
+  const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown> }>();
   const offered = catalog.filter((a) => a.target === type && a.new);
-  const dialog = taking ? <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
-  return { offered, available: offered.length > 0, take: (schema?: string) => setTaking(schema ? offered.find((a) => a.schema === schema) : offered[0]), dialog };
+  const dialog = taking ? <ActionDialog declared={taking.declared} initial={taking.initial} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  return { offered, available: offered.length > 0, take: (schema?: string, initial?: Record<string, unknown>) => {
+    const declared = schema ? offered.find(action => action.schema === schema) : offered[0];
+    setTaking(declared ? { declared, initial: initial && structuredClone(initial) } : undefined);
+  }, dialog };
 }
 
 /** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
