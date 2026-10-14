@@ -1,4 +1,10 @@
 {
+  "DefinitionVersion": "定义版本",
+  "Evaluated function version": "被评测的函数版本",
+  "Evaluation set name": "评测集名称",
+  "EvaluationSet": "评测集",
+  "Freeze the synthetic cases and thresholds against one published function version.": "针对一个已发布的函数版本封存合成用例与验收阈值。",
+  "Publish evaluation set": "发布评测集",
   "Business time selects either an instant or all versions": "业务时间必须选择一个时点或全部版本",
   "Business time must be captured before reading versioned data": "读取带版本数据前必须固定业务时间",
   "Business version preparation requires a record": "业务版本准备需要一条记录",

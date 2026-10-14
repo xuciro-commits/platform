@@ -53,6 +53,14 @@ type AIUsage struct {
 
 type AIDefaults struct{ People, Agents, PerMinute int }
 
+// AIQuota is an original owner counter/limit projection, not an app quota.
+type AIQuota struct {
+	DailyTokens int `json:"dailyTokens"`
+	UsedTokens  int `json:"usedTokens"`
+	PerMinute   int `json:"perMinute"`
+	UsedCalls   int `json:"usedCalls"`
+}
+
 type AITotal struct {
 	Day    string  `json:"day"`
 	Member string  `json:"member"`

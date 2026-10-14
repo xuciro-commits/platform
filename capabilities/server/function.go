@@ -140,13 +140,18 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	x := t.planModelRequest(c, r, q, pending)
 	var ask modelAsk
 	_ = json.Unmarshal([]byte(x.Body), &ask)
-	call := platform.FunctionCall{Definition: definition, Dependencies: candidate.ID, Model: ask.Model, InputHash: hash, Sources: sources, Source: sourceRef, Version: version, Release: release}
+	applications, err := t.bindApplications(platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: f.Name}, release, candidate.ID)
+	if err != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function dependencies cannot be bound")
+	}
+	call := platform.FunctionCall{Applications: applications, Definition: definition, Dependencies: candidate.ID, Model: ask.Model, InputHash: hash, Sources: sources, Source: sourceRef, Version: version, Release: release}
 	if ask.Model == "" {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function needs a bound model")
 	}
 	ask.Function = &functionBinding{Owner: owner, Definition: f, Call: call, Member: member.ID}
 	body, _ := json.Marshal(ask)
 	x.Body = string(body)
+	x.Applications = applications
 	return call, x, nil
 }
 

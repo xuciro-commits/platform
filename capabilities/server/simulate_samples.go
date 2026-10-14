@@ -70,6 +70,15 @@ func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samp
 	owners := map[string]bool{}
 	for _, asset := range candidate.Assets {
 		selected[asset.Ref] = true
+		if asset.Ref.Kind == platform.AssetFlow {
+			var descriptor platform.FlowReleaseDescriptor
+			if json.Unmarshal(asset.Body, &descriptor) != nil {
+				return environment, fmt.Errorf("flow descriptor is invalid")
+			}
+			if descriptor.Native {
+				return environment, fmt.Errorf("native flow %s needs an isolated owner test fixture", asset.Ref)
+			}
+		}
 		if asset.Ref.App != "build" {
 			owners[asset.Ref.App] = true
 		}

@@ -162,6 +162,12 @@ for (const fixture of fixtures) {
       expect(instance.record.release).toBe(release);
       expect(instance.record.version).toBe(3);
       expect(instance.record.state).toBe("waiting");
+      // A measured reply is accepted before the Flow owner's next tick
+      // consumes it. Wait for that original owner to create the review task.
+      await expect.poll(async () => {
+        const current = await (await request.get(instanceURL, { headers })).json() as { record: { tokens: { waits?: string }[] } };
+        return current.record.tokens.some(token => token.waits === "ask");
+      }, { timeout: 20_000 }).toBe(true);
       await page.goto("/#/inbox");
       const review = page.getByRole("listitem").filter({ hasText: source });
       await expect(review).toBeVisible();

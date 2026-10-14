@@ -96,6 +96,7 @@ type ApplicationRole struct {
 type ApplicationBinding struct {
 	Ref        AssetRef `json:"ref"`
 	Kind       string   `json:"kind"`
+	Name       string   `json:"name,omitempty"`
 	Credential bool     `json:"credential,omitempty"`
 }
 
@@ -136,7 +137,7 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 			artifact.Pages = append(artifact.Pages, binding)
 		case AssetFlow:
 			artifact.Flows = append(artifact.Flows, binding)
-		case AssetFunction, AssetAgent:
+		case AssetFunction, AssetAgent, AssetEvaluation:
 			artifact.AI = append(artifact.AI, binding)
 		case AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching:
 			artifact.Integrations = append(artifact.Integrations, binding)
@@ -153,6 +154,13 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 			}
 			artifact.Environment = append(artifact.Environment, ApplicationBinding{Ref: asset.Ref, Kind: contract.Kind, Credential: contract.Credential})
 		}
+		if asset.Ref.Kind == AssetEvaluation {
+			set, err := ReadEvaluationSet(asset.Body)
+			if err != nil {
+				return artifact, err
+			}
+			artifact.Environment = append(artifact.Environment, ApplicationBinding{Ref: asset.Ref, Kind: "ai-model", Name: set.Model})
+		}
 		if asset.Ref.App != root.App {
 			artifact.Depends = append(artifact.Depends, binding)
 		}
@@ -168,7 +176,17 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 func applicationAssetRoles(asset ReleaseAsset) ([]ApplicationRole, error) {
 	var descriptor struct {
 		Entity EntityInfo `json:"entity"`
-		Scope  struct {
+		Access []struct {
+			Role string `json:"role"`
+			Read string `json:"read"`
+		} `json:"access"`
+		Fields      json.RawMessage `json:"fields"`
+		Owners      []string        `json:"owners"`
+		HandoffRole string          `json:"handoffRole"`
+		Definition  struct {
+			Owners []string `json:"owners"`
+		} `json:"definition"`
+		Scope struct {
 			Levels map[string]string `json:"levels"`
 		} `json:"scope"`
 		Standard  struct{ Roles []string }                         `json:"standard"`
@@ -176,7 +194,7 @@ func applicationAssetRoles(asset ReleaseAsset) ([]ApplicationRole, error) {
 		Action    Action                                           `json:"action"`
 		Lifecycle struct{ Transitions []struct{ Roles []string } } `json:"lifecycle"`
 	}
-	if !slices.Contains([]AssetKind{AssetObject, AssetAction, AssetFunction, AssetCompute}, asset.Ref.Kind) {
+	if !slices.Contains([]AssetKind{AssetObject, AssetAction, AssetFunction, AssetCompute, AssetFlow, AssetAgent}, asset.Ref.Kind) {
 		return nil, nil
 	}
 	if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
@@ -191,6 +209,15 @@ func applicationAssetRoles(asset ReleaseAsset) ([]ApplicationRole, error) {
 		roles[role] = value
 		return value
 	}
+	for _, access := range descriptor.Access {
+		add(access.Role).Scope = access.Read
+	}
+	for _, role := range append(slices.Clone(descriptor.Owners), descriptor.Definition.Owners...) {
+		add(role)
+	}
+	if descriptor.HandoffRole != "" {
+		add(descriptor.HandoffRole)
+	}
 	for role, scope := range descriptor.Scope.Levels {
 		add(role).Scope = scope
 	}
@@ -202,7 +229,13 @@ func applicationAssetRoles(asset ReleaseAsset) ([]ApplicationRole, error) {
 			add(role)
 		}
 	}
-	for _, field := range descriptor.Entity.Fields {
+	var fields []FieldInfo
+	if asset.Ref.Kind == AssetObject && len(descriptor.Fields) > 0 {
+		if err := json.Unmarshal(descriptor.Fields, &fields); err != nil {
+			return nil, err
+		}
+	}
+	for _, field := range append(slices.Clone(descriptor.Entity.Fields), fields...) {
 		for _, role := range field.Read {
 			value := add(role)
 			value.ReadFields = append(value.ReadFields, field.Name)

@@ -61,6 +61,9 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 		if err := decoder.Decode(new(any)); err != io.EOF {
 			return nil, fmt.Errorf("direct record has trailing data")
 		}
+		if err := checkRunApplicationBindings(value.Interface()); err != nil {
+			return nil, err
+		}
 		rec := recordOf(value)
 		last := image.History[len(image.History)-1]
 		if rec.ID != image.ID || rec.Revision != revision || rec.Changed != (platform.Stamp{

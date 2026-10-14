@@ -13,35 +13,25 @@ const TestPlanType = "build.testplan"
 // TestPlan stores fixed inputs, not test state or a claim about the next draft.
 type TestPlan struct {
 	platform.Record
-	Title      string                 `json:"title" field:"required,search" title:"Test plan name"`
-	Object     platform.Ref[Object]   `json:"object,omitempty" title:"Saved object draft"`
-	Process    platform.Ref[Process]  `json:"process,omitempty" title:"Saved workflow draft"`
-	Function   platform.Ref[Function] `json:"function,omitempty" title:"Saved function draft"`
-	Model      string                 `json:"model,omitempty" title:"Model identifier"`
-	As         string                 `json:"as,omitempty" title:"Member ID (empty: you)"`
-	At         time.Time              `json:"at" field:"required" title:"Fixed test time"`
-	Steps      []TestStep             `json:"steps" field:"required,aside" title:"Test steps"`
-	Samples    []TestSample           `json:"samples,omitempty" field:"aside" type:"json"`
-	Evaluation []EvaluationPolicy     `json:"evaluation,omitempty" field:"aside" title:"Release evaluation thresholds"`
+	Name              string                 `json:"name,omitempty" title:"Evaluation set name"`
+	FunctionVersion   int                    `json:"functionVersion,omitempty" title:"Evaluated function version"`
+	DefinitionVersion int                    `json:"definitionVersion,omitempty" field:"readonly"`
+	Published         string                 `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Versions          []string               `json:"versions,omitempty" field:"readonly"`
+	Title             string                 `json:"title" field:"required,search" title:"Test plan name"`
+	Object            platform.Ref[Object]   `json:"object,omitempty" title:"Saved object draft"`
+	Process           platform.Ref[Process]  `json:"process,omitempty" title:"Saved workflow draft"`
+	Function          platform.Ref[Function] `json:"function,omitempty" title:"Saved function draft"`
+	Model             string                 `json:"model,omitempty" title:"Model identifier"`
+	As                string                 `json:"as,omitempty" title:"Member ID (empty: you)"`
+	At                time.Time              `json:"at" field:"required" title:"Fixed test time"`
+	Steps             []TestStep             `json:"steps" field:"required,aside" title:"Test steps"`
+	Samples           []TestSample           `json:"samples,omitempty" field:"aside" type:"json"`
+	Evaluation        []EvaluationPolicy     `json:"evaluation,omitempty" field:"aside" title:"Release evaluation thresholds"`
 }
 
-// EvaluationPolicy is a task-specific gate for three real-model runs of each
-// synthetic function case. Cost is the total reported USD amount; latency is
-// a per-call ceiling. Missing provider cost can never satisfy this policy.
-type EvaluationPolicy struct {
-	MinQuality       float64          `json:"minQuality"`
-	MaxCostUSD       float64          `json:"maxCostUsd"`
-	MaxLatencyMillis int64            `json:"maxLatencyMillis"`
-	Cases            []EvaluationCase `json:"cases"`
-}
-
-// EvaluationCase fixes only synthetic input and a strict typed reference; it
-// never copies a production record into an external model request.
-type EvaluationCase struct {
-	Name     string          `json:"name"`
-	Input    json.RawMessage `json:"input"`
-	Expected json.RawMessage `json:"expected"`
-}
+type EvaluationPolicy = platform.EvaluationPolicy
+type EvaluationCase = platform.EvaluationCase
 
 type TestSample struct {
 	Type    string            `json:"type"`

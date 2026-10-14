@@ -9,6 +9,53 @@ fi
 export PLATFORM_REVISION
 PLATFORM_REVISION=$(git rev-parse HEAD)
 mkdir -p .build/local-update
+local_mode=$(python3 - <<'PY'
+import importlib.util
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('dev_environment', Path('deploy/dev/environment.py'))
+environment = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(environment)
+print('native' if environment.alive(environment.read_state()) else 'docker')
+PY
+)
+if [[ $local_mode == native ]]; then
+  python3 - <<'PY'
+import datetime, importlib.util, json, os, re, subprocess, urllib.request
+from pathlib import Path
+root = Path.cwd()
+spec = importlib.util.spec_from_file_location('dev_environment', root / 'deploy/dev/environment.py')
+environment = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(environment)
+# Keep the chosen development mode and its existing data services.
+environment.stop()
+subprocess.run(['make', 'local'], cwd=root, check=True)
+revision = os.environ['PLATFORM_REVISION']
+hosts = []
+for solution, api, port in environment.SOLUTIONS:
+    metadata = subprocess.check_output(['go', 'version', '-m', str(root / '.build/dev' / (solution + '-server'))], text=True)
+    if 'vcs.revision=' + revision not in metadata or 'vcs.modified=true' in metadata:
+        raise SystemExit(f'{solution}: local binary differs from the committed revision')
+    base = f'http://localhost:{port}'
+    with urllib.request.urlopen(base + '/healthz', timeout=5) as response:
+        health = json.load(response)
+    if health.get('status') != 'ok' or health.get('quarantined') != 0:
+        raise SystemExit(f'{solution}: unhealthy tenant state {health}')
+    with urllib.request.urlopen(base + '/', timeout=10) as response:
+        html = response.read().decode()
+    if '/@vite/client' not in html:
+        raise SystemExit(f'{solution}: workspace is not served by the selected Vite environment')
+    assets = sorted(set(re.findall(r'(?:src|href)="(/[^\"]+)"', html)))
+    for asset in assets:
+        with urllib.request.urlopen(base + asset, timeout=10) as response:
+            if not response.read():
+                raise SystemExit(f'{solution}: empty workspace resource {asset}')
+    hosts.append({'service': solution + '-server', 'url': base, 'revision': revision, 'mode': 'native', 'health': health, 'matchedAssets': len(assets)})
+    print(f'{base}: {revision[:12]}, healthy, Vite + {len(assets)} resources verified')
+report = {'revision': revision, 'mode': 'native', 'checkedAtUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'hosts': hosts}
+(root / '.build/local-update' / (revision + '.json')).write_text(json.dumps(report, indent=2) + '\n')
+PY
+  exit 0
+fi
 pnpm --dir web/apps/workspace build
 docker compose -f deploy/local/compose.yaml config --quiet
 docker compose -f deploy/local/compose.yaml up -d --no-deps --build hospitality-server manufacturing-server

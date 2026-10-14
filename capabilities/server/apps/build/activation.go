@@ -131,7 +131,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 		}
 	}
 
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]ReleasePublication, error){b.prepareQueryReleasePublications, b.preparePropertyTypeReleasePublications, b.prepareLinkTypeReleasePublications, b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.PrepareCodeReleasePublications} {
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]ReleasePublication, error){b.prepareQueryReleasePublications, b.preparePropertyTypeReleasePublications, b.prepareLinkTypeReleasePublications, b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareEvaluationPublications, b.PrepareCodeReleasePublications} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, err
@@ -158,7 +158,7 @@ func pageFunctionBindings(p platform.Page) map[string]string {
 func publicationRecord(p ReleasePublication) (string, string, error) {
 	typ, _, ok := strings.Cut(p.Schema, ".publish")
 	var record platform.Record
-	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType, AgentType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
+	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType, AgentType, TestPlanType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
 		return "", "", fmt.Errorf("invalid release publication row")
 	}
 	return typ, record.ID, nil

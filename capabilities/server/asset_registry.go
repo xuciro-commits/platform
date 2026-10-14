@@ -13,8 +13,9 @@ import (
 // are immutable runtime prerequisites, not remotely installable tenant hooks.
 type runtimeAssetOwner struct {
 	platform.App
-	lifecycle platform.AssetLifecycleOwner
-	code      []platform.ReleaseAsset
+	lifecycle  platform.AssetLifecycleOwner
+	code       []platform.ReleaseAsset
+	nativeFlow func(platform.AssetRef, string) (platform.ReleaseAsset, error)
 }
 
 func (o runtimeAssetOwner) AssetKinds() []platform.AssetKind {
@@ -46,6 +47,9 @@ func (o runtimeAssetOwner) ResolvePinned(ref platform.AssetRef, version string, 
 			return asset, nil
 		}
 	}
+	if ref.Kind == platform.AssetFlow && len(contentVersion) == 0 && o.nativeFlow != nil {
+		return o.nativeFlow(ref, version)
+	}
 	if o.lifecycle != nil {
 		return o.lifecycle.ResolvePinned(ref, version, contentVersion...)
 	}
@@ -59,7 +63,15 @@ func (o runtimeAssetOwner) controlled(assets []platform.ReleaseAsset) ([]platfor
 			out = append(out, asset)
 			continue
 		}
-		prior, err := canonicalDigest(o.code[i])
+		selected := o.code[i]
+		if asset.Ref.Kind == platform.AssetFlow && o.nativeFlow != nil {
+			retained, err := o.nativeFlow(asset.Ref, asset.SourceVersion)
+			if err != nil {
+				return nil, err
+			}
+			selected = retained
+		}
+		prior, err := canonicalDigest(selected)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +155,18 @@ func (t *Tenant) assetRegistryLocked() (*platform.AssetRegistry, error) {
 			return nil, err
 		}
 		owner, _ := app.(platform.AssetLifecycleOwner)
-		wrapper := runtimeAssetOwner{App: app, lifecycle: owner, code: code}
+		wrapper := runtimeAssetOwner{App: app, lifecycle: owner, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
+			for _, flow := range app.Manifest().Flows {
+				asset, err := t.nativeFlowAsset(app, flow.Name, flow.Version)
+				if err != nil {
+					return asset, err
+				}
+				if asset.Ref == ref && asset.SourceVersion == source {
+					return asset, nil
+				}
+			}
+			return platform.ReleaseAsset{}, fmt.Errorf("native flow is not retained by its code owner")
+		}}
 		if len(wrapper.AssetKinds()) == 0 {
 			continue
 		}

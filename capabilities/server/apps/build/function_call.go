@@ -61,7 +61,7 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 					return
 				}
 				c.Put(r, FunctionRun{Question: request.Question, History: slices.Clone(request.History), App: cmp.Or(request.App, ID), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
-					Source: call.Source, State: "pending", Definition: call.Definition, Dependencies: call.Dependencies,
+					Applications: call.Applications, Source: call.Source, State: "pending", Definition: call.Definition, Dependencies: call.Dependencies,
 					Model: call.Model, InputHash: call.InputHash, Release: call.Release, Sources: call.Sources})
 			}, nil
 		}

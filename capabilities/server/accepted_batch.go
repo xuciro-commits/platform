@@ -700,6 +700,9 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		if err := decoder.Decode(new(any)); err != io.EOF {
 			return fmt.Errorf("record batch image has trailing data")
 		}
+		if err := checkRunApplicationBindings(value.Interface()); err != nil {
+			return err
+		}
 		rec := recordOf(value)
 		var last *pb.ChangeRecord
 		if len(image.Authorities) > 0 && len(image.Authorities) != len(image.History)-baseHistory {

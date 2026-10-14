@@ -68,6 +68,7 @@ type models interface {
 	Spent(member string, now time.Time) int
 	Reserve(m platform.Member, model platform.AIModel, d platform.AIDefaults, now time.Time) string
 	Usage() []platform.AIUsage
+	Quota(platform.Member, platform.AIDefaults, time.Time) platform.AIQuota
 }
 
 // limits are the defaults a member without its own takes (ADR-0029 D1).

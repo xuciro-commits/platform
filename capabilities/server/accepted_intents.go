@@ -13,6 +13,9 @@ func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
 	defer t.opsMu.Unlock()
 	ids := map[string]bool{}
 	for _, x := range intents {
+		if err := checkApplicationBindings(x.Applications); err != nil {
+			return err
+		}
 		kind, ok := strings.CutPrefix(x.Event, x.App+"/")
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, x.App, kind, x.Key, x.Endpoint)
 		if kind == "model" && x.Endpoint == modelEndpoint {

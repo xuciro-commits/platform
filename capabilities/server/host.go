@@ -268,6 +268,14 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	if err := t.registerDefinitions(); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
+	for _, job := range t.work.jobs {
+		bindings, err := t.bindApplications(platform.AssetRef{App: job.App, Kind: platform.AssetApp, Name: job.App}, "", "", job.App)
+		if err != nil {
+			return nil, fmt.Errorf("job %s application binding: %w", job.ID, err)
+		}
+		job.Applications = bindings
+	}
+
 	for _, et := range t.records.sortedTypes() {
 		if err := t.checkRecordSetDeclarations(et.info); err != nil {
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.info.Type, err)

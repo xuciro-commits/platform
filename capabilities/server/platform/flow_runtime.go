@@ -17,6 +17,7 @@ const (
 
 type FlowInstance struct {
 	Record
+	Applications []AssetBinding             `json:"applications,omitempty" field:"readonly" type:"json"`
 	Flow         string                     `json:"flow" field:"readonly,search"` // "<app>.<name>"
 	Title        string                     `json:"title" field:"readonly,search"`
 	Version      int                        `json:"version" field:"readonly"`

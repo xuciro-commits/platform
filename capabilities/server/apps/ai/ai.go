@@ -328,6 +328,17 @@ func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, now time.Ti
 	if model.DailyTokens > 0 && a.daily[day+"|model:"+model.Name()] >= model.DailyTokens {
 		return fmt.Sprintf("The tenant used the %d tokens a day of %s", model.DailyTokens, model.Name())
 	}
+	daily, perMinute := a.effectiveLimitsLocked(m, d)
+	if daily > 0 && a.daily[day+"|"+m.ID] >= daily {
+		return fmt.Sprintf("%s used its %d tokens for today", m.ID, daily)
+	}
+	if perMinute > 0 && a.callsLocked(m.ID, now) >= perMinute {
+		return fmt.Sprintf("%s made its %d calls this minute", m.ID, perMinute)
+	}
+	return ""
+}
+
+func (a *AI) effectiveLimitsLocked(m platform.Member, d Defaults) (int, int) {
 	own, app := a.limits[m.ID], strings.HasPrefix(m.ID, "app:")
 	daily, perMinute := own.DailyTokens, own.PerMinute
 	switch {
@@ -339,13 +350,14 @@ func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, now time.Ti
 	if perMinute == 0 && !app {
 		perMinute = d.PerMinute
 	}
-	if daily > 0 && a.daily[day+"|"+m.ID] >= daily {
-		return fmt.Sprintf("%s used its %d tokens for today", m.ID, daily)
-	}
-	if perMinute > 0 && a.callsLocked(m.ID, now) >= perMinute {
-		return fmt.Sprintf("%s made its %d calls this minute", m.ID, perMinute)
-	}
-	return ""
+	return daily, perMinute
+}
+
+func (a *AI) Quota(m platform.Member, d Defaults, now time.Time) platform.AIQuota {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	daily, perMinute := a.effectiveLimitsLocked(m, d)
+	return platform.AIQuota{DailyTokens: daily, PerMinute: perMinute, UsedTokens: a.daily[now.UTC().Format(time.DateOnly)+"|"+m.ID], UsedCalls: a.callsLocked(m.ID, now)}
 }
 
 // callsLocked is the caller's calls this minute: the ones already metered and

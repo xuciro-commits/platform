@@ -1348,6 +1348,16 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 // Flow queries must see prior accepted-decision writes without acquiring a
 // second live runtime or widening the member's record/field scope.
 func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+	if q.Limit < 1 || q.Limit > 500 {
+		q.Limit = 500
+	}
+	return t.recordSelectionFrom(s, m, typ, q, now)
+}
+
+// Internal aggregations select an owner's authorized inventory once. They
+// reuse the same masks and source checks without repeatedly sorting each page.
+// Public record reads still enter through the bounded recordsFrom above.
+func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	m = t.authorizationMember(m)
 	if q.Traversal != nil {
 		if s != t.records {
@@ -1372,9 +1382,6 @@ func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q pl
 	visible, err := t.visibleIn(s, m, et, now)
 	if err != nil {
 		return RecordPage{}, err
-	}
-	if q.Limit == 0 || q.Limit > 500 {
-		q.Limit = 500
 	}
 	q = businessQuery(et.info, q, m, now)
 	view, hidden := viewOf(m, et)

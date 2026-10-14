@@ -83,11 +83,27 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 		return err
 	}
 	var plan TestPlan
+	var previous TestPlan
 	if s.GetSchema().GetName() == TestPlanType+".edit" {
 		plan, _ = platform.Get[TestPlan](c, s.GetTarget().GetId())
+		previous = plan
 	}
 	if json.Unmarshal(s.GetPayload(), &plan) != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	if previous.Published != "" && plan.Name != previous.Name {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be renamed; create another definition")
+	}
+	if plan.Name != "" {
+		rows, err := readDefinitionInventory[TestPlan](b.host.Automation(c, ID))
+		if err != nil {
+			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		for _, row := range rows {
+			if row.ID != s.GetTarget().GetId() && row.Name == plan.Name {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This definition name is already in use")
+			}
+		}
 	}
 	roots := 0
 	for _, root := range []string{string(plan.Object), string(plan.Process), string(plan.Function)} {
@@ -95,30 +111,15 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 			roots++
 		}
 	}
-	if roots != 1 || len(plan.Model) > 256 {
+	if roots != 1 || len(plan.Model) > 256 || plan.FunctionVersion < 0 || plan.FunctionVersion > 64 || plan.Name != "" && !named(plan.Name) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose exactly one saved object, workflow or function draft for the test plan")
 	}
 	if len(plan.Evaluation) != 0 {
 		if len(plan.Evaluation) != 1 {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Function evaluation needs quality, total USD cost and per-call latency thresholds")
 		}
-		policy := plan.Evaluation[0]
-		if plan.Function == "" || policy.MinQuality <= 0 || policy.MinQuality > 1 ||
-			policy.MaxCostUSD <= 0 || policy.MaxCostUSD > 1000 || policy.MaxLatencyMillis < 1 || policy.MaxLatencyMillis > 300000 {
+		if plan.Function == "" || plan.Evaluation[0].Check() != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Function evaluation needs quality, total USD cost and per-call latency thresholds")
-		}
-		if len(policy.Cases) == 0 || len(policy.Cases) > 5 {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A function evaluation needs 1–5 bounded cases")
-		}
-		seen := map[string]bool{}
-		for _, test := range policy.Cases {
-			var input, expected map[string]json.RawMessage
-			if !named(test.Name) || seen[test.Name] || len(test.Input) > 32<<10 || len(test.Expected) > 32<<10 ||
-				json.Unmarshal(test.Input, &input) != nil || input == nil ||
-				json.Unmarshal(test.Expected, &expected) != nil || expected == nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Each evaluated function case needs a named synthetic input and expected typed answer")
-			}
-			seen[test.Name] = true
 		}
 	}
 	return nil

@@ -1,4 +1,4 @@
-import { expect, test } from "./kit";
+import { expect, fresh, slug, test } from "./kit";
 
 test("application capacity, original decisions and headless runtime remain visible", async ({ page, builder, operator }, testInfo) => {
   const object = await builder.object({ title: "Runtime case object", fields: [{ name: "note", title: "Note", type: "text" }] });
@@ -25,4 +25,28 @@ test("application capacity, original decisions and headless runtime remain visib
   await expect(page.getByRole("combobox", { name: "Run kind", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Run state", exact: true })).toBeVisible();
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("application-runtime.png"), fullPage: true });
+});
+
+test("published evaluation sets open in their original test-plan editor and release review", async ({ page, builder }) => {
+  const object = await builder.object({ title: "Evaluation object", fields: [{ name: "note", title: "Note", type: "text" }] });
+  const functionID = fresh("FUNCTION"), functionName = slug("advice");
+  await builder.decide("build.function.create", { type: "build.function", id: functionID }, {
+    name: functionName, title: "Evaluation advice", description: "Summarise a synthetic note", object: object.type,
+    fields: ["note"], roles: ["user", "builder"], model: "fixture/probe",
+    instructions: "Summarise the provided note", maxInputBytes: 4096, maxOutputBytes: 1024, maxTokens: 256,
+    output: [{ name: "summary", type: "string", required: true, description: "A short factual summary" }],
+  });
+  await builder.decide("build.function.publish", { type: "build.function", id: functionID }, {});
+  const planID = fresh("PLAN"), name = slug("quality");
+  await builder.decide("build.testplan.create", { type: "build.testplan", id: planID }, {
+    name, title: "Versioned evaluation", function: functionID, model: "fixture/probe", at: "2026-10-14T09:00:00Z",
+    steps: [{ type: object.type, id: "synthetic", action: `${object.type}.create`, payload: '{"note":"Synthetic"}', expect: "accepted" }],
+    evaluation: [{ minQuality: 1, maxCostUsd: 0.1, maxLatencyMillis: 30000, cases: [{ name: "synthetic", input: { note: "Synthetic" }, expected: { summary: "Synthetic" } }] }],
+  });
+  await builder.decide("build.testplan.publish", { type: "build.testplan", id: planID }, {});
+  await builder.open(page, `/evaluation-set?id=${planID}`);
+  await expect(page.getByRole("textbox", { name: "Evaluation set name", exact: true })).toHaveValue(name);
+  await expect(page.getByRole("button", { name: "Publish evaluation set", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Publish evaluation set", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Release review", exact: true })).toBeVisible();
 });

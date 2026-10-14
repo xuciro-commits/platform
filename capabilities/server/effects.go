@@ -159,6 +159,15 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 	if i < 0 {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	typ, _, _ := strings.Cut(entity, "/")
+	resource := platform.AssetRef{App: c.App, Kind: platform.AssetObject, Name: typ}
+	if typ == "" {
+		resource = platform.AssetRef{App: c.App, Kind: platform.AssetApp, Name: c.App}
+	}
+	applications, err := t.bindApplications(resource, t.releases.active, "")
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The effect application cannot be bound")
+	}
 	agent, run := "", ""
 	if c.Agent {
 		agent, run = c.ID, t.agentRun
@@ -181,7 +190,7 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 		if c.Agent && (a.Manifest().Emits[i].Irreversible || ep.Irreversible) {
 			state = "held"
 		}
-		planned = append(planned, platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
+		planned = append(planned, platform.Effect{Applications: applications, ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
 			State: state, Agent: agent, Run: run, Due: now, Body: string(body)})
 	}
 	return planned, nil

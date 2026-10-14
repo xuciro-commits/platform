@@ -17,7 +17,7 @@ import { kindOfType, refKey, resourceGroups, resourceKinds, resourceRef, resourc
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
 export const kindIcon: Record<string, ReactNode> = {
-  object: <Boxes />, "link-type": <Link2 />, "property-type": <Tags />, query: <Search />, page: <LayoutTemplate />, flow: <Workflow />, function: <Sparkles />, agent: <Sparkles />, compute: <Braces />,
+  object: <Boxes />, "link-type": <Link2 />, "property-type": <Tags />, query: <Search />, page: <LayoutTemplate />, flow: <Workflow />, function: <Sparkles />, agent: <Sparkles />, "evaluation-set": <Sparkles />, compute: <Braces />,
   connection: <Link2 />, source: <Database />, dataset: <Database />, pipeline: <Workflow />, writeback: <Link2 />, matching: <Layers />,
 };
 
@@ -89,7 +89,7 @@ function useProjectResources(project?: Project) {
   /** Records of every kind that exist but are not in the project yet: what "Add existing" offers. */
   const available = useMemo(() => {
     const held = new Set(owned.map((item) => refKey(item.ref)));
-    return resourceKinds.flatMap((kind) => (inventories[kind.kind]?.data?.records ?? []).filter((record) => !record.archived && !held.has(refKey(kind.kind === "page" ? { app: "build", kind: "page", name: record.name } : resourceRef(kind, record.name)))).map((record) => ({ kind, record })));
+    return resourceKinds.flatMap((kind) => (inventories[kind.kind]?.data?.records ?? []).filter((record) => !record.archived && record.name && !held.has(refKey(kind.kind === "page" ? { app: "build", kind: "page", name: record.name } : resourceRef(kind, record.name)))).map((record) => ({ kind, record })));
   }, [owned, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
   /** Object types other apps installed (the shared master data of `core`, HR's employees…): a project
    * references them instead of defining its own (ADR-0058 A1). */

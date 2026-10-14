@@ -216,6 +216,21 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 }
 
 func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]releaseInstallation, json.RawMessage, error) {
+	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind != platform.AssetEvaluation {
+			continue
+		}
+		descriptor, err := platform.ReadEvaluationSet(asset.Body)
+		if err != nil {
+			return nil, nil, err
+		}
+		if t.ai == nil {
+			return nil, nil, fmt.Errorf("evaluation set %s needs the target AI owner", asset.Ref)
+		}
+		if _, _, refusal := t.ai.Callable(member, descriptor.Model); refusal != nil {
+			return nil, nil, fmt.Errorf("evaluation set %s needs an enabled target model permitted to this member", asset.Ref)
+		}
+	}
 	return t.prepareReleaseInstallationLocked(candidate, member, at, upgrade, true)
 }
 

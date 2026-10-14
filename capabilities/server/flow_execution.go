@@ -80,7 +80,17 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 				before, _ := canonicalDigest(asset)
 				var after string
 				if a >= 0 {
-					after, _ = canonicalDigest(current[a])
+					selected := current[a]
+					if asset.Ref.Kind == platform.AssetFlow {
+						for _, flow := range owner.Manifest().Flows {
+							candidate, err := h.t.nativeFlowAsset(owner, flow.Name, flow.Version)
+							if err == nil && candidate.SourceVersion == asset.SourceVersion && candidate.Ref == asset.Ref {
+								selected = candidate
+								break
+							}
+						}
+					}
+					after, _ = canonicalDigest(selected)
 				}
 				if before != after {
 					return nil, fmt.Errorf("retained dependency %s has no compatible execution owner", asset.Ref)

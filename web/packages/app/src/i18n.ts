@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Recorded application binding": "已记录的应用绑定",
   "AI function": "AI 函数",
   "External effect": "外部效果",
   "Scheduled job": "定时作业",
@@ -25,6 +26,17 @@ register("zh-CN", {
   "Credential required": "需要凭据",
   "No credential required": "无需凭据",
   "Operating declarations": "运行声明",
+  "Your shared AI quota: {tokens} / {daily} tokens today; {calls} / {minute} calls this minute.": "你的共享 AI 配额：今日 {tokens} / {daily} 个 Token；本分钟 {calls} / {minute} 次调用。",
+  "Agent budgets per run": "智能体单次运行预算",
+  "{steps} steps · {tokens} tokens · {actions} actions · ${cost}": "{steps} 步 · {tokens} 个 Token · {actions} 个动作 · ${cost}",
+  "Owner default": "使用默认值",
+  "No limit": "不限",
+  "Extension": "扩展",
+  "Migration": "迁移",
+  "Application maintenance": "应用维护",
+  "Retirement": "退役",
+  "Retention declaration": "保留声明",
+  "Retention is declared; automatic deletion is not enabled by this declaration.": "保留期限已声明；此声明不会自动启用删除。",
   "Declared retention and recovery targets require environment evidence.": "声明的保留与恢复目标需要环境演练证据。",
   "Declared roles and scopes": "声明的角色与范围",
   "Declared action role": "动作声明角色",
@@ -616,6 +628,7 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+  "Recorded application binding": "已记录的应用绑定",
  "External document": "外部文档",
  "Spacer": "空白",
  "Spacer configuration is unavailable or incompatible.": "空白配置不可用或不兼容。",

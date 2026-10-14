@@ -290,7 +290,7 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 	_, err := f.decide(c, SchemaFlowStart, id, "start:"+id, now, func(ss *session) *kernel.Error {
 		ss.event = e
 		x := ss.create(d, id, key, data, onBehalf, parent)
-		x.Dependencies, x.Release = bound.Dependencies, bound.Release
+		x.Dependencies, x.Release, x.Applications = bound.Dependencies, bound.Release, bound.Applications
 		if len(deferAdvance) > 0 && deferAdvance[0] {
 			if d.Continuous != nil {
 				x.Tokens[0].Waits = "stream"
@@ -1174,7 +1174,12 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				t.Step = moved
 			}
 			ss.trace(x, "", "moved", fmt.Sprintf("version %d to %d", x.Version, to.Version), c.ID)
+			binding, err := f.host.BindFlow(to.app, to.Name, to.Version, host.FlowBinding{})
+			if err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The target flow version cannot be bound")
+			}
 			x.Version = to.Version
+			x.Dependencies, x.Release, x.Applications = binding.Dependencies, binding.Release, binding.Applications
 		default:
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 		}

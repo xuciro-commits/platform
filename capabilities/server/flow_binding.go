@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -11,6 +12,11 @@ import (
 // BindFlow runs under the tenant input/recovery lock. The flow owner supplies
 // its retained native version; dependency owners supply their complete assets.
 func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding) (host.FlowBinding, error) {
+	if prior.Existing && prior.Dependencies == "" && prior.Release == "" {
+		if _, controlled := h.t.app(app).(host.FlowReleaseOwner); !controlled {
+			return host.FlowBinding{}, nil
+		}
+	}
 	if prior.Release != "" {
 		closed, err := h.retainedFlowClosure(app, name, version, prior)
 		if err != nil {
@@ -34,6 +40,11 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 		return host.FlowBinding{}, nil
 	}
 	binding := host.FlowBinding{Dependencies: closure.ID}
+	bindings, bindErr := h.t.bindApplications(root, h.t.releases.active, closure.ID)
+	if bindErr != nil {
+		return binding, bindErr
+	}
+	binding.Applications = bindings
 	for _, asset := range closure.Assets {
 		binding.Assets = append(binding.Assets, asset.Ref)
 	}
@@ -63,11 +74,10 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 }
 
 func (h hostView) retainedFlowClosure(app, name string, version int, prior host.FlowBinding) (platform.ReleaseCandidate, error) {
-	owner, ok := h.t.app(app).(host.FlowReleaseOwner)
-	if !ok || prior.Dependencies == "" {
+	if prior.Dependencies == "" {
 		return platform.ReleaseCandidate{}, fmt.Errorf("flow has no retained starting dependency descriptor")
 	}
-	root, err := owner.FlowReleaseAsset(name, version)
+	root, err := h.t.flowReleaseAsset(app, name, version)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
@@ -81,6 +91,13 @@ func (h hostView) retainedFlowClosure(app, name string, version int, prior host.
 	}
 	for _, asset := range closed.Assets {
 		if asset.Ref == root.Ref {
+			var descriptor platform.FlowReleaseDescriptor
+			if json.Unmarshal(root.Body, &descriptor) != nil {
+				return platform.ReleaseCandidate{}, fmt.Errorf("retained flow descriptor is invalid")
+			}
+			if !descriptor.Native {
+				continue
+			}
 			before, _ := canonicalDigest(asset)
 			after, _ := canonicalDigest(root)
 			if before != after {
@@ -92,11 +109,7 @@ func (h hostView) retainedFlowClosure(app, name string, version int, prior host.
 }
 
 func (h hostView) flowClosure(app, name string, version int) (platform.ReleaseCandidate, platform.AssetRef, error) {
-	owner, ok := h.t.app(app).(host.FlowReleaseOwner)
-	if !ok { // Code flows outside the bounded builder release descriptor scope.
-		return platform.ReleaseCandidate{}, platform.AssetRef{}, nil
-	}
-	asset, err := owner.FlowReleaseAsset(name, version)
+	asset, err := h.t.flowReleaseAsset(app, name, version)
 	if err != nil {
 		return platform.ReleaseCandidate{}, platform.AssetRef{}, err
 	}

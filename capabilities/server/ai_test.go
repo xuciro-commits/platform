@@ -349,9 +349,16 @@ func TestAILimits(t *testing.T) {
 	}
 	before := calls.Load()
 	expect("past the day", chat("bo"), "quota: bo used its 40 tokens for today")
+	quota := tn.ai.Quota(member("bo"), tn.limits(), now)
+	if quota.DailyTokens != 40 || quota.UsedTokens != 48 || quota.UsedCalls != 3 {
+		t.Fatalf("quota view differs from admission: %+v", quota)
+	}
 	expect("the model was not called", fmt.Sprint(calls.Load()-before), "0")
 	decide(ai.ID, ai.SchemaLimitSet, ai.LimitType, "bo", map[string]int{"dailyTokens": 1000})
 	expect("his own limit", chat("bo"), "ok")
+	if quota := tn.ai.Quota(member("bo"), tn.limits(), now); quota.DailyTokens != 1000 || quota.UsedTokens != 64 {
+		t.Fatalf("quota did not follow the original limit override: %+v", quota)
+	}
 	expect("said in Chinese", tn.i18n.Say("zh-CN", "bo used its 40 tokens for today"), "bo 今天的 40 个 token 已用完")
 
 	// Calls a minute, whatever the tokens.

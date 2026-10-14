@@ -39,13 +39,15 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if _, err := journal.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
-	compose := func() *Tenant {
+	targetID := id + "-target"
+	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, targetID)
+	compose := func(tenant string) *Tenant {
 		t.Helper()
-		tn, err := NewTenant(id, NewConsole(id,
+		tn, err := NewTenant(tenant, NewConsole(tenant,
 			Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{
-				build.ID: build.Builder, PlatformApp: Admin, ai.ID: ai.Admin, flow.ID: flow.Admin}}},
+				build.ID: build.Builder, PlatformApp: Admin, ai.ID: ai.Admin, flow.ID: flow.Admin, AgentApp: AgentAdmin}}},
 			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}),
-			ai.New(id), work.New(id), flow.New(id), build.New(id))
+			ai.New(tenant), work.New(tenant), flow.New(tenant), build.New(tenant), NewAgents(tenant))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +60,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		})
 	}))
 	defer provider.Close()
-	live := compose()
+	live := compose(id)
 	live.Record = func(e Entry) {
 		if err := journal.Append(ctx, id, e); err != nil {
 			t.Fatal(err)
@@ -105,32 +107,42 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": provider.URL})
 	submit(ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"})
 	submit(build.ID, build.TestPlanType+".create", build.TestPlanType, "EVAL", map[string]any{
-		"title": "Synthetic quality", "function": "F", "model": "fixture/probe", "at": at,
+		"name": "quality", "title": "Synthetic quality", "function": "F", "model": "fixture/probe", "at": at,
 		"steps": []build.TestStep{{Type: "build.intake", ID: "SAMPLE", Action: "build.intake.create",
 			Payload: `{"note":"Synthetic"}`, Expect: "accepted"}},
 		"evaluation": []build.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 0.05, MaxLatencyMillis: 300000,
 			Cases: []build.EvaluationCase{{Name: "synthetic", Input: json.RawMessage(`{"note":"Synthetic"}`),
 				Expected: json.RawMessage(`{"summary":"Check source","category":"review","review":true}`)}}}},
 	})
-	preview, err := live.PreviewRelease(builder, platform.AssetObject, "O")
+	submit(build.ID, build.SchemaEvaluationSetPublish, build.TestPlanType, "EVAL", struct{}{})
+	submit(build.ID, build.AgentType+".create", build.AgentType, "AGENT", map[string]any{"name": "assistant", "title": "Intake assistant", "description": "Prepare intake updates", "instructions": "Prepare a note update", "tools": []string{"build.intake.edit"}, "steps": 4, "tokens": 2000, "actions": 1, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Takes: []string{"build.intake.edit"}}}})
+	submit(build.ID, build.SchemaAgentPublish, build.AgentType, "AGENT", struct{}{})
+	submit(build.ID, build.ConnectionType+".create", build.ConnectionType, "CONNECTION", map[string]any{"name": "feed", "title": "Feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true})
+	submit(build.ID, build.ConnectionType+".check", build.ConnectionType, "CONNECTION", struct{}{})
+	live.CheckConnections(at)
+	submit(build.ID, build.SourceType+".create", build.SourceType, "SOURCE", map[string]any{"name": "feedrows", "title": "Feed rows", "connection": "CONNECTION", "profile": "json", "url": "rows", "object": "build.intake", "key": "id", "mapping": []build.SourceField{{From: "note", To: "note"}}})
+	submit(build.ID, build.SourceType+".publish", build.SourceType, "SOURCE", struct{}{})
+	submit(build.ID, build.AppType+".create", build.AppType, "APP", map[string]any{"name": "intakeapp", "title": "Intake application", "pages": []string{"intakeadvice"}, "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetFlow, Name: "build.review"}, {App: build.ID, Kind: platform.AssetEvaluation, Name: "quality"}, {App: build.ID, Kind: platform.AssetAgent, Name: "assistant"}, {App: build.ID, Kind: platform.AssetSource, Name: "feedrows"}}, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.intake": 2}, ExpectedRuns: 1, Retention: map[string]string{"runs": "24h"}, RPO: "1h", RTO: "30m"}})
+	preview, err := live.PreviewRelease(builder, platform.AssetApp, "APP")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("joint candidate: %+v %v", preview, err)
 	}
 	seen := map[platform.AssetKind]bool{}
 	for _, asset := range preview.Included {
-		if asset.App == build.ID && (asset.Kind == platform.AssetFunction || asset.Kind == platform.AssetPage || asset.Kind == platform.AssetFlow) {
+		if asset.App == build.ID {
 			seen[asset.Kind] = true
 		}
 	}
-	if !seen[platform.AssetFunction] || !seen[platform.AssetPage] || !seen[platform.AssetFlow] {
+	if !seen[platform.AssetFunction] || !seen[platform.AssetPage] || !seen[platform.AssetFlow] || !seen[platform.AssetEvaluation] || !seen[platform.AssetAgent] || !seen[platform.AssetSource] || !seen[platform.AssetConnection] {
 		t.Fatalf("joint candidate omitted a shared asset: %+v", preview.Included)
 	}
-	if _, err := live.SaveReleaseCandidate(builder, platform.AssetObject, "O", preview.CandidateID, "save", at); err != nil {
+	if _, err := live.SaveReleaseCandidate(builder, platform.AssetApp, "APP", preview.CandidateID, "save", at); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := live.ActivateRelease(builder, preview.CandidateID, "before-evaluation", at); err == nil {
 		t.Fatal("joint candidate activated without an evaluation")
 	}
+	submit(build.ID, build.TestPlanType+".edit", build.TestPlanType, "EVAL", map[string]any{"model": "not-enabled/new-draft", "evaluation": []build.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 0.05, MaxLatencyMillis: 300000, Cases: []build.EvaluationCase{{Name: "newdraft", Input: json.RawMessage(`{"note":"New draft"}`), Expected: json.RawMessage(`{"summary":"Different","category":"review","review":false}`)}}}}})
 	reportID, err := live.EvaluateRelease(builder, ReleaseEvaluationRequest{CandidateID: preview.CandidateID, PlanID: "EVAL", Key: "evaluate"}, at)
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +202,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			recovered := compose()
+			recovered := compose(id)
 			recovered.AIClient = func(*http.Request) (*http.Response, error) {
 				t.Error("evaluation replay called the provider")
 				return nil, errors.New("no provider I/O during replay")
@@ -214,7 +226,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		attempts++
 	}
 	report, ok := platform.Get[build.Evaluation](live.automation(build.ID, false), reportID)
-	if attempts != build.EvaluationRepeats || !ok || report.State != "passed" {
+	if attempts != build.EvaluationRepeats || !ok || report.State != "passed" || report.Set == nil || report.Model != "fixture/probe" || report.Policy[0].Cases[0].Name != "synthetic" {
 		t.Fatalf("joint evaluation: %+v (%d attempts)", report, attempts)
 	}
 	live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
@@ -243,7 +255,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recovered := compose()
+	recovered := compose(id)
 	recovered.AIClient = func(*http.Request) (*http.Response, error) {
 		t.Error("replay called the provider")
 		return nil, errors.New("no provider I/O during replay")
@@ -267,4 +279,120 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		activated != preview.CandidateID || reopened.Position(id) != int64(len(entries)) {
 		t.Fatalf("retry duplicated or lost the activation: %s %v", activated, err)
 	}
+	root := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "intakeapp"}
+	sourceRuntime, refusal := recovered.ApplicationRuntimeOf(recoveredBuilder, root, at)
+	if refusal != nil {
+		assets, assetErr := recovered.releaseAssetsLocked(nil, false)
+		closure, closureErr := recovered.candidateWithBindings([]platform.AssetRef{root}, assets, []platform.AssetRef{root})
+		_, artifactErr := platform.ArtifactOfApplication(root, closure.Assets)
+		t.Fatalf("application runtime: %s; owner assets: %v; closure: %v; artifact: %v", refusal.Message, assetErr, closureErr, artifactErr)
+	}
+	if refusal != nil || len(sourceRuntime.Artifact.Model) == 0 || len(sourceRuntime.Artifact.Rules) == 0 || len(sourceRuntime.Artifact.AI) != 3 || len(sourceRuntime.Artifact.Integrations) != 2 || len(sourceRuntime.Monitoring.AgentBudgets) != 1 || len(sourceRuntime.Maintenance.Retention) != 1 {
+		t.Fatalf("full application artifact: %+v %v", sourceRuntime, refusal)
+	}
+	if bytes.Contains(recovered.releases.raw(preview.CandidateID), []byte(provider.URL)) {
+		t.Fatal("application artifact retained an environment address")
+	}
+	target := compose(targetID)
+	if _, err := reopened.Entries(ctx, targetID, 0); err != nil {
+		t.Fatal(err)
+	}
+	target.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+		raw, err := reopened.AppendAccepted(ctx, targetID, e, key, hash)
+		if err != nil {
+			t.Fatalf("target accepted append: %v", err)
+		}
+		return raw, err
+	}
+	targetMember := memberOf(t, target, "builder")
+	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "missing-model", true, targetMember, at); err == nil || target.ActiveRelease() != "" {
+		t.Fatal("target accepted missing model bindings or installed a partial application")
+	}
+	decide(t, target, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": provider.URL}, at)
+	decide(t, target, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"}, at)
+	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "missing-connection", true, targetMember, at); err == nil || target.ActiveRelease() != "" {
+		t.Fatal("target accepted a missing connection or installed a partial application")
+	}
+	decide(t, target, "builder", build.ID, build.ConnectionType+".create", build.ConnectionType, "TARGET-CONNECTION", map[string]any{"name": "feed", "title": "Target feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true}, at)
+	decide(t, target, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, "TARGET-CONNECTION", map[string]any{}, at)
+	target.CheckConnections(at)
+	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "deliver", true, targetMember, at); err != nil {
+		t.Fatal(err)
+	}
+	targetRuntime, refusal := target.ApplicationRuntimeOf(targetMember, root, at)
+	if refusal != nil || targetRuntime.Artifact.Version != sourceRuntime.Artifact.Version || target.ActiveRelease() != preview.CandidateID {
+		t.Fatalf("second environment changed the artifact: %+v %v", targetRuntime, refusal)
+	}
+	for i := 0; i < 3; i++ {
+		decide(t, target, "operator", build.ID, "build.intake.create", "build.intake", fmt.Sprintf("ROW-%d", i), map[string]any{"note": fmt.Sprintf("Original %d", i)}, at.Add(time.Second))
+	}
+	// The complete artifact moves again through the same migration owner; a
+	// target with rows must not silently install the changed write semantics.
+	decide(t, recovered, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "O", map[string]any{"fields": []map[string]any{{"name": "note", "title": "Original note", "type": "text", "readOnly": true, "aliasOf": "memo", "sourceType": "user-input"}, {"name": "memo", "title": "Memo", "type": "text", "sourceType": "user-input"}}}, at.Add(2*time.Second))
+	upgradeDrafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetApp, ID: "APP"}}
+	next, err := recovered.PreviewReleaseDrafts(recoveredBuilder, upgradeDrafts)
+	if err != nil || next.Diagnostic != "" {
+		t.Fatalf("complete upgrade preview: %+v %v", next, err)
+	}
+	if _, err := recovered.SaveReleaseCandidates(recoveredBuilder, upgradeDrafts, next.CandidateID, "save-upgrade", at.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PromoteCandidate(recovered, target, next.CandidateID, "unsafe-upgrade", true, targetMember, at.Add(2*time.Second)); err == nil || target.ActiveRelease() != preview.CandidateID {
+		t.Fatal("target installed a storage change without its migration")
+	}
+	if _, err := PromoteCandidate(recovered, target, next.CandidateID, "stage-upgrade", false, targetMember, at.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	plan := platform.MigrationPlan{From: preview.CandidateID, To: next.CandidateID, Scope: platform.MigrationScope{Type: "build.intake"}, Steps: []platform.MigrateStep{{Kind: "rename", Types: []string{"build.intake"}, Batch: 1, Fields: []platform.MigrateField{{From: "note", To: "memo"}}}}}
+	migration, err := target.ReviewMigrationPlan(targetMember, plan, at.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decide(t, target, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "MIGRATE", map[string]any{"plan": plan, "review": migration.ID, "reviewedAt": migration.At}, at.Add(2*time.Second))
+	for i := 0; i < 3; i++ {
+		decide(t, target, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "MIGRATE", map[string]any{}, at.Add(3*time.Second))
+	}
+	plans, _, refusal := platform.Find[build.TestPlan](target.automation(build.ID, false), platform.Query{})
+	if refusal != nil {
+		t.Fatal(refusal)
+	}
+	planID := ""
+	for _, plan := range plans {
+		if plan.Name == "quality" {
+			planID = plan.ID
+		}
+	}
+	measured, err := target.EvaluateRelease(targetMember, ReleaseEvaluationRequest{CandidateID: next.CandidateID, PlanID: planID, Key: "target-upgrade"}, at.Add(4*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, effect := range target.Effects(at.Add(4 * time.Second)) {
+		var ask modelAsk
+		if json.Unmarshal([]byte(effect.Body), &ask) != nil || !ask.Evaluation || !strings.HasPrefix(ask.Call, measured+":") {
+			continue
+		}
+		outcome, usage := target.sendModel(effect, at.Add(4*time.Second))
+		if outcome.Result != "delivered" || usage == nil {
+			t.Fatal("target measured evaluation did not complete")
+		}
+		target.settleWithUsage(effect.ID, outcome, usage, at.Add(4*time.Second))
+	}
+	if _, err := target.ActivateRelease(targetMember, next.CandidateID, "activate-upgrade", at.Add(5*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, refusal := target.ApplicationRuntimeOf(targetMember, root, at.Add(5*time.Second))
+	if refusal != nil || upgraded.Previous != sourceRuntime.Artifact.Version || len(upgraded.Maintenance.Migrations) != 1 || upgraded.Maintenance.Migrations[0].State != "complete" || len(upgraded.Warnings) == 0 {
+		t.Fatalf("complete artifact lost its migration or operating evidence: %+v %v", upgraded, refusal)
+	}
+	for i := 0; i < 3; i++ {
+		view, refusal := target.RecordOf(targetMember, "build.intake", fmt.Sprintf("ROW-%d", i), at.Add(5*time.Second))
+		if refusal != nil || !bytes.Contains(platform.Raw(view.Record), []byte(fmt.Sprintf(`"memo":"Original %d"`, i))) {
+			t.Fatalf("target migration lost a record: %v", refusal)
+		}
+	}
+	targetLog, err := reopened.Entries(ctx, targetID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	CheckReplay(t, target, targetLog, func() *Tenant { return compose(targetID) })
 }

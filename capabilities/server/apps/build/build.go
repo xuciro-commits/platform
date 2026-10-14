@@ -84,6 +84,7 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.migrationPlanEntity())...)
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
+	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish evaluation set", Description: "Freeze the synthetic cases and thresholds against one published function version.", Capability: "functions", Roles: []string{Builder}, Payload: []platform.Field{}})
 	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, platform.MigrationRunType, MigrationPlanType, platform.OwnedRelationType(ID))
 	return b
 }
@@ -236,13 +237,16 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaEvaluationSetPublish}
 }
 
 // publicationImage reads and verifies the already committed record image
 // without rerunning builder action rules or publishing a second decision.
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
 	switch schema {
+	case SchemaEvaluationSetPublish:
+		_, _, err := b.evaluationSetImage(image)
+		return b.testPlanEntity(), nil, nil, nil, err
 	case SchemaAgentPublish:
 		var record Agent
 		if err := json.Unmarshal(image, &record); err != nil {
@@ -301,6 +305,10 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaEvaluationSetPublish {
+		_, _, err := b.evaluationSetImage(image)
+		return err
+	}
 	if schema == SchemaTablePublish {
 		tb, err := tableImage(image)
 		if err != nil {
@@ -391,6 +399,10 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaEvaluationSetPublish {
+		_, _, err := b.evaluationSetImage(image)
+		return err
+	}
 	if schema == SchemaTablePublish {
 		tb, err := tableImage(image)
 		if err != nil {
@@ -587,6 +599,9 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	case FunctionType:
 		record, _ := platform.Get[Function](c, id)
 		published = record.Published != ""
+	case TestPlanType:
+		record, _ := platform.Get[TestPlan](c, id)
+		published = record.Published != ""
 	case CodeType:
 		record, _ := platform.Get[Code](c, id)
 		published = record.Published != ""
@@ -641,10 +656,13 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == SchemaFunctionCall || name == SchemaFunctionAnswer {
 		return b.submitFunctionCall(c, s, now)
 	}
+	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
+		return b.submitEvaluationSet(c, s, now)
+	}
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType, TestPlanType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}

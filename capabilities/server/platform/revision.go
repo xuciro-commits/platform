@@ -28,6 +28,7 @@ type ReleaseAsset struct {
 // bindings extracted from its compiled native flow. It is a release format,
 // not an interpreter; the flow and definition owners still validate/run it.
 type FlowReleaseDescriptor struct {
+	Native       bool            `json:"native,omitempty"`
 	Name         string          `json:"name"`
 	Subject      AssetRef        `json:"subject"`
 	Actions      []AssetRef      `json:"actions"`
@@ -239,6 +240,22 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 				var p PropertyType
 				if !ok || source.SourceVersion != f.Property.SourceVersion || json.Unmarshal(source.Body, &p) != nil || p.CheckField(f) != nil {
 					return fmt.Errorf("frozen object field has an unavailable or incompatible property")
+				}
+			}
+		}
+		if ref.Kind == AssetEvaluation {
+			evaluation, err := ReadEvaluationSet(body)
+			if err != nil {
+				return err
+			}
+			function, ok := lookup[evaluation.Function.Ref]
+			var definition AIFunction
+			if !ok || function.SourceVersion != evaluation.Function.SourceVersion || json.Unmarshal(function.Body, &definition) != nil || definition.Check() != nil {
+				return fmt.Errorf("evaluation set needs its pinned function")
+			}
+			for _, test := range evaluation.Policy.Cases {
+				if !definition.EvaluationInput(test.Input) || definition.ValidateOutput(test.Expected) != nil {
+					return fmt.Errorf("evaluation cases differ from the pinned function")
 				}
 			}
 		}
@@ -501,6 +518,15 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			return err
 		}
 		required = append(required, AssetRef{App: ref.App, Kind: AssetObject, Name: function.Object})
+	case AssetEvaluation:
+		evaluation, err := ReadEvaluationSet(body)
+		if err != nil {
+			return err
+		}
+		if evaluation.Name != ref.Name {
+			return fmt.Errorf("evaluation identity differs")
+		}
+		required = append(required, evaluation.Function.Ref)
 	case AssetAgent:
 		var agent AgentReleaseDescriptor
 		if err := json.Unmarshal(body, &agent); err != nil {

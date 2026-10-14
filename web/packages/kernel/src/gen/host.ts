@@ -20,6 +20,13 @@ export type AIFunction = {
   roles: string[];
 };
 
+export type AIQuota = {
+  dailyTokens: number;
+  usedTokens: number;
+  perMinute: number;
+  usedCalls: number;
+};
+
 export type AIUsage = {
   calls: Usage[];
   totals: Total[];
@@ -125,6 +132,7 @@ export type AgentRunRecord = {
   changed: Stamp;
   archived?: boolean;
   versionPins?: RecordVersionPin[];
+  applications?: AssetBinding[];
   release?: string;
   definitionVersion?: string;
   agent: string;
@@ -262,6 +270,11 @@ export type Application = {
   resources?: AssetRef[];
 };
 
+export type ApplicationAgentBudget = {
+  resource: AssetBinding;
+  budget: Budget;
+};
+
 export type ApplicationArtifact = {
   ref: AssetRef;
   version: string;
@@ -281,6 +294,7 @@ export type ApplicationArtifact = {
 export type ApplicationBinding = {
   ref: AssetRef;
   kind: string;
+  name?: string;
   credential?: boolean;
 };
 
@@ -307,6 +321,12 @@ export type ApplicationDiagnostic = {
   runs: ApplicationRun[];
 };
 
+export type ApplicationExtension = {
+  resource: AssetBinding;
+  base: string;
+  source?: AssetBinding;
+};
+
 export type ApplicationHeader = {
   variant: string;
   title: string;
@@ -323,12 +343,28 @@ export type ApplicationHeaderItem = {
   action?: string;
 };
 
+export type ApplicationMaintenance = {
+  migrations: ApplicationMigration[];
+  retired: ApplicationRetirement[];
+  extensions: ApplicationExtension[];
+  retention: ApplicationRetention[];
+};
+
+export type ApplicationMigration = {
+  id: string;
+  state: string;
+  from: string;
+  to: string;
+};
+
 export type ApplicationMonitoring = {
   accepted: number;
   refused: number;
   constraintFailures: number;
   refusalRate: number;
   runs: ApplicationRunSummary;
+  memberQuota?: AIQuota;
+  agentBudgets: ApplicationAgentBudget[];
 };
 
 export type ApplicationProfile = {
@@ -348,6 +384,20 @@ export type ApplicationRecovery = {
   failedRuns: number;
 };
 
+export type ApplicationRetention = {
+  category: string;
+  duration: string;
+  state: string;
+};
+
+export type ApplicationRetirement = {
+  type: string;
+  name: string;
+  kind: string;
+  state: string;
+  migration: string;
+};
+
 export type ApplicationRole = {
   resource: AssetBinding;
   role: string;
@@ -357,6 +407,7 @@ export type ApplicationRole = {
 };
 
 export type ApplicationRun = {
+  applications?: AssetBinding[];
   subject?: string;
   id: string;
   kind: string;
@@ -406,6 +457,7 @@ export type ApplicationRuntime = {
   warnings: ApplicationWarning[];
   recovery: ApplicationRecovery;
   monitoring: ApplicationMonitoring;
+  maintenance: ApplicationMaintenance;
 };
 
 export type ApplicationVersion = {
@@ -879,7 +931,9 @@ export type Definition = {
   application?: Application;
   query?: NamedQuery;
   queryVersions?: Record<string, NamedQuery>;
+  flow?: FlowDefinition;
   function?: AIFunction;
+  evaluation?: EvaluationSetDescriptor;
   agent?: AgentReleaseDescriptor;
   operation?: Operation;
 };
@@ -915,6 +969,7 @@ export type Edge = {
 };
 
 export type Effect = {
+  applications?: AssetBinding[];
   id: string;
   endpoint: string;
   event: string;
@@ -1059,6 +1114,27 @@ export type ErrorBody = {
   detail?: string;
 };
 
+export type EvaluationCase = {
+  name: string;
+  input: unknown;
+  expected: unknown;
+};
+
+export type EvaluationPolicy = {
+  minQuality: number;
+  maxCostUsd: number;
+  maxLatencyMillis: number;
+  cases: EvaluationCase[];
+};
+
+export type EvaluationSetDescriptor = {
+  name: string;
+  title: string;
+  function: AssetBinding;
+  model?: string;
+  policy: EvaluationPolicy;
+};
+
 export type Explanation = {
   member: string;
   permission: string;
@@ -1200,6 +1276,7 @@ export type FunctionRun = {
   changed: Stamp;
   archived?: boolean;
   versionPins?: RecordVersionPin[];
+  applications?: AssetBinding[];
   question?: string;
   history?: string[];
   function: string;
@@ -3440,6 +3517,7 @@ export type TableRow = {
 };
 
 export type Task = {
+  applications?: AssetBinding[];
   id: string;
   kind: string;
   app: string;

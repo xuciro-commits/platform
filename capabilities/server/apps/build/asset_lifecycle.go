@@ -16,7 +16,7 @@ import (
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
 		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent,
+		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation,
 	}
 }
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {
@@ -71,6 +71,9 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	}
 	if ref.Kind == platform.AssetFunction {
 		return b.FunctionReleaseAsset(ref.Name, version)
+	}
+	if ref.Kind == platform.AssetEvaluation {
+		return b.evaluationSetPinned(ref, version)
 	}
 	if ref.Kind == platform.AssetAgent {
 		for _, record := range b.agents {
@@ -452,6 +455,13 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		var r Function
 		_ = json.Unmarshal(image, &r)
 		ref = platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: r.Name}
+	case SchemaEvaluationSetPublish:
+		r, asset, err := b.evaluationSetImage(image)
+		if err != nil {
+			return platform.AssetInstallation{}, err
+		}
+		ref = asset.Ref
+		_ = r
 	case SchemaAgentPublish:
 		var r Agent
 		_ = json.Unmarshal(image, &r)
@@ -853,6 +863,9 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 			return "", nil, err
 		}
 		return FunctionType, d, nil
+	case platform.AssetEvaluation:
+		d, err := b.evaluationSetDraft(asset)
+		return TestPlanType, d, err
 	case platform.AssetAgent:
 		d, err := decodeAgentAsset(asset)
 		if err != nil {

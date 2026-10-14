@@ -6,7 +6,7 @@
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching";
+export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string; group: "ontology" | "interface" | "logic" | "functions" | "integration";
@@ -21,6 +21,7 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "page", type: "build.page", view: "module", group: "interface", label: "Page", plural: "Pages", ref: "page" },
   { kind: "flow", type: "build.process", view: "flow", group: "logic", label: "Logic flow", plural: "Logic flows", ref: "flow" },
   { kind: "function", type: "build.function", view: "function", group: "functions", label: "AI function", plural: "AI functions", ref: "function" },
+  { kind:"evaluation-set",type:"build.testplan",view:"evaluation-set",group:"functions",label:"Evaluation set",plural:"Evaluation sets",ref:"evaluation-set" },
   { kind: "agent", type: "build.agent", view: "agent", group: "functions", label: "Agent", plural: "Agents", ref: "agent" },
   { kind: "compute", type: "build.code", view: "code", group: "functions", label: "Code function", plural: "Code functions", ref: "compute" },
   { kind: "connection", type: "build.connection", view: "connection", group: "integration", label: "Connection", plural: "Connections" },

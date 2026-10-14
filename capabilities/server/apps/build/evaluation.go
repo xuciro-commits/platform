@@ -52,11 +52,10 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The evaluated function version changed")
 			}
 			plan, ok := platform.Get[TestPlan](c, start.Plan)
-			if !ok || plan.Revision != start.PlanRevision || plan.Function == "" || len(plan.Evaluation) != 1 ||
-				!evalEqual(platform.Raw(plan.Evaluation[0]), platform.Raw(start.Policy)) {
+			if !ok || plan.Revision != start.PlanRevision || start.Policy.Check() != nil || start.Set == nil && (plan.Function == "" || len(plan.Evaluation) != 1 || !evalEqual(platform.Raw(plan.Evaluation[0]), platform.Raw(start.Policy))) || start.Set != nil && (start.Set.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: plan.Name}) || start.Set.SourceVersion == "") {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved evaluation plan changed")
 			}
-			run = Evaluation{Record: platform.Record{ID: id}, Candidate: start.Candidate, Function: start.Function,
+			run = Evaluation{Set: start.Set, Record: platform.Record{ID: id}, Candidate: start.Candidate, Function: start.Function,
 				Version: start.Version, Definition: string(platform.Raw(start.Definition)), DefinitionDigest: start.DefinitionDigest,
 				Plan: start.Plan, PlanRevision: start.PlanRevision, PlanDigest: start.PlanDigest,
 				Model: start.Model, ModelConfig: start.ModelConfig, Policy: []EvaluationPolicy{start.Policy}, State: "pending", CostComplete: true}

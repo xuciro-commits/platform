@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"slices"
@@ -38,23 +39,123 @@ type ApplicationRecovery struct {
 	FailedRuns     int    `json:"failedRuns"`
 }
 type ApplicationMonitoring struct {
-	Accepted           int                   `json:"accepted"`
-	Refused            int                   `json:"refused"`
-	ConstraintFailures int                   `json:"constraintFailures"`
-	RefusalRate        float64               `json:"refusalRate"`
-	Runs               ApplicationRunSummary `json:"runs"`
+	Accepted           int                      `json:"accepted"`
+	Refused            int                      `json:"refused"`
+	ConstraintFailures int                      `json:"constraintFailures"`
+	RefusalRate        float64                  `json:"refusalRate"`
+	Runs               ApplicationRunSummary    `json:"runs"`
+	MemberQuota        *platform.AIQuota        `json:"memberQuota,omitempty"`
+	AgentBudgets       []ApplicationAgentBudget `json:"agentBudgets"`
+}
+type ApplicationAgentBudget struct {
+	Resource platform.AssetBinding `json:"resource"`
+	Budget   platform.Budget       `json:"budget"`
 }
 type ApplicationRuntime struct {
-	Artifact   platform.ApplicationArtifact `json:"artifact"`
-	State      string                       `json:"state"`
-	Scope      string                       `json:"scope"`
-	Versions   []ApplicationVersion         `json:"versions"`
-	Previous   string                       `json:"previous,omitempty"`
-	Data       []ApplicationData            `json:"data"`
-	Runs       int                          `json:"runs"`
-	Warnings   []ApplicationWarning         `json:"warnings"`
-	Recovery   ApplicationRecovery          `json:"recovery"`
-	Monitoring ApplicationMonitoring        `json:"monitoring"`
+	Artifact    platform.ApplicationArtifact `json:"artifact"`
+	State       string                       `json:"state"`
+	Scope       string                       `json:"scope"`
+	Versions    []ApplicationVersion         `json:"versions"`
+	Previous    string                       `json:"previous,omitempty"`
+	Data        []ApplicationData            `json:"data"`
+	Runs        int                          `json:"runs"`
+	Warnings    []ApplicationWarning         `json:"warnings"`
+	Recovery    ApplicationRecovery          `json:"recovery"`
+	Monitoring  ApplicationMonitoring        `json:"monitoring"`
+	Maintenance ApplicationMaintenance       `json:"maintenance"`
+}
+
+type ApplicationMaintenance struct {
+	Migrations []ApplicationMigration  `json:"migrations"`
+	Retired    []ApplicationRetirement `json:"retired"`
+	Extensions []ApplicationExtension  `json:"extensions"`
+	Retention  []ApplicationRetention  `json:"retention"`
+}
+type ApplicationMigration struct {
+	ID    string `json:"id"`
+	State string `json:"state"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+type ApplicationRetirement struct {
+	Type      string `json:"type"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	State     string `json:"state"`
+	Migration string `json:"migration"`
+}
+type ApplicationExtension struct {
+	Resource platform.AssetBinding  `json:"resource"`
+	Base     string                 `json:"base"`
+	Source   *platform.AssetBinding `json:"source,omitempty"`
+}
+type ApplicationRetention struct {
+	Category string `json:"category"`
+	Duration string `json:"duration"`
+	State    string `json:"state"`
+}
+
+// Original migration records and installed extension declarations remain the
+// authorities. A declared retention duration does not invent a deletion job.
+func (t *Tenant) applicationMaintenanceLocked(m platform.Member, artifact platform.ApplicationArtifact, now time.Time) (ApplicationMaintenance, *kernel.Error) {
+	out := ApplicationMaintenance{Migrations: []ApplicationMigration{}, Retired: []ApplicationRetirement{}, Extensions: []ApplicationExtension{}, Retention: []ApplicationRetention{}}
+	models := map[string]bool{}
+	for _, binding := range artifact.Model {
+		if binding.Ref.Kind == platform.AssetObject {
+			models[binding.Ref.Name] = true
+		}
+	}
+	for _, binding := range artifact.Model {
+		if binding.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		info, ok := t.entity(binding.Ref.Name)
+		if ok && info.Extends != "" {
+			extension := ApplicationExtension{Resource: binding, Base: info.Extends}
+			if info.ExtensionSource != nil && models[info.ExtensionSource.Base.Ref.Name] {
+				source := info.ExtensionSource.Base
+				extension.Source = &source
+			}
+			out.Extensions = append(out.Extensions, extension)
+		}
+	}
+	page, refusal := t.recordSelectionFrom(t.records, m, platform.MigrationRunType, platform.Query{Archived: true}, now)
+	if refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		return out, refusal
+	}
+	for _, raw := range page.Records {
+		var run platform.MigrationRun
+		if json.Unmarshal(platform.Raw(raw), &run) != nil {
+			continue
+		}
+		candidate, err := t.releases.candidate(run.Plan.To)
+		if err != nil || !slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == artifact.Ref }) {
+			continue
+		}
+		out.Migrations = append(out.Migrations, ApplicationMigration{ID: run.ID, State: run.State, From: run.Plan.From, To: run.Plan.To})
+		for _, step := range run.Plan.Steps {
+			for _, typ := range step.Types {
+				if !models[typ] {
+					continue
+				}
+				if step.Kind == "retire-action" {
+					out.Retired = append(out.Retired, ApplicationRetirement{Type: typ, Name: step.Action, Kind: "action", State: run.State, Migration: run.ID})
+				}
+				if step.Kind == "retire" {
+					for _, field := range step.Fields {
+						out.Retired = append(out.Retired, ApplicationRetirement{Type: typ, Name: field.From, Kind: "field", State: run.State, Migration: run.ID})
+					}
+				}
+			}
+		}
+	}
+	if artifact.Profile != nil {
+		for category, duration := range artifact.Profile.Retention {
+			out.Retention = append(out.Retention, ApplicationRetention{Category: category, Duration: duration, State: "declared"})
+		}
+		slices.SortFunc(out.Retention, func(a, b ApplicationRetention) int { return strings.Compare(a.Category, b.Category) })
+	}
+	return out, nil
 }
 
 // ApplicationRuntimeOf projects the installed owners and original release
@@ -119,6 +220,22 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 	}
 	out.Artifact = artifact
+	out.Monitoring.AgentBudgets = []ApplicationAgentBudget{}
+	if t.ai != nil && len(artifact.AI) > 0 {
+		quota := t.ai.Quota(m, t.limits(), now)
+		out.Monitoring.MemberQuota = &quota
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind != platform.AssetAgent || !visible[asset.Ref] {
+			continue
+		}
+		var descriptor platform.AgentReleaseDescriptor
+		if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
+			t.mu.Unlock()
+			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
+		}
+		out.Monitoring.AgentBudgets = append(out.Monitoring.AgentBudgets, ApplicationAgentBudget{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Budget: descriptor.Budget})
+	}
 	model := map[string]bool{}
 	for _, binding := range artifact.Model {
 		if visible[binding.Ref] {
@@ -222,6 +339,12 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		}
 		out.Artifact.Profile = &profile
 	}
+	maintenance, refusal := t.applicationMaintenanceLocked(m, out.Artifact, now)
+	if refusal != nil {
+		t.mu.Unlock()
+		return out, refusal
+	}
+	out.Maintenance = maintenance
 	t.mu.Unlock()
 	for _, binding := range out.Artifact.Model {
 		if binding.Ref.Kind != platform.AssetObject {

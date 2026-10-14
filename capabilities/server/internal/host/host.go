@@ -30,6 +30,8 @@ type Host interface {
 // FlowBinding exposes hashes and asset paths, never private definition bytes.
 // Release is empty for development without a matching activated flow asset.
 type FlowBinding struct {
+	Existing     bool
+	Applications []platform.AssetBinding
 	Dependencies string
 	Release      string
 	Assets       []platform.AssetRef

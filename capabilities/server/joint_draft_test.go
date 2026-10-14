@@ -2,6 +2,8 @@ package platformserver
 
 import (
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -230,11 +232,47 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	decide(t, source, "builder", build.ID, build.SchemaProcessRun, build.ProcessType, "FLOW", map[string]any{"key": "run-one"}, at)
 	source.Work(at)
 	runs, refusal := source.ApplicationRuns(member, root, 0, 50, at, ApplicationRunFilter{Kind: "flow", Since: at, Until: at})
-	if refusal != nil || runs.Total != 1 || runs.Runs[0].ResourceName != "build.closecase" {
+	if refusal != nil || runs.Total != 1 || runs.Runs[0].ResourceName != "build.closecase" || len(runs.Runs[0].Applications) == 0 || runs.Runs[0].Applications[0].Ref != root {
 		t.Fatalf("filtered original flow: %+v %v", runs, refusal)
 	}
 	filtered, refusal := source.ApplicationRuns(member, root, 0, 50, at, ApplicationRunFilter{Kind: "flow", Since: at.Add(time.Second)})
 	if refusal != nil || filtered.Total != 0 {
 		t.Fatalf("time filter: %+v %v", filtered, refusal)
+	}
+	// Recorded application membership survives removal and must not be assigned
+	// to an unrelated application which begins sharing the flow later.
+	decide(t, source, "builder", build.ID, build.AppType+".edit", build.AppType, "APP", map[string]any{"resources": resources[:len(resources)-1]}, at.Add(time.Second))
+	decide(t, source, "builder", build.ID, build.SchemaHandOver, build.AppType, "APP", map[string]any{}, at.Add(time.Second))
+	decide(t, source, "builder", build.ID, build.AppType+".create", build.AppType, "OTHER", map[string]any{"name": "later", "title": "Later application", "resources": resources[len(resources)-1:]}, at.Add(time.Second))
+	decide(t, source, "builder", build.ID, build.SchemaHandOver, build.AppType, "OTHER", map[string]any{}, at.Add(time.Second))
+	runs, refusal = source.ApplicationRuns(member, root, 0, 50, at.Add(time.Second), ApplicationRunFilter{Kind: "flow"})
+	if refusal != nil || runs.Total != 1 || runs.Runs[0].Association != "application" || len(runs.Runs[0].Shared) != 0 {
+		t.Fatalf("historical application membership changed: %+v %v", runs, refusal)
+	}
+	other, refusal := source.ApplicationRuns(member, platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "later"}, 0, 50, at.Add(time.Second), ApplicationRunFilter{Kind: "flow"})
+	if refusal != nil || other.Total != 0 {
+		t.Fatalf("later membership claimed an existing run: %+v %v", other, refusal)
+	}
+	CheckReplay(t, source, entries, func() *Tenant { return compose(tenant) })
+	// Exercise the former 10,000-record read boundary without introducing a
+	// timing assertion or pretending synthetic inventory is capacity proof.
+	instance, ok := platform.Get[platform.FlowInstance](source.automation(flow.ID, false), runs.Runs[0].ID)
+	if !ok {
+		t.Fatal("original flow instance is unavailable")
+	}
+	source.records.mu.Lock()
+	for i := 0; i < 10001; i++ {
+		copy := instance
+		copy.ID = fmt.Sprintf("inventory-%05d", i)
+		value := reflect.New(reflect.TypeOf(copy)).Elem()
+		value.Set(reflect.ValueOf(copy))
+		source.records.types[platform.FlowInstanceType].setRow(copy.ID, &row{value: value})
+	}
+	source.records.mu.Unlock()
+	scale, refusal := source.ApplicationRuntimeOf(member, root, at.Add(time.Second))
+	if refusal != nil || scale.Runs != 10002 || !slices.ContainsFunc(scale.Warnings, func(warning ApplicationWarning) bool {
+		return warning.Kind == "runs" && warning.Actual == 10002 && warning.Expected == 1
+	}) {
+		t.Fatalf("run inventory silently lost its scale warning: %+v %v", scale, refusal)
 	}
 }

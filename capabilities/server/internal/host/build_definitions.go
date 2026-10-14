@@ -64,3 +64,9 @@ type FlowDefinitionPresence interface {
 type OperationCompletion interface {
 	OperationEnded(platform.Caller, string, time.Time) *kernel.Error
 }
+
+// NativeFlowAssets projects the original compiled Flow owner; code callbacks
+// remain in their immutable composition and never become tenant scripts.
+type NativeFlowAssets interface {
+	NativeFlowAsset(platform.Manifest, string, int, []platform.AssetRef) (platform.ReleaseAsset, error)
+}

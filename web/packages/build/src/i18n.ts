@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Evaluation set": "评测集",
+  "Evaluation sets": "评测集",
+  "Evaluation set name": "评测集名称",
+  "Publish evaluation set": "发布评测集",
   "Projects organize drafts. Applications are delivered as one closed artifact.": "项目组织草稿，应用作为完整闭合制品交付。",
   "Capacity and recovery declarations": "容量与恢复声明",
   "Declare the expected scale and retention for this application. Recovery targets require evidence from its environment.": "声明此应用的预期规模与保留周期。恢复目标须由所属环境的演练证据支持。",
@@ -3010,7 +3014,6 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
-  "Projects organize drafts. Applications are delivered as one closed artifact.": "项目组织草稿，应用作为完整闭合制品交付。",
 
  "Record card": "记录卡片",
  "Card accent tone": "卡片强调色调",

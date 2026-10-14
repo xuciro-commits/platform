@@ -228,6 +228,57 @@ func TestContinuousFlowAutoStartsOnceAndStopIsDurable(t *testing.T) {
 	}
 }
 
+func TestNativeFlowApplicationArtifactUsesOriginalDescriptor(t *testing.T) {
+	const tenant = "native-flow-application"
+	source := newFrameSource(tenant, 128<<10)
+	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	root := platform.AssetRef{App: "frames", Kind: platform.AssetApp, Name: "frames"}
+	assets, err := tn.releaseAssetsLocked(nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed, err := tn.candidateWithBindings([]platform.AssetRef{root}, assets, []platform.AssetRef{root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := platform.ArtifactOfApplication(root, closed.Assets)
+	if err != nil || len(artifact.Flows) != 1 || len(artifact.Model) != 1 || len(artifact.Rules) != 2 {
+		t.Fatalf("native application is not a closed artifact: %+v %v", artifact, err)
+	}
+	var flowAsset platform.ReleaseAsset
+	for _, asset := range closed.Assets {
+		if asset.Ref.Kind == platform.AssetFlow {
+			flowAsset = asset
+		}
+	}
+	var descriptor platform.FlowReleaseDescriptor
+	var definition struct {
+		platform.FlowDefinition
+		Continuous *platform.Continuous `json:"continuous"`
+		Mode       string               `json:"mode"`
+	}
+	if json.Unmarshal(flowAsset.Body, &descriptor) != nil || !descriptor.Native || json.Unmarshal(descriptor.Definition, &definition) != nil || definition.Version != 1 || definition.Mode != "manual" || definition.Continuous.FrameBytes != 256<<10 {
+		t.Fatalf("flow owner declaration was lost: %s", flowAsset.Body)
+	}
+	registry, err := tn.assetRegistryLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := registry.Owner(flowAsset.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := owner.ResolvePinned(flowAsset.Ref, flowAsset.SourceVersion)
+	if err != nil || !evalEqualRaw(retained.Body, flowAsset.Body) {
+		t.Fatal("native version did not resolve to its original owner")
+	}
+	descriptor.Definition = json.RawMessage(`{"id":"frames.window","version":1,"mode":"manual"}`)
+	flowAsset.Body = platform.Raw(descriptor)
+	if _, err := owner.PrepareReleaseAssets([]platform.ReleaseAsset{flowAsset}, platform.AssetReleaseContext{}); err == nil {
+		t.Fatal("changed native declaration bypassed its original compiled owner")
+	}
+}
+
 func TestContinuousWindowRunsRetainedComputeWithBackpressure(t *testing.T) {
 	const tenant, id = "continuous-window-compute", "frames.window:source"
 	source := newFrameComputeSource(tenant, 128<<10)

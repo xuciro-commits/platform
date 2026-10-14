@@ -24,10 +24,11 @@ const (
 	// pages and agent tools run the same declaration.
 	AssetQuery AssetKind = "query"
 	// AssetFlow is a versioned definition executed by the existing flow app.
-	AssetFlow     AssetKind = "flow"
-	AssetFunction AssetKind = "function"
-	AssetAgent    AssetKind = "agent"
-	AssetCompute  AssetKind = "compute"
+	AssetFlow       AssetKind = "flow"
+	AssetFunction   AssetKind = "function"
+	AssetAgent      AssetKind = "agent"
+	AssetEvaluation AssetKind = "evaluation-set"
+	AssetCompute    AssetKind = "compute"
 	// Integration assets describe existing owner configuration. They never
 	// include target credentials, cursors, data or running-work state.
 	AssetConnection AssetKind = "connection"
@@ -71,7 +72,7 @@ func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + 
 
 func (r AssetRef) Check() error {
 	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent}, r.Kind) {
+		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent, AssetEvaluation}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -388,24 +389,26 @@ func IconName(s string) bool {
 type Definition struct {
 	// OwnerRecord is the internal metadata read boundary for assets whose
 	// descriptor is not itself a record type. It never enters discovery JSON.
-	OwnerRecord      string                  `json:"-"`
-	ContentVersion   string                  `json:"contentVersion,omitempty"`
-	PropertyType     *PropertyType           `json:"propertyType,omitempty"`
-	PropertyVersions map[string]PropertyType `json:"propertyVersions,omitempty"`
-	LinkType         *LinkType               `json:"linkType,omitempty"`
-	LinkVersions     map[string]LinkType     `json:"linkVersions,omitempty"`
-	Ref              AssetRef                `json:"ref"`
-	Source           string                  `json:"source"`  // code, until published definitions exist
-	Version          string                  `json:"version"` // installed app manifest version, not a published revision
-	ContractVersion  int                     `json:"contractVersion"`
-	Requires         []AssetRef              `json:"requires"`
-	Entity           *EntityInfo             `json:"entity,omitempty"`
-	Action           *Action                 `json:"action,omitempty"`
-	Page             *Page                   `json:"page,omitempty"`
-	Application      *Application            `json:"application,omitempty"`
-	Query            *NamedQuery             `json:"query,omitempty"`
-	QueryVersions    map[string]NamedQuery   `json:"queryVersions,omitempty"`
-	Function         *AIFunction             `json:"function,omitempty"`
-	Agent            *AgentReleaseDescriptor `json:"agent,omitempty"`
-	Operation        *Operation              `json:"operation,omitempty"`
+	OwnerRecord      string                   `json:"-"`
+	ContentVersion   string                   `json:"contentVersion,omitempty"`
+	PropertyType     *PropertyType            `json:"propertyType,omitempty"`
+	PropertyVersions map[string]PropertyType  `json:"propertyVersions,omitempty"`
+	LinkType         *LinkType                `json:"linkType,omitempty"`
+	LinkVersions     map[string]LinkType      `json:"linkVersions,omitempty"`
+	Ref              AssetRef                 `json:"ref"`
+	Source           string                   `json:"source"`  // code, until published definitions exist
+	Version          string                   `json:"version"` // installed app manifest version, not a published revision
+	ContractVersion  int                      `json:"contractVersion"`
+	Requires         []AssetRef               `json:"requires"`
+	Entity           *EntityInfo              `json:"entity,omitempty"`
+	Action           *Action                  `json:"action,omitempty"`
+	Page             *Page                    `json:"page,omitempty"`
+	Application      *Application             `json:"application,omitempty"`
+	Query            *NamedQuery              `json:"query,omitempty"`
+	QueryVersions    map[string]NamedQuery    `json:"queryVersions,omitempty"`
+	Flow             *FlowDefinition          `json:"flow,omitempty"`
+	Function         *AIFunction              `json:"function,omitempty"`
+	Evaluation       *EvaluationSetDescriptor `json:"evaluation,omitempty"`
+	Agent            *AgentReleaseDescriptor  `json:"agent,omitempty"`
+	Operation        *Operation               `json:"operation,omitempty"`
 }

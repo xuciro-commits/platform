@@ -166,6 +166,11 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if target == "" {
 		target = r.GetSubmission().GetTarget().GetType() + "/" + r.GetSubmission().GetTarget().GetId()
 	}
+	applications, err := t.bindApplications(platform.AssetRef{App: owner, Kind: platform.AssetCompute, Name: op.Name}, call.Release, call.Dependencies)
+	if err != nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The operation dependencies cannot be bound")
+	}
+	call.Applications = applications
 	binding := operationBinding{Definition: op, Call: call, Member: member.ID, Inputs: slices.Clone(q.Inputs), SealedInput: input}
 	if op.Rules != nil {
 		if input != nil {
@@ -200,7 +205,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	}
 	body, _ := json.Marshal(binding)
 	at := r.GetRecordedTime().AsTime()
-	return call, platform.Effect{ID: id, Endpoint: operationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
+	return call, platform.Effect{Applications: applications, ID: id, Endpoint: operationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
 }
 func operationDefinition(app platform.App, name string, version int) (platform.Operation, int, bool) {
 	if owner, ok := app.(host.OperationDefinitions); ok {

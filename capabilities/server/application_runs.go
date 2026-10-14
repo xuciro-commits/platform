@@ -16,25 +16,26 @@ import (
 // ApplicationRun is a projection of original authorized runtime reads. Its
 // relationship describes resource use, never exclusive ownership by an app.
 type ApplicationRun struct {
-	Subject      string             `json:"subject,omitempty"`
-	ID           string             `json:"id"`
-	Kind         string             `json:"kind"`
-	Title        string             `json:"title"`
-	Resource     *platform.AssetRef `json:"resource,omitempty"`
-	ResourceName string             `json:"resourceName"`
-	State        string             `json:"state"`
-	Version      string             `json:"version,omitempty"`
-	Release      string             `json:"release,omitempty"`
-	Dependencies string             `json:"dependencies,omitempty"`
-	Module       string             `json:"module,omitempty"`
-	Node         string             `json:"node,omitempty"`
-	Error        string             `json:"error,omitempty"`
-	Association  string             `json:"association"`
-	Shared       []string           `json:"shared"`
-	Created      time.Time          `json:"created"`
-	AITokens     int                `json:"aiTokens,omitempty"`
-	AIUSD        float64            `json:"aiUsd,omitempty"`
-	CostReported bool               `json:"costReported,omitempty"`
+	Applications []platform.AssetBinding `json:"applications,omitempty"`
+	Subject      string                  `json:"subject,omitempty"`
+	ID           string                  `json:"id"`
+	Kind         string                  `json:"kind"`
+	Title        string                  `json:"title"`
+	Resource     *platform.AssetRef      `json:"resource,omitempty"`
+	ResourceName string                  `json:"resourceName"`
+	State        string                  `json:"state"`
+	Version      string                  `json:"version,omitempty"`
+	Release      string                  `json:"release,omitempty"`
+	Dependencies string                  `json:"dependencies,omitempty"`
+	Module       string                  `json:"module,omitempty"`
+	Node         string                  `json:"node,omitempty"`
+	Error        string                  `json:"error,omitempty"`
+	Association  string                  `json:"association"`
+	Shared       []string                `json:"shared"`
+	Created      time.Time               `json:"created"`
+	AITokens     int                     `json:"aiTokens,omitempty"`
+	AIUSD        float64                 `json:"aiUsd,omitempty"`
+	CostReported bool                    `json:"costReported,omitempty"`
 }
 type ApplicationRunPage struct {
 	Application platform.AssetRef     `json:"application"`
@@ -120,12 +121,35 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		slices.Sort(names)
 		return slices.Compact(names)
 	}
+	belongs := func(bindings []platform.AssetBinding) bool {
+		return slices.ContainsFunc(bindings, func(binding platform.AssetBinding) bool { return binding.Ref == ref })
+	}
+	visibleApps := map[platform.AssetRef]string{}
+	for _, definition := range visible {
+		if definition.Application != nil {
+			visibleApps[definition.Ref] = definition.Application.Title
+		}
+	}
 	appendRun := func(run ApplicationRun) {
+		if len(run.Applications) > 0 && !belongs(run.Applications) {
+			return
+		}
 		if filter.Kind != "" && run.Kind != filter.Kind || filter.State != "" && run.State != filter.State || filter.Subject != "" && run.Subject != filter.Subject || !filter.Since.IsZero() && run.Created.Before(filter.Since) || !filter.Until.IsZero() && run.Created.After(filter.Until) {
 			return
 		}
+		run.Applications = slices.DeleteFunc(slices.Clone(run.Applications), func(binding platform.AssetBinding) bool { return visibleApps[binding.Ref] == "" })
+		if belongs(run.Applications) {
+			run.Association = "application"
+		}
 		run.Shared = []string{}
-		if run.Resource != nil {
+		if len(run.Applications) > 0 {
+			for _, binding := range run.Applications {
+				if binding.Ref != ref {
+					run.Shared = append(run.Shared, visibleApps[binding.Ref])
+				}
+			}
+			slices.Sort(run.Shared)
+		} else if run.Resource != nil {
 			run.Shared = shares(*run.Resource)
 		}
 		out.Runs = append(out.Runs, run)
@@ -147,39 +171,16 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		}
 	}
 	records := func(typ string, domain json.RawMessage) ([]any, *kernel.Error) {
-		rows := []any{}
-		for skip := 0; ; skip += 500 {
-			page, err := t.Records(m, typ, platform.Query{Domain: domain, Sort: []string{"-created"}, Offset: skip, Limit: 500, Archived: true}, now)
-			if err != nil {
-				if err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED || err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
-					return rows, nil
-				}
-				return nil, err
-			}
-			if page.Total > 10000 {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Application run inventory exceeds its 10000-record profile")
-			}
-			rows = append(rows, page.Records...)
-			if skip+len(page.Records) >= page.Total {
-				return rows, nil
-			}
-			if len(page.Records) == 0 {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Run inventory changed during reading")
-			}
+		page, err := t.recordSelectionFrom(t.records, m, typ, platform.Query{Domain: domain, Archived: true}, now)
+		if err != nil && (err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED || err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND) {
+			return nil, nil
 		}
+		return page.Records, err
 	}
-	flows := []string{}
-	for r := range union {
-		if r.Kind == platform.AssetFlow {
-			flows = append(flows, r.Name)
-		}
-	}
-	slices.Sort(flows)
 	relatedFlows := map[string]ApplicationRun{}
 	operationNodes := map[string]string{}
-	if len(flows) > 0 {
-		domain, _ := json.Marshal([]any{[]any{"flow", "in", flows}})
-		rows, err := records(platform.FlowInstanceType, domain)
+	{
+		rows, err := records(platform.FlowInstanceType, nil)
 		if err != nil {
 			return out, err
 		}
@@ -197,9 +198,16 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 				}
 			}
 			if resource.App == "" {
-				continue
+				if !belongs(x.Applications) {
+					continue
+				}
+				owner, _, ok := strings.Cut(x.Flow, ".")
+				if !ok {
+					continue
+				}
+				resource = platform.AssetRef{App: owner, Kind: platform.AssetFlow, Name: x.Flow}
 			}
-			run := ApplicationRun{Subject: x.Subject, ID: x.ID, Kind: "flow", Title: x.Title, Resource: &resource, ResourceName: x.Flow, State: x.State, Version: fmt.Sprint(x.Version), Release: x.Release, Dependencies: x.Dependencies, Association: "resource", Created: x.Created.At}
+			run := ApplicationRun{Applications: x.Applications, Subject: x.Subject, ID: x.ID, Kind: "flow", Title: x.Title, Resource: &resource, ResourceName: x.Flow, State: x.State, Version: fmt.Sprint(x.Version), Release: x.Release, Dependencies: x.Dependencies, Association: "resource", Created: x.Created.At}
 			if !x.Withheld {
 				for _, token := range x.Tokens {
 					if token.Operation != "" {
@@ -253,10 +261,10 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 					}
 				}
 			}
-			if association == "" {
+			if association == "" && !belongs(x.Applications) {
 				continue
 			}
-			run := ApplicationRun{Subject: x.Ref, ID: x.ID, Kind: "agent", Title: x.Title, Resource: &resource, ResourceName: x.Agent, State: x.State, Version: x.DefinitionVersion, Release: release, Association: association, Node: x.Step, Created: x.Created.At}
+			run := ApplicationRun{Applications: x.Applications, Subject: x.Ref, ID: x.ID, Kind: "agent", Title: x.Title, Resource: &resource, ResourceName: x.Agent, State: x.State, Version: x.DefinitionVersion, Release: release, Association: association, Node: x.Step, Created: x.Created.At}
 			if !x.Withheld {
 				run.Error = x.Stopped
 				run.AITokens, run.AIUSD = x.TokensUsed, x.Cost
@@ -290,7 +298,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		if parentType == platform.FlowInstanceType && hasParent {
 			association = "flow"
 		}
-		if !graphFor(binding.Call.Release)[resource] && association != "flow" {
+		if !belongs(effect.Applications) && !graphFor(binding.Call.Release)[resource] && association != "flow" {
 			association = ""
 			for _, source := range binding.Call.Sources {
 				typ, id, _ := strings.Cut(source, "/")
@@ -305,7 +313,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 				continue
 			}
 		}
-		appendRun(ApplicationRun{ID: effect.ID, Kind: "compute", Title: binding.Definition.Title, Resource: &resource, ResourceName: resource.Name, State: result.State, Version: operationStartupVersion(binding.Call), Release: binding.Call.Release, Dependencies: binding.Call.Dependencies, Module: binding.Call.Module, Node: operationNodes[effect.ID], Error: result.Error, Association: association, Created: effect.At})
+		appendRun(ApplicationRun{Applications: effect.Applications, ID: effect.ID, Kind: "compute", Title: binding.Definition.Title, Resource: &resource, ResourceName: resource.Name, State: result.State, Version: operationStartupVersion(binding.Call), Release: binding.Call.Release, Dependencies: binding.Call.Dependencies, Module: binding.Call.Module, Node: operationNodes[effect.ID], Error: result.Error, Association: association, Created: effect.At})
 	}
 	if rows, err := records(buildapi.FunctionCallType, nil); err != nil {
 		return out, err
@@ -321,10 +329,10 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 				owner = "build"
 			}
 			resource := platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: call.Function}
-			if !graphFor(call.Release)[resource] {
+			if !belongs(call.Applications) && !graphFor(call.Release)[resource] {
 				continue
 			}
-			run := ApplicationRun{ID: call.ID, Kind: "function", Title: call.Function, Resource: &resource, ResourceName: call.Function, State: call.State, Version: fmt.Sprint(call.Version), Release: call.Release, Dependencies: call.Dependencies, Association: "resource", Created: call.Created.At}
+			run := ApplicationRun{Applications: call.Applications, ID: call.ID, Kind: "function", Title: call.Function, Resource: &resource, ResourceName: call.Function, State: call.State, Version: fmt.Sprint(call.Version), Release: call.Release, Dependencies: call.Dependencies, Association: "resource", Created: call.Created.At}
 			if call.Source != "" {
 				run.Subject = call.Contract.Object + "/" + call.Source
 			}
@@ -350,9 +358,12 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 					}
 				}
 				if resource.App == "" {
-					continue
+					if !belongs(effect.Applications) {
+						continue
+					}
+					resource = platform.AssetRef{App: effect.App, Kind: platform.AssetApp, Name: effect.App}
 				}
-				run := ApplicationRun{ID: effect.ID, Kind: "effect", Title: effect.Event, Subject: effect.Target, Resource: &resource, ResourceName: resource.Name, State: effect.State, Association: "subject", Created: effect.At}
+				run := ApplicationRun{Applications: effect.Applications, ID: effect.ID, Kind: "effect", Title: effect.Event, Subject: effect.Target, Resource: &resource, ResourceName: resource.Name, State: effect.State, Association: "subject", Created: effect.At}
 				if !effect.Withheld {
 					run.Error = effect.Error
 				}
@@ -369,10 +380,10 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 			for _, task := range tasks {
 				// A scheduler job belongs to its original owner and may serve
 				// several application artifacts. It is labelled as shared work.
-				if task.Kind != "job" || !owners[task.App] {
+				if task.Kind != "job" || !belongs(task.Applications) && !owners[task.App] {
 					continue
 				}
-				run := ApplicationRun{ID: task.ID, Kind: "job", Title: task.Title, ResourceName: task.App, State: task.State, Association: "owner", Created: task.Last}
+				run := ApplicationRun{Applications: task.Applications, ID: task.ID, Kind: "job", Title: task.Title, ResourceName: task.App, State: task.State, Association: "owner", Created: task.Last}
 				if !task.Withheld {
 					run.Error = task.Error
 				}

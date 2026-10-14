@@ -27,6 +27,7 @@ type DynamicAgentDefinitions interface {
 // AgentHost is the execution and read context actually consumed by Agents.
 // The owner never receives the tenant's component fields or record-store locks.
 type AgentHost interface {
+	ApplicationBindings(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
 	AppCatalog
 	Automation(platform.Caller, string) platform.Caller
 	Caller(platform.Caller, platform.Member, string) platform.Caller

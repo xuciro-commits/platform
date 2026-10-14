@@ -363,22 +363,28 @@ workflow_setup() {
   result=$(submit "$builder" wf-archive-denied build.object.archive build.object WF-O '{}')
   jq -e '.error.code == "ERROR_CODE_CONFLICT"' <<<"$result" >/dev/null || fail "archived an installed workflow dependency"
   workflow_submit "$builder" wf-object-edit build.object.edit build.object WF-O '{"title":"Changed while waiting"}'
-  result=$(submit "$builder" wf-object-denied build.object.publish build.object WF-O '{}')
-  jq -e '.error.code == "ERROR_CODE_INVALID_ARGUMENT"' <<<"$result" >/dev/null || fail "changed live workflow dependency"
+  workflow_submit "$builder" wf-object-metadata build.object.publish build.object WF-O '{}'
+  # Bound instances retain their original closure while compatible metadata
+  # changes publish. Unbound historical instances keep the original refusal.
+  workflow_wait "$builder" "$flow:WF-OLD" 1 "$first"
+  workflow_wait "$builder" "$flow:WF-NEW" 2 "$second"
   workflow_submit "$builder" wf-object-reset build.object.edit build.object WF-O '{"title":"Workflow recovery sample"}'
+  workflow_submit "$builder" wf-object-restored build.object.publish build.object WF-O '{}'
   jq -n --arg first "$first" --arg second "$second" '{first:$first,second:$second}' >"$backup/workflow-$suffix.json"
 }
 function_wait() {
-  local who=$1 id=$2 source=$3 release=$4 result
+  local who=$1 id=$2 source=$3 release=$4 dependencies=${5:-} result
   for _ in $(seq 30); do
     result=$(workflow_get "$who" "records/build.function-call/$id" || true)
-    if jq -e --arg source "$source" --arg release "$release" \
-      '.record | .state == "ready" and .version == 1 and .source == $source and .release == $release and .model == "local/echo" and
+    if jq -e --arg source "$source" --arg release "$release" --arg dependencies "$dependencies" \
+      '.record | .state == "ready" and .version == 1 and .source == $source and (.release // "") == $release and .model == "local/echo" and
+        ($dependencies == "" or .dependencies == $dependencies) and
         .metered == true and .tokensReported == true and .inputTokens > 0 and .outputTokens == 20 and
         .costReported == true and .costUsd == 0.01 and (.latencyMillis // 0) >= 0 and (.output | fromjson | .category == "routine")' \
       <<<"$result" >/dev/null 2>&1; then return; fi
     sleep 1
   done
+  jq -c '.record | {state,version,source,release,dependencies,model,metered,tokensReported,costReported,code,reason}' <<<"$result" >&2 || true
   fail "function $id did not keep its source, version, release, measured usage and strict answer"
 }
 function_setup() {
@@ -416,24 +422,33 @@ function_setup() {
 }
 function_after_restart() {
   local SERVER=$1 TENANT=$2 AUTHORITY=build operator=$3 suffix=$4
-  local typ=build.rehearsal$suffix candidate joint name
+  local typ=build.rehearsal$suffix candidate name builder
   candidate=$(jq -r .candidate "$backup/function-$suffix.json")
-  joint=$(jq -r .candidate "$backup/function-joint-$suffix.json")
+  if [[ $suffix == plant ]]; then builder=$SUP; else builder=$MGR; fi
   name=$(jq -r .name "$backup/function-$suffix.json")
   function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"
+  # The migration probe activated a different root. New direct calls keep
+  # the installed function closure without claiming that unrelated release.
+  local active dependencies
+  active=$(workflow_get "$operator" releases/active | jq -er .id) || fail "active migration release unavailable after restart"
+  workflow_get "$builder" "releases/candidates/$active" | jq -e --arg name "$name" \
+    'all(.assets[]; .ref.kind != "function" or .ref.name != $name)' >/dev/null || fail "migration candidate unexpectedly contains the advice function"
+  dependencies=$(workflow_get "$builder" records/build.function-call/FN-CALL-JOINT | jq -er .record.dependencies) || fail "original joint function dependencies unavailable to the builder"
   workflow_submit "$operator" fn-call-new build.function-call.start build.function-call FN-CALL-NEW "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-NEW\"}"
-  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$joint"
+  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "" "$dependencies"
 }
 function_after_recovery() {
   local SERVER=$1 TENANT=$2 AUTHORITY=build operator=$3 suffix=$4
-  local typ=build.rehearsal$suffix candidate joint name
+  local typ=build.rehearsal$suffix candidate name builder
   candidate=$(jq -r .candidate "$backup/function-$suffix.json")
-  joint=$(jq -r .candidate "$backup/function-joint-$suffix.json")
+  if [[ $suffix == plant ]]; then builder=$SUP; else builder=$MGR; fi
   name=$(jq -r .name "$backup/function-$suffix.json")
   function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"
-  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$joint"
+  local dependencies
+  dependencies=$(workflow_get "$builder" records/build.function-call/FN-CALL-JOINT | jq -er .record.dependencies) || fail "recovered joint function dependencies unavailable to the builder"
+  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "" "$dependencies"
   workflow_submit "$operator" fn-call-recovered build.function-call.start build.function-call FN-CALL-RECOVERED "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-NEW\"}"
-  function_wait "$operator" FN-CALL-RECOVERED "$typ/WF-NEW" "$joint"
+  function_wait "$operator" FN-CALL-RECOVERED "$typ/WF-NEW" "" "$dependencies"
 }
 function_joint_setup() {
   local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 suffix=$4
@@ -499,6 +514,8 @@ deployed_browser() {
     pnpm --dir ../../web/e2e exec playwright test --config playwright.deploy.config.ts >"$backup/browser-$phase.log" 2>&1; then
     # Playwright traces are retained under web/e2e/test-results/deploy-* for diagnosis.
     # Do not print provider redirect URLs or browser session tokens in logs.
+    curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/work" |
+      jq '[.[] | select(.kind == "job") | {app,state,error,attempts}]' >&2
     fail "deployed browser function release ($phase); see the retained Playwright trace"
   fi
   echo "ok   deployed browser $phase: OIDC workspace, shared function page and native flow"
@@ -506,13 +523,28 @@ deployed_browser() {
 
 # Inputs of every kind the journal keeps: decisions and a push batch.
 (cd ../../apps/mes/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
-  go run ./cmd/gateway-sim -server "$MANUFACTURING" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >/dev/null)
+  go run ./cmd/gateway-sim -server "$MANUFACTURING" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >"$backup/gateway.log")
+if awk '$1 == "batch" && $NF != 200 { bad = 1 } END { exit !bad }' "$backup/gateway.log"; then
+  cat "$backup/gateway.log" >&2
+  fail "gateway batches were refused"
+fi
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
 
 # Platform operations (ADR-0013): the gateway's downtime reached the supervisor
 # of the line, not its operators; Settings disables the gateway's connector, and
 # that is a decision the restart below keeps.
-curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/notifications" | jq -e 'any(.[]; .title | startswith("Downtime on"))' >/dev/null || fail "supervisor not notified"
+notified=false
+for _ in $(seq 30); do
+  if curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/notifications" | jq -e 'any(.[]; .key | startswith("down:"))' >/dev/null; then
+    notified=true
+    break
+  fi
+  sleep 1
+done
+if [[ $notified != true ]]; then
+  curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/notifications" | jq '[.[] | {title,key,ref}]' >&2
+  fail "supervisor not notified"
+fi
 [[ $(curl -s -H "Authorization: Bearer $OP1" "$MANUFACTURING/v1/notifications" | jq length) == 0 ]] || fail "operator notified"
 AUTHORITY=platform submit "$SUP" o-1 platform.connector.disable platform.connector gateway-l1 '{}' | jq -e .record >/dev/null || fail "disable connector"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/connectors" | jq -r '.[] | select(.id == "gateway-l1") | .health') == disabled ]] || fail "connector health"
@@ -586,7 +618,7 @@ done
 for _ in $(seq 20); do [[ $(wo WO-3) == refused* ]] && break; sleep 0.5; done
 [[ $(wo WO-3) == "refused no planned order to confirm against " ]] || fail "refusal of WO-3: $(wo WO-3)"
 submit "$AGENT" a-2 mes.order.reconfirm mes.order WO-3 '{"planned":"MO-3"}' | jq -e .record >/dev/null || fail "assistant resend"
-[[ $(wo WO-3) == "refused agent-l1 holds no role in erp, so may not "*" MO-3" ]] || fail "the ERP took the assistant's confirmation, or refused it without saying why: $(wo WO-3)"
+[[ $(wo WO-3) == "refused Authorization denied at verb: No role or policy grants this operation MO-3" ]] || fail "the ERP took the assistant's confirmation, or refused it without saying why: $(wo WO-3)"
 submit "$SUP" a-3 mes.order.reconfirm mes.order WO-3 '{}' | jq -e .record >/dev/null || fail "supervisor resend"
 [[ $(wo WO-3) == "confirmed MJ/"????"/00002 MO-3" ]] || fail "WO-3 after the supervisor's resend: $(wo WO-3)"
 mailed() { curl -s "$SINK/mail" | jq -r '[.[] | select(.to == "sup@plant.test") | .subject] | join("|")'; }
@@ -775,7 +807,7 @@ records "$MGR" 'crm.opportunity/OPP-1' | jq -e '.record | .adviceState == "ready
 echo "ok   typed AI functions: CRM opportunity and MES order use the shared bounded path; structured advice, sources, definition/model bindings and usage persist; business states stay unchanged; unauthorized calls and forged replies refused"
 workflow_setup "$MANUFACTURING" plant-sz "$SUP" "$OP1" sup-1 op-l1 plant
 workflow_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" manager-1 sales-1 hotel
-echo "ok   workflows: fixed isolated plans, exact releases, old/new native asks, incompatible dependency publication refused in both industries"
+echo "ok   workflows: fixed isolated plans, exact releases, old/new native asks and retained closures across compatible metadata publication in both industries"
 function_setup "$MANUFACTURING" plant-sz "$SUP" "$OP2" plant op-l2
 function_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel sales-1
 echo "ok   builder AI functions: both industries activate a page pinned to retained version 1 after publishing version 2; operators keep strict results in separate call records"

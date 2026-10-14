@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"platformserver/internal/host"
 	"slices"
+	"strings"
 	"time"
 
 	build "platformserver/internal/host/buildapi"
@@ -109,6 +110,16 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			}
 			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
 				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+		case platform.AssetFlow:
+			if def.Flow == nil {
+				return nil, fmt.Errorf("native flow has no owner descriptor")
+			}
+			name := strings.TrimPrefix(def.Ref.Name, manifest.ID+".")
+			asset, err := t.nativeFlowAsset(app, name, def.Flow.Version)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, asset)
 		case platform.AssetFunction:
 			if def.Function == nil {
 				return nil, fmt.Errorf("code function %s has no owner declaration", def.Ref)
@@ -160,7 +171,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			}
 		}
 		asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
-			platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: resources})
+			platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)})
 		if err != nil {
 			return nil, err
 		}

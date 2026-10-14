@@ -358,15 +358,16 @@ type OperationRequest struct {
 	Release  *string         `json:"release,omitempty"`
 }
 type OperationCall struct {
-	OwnerVersion string   `json:"ownerVersion,omitempty"`
-	ID           string   `json:"id"`
-	Definition   string   `json:"definition"`
-	InputHash    string   `json:"inputHash"`
-	Version      int      `json:"version,omitempty"`
-	Module       string   `json:"module,omitempty"`
-	Sources      []string `json:"sources,omitempty"`
-	Dependencies string   `json:"dependencies"`
-	Release      string   `json:"release,omitempty"`
+	Applications []AssetBinding `json:"applications,omitempty" field:"readonly" type:"json"`
+	OwnerVersion string         `json:"ownerVersion,omitempty"`
+	ID           string         `json:"id"`
+	Definition   string         `json:"definition"`
+	InputHash    string         `json:"inputHash"`
+	Version      int            `json:"version,omitempty"`
+	Module       string         `json:"module,omitempty"`
+	Sources      []string       `json:"sources,omitempty"`
+	Dependencies string         `json:"dependencies"`
+	Release      string         `json:"release,omitempty"`
 }
 type OperationResult struct {
 	OwnerVersion string          `json:"ownerVersion,omitempty"`

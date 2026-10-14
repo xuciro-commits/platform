@@ -14,14 +14,14 @@ type FunctionDraft = { id: string; revision: number; name: string; title: string
 type Step = Omit<Api.SimulationStep, "payload" | "expect"> & { payload: string; expect: "accepted" | "refused" };
 type EvaluationCase = { name: string; input: string; expected: string };
 type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
-type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
+type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
 export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
   return <InputDraftProvider isolated scope="candidate-test"><CandidateTestForm {...props}/></InputDraftProvider>;
 }
-function CandidateTestForm({ processId = "", functionId = "", objectId = "", embedded = false, onStepSelect }: {
-  processId?: string; functionId?: string; objectId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
+function CandidateTestForm({ processId = "", functionId = "", objectId = "", planId = "", embedded = false, onStepSelect }: {
+  processId?: string; functionId?: string; objectId?: string; planId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
 }) {
   const { client, role, decide, action } = useHost();
   const { open } = useApplicationWorkspace();
@@ -34,6 +34,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
   const [planID, setPlanID] = useState(""),[createID,setCreateID]=useState(()=>crypto.randomUUID());
   const [revision, setRevision] = useState(0);
   const [title, setTitle] = useState("");
+  const [setName,setSetName]=useState("");
   const [edited, setDirty] = useState(false);
  const inputDrafts=useInputDrafts(),dirty=edited||!!inputDrafts?.dirty;
   const [saved, setSaved] = useState(false);
@@ -103,7 +104,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
     clear(); setKind(nextKind); setID(nextID); setSteps([]);
     // A new root gets a new plan identity; Save must never move the previous
     // asset's plan simply because the user selected a different draft.
-    setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setMember(""); setSamples("[]");
+    setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");
     setModel("fixture/probe"); setEvaluationEnabled(false);
     setMinQuality(1); setMaxCostUsd(0.1); setMaxLatencyMillis(30000);
     setCases([{ name: "synthetic", input: "{}", expected: "{}" }]);
@@ -112,16 +113,21 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
     clear();
     setSteps((old) => old.map((step, i) => i === index ? { ...step, ...patch } : step));
   };
-  const load = (plan: TestPlan) => {
-    if (!matchesAsset(plan)) return;
+  const load = (plan: TestPlan, initial = false) => {
+    if (!initial && !matchesAsset(plan)) return;
     clear(); setPlanID(plan.id); setRevision(plan.revision);
-    setTitle(plan.title); setKind(plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.function || plan.process || plan.object || ""); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
+    setTitle(plan.title);setSetName(plan.name??""); setKind(plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.function || plan.process || plan.object || ""); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
     setSteps(plan.steps); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setDirty(false);
     const policy = plan.evaluation?.[0];
     setEvaluationEnabled(Boolean(policy));
     setMinQuality(policy?.minQuality ?? 1); setMaxCostUsd(policy?.maxCostUsd ?? 0.1); setMaxLatencyMillis(policy?.maxLatencyMillis ?? 30000);
     setCases(policy?.cases.map((item) => ({ name: item.name, input: JSON.stringify(item.input, null, 2), expected: JSON.stringify(item.expected, null, 2) })) ?? [{ name: "synthetic", input: "{}", expected: "{}" }]);
   };
+  useEffect(() => {
+    if (!planId || planID === planId) return;
+    const selected = plans.data?.records.find(plan => plan.id === planId);
+    if (selected) load(selected, true);
+  }, [planId, planID, plans.data]);
   const reload = async () => {
     setBusy(true);
     try {
@@ -160,7 +166,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
-        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, samples: JSON.parse(samples), evaluation },
+        { name:setName||undefined,title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, samples: JSON.parse(samples), evaluation },
         { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) {
         const refreshed = await plans.refetch();
         const record = refreshed.data?.records.find((plan) => plan.id === target);
@@ -199,6 +205,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
               const plan = ownPlans.find((record) => record.id === event.target.value);
               clear();setCreateID(crypto.randomUUID());inputDrafts?.clear(); setPlanID(plan?.id ?? ""); setRevision(plan?.revision ?? 0);
               if (plan) load(plan);
+              else { setTitle(""); setSetName(""); }
             }}>
               <option value="">{t("New test plan")}</option>
               {ownPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}
@@ -208,6 +215,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
             <Input value={title} onChange={(event) => { setTitle(event.target.value); clear(); }} />
           </label>
         </div>
+        {kind==="function"&&<label className="grid gap-1 text-xs">{t("Evaluation set name")}<Input value={setName} onChange={event=>{setSetName(event.target.value);clear();}}/></label>}
         {kind === "flow" && <Disclosure summary={<span className="text-xs font-medium">{t("Synthetic query samples")}</span>}><div className="mt-2 grid gap-2">
           <p className="text-[11px] leading-5 text-muted">{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</p>
           <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); clear(); }} />
@@ -344,8 +352,9 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", emb
             : { type: `build.${object?.name}`, id: "TEST-1", action: `build.${object?.name}.${object?.actions?.[0]?.name ?? "edit"}`, payload: "{}", expect: "accepted" }]); }}>{t("Add a test step")}</Button>
           <AssetControls type="build.testplan" record={planID ? { id: planID, revision } : undefined} dirty={dirty} busy={busy} onCancel={discardChanges} />
           <Button disabled={(!object && !process?.manual) || !steps.length || !title.trim()} onClick={save}>{t("Save test plan")}</Button>
+          {kind==="function"&&evaluationEnabled&&<Button disabled={!planID||dirty||busy||!setName.trim()} onClick={()=>void open({view:"release-review",params:{kind:"evaluation-set",id:planID}})}>{t("Publish evaluation set")}</Button>}
           <Button disabled={!planID} onClick={reload}>{t("Reload saved plan")}</Button>
-          <Button onClick={() => { clear(); setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); }}>{t("New test plan")}</Button>
+          <Button onClick={() => { clear(); setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); }}>{t("New test plan")}</Button>
           <Button variant="primary" disabled={(!object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
         </div>
       </fieldset>

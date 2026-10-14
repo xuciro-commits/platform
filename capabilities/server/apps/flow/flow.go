@@ -402,7 +402,7 @@ func (f *Flows) binding(x FlowInstance) (host.FlowBinding, error) {
 	if d == nil {
 		return host.FlowBinding{}, fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
 	}
-	bound, err := f.host.BindFlow(d.app, d.Name, d.Version, host.FlowBinding{Dependencies: x.Dependencies, Release: x.Release})
+	bound, err := f.host.BindFlow(d.app, d.Name, d.Version, host.FlowBinding{Dependencies: x.Dependencies, Release: x.Release, Applications: x.Applications, Existing: true})
 	if err != nil {
 		return bound, fmt.Errorf("flow instance %s: %w", x.ID, err)
 	}
@@ -540,6 +540,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 	}
 	for _, x := range running {
 		d := f.def(x.Flow, x.Version)
+
 		if d == nil {
 			continue
 		}
@@ -675,26 +676,32 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 	out := []FlowDefinition{}
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		for _, d := range f.defs[id] {
-			v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: append([]string{}, d.Start.On...), Steps: []FlowStep{}}
-			if d.Start.Type != "" { // started by a record's state, not an event (ADR-0028 D8)
-				v.Start = append(v.Start, "state of "+d.Start.Type)
-			}
-			if d.Start.Continuous {
-				v.Start = append(v.Start, "continuous source")
-			}
-			for _, s := range d.Steps {
-				sv := FlowStep{Name: s.Name, Title: cmp.Or(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
-				for _, n := range append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...) {
-					if n != "" && !slices.Contains(sv.Next, n) {
-						sv.Next = append(sv.Next, n)
-					}
-				}
-				v.Steps = append(v.Steps, sv)
-			}
+			v := flowDefinitionOf(d)
 			out = append(out, v)
 		}
 	}
 	return out, nil
+}
+
+func flowDefinitionOf(d *flowDef) FlowDefinition {
+	id := d.app + "." + d.Name
+	v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: append([]string{}, d.Start.On...), Steps: []FlowStep{}}
+	if d.Start.Type != "" { // started by a record's state, not an event (ADR-0028 D8)
+		v.Start = append(v.Start, "state of "+d.Start.Type)
+	}
+	if d.Start.Continuous {
+		v.Start = append(v.Start, "continuous source")
+	}
+	for _, s := range d.Steps {
+		sv := FlowStep{Name: s.Name, Title: cmp.Or(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
+		for _, n := range append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...) {
+			if n != "" && !slices.Contains(sv.Next, n) {
+				sv.Next = append(sv.Next, n)
+			}
+		}
+		v.Steps = append(v.Steps, sv)
+	}
+	return v
 }
 
 func kindOf(s platform.Step) string {

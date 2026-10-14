@@ -42,14 +42,15 @@ type AIFunction struct {
 // prompt bytes. Apps retain Sources alongside derived answer fields so their
 // Entity.Derived declarations enforce current read permissions (ADR-0033).
 type FunctionCall struct {
-	Definition   string   `json:"definition"`
-	Dependencies string   `json:"dependencies"`
-	Model        string   `json:"model"`
-	InputHash    string   `json:"inputHash"`
-	Sources      []string `json:"sources"`
-	Source       string   `json:"source"`
-	Version      int      `json:"version,omitempty"`
-	Release      string   `json:"release,omitempty"`
+	Applications []AssetBinding `json:"applications,omitempty" field:"readonly" type:"json"`
+	Definition   string         `json:"definition"`
+	Dependencies string         `json:"dependencies"`
+	Model        string         `json:"model"`
+	InputHash    string         `json:"inputHash"`
+	Sources      []string       `json:"sources"`
+	Source       string         `json:"source"`
+	Version      int            `json:"version,omitempty"`
+	Release      string         `json:"release,omitempty"`
 }
 
 // FunctionRequest separates the readable source record from the decision's

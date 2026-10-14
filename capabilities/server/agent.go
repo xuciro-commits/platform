@@ -42,32 +42,33 @@ const (
 // AgentRunRecord is one run of an agent.
 type AgentRunRecord struct {
 	platform.Record
-	Release           string     `json:"release,omitempty" field:"readonly" title:"Startup release" source:"record"`
-	DefinitionVersion string     `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition" source:"record"`
-	Agent             string     `json:"agent" field:"readonly,search" source:"record"` // "<app>.<name>"
-	Title             string     `json:"title" field:"readonly,search" source:"record"`
-	Goal              string     `json:"goal" field:"readonly" type:"longtext" source:"record"`
-	Ref               string     `json:"ref,omitempty" field:"readonly" source:"record"`
-	Seen              string     `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
-	OnBehalf          string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of" source:"record"`
-	Acts              bool       `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
-	Language          string     `json:"language,omitempty" field:"readonly" source:"record"`         // the person's, which the agent answers in (ADR-0023 D6)
-	Flow              string     `json:"flow,omitempty" field:"readonly" source:"record"`             // the flow instance whose step started it
-	Token             int        `json:"token,omitempty" field:"readonly"`
-	Step              string     `json:"step,omitempty" field:"readonly" source:"record"` // that step's name
-	State             string     `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
-	Model             string     `json:"model,omitempty" field:"readonly" source:"record"`
-	Steps             []RunStep  `json:"steps" field:"readonly"`
-	StepsUsed         int        `json:"stepsUsed" field:"readonly" title:"Model turns"`
-	TokensUsed        int        `json:"tokensUsed" field:"readonly" title:"Tokens"`
-	ActionsUsed       int        `json:"actionsUsed" field:"readonly" title:"Actions"`
-	Cost              float64    `json:"cost,omitempty" field:"readonly"`
-	Result            string     `json:"result,omitempty" field:"readonly" type:"longtext"`
-	Task              string     `json:"task,omitempty" field:"readonly" source:"record"`
-	Stopped           string     `json:"stopped,omitempty" field:"readonly" title:"Why it stopped" source:"record"`
-	Draft             []Draft    `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
-	Citations         []Citation `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
-	Signals           []Signal   `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
+	Applications      []platform.AssetBinding `json:"applications,omitempty" field:"readonly" type:"json"`
+	Release           string                  `json:"release,omitempty" field:"readonly" title:"Startup release" source:"record"`
+	DefinitionVersion string                  `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition" source:"record"`
+	Agent             string                  `json:"agent" field:"readonly,search" source:"record"` // "<app>.<name>"
+	Title             string                  `json:"title" field:"readonly,search" source:"record"`
+	Goal              string                  `json:"goal" field:"readonly" type:"longtext" source:"record"`
+	Ref               string                  `json:"ref,omitempty" field:"readonly" source:"record"`
+	Seen              string                  `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
+	OnBehalf          string                  `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of" source:"record"`
+	Acts              bool                    `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
+	Language          string                  `json:"language,omitempty" field:"readonly" source:"record"`         // the person's, which the agent answers in (ADR-0023 D6)
+	Flow              string                  `json:"flow,omitempty" field:"readonly" source:"record"`             // the flow instance whose step started it
+	Token             int                     `json:"token,omitempty" field:"readonly"`
+	Step              string                  `json:"step,omitempty" field:"readonly" source:"record"` // that step's name
+	State             string                  `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
+	Model             string                  `json:"model,omitempty" field:"readonly" source:"record"`
+	Steps             []RunStep               `json:"steps" field:"readonly"`
+	StepsUsed         int                     `json:"stepsUsed" field:"readonly" title:"Model turns"`
+	TokensUsed        int                     `json:"tokensUsed" field:"readonly" title:"Tokens"`
+	ActionsUsed       int                     `json:"actionsUsed" field:"readonly" title:"Actions"`
+	Cost              float64                 `json:"cost,omitempty" field:"readonly"`
+	Result            string                  `json:"result,omitempty" field:"readonly" type:"longtext"`
+	Task              string                  `json:"task,omitempty" field:"readonly" source:"record"`
+	Stopped           string                  `json:"stopped,omitempty" field:"readonly" title:"Why it stopped" source:"record"`
+	Draft             []Draft                 `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
+	Citations         []Citation              `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
+	Signals           []Signal                `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
 	// Withheld is set for a reader who may no longer read something the run
 	// derived its trace from; it is never journaled (#130).
 	Withheld bool `json:"withheld,omitempty" field:"readonly" title:"Part of this trace is no longer readable to you"`
@@ -450,7 +451,10 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if a.host.AgentSuspended("agent:"+p.Agent) && !c.Replaying {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", p.Agent)
 			}
-			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now, !c.Replaying && (c.Staging()))
+			run, err := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now, !c.Replaying && c.Staging())
+			if err != nil {
+				return nil, err
+			}
 			run.Acts, run.Language = p.Act, p.Language
 			return func(r *pb.ChangeRecord) { a.host.Automation(c, AgentApp).Put(r, run) }, nil
 		case SchemaEvalStart:
@@ -552,7 +556,7 @@ func (a *Agents) RecordAgentSignal(c platform.Caller, r *pb.ChangeRecord, id str
 	}
 }
 
-func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time, captureBinding bool) AgentRunRecord {
+func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time, captureBinding bool) (AgentRunRecord, *kernel.Error) {
 	title := goal
 	if len(title) > 80 {
 		title = title[:77] + "..."
@@ -582,7 +586,17 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 			run.Seen = clip(string(view.Body), 6000)
 		}
 	}
-	return run
+	if recorded {
+		owner, name, ok := strings.Cut(agent, ".")
+		if ok {
+			bindings, err := a.host.ApplicationBindings(platform.AssetRef{App: owner, Kind: platform.AssetAgent, Name: name}, run.Release, "")
+			if err != nil {
+				return run, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
+			}
+			run.Applications = bindings
+		}
+	}
+	return run, nil
 }
 
 // Read "agents": the declared agents, their tools and budgets; "runs": the

@@ -31,6 +31,7 @@ import { AgentEditor, Agents } from "./functions/agent";
 import { AlertEditor, Alerts } from "./functions/alert";
 import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind } from "./releases/release";
 import { Changes } from "./releases/changes";
+import { CandidateTest } from "./releases/simulate";
 import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
@@ -52,6 +53,7 @@ const integration = (): NavSection => ({ label: t("Integration"), items: [
 ] });
 
 const views: View[] = [
+  { id: "evaluation-set", title: () => t("Evaluation set"), render: (p) => scoped(p, <CandidateTest key={p.id??"new"} planId={p.id} />) },
   // Projects
   { id: "projects", title: () => t("Projects"), render: () => <ProjectsList /> },
   { id: "project", title: () => t("Project"), render: (p) => <ApplicationScope key={p.id ?? "new"} application={p.id}><ProjectHome id={p.id ?? ""} /></ApplicationScope> },

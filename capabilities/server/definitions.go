@@ -303,6 +303,32 @@ func (t *Tenant) registerDefinitions() error {
 	}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
+		latest := map[string]platform.Flow{}
+		for _, flow := range manifest.Flows {
+			if old, ok := latest[flow.Name]; !ok || old.Version < flow.Version {
+				latest[flow.Name] = flow
+			}
+		}
+		for _, flow := range latest {
+			asset, err := t.nativeFlowAsset(app, flow.Name, flow.Version)
+			if err != nil {
+				return err
+			}
+			var descriptor platform.FlowReleaseDescriptor
+			if json.Unmarshal(asset.Body, &descriptor) != nil {
+				return fmt.Errorf("native flow descriptor is invalid")
+			}
+			var definition platform.FlowDefinition
+			if json.Unmarshal(descriptor.Definition, &definition) != nil {
+				return fmt.Errorf("native flow definition is invalid")
+			}
+			if err := add(platform.Definition{Ref: asset.Ref, Source: "code", Version: asset.SourceVersion, ContractVersion: 1, Requires: asset.Requires, Flow: &definition}); err != nil {
+				return err
+			}
+		}
+	}
+	for _, app := range t.apps {
+		manifest := app.Manifest()
 		pages, resources := []string{}, []platform.AssetRef{}
 		for _, definition := range t.definitions {
 			if definition.Ref.App != manifest.ID || definition.Source != "code" {
@@ -317,7 +343,7 @@ func (t *Tenant) registerDefinitions() error {
 		if len(pages) == 0 && len(resources) == 0 {
 			continue
 		}
-		declaration := platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: resources}
+		declaration := platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)}
 		if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetApp, Name: manifest.ID}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: declaration.Dependencies(manifest.ID), Application: &declaration}); err != nil {
 			return err
 		}
@@ -362,7 +388,7 @@ func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error
 }
 
 func ownedMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration}, kind)
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation}, kind)
 }
 
 // ownedAssetDefinition indexes only an owner's accepted descriptor identity.
@@ -382,7 +408,15 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 	if err := json.Unmarshal([]byte(record.Published), &asset); err != nil || asset.Ref != plan.Ref || asset.SourceVersion == "" || asset.ContractVersion < 1 {
 		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
 	}
-	return platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), OwnerRecord: plan.Record}, true, nil
+	definition := platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), OwnerRecord: plan.Record}
+	if plan.Ref.Kind == platform.AssetEvaluation {
+		descriptor, err := platform.ReadEvaluationSet(asset.Body)
+		if err != nil {
+			return definition, false, err
+		}
+		definition.Evaluation = &descriptor
+	}
+	return definition, true, nil
 }
 
 // ownedAssetDefinitions is a temporary read projection over stored owner
@@ -615,6 +649,10 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					continue
 				}
 			}
+		case platform.AssetFlow:
+			if def.Flow == nil || len(m.RolesIn(def.Ref.App)) == 0 {
+				continue
+			}
 		case platform.AssetFunction:
 			if def.Function == nil || !m.May(def.Ref.App, def.Function.Name, def.Function.Roles).Allow {
 				continue
@@ -642,7 +680,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
 				continue
 			}
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching:
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {
@@ -669,7 +707,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	}
 	for i, def := range out {
 		switch def.Ref.Kind {
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching:
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation:
 			out[i].Requires = slices.DeleteFunc(slices.Clone(def.Requires), func(ref platform.AssetRef) bool { return !visible[ref] })
 		}
 	}

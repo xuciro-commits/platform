@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	build "platformserver/internal/host/buildapi"
@@ -48,16 +47,34 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	}
 	caller := t.automation(build.ID, false)
 	plan, ok := platform.Get[build.TestPlan](caller, request.PlanID)
-	if !ok || plan.Archived || plan.Function == "" || len(plan.Evaluation) != 1 || plan.Model == "" {
-		return "", fmt.Errorf("a saved function plan with one evaluation policy and model is required")
+	if !ok || plan.Archived {
+		return "", fmt.Errorf("a saved function plan is required")
 	}
-	function, ok := platform.Get[build.Function](caller, string(plan.Function))
-	if !ok || function.Archived {
-		return "", fmt.Errorf("the plan's function draft is unavailable")
+	var evaluationSet *platform.AssetBinding
+	functionName := ""
+	for _, selected := range candidate.Assets {
+		if selected.Ref.Kind != platform.AssetEvaluation || selected.Ref.App != build.ID || selected.Ref.Name != plan.Name {
+			continue
+		}
+		descriptor, err := platform.ReadEvaluationSet(selected.Body)
+		if err != nil {
+			return "", err
+		}
+		plan.Evaluation = []build.EvaluationPolicy{descriptor.Policy}
+		plan.Model = descriptor.Model
+		functionName = descriptor.Function.Ref.Name
+		evaluationSet = &platform.AssetBinding{Ref: selected.Ref, SourceVersion: selected.SourceVersion}
+	}
+	if evaluationSet == nil {
+		function, ok := platform.Get[build.Function](caller, string(plan.Function))
+		if !ok || function.Archived || len(plan.Evaluation) != 1 || plan.Model == "" {
+			return "", fmt.Errorf("a saved function plan with one evaluation policy and model is required")
+		}
+		functionName = function.Name
 	}
 	var asset platform.ReleaseAsset
 	for _, selected := range candidate.Assets {
-		if selected.Ref.App == build.ID && selected.Ref.Kind == platform.AssetFunction && selected.Ref.Name == function.Name {
+		if selected.Ref.App == build.ID && selected.Ref.Kind == platform.AssetFunction && selected.Ref.Name == functionName {
 			asset = selected
 			break
 		}
@@ -69,7 +86,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	version, parseErr := strconv.Atoi(versionText)
 	var definition platform.AIFunction
 	if !found || parseErr != nil || version < 1 || json.Unmarshal(asset.Body, &definition) != nil ||
-		definition.Name != function.Name || definition.Check() != nil {
+		definition.Name != functionName || definition.Check() != nil {
 		return "", fmt.Errorf("the saved function version is invalid")
 	}
 	if definition.Model != "" && definition.Model != plan.Model {
@@ -90,7 +107,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		return "", err
 	}
 	for _, test := range plan.Evaluation[0].Cases {
-		if !functionEvaluationInput(definition, test.Input) || definition.ValidateOutput(test.Expected) != nil {
+		if !definition.EvaluationInput(test.Input) || definition.ValidateOutput(test.Expected) != nil {
 			return "", fmt.Errorf("the plan's synthetic cases do not fit the saved function")
 		}
 	}
@@ -108,7 +125,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		return "", err
 	}
 	id := "eval-" + identity[:32]
-	start := build.EvaluationStart{Candidate: request.CandidateID, Function: definition.Name, Version: version,
+	start := build.EvaluationStart{Set: evaluationSet, Candidate: request.CandidateID, Function: definition.Name, Version: version,
 		Definition: definition, DefinitionDigest: definitionDigest, Plan: request.PlanID, PlanRevision: plan.Revision,
 		PlanDigest: planDigest, Model: plan.Model, ModelConfig: config, Policy: plan.Evaluation[0]}
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + build.ID, Authority: build.ID,
@@ -119,55 +136,6 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		return "", fmt.Errorf("function evaluation was refused: %s", refusal.Message)
 	}
 	return id, nil
-}
-
-// Synthetic evaluation uses the same prompt shape as an ordinary accepted call.
-// History contains bounded synthetic typed answers, never production call IDs.
-func functionEvaluationInput(f platform.AIFunction, raw []byte) bool {
-	if len(raw) > f.MaxInputBytes || !utf8.Valid(raw) {
-		return false
-	}
-	var input map[string]json.RawMessage
-	if json.Unmarshal(raw, &input) != nil || input == nil {
-		return false
-	}
-	if f.Conversation {
-		var record map[string]json.RawMessage
-		var question string
-		var history []map[string]json.RawMessage
-		if len(input) != 3 || json.Unmarshal(input["record"], &record) != nil || record == nil || json.Unmarshal(input["question"], &question) != nil || strings.TrimSpace(question) == "" || len(question) > 4096 || json.Unmarshal(input["history"], &history) != nil || history == nil || len(history) > 8 {
-			return false
-		}
-		for _, turn := range history {
-			var prior string
-			if len(turn) != 2 || json.Unmarshal(turn["question"], &prior) != nil || strings.TrimSpace(prior) == "" || len(prior) > 4096 || f.ValidateOutput(turn["answer"]) != nil {
-				return false
-			}
-		}
-		input = record
-	}
-	if len(input) != len(f.Fields) {
-		return false
-	}
-	for _, name := range f.Fields {
-		if value, present := input[name]; !present || !scalarEvaluationInput(value) {
-			return false
-		}
-	}
-	return true
-}
-
-func scalarEvaluationInput(raw json.RawMessage) bool {
-	var value any
-	if json.Unmarshal(raw, &value) != nil || value == nil {
-		return false
-	}
-	switch value.(type) {
-	case string, bool, float64:
-		return true
-	default:
-		return false
-	}
 }
 
 func evaluationFor(candidate string, records []build.Evaluation) []build.Evaluation {
@@ -211,24 +179,55 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 		if err != nil {
 			return err
 		}
+		requiredSets := []platform.AssetBinding{}
+		for _, set := range candidate.Assets {
+			if set.Ref.Kind == platform.AssetEvaluation {
+				descriptor, err := platform.ReadEvaluationSet(set.Body)
+				if err != nil {
+					return err
+				}
+				if descriptor.Function.Ref == asset.Ref {
+					requiredSets = append(requiredSets, platform.AssetBinding{Ref: set.Ref, SourceVersion: set.SourceVersion})
+				}
+			}
+		}
 		matched := false
+		passedSets := map[platform.AssetBinding]bool{}
 		for _, report := range reports {
 			if report.Function != asset.Ref.Name || report.Version != version || report.DefinitionDigest != digest ||
 				!evalEqualRaw([]byte(report.Definition), asset.Body) || report.State != "passed" || len(report.Policy) != 1 {
 				continue
 			}
+			if len(requiredSets) > 0 && (report.Set == nil || !slices.Contains(requiredSets, *report.Set)) {
+				continue
+			}
 			plan, ok := platform.Get[build.TestPlan](caller, report.Plan)
-			if !ok || plan.Archived || plan.Revision != report.PlanRevision || len(plan.Evaluation) != 1 ||
-				plan.Model != report.Model || !evalEqualRaw(platform.Raw(plan.Evaluation[0]), platform.Raw(report.Policy[0])) {
+			if !ok || plan.Archived {
 				continue
 			}
-			function, ok := platform.Get[build.Function](caller, string(plan.Function))
-			if !ok || function.Archived || function.Name != asset.Ref.Name {
-				continue
-			}
-			planDigest, err := canonicalDigest(plan)
-			if err != nil || planDigest != report.PlanDigest {
-				continue
+			if report.Set != nil {
+				selected := slices.IndexFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
+					return a.Ref == report.Set.Ref && a.SourceVersion == report.Set.SourceVersion
+				})
+				if selected < 0 {
+					continue
+				}
+				descriptor, err := platform.ReadEvaluationSet(candidate.Assets[selected].Body)
+				if err != nil || descriptor.Function.Ref != asset.Ref || descriptor.Function.SourceVersion != asset.SourceVersion || descriptor.Model != report.Model || !evalEqualRaw(platform.Raw(descriptor.Policy), platform.Raw(report.Policy[0])) {
+					continue
+				}
+			} else {
+				if plan.Revision != report.PlanRevision || len(plan.Evaluation) != 1 || plan.Model != report.Model || !evalEqualRaw(platform.Raw(plan.Evaluation[0]), platform.Raw(report.Policy[0])) {
+					continue
+				}
+				function, ok := platform.Get[build.Function](caller, string(plan.Function))
+				if !ok || function.Archived || function.Name != asset.Ref.Name {
+					continue
+				}
+				planDigest, err := canonicalDigest(plan)
+				if err != nil || planDigest != report.PlanDigest {
+					continue
+				}
 			}
 			modelName := definition.Model
 			if modelName == "" {
@@ -249,9 +248,11 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 				continue
 			}
 			matched = true
-			break
+			if report.Set != nil {
+				passedSets[*report.Set] = true
+			}
 		}
-		if !matched {
+		if !matched || slices.ContainsFunc(requiredSets, func(set platform.AssetBinding) bool { return !passedSets[set] }) {
 			return fmt.Errorf("function %s needs a passing measured evaluation of this candidate, current plan and model configuration", asset.Ref.Name)
 		}
 	}

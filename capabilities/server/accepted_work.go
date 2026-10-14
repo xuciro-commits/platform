@@ -116,6 +116,11 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 	result.After = *task
 	result.After.Attempts, result.After.Last, result.After.Error = int(generation), now, ""
 	if task.Kind == "job" {
+		bindings, err := t.bindApplications(platform.AssetRef{App: task.App, Kind: platform.AssetApp, Name: task.App}, "", "", task.App)
+		if err != nil {
+			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+		}
+		result.After.Applications = bindings
 		result.After.Due = now.Add(task.job.Every)
 		if result.Outcome != "ok" {
 			result.After.Error = result.Outcome
@@ -281,6 +286,9 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 		finished.GetWorkId() != result.Input.ID || finished.GetOwnerId() != "host" ||
 		int(finished.GetGeneration()) != result.After.Attempts || result.Outcome == "" {
 		return result, fmt.Errorf("work result has inconsistent identity, outcome or digest")
+	}
+	if err := checkApplicationBindings(result.After.Applications); err != nil {
+		return result, err
 	}
 	if result.Input.Since < 0 || result.Input.Since > result.Input.Attempts {
 		return result, fmt.Errorf("work result has an invalid retry base")

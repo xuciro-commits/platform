@@ -204,6 +204,9 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
 				return nil, err
 			}
+			if err := checkRunApplicationBindings(v.Interface()); err != nil {
+				return nil, err
+			}
 			emptyLists(v) // a snapshot of older code may hold null lists
 			recovered := &row{value: v, history: r.History, projection: cloneRecordProjection(r.Projection), extraction: r.Extraction}
 			recovered.retainOriginal(r.Value)
@@ -461,6 +464,16 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 // restoreOperations restores what the runner shares with reads: works, tasks,
 // queues, jobs, connectors, notices, settings, endpoints, sequences, outbound.
 func (t *Tenant) restoreOperations(s *tenantState) error {
+	for _, job := range s.Jobs {
+		if err := checkApplicationBindings(job.Applications); err != nil {
+			return err
+		}
+	}
+	for _, effect := range s.Outbound {
+		if err := checkApplicationBindings(effect.Effect.Applications); err != nil {
+			return err
+		}
+	}
 	works, err := platform.Unprotos[*pb.Work](s.Works)
 	if err != nil {
 		return err

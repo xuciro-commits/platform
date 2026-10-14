@@ -299,6 +299,10 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.mu.Unlock()
 		return false, fmt.Errorf("accepted record has trailing data")
 	}
+	if err := checkRunApplicationBindings(value.Interface()); err != nil {
+		draft.mu.Unlock()
+		return false, err
+	}
 	rec := recordOf(value)
 	if rec.ID != result.Row.ID || rec.Revision != receipt.GetRevision() ||
 		rec.Changed.By != receipt.GetSubmission().GetPrincipalId() ||
