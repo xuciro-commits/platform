@@ -74,7 +74,7 @@ OPENROUTER_API_KEY=sk-or-...
 
 同一套语义可以在小设备上用一个二进制加一个数据目录跑起来：没有 Docker、没有 PostgreSQL、没有对象存储、没有外部身份服务。profile 是**声明**的，缺依赖就失败退出，不会悄悄回退到另一个 profile 的存储或身份。
 
-根目录入口为 `make lite` / `make lite SOLUTION=manufacturing`。先在 `web` 执行 `corepack pnpm install --frozen-lockfile`；只有 Corepack 时加 `PNPM="corepack pnpm"`。默认只绑定 `127.0.0.1`；Arena 等受信任网络预览显式加 `LITE_HOST=0.0.0.0`（会开放演示角色卡，不能视为公网生产认证）。沙箱 Go 模块代理不可用时按 AGENTS 执行 `scripts/sandbox-go.sh` 及其打印的 export，复用原 vendor。每次启动先在 `web` 构建工作台、再从 solution 模块编译宿主，避免旧页面与新宿主混用；角色卡由本机签名，不打印或持久化登录 token。
+根目录入口为 `make lite` / `make lite SOLUTION=manufacturing`。先在 `web` 执行 `corepack pnpm install --frozen-lockfile`；只有 Corepack 时加 `PNPM="corepack pnpm"`。默认只绑定 `127.0.0.1`；Arena 等受信任网络预览显式加 `LITE_HOST=0.0.0.0`（会开放演示角色卡，不能视为公网生产认证）。沙箱 Go 模块代理不可用时按 AGENTS 执行 `scripts/sandbox-go.sh` 及其打印的 export 挂载工作区。每次启动先在 `web` 构建工作台、再从 solution 模块编译宿主，避免旧页面与新宿主混用；角色卡由本机签名，不打印或持久化登录 token。
 
 ```bash
 (cd solutions/hospitality && go build -o /tmp/hospitality-server ./cmd/hospitality-server)

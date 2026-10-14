@@ -53,13 +53,13 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 
 ## 沙箱（Arena 等离线代理环境）里怎么干活
 
-网络只通 GitHub、npm、PyPI；Go 模块代理全封。仓库自带离线所需，照做即可：
+网络只通 GitHub、npm、PyPI；Go 模块代理全封。从可达站点按需获取工具与依赖，仓库内不提交大型离线二进制与 vendor：
 
-1. **Go**：`cd /home/user/platform && bash scripts/sandbox-go.sh`，执行脚本打印的 `export`（包含 `PATH`、`GOFLAGS=-mod=vendor`、`GOTOOLCHAIN=local` 与 `GOWORK`）。工具链来自 `tools/go/`（找不到则 `pip download go-bin`），依赖来自 `capabilities/server/vendor/`（已提交，别跑 `go mod tidy`/`go mod vendor`）。脚本在忽略的 `.build/sandbox-go/` 创建离线 workspace，复用原 vendor 字节，不修改正式模块或 vendor；可在 `capabilities/server/`、`apps/*/server`、`protocols/*` 和 `solutions/*` 跑 `go build`/`go vet`/`go test`，也可直接 `make lite LITE_HOST=0.0.0.0`。Web 依赖先按下一条安装。新增模块后重新跑脚本；检查 workspace 以外的临时 scaffold 时须单独装配，不把它冒充已经验证。
+1. **Go**：`cd /home/user/platform && bash scripts/sandbox-go.sh`，执行脚本打印的 `export`（包含 `PATH`、`GOTOOLCHAIN=local` 与 `GOWORK`，模块直连走 `GOPROXY=direct`）。Go 工具链从 PyPI 动态获取（`pip download go-bin`，已内置于脚本）；外部工具（如 `buf`）由 GitHub Releases 或 npm/PyPI 按需获取，不入库。脚本在忽略的 `.build/sandbox-go/` 装配多模块工作区，可在 `capabilities/server/`、`apps/*/server`、`protocols/*` 和 `solutions/*` 跑 `go build`/`go vet`/`go test`，也可直接 `make lite LITE_HOST=0.0.0.0`。Web 依赖先按下一条安装。新增模块后重新跑脚本；检查 workspace 以外的临时 scaffold 时须单独装配，不把它冒充已经验证。
 2. **Web**：`cd web && corepack pnpm install --frozen-lockfile`（npm 可达），随后从根目录执行 `npm_config_workspace_concurrency=1 make check PNPM="corepack pnpm"`，不要从根目录让 Corepack 猜 Web 的固定 pnpm 版本。默认浏览器未安装；若已准备 Chromium 及运行库，照原 Playwright 路线执行并报告实际结果；未准备时才写明"未在浏览器观察"，不能把 tsc 当浏览器证据。
 3. **宿主类型变了**：`go run ./cmd/api-types`（在 `capabilities/server/`）再生成 `web/packages/kernel/src/gen/host.ts`，否则 `TestAPIContract` 失败。文案变了：补 `i18n/zh-CN.json` / 包内 `i18n.ts`，否则 `TestLanguages` 失败。
 4. **轻量验证**：`make check-go` 不可用时（无 pnpm/buf）直接 `go build ./... && go vet ./...`；`go test ./apps/<改动包>/... ./platform/...` + 根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`；根包全量仅保留长期不变量测试（ADR-0082）；计时规模测试已删除。
-5. **沙箱会被重置**：`/home/user/platform` 以外（上传文件、`~/.gocache`）全丢，分支 HEAD 可能回退到旧树。每个整块做完立刻 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再跑第 1 步。需要长期保留的外部文件（规范、工具）提交进仓库（`docs/standards/`、`tools/`）。
+5. **沙箱会被重置**：`/home/user/platform` 以外（上传文件、`~/.gocache`）全丢，分支 HEAD 可能回退到旧树。每个整块做完立刻 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再跑第 1 步。需要长期保留的外部文件（规范）提交进仓库（`docs/standards/`，不含预编译工具链）。
 6. **分支纪律与双代理同步协议**（分支代理 = Arena 会话分支；集成代理 = 负责人授权的本地代理，在 main 上工作。双方都遵守，目标是不丢任何一行已提交代码）：
    - **永不 merge / cherry-pick / rebase / reset 到对方分支**（任一方向）。跨分支取内容只有一种方式：按路径复制，然后正常 commit/push 到自己的分支。路径复制不建立 Git 祖先关系，所以 `git merge-base` 不是同步点，提交号相同与否也不说明已同步。
    - **内容基点 B**：双方每轮以同一个「上次已确认同步」的提交为比较基点（上一轮回执里写明的 main SHA 或分支 SHA）。本轮一切「谁改了什么」都用 `git diff --name-only B <对方HEAD>` 与 `git diff --name-only B HEAD` 算，不凭记忆。

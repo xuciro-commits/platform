@@ -23,3 +23,7 @@ dist/
 
 # Generated trusted rule runtime (scripts/rule-browser.mjs)
 web/public/rules/
+
+# Toolchains and vendored dependencies
+tools/
+capabilities/server/vendor/
