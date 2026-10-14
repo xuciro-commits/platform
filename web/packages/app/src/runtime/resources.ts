@@ -31,7 +31,7 @@ export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):st
  // Application producers share the output, not each other's query-confirmation lease.
  if(!parent&&profile>=95&&section.selectionVariable&&section.id)return `record-producer/${section.id}/${object}`;
  const scoped=profile>=11;
- const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","resource-list","record-calendar","record-picker","record-leaderboard","record-scatter","record-map"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
+ const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","resource-list","record-calendar","record-picker","record-leaderboard","record-scatter","record-map","layered-graph","model-matrix"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
  return recordSlot(object,name,local?owner:undefined);
 }
 export const selectionSetSlot=(page:Api.Page,section:Api.Section)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-set/${section.id??""}`;
@@ -59,7 +59,7 @@ export function overlaySessionScopes(page:Api.Page) {
   const nodes=new Set<string>();const collect=(id:string)=>{if(nodes.has(id))return;nodes.add(id);document?.nodes[id]?.children?.forEach(collect);};collect(overlay.root);
   const sections=(page.sections??[]).filter((s)=>[...nodes].some((id)=>document?.nodes[id]?.section===s.id));
   return [owner,{
-   queries:new Set([...sections.map((s)=>s.id??""),...Object.entries(document?.queries??{}).filter(([,q])=>q.owner===owner).map(([id])=>`plan/${id}`)]),
+   queries:new Set([...sections.flatMap((s)=>[s.id??"",...(modelWindowWidget(s)?[modelWindowKey(s)]:[])]),...Object.entries(document?.queries??{}).filter(([,q])=>q.owner===owner).map(([id])=>`plan/${id}`)]),
    selections:new Set(sections.flatMap(s=>[selectionSlot(page,s),...(s.graphExplorer?.outputs??[]).map(o=>recordOutputSlot(page,s,o.id)),...(s.observation?.kind==="table"?["row","asset"].filter(port=>recordOutputObject(page,s,port)).map(port=>recordOutputSlot(page,s,port)):[]),...(s.selectionSetVariable?[selectionSetSlot(page,s)]:[])]).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    filters:new Set(sections.filter((s)=>s.widget==="filter").map((s)=>filterSlot(s.object?.name||page.object.name,filterOwner(page,s))).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    loops:new Set([...nodes].filter((id)=>document?.nodes[id]?.kind==="loop")),

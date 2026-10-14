@@ -147,6 +147,19 @@ func TestPageModelDeclaredInverseFilteredAndNamedCollections(t *testing.T) {
 	if out.Total != 5 || len(out.Records) != 2 || out.Records[0]["number"].(json.Number).String() != "2" {
 		t.Fatalf("retained query pagination: %+v", out)
 	}
+	// A composite consumes these same declarations in the original page
+	// context, including its separate typed parent producer.
+	cell := platform.ExprLiteralValue("boolean", true)
+	p.Sections[1] = platform.Section{ID: "children", Widget: "model-matrix", ConfigVersion: 1, Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{
+		"rows":    {Model: platform.ModelBinding{Type: child, Set: &platform.ModelRecordSet{RecordVariable: "parent", Name: "positive"}}},
+		"columns": {Model: platform.ModelBinding{Type: child, Set: &platform.ModelRecordSet{RecordVariable: "parent", Query: &binding}}},
+	}, Value: &cell}}
+	p.Document.UIProfile = platform.PageCompositeProfile
+	request.Offset = 0
+	out = read()
+	if out.Hidden || out.Partial || len(out.Composite.Sources["rows"].Records) != 3 || len(out.Composite.Sources["columns"].Records) != 5 || len(out.Composite.Cells) != 15 {
+		t.Fatalf("composite collection context was lost: %+v", out)
+	}
 }
 
 func TestPageModelMigrationPathsReadOnlyAndPublicationRefusals(t *testing.T) {

@@ -37,8 +37,10 @@ export class LiveReads {
   }
   private failure(paths: string[], status: number) {
     for (const path of paths) if (this.readers.has(path)) {
+      const previous = this.snapshots.get(path);
+      const unchanged = previous?.status === status && JSON.stringify(previous.body) === JSON.stringify({ error: "Live read unavailable" });
       this.snapshots.set(path, { path, status, body: { error: "Live read unavailable" } });
-      this.readers.get(path)?.forEach(changed => changed());
+      if (!unchanged) this.readers.get(path)?.forEach(changed => changed());
     }
   }
   private async follow(paths: string[], signal: AbortSignal) {
@@ -65,8 +67,15 @@ export class LiveReads {
             if (!event.startsWith("event: snapshot\n")) continue;
             const frame = JSON.parse(event.slice(event.indexOf("data: ") + 6)) as LiveQueryFrame;
             // Install the whole frame before notifying inventory/multi-read users.
-            for (const result of frame.results ?? []) if (this.readers.has(result.path)) this.snapshots.set(result.path, result);
-            for (const result of frame.results ?? []) this.readers.get(result.path)?.forEach(changed => changed());
+            // Adding a detail lease restarts this stream with a full snapshot.
+            // Unchanged answers must not retire the table selection that opened it.
+            const changed = new Set<string>();
+            for (const result of frame.results ?? []) if (this.readers.has(result.path)) {
+              const previous = this.snapshots.get(result.path);
+              if (!previous || previous.status !== result.status || JSON.stringify(previous.body) !== JSON.stringify(result.body)) changed.add(result.path);
+              this.snapshots.set(result.path, result);
+            }
+            for (const path of changed) this.readers.get(path)?.forEach(notify => notify());
           }
         }
         this.failure(paths, 0);

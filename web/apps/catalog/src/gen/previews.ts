@@ -13,6 +13,8 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "app/flow-instance": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.FlowInstanceExample })),
   "app/generated-form": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.GeneratedFormExample })),
   "app/knowledge-search": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.SearchExample })),
+  "app/layered-model-graph": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ProfessionalGraphExample })),
+  "app/model-matrix": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ProfessionalMatrixExample })),
   "app/observation-statistics-reader": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ObservationStatisticsReaderExample })),
   "app/operation-run": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.OperationRunExample })),
   "app/page-workspace": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.PageWorkspaceExample })),

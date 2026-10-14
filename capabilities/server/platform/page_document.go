@@ -68,7 +68,7 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	// Presentation contracts still consume their original ports. Materialize
 	// model references only for this validation; accepted bytes stay canonical.
-	if slices.ContainsFunc(sections, func(s Section) bool { return s.Model != nil }) {
+	if slices.ContainsFunc(sections, func(s Section) bool { return s.PrimaryModel() != nil }) {
 		sections = (Page{Document: d, Sections: sections}).EffectiveModelPage(nil).Sections
 	}
 	if d == nil {

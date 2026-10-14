@@ -5,7 +5,7 @@ import type {EntityInfo} from '@platform/ui';
 export const modelBindingContract=pageUIManifest.runtime.modelBinding;
 export const modelFieldKey=(field:Api.FieldRef)=>(field.path??[field.name??'']).join('.');
 type Lookup=(type:string)=>EntityInfo|undefined;
-type ModelSection={widget:string;model?:Api.ModelBinding;object?:string|Api.AssetRef;fields?:string[];relation?:string;parentSelection?:string;query?:string|Api.AssetRef};
+type ModelSection={widget:string;composite?:Api.PageComposite;model?:Api.ModelBinding;object?:string|Api.AssetRef;fields?:string[];relation?:string;parentSelection?:string;query?:string|Api.AssetRef};
 type Values=Record<string,unknown>;
 export function modelPort(value:unknown,path:string):unknown {
  let current=value;for(const name of path.split('.')){if(!current||typeof current!=='object')return;current=(current as Values)[name];}return current;
@@ -27,7 +27,10 @@ export function modelEntity(info:EntityInfo|undefined,model:Api.ModelBinding|und
  for(const ref of model.fields??[]){if((ref.path?.length??0)<2)continue;const field=modelField(model.type,ref.path!,lookup);if(field&&!fields.some(f=>f.name===modelFieldKey(ref)))fields.push({...field,name:modelFieldKey(ref),title:ref.path!.join(' → '),readOnly:true});}
  return {...info,fields};
 }
+export const primaryModel=(section:Pick<Api.Section,'widget'|'model'|'composite'>)=>section.model??section.composite?.bindings[section.widget==='model-matrix'?'rows':'nodes']?.model;
+export const sectionModels=(section:Pick<Api.Section,'model'|'composite'>)=>[...section.model?[section.model]:[],...Object.values(section.composite?.bindings??{}).map(b=>b.model)];
 export function materializeModelSection<T extends ModelSection>(section:T,lookup:Lookup,authoring=false):T {
+ if(section.composite){const model=primaryModel(section);return model?{...section,object:authoring?model.type:{app:model.type.split('.')[0]??'',kind:'object',name:model.type}}:section;}
  const model=section.model;if(!model)return section;
  const copy=structuredClone(section),values=copy as unknown as Values,info=lookup(model.type);
  copy.object=authoring?model.type:{app:model.type.split('.')[0]??'',kind:'object',name:model.type};
@@ -42,6 +45,7 @@ export function materializeModelSection<T extends ModelSection>(section:T,lookup
 }
 
 export function canonicalModelSection<T extends ModelSection>(section:T):T {
+ if(section.composite){const copy=structuredClone(section);delete copy.object;return copy;}
  if(!section.model)return section;
  const copy=structuredClone(section),values=copy as unknown as Values;
  for(const name of ['object','fields','relation','parentSelection','query'])delete values[name];
@@ -60,7 +64,7 @@ export function foldModelPorts<T extends ModelSection>(section:T,lookup:Lookup):
  canonical.model=model;return canonical;
 }
 export const modelWindowKey=(section:Pick<Api.Section,'id'>)=>`model/${section.id??''}`;
-export const modelWindowWidget=(section:Pick<Api.Section,'model'|'widget'>)=>!!section.model&&['table','detail','record-picker','record-card','record-list','record-chart','record-events','record-calendar','record-gantt','record-leaderboard','record-scatter','record-timeline','kanban','record-map','histogram','term-counts','tag-counts','sparkline-kpi'].includes(section.widget);
+export const modelWindowWidget=(section:Pick<Api.Section,'model'|'widget'|'composite'>)=>(!!section.composite&&['layered-graph','model-matrix'].includes(section.widget))||!!section.model&&['table','detail','record-picker','record-card','record-list','record-chart','record-events','record-calendar','record-gantt','record-leaderboard','record-scatter','record-timeline','kanban','record-map','histogram','term-counts','tag-counts','sparkline-kpi'].includes(section.widget);
 
 /** Follows only declared single-record references. Every hop is an original
  * source.get(), so row and field authorization remain with the host. */

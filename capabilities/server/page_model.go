@@ -40,6 +40,7 @@ type PageModelRead struct {
 }
 
 type PageModelResult struct {
+	Composite     *PageCompositeResult                         `json:"composite,omitempty"`
 	Object        string                                       `json:"object"`
 	Records       []map[string]any                             `json:"records"`
 	Total         int                                          `json:"total"`
@@ -56,31 +57,29 @@ type PageModelResult struct {
 
 func (t *Tenant) checkModelQueries(page platform.Page) error {
 	for _, section := range page.Sections {
-		m := section.Model
-		if m == nil {
-			continue
-		}
-		sets := []*platform.ModelRecordSet{m.Set}
-		if m.Options != nil {
-			sets = append(sets, m.Options.Set)
-		}
-		for _, set := range sets {
-			if set == nil || set.Query == nil {
-				continue
+		for _, m := range section.ModelBindings() {
+			sets := []*platform.ModelRecordSet{m.Set}
+			if m.Options != nil {
+				sets = append(sets, m.Options.Set)
 			}
-			named := pageNamedQuery(t.definitions, set.Query)
-			if named == nil || named.Query == nil || named.Query.Object != m.Type {
-				return fmt.Errorf("section %s: retained model query type or version is unavailable", section.ID)
-			}
-			if section.Widget == "record-picker" && len(named.Query.Sort) > 0 && !slices.Equal(named.Query.Sort, []string{"id"}) {
-				return fmt.Errorf("section %s: model picker needs its original ID ordering", section.ID)
-			}
-			if named.Query.By != "" {
-				root := page.RecordResourceObject(set.RecordVariable)
-				info, ok := t.entity(m.Type)
-				f, found := info.Field(named.Query.By)
-				if !ok || !found || f.Type != "reference" || root.Name != f.Ref {
-					return fmt.Errorf("section %s: model query needs its declared source record", section.ID)
+			for _, set := range sets {
+				if set == nil || set.Query == nil {
+					continue
+				}
+				named := pageNamedQuery(t.definitions, set.Query)
+				if named == nil || named.Query == nil || named.Query.Object != m.Type {
+					return fmt.Errorf("section %s: retained model query type or version is unavailable", section.ID)
+				}
+				if section.Widget == "record-picker" && len(named.Query.Sort) > 0 && !slices.Equal(named.Query.Sort, []string{"id"}) {
+					return fmt.Errorf("section %s: model picker needs its original ID ordering", section.ID)
+				}
+				if named.Query.By != "" {
+					root := page.RecordResourceObject(set.RecordVariable)
+					info, ok := t.entity(m.Type)
+					f, found := info.Field(named.Query.By)
+					if !ok || !found || f.Type != "reference" || root.Name != f.Ref {
+						return fmt.Errorf("section %s: model query needs its declared source record", section.ID)
+					}
 				}
 			}
 		}
@@ -142,9 +141,11 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		for _, section := range page.Sections {
-			if section.Model != nil && section.Model.Set != nil && section.Model.Set.Query != nil && section.Model.Set.Query.SourceVersion == "" {
-				if binding, ok := (hostView{t: t}).ModelQueryBinding(section.Model.Set.Query.Ref); ok {
-					*section.Model.Set.Query = binding
+			for _, model := range section.ModelBindings() {
+				if model.Set != nil && model.Set.Query != nil && model.Set.Query.SourceVersion == "" {
+					if binding, ok := (hostView{t: t}).ModelQueryBinding(model.Set.Query.Ref); ok {
+						*model.Set.Query = binding
+					}
 				}
 			}
 		}
@@ -172,10 +173,18 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	index := slices.IndexFunc(page.Sections, func(section platform.Section) bool { return section.ID == request.Section })
-	if index < 0 || page.Sections[index].Model == nil {
+	if index < 0 || page.Sections[index].PrimaryModel() == nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model section is unavailable")
 	}
 	section := page.Sections[index]
+	if section.Composite != nil {
+		return t.readPageComposite(member, page, section, request, at)
+	}
+	return t.readPageModelSource(member, page, section, request, at)
+}
+
+func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page, section platform.Section, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
+	result := PageModelResult{Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}}
 	model := section.Model
 	result.Model, result.Object = model, model.Type
 	info, known := t.entity(model.Type)
@@ -304,14 +313,7 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 		id := fmt.Sprint(row["id"])
 		// Read the original typed value only after its owner admitted this row.
 		// This preserves initialized false/zero fields omitted by JSON transport.
-		var ruleRecord any = row
-		t.records.mu.Lock()
-		if entity := t.records.types[model.Type]; entity != nil {
-			if original := entity.rows.get(id); original != nil {
-				ruleRecord = original.value.Interface()
-			}
-		}
-		t.records.mu.Unlock()
+		ruleRecord := t.pageModelRuleRecord(model.Type, id, row)
 		if criteria != nil {
 			matched, _, refusal := criteria.Evaluate(caller, ruleRecord, inputs, at, t.entity)
 			if refusal != nil {

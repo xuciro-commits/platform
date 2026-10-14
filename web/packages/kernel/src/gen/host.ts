@@ -1806,6 +1806,12 @@ export type ModelRule = {
   inputs?: Record<string, string>;
 };
 
+export type ModelViewBinding = {
+  model: ModelBinding;
+  roles?: Record<string, FieldRef>;
+  expressions?: Record<string, Expr>;
+};
+
 export type NamedQuery = {
   name: string;
   title: string;
@@ -2043,6 +2049,24 @@ export type PageCollectionInput = {
   bindings?: AssetBinding[];
 };
 
+export type PageComposite = {
+  bindings: Record<string, ModelViewBinding>;
+  value?: Expr;
+  tones?: Record<string, string>;
+  direction?: "right" | "down";
+  acyclic?: boolean;
+};
+
+export type PageCompositeResult = {
+  sources: Record<string, PageCompositeSource>;
+  cells?: PageMatrixCell[];
+};
+
+export type PageCompositeSource = {
+  object: string;
+  records: Record<string, unknown>[];
+};
+
 export type PageComputeResource = {
   operation: AssetBinding;
   recordVariable: string;
@@ -2205,6 +2229,13 @@ export type PageLoop = {
   limit: number;
 };
 
+export type PageMatrixCell = {
+  row: string;
+  column: string;
+  value: unknown;
+  kind: string;
+};
+
 export type PageMetricAnnotation = {
   direction: string;
   text: string;
@@ -2239,6 +2270,7 @@ export type PageModelRecord = {
 };
 
 export type PageModelResult = {
+  composite?: PageCompositeResult;
   object: string;
   records: Record<string, unknown>[];
   total: number;
@@ -3178,6 +3210,7 @@ export type SchemaVersion = {
 };
 
 export type Section = {
+  composite?: PageComposite;
   model?: ModelBinding;
   tablePresentation?: PageTablePresentation;
   collectionBuilder?: PageCollectionBuilder;
@@ -3940,7 +3973,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.110",
+  "uiProfile": "platform.page.v2.111",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -9035,6 +9068,291 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "layered-graph",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.111",
+      "title": "Layered graph",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "composite"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "modelPorts": [
+        {
+          "id": "nodes",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "detail": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "layer": {
+              "kinds": [
+                "reference"
+              ],
+              "target": "layers"
+            },
+            "state": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "current": {
+              "kinds": [
+                "boolean"
+              ]
+            },
+            "notation": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "order": {
+              "kinds": [
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          },
+          "required": true
+        },
+        {
+          "id": "layers",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          }
+        },
+        {
+          "id": "edges",
+          "roles": {
+            "from": {
+              "kinds": [
+                "reference"
+              ],
+              "required": true,
+              "target": "nodes"
+            },
+            "to": {
+              "kinds": [
+                "reference"
+              ],
+              "required": true,
+              "target": "nodes"
+            },
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "state": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "dashed": {
+              "kinds": [
+                "boolean"
+              ]
+            }
+          },
+          "required": true
+        },
+        {
+          "id": "overlay",
+          "roles": {
+            "node": {
+              "kinds": [
+                "reference"
+              ],
+              "required": true,
+              "target": "nodes"
+            },
+            "detail": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "state": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "current": {
+              "kinds": [
+                "boolean"
+              ]
+            }
+          }
+        }
+      ],
+      "inputPorts": [],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.111"
+        }
+      ],
+      "events": [
+        {
+          "id": "select",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 1
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      }
+    },
+    {
+      "componentID": "model-matrix",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.111",
+      "title": "Model matrix",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "composite"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "modelPorts": [
+        {
+          "id": "rows",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          },
+          "required": true
+        },
+        {
+          "id": "columns",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          },
+          "required": true
+        }
+      ],
+      "inputPorts": [],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.111"
+        }
+      ],
+      "events": [
+        {
+          "id": "select",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 1
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      }
     }
   ],
   "supportedProfiles": [
@@ -9147,7 +9465,8 @@ export const pageUIManifest = {
     "platform.page.v2.107",
     "platform.page.v2.108",
     "platform.page.v2.109",
-    "platform.page.v2.110"
+    "platform.page.v2.110",
+    "platform.page.v2.111"
   ],
   "runtime": {
     "telemetry": {
@@ -9899,6 +10218,12 @@ export const pageUIManifest = {
         "avatar.labelField",
         "sparkline.field"
       ]
+    },
+    "composite": {
+      "maxRecords": 200,
+      "maxCells": 1600,
+      "maxBytes": 262144,
+      "requiredUIProfile": "platform.page.v2.111"
     }
   },
   "layout": {

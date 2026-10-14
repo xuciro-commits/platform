@@ -33,9 +33,9 @@ export function flowStepKind(node: Pick<FlowStepNode, "id" | "kind" | "notation"
 
 /** Read-only process adapter: the BPMN shapes the steps ask for, the class
  * glyphs the vocabulary decides, one entry per class the drawing actually uses. */
-export function FlowSteps({ nodes, edges, lanes, direction = "right", height = 280, onOpen, label, children, positions, storeKey }: {
+export function FlowSteps({ nodes, edges, lanes, direction = "right", height = 280, onOpen, label, children, positions, storeKey, selected, onActivate }: {
   nodes: FlowStepNode[]; edges: FlowStepEdge[]; lanes?: FlowLane[]; direction?: CanvasDirection; height?: number;
-  onOpen?: (node: FlowStepNode) => void; label?: string; children?: ReactNode; positions?: Readonly<Record<string, CanvasPosition>>;
+  selected?: string; onActivate?: (node: FlowStepNode) => void; onOpen?: (node: FlowStepNode) => void; label?: string; children?: ReactNode; positions?: Readonly<Record<string, CanvasPosition>>;
   /** The reader's own arrangement of this drawing stays on the device (ADR-0092). */
   storeKey?: string;
 }) {
@@ -63,5 +63,5 @@ export function FlowSteps({ nodes, edges, lanes, direction = "right", height = 2
     };
   }, [nodes, edges, lanes, direction, positions, catalog, arranged]);
   const open = onOpen ? (id: string) => { const node = nodes.find((item) => item.id === id); if (node) onOpen(node); } : undefined;
-  return <FlowCanvas catalog={catalog} nodes={graph.nodes} edges={graph.edges} lanes={lanes} mode="view" direction={direction} height={height} label={label} onSelect={open} storeKey={storeKey}>{children}</FlowCanvas>;
+  return <FlowCanvas catalog={catalog} nodes={graph.nodes} edges={graph.edges} lanes={lanes} mode="view" direction={direction} height={height} label={label} selected={selected} onSelect={open} onOpen={onActivate?(id)=>{const node=nodes.find(n=>n.id===id);if(node)onActivate(node)}:undefined} storeKey={storeKey}>{children}</FlowCanvas>;
 }

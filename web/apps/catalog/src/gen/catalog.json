@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:6269048c38f2dba9",
+  "revision": "sha256:826245e3f8342ca2",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -802,6 +802,73 @@
         "ui/input",
         "ui/page-header",
         "ui/panels"
+      ]
+    },
+    {
+      "id": "app/layered-model-graph",
+      "owner": "@platform/app",
+      "name": "Model-bound layered graph",
+      "summary": "Configure directed graphs, layers and state overlays from original authorized models.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "widget",
+        "reference"
+      ],
+      "tags": [
+        "composite",
+        "graph",
+        "routing",
+        "organization",
+        "lineage"
+      ],
+      "source": "web/packages/app/src/composites/configurations.ts",
+      "exports": [],
+      "example": "ProfessionalGraphExample",
+      "constraints": [
+        "The runnable examples include complete model bindings and synthetic sample answers. Live expressions and permissions are evaluated by the original host.",
+        "These examples have one author. Independent human configuration and owner walkthrough remain acceptance work."
+      ],
+      "widgets": [
+        "layered-graph"
+      ],
+      "dependencies": [
+        "ui/flow",
+        "ui/data-table"
+      ]
+    },
+    {
+      "id": "app/model-matrix",
+      "owner": "@platform/app",
+      "name": "Model-bound expression matrix",
+      "summary": "Bind both axes to model collections and evaluate each cell with the original rule language.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "widget",
+        "reference"
+      ],
+      "tags": [
+        "composite",
+        "matrix",
+        "capability",
+        "rates"
+      ],
+      "source": "web/packages/app/src/composites/configurations.ts",
+      "exports": [],
+      "example": "ProfessionalMatrixExample",
+      "constraints": [
+        "A matrix is bounded to 1600 cells; both axes retain record identities. Hidden inputs never become a false or zero cell."
+      ],
+      "widgets": [
+        "model-matrix"
+      ],
+      "dependencies": [
+        "ui/data-table"
       ]
     },
     {
@@ -5348,6 +5415,20 @@
           "isCallback": false,
           "isSlot": false,
           "defaultValue": "280"
+        },
+        {
+          "name": "selected",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onActivate",
+          "type": "(node: FlowStepNode) => void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
         },
         {
           "name": "onOpen",
@@ -11699,6 +11780,7 @@
     "zh-CN": {
       "3D scene": "3D 场景",
       "A labelled boolean choice with an explicit disabled state.": "带标签的布尔选择，支持明确的禁用状态。",
+      "A matrix is bounded to 1600 cells; both axes retain record identities. Hidden inputs never become a false or zero cell.": "矩阵最多含 1600 个单元格；两轴保留记录身份。隐藏输入不会被显示为假值或零。",
       "A runtime call needs the actual host, a published owner revision and the current member’s permissions.": "运行调用需要实际宿主、已发布能力版本及当前成员的权限。",
       "A tenant object must be created, tested and published in the connected Application Studio.": "租户对象须在已连接的应用工坊创建、测试和发布。",
       "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions.": "动作条件将已声明的记录路径或输入与固定值或兼容字段比较；关联读取和审批重试均走原动作及申请人当前权限。",
@@ -11739,6 +11821,7 @@
       "Authorized task Gantt": "授权任务甘特图",
       "Authorized workflow run": "受权流程运行",
       "Bind a published Go/Wasm operation to a page using its original owner contract.": "按原能力契约将已发布 Go/Wasm 操作绑定到页面。",
+      "Bind both axes to model collections and evaluate each cell with the original rule language.": "将两个坐标轴绑定到模型集合，用原规则语言计算各单元格。",
       "Boolean switch": "布尔开关",
       "Bound dashboard": "绑定仪表盘",
       "Browse a scoped entity source with search, sort and paging.": "通过搜索、排序和分页浏览限定范围的实体数据源。",
@@ -11771,6 +11854,7 @@
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
       "Compose each offered task with its authorized original request and caller-owned approval decisions.": "将每条待办任务与其已授权原请求及调用方控制的审批决策组合。",
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
+      "Configure directed graphs, layers and state overlays from original authorized models.": "通过原模型的获权数据配置有向图、层级和状态叠加。",
       "Confirm offered approval requests and use the member's original approval and notification decisions.": "确认已提供的审批请求，并使用成员的原审批和通知决策。",
       "Confirmed": "已确认",
       "Confirmed record comparison": "已确认记录对比",
@@ -11865,6 +11949,8 @@
       "Member-scoped assistant": "成员范围内的助手",
       "Metal button": "金属与流体按钮",
       "Modal dialog": "模态对话框",
+      "Model-bound expression matrix": "模型绑定表达式矩阵",
+      "Model-bound layered graph": "模型绑定分层图",
       "Move, order and resize controlled layout regions with pointer previews and atomic caller-owned edits.": "通过指针预览和调用方拥有的原子编辑，移动、排序与调整受控布局区域。",
       "Multiple choices": "多项选择",
       "Named record selections keep same-object lists independent; parent bindings scope related sections.": "具名记录选择让同一对象的多个列表互不干扰；父来源绑定限定关联区块的范围。",
@@ -12101,8 +12187,10 @@
       "The original summary and record window share their query scope and total. No synthetic 24-hour points, live heartbeat, signal stream or availability promise is created.": "原摘要与记录窗口共享查询作用域和总数。不生成合成的二十四小时点、实时心跳、信号流或可用率承诺。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The project's module: its pages, header and navigation, with the page editor inside and a live preview.": "项目的模块：其页面、页头与导航，内含页面编辑器和实时预览。",
+      "The runnable examples include complete model bindings and synthetic sample answers. Live expressions and permissions are evaluated by the original host.": "可运行示例包含完整模型绑定和合成答案；真实表达式和权限由原宿主判断。",
       "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
       "The selector returns typed references. Host validation and original permissions remain authoritative.": "选择器返回类型化引用；宿主校验和原权限仍为准。",
+      "These examples have one author. Independent human configuration and owner walkthrough remain acceptance work.": "这些示例由同一作者编写；不同人员独立配置和负责人走查仍待验收。",
       "This is the object type workbench with synthetic local data. Save and publish are refused in Catalog.": "这是使用本地合成数据的对象类型工作台。在目录中保存与发布会被拒绝。",
       "This pattern recommends a composition; it does not grant widget eligibility or permissions.": "此模式推荐一种组合，不授予区块资格或权限。",
       "This search currently has no dedicated error or pending feedback; callers must not claim otherwise.": "当前搜索没有专门的错误或等待反馈；调用方须如实说明。",
@@ -12180,6 +12268,7 @@
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/widgets/Button.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
+      "web/packages/app/src/widgets/CompositeViews.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
@@ -12234,6 +12323,7 @@
       "web/packages/build/src/workshop/module-import/ObservationImportFields.tsx",
       "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
+      "web/packages/build/src/workshop/page-editor/CompositeBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
@@ -12334,6 +12424,7 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/automation/capability.tsx",
+      "web/packages/app/src/composites/catalog-examples.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/semantic/References.tsx",
@@ -12395,6 +12486,7 @@
       "web/packages/build/src/workshop/module-import/SpatialImportFields.tsx",
       "web/packages/build/src/workshop/module-import/UnusedImportFields.tsx",
       "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
+      "web/packages/build/src/workshop/page-editor/CompositeBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
@@ -12527,6 +12619,7 @@
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/module-import/ApplicationImportFields.tsx",
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/workshop/page-editor/CompositeBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
@@ -12749,6 +12842,7 @@
     "ui/disclosure": [
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/composites/catalog-examples.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
@@ -12860,6 +12954,7 @@
     ],
     "ui/flow-steps": [
       "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/widgets/CompositeViews.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/ui/src/graph/flow/FlowProcess.tsx",
       "web/packages/ui/src/records/Records.tsx"
@@ -12889,6 +12984,7 @@
     ],
     "ui/data-table": [
       "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/widgets/CompositeViews.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/dataset.tsx",

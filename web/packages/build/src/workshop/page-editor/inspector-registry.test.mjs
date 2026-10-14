@@ -32,7 +32,7 @@ test("all native inspectors resolve exact versions without eagerly loading UI or
  }
  assert.equal(widgetInspectorStatus("unregistered",1),"unsupported");
  assert.equal(widgetInspectorStatus("table",1),"specialized");
- assert.deepEqual(manifest.widgets.filter(c=>widgetInspectorStatus(c.componentID,c.configVersion)==="common").map(c=>c.componentID).sort(),["actions","compute","form","function","input","tasks","text"]);
+ assert.deepEqual(manifest.widgets.filter(c=>widgetInspectorStatus(c.componentID,c.configVersion)==="common").map(c=>c.componentID).sort(),["actions","compute","form","function","input","layered-graph","model-matrix","tasks","text"]);
  assert.deepEqual(loaded,[]);
 });
 

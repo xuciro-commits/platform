@@ -853,6 +853,24 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	if err := page.CheckModelBindings(modelLookup, criteria); err != nil {
 		return err
 	}
+	for _, section := range page.Sections {
+		for _, model := range section.ModelBindings() {
+			sets := []*ModelRecordSet{model.Set}
+			if model.Options != nil {
+				sets = append(sets, model.Options.Set)
+			}
+			for _, set := range sets {
+				if set == nil || set.Query == nil {
+					continue
+				}
+				asset, ok := lookup[set.Query.Ref]
+				var query NamedQuery
+				if !ok || asset.SourceVersion != set.Query.SourceVersion || json.Unmarshal(asset.Body, &query) != nil || query.Object != model.Type {
+					return fmt.Errorf("section %s: frozen model query type or source version differs", section.ID)
+				}
+			}
+		}
+	}
 	page = page.EffectiveModelPage(modelLookup)
 	for _, s := range page.Sections {
 		if q, ok := page.InterfaceQueryForSection(s); ok {

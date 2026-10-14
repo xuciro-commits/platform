@@ -9,6 +9,20 @@ const {overlaySessionScopes,selectionSlot,recordSlot,resourceVariables,recordOut
 const page={object:{app:"sample",kind:"object",name:"sample.note"},sections:[{id:"main",widget:"table"},{id:"local",widget:"table",collectionVariable:"window"},{id:"detail",widget:"detail"},{id:"other",widget:"table"}],document:{uiProfile:"platform.page.v2.11",root:"root",nodes:{root:{kind:"rows",children:["main"]},main:{kind:"widget",section:"main"},panel:{kind:"rows",children:["local","detail","cards"]},local:{kind:"widget",section:"local"},detail:{kind:"widget",section:"detail"},cards:{kind:"loop",children:[]},otherPanel:{kind:"rows",children:["other"]},other:{kind:"widget",section:"other"}},overlays:{picker:{root:"panel"},other:{root:"otherPanel"}},queries:{read:{owner:"picker"}},variables:{selected:{scope:"overlay",owner:"picker",type:"record",mode:"resource",source:{kind:"record",section:"local"}},window:{scope:"overlay",owner:"picker",type:"object-set",mode:"resource",source:{kind:"plan",query:"read"}}}}};
 const tick=()=>new Promise((resolve)=>setImmediate(resolve));
 const deferred=()=>{let resolve;const promise=new Promise((r)=>resolve=r);return {promise,resolve};};
+test("composite windows share the original selection lifecycle and close with their overlay",async()=>{
+ const {materializeModelSection,modelWindowKey}=await import('./model-bindings.ts');
+ const section=materializeModelSection({id:'graph',widget:'layered-graph',composite:{bindings:{nodes:{model:{type:'sample.node'}},edges:{model:{type:'sample.edge'}}}}},()=>undefined);
+ const p={object:{app:'sample',kind:'object',name:'sample.node'},sections:[section],document:{uiProfile:'platform.page.v2.111',root:'root',nodes:{root:{kind:'rows',children:[]},panel:{kind:'rows',children:['graph']},graph:{kind:'widget',section:'graph'}},overlays:{picker:{root:'panel'}},variables:{selected:{type:'record',mode:'resource',scope:'overlay',owner:'picker',source:{kind:'record',section:'graph'}},window:{type:'object-set',mode:'resource',scope:'overlay',owner:'picker',source:{kind:'query',section:'graph'}}}}};
+ const slot=selectionSlot(p,section),key=modelWindowKey(section),source={scope:'member',entity:()=>({fields:[]}),get:async(type,id)=>({record:{id,revision:1,name:'Confirmed original'}})};
+ assert.ok(slot.startsWith('overlay:picker/'));
+ const session=new PageSessionStore(source,{objects:new Map([[slot,'sample.node']]),children:new Map(),queryParents:new Map(),querySelections:new Map([[key,new Set([slot])]]),overlayScopes:overlaySessionScopes(p)});
+ session.adoptModelWindow(key,'first',{object:'sample.node',query:{},records:[{id:'A',revision:1,name:'Projected'}],total:1});
+ await session.confirmSelection(slot,{id:'A',revision:1,name:'Untrusted'},key);
+ assert.equal(session.confirmedSelected(slot).name,'Confirmed original');assert.equal(resourceVariables(p,session.snapshot()).window.value.window.records[0].object,'sample.node');
+ session.adoptModelWindow(key,'next');assert.equal(session.confirmedSelected(slot),undefined);assert.equal(resourceVariables(p,session.snapshot()).selected.status,'empty');
+ session.adoptModelWindow(key,'next',{object:'sample.node',query:{},records:[{id:'B',revision:1}],total:1});await session.confirmSelection(slot,{id:'B',revision:1},key);
+ session.endOverlay('picker');assert.equal(session.confirmedSelected(slot),undefined);assert.equal(resourceVariables(p,session.snapshot()).window.status,'empty');session.dispose();
+});
 test("overlay selections belong to their producer root, with explicit page fallback when no local producer exists",()=>{
  assert.equal(selectionSlot(page,page.sections[0]),"object/sample.note");assert.equal(selectionSlot(page,page.sections[1]),"overlay:picker/object/sample.note");assert.equal(selectionSlot(page,page.sections[2]),selectionSlot(page,page.sections[1]));assert.notEqual(selectionSlot(page,page.sections[3]),selectionSlot(page,page.sections[1]));
  assert.equal(selectionSlot({...page,document:{...page.document,uiProfile:"platform.page.v2.10"}},page.sections[1]),selectionSlot(page,page.sections[0]));

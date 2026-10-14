@@ -48,6 +48,12 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Composite struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MaxRecords        int    `json:"maxRecords"`
+		MaxCells          int    `json:"maxCells"`
+		MaxBytes          int    `json:"maxBytes"`
+	} `json:"composite"`
 	ModelBinding struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		MaxFields         int      `json:"maxFields"`

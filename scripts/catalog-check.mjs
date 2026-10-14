@@ -7,6 +7,20 @@ export const ownerPackage = (owner) => owner.startsWith("@") ? owner : owner ===
 export const ownerDirectory = (owner) => `web/packages/${owner}`;
 export const dictionaryFile = (owner) => `${ownerDirectory(owner)}/src/${owner === "ui" ? "i18n/zh-CN.ts" : "i18n.ts"}`;
 
+/** ADR-0110: configuration belongs to applications; domain pages cannot enter
+ * the generic presentation owner by changing their import path. */
+export function professionalViewGate({source, owner="@platform/app", configurations=[]}) {
+  const errors=[];
+  const domain=source.match(/\b(?:RoutingFlow|mes|sfc|workCenter|operation|equipment|warehouse|bed|ncCodes)\b/i);
+  if(domain)errors.push(`Professional view contains domain vocabulary: ${domain[0]}`);
+  if(owner==="@platform/ui"){
+    const authors=new Set(configurations.map(c=>c.author).filter(Boolean));
+    const apps=new Set(configurations.map(c=>c.application).filter(Boolean));
+    if(authors.size<2||apps.size<2)errors.push("A new UI component needs configurations in two applications by two independent authors");
+  }
+  return errors;
+}
+
 export function syntax(file, text) {
   return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
 }

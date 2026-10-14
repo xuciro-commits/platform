@@ -11,7 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const indexPath = path.join(root, "web/apps/catalog/src/gen/catalog.json");
 
 async function generate(check) {
-  const { owners, ownerPackage, ownerDirectory, dictionaryFile, publicExports, publicTypes, readDictionary, validateOwner, sourceFiles, inspectImports, extractComponentApi } = await import("./catalog-check.mjs");
+  const { owners, ownerPackage, ownerDirectory, dictionaryFile, publicExports, publicTypes, readDictionary, validateOwner, sourceFiles, inspectImports, extractComponentApi, professionalViewGate } = await import("./catalog-check.mjs");
   // Metadata can share pure owner descriptors; only relative TS files are resolved.
   const hook = registerHooks({ resolve(specifier, context, nextResolve) {
     if (specifier.startsWith(".") && context.parentURL?.startsWith(pathToFileURL(path.join(root, "web/packages/")).href)) {
@@ -29,6 +29,9 @@ async function generate(check) {
   const entries = [], translations = {}, errors = [], packages = new Map(), apis = {};
   const pageUI = JSON.parse(await read("capabilities/server/platform/pageui/widgets.json"));
   const widgets = new Set(pageUI.widgets.map((widget) => widget.componentID));
+  for(const file of ["web/packages/app/src/widgets/CompositeViews.tsx","web/packages/app/src/widgets/composite-plugins.ts","web/packages/app/src/runtime/PageComposite.ts"]){
+    errors.push(...professionalViewGate({source:await read(file)}).map(error=>`${file}: ${error}`));
+  }
   for (const owner of owners) {
     const directory = ownerDirectory(owner);
     const metadata = `${directory}/src/catalog.ts`;

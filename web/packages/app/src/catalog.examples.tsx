@@ -1,3 +1,4 @@
+export {ProfessionalGraphExample,ProfessionalMatrixExample} from "./composites/catalog-examples";
 import "./i18n";
 import { AppSelect, RoleSelect, ProtocolSelect, MemberSelect } from "./semantic/References";
 import { useEffect,useMemo,useRef,useState } from "react";

@@ -14,7 +14,19 @@ import (
 //go:embed pageui/widgets.json
 var pageWidgetJSON []byte
 
+type pageModelRole struct {
+	Kinds    []string `json:"kinds"`
+	Required bool     `json:"required,omitempty"`
+	Target   string   `json:"target,omitempty"`
+}
+type pageModelPort struct {
+	ID       string                   `json:"id"`
+	Required bool                     `json:"required,omitempty"`
+	Roles    map[string]pageModelRole `json:"roles"`
+}
+
 type pageWidgetContract struct {
+	ModelPorts        []pageModelPort   `json:"modelPorts,omitempty"`
 	ComponentID       string            `json:"componentID"`
 	ConfigVersion     int               `json:"configVersion"`
 	RequiredUIProfile string            `json:"requiredUIProfile"`

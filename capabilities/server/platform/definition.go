@@ -121,6 +121,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	Composite                     *PageComposite         `json:"composite,omitempty"`
 	Model                         *ModelBinding          `json:"model,omitempty"`
 	TablePresentation             *PageTablePresentation `json:"tablePresentation,omitempty"`
 	CollectionBuilder             *PageCollectionBuilder `json:"collectionBuilder,omitempty"`

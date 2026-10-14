@@ -76,6 +76,8 @@ const ButtonInspector=lazyInspector(()=>import("./ButtonInspector").then(module=
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = createWidgetDefinitions({
+ "layered-graph":{configVersion:1},
+ "model-matrix":{configVersion:1},
  text:{configVersion:1},
  input:{configVersion:1},
  actions:{configVersion:1},

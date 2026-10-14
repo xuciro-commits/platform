@@ -2,6 +2,28 @@ import { afterEach, expect, test, vi } from "vitest";
 import { LiveReads } from "./live";
 
 afterEach(() => vi.useRealTimers());
+
+test("adding a detail lease preserves unchanged windows while changed data and denied reads still notify", async () => {
+  vi.useFakeTimers();
+  const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+  const live = new LiveReads(async (_, signal) => new Response(new ReadableStream({ start(stream) {
+    streams.push(stream); signal.addEventListener("abort", () => stream.error(Error("aborted")));
+  } })));
+  const stop = live.enable(), changed = vi.fn(), detail = vi.fn();
+  const release = live.subscribe("/v1/records/sample.note", changed);
+  const push = (results: unknown[]) => streams.at(-1)!.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${JSON.stringify({sequence:1,results})}\n\n`));
+  const original = {path:"/v1/records/sample.note",status:200,body:{records:[{id:"A",revision:1}]}};
+  await vi.advanceTimersByTimeAsync(60); push([original]); await vi.advanceTimersByTimeAsync(0);
+  expect(changed).toHaveBeenCalledTimes(1);
+  const releaseDetail = live.subscribe("/v1/records/sample.note/A", detail);
+  await vi.advanceTimersByTimeAsync(60); push([original,{path:"/v1/records/sample.note/A",status:200,body:{record:{id:"A",revision:1}}}]); await vi.advanceTimersByTimeAsync(0);
+  expect(changed).toHaveBeenCalledTimes(1); expect(detail).toHaveBeenCalledTimes(1);
+  push([{...original,body:{records:[{id:"A",revision:2}]}}]); await vi.advanceTimersByTimeAsync(0);
+  expect(changed).toHaveBeenCalledTimes(2);
+  push([{...original,status:403,body:{error:"denied"}}]); await vi.advanceTimersByTimeAsync(0);
+  expect(changed).toHaveBeenCalledTimes(3); expect(()=>live.read(original.path)).toThrow("HTTP 403");
+  releaseDetail(); release(); stop();
+});
 test("visible leases share one stream, release hidden queries and install current snapshots before callbacks", async () => {
   vi.useFakeTimers();
   const connections: { paths: string[]; signal: AbortSignal; stream: ReadableStreamDefaultController<Uint8Array> }[] = [];
@@ -35,11 +57,14 @@ test("connection loss invalidates cached values and reconnect installs the curre
  vi.useFakeTimers();
  const streams: ReadableStreamDefaultController<Uint8Array>[]=[];
  const live=new LiveReads(async(_,signal)=>new Response(new ReadableStream({start(stream){streams.push(stream);signal.addEventListener("abort",()=>stream.error(Error("aborted")));}})));
- const stop=live.enable();const release=live.subscribe("/v1/me",()=>{});
+ const changed=vi.fn(),stop=live.enable();const release=live.subscribe("/v1/me",changed);
  const push=(n:number)=>streams.at(-1)!.enqueue(new TextEncoder().encode(`event: snapshot\ndata: {"sequence":${n},"results":[{"path":"/v1/me","status":200,"body":{"revision":${n}}}]}\n\n`));
  await vi.advanceTimersByTimeAsync(60);push(1);await vi.advanceTimersByTimeAsync(0);expect(live.read("/v1/me")?.value).toEqual({revision:1});
  streams[0]!.error(Error("offline"));await vi.advanceTimersByTimeAsync(0);expect(()=>live.read("/v1/me")).toThrow("live connection unavailable");
- await vi.advanceTimersByTimeAsync(1000);expect(streams).toHaveLength(2);push(2);await vi.advanceTimersByTimeAsync(0);expect(live.read("/v1/me")?.value).toEqual({revision:2});
+ expect(changed).toHaveBeenCalledTimes(2);
+ await vi.advanceTimersByTimeAsync(1000);expect(streams).toHaveLength(2);
+ streams[1]!.error(Error("still offline"));await vi.advanceTimersByTimeAsync(0);expect(changed).toHaveBeenCalledTimes(2);
+ await vi.advanceTimersByTimeAsync(2000);expect(streams).toHaveLength(3);push(2);await vi.advanceTimersByTimeAsync(0);expect(live.read("/v1/me")?.value).toEqual({revision:2});expect(changed).toHaveBeenCalledTimes(3);
  release();stop();
 });
 

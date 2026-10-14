@@ -1,3 +1,4 @@
+import {compositePlugins} from "./composite-plugins";
 import {analysisServicePlugins} from "./analysis-service-plugins";
 import {collaborationPlugins} from "./collaboration-plugins";
 import {authoringPlugins} from "./authoring-plugins";
@@ -17,6 +18,7 @@ import {createWidgetRegistry} from "./registry";
 import type {WidgetBindingContext} from "./bindings";
 
 export const pageWidgetRegistry = createWidgetRegistry<WidgetBindingContext>({
+ ...compositePlugins,
  ...inputPlugins,
  ...contentPlugins,
  ...scalarPlugins,

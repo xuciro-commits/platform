@@ -73,8 +73,8 @@ func ModelObject(typ string) AssetRef {
 	return AssetRef{App: app, Kind: AssetObject, Name: typ}
 }
 func (s Section) ModelObject(page Page) AssetRef {
-	if s.Model != nil {
-		return ModelObject(s.Model.Type)
+	if model := s.PrimaryModel(); model != nil {
+		return ModelObject(model.Type)
 	}
 	if s.Object.Name != "" {
 		return s.Object
@@ -118,6 +118,12 @@ func setModelSlot(values map[string]any, slot string, value any) {
 // EffectiveModelSection is a transient adapter to the existing widget ports.
 // It never writes the adapted bare names back into the published definition.
 func (p Page) EffectiveModelSection(s Section, lookup func(string) (EntityInfo, bool)) Section {
+	if s.Composite != nil {
+		if model := s.PrimaryModel(); model != nil {
+			s.Object = ModelObject(model.Type)
+		}
+		return s
+	}
 	if s.Model == nil {
 		return s
 	}
@@ -202,6 +208,11 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 		return nil
 	}
 	for i, s := range p.Sections {
+		if s.Composite != nil {
+			s.Object = AssetRef{}
+			p.Sections[i] = s
+			continue
+		}
 		modelWidget := false
 		for _, widget := range pageWidgets.Widgets {
 			if widget.ComponentID == s.Widget {
@@ -324,11 +335,21 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 		p.Sections[i] = next
 	}
 	p.Document.UIProfile = PageModelProfile
+	if slices.ContainsFunc(p.Sections, func(s Section) bool { return s.Composite != nil }) {
+		p.Document.UIProfile = PageCompositeProfile
+	}
 	return nil
 }
 
 func (p Page) CheckModelBindings(lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool)) error {
-	for _, section := range p.Sections {
+	if err := p.CheckCompositeBindings(lookup, criteria); err != nil {
+		return err
+	}
+	return p.checkModelSources(p.Sections, lookup, criteria)
+}
+
+func (p Page) checkModelSources(sections []Section, lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool)) error {
+	for _, section := range sections {
 		m := section.Model
 		if m == nil {
 			continue
@@ -471,29 +492,27 @@ func PageRuleInputFits(variable, kind string) bool {
 func (p Page) ModelDependencies() []AssetRef {
 	refs := []AssetRef{}
 	for _, s := range p.Sections {
-		m := s.Model
-		if m == nil {
-			continue
-		}
-		if p.SectionInterface(s) == "" {
-			refs = append(refs, ModelObject(m.Type))
-		}
-		if m.Relation != nil {
-			refs = append(refs, ModelObject(m.Relation.ParentType))
-		}
-		sets := []*ModelRecordSet{m.Set}
-		if m.Options != nil {
-			sets = append(sets, m.Options.Set)
-			if m.Options.Rule != nil {
-				refs = append(refs, m.Options.Rule.Action)
+		for _, m := range s.ModelBindings() {
+			if p.SectionInterface(s) == "" {
+				refs = append(refs, ModelObject(m.Type))
 			}
-		}
-		for _, set := range sets {
-			if set != nil && set.Query != nil {
-				refs = append(refs, set.Query.Ref)
+			if m.Relation != nil {
+				refs = append(refs, ModelObject(m.Relation.ParentType))
 			}
-			if set != nil && set.Name != "" {
-				refs = append(refs, p.RecordResourceObject(set.RecordVariable))
+			sets := []*ModelRecordSet{m.Set}
+			if m.Options != nil {
+				sets = append(sets, m.Options.Set)
+				if m.Options.Rule != nil {
+					refs = append(refs, m.Options.Rule.Action)
+				}
+			}
+			for _, set := range sets {
+				if set != nil && set.Query != nil {
+					refs = append(refs, set.Query.Ref)
+				}
+				if set != nil && set.Name != "" {
+					refs = append(refs, p.RecordResourceObject(set.RecordVariable))
+				}
 			}
 		}
 	}
@@ -509,7 +528,7 @@ func ModelWindowWidget(widget string) bool {
 // ReplaceModelPorts preserves owner-specific action transport when Build
 // consumes the canonical platform binding. It copies no business records.
 func ReplaceModelPorts(values, canonical map[string]any) {
-	for _, key := range []string{"model", "object", "fields", "relation", "parentSelection", "query"} {
+	for _, key := range []string{"composite", "model", "object", "fields", "relation", "parentSelection", "query"} {
 		if key == "object" || key == "query" {
 			delete(values, key)
 			continue
@@ -539,6 +558,10 @@ func ReplaceModelPorts(values, canonical map[string]any) {
 // CanonicalModelSection removes the temporary widget ports after a member
 // projection without modifying the original model or publication bytes.
 func CanonicalModelSection(section Section) Section {
+	if section.Composite != nil {
+		section.Object = AssetRef{}
+		return section
+	}
 	if section.Model == nil {
 		return section
 	}
