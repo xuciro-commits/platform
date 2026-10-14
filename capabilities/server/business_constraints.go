@@ -36,11 +36,11 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 			continue
 		}
 		info := platform.ConstraintEntity(et.info)
-		if et.rows[id] != nil && !t.readableIn(t.records, member, issue.Record, at) {
+		if et.rows.get(id) != nil && !t.readableIn(t.records, member, issue.Record, at) {
 			issues[i].Values = nil
 			continue
 		}
-		if current := et.rows[id]; current != nil && et.info.HasReadSources() {
+		if current := et.rows.get(id); current != nil && et.info.HasReadSources() {
 			narrowed, _ := t.narrowerIn(t.records, member, at, true).derive(et, current.value)
 			for _, derivation := range et.info.Derived {
 				paths := derivation.Fields
@@ -161,10 +161,10 @@ func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.C
 					break
 				}
 				parent := s.types[field.Ref]
-				if parent == nil || parent.info.App != info.App || parent.rows[x.String()] == nil {
+				if parent == nil || parent.info.App != info.App || parent.rows.get(x.String()) == nil {
 					return "", fmt.Errorf("unique scope reference is unavailable")
 				}
-				current, currentType = parent.rows[x.String()].value, parent.info
+				current, currentType = parent.rows.get(x.String()).value, parent.info
 			}
 		}
 		raw, err := json.Marshal(values)
@@ -174,7 +174,7 @@ func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.C
 	if err != nil || key == "" {
 		return err == nil, err
 	}
-	for id, other := range et.rows {
+	for id, other := range et.rows.all() {
 		if id == recordOf(value).ID {
 			continue
 		}
@@ -345,8 +345,8 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 		if len(et.info.Constraints) == 0 {
 			continue
 		}
-		ids := make([]string, 0, len(et.rows))
-		for id := range et.rows {
+		ids := make([]string, 0, et.rows.len())
+		for id := range et.rows.all() {
 			ids = append(ids, id)
 		}
 		slices.Sort(ids)
@@ -357,9 +357,9 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 				if !touched {
 					for _, source := range refs {
 						candidate := d.constraintWrites[source]
-						if candidate.caller.App == et.info.App && d.constraintDepends(et.info, rule, et.rows[id], source, candidate.before) {
+						if candidate.caller.App == et.info.App && d.constraintDepends(et.info, rule, et.rows.get(id), source, candidate.before) {
 							write, touched = candidate, true
-							write.before = et.rows[id]
+							write.before = et.rows.get(id)
 							break
 						}
 					}
@@ -367,7 +367,7 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 				if !touched {
 					continue
 				}
-				if err := d.checkConstraint(write.caller, et.info, rule, et.rows[id], write.before); err != nil {
+				if err := d.checkConstraint(write.caller, et.info, rule, et.rows.get(id), write.before); err != nil {
 					d.failure = err
 					return err
 				}
@@ -411,7 +411,7 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			if !ok {
 				return true
 			}
-			for _, candidate := range []*row{et.rows[id], old} {
+			for _, candidate := range []*row{et.rows.get(id), old} {
 				if candidate != nil && candidate.value.FieldByIndex(field.Index).String() == rootID {
 					return true
 				}
@@ -492,10 +492,10 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 				return true
 			}
 			target := d.records.types[field.Ref]
-			if target == nil || target.rows[targetID] == nil {
+			if target == nil || target.rows.get(targetID) == nil {
 				break
 			}
-			current, currentInfo = target.rows[targetID], target.info
+			current, currentInfo = target.rows.get(targetID), target.info
 		}
 		return false
 	}
@@ -515,7 +515,7 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			if index < 0 || et == nil {
 				return true
 			}
-			for itemID, item := range et.rows {
+			for itemID, item := range et.rows.all() {
 				if !d.declaredSetDepends(info, root, info.Sets[index], et.info.Type, itemID, nil) {
 					continue
 				}
@@ -572,7 +572,7 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row,
 		if et == nil {
 			return true
 		}
-		for _, candidate := range []*row{et.rows[id], old} {
+		for _, candidate := range []*row{et.rows.get(id), old} {
 			if candidate != nil && candidate.value.FieldByIndex(field.Index).String() == rootID {
 				return true
 			}
@@ -609,9 +609,9 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row,
 			}
 			candidates := []*row{}
 			if typ == et.info.Type {
-				candidates = append(candidates, et.rows[id], old)
+				candidates = append(candidates, et.rows.get(id), old)
 			} else {
-				for _, edge := range et.rows {
+				for _, edge := range et.rows.all() {
 					candidates = append(candidates, edge)
 				}
 				for ref, write := range d.constraintWrites {

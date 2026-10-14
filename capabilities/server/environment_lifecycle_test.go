@@ -169,14 +169,14 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if len(migration.Types) != 1 || migration.Types[0].Rows != 3 || migration.Types[0].Written != 3 || len(migration.Types[0].Refused) != 0 {
 		t.Fatalf("migration moved the wrong rows: %+v", migration.Types)
 	}
-	if visits := prod.records.types["build.visit"]; visits == nil || len(visits.rows) != 3 {
+	if visits := prod.records.types["build.visit"]; visits == nil || visits.rows.len() != 3 {
 		t.Fatal("prod does not hold the migrated visits")
 	}
-	if image, _ := prod.records.types["build.visit"].rows["V1"].image(); !strings.Contains(string(image), `"visit 1"`) {
+	if image, _ := prod.records.types["build.visit"].rows.get("V1").image(); !strings.Contains(string(image), `"visit 1"`) {
 		t.Fatalf("migrated V1 lost its note: %s", image)
 	}
 	repeat, err := MigrateRecords(dev.Tenant, prod.Tenant, member(dev, "ops"), member(prod, "ops"), []string{"build.visit"}, at.Add(time.Minute))
-	if err != nil || repeat.Key != migration.Key || repeat.Types[0].Written != 3 || len(prod.records.types["build.visit"].rows) != 3 {
+	if err != nil || repeat.Key != migration.Key || repeat.Types[0].Written != 3 || prod.records.types["build.visit"].rows.len() != 3 {
 		t.Fatalf("a repeated migration changed prod: %+v %v", repeat, err)
 	}
 	if _, err := MigrateRecords(dev.Tenant, prod.Tenant, member(dev, "ops"), member(prod, "ops"), []string{"build.nothing"}, at); err == nil || !strings.Contains(err.Error(), "does not host") {
@@ -247,11 +247,11 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if err != nil || prodReview.UpgradePlan == nil || prodReview.UpgradePlan.Additions[0].Records != 4 || prodReview.UpgradePlan.ID == review.UpgradePlan.ID {
 		t.Fatalf("prod did not re-derive its plan: %+v %v", prodReview, err)
 	}
-	before, _ := prod.records.types["build.visit"].rows["V1"].image()
+	before, _ := prod.records.types["build.visit"].rows.get("V1").image()
 	if _, err := prod.ActivateReleaseWithUpgrade(member(prod, "pat"), v2, "activate-v2", prodReview.UpgradePlan.ID, at); err != nil {
 		t.Fatalf("prod upgrade: %v", err)
 	}
-	if after, _ := prod.records.types["build.visit"].rows["V1"].image(); string(after) != string(before) {
+	if after, _ := prod.records.types["build.visit"].rows.get("V1").image(); string(after) != string(before) {
 		t.Fatal("the prod upgrade rewrote an existing record")
 	}
 	if field, ok := prod.records.types["build.visit"].info.Field("priority"); !ok || field.Required {
@@ -289,10 +289,10 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if field, ok := restored.records.types["build.visit"].info.Field("priority"); !ok || field.Required {
 		t.Fatal("recovery lost the upgraded shape")
 	}
-	if image, _ := restored.records.types["build.visit"].rows["V3"].image(); !strings.Contains(string(image), `"priority":9`) {
+	if image, _ := restored.records.types["build.visit"].rows.get("V3").image(); !strings.Contains(string(image), `"priority":9`) {
 		t.Fatalf("recovery lost the write after the upgrade: %s", image)
 	}
-	if len(restored.records.types["build.visit"].rows) != 4 {
+	if restored.records.types["build.visit"].rows.len() != 4 {
 		t.Fatal("recovery changed the record count")
 	}
 	seen := map[string]bool{}

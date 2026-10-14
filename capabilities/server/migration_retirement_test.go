@@ -151,7 +151,7 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 	if redirect {
 		wantBusinessState = "open"
 	}
-	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows["A"].value, "state"); got != wantBusinessState {
+	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.get("A").value, "state"); got != wantBusinessState {
 		t.Fatalf("held business state was not released: %s", got)
 	}
 	for _, request := range requests {
@@ -252,7 +252,7 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 				decide(t, tn, approver, work.ID, "work.approval.approve", work.ApprovalType, newRequest.ID, map[string]any{}, txnAt.Add(5*time.Hour))
 			}
 		}
-		if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows["A"].value, "state"); got != "done" {
+		if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.get("A").value, "state"); got != "done" {
 			t.Fatalf("target approval did not execute: %s", got)
 		}
 		a, _ = platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), requests[0].ID)

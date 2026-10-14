@@ -28,7 +28,7 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 		seen[release] = true
 		var selected *platform.MigrationRun
 		if runs := r.records.types[platform.MigrationRunType]; runs != nil {
-			for _, value := range runs.rows {
+			for _, value := range runs.rows.all() {
 				run := value.value.Interface().(platform.MigrationRun)
 				if run.State != "complete" || len(run.Failures) != 0 || run.Plan.From != release || run.SourceShapes[typ] == "" {
 					continue

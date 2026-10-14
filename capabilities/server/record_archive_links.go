@@ -18,7 +18,7 @@ func (s *recordStore) validateArchiveLinkLocked(l platform.LinkType) error {
 	if !ok || f.Type != "reference" || f.Ref != parent.info.Type {
 		return fmt.Errorf("link reference is unavailable")
 	}
-	for _, row := range child.rows {
+	for _, row := range child.rows.all() {
 		if row.value.Field(0).Interface().(platform.Record).Archived {
 			continue
 		}
@@ -26,7 +26,7 @@ func (s *recordStore) validateArchiveLinkLocked(l platform.LinkType) error {
 		if id == "" {
 			continue
 		}
-		target := parent.rows[id]
+		target := parent.rows.get(id)
 		if target == nil || target.value.Field(0).Interface().(platform.Record).Archived {
 			return fmt.Errorf("%s", linkArchiveFailure)
 		}
@@ -47,7 +47,7 @@ func (s *recordStore) checkArchiveWriteLocked(et *entityType, value reflect.Valu
 			return fail()
 		}
 		if et.info.Type == l.Parent.Name && rec.Archived {
-			for id, row := range child.rows {
+			for id, row := range child.rows.all() {
 				if et.info.Type == child.info.Type && id == rec.ID {
 					continue
 				} // prospective self is archived
@@ -64,7 +64,7 @@ func (s *recordStore) checkArchiveWriteLocked(et *entityType, value reflect.Valu
 			if et.info.Type == l.Parent.Name && id == rec.ID {
 				continue
 			} // prospective self is active
-			target := parent.rows[id]
+			target := parent.rows.get(id)
 			if target == nil || target.value.Field(0).Interface().(platform.Record).Archived {
 				return fail()
 			}

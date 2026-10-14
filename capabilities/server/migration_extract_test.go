@@ -99,7 +99,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					if _, err := tn.Submit(memberOf(t, tn, "builder"), start, txnAt); err != nil {
 						t.Fatalf("start: %#v; fault: %+v", err, tn.fault.Load())
 					}
-					if target := tn.records.types["build.detail"]; target == nil || len(target.rows) != 0 {
+					if target := tn.records.types["build.detail"]; target == nil || target.rows.len() != 0 {
 						t.Fatal("start did not accept the sealed new object declaration")
 					}
 					advance := submission(tn, memberOf(t, tn, "builder"), build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
@@ -122,7 +122,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 						if mode == "quarantine" {
 							expected = 1
 						}
-						if run.State != "blocked" || len(run.Failures) == 0 || len(tn.records.types["build.detail"].rows) != expected {
+						if run.State != "blocked" || len(run.Failures) == 0 || tn.records.types["build.detail"].rows.len() != expected {
 							t.Fatalf("identity collision was not recorded without overwriting: %+v", run)
 						}
 						if _, err := tn.ActivateRelease(memberOf(t, tn, "builder"), to, "blocked-activate", txnAt); err == nil {
@@ -136,7 +136,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 						if err := recovered.Replay(entries); err != nil {
 							t.Fatal(err)
 						}
-						if migrationRun(t, recovered, "M").State != "blocked" || len(recovered.records.types["build.detail"].rows) != expected {
+						if migrationRun(t, recovered, "M").State != "blocked" || recovered.records.types["build.detail"].rows.len() != expected {
 							t.Fatal("recovery lost extraction quarantine or repeated rejected rows")
 						}
 						return
@@ -171,7 +171,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 							t.Fatal("cancellation did not finish its bounded compensation")
 						}
 						for _, rowID := range []string{"A", "B"} {
-							if !recordOf(tn.records.types["build.detail"].rows[rowID].value).Archived {
+							if !recordOf(tn.records.types["build.detail"].rows.get(rowID).value).Archived {
 								t.Fatal("cancellation left an extracted record active")
 							}
 						}
@@ -183,7 +183,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 						}
 						for _, rowID := range []string{"A", "B", "C"} {
 							et := tn.records.types["build.detail"]
-							if businessField(et.info, et.rows[rowID].value, "name") != "Name "+rowID {
+							if businessField(et.info, et.rows.get(rowID).value, "name") != "Name "+rowID {
 								t.Fatal("extraction lost its declared source value")
 							}
 						}
@@ -207,11 +207,11 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					for _, rowID := range []string{"A", "B", "C"} {
 						instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:"+rowID)
 						if instance.State != "done" || instance.Release != from {
-							t.Fatalf("old flow lost its extraction binding: %s; projection: %s; source: %s", jsonOf(instance), jsonOf(tn.records.types["build.sample"].rows[rowID].projection), jsonOf(tn.records.types["build.sample"].rows[rowID].value.Interface()))
+							t.Fatalf("old flow lost its extraction binding: %s; projection: %s; source: %s", jsonOf(instance), jsonOf(tn.records.types["build.sample"].rows.get(rowID).projection), jsonOf(tn.records.types["build.sample"].rows.get(rowID).value.Interface()))
 						}
 						if !cancel {
 							et := tn.records.types["build.detail"]
-							if businessField(et.info, et.rows[rowID].value, "name") != "Updated" {
+							if businessField(et.info, et.rows.get(rowID).value, "name") != "Updated" {
 								t.Fatal("retained extraction did not write its target")
 							}
 						}
@@ -224,9 +224,9 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					if err := recovered.Replay(entries); err != nil {
 						t.Fatal(err)
 					}
-					for rowID, row := range tn.records.types["build.detail"].rows {
+					for rowID, row := range tn.records.types["build.detail"].rows.all() {
 						before, _ := acceptedRowOf("build.detail", rowID, row)
-						after, _ := acceptedRowOf("build.detail", rowID, recovered.records.types["build.detail"].rows[rowID])
+						after, _ := acceptedRowOf("build.detail", rowID, recovered.records.types["build.detail"].rows.get(rowID))
 						if !bytes.Equal(jsonOf(before), jsonOf(after)) {
 							t.Fatal("recovery reran extraction or compensation")
 						}

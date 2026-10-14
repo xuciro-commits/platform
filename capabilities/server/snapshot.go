@@ -141,7 +141,10 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	rows := map[string][]*row{}
 	t.records.mu.Lock()
 	for typ, et := range t.records.types {
-		rows[typ] = slices.Collect(maps.Values(et.rows))
+		rows[typ] = make([]*row, 0, et.rows.len())
+		for _, value := range et.rows.all() {
+			rows[typ] = append(rows[typ], value)
+		}
 	}
 	t.records.mu.Unlock()
 	t.audit.snapshot(&s)
@@ -190,7 +193,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			held[typ] = rows
 			continue
 		}
-		et.rows = map[string]*row{}
+		et.rows = recordIndex[*row]{}
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
 			decode, err := rowDecodeImage(et.info, r.Value, r.Projection, t.records.readRelease)
@@ -203,7 +206,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			emptyLists(v) // a snapshot of older code may hold null lists
 			recovered := &row{value: v, history: r.History, projection: cloneRecordProjection(r.Projection), extraction: r.Extraction}
 			recovered.retainOriginal(r.Value)
-			et.rows[recordOf(v).ID] = recovered
+			et.rows.set(recordOf(v).ID, recovered)
 		}
 		t.records.generation++
 	}
@@ -320,7 +323,7 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 		}
 	}
 	for typ, et := range t.records.types {
-		for _, row := range et.rows {
+		for _, row := range et.rows.all() {
 			if err := validateExtractionOrigin(t.records, typ, row.extraction); err != nil {
 				return err
 			}

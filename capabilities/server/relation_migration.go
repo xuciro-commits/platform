@@ -55,7 +55,7 @@ func (t *Tenant) relationMigrationPlan(store *recordStore, c platform.Caller, bi
 	store.mu.Lock()
 	et := store.types[platform.OwnedRelationType(c.App)]
 	if et != nil {
-		plan.Migrated = relationImage(et.rows[relationMigrationID(binding.Ref)]).Migration
+		plan.Migrated = relationImage(et.rows.get(relationMigrationID(binding.Ref))).Migration
 	}
 	store.mu.Unlock()
 	if et == nil {
@@ -134,7 +134,7 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 		childType, childID, _ := strings.Cut(child, "/")
 		request := platform.TxnLink{Binding: binding, Parent: platform.TxnRef{Type: parentType, ID: parentID}, Child: platform.TxnRef{Type: childType, ID: childID}}
 		id := ownedRelationID(binding.Ref.String(), parent, child)
-		prior := d.records.types[entity.Type].rows[id]
+		prior := d.records.types[entity.Type].rows.get(id)
 		if prior != nil && !recordOf(prior.value).Archived {
 			return fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration overlaps an existing owned relationship"))
 		}
@@ -157,7 +157,7 @@ func (t *Tenant) ownedRelations(store *recordStore, c platform.Caller, entity st
 		if !ownedRelationSchema(et.info) {
 			continue
 		}
-		for _, row := range et.rows {
+		for _, row := range et.rows.all() {
 			image := relationImage(row)
 			if image.Archived || image.Migration || entity != "" && image.Parent != entity && image.Child != entity {
 				continue
@@ -188,7 +188,7 @@ func (t *Tenant) legacyRelationActive(store *recordStore, link platform.Relation
 		if !ownedRelationSchema(et.info) {
 			continue
 		}
-		for _, row := range et.rows {
+		for _, row := range et.rows.all() {
 			image := relationImage(row)
 			if !image.Migration || image.Archived {
 				continue

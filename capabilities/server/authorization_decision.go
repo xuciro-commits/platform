@@ -277,7 +277,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 	et := store.types[q.Type]
 	var current *row
 	if et != nil {
-		current = et.rows[q.Record]
+		current = et.rows.get(q.Record)
 	}
 	if !held {
 		store.mu.Unlock()

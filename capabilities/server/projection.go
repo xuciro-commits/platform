@@ -212,7 +212,7 @@ func (p *Projection) rows(typ string, ids map[string]bool) (rows [][]any, change
 	defer s.mu.Unlock()
 	et := s.types[typ]
 	cols := columns(et.info)
-	for id, r := range et.rows {
+	for id, r := range et.rows.all() {
 		if ids != nil && !ids[id] {
 			continue
 		}

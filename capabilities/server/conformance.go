@@ -125,7 +125,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	records := map[string]any{}
 	for typ, et := range t.records.types {
 		rows := map[string]any{}
-		for id, r := range et.rows {
+		for id, r := range et.rows.all() {
 			rows[id] = []any{r.value.Interface(), r.history}
 		}
 		records[typ] = rows

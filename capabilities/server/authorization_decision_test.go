@@ -151,7 +151,7 @@ func TestDerivedFreeTextRequiresDeclaredSourceType(t *testing.T) {
 	decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Machine", "line": "L1", "note": "Inspection"}, txnAt)
 	tn.records.mu.Lock()
 	et := tn.records.types["stock.item"]
-	value := et.rows["I1"].value.Interface()
+	value := et.rows.get("I1").value.Interface()
 	tn.records.mu.Unlock()
 	read := tn.narrowed(memberOf(t, tn, "ana"), value, txnAt, false)
 	var fields map[string]any

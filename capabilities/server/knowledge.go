@@ -210,8 +210,8 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 			t.records.mu.Lock()
 			et := t.records.types[typ]
 			var v reflect.Value
-			if et != nil && et.rows[id] != nil {
-				v = et.rows[id].value
+			if et != nil && et.rows.get(id) != nil {
+				v = et.rows.get(id).value
 			}
 			t.records.mu.Unlock()
 			if et == nil || !v.IsValid() || v.FieldByName("Record").Interface().(platform.Record).Archived {
@@ -291,11 +291,15 @@ func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := s.dirty
-	s.dirty = nil
+	s.dirty = recordIndex[bool]{}
 	if !walked {
 		return nil
 	}
-	return out
+	changed := make(map[string]bool, out.len())
+	for ref, dirty := range out.all() {
+		changed[ref] = dirty
+	}
+	return changed
 }
 
 // passages cuts a text at its headings, then into pieces of about 800 tokens
@@ -395,10 +399,10 @@ func (t *Tenant) knowledgeSourceReadable(store *recordStore, m platform.Member, 
 		return false
 	}
 	et := store.types[platform.KnowledgeDocumentType]
-	if et == nil || et.rows[id] == nil {
+	if et == nil || et.rows.get(id) == nil {
 		return false
 	}
-	d, ok := et.rows[id].value.Interface().(platform.KnowledgeDocument)
+	d, ok := et.rows.get(id).value.Interface().(platform.KnowledgeDocument)
 	return ok && !d.Archived && knowledgeAppsReadable(d.Apps, &m, "")
 }
 

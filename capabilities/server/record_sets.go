@@ -93,12 +93,12 @@ func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, n
 	if json.Unmarshal(raw, value.Addr().Interface()) != nil || recordOf(value).ID != id {
 		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Collection candidate is invalid")
 	}
-	if before := et.rows[id]; before != nil {
+	if before := et.rows.get(id); before != nil {
 		recordOf(value).Created = recordOf(before.value).Created
 	} else {
 		recordOf(value).Created.By = c.ID
 	}
-	et.rows[id] = &row{value: value}
+	et.rows.set(id, &row{value: value})
 	return d.tenant.readRecordSetFrom(store, c, object, id, name, at)
 }
 

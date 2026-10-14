@@ -19,7 +19,7 @@ type migrationRetirement struct {
 func (d *stagedDecision) stageActionRetirement(c platform.Caller, run platform.MigrationRun, step platform.MigrateStep) (platform.MigrationRun, *kernel.Error) {
 	pending := []string{}
 	if requests := d.records.types[platform.WorkApprovalType]; requests != nil {
-		for id, value := range requests.rows {
+		for id, value := range requests.rows.all() {
 			request := value.value.Interface().(platform.ApprovalRequest)
 			if request.State == "pending" && request.Action == step.Action && id > run.Cursor {
 				pending = append(pending, id)
@@ -76,7 +76,7 @@ func (s *recordStore) retiredApprovalReturnLocked(info platform.EntityInfo, sche
 		return false
 	}
 	action := strings.TrimSuffix(strings.TrimSuffix(schema, platform.ApprovalRejected), platform.ApprovalReturned)
-	for _, value := range runs.rows {
+	for _, value := range runs.rows.all() {
 		run := value.value.Interface().(platform.MigrationRun)
 		if run.State != "cancelled" && run.Plan.From == s.readRelease && slices.ContainsFunc(run.Plan.Steps, func(step platform.MigrateStep) bool {
 			return step.Kind == "retire-action" && step.Action == action && slices.Contains(step.Types, info.Type)

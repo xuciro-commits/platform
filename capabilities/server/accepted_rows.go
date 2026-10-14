@@ -24,7 +24,7 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 		if et == nil || et.info.App != image.App {
 			return nil, fmt.Errorf("direct result needs missing record type %s", image.Type)
 		}
-		prior := et.rows[image.ID]
+		prior := et.rows.get(image.ID)
 		before, previousHistory, revision := "", 0, uint32(0)
 		if prior != nil {
 			row, err := acceptedRowOf(image.Type, image.ID, prior)
@@ -73,10 +73,10 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 		}
 		recovered := &row{value: value, history: copyHistory(image.History)}
 		recovered.retainOriginal(image.Value)
-		et.rows[image.ID] = recovered
+		et.rows.set(image.ID, recovered)
 		draft.writes[image.Type+"/"+image.ID] = true
 		if et.knowledge {
-			draft.dirty[image.Type+"/"+image.ID] = true
+			draft.dirty.set(image.Type+"/"+image.ID, true)
 		}
 	}
 	return draft, nil

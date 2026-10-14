@@ -288,7 +288,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		t.Fatal("recovery reran current authorization")
 	}
 	for _, row := range saved.Rows {
-		r := restarted.records.types[row.Type].rows[row.ID]
+		r := restarted.records.types[row.Type].rows.get(row.ID)
 		image, err := r.image()
 		if err != nil || !bytes.Equal(image, row.Value) {
 			t.Fatalf("recovered image differs for %s: %v", row.Type, err)

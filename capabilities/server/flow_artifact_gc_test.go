@@ -136,7 +136,7 @@ func TestContinuousOrphanCollectionPreservesHistoryAndRecoveryBoundary(t *testin
 	}
 	live.Files = files
 	live.records.mu.Lock()
-	row := live.records.types[platform.FlowInstanceType].rows[id]
+	row := live.records.types[platform.FlowInstanceType].rows.get(id)
 	row.history = append(row.history, RecordChange{Fields: []FieldChange{{Field: "batch", Before: []byte("{")}}})
 	live.records.mu.Unlock()
 	if err := live.collectUnacceptedFlowArtifacts(context.Background(), now); err == nil {
@@ -162,7 +162,9 @@ func TestFlowArtifactReferencesRetainOriginalRecoveryBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	records := newRecordStore()
-	records.types[platform.FlowInstanceType] = &entityType{rows: map[string]*row{"old": {value: reflect.ValueOf(platform.FlowInstance{}), original: platform.Raw(map[string]any{"batch": map[string]any{"sealed": ref}})}}}
+	et := &entityType{}
+	et.rows.set("old", &row{value: reflect.ValueOf(platform.FlowInstance{}), original: platform.Raw(map[string]any{"batch": map[string]any{"sealed": ref}})})
+	records.types[platform.FlowInstanceType] = et
 	keep, err := records.flowArtifactReferences(store)
 	if err != nil || !keep[key] {
 		t.Fatal("original recovery bytes lost their artifact root", err)

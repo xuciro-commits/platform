@@ -78,7 +78,7 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, m
 	plan := &ReleaseUpgradePlan{CandidateID: candidate.ID, ActiveID: t.releases.active}
 	for typ, old := range t.records.types {
 		next := trial.records.types[typ]
-		if next == nil || len(old.rows) == 0 || sameStoredFields(old.info, next.info) {
+		if next == nil || old.rows.len() == 0 || sameStoredFields(old.info, next.info) {
 			continue
 		}
 		field := optionalStoredAddition(old.info, next.info)
@@ -89,7 +89,7 @@ func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, m
 		if err != nil {
 			return nil, err
 		}
-		plan.Additions = append(plan.Additions, ReleaseFieldAddition{Type: typ, Field: field.Name, Kind: field.Type, Records: len(old.rows), SourceShape: shape})
+		plan.Additions = append(plan.Additions, ReleaseFieldAddition{Type: typ, Field: field.Name, Kind: field.Type, Records: old.rows.len(), SourceShape: shape})
 	}
 	if len(plan.Additions) == 0 {
 		return nil, nil

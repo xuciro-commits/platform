@@ -436,16 +436,16 @@ func captureDirectEffectRows(d *stagedDecision, owner string, eventRows map[stri
 		}
 		typ, id, ok := strings.Cut(ref, "/")
 		et := d.records.types[typ]
-		if !ok || et == nil || et.info.App != owner || et.rows[id] == nil {
+		if !ok || et == nil || et.info.App != owner || et.rows.get(id) == nil {
 			return nil, fmt.Errorf("effect answer writes a foreign or undeclared record")
 		}
-		image, err := acceptedRowOf(typ, id, et.rows[id])
+		image, err := acceptedRowOf(typ, id, et.rows.get(id))
 		if err != nil {
 			return nil, err
 		}
 		row := acceptedInputRow{acceptedRow: image, App: owner}
-		if prior := d.records.parent.types[typ]; prior != nil && prior.rows[id] != nil {
-			old, err := acceptedRowOf(typ, id, prior.rows[id])
+		if prior := d.records.parent.types[typ]; prior != nil && prior.rows.get(id) != nil {
+			old, err := acceptedRowOf(typ, id, prior.rows.get(id))
 			if err != nil {
 				return nil, err
 			}

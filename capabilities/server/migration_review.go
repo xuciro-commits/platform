@@ -77,12 +77,12 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 		for _, field := range source.Fields {
 			fields = append(fields, field.Name)
 		}
-		for id := range et.rows {
+		for id := range et.rows.all() {
 			decision := t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "read", Type: typ, Record: id, Fields: fields}, at, false)
 			if err := authorizationRefusal(decision); err != nil {
 				return MigrationReview{}, err
 			}
-			image, err := et.rows[id].image()
+			image, err := et.rows.get(id).image()
 			if err != nil {
 				return MigrationReview{}, err
 			}
@@ -105,7 +105,7 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 					_ = json.Unmarshal(result.Extracted["id"], &id)
 					key := step.Target + "/" + id
 					existing := t.records.types[step.Target]
-					if extractions[key] || existing != nil && existing.rows[id] != nil {
+					if extractions[key] || existing != nil && existing.rows.get(id) != nil {
 						review.Issues = append(review.Issues, MigrationReviewIssue{Type: typ, Record: id, Step: index + 1, Reason: "extraction identity is already used"})
 					}
 					extractions[key] = true
@@ -124,7 +124,7 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 		if err != nil {
 			return MigrationReview{}, err
 		}
-		review.Types = append(review.Types, MigrationReviewType{Type: typ, Records: len(et.rows), SourceShape: sourceHash, TargetShape: targetHash})
+		review.Types = append(review.Types, MigrationReviewType{Type: typ, Records: et.rows.len(), SourceShape: sourceHash, TargetShape: targetHash})
 	}
 	slices.SortFunc(review.Issues, func(a, b MigrationReviewIssue) int {
 		if a.Type < b.Type || a.Type == b.Type && a.Record < b.Record {
@@ -191,7 +191,7 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 			return nil, fmt.Errorf("migration source type is outside the sealed release")
 		}
 		sources[typ] = old.info
-		old.rows = map[string]*row{}
+		old.rows = recordIndex[*row]{}
 	}
 	view, err := t.assetInstallationView(records)
 	if err != nil {

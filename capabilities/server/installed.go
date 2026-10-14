@@ -71,7 +71,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if err := s.migrationDefinitionLocked(info); err != nil {
 		return err
 	}
-	et := &entityType{info: info, rows: map[string]*row{}, knowledge: knowledgeBearing(info)}
+	et := &entityType{info: info, rows: recordIndex[*row]{}, knowledge: knowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
@@ -79,7 +79,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		if before.info.Versioning != nil && !reflect.DeepEqual(before.info.Versioning, info.Versioning) || len(before.info.VersionPins) > 0 && !reflect.DeepEqual(before.info.VersionPins, info.VersionPins) {
 			return fmt.Errorf("published business versioning and pin bindings are retained")
 		}
-		for id, r := range before.rows {
+		for id, r := range before.rows.all() {
 			raw, err := r.image()
 			if err != nil {
 				return err
@@ -94,8 +94,9 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			}
 			platform.ApplyFieldAliases(info, v)
 			emptyLists(v)
-			et.rows[id] = &row{value: v, history: copyHistory(r.history), projection: cloneRecordProjection(r.projection), extraction: r.extraction}
-			et.rows[id].retainOriginal(raw)
+			installed := &row{value: v, history: r.history, projection: r.projection, extraction: r.extraction}
+			installed.retainOriginal(raw)
+			et.rows.set(id, installed)
 		}
 		delete(s.byGo, before.info.Go)
 	}

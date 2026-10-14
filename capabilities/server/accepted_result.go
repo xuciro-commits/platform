@@ -109,16 +109,16 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	}
 	d.records.mu.Lock()
 	et := d.records.types[typ]
-	if et == nil || et.info.App != app || et.rows[id] == nil {
+	if et == nil || et.info.App != app || et.rows.get(id) == nil {
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("decision has no declared record image")
 	}
-	if et.rows[id].projection != nil {
+	if et.rows.get(id).projection != nil {
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("versioned migration row requires the complete record batch")
 	}
-	value, err := json.Marshal(et.rows[id].value.Interface())
-	history := copyHistory(et.rows[id].history)
+	value, err := json.Marshal(et.rows.get(id).value.Interface())
+	history := copyHistory(et.rows.get(id).history)
 	d.records.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -314,7 +314,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 			return false, fmt.Errorf("accepted publication is invalid: %w", err)
 		}
 	}
-	prior := et.rows[rec.ID]
+	prior := et.rows.get(rec.ID)
 	if prior != nil && reflect.DeepEqual(prior.value.Interface(), value.Interface()) &&
 		reflect.DeepEqual(prior.history, result.Row.History) {
 		draft.mu.Unlock()
@@ -336,11 +336,11 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}
 	recovered := &row{value: value, history: copyHistory(result.Row.History)}
 	recovered.retainOriginal(result.Row.Value)
-	et.rows[rec.ID] = recovered
+	et.rows.set(rec.ID, recovered)
 	draft.writes[result.Row.Type+"/"+rec.ID] = true
 	draft.remember(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
 	if et.knowledge {
-		draft.dirty[result.Row.Type+"/"+rec.ID] = true
+		draft.dirty.set(result.Row.Type+"/"+rec.ID, true)
 	}
 	draft.mu.Unlock()
 	// An invalid receipt cannot expose the staged row. With the tenant lock

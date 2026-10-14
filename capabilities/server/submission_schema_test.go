@@ -52,7 +52,7 @@ func TestSubmissionSchemaHTTPRequiresContentBeforeExecutingPublishedObjects(t *t
 	if answer := post(""); answer.Error == nil || answer.Error.Code != pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA.String() {
 		t.Fatal("published object accepted an undeclared version", answer)
 	}
-	if tenant.records.types[typ].rows["A"] != nil {
+	if tenant.records.types[typ].rows.get("A") != nil {
 		t.Fatal("undeclared version wrote a row")
 	}
 	request.IdempotencyKey += "-declared"
@@ -125,7 +125,7 @@ func TestSubmissionSchemaFamiliesRetainVersionsAndRecover(t *testing.T) {
 			}
 			oldRequest := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "B", map[string]any{"name": "Stale client"})
 			_, refusal, _ = live.submitSchemaDiagnosed(memberOf(t, live, "user"), oldRequest, compatible.Version, txnAt)
-			if refusal == nil || live.records.types[typ].rows["B"] != nil || !strings.Contains(refusal.Message, "refresh") {
+			if refusal == nil || live.records.types[typ].rows.get("B") != nil || !strings.Contains(refusal.Message, "refresh") {
 				t.Fatal("old family executed current rules or omitted its refresh reason", refusal)
 			}
 			freshRequest := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "C", map[string]any{"name": "New client", "note": "V2"})

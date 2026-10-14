@@ -105,14 +105,14 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 				t.Fatal(bindErr)
 			}
 			caller := execution.Caller(parent, memberOf(t, tn, "user"), build.ID)
-			beforeRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows["A"])
+			beforeRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows.get("A"))
 			_, invalid := platform.Attempt(caller, func() (*pb.ChangeRecord, *kernel.Error) {
 				return execution.Submit(caller, submission(tn, caller.Member, build.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "unmapped"}), at)
 			})
 			if invalid == nil {
 				t.Fatal("invalid retained conversion accepted")
 			}
-			afterRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows["A"])
+			afterRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows.get("A"))
 			if !bytes.Equal(jsonOf(beforeRejected), jsonOf(afterRejected)) {
 				t.Fatal("invalid conversion exposed a partial target or source image")
 			}
@@ -127,11 +127,11 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			if reference {
 				want = "b"
 			}
-			if businessField(et.info, et.rows["A"].value, "state") != "done" || businessField(et.info, et.rows["A"].value, "value") != want {
+			if businessField(et.info, et.rows.get("A").value, "state") != "done" || businessField(et.info, et.rows.get("A").value, "value") != want {
 				instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:A")
-				t.Fatalf("old conversion did not finish: %s; flow: %s", jsonOf(et.rows["A"].value.Interface()), jsonOf(instance))
+				t.Fatalf("old conversion did not finish: %s; flow: %s", jsonOf(et.rows.get("A").value.Interface()), jsonOf(instance))
 			}
-			source := projectionFor(et.rows["A"].projection, from)
+			source := projectionFor(et.rows.get("A").projection, from)
 			if source == nil || !bytes.Contains(source.Value, []byte(`"value":"`+nextValue+`"`)) {
 				t.Fatalf("old source write was lost: %+v", source)
 			}
@@ -139,8 +139,8 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			if err := recovered.Replay(entries); err != nil {
 				t.Fatal(err)
 			}
-			before, _ := acceptedRowOf(et.info.Type, "A", et.rows["A"])
-			after, _ := acceptedRowOf(et.info.Type, "A", recovered.records.types[et.info.Type].rows["A"])
+			before, _ := acceptedRowOf(et.info.Type, "A", et.rows.get("A"))
+			after, _ := acceptedRowOf(et.info.Type, "A", recovered.records.types[et.info.Type].rows.get("A"))
 			if !bytes.Equal(jsonOf(before), jsonOf(after)) {
 				t.Fatal("recovery reran the conversion")
 			}

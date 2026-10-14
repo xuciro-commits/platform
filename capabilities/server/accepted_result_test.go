@@ -216,7 +216,7 @@ func TestAcceptedGeneratedArchivePreservesReceiptAndHistory(t *testing.T) {
 	if len(entries) != 2 || entries[1].Kind != "accepted-result" {
 		t.Fatalf("archive was not committed as a result: %+v", entries)
 	}
-	if row := live.records.types["stock.item"].rows["I1"]; row == nil ||
+	if row := live.records.types["stock.item"].rows.get("I1"); row == nil ||
 		!row.value.Interface().(Item).Archived || len(row.history) != 2 {
 		t.Fatal("committed archive or its history was lost")
 	}
@@ -243,7 +243,7 @@ func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	create := sub("k1", "create", `{"name":"Bolt","qty":2,"line":"L1"}`)
 	if _, err := live.Submit(member, create, now); err == nil ||
 		len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
-		live.records.types["stock.item"].rows["I1"] != nil {
+		live.records.types["stock.item"].rows.get("I1") != nil {
 		t.Fatal("failed append exposed a draft")
 	}
 	entries = append(entries, Entry{}) // enable successful append
@@ -292,8 +292,8 @@ func TestGeneratedActionWithWrongTargetCannotFallBackToLegacy(t *testing.T) {
 		Payload: []byte(`{"name":"Bolt","line":"L1"}`)},
 		time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC))
 	if err == nil || len(journal) != 1 ||
-		tn.records.types["stock.item"].rows["B1"] != nil ||
-		tn.records.types["stock.bin"].rows["B1"] != nil {
+		tn.records.types["stock.item"].rows.get("B1") != nil ||
+		tn.records.types["stock.bin"].rows.get("B1") != nil {
 		t.Fatalf("malformed generated action escaped the isolated result boundary: %v, journal=%+v", err, journal)
 	}
 	if _, _, decodeErr := decodeRefusedResult(journal[0].Body); decodeErr != nil {
@@ -356,7 +356,7 @@ func TestAcceptedResultCrashAfterAppendBeforeApply(t *testing.T) {
 			IdempotencyKey: "crash", Target: &pb.EntityRef{Type: "stock.bin", Id: "B1"},
 			Schema: &pb.SchemaRef{Name: "stock.bin.create", Version: 1}, Payload: []byte(`{"code":"A"}`)}, at)
 	}()
-	if durable.Kind != "accepted-result" || source.records.types["stock.bin"].rows["B1"] != nil ||
+	if durable.Kind != "accepted-result" || source.records.types["stock.bin"].rows.get("B1") != nil ||
 		len(source.app("stock").(*stock).ledger.RecordsFor(source.ID)) != 0 {
 		t.Fatal("result was not durable first, or a draft escaped before application")
 	}
@@ -364,7 +364,7 @@ func TestAcceptedResultCrashAfterAppendBeforeApply(t *testing.T) {
 	if err := restarted.Replay([]Entry{durable}); err != nil {
 		t.Fatalf("restart must apply committed result: %v", err)
 	}
-	if restarted.records.types["stock.bin"].rows["B1"] == nil ||
+	if restarted.records.types["stock.bin"].rows.get("B1") == nil ||
 		len(restarted.app("stock").(*stock).ledger.RecordsFor(source.ID)) != 1 {
 		t.Fatal("durable result was not applied on restart")
 	}
@@ -489,7 +489,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	create := submit("k1", "create", `{"name":"Bolt","qty":2,"line":"L1"}`)
 	savedCreate := stage(create, now)
-	if len(app.ledger.RecordsFor(source.ID)) != 0 || source.records.types["stock.item"].rows["I1"] != nil {
+	if len(app.ledger.RecordsFor(source.ID)) != 0 || source.records.types["stock.item"].rows.get("I1") != nil {
 		t.Fatal("building a result exposed an uncommitted decision")
 	}
 	// Simulate loss of all in-memory draft state after the durable result: a
@@ -501,7 +501,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	c := platform.NewCaller(runtime{restored}, member, "stock", false, false)
 	got, _ := restored.records.get(c, reflect.TypeFor[Item](), "I1")
-	if got.(Item).Qty != 2 || len(restored.records.types["stock.item"].rows["I1"].history) != 1 ||
+	if got.(Item).Qty != 2 || len(restored.records.types["stock.item"].rows.get("I1").history) != 1 ||
 		len(ledger.RecordsFor(restored.ID)) != 1 || len(restored.events) != 0 {
 		t.Fatalf("saved create was not applied purely: %+v", got)
 	}
@@ -536,7 +536,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	got, _ = restored.records.get(c, reflect.TypeFor[Item](), "I1")
 	if got.(Item).Qty != 7 || len(ledger.RecordsFor(restored.ID)) != 2 ||
-		len(restored.records.types["stock.item"].rows["I1"].history) != 2 {
+		len(restored.records.types["stock.item"].rows.get("I1").history) != 2 {
 		t.Fatalf("saved edit was not applied purely: %+v", got)
 	}
 	if applied, err := restored.applyAcceptedResult(ledger, savedEdit); err != nil || applied {
@@ -592,7 +592,7 @@ func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 			recovered := stockTenant(t)
 			ledger := recovered.app("stock").(*stock).ledger
 			if _, err := recovered.applyAcceptedResult(ledger, tampered); err == nil ||
-				len(ledger.RecordsFor(recovered.ID)) != 0 || recovered.records.types["stock.item"].rows["I1"] != nil {
+				len(ledger.RecordsFor(recovered.ID)) != 0 || recovered.records.types["stock.item"].rows.get("I1") != nil {
 				t.Fatalf("invalid bytes modified recovered tenant: %v", err)
 			}
 		})

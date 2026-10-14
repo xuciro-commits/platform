@@ -135,7 +135,7 @@ func (s *recordStore) flowArtifactReferences(store flowFrameStore) (map[string]b
 		}
 		return walk(value, depth)
 	}
-	for _, row := range entity.rows {
+	for _, row := range entity.rows.all() {
 		image, err := row.image()
 		if err != nil {
 			return nil, err

@@ -88,7 +88,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 	info := et.info
 	value := copyOf(info.Go, entity)
 	record := recordOf(value)
-	before := et.rows[record.ID]
+	before := et.rows.get(record.ID)
 	if before != nil {
 		record.VersionPins = slices.Clone(recordOf(before.value).VersionPins)
 	} else {
@@ -127,7 +127,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		source := d.records.types[field.Ref]
 		var selected *row
 		if source != nil {
-			selected = source.rows[id]
+			selected = source.rows.get(id)
 		}
 		d.records.mu.Unlock()
 		if source == nil || source.info.Versioning == nil {
@@ -198,7 +198,7 @@ func (d *stagedDecision) checkBusinessVersionPins() *kernel.Error {
 	// Only versions already used before this decision freeze their contents.
 	// A new version, its children and its first consumer may be accepted together.
 	for _, et := range d.records.parent.sortedTypes() {
-		for _, current := range et.rows {
+		for _, current := range et.rows.all() {
 			for _, pin := range recordOf(current.value).VersionPins {
 				pinned[pin.Source] = true
 			}
@@ -213,7 +213,7 @@ func (d *stagedDecision) checkBusinessVersionPins() *kernel.Error {
 		if et.info.Versioning == nil {
 			continue
 		}
-		for id, current := range et.rows {
+		for id, current := range et.rows.all() {
 			rootRef := et.info.Type + "/" + id
 			if !pinned[rootRef] {
 				continue

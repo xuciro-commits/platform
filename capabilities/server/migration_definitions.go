@@ -125,7 +125,9 @@ func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.
 		if err := json.Unmarshal(definition.Image, value.Addr().Interface()); err != nil {
 			return nil, err
 		}
-		et.rows[id].value, et.rows[id].original = value, nil
+		installed := *et.rows.get(id)
+		installed.value, installed.original = value, nil
+		et.rows.set(id, &installed)
 	}
 	assets, err := check.releaseAssetsLocked(nil, false)
 	if err != nil {

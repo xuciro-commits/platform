@@ -87,13 +87,13 @@ func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedCallbac
 		}
 		typ, id, _ := strings.Cut(ref, "/")
 		private.mu.Lock()
-		image := private.types[typ].rows[id]
+		image := private.types[typ].rows.get(id)
 		private.mu.Unlock()
 		target.mu.Lock()
-		target.types[typ].rows[id] = image
+		target.types[typ].rows.set(id, image)
 		target.writes[ref] = true
 		if target.types[typ].knowledge {
-			target.dirty[ref] = true
+			target.dirty.set(ref, true)
 		}
 		target.mu.Unlock()
 	}

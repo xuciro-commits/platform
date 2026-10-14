@@ -157,6 +157,8 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 ## 发布与演进边界
 
+记录暂存的隔离由 `TestRecordDraftIsolationAndPromotion` 核对不可变索引快照、嵌套丢弃、读取切片隔离、未修改记录共享、历史私有副本、投影时机与过期世代拒绝；可用 `make test-go PKG='.' RUN='TestRecordDraftIsolationAndPromotion|TestAccepted|TestStaged|TestMigration|TestRelease'` 集中检查。持久恢复沿原 `accepted_*`、快照和两行业重放验证；性能对比只作本地测量，不添加计时阈值或据此声明生产容量。
+
 对象/页面/应用/流程/代码候选支持冻结安装；AI 版本/评测仍归函数 owner。拒绝、追加失败及追加后应用前崩溃保留旧运行或恢复已接受结果；迁移、退役、在途版本与客户扩展的实施边界归 ADR-0106 As built；schema family 与两行业持久演练仍待交付。隔离编译/计算不等于候选数据的物理沙箱。
 
 阶段集成按 Platform §10.6 核对两行业完整旅程、权限、隔离、在途版本及恢复；真实模型质量使用实际任务和供应商评测，替身只证明协议和治理。无真实客户或生产数据时标为内部演练。当前能力边界查 ADR，本文不保存旧检查点的“当时尚未完成”清单。

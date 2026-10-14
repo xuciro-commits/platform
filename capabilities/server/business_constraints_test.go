@@ -263,7 +263,7 @@ func TestBusinessConstraintsNoLiveRuntimeWriteBypass(t *testing.T) {
 	if err := c.PutAt(txnAt, "read-callback", entry); err == nil {
 		t.Fatal("a live read or callback bypassed the private write gate")
 	}
-	if tenant.records.types["invariants.entry"].rows["BYPASS"] != nil {
+	if tenant.records.types["invariants.entry"].rows.get("BYPASS") != nil {
 		t.Fatal("direct live write left a record")
 	}
 }
@@ -423,7 +423,7 @@ func TestBusinessConstraintsAffectedReferencesAndWithheldFacts(t *testing.T) {
 	d.at = txnAt
 	c := platform.NewCaller(d, user, build.ID, false, false)
 	info := d.records.types[child].info
-	after := d.records.types[child].rows["C1"]
+	after := d.records.types[child].rows.get("C1")
 	if err := d.checkConstraint(c, info, rule, after, after); err == nil {
 		t.Fatal("withheld rule input silently passed")
 	} else {

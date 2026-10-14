@@ -284,18 +284,18 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 	if err != nil || upgradeReview.UpgradePlan == nil || upgradeReview.UpgradePlan.Additions[0].Records != 2 {
 		t.Fatal("the refreshed plan lost concurrent records")
 	}
-	priorRecord, _ := acceptedRowOf("build.visit", "V1", live.records.types["build.visit"].rows["V1"])
+	priorRecord, _ := acceptedRowOf("build.visit", "V1", live.records.types["build.visit"].rows.get("V1"))
 	priorHash, _ := canonicalDigest(priorRecord)
 	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at); err != nil {
 		t.Fatal(err)
 	}
-	retained, _ := acceptedRowOf("build.visit", "V1", live.records.types["build.visit"].rows["V1"])
+	retained, _ := acceptedRowOf("build.visit", "V1", live.records.types["build.visit"].rows.get("V1"))
 	retainedHash, _ := canonicalDigest(retained)
 	if retainedHash != priorHash {
 		t.Fatal("storage expansion changed values or history")
 	}
 	do(operator, "build.visit", "V1", "build.visit.edit", `{"priority":7}`)
-	if value, _ := live.records.types["build.visit"].rows["V1"].image(); !bytes.Contains(value, []byte(`"priority":7`)) {
+	if value, _ := live.records.types["build.visit"].rows.get("V1").image(); !bytes.Contains(value, []byte(`"priority":7`)) {
 		t.Fatal("the new write action cannot set the optional field")
 	}
 	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at.Add(time.Second)); err != nil {

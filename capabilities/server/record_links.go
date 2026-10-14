@@ -25,7 +25,7 @@ func (s *recordStore) validateUniqueLinkLocked(l platform.LinkType) error {
 		return fmt.Errorf("link reference is unavailable")
 	}
 	seen := map[string]bool{}
-	for _, row := range et.rows {
+	for _, row := range et.rows.all() {
 		id := row.value.FieldByIndex(f.Index).String()
 		if id == "" {
 			continue
@@ -113,7 +113,7 @@ func (s *recordStore) checkLinkWriteLocked(et *entityType, value reflect.Value) 
 		if parent == "" {
 			continue
 		}
-		for otherID, row := range et.rows {
+		for otherID, row := range et.rows.all() {
 			if otherID != id && row.value.FieldByIndex(f.Index).String() == parent {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkCardinalityFailure)
 			}

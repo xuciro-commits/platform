@@ -118,7 +118,7 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	}
 	fromCheckpoint, _ := compose(id)
 	if err := fromCheckpoint.recoverSnapshot(state, seq); err != nil ||
-		fromCheckpoint.records.types["stock.bin"].rows["B1"] == nil {
+		fromCheckpoint.records.types["stock.bin"].rows.get("B1") == nil {
 		t.Fatalf("repaired checkpoint still contains the damaged state: %v", err)
 	}
 	if code, _ := call("admin-token", id, "/v1/me", http.MethodGet); code != http.StatusOK {

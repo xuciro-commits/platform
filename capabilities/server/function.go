@@ -101,7 +101,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		store.mu.Unlock()
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
 	}
-	row := et.rows[source]
+	row := et.rows.get(source)
 	if row == nil || recordOf(row.value).Archived || !t.readableIn(store, member, sourceRef, at) {
 		store.mu.Unlock()
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
@@ -179,7 +179,7 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	sourceTypeInfo := t.records.types[sourceType]
 	var sourcePresent bool
 	if sourceTypeInfo != nil {
-		row := sourceTypeInfo.rows[sourceID]
+		row := sourceTypeInfo.rows.get(sourceID)
 		sourcePresent = row != nil && !recordOf(row.value).Archived
 	}
 	t.records.mu.Unlock()

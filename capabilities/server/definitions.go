@@ -365,7 +365,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		if _, ok := t.app(et.info.App).(platform.AssetLifecycleOwner); !ok {
 			continue
 		}
-		for id, row := range et.rows {
+		for id, row := range et.rows.all() {
 			if recordOf(row.value).Archived {
 				continue
 			}

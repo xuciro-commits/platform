@@ -60,7 +60,7 @@ func (s *recordStore) indexedRecordCandidates(et *entityType, q platform.Query) 
 		index, exists := s.referenceIndexes[key]
 		if !exists || index.generation != s.generation {
 			index = referenceIndex{generation: s.generation, ids: map[string][]string{}}
-			for id, row := range et.rows {
+			for id, row := range et.rows.all() {
 				value := row.value.FieldByIndex(info.Index).String()
 				index.ids[value] = append(index.ids[value], id)
 			}

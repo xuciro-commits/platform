@@ -78,7 +78,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 		}
 		for typ, shape := range shapes {
 			if old := view.records.types[typ]; old != nil && old.info.Go != shape.Go {
-				old.rows = map[string]*row{}
+				old.rows = recordIndex[*row]{}
 			}
 		}
 	}
@@ -146,7 +146,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 			return nil, nil, fmt.Errorf("asset draft %s has no owner identity", draft.Type)
 		}
 		matches := 0
-		for _, row := range et.rows {
+		for _, row := range et.rows.all() {
 			if !row.value.FieldByName("Record").Interface().(platform.Record).Archived && row.value.FieldByIndex(nameField.Index).String() == draft.Name {
 				matches++
 			}

@@ -30,7 +30,7 @@ func (r *flowExecutionRuntime) applyRetainedExtractions(c platform.Caller, recei
 		}
 		var id string
 		_ = json.Unmarshal(write.after["id"], &id)
-		prior := et.rows[id]
+		prior := et.rows.get(id)
 		values := maps.Clone(write.after)
 		kind := "create"
 		if prior != nil {
@@ -86,7 +86,9 @@ func (r *flowExecutionRuntime) applyRetainedExtractions(c platform.Caller, recei
 			return err
 		}
 		origin := write.origin
-		et.rows[id].extraction = &origin
+		updated := *et.rows.get(id)
+		updated.extraction = &origin
+		et.rows.set(id, &updated)
 	}
 	return nil
 }
@@ -96,10 +98,10 @@ func validateExtractionOrigins(records *recordStore) error {
 	for ref := range records.writes {
 		typ, id, _ := strings.Cut(ref, "/")
 		et := records.types[typ]
-		if et == nil || et.rows[id] == nil {
+		if et == nil || et.rows.get(id) == nil {
 			return fmt.Errorf("extraction row is absent")
 		}
-		if err := validateExtractionOrigin(records, typ, et.rows[id].extraction); err != nil {
+		if err := validateExtractionOrigin(records, typ, et.rows.get(id).extraction); err != nil {
 			return err
 		}
 	}
@@ -111,17 +113,17 @@ func validateExtractionOrigin(records *recordStore, typ string, origin *extracti
 		return nil
 	}
 	runs := records.types[platform.MigrationRunType]
-	if runs == nil || runs.rows[origin.Migration] == nil {
+	if runs == nil || runs.rows.get(origin.Migration) == nil {
 		return fmt.Errorf("extraction has no saved declaration")
 	}
-	run := runs.rows[origin.Migration].value.Interface().(platform.MigrationRun)
+	run := runs.rows.get(origin.Migration).value.Interface().(platform.MigrationRun)
 	if origin.Step < 0 || origin.Step >= len(run.Plan.Steps) {
 		return fmt.Errorf("extraction has no declared step")
 	}
 	step := run.Plan.Steps[origin.Step]
 	sourceType, sourceID, found := strings.Cut(origin.Source, "/")
 	source := records.types[sourceType]
-	if !found || sourceID == "" || step.Kind != "extract" || step.Target != typ || !slices.Contains(step.Types, sourceType) || source == nil || source.rows[sourceID] == nil {
+	if !found || sourceID == "" || step.Kind != "extract" || step.Target != typ || !slices.Contains(step.Types, sourceType) || source == nil || source.rows.get(sourceID) == nil {
 		return fmt.Errorf("extraction origin differs from its declared scope")
 	}
 	return nil

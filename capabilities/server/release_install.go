@@ -26,10 +26,10 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	et := t.records.types[typ]
-	if et == nil || et.rows[id] == nil {
+	if et == nil || et.rows.get(id) == nil {
 		return "", fmt.Errorf("release metadata needs its predecessor %s", record)
 	}
-	image, err := et.rows[id].image()
+	image, err := et.rows.get(id).image()
 	if err != nil {
 		return "", err
 	}
@@ -80,9 +80,10 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 		if err := json.Unmarshal(plan.Image, value.Addr().Interface()); err != nil {
 			return nil, err
 		}
-		et.rows[id].value = value
-		et.rows[id].original = nil
-		et.rows[id].retainOriginal(plan.Image)
+		installed := *et.rows.get(id)
+		installed.value, installed.original = value, nil
+		installed.retainOriginal(plan.Image)
+		et.rows.set(id, &installed)
 		draft.records.writes[plan.Record] = true
 		if err := draft.registerInstalledAsset(plan); err != nil {
 			return nil, err
@@ -150,7 +151,7 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool, reviewed ...p
 	}
 	for typ, old := range t.records.types {
 		next := draft.records.types[typ]
-		if next == nil || len(old.rows) == 0 {
+		if next == nil || old.rows.len() == 0 {
 			continue
 		}
 		if !sameStoredFields(old.info, next.info) && !declared(typ, "") && (!upgrade || optionalStoredAddition(old.info, next.info) == nil && !t.migratedStorageLocked(old.info, next.info)) {

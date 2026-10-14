@@ -67,7 +67,7 @@ func (d *stagedDecision) putOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 	if et == nil || et.info.App != c.App {
 		return fail("Relationship owner has not declared its relation records")
 	}
-	prior := et.rows[id]
+	prior := et.rows.get(id)
 	if remove && (prior == nil || recordOf(prior.value).Archived) {
 		return fail("Owned relationship does not exist")
 	}
@@ -89,7 +89,7 @@ func (t *Tenant) ownedRelationTargets(store *recordStore, c platform.Caller, lin
 	et := store.types[platform.OwnedRelationType(link.Child.App)]
 	refs := []string{}
 	if et != nil {
-		for _, row := range et.rows {
+		for _, row := range et.rows.all() {
 			if recordOf(row.value).Archived {
 				continue
 			}
@@ -141,7 +141,7 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 	type edge struct{ id, parent, child string }
 	var edges []edge
 	parents, children := map[string]int{}, map[string]int{}
-	for id, row := range et.rows {
+	for id, row := range et.rows.all() {
 		if recordOf(row.value).Archived {
 			continue
 		}
@@ -169,9 +169,9 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 		parentType, parentID, parentOK := strings.Cut(value.parent, "/")
 		childType, childID, childOK := strings.Cut(value.child, "/")
 		parent, child := s.types[parentType], s.types[childType]
-		if !parentOK || !childOK || parentType != link.Parent.Name || childType != link.Child.Name || parent == nil || child == nil || parent.rows[parentID] == nil || child.rows[childID] == nil {
+		if !parentOK || !childOK || parentType != link.Parent.Name || childType != link.Child.Name || parent == nil || child == nil || parent.rows.get(parentID) == nil || child.rows.get(childID) == nil {
 			invalid = "endpoint"
-		} else if link.DeletePolicy == "restrict-active" && recordOf(parent.rows[parentID].value).Archived && !recordOf(child.rows[childID].value).Archived {
+		} else if link.DeletePolicy == "restrict-active" && recordOf(parent.rows.get(parentID).value).Archived && !recordOf(child.rows.get(childID).value).Archived {
 			invalid = "archive"
 		}
 		if invalid != "" {
@@ -184,7 +184,7 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 			return nil, fmt.Errorf("required relationship child is unavailable")
 		}
 		ids := []string{}
-		for id, row := range child.rows {
+		for id, row := range child.rows.all() {
 			if !recordOf(row.value).Archived && children[child.info.Type+"/"+id] == 0 {
 				ids = append(ids, id)
 			}
@@ -220,7 +220,7 @@ func (d *stagedDecision) checkOwnedRelationConstraints() *kernel.Error {
 					}
 					id := strings.TrimPrefix(edgeRef, platform.OwnedRelationType(link.Child.App)+"/")
 					et := d.records.types[platform.OwnedRelationType(link.Child.App)]
-					for _, row := range []*row{candidate.before, et.rows[id]} {
+					for _, row := range []*row{candidate.before, et.rows.get(id)} {
 						image := relationImage(row)
 						if image.Binding == link.Name && image.Child == violation.child {
 							write, changed = candidate, true

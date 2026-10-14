@@ -208,16 +208,16 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 		typ, id, ok := strings.Cut(ref, "/")
 		et := d.records.types[typ]
-		if !ok || et == nil || et.rows[id] == nil {
+		if !ok || et == nil || et.rows.get(id) == nil {
 			return nil, fmt.Errorf("batch includes an undeclared record")
 		}
-		image, err := acceptedRowOf(typ, id, et.rows[id])
+		image, err := acceptedRowOf(typ, id, et.rows.get(id))
 		if err != nil {
 			return nil, err
 		}
 		row := acceptedBatchRow{acceptedRow: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref])}
-		if priorType := d.records.parent.types[typ]; priorType != nil && priorType.rows[id] != nil {
-			before, err := acceptedRowOf(typ, id, priorType.rows[id])
+		if priorType := d.records.parent.types[typ]; priorType != nil && priorType.rows.get(id) != nil {
+			before, err := acceptedRowOf(typ, id, priorType.rows.get(id))
 			if err != nil {
 				return nil, err
 			}
@@ -635,7 +635,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		if et == nil || et.info.App != image.App {
 			return fmt.Errorf("record batch needs installed entity %s", image.Type)
 		}
-		prior := et.rows[image.ID]
+		prior := et.rows.get(image.ID)
 		if prior != nil && !reflect.DeepEqual(prior.extraction, image.Extraction) {
 			return fmt.Errorf("record extraction origin changed")
 		}
@@ -722,13 +722,13 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		}
 		recovered := &row{value: value, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
 		recovered.retainOriginal(image.Value)
-		et.rows[rec.ID] = recovered
+		et.rows.set(rec.ID, recovered)
 		draft.writes[image.Type+"/"+rec.ID] = true
 		for _, change := range image.History[baseHistory:] {
 			draft.remember(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
 		}
 		if et.knowledge {
-			draft.dirty[image.Type+"/"+rec.ID] = true
+			draft.dirty.set(image.Type+"/"+rec.ID, true)
 		}
 	}
 	return nil

@@ -48,7 +48,7 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 	if current := draft.records.types[e.Type]; current != nil && current.info.Go != reflect.TypeOf(e.Model) {
 		// Definition review cannot decode source rows as the unmigrated target.
 		// Admission of actual rows is checked by migration and activation.
-		current.rows = map[string]*row{}
+		current.rows = recordIndex[*row]{}
 	}
 	if err := draft.Install(h.app, e, actions, pages...); err != nil {
 		return err

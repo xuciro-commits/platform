@@ -197,8 +197,8 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 		if current == nil {
 			return nil, migrationRefusal(fmt.Errorf("retained object %s has no current storage", typ))
 		}
-		rows := make(map[string]*row, len(current.rows))
-		for id, value := range current.rows {
+		rows := recordIndex[*row]{}
+		for id, value := range current.rows.all() {
 			raw, err := value.image()
 			if err != nil {
 				return nil, migrationRefusal(err)
@@ -226,7 +226,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 			if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
 				return nil, migrationRefusal(err)
 			}
-			rows[id] = &row{value: decoded.Elem(), history: value.history}
+			rows.set(id, &row{value: decoded.Elem(), history: value.history})
 		}
 		store.types[typ] = &entityType{info: info, rows: rows, knowledge: current.knowledge}
 		store.byGo[info.Go] = store.types[typ]
@@ -368,7 +368,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
 		return migrationRefusal(fmt.Errorf("retained action wrote an invalid record"))
 	}
-	if prior := old.rows[id]; prior != nil {
+	if prior := old.rows.get(id); prior != nil {
 		_ = json.Unmarshal(jsonOf(prior.value.Interface()), &before)
 	}
 	mappedBefore, mappedInput, extractions, mappingErr := r.mapRetainedWrite(c.ID, old.info.Type, before, input)
@@ -378,7 +378,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if err := r.applyRetainedExtractions(c, receipt, extractions); err != nil {
 		return err
 	}
-	if prior := current.rows[id]; prior != nil {
+	if prior := current.rows.get(id); prior != nil {
 		raw, _ := prior.image()
 		_ = json.Unmarshal(raw, &result)
 	} else {
@@ -401,7 +401,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		fields = append(fields, target.Name)
 	}
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: current.info.Type, Record: id, Fields: fields}
-	if current.rows[id] == nil {
+	if current.rows.get(id) == nil {
 		question.Kind = "create"
 	}
 	grant := r.tenant.authorizeFrom(r.records, c, question, r.at, false)
@@ -422,11 +422,14 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		return refusal
 	}
 	// Keep the newly accepted source values for another old-version step.
-	if source := projectionFor(current.rows[id].projection, r.release); source != nil {
+	updated := *current.rows.get(id)
+	updated.projection = cloneRecordProjection(updated.projection)
+	if source := projectionFor(updated.projection, r.release); source != nil {
 		source.Value = jsonOf(input)
-		if refusal := refreshRecordProjection(current.rows[id].projection, current.rows[id].value.Interface()); refusal != nil {
+		if refusal := refreshRecordProjection(updated.projection, updated.value.Interface()); refusal != nil {
 			return refusal
 		}
+		current.rows.set(id, &updated)
 	}
 	return nil
 }

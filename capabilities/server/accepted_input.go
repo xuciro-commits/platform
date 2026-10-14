@@ -124,16 +124,16 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
 		typ, id, ok := strings.Cut(ref, "/")
 		et := d.records.types[typ]
-		if !ok || et == nil || et.info.App != app || et.rows[id] == nil {
+		if !ok || et == nil || et.info.App != app || et.rows.get(id) == nil {
 			return nil, fmt.Errorf("connector input writes a foreign or undeclared record")
 		}
-		row, err := acceptedRowOf(typ, id, et.rows[id])
+		row, err := acceptedRowOf(typ, id, et.rows.get(id))
 		if err != nil {
 			return nil, err
 		}
 		saved := acceptedInputRow{acceptedRow: row, App: app}
-		if prior := d.records.parent.types[typ]; prior != nil && prior.rows[id] != nil {
-			before, err := acceptedRowOf(typ, id, prior.rows[id])
+		if prior := d.records.parent.types[typ]; prior != nil && prior.rows.get(id) != nil {
+			before, err := acceptedRowOf(typ, id, prior.rows.get(id))
 			if err != nil {
 				return nil, err
 			}
