@@ -1,3 +1,4 @@
+import {ProposalReview} from "./ProposalReview";
 import {useEffect,useState} from 'react';
 import {Button,Card,PropertyList,RecordList,RecordPage,t,type EntityRecord} from '@platform/ui';
 import type {Api} from '@platform/kernel';
@@ -52,6 +53,7 @@ export function FunctionAdviceRenderer({recordType,functionBinding,selected,live
       </Card>}
       {live && callID && measured?.state !== "pending" && measured?.metered === false &&
         <p className="text-xs text-muted">{t("No model call was measured for this result.")}</p>}
+      {live&&measured&&<ProposalReview key={callID} call={measured as unknown as Api.FunctionRun} live={live} onChanged={()=>setReload(n=>n+1)}/>}
       {live && callID && <RecordPage source={source} type="build.function-call" id={callID} fields={["state", "output", "code", "reason"]} reload={reload} />}
     </>}
   </div>;

@@ -68,6 +68,7 @@ type ReleasePage struct {
 }
 
 type SavedReleaseReview struct {
+	AI                   []ApplicationAI          `json:"ai,omitempty"`
 	Preview              ReleasePreview           `json:"preview"`
 	Assets               []platform.ReleaseAsset  `json:"assets"`
 	Active               bool                     `json:"active"`
@@ -170,7 +171,15 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if err != nil {
 		return SavedReleaseReview{}, err
 	}
-	reply := SavedReleaseReview{Assets: saved.Assets, Active: t.releases.active == id, Preview: ReleasePreview{
+	visible := map[platform.AssetRef]bool{}
+	for _, asset := range saved.Assets {
+		visible[asset.Ref] = true
+	}
+	ai, refusal := t.applicationAILocked(m, saved.Assets, visible)
+	if refusal != nil {
+		return SavedReleaseReview{}, fmt.Errorf("candidate AI metadata is unavailable: %s", refusal.Message)
+	}
+	reply := SavedReleaseReview{AI: ai, Assets: saved.Assets, Active: t.releases.active == id, Preview: ReleasePreview{
 		CandidateID: id, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{},
 	}}
 	for _, asset := range saved.Assets {
@@ -201,6 +210,9 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 		}
 	} else {
 		_, _, err = t.prepareReleaseLifecycleLocked(saved, m, time.Now().UTC(), false)
+	}
+	if err == nil {
+		err = t.evaluationsReadyLocked(id, raw)
 	}
 	reply.CanActivate = err == nil
 	if err != nil {

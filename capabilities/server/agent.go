@@ -173,7 +173,8 @@ func NewAgents(tenant string) *Agents {
 			Description: "Re-run an agent's past runs that people confirmed or corrected, dry, with a candidate model, and compare.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
 				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"},
-				{Name: "suite", Type: "boolean", Description: "Run the agent's declared cases, three times each, instead of its past runs"}}})
+				{Name: "suite", Type: "boolean", Description: "Run the agent's declared cases, three times each, instead of its past runs"},
+				{Name: "candidate", Type: "string", Description: "Saved release candidate containing this agent; requires a builder and declared cases"}}})
 	actions = append(actions, switchActions()...)
 	return &Agents{tenant: tenant, ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType, SwitchType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
@@ -420,9 +421,9 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		return record, err
 	}
 	var p struct {
-		Agent, Goal, Ref, Reason, Model, Language string
-		Act, Suite                                bool
-		Payload                                   json.RawMessage
+		Agent, Goal, Ref, Reason, Model, Language, Candidate string
+		Act, Suite                                           bool
+		Payload                                              json.RawMessage
 	}
 	json.Unmarshal(s.GetPayload(), &p)
 	d := a.def(p.Agent)
@@ -459,9 +460,9 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			return func(r *pb.ChangeRecord) { a.host.Automation(c, AgentApp).Put(r, run) }, nil
 		case SchemaEvalStart:
 			return a.startEvaluation(c, id, struct {
-				Agent, Model string
-				Suite        bool
-			}{p.Agent, p.Model, p.Suite})
+				Agent, Model, Candidate string
+				Suite                   bool
+			}{p.Agent, p.Model, p.Candidate, p.Suite})
 		case SchemaSuspend, SchemaResume:
 			return a.switchDecision(c, s, struct{ Reason string }{p.Reason})
 		case SchemaRunCancel:
@@ -669,6 +670,9 @@ func (a *Agents) definitionVersion(d *agentDef) string {
 	parts := []any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget}
 	if b, ok := a.host.App(d.app).(host.DynamicAgentDefinitions); ok {
 		parts = append(parts, b.AgentVersion(d.Name))
+	}
+	if len(d.Checkpoints) > 0 {
+		parts = append(parts, d.Checkpoints)
 	}
 	digest, _ := canonicalDigest(parts)
 	return "agent.sha256." + digest

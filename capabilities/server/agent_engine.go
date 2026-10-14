@@ -97,6 +97,7 @@ func (t *Tenant) take(x turn, now time.Time) {
 			}
 		}
 		answer, failure := t.call(x.Provider, x.Model, t.agents.AgentPrincipal(x.Run.Agent), x.Request, now)
+		answer.Usage = agentRunUsage(answer.Usage, x.Run)
 		if t.quarantined() {
 			return // do not apply a late model answer to a tenant under recovery
 		}
@@ -572,6 +573,15 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	key := fmt.Sprintf("agent:%s:%d", run.ID, len(run.Steps)+1)
 	agent := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.app, true)
 	person := a.reader(*run)
+	mustConfirm := slices.Contains(d.Checkpoints, tool.schema)
+	if tool.kind == "action" {
+		if declared, ok := h.App(d.app).Manifest().Actions.Action(tool.schema); ok && declared.Approval != nil {
+			mustConfirm = true
+		}
+	}
+	if mustConfirm && person == nil {
+		return "refused: this checkpoint waits for a person", nil
+	}
 	// For a person, it drafts and the person confirms (D6); a flow's agent acts itself.
 	draft := func(typ string) (string, func(*pb.ChangeRecord)) {
 		run.Draft = []Draft{{Kind: tool.kind, Action: tool.schema, Target: target, Type: typ, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}}
@@ -589,7 +599,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 			if !ok || !owner.Manifest().Actions.PermitsAny(person.RolesIn(owner.Manifest().ID), provided) {
 				return "refused: " + person.ID + " may not " + schema + " at the provider", nil
 			}
-			if !run.Acts {
+			if !run.Acts || mustConfirm {
 				return draft("")
 			}
 		}
@@ -619,7 +629,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + person.ID + " may not do this (" + err.Error() + ")", nil
 		}
-		if !run.Acts {
+		if !run.Acts || mustConfirm {
 			return draft(tool.target)
 		}
 	}

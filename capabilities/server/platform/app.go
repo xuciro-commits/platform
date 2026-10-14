@@ -26,10 +26,11 @@ import (
 // for the many places that ask for one; RolesIn answers with all of them.
 // What a rule scopes by is the member's organisation (ADR-0012).
 type Member struct {
-	ID     string            `json:"id"`
-	Tenant string            `json:"tenant"`
-	Roles  map[string]string `json:"roles"`
-	Grants []Grant           `json:"grants,omitempty"`
+	AIContext bool              `json:"-"` // trusted read narrowing, never a grant or request field
+	ID        string            `json:"id"`
+	Tenant    string            `json:"tenant"`
+	Roles     map[string]string `json:"roles"`
+	Grants    []Grant           `json:"grants,omitempty"`
 	// Status is the member's standing (ADR-0079 §4): "" active, invited
 	// (added, not yet signed in), suspended (holds nothing until resumed),
 	// left (offboarded: no subjects, no grants; the record stays for history).
@@ -272,6 +273,11 @@ func ProbeDecision(c Caller, decide func(Caller) *kernel.Error) *kernel.Error {
 // Decide uses the caller's decision owner. A host must explicitly handle or
 // refuse nested decisions; only callers made by As run without a host.
 func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if c.Simulating() {
+		if action, ok := app.Manifest().Actions.Action(s.GetSchema().GetName()); ok && action.Adoption != nil {
+			return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Proposal adoption does not execute in isolated trials")
+		}
+	}
 	c = RouteCaller(c, app.Manifest().ID)
 	if c.rt == nil {
 		return app.Submit(c, s, at)

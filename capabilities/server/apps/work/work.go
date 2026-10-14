@@ -406,6 +406,9 @@ func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now
 	}
 	if err != nil {
 		a.State, a.Outcome = "refused", err.Error()
+		if err.Message != "" {
+			a.Outcome += ": " + err.Message
+		}
 		w.move(c, a, platform.ApprovalReturned, now)
 	} else {
 		a.State = "approved"
@@ -581,6 +584,13 @@ func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error 
 
 // Assign creates an app's task (Caller.Assign), resolving its recipients now.
 func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
+	if a.Close {
+		if a.Key == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Closing an assignment needs its original owner key")
+		}
+		w.Close(c, r, c.App+":"+a.Key)
+		return nil
+	}
 	candidates := w.host.Recipients(c, r.GetRecordedTime().AsTime(), a.To)
 	work := w.host.Automation(c, ID)
 	id := fmt.Sprintf("%s:%s", c.App, a.Key)

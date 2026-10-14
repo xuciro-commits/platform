@@ -88,8 +88,9 @@ type Issue struct {
 func (i *Issue) Error() string { return fmt.Sprintf("%s: %s (%s)", i.At, i.Message, i.Code) }
 
 type Result struct {
-	Value   Value   `json:"value"`
-	Reasons []Issue `json:"reasons,omitempty"`
+	Sources []string `json:"sources,omitempty"`
+	Value   Value    `json:"value"`
+	Reasons []Issue  `json:"reasons,omitempty"`
 }
 type Program struct {
 	patterns      map[string]*regexp.Regexp

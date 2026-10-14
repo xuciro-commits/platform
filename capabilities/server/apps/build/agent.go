@@ -184,7 +184,7 @@ func (b *Build) agentDeclarations() []platform.Agent {
 func (a Agent) Definition() platform.Agent {
 	checkpoints := slices.Clone(a.Checkpoints)
 	role := a.HandoffRole
-	d := platform.Agent{Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools),
+	d := platform.Agent{Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools), Checkpoints: checkpoints,
 		Budget: platform.Budget{Steps: a.Steps, Tokens: a.Tokens, Actions: a.Actions, Cost: a.Cost},
 		Guard: func(c platform.Caller, r platform.AgentRun, action, target string, payload json.RawMessage) *kernel.Error {
 			if slices.Contains(checkpoints, action) && r.OnBehalf == "" {

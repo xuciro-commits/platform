@@ -657,6 +657,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == migrationStart || name == migrationAdvance || name == migrationCancel {
 		return b.submitMigration(c, s, now)
 	}
+	if s.GetSchema().GetName() == SchemaProposalReview {
+		return b.submitProposalReview(c, s, now)
+	}
 	if name := s.GetSchema().GetName(); name == SchemaFunctionCall || name == SchemaFunctionAnswer {
 		return b.submitFunctionCall(c, s, now)
 	}
@@ -1216,6 +1219,13 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, buildapi.TypeOf(o.Name)))}}
 	for _, f := range o.Fields {
 		tag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, f.Name, f.Title)
+		if f.AIInput != nil {
+			if *f.AIInput {
+				tag += ` ai:"allow"`
+			} else {
+				tag += ` ai:"deny"`
+			}
+		}
 		if f.SourceType != "" {
 			tag += fmt.Sprintf(` source:"%s"`, f.SourceType)
 		}
@@ -1268,6 +1278,11 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	var derived []platform.Derivation
 	for _, f := range o.Fields {
+		if f.SourceType == "generated" {
+			name := "aisources" + f.Name
+			fields = append(fields, reflect.StructField{Name: "AISources" + goName(f.Name), Type: reflect.TypeFor[[]string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" type:"json" field:"readonly,aside"`, name))})
+			derived = append(derived, platform.Derivation{From: name, Fields: []string{f.Name}})
+		}
 		if f.FormulaExpr != nil {
 			name := "rulesources" + f.Name
 			fields = append(fields, reflect.StructField{Name: "RuleSources" + goName(f.Name), Type: reflect.TypeFor[[]string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" type:"json" field:"readonly,aside"`, name))})

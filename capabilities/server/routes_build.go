@@ -254,12 +254,12 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseSaved{ID: id})
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run real measured model calls against synthetic cases for one saved function candidate (ADR-0043 24c)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate (ADR-0116)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseEvaluationRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
 		}
-		if request.CandidateID == "" || request.PlanID == "" || request.Key == "" {
+		if request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") || request.Key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

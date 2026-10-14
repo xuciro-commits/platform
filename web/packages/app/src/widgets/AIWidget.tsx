@@ -1,3 +1,4 @@
+import {ProposalReview} from "./ProposalReview";
 import {useEffect,useRef,useState} from "react";
 import {useQueries} from "@tanstack/react-query";
 import {AIResult,Panel,t,type AIResultTurn,type EntityRecord} from "@platform/ui";
@@ -24,5 +25,5 @@ function AISession({config,functionBinding,record,status,active,live,enabled=tru
   setAttempt(next);setBusy(true);setError(undefined);
   try{if(await reader.request(next)&&valid()){setRequests(old=>config.kind==="chatbot"?[...old,next]:[next]);setAttempt(undefined);if(config.kind==="chatbot")onQuestion?.("");}}catch(err){if(valid())setError(err instanceof Error?t(err.message):t("The AI request was not confirmed."));}finally{if(valid())setBusy(false);}
  };
- return <AIResult kind={config.kind} turns={turns} question={text} suggestions={config.suggestions??[]} disabled={!live||!enabled||!valid()||pending||!host.can("build.function-call.start")} busy={busy} error={error} onQuestion={value=>{if(valid())onQuestion?.(value);}} onRun={value=>void run(value)} onReset={()=>{if(valid()){setRequests([]);setAttempt(undefined);setError(undefined);}}} onRetry={attempt?()=>void run(undefined,true):undefined}/>;
+ return <div className="grid gap-3"><AIResult kind={config.kind} turns={turns} question={text} suggestions={config.suggestions??[]} disabled={!live||!enabled||!valid()||pending||!host.can("build.function-call.start")} busy={busy} error={error} onQuestion={value=>{if(valid())onQuestion?.(value);}} onRun={value=>void run(value)} onReset={()=>{if(valid()){setRequests([]);setAttempt(undefined);setError(undefined);}}} onRetry={attempt?()=>void run(undefined,true):undefined}/>{answers.map((answer,index)=>answer.data?.contract.proposal?<ProposalReview key={requests[index]!.id} call={answer.data} live={live&&enabled} active={valid} onChanged={()=>void answer.refetch()}/>:null)}</div>;
 }

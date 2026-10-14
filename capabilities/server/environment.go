@@ -191,6 +191,13 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if to.quarantined() {
 		return result, fmt.Errorf("tenant %s is quarantined", to.ID)
 	}
+	if prior, ok := to.releases.request("promotion:" + key); ok {
+		hash, hashErr := releaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
+		if hashErr != nil || prior != hash {
+			return result, fmt.Errorf("promotion key belongs to another request")
+		}
+		return result, nil
+	}
 	if prior := to.releases.raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
 		return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
 	}
@@ -198,6 +205,9 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	var bootstrap json.RawMessage
 	if activate {
 		if installations, bootstrap, err = to.prepareReleaseLifecycleLocked(candidate, member, now, false); err != nil {
+			return result, err
+		}
+		if err = to.evaluationsReadyLocked(candidate.ID, candidate.Bytes); err != nil {
 			return result, err
 		}
 	}

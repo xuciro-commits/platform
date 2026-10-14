@@ -1,3 +1,4 @@
+import {ProposalReview} from "./widgets/ProposalReview";
 import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
 export { ApplicationRuns, ApplicationRuntimePanel, OperationRunView } from "./automation/application-runs";
 export {createRecordExploration,type RecordExplorationReader} from "./exploration/reader";
@@ -398,7 +399,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
 
 /** A record page with its lifecycle's transitions and the generated edit and archive where the catalog grants them. */
 export function RecordDetail({ type, id, fields, allowed, advice }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] } }) {
-  const { source, can, decide, client, me, catalog, resend } = useHost();
+  const { source, can, decide, client, me, catalog, resend,refresh } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
@@ -430,7 +431,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   return (
     <>
       <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
-        work={advice ? (view) => <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} /> : undefined} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+        work={type==="build.function-call"?(view)=><ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={()=>void refresh?.()}/>:advice ? (view) => <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} /> : undefined} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}

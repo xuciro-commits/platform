@@ -48,11 +48,11 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			installed, _, ok := b.FunctionDefinition(start.Function, start.Version)
-			if !ok || !evalEqual(platform.Raw(installed), platform.Raw(start.Definition)) {
+			if start.Set == nil && (!ok || !evalEqual(platform.Raw(installed), platform.Raw(start.Definition))) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The evaluated function version changed")
 			}
 			plan, ok := platform.Get[TestPlan](c, start.Plan)
-			if !ok || plan.Revision != start.PlanRevision || start.Policy.Check() != nil || start.Set == nil && (plan.Function == "" || len(plan.Evaluation) != 1 || !evalEqual(platform.Raw(plan.Evaluation[0]), platform.Raw(start.Policy))) || start.Set != nil && (start.Set.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: plan.Name}) || start.Set.SourceVersion == "") {
+			if start.Policy.Check() != nil || start.Set == nil && (!ok || plan.Revision != start.PlanRevision || plan.Function == "" || len(plan.Evaluation) != 1 || !evalEqual(platform.Raw(plan.Evaluation[0]), platform.Raw(start.Policy))) || start.Set != nil && (start.Set.Ref.App != ID || start.Set.Ref.Kind != platform.AssetEvaluation || start.Set.Ref.Check() != nil || start.Set.SourceVersion == "") {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved evaluation plan changed")
 			}
 			run = Evaluation{Set: start.Set, Record: platform.Record{ID: id}, Candidate: start.Candidate, Function: start.Function,

@@ -116,7 +116,12 @@ func compatibleObjectSchema(previous, next Object) bool {
 	if !reflect.DeepEqual(normalize(previous), normalize(next)) {
 		return false
 	}
-	fieldContract := func(field Field) Field { field.Title, field.SourceType = "", ""; field.Search = false; return field }
+	fieldContract := func(field Field) Field {
+		field.Title, field.SourceType = "", ""
+		field.AIInput = nil
+		field.Search = false
+		return field
+	}
 	for _, old := range previous.Fields {
 		index := slices.IndexFunc(next.Fields, func(field Field) bool { return field.Name == old.Name })
 		if index < 0 || !reflect.DeepEqual(fieldContract(old), fieldContract(next.Fields[index])) {

@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -44,7 +45,10 @@ type Evaluation struct {
 	Cost  float64    `json:"cost,omitempty" field:"readonly" title:"Model cost, USD"`
 	Cases []EvalCase `json:"cases" field:"readonly"`
 	// Suite runs the agent's declared cases instead of its past runs (ADR-0029 D6).
-	Suite bool `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
+	Suite            bool   `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
+	Candidate        string `json:"candidate,omitempty" field:"readonly" title:"Release candidate"`
+	DefinitionDigest string `json:"definitionDigest,omitempty" field:"readonly" title:"Evaluated definition"`
+	ModelConfig      string `json:"modelConfig,omitempty" field:"readonly" title:"Evaluated model configuration"`
 }
 
 const suiteRuns = 3 // each declared case, as models vary
@@ -146,6 +150,10 @@ func (t *Tenant) Evaluate(now time.Time) {
 	}
 	for {
 		t.mu.Lock()
+		if t.quarantined() {
+			t.mu.Unlock()
+			return
+		}
 		evals, _, _ := platform.Find[Evaluation](t.automation(AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
 		t.mu.Unlock()
 		if len(evals) == 0 {
@@ -153,6 +161,12 @@ func (t *Tenant) Evaluate(now time.Time) {
 		}
 		report := t.agents.EvaluateAgent(evals[0], now)
 		t.agentStep(stepBody{Run: evals[0].ID, Evaluation: &report}, now)
+		t.mu.Lock()
+		current, known := platform.Get[Evaluation](t.automation(AgentApp, false), evals[0].ID)
+		t.mu.Unlock()
+		if !known || current.State == "queued" {
+			return // retry on the next work cycle after an append failure
+		}
 	}
 }
 
@@ -161,12 +175,31 @@ func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time) Evaluation {
 	endRead := h.BeginAgentRead()
 	c := a.automation(AgentApp, false)
 	d := a.def(ev.Agent)
+	var definitionErr error
+	if ev.Candidate != "" {
+		var digest string
+		d, digest, definitionErr = a.evaluationDefinition(ev.Candidate, ev.Agent)
+		if definitionErr == nil && digest != ev.DefinitionDigest {
+			definitionErr = fmt.Errorf("the evaluation's saved declaration differs")
+		}
+	}
 	domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
 	past, _, _ := platform.Find[AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
 	model, pv, err := h.AgentModel(ev.Model)
+	if ev.Candidate != "" && err == nil {
+		config, problem := canonicalDigest([]any{model, pv})
+		if problem != nil || config != ev.ModelConfig {
+			definitionErr = fmt.Errorf("the evaluation's model configuration changed")
+		}
+	}
 	who, _ := h.Member(ev.Created.By)
 	endRead()
 	ev.State = "done"
+	if definitionErr != nil {
+		ev.Cases = []EvalCase{{Verdict: "fails", Candidate: definitionErr.Error()}}
+		ev.Fails = 1
+		return ev
+	}
 	if d != nil && err == nil && ev.Suite {
 		return a.suite(ev, d, model, pv, who, now)
 	}
@@ -446,18 +479,38 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 
 // startEvaluation queues a candidate's evaluation (an administrator's decision).
 func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
-	Agent, Model string
-	Suite        bool
+	Agent, Model, Candidate string
+	Suite                   bool
 }) (func(*pb.ChangeRecord), *kernel.Error) {
 	if _, known := platform.Get[Evaluation](c, id); known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	if a.def(p.Agent) == nil || p.Model == "" {
+	d := a.def(p.Agent)
+	digest, config := "", ""
+	if p.Candidate != "" {
+		if !p.Suite || !c.Holds(build.ID, build.Builder) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A builder and declared cases are required for candidate agent evaluation")
+		}
+		var err error
+		d, digest, err = a.evaluationDefinition(p.Candidate, p.Agent)
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+		}
+		model, provider, refusal := a.host.AgentModel(p.Model)
+		if refusal != nil {
+			return nil, refusal
+		}
+		config, err = canonicalDigest([]any{model, provider})
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+		}
+	}
+	if d == nil || p.Model == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if p.Suite && len(a.def(p.Agent).Cases) == 0 {
+	if p.Suite && len(d.Cases) == 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
 	}
-	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite}
+	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite, Candidate: p.Candidate, DefinitionDigest: digest, ModelConfig: config}
 	return func(r *pb.ChangeRecord) { a.host.Automation(c, AgentApp).Put(r, ev) }, nil
 }

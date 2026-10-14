@@ -17,14 +17,15 @@ import (
 // description that screens and automation callers (AI agents included) read.
 // Roles say who may call it; attribute conditions stay in the domain's policy.
 type Action struct {
-	SchemaVersion *SchemaVersion `json:"schemaVersion,omitempty"`
-	Schema        string         `json:"schema"`
-	Target        string         `json:"target"`
-	Capability    string         `json:"capability"`
-	Title         string         `json:"title"`
-	Description   string         `json:"description"`
-	Payload       []Field        `json:"payload"`
-	Roles         []string       `json:"-"`
+	Adoption      *ProposalAdoption `json:"adoption,omitempty"`
+	SchemaVersion *SchemaVersion    `json:"schemaVersion,omitempty"`
+	Schema        string            `json:"schema"`
+	Target        string            `json:"target"`
+	Capability    string            `json:"capability"`
+	Title         string            `json:"title"`
+	Description   string            `json:"description"`
+	Payload       []Field           `json:"payload"`
+	Roles         []string          `json:"-"`
 	// Uses names protocol actions this one invokes (ProtocolAction); a caller
 	// is offered it only when it may call the bound provider's (ADR-0009, ADR-0011).
 	Uses []string `json:"uses,omitempty"`

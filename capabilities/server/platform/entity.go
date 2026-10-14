@@ -159,6 +159,7 @@ type State struct {
 // status among To (the first is the default). It runs inside the decision, so
 // replay runs it again; an error refuses the transition.
 type Transition struct {
+	Adoption *ProposalAdoption `json:"-"`
 	// Criteria is the owner's pure rule plan, shared with model-bound reads.
 	// It is not serialized into legacy action descriptors or accepted images.
 	Criteria    *RuleCriteria `json:"-"`
@@ -276,6 +277,7 @@ func (s Scope) LevelFor(roles []string) string {
 
 // FieldInfo describes one field, for the host's reads and the UI kit's pages.
 type FieldInfo struct {
+	AIInput     *bool             `json:"aiInput,omitempty"`
 	SourceType  string            `json:"sourceType,omitempty" enum:"record,user-input,external-input,generated"`
 	Constraints *InputConstraints `json:"constraints,omitempty"`
 	Range       *DateRange        `json:"range,omitempty"`
@@ -629,7 +631,7 @@ func EntityActions(e Entity) []Action {
 				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
 			}
 			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
-				Description: description, Payload: payload, Roles: t.Roles, Approval: t.Approval, DeferRequired: t.DeferRequired})
+				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired})
 			if t.Approval != nil && t.Approval.Pending != "" { // the work app's alone: no role holds them
 				for _, m := range [][2]string{{ApprovalHeld, "Hold for approval"}, {ApprovalRejected, "Mark rejected"}, {ApprovalReturned, "Return from approval"}} {
 					suffix, title := m[0], m[1]
@@ -751,6 +753,10 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
 			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example"), Personal: sf.Tag.Get("personal")}
 		f.SourceType = sf.Tag.Get("source")
+		if policy := sf.Tag.Get("ai"); policy != "" {
+			allowed := policy == "allow"
+			f.AIInput = &allowed
+		}
 		f.AliasOf = sf.Tag.Get("alias")
 		if f.SourceType != "" && !slices.Contains([]string{"record", "user-input", "external-input", "generated"}, f.SourceType) {
 			return nil, fmt.Errorf("field %s has an unknown source type", name)

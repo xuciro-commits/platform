@@ -61,7 +61,7 @@ func (p *Program) Eval(c Context) (Result, error) {
 		}
 		v = Present(p.expr.Kind, text)
 	}
-	return Result{v, reasons}, err
+	return Result{Value: v, Reasons: reasons}, err
 }
 func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, error) {
 	if e.Lit != nil {

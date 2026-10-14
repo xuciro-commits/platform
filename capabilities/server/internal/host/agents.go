@@ -66,6 +66,12 @@ type AgentHost interface {
 
 type AttachedAgent interface{ AttachAgent(AgentHost) }
 
+// Candidate declarations are compiled by their original owner. Evaluations
+// retain this immutable selection while all reads still use current grants.
+type AgentEvaluationDefinitions interface {
+	AgentEvaluationApp(candidate, agent string) (platform.App, string, error)
+}
+
 // The agent owner closes its own waiting task and reports a completed run;
 // it cannot install, pin or redeclare a flow through either collaborator.
 type TaskClosure interface {

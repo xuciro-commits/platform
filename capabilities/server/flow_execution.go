@@ -467,7 +467,10 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 			target, _ = current.info.Field(target.AliasOf)
 		}
 		lifecycle := current.info.Lifecycle != nil && current.info.Lifecycle.Field == target.Name
-		if target.ReadOnly && !lifecycle {
+		original, declared := old.info.Field(name)
+		// The original owner still computes its declared readonly metadata.
+		// Turning a formerly writable field readonly retires that old write.
+		if target.ReadOnly && !lifecycle && (!declared || !original.ReadOnly) {
 			return migrationRefusal(fmt.Errorf("retained action writes a retired field %s", target.Name))
 		}
 		result[target.Name] = mappedInput[name]

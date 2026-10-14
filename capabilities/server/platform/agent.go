@@ -27,6 +27,9 @@ type Agent struct {
 	// search, knowledge, remember, ask and finish.
 	Tools  []string
 	Budget Budget
+	// Checkpoints always require a person's confirmation, including runs
+	// whose requester otherwise authorized autonomous actions.
+	Checkpoints []string
 	// Guard may refuse an action the model chose, before it is submitted.
 	Guard func(c Caller, r AgentRun, action, target string, payload json.RawMessage) *kernel.Error
 	// To is who takes the goal over when a run stops, and who its questions go to

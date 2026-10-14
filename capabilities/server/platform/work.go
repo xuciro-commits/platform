@@ -11,6 +11,7 @@ import (
 // their inbox, due by a time, escalated when it is late. To lists who may take
 // it; Key keeps one open task per app and key.
 type Assignment struct {
+	Close bool // close this owner's existing task identified by Key
 	Title string
 	Body  string
 	Ref   string // the record it is about, "<type>/<id>"

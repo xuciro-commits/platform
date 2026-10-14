@@ -6,7 +6,7 @@ import { stateInputValid, ruleInputValid, assignmentInputFits } from "./process-
 import type { Api } from "@platform/kernel";
 import { t, type EntityInfo } from "@platform/ui";
 
-export type Field = { name: string; title: string; type: string; sourceType?:string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; readOnly?: boolean; aliasOf?: string; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
+export type Field = { name: string; title: string; type: string; aiInput?:boolean;sourceType?:string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; readOnly?: boolean; aliasOf?: string; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 export type State = { name: string; title: string; tone?: string; description?: string };
 export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number;constraints?:Api.InputConstraints;range?:Api.DateRange;group?:string };
 /** Preview the same complete input contract in both object and action workbenches. */
@@ -29,7 +29,7 @@ export type Post_ = { object: string; match: Set_[]; field: string; amount: stri
 /** One line of the journal entry an action books (ADR-0076): an account (=code or a source), a debit or a credit source, and what it is about. */
 export type JournalLine_ = { account: string; debit?: string; credit?: string; text?: string; object?: string; partner?: string };
 export type Journal_ = { date?: string; text?: string; lines: JournalLine_[] };
-export type Action = { name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[]; journal?: Journal_; reverses?: string; transaction?: Api.BusinessTxn; reads?: Api.RuleReadSpec };
+export type Action = {adoption?:Api.ProposalAdoption; name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[]; journal?: Journal_; reverses?: string; transaction?: Api.BusinessTxn; reads?: Api.RuleReadSpec };
 /** Gapless document numbers for an object's records (ADR-0076): prefix, optional year, zero-padded count. */
 export type Numbering_ = { field: string; prefix?: string; yearly?: boolean; width?: number };
 /** What one role of the builder app may do with the object (ADR-0037 18b). */

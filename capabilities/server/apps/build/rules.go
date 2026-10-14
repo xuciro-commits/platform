@@ -178,8 +178,11 @@ func actionCriteria(o Object, a Action, lookup func(string) (platform.EntityInfo
 	return plan, nil
 }
 
-func ruleAssignment(e platform.Expr, s platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (platform.EntityInfo, bool)) (any, *kernel.Error) {
+func ruleAssignment(e platform.Expr, s platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (platform.EntityInfo, bool), provenance ...*[]string) (any, *kernel.Error) {
 	r, err := evalRule(e, s, c, record, inputs, now, lookup)
+	for _, refs := range provenance {
+		*refs = append(*refs, r.Sources...)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +297,7 @@ func (b *Build) checkObjectRules(o Object) error {
 		return err
 	}
 	for _, f := range o.Fields {
-		if strings.HasPrefix(f.Name, "rulesources") || f.Name == "rulewithheld" {
+		if strings.HasPrefix(f.Name, "rulesources") || strings.HasPrefix(f.Name, "aisources") || f.Name == "rulewithheld" {
 			return fmt.Errorf("field %s is reserved for rule provenance", f.Name)
 		}
 	}

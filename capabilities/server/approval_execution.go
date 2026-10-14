@@ -1,6 +1,8 @@
 package platformserver
 
 import (
+	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -18,6 +20,12 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 		return nil, migrationRefusal(err)
 	}
 	root := platform.AssetRef{App: a.App, Kind: platform.AssetAction, Name: a.Action}
+	typ, _, _ := strings.Cut(a.Target, "/")
+	if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
+		// Object assets already contain their complete action declarations.
+		// An application need not separately list each contained action.
+		root = platform.AssetRef{App: a.App, Kind: platform.AssetObject, Name: typ}
+	}
 	closed, err := platform.Candidate([]platform.AssetRef{root}, sealed.Assets)
 	if err != nil {
 		return nil, migrationRefusal(err)
@@ -26,7 +34,12 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	if err != nil {
 		return nil, migrationRefusal(err)
 	}
-	return execution.(host.WorkHost), nil
+	bound := execution.(host.WorkHost)
+	app, action, known := bound.Action(a.Action)
+	if !known || app != a.App || action.Target != "" && action.Target != typ || action.Approval == nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained approval action is unavailable")
+	}
+	return bound, nil
 }
 
 func (r *flowExecutionRuntime) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {

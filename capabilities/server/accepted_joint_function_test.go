@@ -115,7 +115,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 				Expected: json.RawMessage(`{"summary":"Check source","category":"review","review":true}`)}}}},
 	})
 	submit(build.ID, build.SchemaEvaluationSetPublish, build.TestPlanType, "EVAL", struct{}{})
-	submit(build.ID, build.AgentType+".create", build.AgentType, "AGENT", map[string]any{"name": "assistant", "title": "Intake assistant", "description": "Prepare intake updates", "instructions": "Prepare a note update", "tools": []string{"build.intake.edit"}, "steps": 4, "tokens": 2000, "actions": 1, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Takes: []string{"build.intake.edit"}}}})
+	submit(build.ID, build.AgentType+".create", build.AgentType, "AGENT", map[string]any{"name": "assistant", "title": "Intake assistant", "description": "Prepare intake updates", "instructions": "Prepare a note update", "tools": []string{"build.intake.edit"}, "steps": 4, "tokens": 2000, "actions": 1, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Expect: "Check source"}}})
 	submit(build.ID, build.SchemaAgentPublish, build.AgentType, "AGENT", struct{}{})
 	submit(build.ID, build.ConnectionType+".create", build.ConnectionType, "CONNECTION", map[string]any{"name": "feed", "title": "Feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true})
 	submit(build.ID, build.ConnectionType+".check", build.ConnectionType, "CONNECTION", struct{}{})
@@ -229,6 +229,11 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if attempts != build.EvaluationRepeats || !ok || report.State != "passed" || report.Set == nil || report.Model != "fixture/probe" || report.Policy[0].Cases[0].Name != "synthetic" {
 		t.Fatalf("joint evaluation: %+v (%d attempts)", report, attempts)
 	}
+	submit(PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "fixture/probe"})
+	if _, err := live.EvaluateRelease(builder, ReleaseEvaluationRequest{CandidateID: preview.CandidateID, Agent: "build.assistant", Key: "agent"}, at); err != nil {
+		t.Fatal(err)
+	}
+	live.Evaluate(at)
 	live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 		if _, err := activeJournal.AppendAccepted(ctx, id, e, key, hash); err != nil {
 			t.Fatal(err)
@@ -316,6 +321,35 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	decide(t, target, "builder", build.ID, build.ConnectionType+".create", build.ConnectionType, "TARGET-CONNECTION", map[string]any{"name": "feed", "title": "Target feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true}, at)
 	decide(t, target, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, "TARGET-CONNECTION", map[string]any{}, at)
 	target.CheckConnections(at)
+	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "stage-unmeasured", false, targetMember, at); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "unmeasured", true, targetMember, at); err == nil {
+		t.Fatal("promotion bypassed measured AI gates")
+	}
+	decide(t, target, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "fixture/probe"}, at)
+	measureTarget := func(candidateID, key string) {
+		if _, err := target.EvaluateRelease(targetMember, ReleaseEvaluationRequest{CandidateID: candidateID, Agent: "build.assistant", Key: key + ":agent"}, at); err != nil {
+			t.Fatal(err)
+		}
+		target.Evaluate(at)
+		measured, err := target.EvaluateRelease(targetMember, ReleaseEvaluationRequest{CandidateID: candidateID, PlanID: "quality", Key: key + ":function"}, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, effect := range target.Effects(at) {
+			var ask modelAsk
+			if json.Unmarshal([]byte(effect.Body), &ask) != nil || !ask.Evaluation || !strings.HasPrefix(ask.Call, measured+":") {
+				continue
+			}
+			outcome, usage := target.sendModel(effect, at)
+			if outcome.Result != "delivered" || usage == nil {
+				t.Fatal("target measured evaluation failed")
+			}
+			target.settleWithUsage(effect.ID, outcome, usage, at)
+		}
+	}
+	measureTarget(preview.CandidateID, "initial")
 	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "deliver", true, targetMember, at); err != nil {
 		t.Fatal(err)
 	}
@@ -377,6 +411,10 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		}
 		target.settleWithUsage(effect.ID, outcome, usage, at.Add(4*time.Second))
 	}
+	if _, err := target.EvaluateRelease(targetMember, ReleaseEvaluationRequest{CandidateID: next.CandidateID, Agent: "build.assistant", Key: "upgrade-agent"}, at.Add(4*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	target.Evaluate(at.Add(4 * time.Second))
 	if _, err := target.ActivateRelease(targetMember, next.CandidateID, "activate-upgrade", at.Add(5*time.Second)); err != nil {
 		t.Fatal(err)
 	}

@@ -49,6 +49,10 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
 	}
+	proposal, refusal := b.prepareProposal(c, receipt, txn, now)
+	if refusal != nil {
+		return refusal
+	}
 	subjectID := receipt.GetSubmission().GetTarget().GetId()
 	readSubject := func() (map[string]any, *kernel.Error) {
 		raw, refusal := c.ReadRecord(txn.Subject, subjectID, now)
@@ -272,19 +276,20 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 			}
 			info, _ := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
 			patch := map[string]any{}
+			sources := []string{}
 			for _, assignment := range step.Changes {
 				field, _ := info.Field(assignment.Field)
 				expr, err := assignmentExpr(field.Type, assignment, scope)
 				if err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 				}
-				value, failure := ruleAssignment(expr, scope, c, subject, facts, now, b.conditionLookup)
+				value, failure := ruleAssignment(expr, scope, c, subject, facts, now, b.conditionLookup, &sources)
 				if failure != nil {
 					return failure
 				}
 				patch[assignment.Field] = value
 			}
-			if err := b.ledger.ApplyTxnRecord(c, receipt, entity, verb, id, platform.Raw(patch), now); err != nil {
+			if err := b.ledger.ApplyTxnRecord(c, receipt, proposalEntity(entity, patch, proposal, sources), verb, id, platform.Raw(patch), now); err != nil {
 				return err
 			}
 			if step.Kind == "create" {
@@ -301,5 +306,8 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 		}
 		return nil
 	}
-	return run(txn.Steps, spec, values, "", "")
+	if err := run(txn.Steps, spec, values, "", ""); err != nil {
+		return err
+	}
+	return b.finishProposal(c, receipt, proposal, now)
 }

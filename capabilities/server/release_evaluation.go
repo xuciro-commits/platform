@@ -14,11 +14,12 @@ import (
 	"platformserver/platform"
 )
 
-// ReleaseEvaluationRequest asks for real, measured model calls against one
-// saved function version and one retained synthetic test plan.
+// ReleaseEvaluationRequest asks the original function or agent evaluator for
+// real model calls against one saved candidate and its declared cases.
 type ReleaseEvaluationRequest struct {
 	CandidateID string `json:"candidateId"`
-	PlanID      string `json:"planId"`
+	PlanID      string `json:"planId,omitempty"`
+	Agent       string `json:"agent,omitempty"`
 	Key         string `json:"key"`
 }
 
@@ -30,9 +31,9 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if !holdsIndependentBuildRole(m, build.Builder) || request.CandidateID == "" || request.PlanID == "" ||
+	if !holdsIndependentBuildRole(m, build.Builder) || request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") ||
 		request.Key == "" || len(request.Key) > 200 || now.IsZero() {
-		return "", fmt.Errorf("a builder, saved candidate, test plan and idempotency key are required")
+		return "", fmt.Errorf("a builder, saved candidate, test plan or agent, and idempotency key are required")
 	}
 
 	t.mu.Lock()
@@ -41,14 +42,20 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
+	if request.Agent != "" {
+		return t.evaluateReleaseAgentLocked(m, request, now)
+	}
 	candidate, err := t.releases.candidate(request.CandidateID)
 	if err != nil {
 		return "", fmt.Errorf("release candidate is not saved: %w", err)
 	}
 	caller := t.automation(build.ID, false)
 	plan, ok := platform.Get[build.TestPlan](caller, request.PlanID)
-	if !ok || plan.Archived {
+	if ok && plan.Archived {
 		return "", fmt.Errorf("a saved function plan is required")
+	}
+	if !ok {
+		plan = build.TestPlan{Record: platform.Record{ID: request.PlanID, Revision: 1}, Name: request.PlanID}
 	}
 	var evaluationSet *platform.AssetBinding
 	functionName := ""
@@ -66,6 +73,9 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		evaluationSet = &platform.AssetBinding{Ref: selected.Ref, SourceVersion: selected.SourceVersion}
 	}
 	if evaluationSet == nil {
+		if !ok {
+			return "", fmt.Errorf("a saved function plan or candidate evaluation set is required")
+		}
 		function, ok := platform.Get[build.Function](caller, string(plan.Function))
 		if !ok || function.Archived || len(plan.Evaluation) != 1 || plan.Model == "" {
 			return "", fmt.Errorf("a saved function plan with one evaluation policy and model is required")
@@ -155,6 +165,12 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 			functions = append(functions, asset)
 		}
 	}
+	if err := checkApplicationProposalFunctions(candidate); err != nil {
+		return err
+	}
+	if err := t.agentEvaluationsReadyLocked(candidate); err != nil {
+		return err
+	}
 	if len(functions) == 0 {
 		return nil
 	}
@@ -201,10 +217,6 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 			if len(requiredSets) > 0 && (report.Set == nil || !slices.Contains(requiredSets, *report.Set)) {
 				continue
 			}
-			plan, ok := platform.Get[build.TestPlan](caller, report.Plan)
-			if !ok || plan.Archived {
-				continue
-			}
 			if report.Set != nil {
 				selected := slices.IndexFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
 					return a.Ref == report.Set.Ref && a.SourceVersion == report.Set.SourceVersion
@@ -217,6 +229,10 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 					continue
 				}
 			} else {
+				plan, ok := platform.Get[build.TestPlan](caller, report.Plan)
+				if !ok || plan.Archived {
+					continue
+				}
 				if plan.Revision != report.PlanRevision || len(plan.Evaluation) != 1 || plan.Model != report.Model || !evalEqualRaw(platform.Raw(plan.Evaluation[0]), platform.Raw(report.Policy[0])) {
 					continue
 				}
@@ -262,4 +278,46 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 func evalEqualRaw(a, b []byte) bool {
 	var left, right any
 	return json.Unmarshal(a, &left) == nil && json.Unmarshal(b, &right) == nil && reflect.DeepEqual(left, right)
+}
+
+func checkApplicationProposalFunctions(candidate platform.ReleaseCandidate) error {
+	functions := map[string]platform.ReleaseAsset{}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetFunction {
+			functions[asset.Ref.Name] = asset
+		}
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		var object build.Object
+		if json.Unmarshal(asset.Body, &object) != nil {
+			return fmt.Errorf("Proposal object declaration is invalid")
+		}
+		for _, action := range object.Actions {
+			if action.Adoption == nil {
+				continue
+			}
+			functionAsset, ok := functions[action.Adoption.Function.Name]
+			if !ok {
+				return fmt.Errorf("Application adoption needs its declared function in the candidate")
+			}
+			definition, version, err := functionAssetDefinition(functionAsset)
+			if err != nil {
+				return err
+			}
+			if action.Adoption.Function.Version != 0 && action.Adoption.Function.Version != version {
+				return fmt.Errorf("Application adoption function version differs from the candidate")
+			}
+			inputs := []platform.Field{}
+			for _, input := range action.Inputs {
+				inputs = append(inputs, input.Field())
+			}
+			if err := action.Adoption.CheckMapping(definition, inputs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -76,6 +77,7 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 		return ExprResult{}, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	value, err := program.Eval(context)
+	value.Sources = slices.Clone(context.Sources)
 	if err != nil {
 		code := pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT
 		if issue, ok := err.(*ExprIssue); ok && issue.Code == "withheld" {

@@ -194,7 +194,7 @@ func (b *Build) checkTransactions(object Object) error {
 		if txn.Subject != subject || len(txn.Steps) == 0 {
 			return fmt.Errorf("transaction needs its subject and steps")
 		}
-		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Journal != nil || action.Reverses != "" || len(action.Conditions) > 0 || action.Approval != nil || action.To != "" || action.ToInput != "" {
+		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Journal != nil || action.Reverses != "" || len(action.Conditions) > 0 || action.Approval != nil && action.Approval.Pending != "" || action.To != "" || action.ToInput != "" {
 			return fmt.Errorf("transaction replaces legacy mutations and state routing")
 		}
 		ownInfo, _ := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })

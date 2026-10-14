@@ -77,6 +77,11 @@ func (t *Tenant) acceptAgentStep(b stepBody, at time.Time) {
 		run.Agent = b.Evaluation.Agent
 	}
 	member := agent.AgentPrincipal(run.Agent)
+	if b.Evaluation != nil && b.Evaluation.Candidate != "" {
+		// A candidate's agent need not be installed as a principal yet. Only
+		// its original owner records the dry report; it executes no AI tool.
+		member = platform.Member{ID: "app:" + AgentApp, Tenant: t.ID}
+	}
 	c := platform.NewCaller(draft, member, AgentApp, false, true)
 	r := acceptedAgent{Version: 1, Kind: "agent-result", Tenant: t.ID, App: AgentApp, Member: member.ID, At: at.UTC(), Step: b}
 	var err error

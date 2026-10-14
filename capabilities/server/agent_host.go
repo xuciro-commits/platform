@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -20,7 +21,7 @@ func (h hostView) InvokeDecision(c platform.Caller, protocol, action, id string,
 	return h.t.invoke(c, protocol, action, id, raw, key, correlation, now)
 }
 func (h hostView) AgentContext(reader *platform.Member, typ, id string, now time.Time) (host.AgentObservation, *kernel.Error) {
-	view, err := h.t.Context(reader, typ, id, now)
+	view, err := h.t.Context(aiContextReader(reader), typ, id, now)
 	if err != nil {
 		return host.AgentObservation{}, err
 	}
@@ -28,7 +29,7 @@ func (h hostView) AgentContext(reader *platform.Member, typ, id string, now time
 	return host.AgentObservation{Body: raw, Sources: h.t.refsIn(view)}, nil
 }
 func (h hostView) AgentSearch(reader *platform.Member, q string, now time.Time) host.AgentObservation {
-	found := h.t.Search(reader, q, now)
+	found := h.t.Search(aiContextReader(reader), q, now)
 	out := host.AgentObservation{}
 	for _, hit := range found {
 		out.Sources = append(out.Sources, hit.Type+"/"+hit.ID)
@@ -37,6 +38,7 @@ func (h hostView) AgentSearch(reader *platform.Member, q string, now time.Time) 
 	return out
 }
 func (h hostView) AgentQuery(reader platform.Member, app, name, of string, now time.Time) (host.AgentObservation, *kernel.Error) {
+	reader.AIContext = true
 	page, err := h.t.RunQuery(reader, app, name, of, now)
 	if err != nil {
 		return host.AgentObservation{}, err
@@ -53,6 +55,7 @@ func (h hostView) AgentQuery(reader platform.Member, app, name, of string, now t
 	return out, nil
 }
 func (h hostView) AgentRead(reader platform.Member, name string) (host.AgentObservation, *kernel.Error) {
+	reader.AIContext = true
 	value, err := h.t.Read(reader, name)
 	if err != nil {
 		return host.AgentObservation{}, err
@@ -62,7 +65,7 @@ func (h hostView) AgentRead(reader platform.Member, name string) (host.AgentObse
 }
 func (h hostView) AgentSources(value any) []string { return h.t.refsIn(value) }
 func (h hostView) AgentKnowledge(reader *platform.Member, app, q string, limit int, now time.Time) json.RawMessage {
-	found := h.t.Knowledge(reader, app, q, limit, now)
+	found := h.t.Knowledge(aiContextReader(reader), app, q, limit, now)
 	for i := range found {
 		found[i].Text = clip(found[i].Text, 700)
 	}
@@ -117,7 +120,25 @@ func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AI
 	if refusal := authorizationRefusal(h.t.authorizeNative(c, "model:"+request.Model, "action", []string{platform.AnyMember}, true)); refusal != nil {
 		return platform.ChatAnswer{}, &platform.AIError{Status: 403, Detail: refusal.Message}
 	}
-	return h.t.call(provider, model, member, request, now)
+	answer, failure := h.t.call(provider, model, member, request, now)
+	// Only the original agent owner supplies these bindings; an HTTP chat
+	// request's arbitrary run label never becomes application attribution.
+	if value, ok := h.Record(RunType + "/" + request.Run); ok {
+		if run, ok := value.(AgentRunRecord); ok {
+			answer.Usage = agentRunUsage(answer.Usage, run)
+		}
+	}
+	return answer, failure
+}
+
+func agentRunUsage(usage platform.AIUsage, run AgentRunRecord) platform.AIUsage {
+	usage.Applications = append([]platform.AssetBinding(nil), run.Applications...)
+	usage.Run = run.ID
+	if owner, name, valid := strings.Cut(run.Agent, "."); valid {
+		ref := platform.AssetRef{App: owner, Kind: platform.AssetAgent, Name: name}
+		usage.Resource = &ref
+	}
+	return usage
 }
 func (h hostView) MeterAgentUsage(member platform.Member, usage platform.AIUsage) *kernel.Error {
 	return h.t.meter(member, usage)
@@ -132,3 +153,12 @@ var _ host.AgentHost = hostView{}
 
 func (h hostView) AgentTasks() host.TaskClosure         { return h.Tasks() }
 func (h hostView) AgentFlows() host.AgentFlowCompletion { return h.Processes() }
+
+func aiContextReader(reader *platform.Member) *platform.Member {
+	if reader == nil {
+		return nil
+	}
+	copy := *reader
+	copy.AIContext = true
+	return &copy
+}

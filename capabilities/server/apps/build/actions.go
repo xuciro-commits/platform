@@ -58,6 +58,12 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 	}
 	seen := map[string]bool{}
 	for _, a := range o.Actions {
+		if err := checkActionAdoption(a); err != nil {
+			return err
+		}
+		if err := checkAdoptionSources(o, a, lookup); err != nil {
+			return err
+		}
 		where := fmt.Sprintf("the action %q", a.Name)
 		switch {
 		case !named(a.Name):
@@ -85,9 +91,9 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 			switch {
 			case len(a.From) != 1:
 				return fmt.Errorf("%s waiting for approval needs exactly one starting state", where)
-			case !states[approval.Pending] || approval.Pending == a.From[0] || approval.Pending == a.To:
+			case !(a.Transaction != nil && approval.Pending == "") && (!states[approval.Pending] || approval.Pending == a.From[0] || approval.Pending == a.To):
 				return fmt.Errorf("%s waits in %q, which must be a separate state of the object", where, approval.Pending)
-			case approval.Rejected != "" && (!states[approval.Rejected] || approval.Rejected == approval.Pending):
+			case approval.Rejected != "" && (a.Transaction != nil && approval.Pending == "" || !states[approval.Rejected] || approval.Rejected == approval.Pending):
 				return fmt.Errorf("%s rejects into %q, which must be a state other than pending", where, approval.Rejected)
 			case len(approval.Levels) == 0:
 				return fmt.Errorf("%s waiting for approval needs an approver level", where)
@@ -379,7 +385,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 			}
 		}
 		criteria, _ := actionCriteria(o, a, lookup)
-		l.Transitions = append(l.Transitions, platform.Transition{Criteria: criteria, Name: a.Name, Title: a.Title, Description: a.Description,
+		l.Transitions = append(l.Transitions, platform.Transition{Adoption: a.Adoption, Criteria: criteria, Name: a.Name, Title: a.Title, Description: a.Description,
 			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)

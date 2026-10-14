@@ -1,7 +1,7 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, Disclosure, PageHeader, Select, StatusTag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, PageHeader, Panel, Select, StatusTag, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { refKey, resourceKinds, resourceRef, type ResourceKind } from "../projects/resources";
@@ -60,7 +60,7 @@ type ReleaseRequest = { kind: "save"; body: Api.ReleaseSaveRequest }
   | { kind: "activate"; body: Api.ReleaseActivateRequest };
 
 type Record = { id: string; title: string; name: string; state: string };
-type EvaluationPlan = { id: string; title: string; function?: string; evaluation?: unknown[] };
+type EvaluationPlan = { id: string; name?: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
 const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
   ...resourceKinds.filter((item) => item.kind !== "action" && item.kind !== "automation").map((item) => ({ kind: item.kind as ReleaseKind, type: item.type, label: item.plural })),
@@ -78,6 +78,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [id, setId] = useState(initialID);
   const [review, setReview] = useState<Api.ReleasePreview>();
   const [assets, setAssets] = useState<Api.ReleaseAsset[]>([]);
+	const [candidateAI, setCandidateAI] = useState<Api.ApplicationAI[]>([]);
   const [candidateKey, setCandidateKey] = useState("");
   const [savedID, setSavedID] = useState("");
   const [offset, setOffset] = useState(0);
@@ -129,17 +130,19 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
   const records = (query.isError ? [] : query.data?.records ?? []).filter(record => !scope || (kind === "app" ? record.id === scope : !!scopedApplication && held.has(refKey(resourceRef(resourceKinds.find(item => item.kind === kind)!, record.name)))));
   const functionNames = (review?.included ?? []).filter((ref) => ref.app === "build" && ref.kind === "function").map((ref) => ref.name);
-  const eligiblePlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
+  const localPlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
+  const eligiblePlans = [...localPlans, ...assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "evaluation-set" && !localPlans.some(plan => plan.name === asset.ref.name)).map(asset => ({id:asset.ref.name,title:asset.ref.name}))];
   const report = reports.isError ? undefined : reports.data?.records.find((item) => item.id === reportID);
   // The application a release review was opened from is the natural root of a
   // joint selection (ADR-0048 D1): its pages come before its own draft.
   const passedFunctions = (reports.isError ? [] : reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
-  const evaluated = functionNames.every((name) => passedFunctions.includes(name));
+  const agentNames = (review?.included ?? []).filter(ref => ref.app === "build" && ref.kind === "agent").map(ref => ref.name);
+  const evaluated = functionNames.every((name) => passedFunctions.includes(name)) && agentNames.every(name => candidateAI.some(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name && item.evaluations.some(report => report.candidate === savedID && report.state === "passed")));
   if (!mayRelease) {
     return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
   }
   const clearReview = () => {
-    setReview(undefined); setAssets([]); setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic("");
+    setReview(undefined); setAssets([]); setCandidateAI([]); setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic("");
     setCanActivate(false); setActivationDiagnostic(""); setUpgradePlan(undefined); setExtensions([]); setOrigin(undefined); setPromotedTo([]);
     setPlanID(""); setReportID("");
   };
@@ -150,7 +153,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       if (!result.ok || result.body.preview?.candidateId !== candidateID) {
         setError(apiErrorMessage(result.body) ?? t("Saved releases could not be loaded.")); return;
       }
-      setReview(result.body.preview); setSavedReview(true); setAssets(result.body.assets ?? []);
+      setReview(result.body.preview); setSavedReview(true); setAssets(result.body.assets ?? []); setCandidateAI(result.body.ai ?? []);
       setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
       setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
       setUpgradePlan(result.body.upgradePlan);
@@ -225,6 +228,11 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     if (pendingRef.current) return pendingRef.current.kind === "evaluate" ? send(pendingRef.current) : undefined;
     if (!savedReview || !savedID || !planID) return;
     return send({ kind: "evaluate", body: { candidateId: savedID, planId: planID, key: crypto.randomUUID() } });
+  };
+  const evaluateAgent = (name: string) => {
+    if (pendingRef.current) return;
+    if (!savedReview || !savedID) return;
+    return send({ kind: "evaluate", body: { candidateId: savedID, agent: `build.${name}`, key: crypto.randomUUID() } });
   };
   const save = () => {
     if (pendingRef.current) return pendingRef.current.kind === "save" ? send(pendingRef.current) : undefined;
@@ -411,7 +419,15 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           {report && <p className="text-sm" role="status">{t("Report state")}: {t(report.state)} · {t("Quality")}: {Math.round(report.quality * 100)}% · {t("Reported USD cost")}: {report.costComplete ? report.costUsd : t("Unknown")} · {t("Peak latency (ms)")}: {report.peakLatencyMillis} · {t("Calls")}: {report.attempts.length}</p>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
-        {!builder && functionNames.length > 0 && !evaluated && <p role="status" className="text-sm text-warning">{t("Required function evaluations are missing. Ask a builder to complete them before activation.")}</p>}
+        {builder && savedID && agentNames.length > 0 && <Panel title={t("Agent candidate evaluations")} role="region" aria-label={t("Agent candidate evaluations")} className="grid gap-2">
+          <p className="text-xs text-muted">{t("Each candidate agent must pass its declared cases three times with the current agent model before activation.")}</p>
+          {agentNames.map(name => <div key={name} className="grid gap-1 text-xs"><div className="flex flex-wrap items-center gap-2"><strong>{name}</strong><Button size="sm" disabled={locked} onClick={() => void evaluateAgent(name)}>{t("Run declared cases")}</Button></div>
+            {candidateAI.filter(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name).flatMap(item => item.evaluations.filter(report => report.candidate === savedID).map(report => <p key={report.id}>{report.id} · {t(report.state)} · {report.model} · {Math.round(report.quality * 100)}%</p>))}
+          </div>)}
+          <Button disabled={locked} onClick={() => void perform(() => readSaved(savedID))}>{t("Refresh evaluation reports")}</Button>
+          {reportID && <p className="break-all text-xs">{t("Evaluation report")}: {reportID}</p>}
+        </Panel>}
+        {!builder && (functionNames.length > 0 || agentNames.length > 0) && !evaluated && <p role="status" className="text-sm text-warning">{t("Required AI evaluations are missing. Ask a builder to complete them before activation.")}</p>}
         {savedID && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !evaluated || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
       </div>}

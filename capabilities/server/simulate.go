@@ -89,6 +89,7 @@ func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, 
 		s.IdempotencyKey = "simulate"
 	}
 	draft := t.newStagedDecision()
+	draft.simulation = true
 	_, refusal := decideAccepted(a, draft, m, s, now)
 	out := Simulation{Changes: []SimulatedChange{}}
 	if refusal != nil {

@@ -419,3 +419,14 @@ type Definition struct {
 	Agent            *AgentReleaseDescriptor  `json:"agent,omitempty"`
 	Operation        *Operation               `json:"operation,omitempty"`
 }
+
+// ApplicationVisibility is the original member-facing metadata projection.
+// Binding labels do not confer permission to open another application.
+type ApplicationVisibility interface{ VisibleApplications(Caller) []AssetRef }
+
+func (c Caller) VisibleApplications() []AssetRef {
+	if rt, ok := c.rt.(ApplicationVisibility); ok {
+		return rt.VisibleApplications(c)
+	}
+	return nil
+}

@@ -162,6 +162,16 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       (c) => <><span className="min-w-0 flex-1 truncate font-medium">{subjects.find((s) => s.value === c.field)?.label ?? c.field} {t(c.operator)} {c.valueField ? subjects.find((s) => s.value === c.valueField)?.label : c.value}</span><span className="truncate text-xs text-muted">{c.message}</span></>, t("No criteria. The action can always be submitted from its starting states.")),
     transaction: <div className="grid max-w-4xl content-start gap-3 p-4">
       <h2 className="text-sm font-semibold">{t("Transaction")}</h2>
+ <Checkbox checked={!!action.adoption} disabled={!action.transaction} onChange={enabled=>patch({adoption:enabled?{function:{app:"build",name:"",version:0},input:"proposal",mapping:[]}:undefined,inputs:enabled&&!inputs.some(input=>input.name==="proposal")?[...inputs,{name:"proposal",title:t("Retained proposal"),type:"reference",ref:"build.function-call",required:true}]:inputs})}>{t("Adopt an AI proposal")}</Checkbox>
+ {action.adoption&&<div className="grid gap-2 rounded border border-border p-3">
+ <p className="text-xs text-muted">{t("The proposal stays unchanged until this transaction is accepted. AI destinations must declare generated provenance.")}</p>
+ <label className="grid gap-1 text-xs">{t("Proposal function name")}<Input value={action.adoption.function.name} onChange={event=>patch({adoption:{...action.adoption!,function:{...action.adoption!.function,name:event.target.value}}})}/></label>
+ <label className="grid gap-1 text-xs">{t("Proposal version (0: retained call version)")}<Input type="number" min={0} max={64} value={action.adoption.function.version} onChange={event=>patch({adoption:{...action.adoption!,function:{...action.adoption!.function,version:Number(event.target.value)}}})}/></label>
+ <label className="grid gap-1 text-xs">{t("Proposal reference input")}<Select value={action.adoption.input} onChange={event=>patch({adoption:{...action.adoption!,input:event.target.value}})}>{inputs.filter(input=>input.type==="reference"&&input.ref==="build.function-call").map(input=><option key={input.name} value={input.name}>{input.title}</option>)}</Select></label>
+ {action.adoption.mapping.map((mapping,index)=><div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><label className="grid gap-1 text-xs">{t("Proposal output field")}<Input value={mapping.output} onChange={event=>patch({adoption:{...action.adoption!,mapping:action.adoption!.mapping.map((value,i)=>i===index?{...value,output:event.target.value}:value)}})}/></label><label className="grid gap-1 text-xs">{t("Business action input")}<Select value={mapping.input} onChange={event=>patch({adoption:{...action.adoption!,mapping:action.adoption!.mapping.map((value,i)=>i===index?{...value,input:event.target.value}:value)}})}><option value="">{t("Choose an input")}</option>{inputs.filter(input=>input.name!==action.adoption!.input).map(input=><option key={input.name} value={input.name}>{input.title}</option>)}</Select></label><Button onClick={()=>patch({adoption:{...action.adoption!,mapping:action.adoption!.mapping.filter((_,i)=>i!==index)}})}>{t("Remove")}</Button></div>)}
+ <Button onClick={()=>patch({adoption:{...action.adoption!,mapping:[...action.adoption!.mapping,{output:"",input:inputs.find(input=>input.name!==action.adoption!.input)?.name??""}]}})}>{t("Add proposal mapping")}</Button>
+ </div>}
+
       <p className="text-sm text-muted">{t("One operation commits all steps together. Iteration uses an ordered record set; a failed step leaves every record unchanged.")}</p>
       {action?.transaction ? <>
         <label className="grid gap-1 text-xs">{t("Transaction definition")}<Textarea aria-label={t("Transaction definition")} parse="json" rows={22} value={JSON.stringify(action.transaction, null, 2)} onChange={event => patch({transaction: event.target.value.trim()?JSON.parse(event.target.value):undefined})} /></label>
@@ -176,13 +186,13 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <p className="px-4 text-xs text-muted">{t("A balance is one record per distinct set of match values; it is created on the first posting. Reverse with a posting of the other sign.")}</p>
       <BooksEditor action={action} actions={process.actions} sources={postSources} patch={patch} /></>,
     approval: <div className="grid max-w-xl content-start gap-3 p-4 text-sm">
-      <Checkbox checked={!!action.approval} disabled={!!action.toInput && !action.approval} onChange={(enabled) => patch({ approval: enabled ? { pending: process.states.find((s) => s.name !== action.from[0] && s.name !== action.to)?.name ?? "", levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }] } : undefined })}>{t("Wait for approval")}</Checkbox>
+      <Checkbox checked={!!action.approval} disabled={!!action.toInput && !action.approval} onChange={(enabled) => patch({ approval: enabled ? { pending: action.transaction?"":process.states.find((s) => s.name !== action.from[0] && s.name !== action.to)?.name ?? "", levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }] } : undefined })}>{t("Wait for approval")}</Checkbox>
       {action.approval && <>
         <p className="text-xs text-muted">{t("Use one starting state. The approver decides in the work inbox; the action runs after the last approval.")}</p>
         <Label text={t("While it waits")}><Select value={action.approval.pending} onChange={(e) => patch({ approval: { ...action.approval!, pending: e.target.value } })}>
-          <option value="">{t("Choose a state")}</option>{process.states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}</Select></Label>
+          <option value="">{t(action.transaction?"Keep business records unchanged while approval waits":"Choose a state")}</option>{!action.transaction&&process.states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}</Select></Label>
         <Label text={t("If rejected")}><Select value={action.approval.rejected ?? ""} onChange={(e) => patch({ approval: { ...action.approval!, rejected: e.target.value || undefined } })}>
-          <option value="">{t("Return to the starting state")}</option>{process.states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}</Select></Label>
+          <option value="">{t("Return to the starting state")}</option>{!action.transaction&&process.states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}</Select></Label>
         <Rows<ApproverLevel> title={t("Approver levels, in order")} add={t("Add a level")} items={action.approval.levels} make={() => ({ title: t("Approver"), role: approverRoles[0] ?? "builder" })}
           onChange={(levels) => patch({ approval: { ...action.approval!, levels } })}
           row={(level, set) => <>
@@ -226,14 +236,14 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
         {!process.actions.length && <p className="px-2 text-[11px] text-muted">{process.states.length ? t("No actions yet.") : t("Add a lifecycle state first: every action starts from a state.")}</p>}
       </PanelSection>
       {action && <PanelSection title={t("Sections")}>
-        {sections.filter(s => !action.transaction || !["rules", "criteria", "effects", "approval"].includes(s.id)).map((s) => <StructureRow key={s.id} icon={s.icon} label={s.title()} selected={section === s.id} onClick={() => go(s.id)}
+        {sections.filter(s => !action.transaction || !["rules", "criteria", "effects"].includes(s.id)).map((s) => <StructureRow key={s.id} icon={s.icon} label={s.title()} selected={section === s.id} onClick={() => go(s.id)}
           meta={s.id === "parameters" ? String(inputs.length) : s.id === "rules" ? String(sets.length) : s.id === "criteria" ? String(conditions.length) : s.id === "effects" ? String(creates.length) : s.id === "approval" && action.approval ? "✓" : undefined} />)}
       </PanelSection>}
     </div> }}
     right={{ label: t("Action inspector"),scope:JSON.stringify([at,pick]),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("["));setPick(scope?(JSON.parse(scope) as [number,Pick])[1]:pick);}, content: inspector }}
     dock={{ label: t("Action dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The action can be published with its object type.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    {action ? <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[action.transaction && ["rules", "criteria", "effects", "approval"].includes(section) ? "transaction" : section]}</fieldset>
+    {action ? <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[action.transaction && ["rules", "criteria", "effects"].includes(section) ? "transaction" : section]}</fieldset>
       : <WorkbenchMessage>{process.actions.length ? t("Choose an action on the left.") : t("This object type has no actions yet.")}</WorkbenchMessage>}
   </Workbench>;
 }

@@ -139,6 +139,8 @@ ADR-0111 的 `sample-set` 归 Build：有稳定名称、保留版本和合成记
 
 ## As built
 
+ADR-0116 扩展现有 `function`、`action`、`agent` 和 work 能力，没有新增资产 kind。函数的 Proposal 策略仍为 effect（产生原模型意图），输出/提议读取为 pure；采纳动作是 authoritative，复用原对象事务，依赖声明的函数 `AssetRef` 和提议记录引用。对象/函数闭包必须同时包含匹配版本，激活验证映射；没有第二份 AI 工具授权。原动作 Approval 与智能体 Checkpoints/HandoffRole 仍由 work/agent 执行；候选智能体的报告固定完整资产与模型配置，不成为业务权限。应用用量、位置与评测是原账目/声明的 pure 投影，通用 Provides/Side 发现仍归本文剩余验收。
+
 ADR-0106 已登记 `migration` 资产：唯一生命周期归 Build / `build.migration-plan`，描述体为 `MigrationDescriptor`，固定源/目标封存发布、受控步骤与范围。版本边为既有发布的内容 ID；计划不能依赖自身目标候选，也不另维持一份对象当前形状图。声明读取与版本解析为 pure，`migrations` 的 start/advance/cancel 为 authoritative，仅写 build 权威；目标新声明和对象行仍走原接受结果。能力和版本化资产已注册；本 ADR 的通用 `Provides`/`Side` 推导、统一反向图和发现验收仍未实施，不用此登记宣称 §4 通过。
 
 ADR-0107 登记 `agent` 与 `evaluation-set`：两者的构建生命周期归 Build；`agent` 冻结原智能体定义、工具边与用例，工具执行为 effect/authoritative 并仍由原 owner 授权；`evaluation-set` 的 `EvaluationSetDescriptor` 冻结原 TestPlan 的质量/费用/延迟策略及合成输入/期望，唯一版本边是被评测函数的 `AssetBinding`。声明读取、闭包与版本解析为 pure；发布为 build 权威的 authoritative 接受结果；评测的模型调用仍由原 AI effect 路径执行，报告沿原 `build.evaluation`，不授予工具或数据权限。两类制品都不携带环境地址或凭据。本登记不代替通用依赖图/Provides 的剩余验收。

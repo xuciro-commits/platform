@@ -272,7 +272,7 @@ func (t *Tenant) registerDefinitions() error {
 			if err != nil {
 				return err
 			}
-			descriptor := platform.AgentReleaseDescriptor{Name: agent.Name, Title: agent.Title, Description: agent.Description, Instructions: agent.Instructions, Tools: slices.Clone(agent.Tools), Budget: agent.Budget, Native: true, Guard: agent.Guard != nil, Handoff: agent.To != nil, Cases: raw}
+			descriptor := platform.AgentReleaseDescriptor{Name: agent.Name, Title: agent.Title, Description: agent.Description, Instructions: agent.Instructions, Tools: slices.Clone(agent.Tools), Budget: agent.Budget, Checkpoints: slices.Clone(agent.Checkpoints), Native: true, Guard: agent.Guard != nil, Handoff: agent.To != nil, Cases: raw}
 			if err := descriptor.Check(); err != nil {
 				return err
 			}
@@ -1272,4 +1272,17 @@ func (t *Tenant) visibleApplication(registered platform.Definition, m platform.M
 	def.Requires = application.Dependencies(def.Ref.App)
 	def.Application = &application
 	return def, true
+}
+
+func (r runtime) VisibleApplications(c platform.Caller) []platform.AssetRef {
+	refs := []platform.AssetRef{}
+	for _, definition := range r.t.Definitions(c.Member) {
+		if definition.Application != nil {
+			refs = append(refs, definition.Ref)
+		}
+	}
+	return refs
+}
+func (d *stagedDecision) VisibleApplications(c platform.Caller) []platform.AssetRef {
+	return (runtime{d.tenant}).VisibleApplications(c)
 }

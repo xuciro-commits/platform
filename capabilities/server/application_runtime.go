@@ -52,6 +52,7 @@ type ApplicationAgentBudget struct {
 	Budget   platform.Budget       `json:"budget"`
 }
 type ApplicationRuntime struct {
+	AI          []ApplicationAI              `json:"ai"`
 	Artifact    platform.ApplicationArtifact `json:"artifact"`
 	State       string                       `json:"state"`
 	Scope       string                       `json:"scope"`
@@ -345,7 +346,13 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		return out, refusal
 	}
 	out.Maintenance = maintenance
+	out.AI, refusal = t.applicationAILocked(m, candidate.Assets, visible)
+	if refusal != nil {
+		t.mu.Unlock()
+		return out, refusal
+	}
 	t.mu.Unlock()
+	out.AI = t.applicationAIUsage(m, ref, out.AI)
 	for _, binding := range out.Artifact.Model {
 		if binding.Ref.Kind != platform.AssetObject {
 			continue

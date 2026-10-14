@@ -233,12 +233,14 @@ func applicationAssetRoles(asset ReleaseAsset) ([]ApplicationRole, error) {
 		}
 	}
 	var fields []FieldInfo
-	if asset.Ref.Kind == AssetObject && len(descriptor.Fields) > 0 {
-		if err := json.Unmarshal(descriptor.Fields, &fields); err != nil {
+	if asset.Ref.Kind == AssetObject {
+		info, err := queryObjectDescriptor(asset.Body)
+		if err != nil {
 			return nil, err
 		}
+		fields = info.Fields
 	}
-	for _, field := range append(slices.Clone(descriptor.Entity.Fields), fields...) {
+	for _, field := range fields {
 		for _, role := range field.Read {
 			value := add(role)
 			value.ReadFields = append(value.ReadFields, field.Name)

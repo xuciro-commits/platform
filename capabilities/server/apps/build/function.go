@@ -29,6 +29,9 @@ func (b *Build) checkFunction(f Function) error {
 	if _, ok := b.installed[f.Object]; !ok {
 		return fmt.Errorf("Function %s needs a published object of this builder", f.Name)
 	}
+	if f.Proposal != nil && f.Proposal.HandoffRole != "" && !slices.Contains(b.Manifest().AllRoles(), f.Proposal.HandoffRole) {
+		return fmt.Errorf("The proposal reviewer must hold a declared role")
+	}
 	if err := b.host.ValidateInstallFunction(f.Definition()); err != nil {
 		return err
 	}

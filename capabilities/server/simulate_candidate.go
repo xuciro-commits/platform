@@ -631,6 +631,21 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	}
 	apps := []platform.App{identity}
 	hasFunctions := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFunction })
+	hasFlow := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFlow })
+	hasProposal := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
+		if a.Ref.Kind != platform.AssetFunction {
+			return false
+		}
+		var definition platform.AIFunction
+		return json.Unmarshal(a.Body, &definition) == nil && definition.Proposal != nil
+	})
+	if hasProposal && !hasFlow {
+		app, err := fresh(platform.WorkApp)
+		if err != nil {
+			return nil, err
+		}
+		apps = append(apps, app)
+	}
 	if hasFunctions {
 		app, err := fresh(platform.AIApp)
 		if err != nil {
@@ -662,6 +677,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	if err != nil {
 		return nil, err
 	}
+	sandbox.simulation = true
 	sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 	for digest, raw := range environment.Modules {
 		if err := sandbox.files().Put(context.Background(), artifactKey(sandbox.ID, digest), raw, "application/wasm"); err != nil {
@@ -707,7 +723,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			return nil, err
 		}
 		for _, action := range object.Actions {
-			if action.Approval != nil {
+			if action.Approval != nil && action.Adoption == nil {
 				return nil, fmt.Errorf("%s needs an approval test environment", asset.Ref)
 			}
 		}

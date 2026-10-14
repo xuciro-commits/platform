@@ -102,12 +102,12 @@ type entityType struct {
 func viewOf(m platform.Member, et *entityType) (view *entityType, hidden []platform.FieldInfo) {
 	roles := m.RolesIn(et.info.App)
 	readable := func(f platform.FieldInfo) bool {
-		if !f.ReadsAny(roles) {
+		if !f.ReadsAny(roles) || m.AIContext && f.AIInput != nil && !*f.AIInput {
 			return false
 		}
 		if f.AliasOf != "" {
 			target, found := et.info.Field(f.AliasOf)
-			return found && target.ReadsAny(roles)
+			return found && target.ReadsAny(roles) && !(m.AIContext && target.AIInput != nil && !*target.AIInput)
 		}
 		return true
 	}

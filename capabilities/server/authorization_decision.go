@@ -355,7 +355,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 			if !known && q.Action != "" {
 				continue
 			} // payload validation owns unknown keys
-			allowed := known && field.ReadsAny(c.RolesIn(et.info.App))
+			allowed := known && field.ReadsAny(c.RolesIn(et.info.App)) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
 			if et.info.Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
 				allowed = t.knowledgeSourceReadable(store, c.Member, q.Record, name)
 			}

@@ -4,7 +4,19 @@ import type { AuthorityDeclarationJson } from "./platform/kernel/v1alpha1/author
 import type { ChangeRecordJson, SubmissionJson } from "./platform/kernel/v1alpha1/change_pb";
 import type { EntityRefJson } from "./platform/kernel/v1alpha1/identity_pb";
 
+export type AIApplicationTotal = {
+  resource?: AssetRef;
+  application: AssetBinding;
+  calls: number;
+  sharedCalls: number;
+  input: number;
+  output: number;
+  cost: number;
+  costUnknown: number;
+};
+
 export type AIFunction = {
+  proposal?: ProposalPolicy;
   conversation?: boolean;
   name: string;
   title: string;
@@ -28,6 +40,7 @@ export type AIQuota = {
 };
 
 export type AIUsage = {
+  applications?: AIApplicationTotal[];
   calls: Usage[];
   totals: Total[];
 };
@@ -74,6 +87,7 @@ export type Account = {
 };
 
 export type Action = {
+  adoption?: ProposalAdoption;
   schemaVersion?: SchemaVersion;
   schema: string;
   target: string;
@@ -277,6 +291,31 @@ export type Application = {
   concepts?: AppConcept[];
 };
 
+export type ApplicationAI = {
+  resource: AssetBinding;
+  placement: string;
+  model?: string;
+  handoffRole?: string;
+  adoptions: string[];
+  checkpoints: string[];
+  evaluations: ApplicationAIEvaluation[];
+  calls: number;
+  sharedCalls: number;
+  input: number;
+  output: number;
+  cost: number;
+  costUnknown: number;
+};
+
+export type ApplicationAIEvaluation = {
+  id: string;
+  candidate: string;
+  state: string;
+  model: string;
+  quality: number;
+  costUsd: number;
+};
+
 export type ApplicationAgentBudget = {
   resource: AssetBinding;
   budget: Budget;
@@ -455,6 +494,7 @@ export type ApplicationRunSummary = {
 };
 
 export type ApplicationRuntime = {
+  ai: ApplicationAI[];
   artifact: ApplicationArtifact;
   state: string;
   scope: string;
@@ -1230,6 +1270,7 @@ export type FieldCondition = {
 };
 
 export type FieldInfo = {
+  aiInput?: boolean;
   sourceType?: "record" | "user-input" | "external-input" | "generated";
   constraints?: InputConstraints;
   range?: DateRange;
@@ -1329,6 +1370,16 @@ export type FunctionRun = {
   changed: Stamp;
   archived?: boolean;
   versionPins?: RecordVersionPin[];
+  sourceValues?: Record<string, unknown>;
+  sourceRevision?: number;
+  decision?: "pending" | "adopted" | "rejected" | "expired";
+  expiresAt?: string;
+  reviewers?: string[];
+  decidedBy?: string;
+  decidedAt?: string;
+  adoptedAction?: string;
+  adoptedChange?: string;
+  amendments?: unknown;
   applications?: AssetBinding[];
   question?: string;
   history?: string[];
@@ -2901,6 +2952,24 @@ export type PropertyType = {
   type: string;
 };
 
+export type ProposalAdoption = {
+  function: FunctionRef;
+  input: string;
+  mapping: ProposalInput[];
+};
+
+export type ProposalInput = {
+  output: string;
+  input: string;
+};
+
+export type ProposalPolicy = {
+  handoffRole?: string;
+  confidenceField?: string;
+  minimumConfidence?: number;
+  expiresAfterSeconds: number;
+};
+
 export type ProtocolCall = {
   target: string;
   idempotencyKey: string;
@@ -3091,7 +3160,8 @@ export type ReleaseDraftsRequest = {
 
 export type ReleaseEvaluationRequest = {
   candidateId: string;
-  planId: string;
+  planId?: string;
+  agent?: string;
   key: string;
 };
 
@@ -3169,6 +3239,7 @@ export type ReleaseUpgradePlan = {
 };
 
 export type Result = {
+  sources?: string[];
   value: Value;
   reasons?: Issue[];
 };
@@ -3244,6 +3315,7 @@ export type SampleSet = {
 };
 
 export type SavedReleaseReview = {
+  ai?: ApplicationAI[];
   preview: ReleasePreview;
   assets: ReleaseAsset[];
   active: boolean;
@@ -3938,6 +4010,9 @@ export type Upload = {
 };
 
 export type Usage = {
+  applications?: AssetBinding[];
+  resource?: AssetRef;
+  run?: string;
   at: string;
   member: string;
   agent?: boolean;

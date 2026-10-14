@@ -172,6 +172,7 @@
 | 工作流 | D5 | 应用 API、平台应用 `flow` | 原生动作/等待/人工/并行/子流程/AI/计算、持久 scope/frame、超时/补偿、取消与追踪。 | platform.Flow；[ADR-0044](ADR/0044-capability-fabric.md) |
 | AI 提供商与模型 (ADR-0015, ADR-0029) | D6 | 平台应用 `ai` | 多供应商、受权模型、预算/熔断、SSE 及接受时模型绑定。 | capabilities/server/apps/ai/ai.go, aicall.go；[ADR-0015](ADR/0015-ai-providers.md), [ADR-0029](ADR/0029-ai-control-plane.md) |
 | 类型化 AI 函数 (ADR-0043 24b–24c 部分实现) | D6 | 应用 API、宿主 AI 模型效果路径 | 强类型建议、Build 版本/独立结果、页面/Flow 复用与评测门禁；ADR-0046 §6.80增加可选受权问题/原调用历史输入。真实模型质量未验收。 | platform.AIFunction, Caller.RequestFunction；[ADR-0043](ADR/0043-typed-ai-functions.md) |
+| AI 与人工装配（ADR-0116） | D6 | 原函数/智能体、Build 事务、Work、AI 账目 | 持久提议、类型化修改与普通事务采纳、整事务审批、低置信度接管、上下文排除/来源遮蔽、应用用量与候选评测门禁；本地激活和晋级激活共用门禁。合成验证不代表真实模型品质。 | [ADR-0116 As built](ADR/0116-ai-and-human-in-applications.md#5-as-built) |
 | 专业模型视图（ADR-0110） | D4 | 原页面契约、Build、宿主模型读取与 UI/App | 模型引用配置分层图、谱系与矩阵；矩阵单元格和视觉表达式复用原规则与权限。工作站复用原表格/表单/状态条。 | [ADR-0110 As built](ADR/0110-professional-components.md#5-as-built)；未新增 UI 组件，未退役原生 MES；独立作者配置和负责人走查待验收 |
 | 应用设计台（ADR-0108） | D4 | Build、Shell、UI/App、原编辑/发布 owner | 一个应用上下文的 Model / Behavior / Interface / Assemble / Verify；工件内业务概念元数据、原草稿页签、声明依赖跳转、可选原表单引导、应用候选筛选和运行投影。 | [ADR-0108 As built](ADR/0108-application-studio.md#5-as-built)；真实构建者体验待验收 |
 | 业务规则语言（ADR-0101） | D4 | 应用 API、Build、页面运行时 | 动作/事务守卫、赋值、计算字段、表格条件和页面 Rule 共用同一 Go 求值器，浏览器使用同源 Go/Wasm；声明路径/查询集合、权限读取、严格缺值/除零与只读旧发布兼容。 | [ADR-0101 As built](ADR/0101-one-rule-language.md#5-as-built) |

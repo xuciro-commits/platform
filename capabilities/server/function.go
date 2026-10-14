@@ -90,6 +90,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	for _, field := range f.Fields {
 		sources = append(sources, sourceRef+"#"+field)
 	}
+	member.AIContext = true
 	applicant := platform.ActingCaller(c, member, owner, false)
 	decision := t.authorizeCapability(applicant, owner, f.Name, f.Roles, f.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition})
 	if refusal := authorizationRefusal(decision); refusal != nil {
@@ -109,11 +110,16 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	input := map[string]any{}
 	for _, name := range f.Fields {
 		field, found := et.info.Field(name)
-		if !found {
+		if !found || field.AIInput != nil && !*field.AIInput {
 			store.mu.Unlock()
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 		}
 		input[name] = row.value.FieldByIndex(field.Index).Interface()
+	}
+	sourceRevision := recordOf(row.value).Revision
+	sourceValues := map[string]json.RawMessage{}
+	for field, value := range input {
+		sourceValues[field] = platform.Raw(value)
 	}
 	payload, historySources, conversationErr := t.functionConversation(store, member, request, f, owner, sourceRef, definition, version, input)
 	raw, err := json.Marshal(payload)
@@ -144,7 +150,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function dependencies cannot be bound")
 	}
-	call := platform.FunctionCall{Applications: applications, Definition: definition, Dependencies: candidate.ID, Model: ask.Model, InputHash: hash, Sources: sources, Source: sourceRef, Version: version, Release: release}
+	call := platform.FunctionCall{SourceValues: sourceValues, SourceRevision: sourceRevision, Applications: applications, Definition: definition, Dependencies: candidate.ID, Model: ask.Model, InputHash: hash, Sources: sources, Source: sourceRef, Version: version, Release: release}
 	if ask.Model == "" {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function needs a bound model")
 	}
@@ -192,6 +198,12 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 		return false
 	}
 	for i, field := range f.Fields {
+		if sourceTypeInfo == nil {
+			return false
+		}
+		if current, ok := sourceTypeInfo.info.Field(field); !ok || current.AIInput != nil && !*current.AIInput {
+			return false
+		}
 		ref := binding.Call.Source + "#" + field
 		if binding.Call.Sources[i] != ref {
 			return false
@@ -218,7 +230,7 @@ func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
 	}
 	for _, name := range f.Fields {
 		field, ok := et.info.Field(name)
-		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "integer", "decimal", "boolean"}, field.Type) || slices.Contains(h.t.narrowable(et), name) {
+		if !ok || field.AIInput != nil && !*field.AIInput || !slices.Contains([]string{"text", "longtext", "choice", "integer", "decimal", "boolean"}, field.Type) || slices.Contains(h.t.narrowable(et), name) {
 			return fmt.Errorf("function %s needs direct scalar source fields", f.Name)
 		}
 	}

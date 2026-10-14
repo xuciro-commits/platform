@@ -403,6 +403,7 @@ type Total = platform.AITotal
 // administrators see every enabled model), "ai-usage" (the caller's own;
 // administrators see everyone's): recent calls, newest first, and totals.
 func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
+	visibleApps := c.VisibleApplications()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	admin := c.Holds(c.App, Admin)
@@ -428,11 +429,34 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		}
 		return out, nil
 	}
+	byApplication := []platform.AIApplicationTotal{}
 	calls, totals := []Usage{}, []Total{}
 	for i := len(a.usage) - 1; i >= 0; i-- {
 		u := a.usage[i]
 		if !admin && u.Member != c.ID {
 			continue
+		}
+		shared := len(u.Applications) > 1
+		u.Applications = slices.DeleteFunc(slices.Clone(u.Applications), func(binding platform.AssetBinding) bool { return !slices.Contains(visibleApps, binding.Ref) })
+		for _, binding := range u.Applications {
+			j := slices.IndexFunc(byApplication, func(total platform.AIApplicationTotal) bool {
+				return total.Application == binding && (total.Resource == nil && u.Resource == nil || total.Resource != nil && u.Resource != nil && *total.Resource == *u.Resource)
+			})
+			if j < 0 {
+				byApplication = append(byApplication, platform.AIApplicationTotal{Application: binding, Resource: u.Resource})
+				j = len(byApplication) - 1
+			}
+			total := &byApplication[j]
+			total.Calls++
+			total.Input += u.Input
+			total.Output += u.Output
+			total.Cost += u.Cost
+			if shared {
+				total.SharedCalls++
+			}
+			if !u.CostReported {
+				total.CostUnknown++
+			}
 		}
 		if len(calls) < 200 {
 			calls = append(calls, u)
@@ -457,7 +481,7 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 			t.Failed++
 		}
 	}
-	return AIUsage{Calls: calls, Totals: totals}, nil
+	return AIUsage{Calls: calls, Totals: totals, Applications: byApplication}, nil
 }
 
 // AIUsage is model calls metered from the journal, and their totals per day, member and model.

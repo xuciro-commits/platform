@@ -9,6 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"bytes"
+	"io"
+	"net/http"
+	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
@@ -189,14 +193,14 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	const tenant = "application-agents"
 	at := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
 	compose := func(id string) *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "agent:admin", "flow:member")}, work.New(id), flow.New(id), build.New(id), NewAgents(id))
+		return composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "agent:admin", "flow:member", "platform:admin", "ai:admin")}, work.New(id), flow.New(id), build.New(id), NewAgents(id), ai.New(id))
 	}
 	source := compose(tenant)
 	var entries []Entry
 	source.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	decide(t, source, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{"name": "case", "title": "Case", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
 	decide(t, source, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
-	decide(t, source, "builder", build.ID, build.AgentType+".create", build.AgentType, "AG", map[string]any{"name": "assist", "title": "Assist", "description": "Prepare case updates", "instructions": "Prepare a note update", "tools": []string{"build.case.edit"}, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Takes: []string{"build.case.edit"}}}}, at)
+	decide(t, source, "builder", build.ID, build.AgentType+".create", build.AgentType, "AG", map[string]any{"name": "assist", "title": "Assist", "description": "Prepare case updates", "instructions": "Prepare a note update", "tools": []string{"build.case.edit"}, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Expect: "Ready"}}}, at)
 	decide(t, source, "builder", build.ID, build.SchemaAgentPublish, build.AgentType, "AG", map[string]any{}, at)
 	decide(t, source, "builder", build.ID, build.ProcessType+".create", build.ProcessType, "FLOW", map[string]any{"name": "closecase", "title": "Close case", "manual": true, "steps": []build.ProcessStep{{Name: "done", Kind: "end"}}}, at)
 	resources := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.case"}, {App: build.ID, Kind: platform.AssetAction, Name: "build.case.edit"}, {App: build.ID, Kind: platform.AssetAgent, Name: "assist"}, {App: build.ID, Kind: platform.AssetFlow, Name: "build.closecase"}}
@@ -211,6 +215,19 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureModel := func(tn *Tenant) {
+		decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/probe"}, at)
+		decide(t, tn, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://localhost:1", "wire": "openai"}, at)
+		decide(t, tn, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]any{"access": "users"}, at)
+		tn.AIClient = func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(bytes.NewBufferString(`{"choices":[{"message":{"content":"Ready"}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`))}, nil
+		}
+	}
+	configureModel(source)
+	if _, err := source.EvaluateRelease(member, ReleaseEvaluationRequest{CandidateID: saved, Agent: "build.assist", Key: "agent"}, at); err != nil {
+		t.Fatal(err)
+	}
+	source.Evaluate(at)
 	if _, err := source.ActivateRelease(member, saved, "activate-app", at); err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +238,15 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	}
 	target := compose("application-target")
 	target.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
-	if _, err := PromoteCandidate(source, target, saved, "promote-app", true, memberOf(t, target, "builder"), at); err != nil {
+	if _, err := PromoteCandidate(source, target, saved, "promote-app", false, memberOf(t, target, "builder"), at); err != nil {
+		t.Fatal(err)
+	}
+	configureModel(target)
+	if _, err := target.EvaluateRelease(memberOf(t, target, "builder"), ReleaseEvaluationRequest{CandidateID: saved, Agent: "build.assist", Key: "agent"}, at); err != nil {
+		t.Fatal(err)
+	}
+	target.Evaluate(at)
+	if _, err := target.ActivateRelease(memberOf(t, target, "builder"), saved, "activate", at); err != nil {
 		t.Fatal(err)
 	}
 	installed, refusal := target.ApplicationRuntimeOf(memberOf(t, target, "builder"), root, at)

@@ -14,3 +14,6 @@ func (d *stagedDecision) RecordDecisionTrace(event platform.DecisionTrace) {
 		d.tenant.simulationTrace(event)
 	}
 }
+
+func (r runtime) Simulating() bool         { return r.t.simulation }
+func (d *stagedDecision) Simulating() bool { return d.simulation || d.tenant.simulation }

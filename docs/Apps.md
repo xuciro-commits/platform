@@ -378,6 +378,12 @@ Go 类型内嵌 `platform.Record`，由 `platform.Entity` 声明：
 
 ## 4. 声明流程
 
+AI 业务采纳（[ADR-0116](ADR/0116-ai-and-human-in-applications.md#5-as-built)）：在 Model 的字段配置中允许或排除 AI context，接收建议的字段声明 Generated source。在 Functions 编辑器开启 Produce a business proposal，指定 Handover role、Confidence output/Minimum confidence 和有效期。在原动作 Transaction 中开启 Adopt an AI proposal，选函数与版本，映射输出到已有类型化输入；事务将输入赋给生成字段。需要人工检查点时在原 Approval 勾选 Wait for approval，选择审批角色，保持原业务状态。保存函数、对象和应用，将它们放进同一候选。
+
+页面沿原 AI function 呈现显示建议；原调用记录也能打开 Proposal review，复核来源和有效期、修改输入后采纳或申请审批。低置信度进入原 work 收件箱，指定角色使用同一记录详情裁决。审批前业务记录不变；放行后原申请人执行完整事务，裁决记录保留实际提交人、修改值及原收据。过期提议需重新申请推断。Verify 的隔离试跑可检查提议，采纳会被拒绝。
+
+应用 Verify 的 AI placement and evaluations 显示位置、模型、用量、费用、检查点和评测。发布审阅中函数沿原 measured evaluation；智能体点击 Run declared cases，再 Refresh evaluation reports，每例三次通过后才可激活。智能体评测固定保存候选和当前 agent/model 配置，编辑工作草稿不会改报告。跨环境先晋级保存候选，在目标配置模型和连接，再按封存评测集完成本地实测后激活；`POST /v1/releases/evaluations` 的 `planId` 可传目标本地 TestPlan ID 或候选 evaluation-set 名，智能体改传 `agent: build.<name>`，两者二选一，重试保持原 key。
+
 代码使用 `platform.Flow`，租户使用 `build.process`，都由原 Flow/Work 执行。步骤明确 `kind`，数据使用 `Binding{source,path,step,value}`，条件使用结构化 Predicate；`next/error/cases/body` 决定控制路径。ForEach/While 是有界 scope，break/continue 只影响所在循环；fork `all` 等待全部，`any` 等待首个成功路径。保存和发布由同一 owner compiler 校验；布局不决定运行顺序。
 
 持续 PostgreSQL 来源：在 Data sources 中选已 Check 就绪的 PostgreSQL 连接、表与唯一递增的 Incremental column，将 Rows go to 选为 A continuous Flow，保存并 Publish。每个原 Flow 实例独立持有消费位置，Source 不生成对象/数据集行，也不提供 Pull now/Reset cursor；暂停 Source 可停止读取，保持配置不变再 Publish 从原位置继续。Flow 设置的 Continuous source intake 保存 `Source`（来源 name）、`Batch`、`State`、`FrameBytes`、`DeadLetter`、`Window` 及 `Intake:{sourceRecord,key,partition,eventTime,value,fields}`，声明随原 Process 版本/候选保留。分区列为 1–8 个非空字符串列，事件时间为数据库时间戳；`fields` 保留业务 Action 所需的非采样列，修改来源/连接配置后旧实例拒绝换绑。默认原生链以固定 f32 kernel 聚合，`threshold.field`（默认 `mean`）映射到触发项 `reading`，经原 Action 执行；只读结果属于该应用/实例/版本，intake-only 批保留最近完成窗口，完成的空窗口替换为 `[]`。实例中的大算子输出可能是带 `output:true` 的摘要/大小引用，须沿原成员权限读 frame 核对，不能当作数值或任意文件句柄。停止/续接、死信及当前验证层级见 [ADR-0047 §13.5](ADR/0047-platform-composition-and-workspaces.md#135-当前边界)。

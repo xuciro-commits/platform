@@ -20,6 +20,7 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
+	simulation           bool
 	definitions          map[string]*DecisionDefinition
 	schemaVersion        *platform.SchemaVersion
 	retirements          []migrationRetirement
@@ -108,7 +109,7 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	connectors := kernel.NewConnectors()
 	connectors.Restore(descriptors, marks)
 	before, _ := canonicalDigest(notices)
-	return &stagedDecision{tenant: t, records: t.records.forkRecords(),
+	return &stagedDecision{simulation: t.simulation, tenant: t, records: t.records.forkRecords(),
 		logs: map[*platform.Ledger]*kernel.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
 		notices: notices, noticeBase: noticeSeq, noticeSeq: noticeSeq, noticeBefore: before,

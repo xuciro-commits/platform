@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:36e0db8aaf7de216",
+  "revision": "sha256:f662312eb3d8e41a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12271,6 +12271,7 @@
       "web/packages/app/src/widgets/CompositeViews.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
+      "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
@@ -12435,6 +12436,7 @@
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/Input.tsx",
       "web/packages/app/src/widgets/Observation.tsx",
+      "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/RecordWork.tsx",
       "web/packages/app/src/widgets/ScanInput.tsx",
       "web/packages/build/src/automate/automation.tsx",
@@ -12690,6 +12692,7 @@
       "web/packages/app/src/widgets/Observation.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/Progress.tsx",
+      "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/Range.tsx",
       "web/packages/app/src/widgets/RecordActivity.tsx",
@@ -12846,6 +12849,7 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/composites/catalog-examples.tsx",
+      "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",

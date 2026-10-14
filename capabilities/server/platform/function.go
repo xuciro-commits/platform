@@ -23,34 +23,37 @@ type FunctionDefinitions interface {
 // of one object (ADR-0043). It has no tools, code or business writes; the
 // application's ordinary Reply action decides whether to adopt the answer.
 type AIFunction struct {
-	Conversation   bool     `json:"conversation,omitempty"`
-	Name           string   `json:"name"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Object         string   `json:"object"`
-	Fields         []string `json:"fields"`
-	Instructions   string   `json:"instructions"`
-	Output         []Field  `json:"output"`
-	Model          string   `json:"model,omitempty"`
-	MaxInputBytes  int      `json:"maxInputBytes"`
-	MaxOutputBytes int      `json:"maxOutputBytes"`
-	MaxTokens      int      `json:"maxTokens"`
-	Roles          []string `json:"roles"`
+	Proposal       *ProposalPolicy `json:"proposal,omitempty"`
+	Conversation   bool            `json:"conversation,omitempty"`
+	Name           string          `json:"name"`
+	Title          string          `json:"title"`
+	Description    string          `json:"description"`
+	Object         string          `json:"object"`
+	Fields         []string        `json:"fields"`
+	Instructions   string          `json:"instructions"`
+	Output         []Field         `json:"output"`
+	Model          string          `json:"model,omitempty"`
+	MaxInputBytes  int             `json:"maxInputBytes"`
+	MaxOutputBytes int             `json:"maxOutputBytes"`
+	MaxTokens      int             `json:"maxTokens"`
+	Roles          []string        `json:"roles"`
 }
 
 // FunctionCall identifies the exact accepted input without returning private
 // prompt bytes. Apps retain Sources alongside derived answer fields so their
 // Entity.Derived declarations enforce current read permissions (ADR-0033).
 type FunctionCall struct {
-	Applications []AssetBinding `json:"applications,omitempty" field:"readonly" type:"json"`
-	Definition   string         `json:"definition"`
-	Dependencies string         `json:"dependencies"`
-	Model        string         `json:"model"`
-	InputHash    string         `json:"inputHash"`
-	Sources      []string       `json:"sources"`
-	Source       string         `json:"source"`
-	Version      int            `json:"version,omitempty"`
-	Release      string         `json:"release,omitempty"`
+	SourceValues   map[string]json.RawMessage `json:"sourceValues,omitempty" field:"readonly" type:"json" title:"Accepted AI inputs"`
+	SourceRevision uint32                     `json:"sourceRevision,omitempty"`
+	Applications   []AssetBinding             `json:"applications,omitempty" field:"readonly" type:"json"`
+	Definition     string                     `json:"definition"`
+	Dependencies   string                     `json:"dependencies"`
+	Model          string                     `json:"model"`
+	InputHash      string                     `json:"inputHash"`
+	Sources        []string                   `json:"sources"`
+	Source         string                     `json:"source"`
+	Version        int                        `json:"version,omitempty"`
+	Release        string                     `json:"release,omitempty"`
 }
 
 // FunctionRequest separates the readable source record from the decision's
@@ -99,6 +102,14 @@ func (f AIFunction) Check() error {
 		f.MaxInputBytes < 1 || f.MaxInputBytes > 32<<10 || f.MaxOutputBytes < 1 || f.MaxOutputBytes > 32<<10 ||
 		f.MaxTokens < 1 || f.MaxTokens > 4096 {
 		return fmt.Errorf("function %s needs named, typed inputs/outputs, roles and bounded instructions/bytes/tokens", f.Name)
+	}
+	if f.Proposal != nil {
+		if err := f.Proposal.Check(f.Output); err != nil {
+			return err
+		}
+		if f.Conversation {
+			return fmt.Errorf("Conversation advice cannot be adopted as a business proposal")
+		}
 	}
 	seen := map[string]bool{}
 	for _, name := range f.Fields {
@@ -187,12 +198,12 @@ func (f AIFunction) ValidateOutput(raw []byte) error {
 			}
 		case "integer":
 			var n int64
-			if json.Unmarshal(value, &n) != nil {
+			if json.Unmarshal(value, &n) != nil || f.Proposal != nil && field.Name == f.Proposal.ConfidenceField && (n < 0 || n > 1) {
 				return fmt.Errorf("function output has an invalid integer")
 			}
 		case "decimal":
 			var n float64
-			if json.Unmarshal(value, &n) != nil {
+			if json.Unmarshal(value, &n) != nil || f.Proposal != nil && field.Name == f.Proposal.ConfidenceField && (n < 0 || n > 1) {
 				return fmt.Errorf("function output has an invalid decimal")
 			}
 		}

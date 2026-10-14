@@ -286,6 +286,23 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		t.quarantine(fmt.Errorf("external answer for an unknown or different effect %s", id))
 		return
 	}
+	if usage != nil {
+		copy := *usage
+		copy.Applications = slices.Clone(before.Effect.Applications)
+		copy.Run = before.Effect.ID
+		if before.Effect.Endpoint == modelEndpoint {
+			var ask modelAsk
+			if json.Unmarshal([]byte(before.Effect.Body), &ask) == nil && ask.Function != nil {
+				owner := ask.Function.Owner
+				if owner == "" {
+					owner = before.Effect.App
+				}
+				ref := platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: ask.Function.Definition.Name}
+				copy.Resource = &ref
+			}
+		}
+		usage = &copy
+	}
 	after := &effect{Effect: before.Effect, since: before.Since}
 	markEffect(after, out, at)
 	result := acceptedEffect{Version: 1, Kind: "effect-result", Tenant: t.ID, App: PlatformApp,

@@ -62,6 +62,7 @@ type Object struct {
 
 // Field is one field of a defined object, as a person describes it.
 type Field struct {
+	AIInput    *bool                  `json:"aiInput,omitempty" title:"Allow AI context"`
 	SourceType string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
 	Property   *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
 	Name       string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`

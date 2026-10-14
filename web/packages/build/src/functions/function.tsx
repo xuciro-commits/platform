@@ -12,10 +12,10 @@ import { Button, Card, Checkbox, Input, FlowCanvas, PageHeader, Panel, Select, T
 import { useEffect, useState } from "react";
 import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
 
-type FunctionDraft = { conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
+type FunctionDraft = { proposal?:Api.ProposalPolicy; conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
   instructions: string; output: Api.Field[]; model?: string; maxInputBytes: number; maxOutputBytes: number; maxTokens: number;
   roles: string[]; version?: number; published?: string };
-type Source = WorkflowObject & { fields: { name: string; title: string; type: string; read?: string[] }[] };
+type Source = WorkflowObject & { fields: { name: string; title: string; type: string; aiInput?:boolean;read?: string[] }[] };
 type Stage = "settings" | "source" | "model" | "output";
 const empty = (): FunctionDraft => ({ id: "", revision: 0, name: "", title: "", description: "", object: "", fields: [], instructions: "",
   output: [{ name: "summary", type: "string", required: true, description: "" }], maxInputBytes: 4096, maxOutputBytes: 1024, maxTokens: 256, roles: ["builder", "user"] });
@@ -53,7 +53,7 @@ export function FunctionEditor({ id }: { id: string }) {
   }, busy);
   useEffect(() => { if (query.data?.record && !dirty && !busy) setDraft(loaded(query.data.record)); }, [query.data, dirty, busy]);
   const source = objects.find((object) => `build.${object.name}` === draft.object);
-  const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)) ?? [];
+  const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)&&field.aiInput!==false) ?? [];
   const roles = [...new Set(["builder", ...(source?.access?.length ? source.access.filter((access) => access.read !== "none").map((access) => access.role) : ["user"])])];
   const change = (patch: Partial<FunctionDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); };
   const updateOutput = (index: number, patch: Partial<Api.Field>) => change({ output: draft.output.map((field, i) => i === index ? { ...field, ...patch } : field) });
@@ -72,9 +72,9 @@ export function FunctionEditor({ id }: { id: string }) {
   };
   const save = async (): Promise<number | undefined> => {
     const target = draft.id || createID;
-    const { conversation,name, title, description, object, fields, instructions, output, model, maxInputBytes, maxOutputBytes, maxTokens, roles } = draft;
+    const { proposal,conversation,name, title, description, object, fields, instructions, output, model, maxInputBytes, maxOutputBytes, maxTokens, roles } = draft;
     if (!await decide(`build.function.${draft.id ? "edit" : "create"}`, { type: "build.function", id: target },
-      { conversation:conversation??false,name, title, description, object, fields, instructions, output, model: model ?? "", maxInputBytes, maxOutputBytes, maxTokens, roles },
+      { proposal:proposal??null,conversation:conversation??false,name, title, description, object, fields, instructions, output, model: model ?? "", maxInputBytes, maxOutputBytes, maxTokens, roles },
       { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
     const revision = draft.id ? draft.revision + 1 : 1;
     if (!draft.id) {
@@ -133,6 +133,14 @@ export function FunctionEditor({ id }: { id: string }) {
       <FunctionMap draft={draft} source={source?.title} chosen={chosen} onChoose={setChosen} />
       <Panel role="region" aria-label={t("Function properties")} className="grid min-w-0 content-start gap-3 p-3">
         {chosen === "settings" && <>
+ <Checkbox checked={!!draft.proposal} onChange={enabled=>change({proposal:enabled?{expiresAfterSeconds:3600}:undefined,conversation:false})}>{t("Produce a business proposal")}</Checkbox>
+ {draft.proposal&&<fieldset className="grid gap-2 rounded border border-border p-2"><legend className="text-xs">{t("Proposal review policy")}</legend>
+ <label className="grid gap-1 text-xs">{t("Proposal expiry (seconds)")}<Input type="number" min={1} max={604800} value={draft.proposal.expiresAfterSeconds} onChange={event=>change({proposal:{...draft.proposal!,expiresAfterSeconds:Number(event.target.value)}})}/></label>
+ <label className="grid gap-1 text-xs">{t("Handover role")}<Select value={draft.proposal.handoffRole??""} onChange={event=>change({proposal:{...draft.proposal!,handoffRole:event.target.value||undefined,confidenceField:undefined,minimumConfidence:0}})}><option value="">{t("Original adoption action roles")}</option>{roles.map(role=><option key={role} value={role}>{role}</option>)}</Select></label>
+ {draft.proposal.handoffRole&&<><label className="grid gap-1 text-xs">{t("Confidence output")}<Select value={draft.proposal.confidenceField??""} onChange={event=>change({proposal:{...draft.proposal!,confidenceField:event.target.value||undefined,minimumConfidence:event.target.value?0.5:0}})}><option value="">{t("Always hand over")}</option>{draft.output.filter(field=>field.required&&["decimal","integer"].includes(field.type)).map(field=><option key={field.name} value={field.name}>{field.name}</option>)}</Select></label>
+ {!!draft.proposal.confidenceField&&<label className="grid gap-1 text-xs">{t("Minimum confidence")}<Input type="number" min={0} max={1} step={0.05} value={draft.proposal.minimumConfidence??0} onChange={event=>change({proposal:{...draft.proposal!,minimumConfidence:Number(event.target.value)}})}/></label>}</>}
+ </fieldset>}
+
           <label className="grid gap-1 text-xs">{t("Function name")}<Input disabled={!!draft.published} value={draft.name} onChange={(e) => change({ name: e.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Function title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Function description")}<Textarea rows={3} value={draft.description} onChange={(e) => change({ description: e.target.value })} /></label>
@@ -151,7 +159,7 @@ export function FunctionEditor({ id }: { id: string }) {
         </>}
         {chosen === "model" && <>
           <label className="grid gap-1 text-xs">{t("Model identifier (empty: application default)")}<Input value={draft.model ?? ""} onChange={(e) => change({ model: e.target.value })} placeholder="provider/model" /></label>
-          <Checkbox checked={draft.conversation??false} onChange={conversation=>change({conversation})}>{t("Accept conversation questions and retained call history")}</Checkbox>
+          <Checkbox disabled={!!draft.proposal} checked={draft.conversation??false} onChange={conversation=>change({conversation})}>{t("Accept conversation questions and retained call history")}</Checkbox>
           {draft.conversation&&<p className="text-xs text-muted">{t("Conversation input contains the authorized record, current question and up to eight completed calls. The full input still uses the original byte and token budgets.")}</p>}
           <label className="grid gap-1 text-xs">{t("Model instructions")}<Textarea rows={8} value={draft.instructions} onChange={(e) => change({ instructions: e.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Maximum tokens")}<Input draftKey="maximum-tokens" type="number" min={1} max={4096} value={draft.maxTokens} onChange={(e) => change({ maxTokens: Number(e.target.value) })} /></label>
