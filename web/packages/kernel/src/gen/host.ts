@@ -283,6 +283,7 @@ export type ApplicationAgentBudget = {
 };
 
 export type ApplicationArtifact = {
+  samples: AssetBinding[];
   ref: AssetRef;
   version: string;
   title: string;
@@ -624,6 +625,7 @@ export type Calendar = {
 };
 
 export type CandidateSimulation = {
+  actors?: SimulationActor[];
   candidateId: string;
   testId?: string;
   model?: string;
@@ -634,6 +636,10 @@ export type CandidateSimulation = {
 };
 
 export type CandidateSimulationRequest = {
+  applicationId?: string;
+  candidateId?: string;
+  actors?: string[];
+  sample?: string;
   objectId?: string;
   processId?: string;
   functionId?: string;
@@ -740,6 +746,13 @@ export type Citation = {
   step: number;
 };
 
+export type Collection = {
+  status?: string;
+  items: Item[];
+  complete: boolean;
+  withheld?: boolean;
+};
+
 export type Column = {
   name: string;
   title: string;
@@ -839,6 +852,15 @@ export type Constraint = {
   reads?: RuleReadSpec;
 };
 
+export type Context = {
+  sources?: string[];
+  refs: Record<string, Value>;
+  sets?: Record<string, Collection>;
+  me: string;
+  now: string;
+  today: string;
+};
+
 export type ContextView = {
   type: string;
   record: unknown;
@@ -921,7 +943,24 @@ export type DecisionDefinition = {
   applications: AssetBinding[];
 };
 
+export type DecisionTrace = {
+  kind: string;
+  name?: string;
+  type?: string;
+  id?: string;
+  operation?: string;
+  expression?: Expr;
+  reads?: Context;
+  result?: Result;
+  request?: AuthzRequest;
+  authorization?: Verdict;
+  before?: unknown;
+  after?: unknown;
+  refusal?: string;
+};
+
 export type Definition = {
+  sampleSet?: SampleSet;
   contentVersion?: string;
   propertyType?: PropertyType;
   propertyVersions?: Record<string, PropertyType>;
@@ -1513,6 +1552,17 @@ export type InterfaceRecord = {
 export type InterfaceRecordPage = {
   records: InterfaceRecord[];
   total: number;
+};
+
+export type Issue = {
+  code: string;
+  at: string;
+  message: string;
+};
+
+export type Item = {
+  id: string;
+  fields: Record<string, Value>;
 };
 
 export type JointDraftRef = {
@@ -3084,6 +3134,7 @@ export type ReleasePreview = {
 };
 
 export type ReleasePreviewRequest = {
+  applicationDrafts?: boolean;
   kind?: string;
   id?: string;
   drafts?: JointDraftRef[];
@@ -3115,6 +3166,11 @@ export type ReleaseUpgradePlan = {
   candidateId: string;
   activeId: string;
   additions: ReleaseFieldAddition[];
+};
+
+export type Result = {
+  value: Value;
+  reasons?: Issue[];
 };
 
 export type RetainedArtifact = {
@@ -3174,6 +3230,17 @@ export type RunStep = {
   outcome: string;
   tokens?: number;
   sources?: string[];
+};
+
+export type SampleRecords = {
+  type: string;
+  records: unknown[];
+};
+
+export type SampleSet = {
+  name: string;
+  title: string;
+  samples: SampleRecords[];
 };
 
 export type SavedReleaseReview = {
@@ -3392,6 +3459,7 @@ export type Signal = {
 };
 
 export type SimulatedChange = {
+  before?: unknown;
   type: string;
   id: string;
   record: unknown;
@@ -3410,6 +3478,11 @@ export type SimulatedFlow = {
 };
 
 export type Simulation = {
+  traceTruncated?: boolean;
+  input?: SimulationStep;
+  trace?: DecisionTrace[];
+  read?: unknown;
+  rolledBack?: boolean;
   accepted: boolean;
   refusal?: string;
   changes: SimulatedChange[];
@@ -3421,12 +3494,21 @@ export type Simulation = {
   functionMatched?: boolean;
 };
 
+export type SimulationActor = {
+  member: string;
+  steps: Simulation[];
+  testId: string;
+  recovered: boolean;
+  passed?: boolean;
+};
+
 export type SimulationSample = {
   type: string;
   records: unknown[];
 };
 
 export type SimulationStep = {
+  read?: boolean;
   type: string;
   id: string;
   action: string;
@@ -3869,6 +3951,12 @@ export type Usage = {
   costReported?: boolean;
   millis: number;
   outcome: string;
+};
+
+export type Value = {
+  kind: string;
+  status: string;
+  value?: unknown;
 };
 
 export type ValueSchema = {

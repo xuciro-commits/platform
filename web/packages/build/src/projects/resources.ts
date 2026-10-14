@@ -3,7 +3,7 @@
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching";
+export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "sample-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -11,6 +11,7 @@ export type ResourceKindInfo = {
 };
 
 export const resourceKinds: ResourceKindInfo[] = [
+ {kind:"sample-set",type:"build.sample-set",view:"sample-set",label:"Sample set",plural:"Sample sets",ref:"sample-set"},
   { kind: "object", type: "build.object", view: "object-type", label: "Object type", plural: "Object types", ref: "object" },
   { kind: "link-type", type: "build.linktype", view: "link-type", label: "Link type", plural: "Link types", ref: "link-type" },
   { kind: "property-type", type: "build.propertytype", view: "property-type", label: "Shared property", plural: "Shared properties", ref: "property-type" },

@@ -49,7 +49,7 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 		}
 		for _, step := range steps {
 			var payload map[string]json.RawMessage
-			if !strings.HasPrefix(step.Type, ID+".") || step.Type == ObjectType || step.Type == PageType || step.Type == AppType || step.Type == TestPlanType || step.Type == ProcessType && step.Action != SchemaProcessRun && step.AdvanceSeconds == 0 || step.Type == FunctionType ||
+			if !strings.HasPrefix(step.Type, ID+".") || step.Type == ObjectType || step.Type == PageType || step.Type == AppType || step.Type == TestPlanType || step.Type == SampleSetType || step.Type == ProcessType && step.Action != SchemaProcessRun && step.AdvanceSeconds == 0 || step.Type == FunctionType ||
 				strings.TrimSpace(step.ID) == "" || step.AdvanceSeconds < 0 || step.AdvanceSeconds > 86400 ||
 				(step.Expect != "accepted" && step.Expect != "refused") || json.Unmarshal([]byte(step.Payload), &payload) != nil || payload == nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Every test step needs a candidate action or answer, record ID, JSON object, bounded time and expected outcome")
@@ -60,7 +60,11 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 			if step.Function != nil && !step.Function.Check() {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")
 			}
-			if step.Answer == "" {
+			if step.Read {
+				if step.Action != "" || step.Answer != "" || step.Flow != "" || step.Step != "" || step.AdvanceSeconds != 0 {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A read step needs only an object and record ID")
+				}
+			} else if step.Answer == "" {
 				if (step.Action == "" && step.AdvanceSeconds == 0 || step.Action != "" && !strings.HasPrefix(step.Action, step.Type+".")) || step.Flow != "" || step.Step != "" {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one candidate action or workflow answer per test step")
 				}
@@ -106,12 +110,12 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 		}
 	}
 	roots := 0
-	for _, root := range []string{string(plan.Object), string(plan.Process), string(plan.Function)} {
+	for _, root := range []string{string(plan.Object), string(plan.Process), string(plan.Function), string(plan.Application)} {
 		if root != "" {
 			roots++
 		}
 	}
-	if roots != 1 || len(plan.Model) > 256 || plan.FunctionVersion < 0 || plan.FunctionVersion > 64 || plan.Name != "" && !named(plan.Name) {
+	if (roots != 1 && !(roots == 0 && plan.CandidateID != "")) || plan.CandidateID != "" && (plan.Object != "" || plan.Process != "" || plan.Function != "") || len(plan.Actors) > 3 || len(plan.Sample) > 64 || len(plan.Actors) > 0 && plan.As != "" || len(plan.Model) > 256 || plan.FunctionVersion < 0 || plan.FunctionVersion > 64 || plan.Name != "" && !named(plan.Name) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose exactly one saved object, workflow or function draft for the test plan")
 	}
 	if len(plan.Evaluation) != 0 {

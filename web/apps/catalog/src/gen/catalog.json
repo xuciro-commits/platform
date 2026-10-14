@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:826245e3f8342ca2",
+  "revision": "sha256:36e0db8aaf7de216",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12314,6 +12314,7 @@
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
+      "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
@@ -12471,6 +12472,7 @@
       "web/packages/build/src/projects/studio-navigation.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
+      "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
@@ -12738,6 +12740,7 @@
       "web/packages/build/src/projects/studio-guide.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
+      "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",

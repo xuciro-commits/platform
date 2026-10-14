@@ -204,7 +204,13 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		var answer ReleasePreview
 		var err error
-		if len(request.Drafts) > 0 {
+		if request.ApplicationDrafts {
+			if request.Kind != platform.AssetApp || request.ID == "" || len(request.Drafts) > 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			answer, err = t.PreviewApplicationDrafts(m, request.ID)
+		} else if len(request.Drafts) > 0 {
 			answer, err = t.PreviewReleaseDrafts(m, request.Drafts)
 		} else {
 			answer, err = t.PreviewRelease(m, request.Kind, request.ID)
@@ -309,7 +315,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test a saved object, process or function draft using fixed actions and answers in an empty isolated tenant (ADR-0040 21d, ADR-0042 23b, ADR-0043 24c)",
+	rt.authorized(Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test an application draft closure or retained candidate with synthetic samples, controlled members and original executor traces (ADR-0111)",
 		Body: CandidateSimulationRequest{}, Answer: CandidateSimulation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request CandidateSimulationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))

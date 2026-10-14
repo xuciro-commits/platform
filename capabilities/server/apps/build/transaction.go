@@ -133,6 +133,7 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 	var run func([]platform.TxnStep, platform.RuleReadSpec, map[string]any, string, string) *kernel.Error
 	run = func(steps []platform.TxnStep, scope platform.RuleReadSpec, facts map[string]any, rowID, frame string) *kernel.Error {
 		for _, step := range steps {
+			c.Trace(platform.DecisionTrace{Kind: "transaction-step", Name: strings.TrimPrefix(frame+"/"+step.Name, "/"), Operation: step.Kind})
 			if step.When != nil {
 				result, err := evalRule(*step.When, scope, c, subject, facts, now, b.conditionLookup)
 				if err != nil {

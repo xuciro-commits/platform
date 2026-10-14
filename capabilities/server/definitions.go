@@ -388,7 +388,7 @@ func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error
 }
 
 func ownedMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation}, kind)
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetSampleSet}, kind)
 }
 
 // ownedAssetDefinition indexes only an owner's accepted descriptor identity.
@@ -409,6 +409,16 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
 	}
 	definition := platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), OwnerRecord: plan.Record}
+	if plan.Ref.Kind == platform.AssetSampleSet {
+		var samples platform.SampleSet
+		if err := json.Unmarshal(asset.Body, &samples); err != nil {
+			return definition, false, err
+		}
+		if err := samples.Check(); err != nil {
+			return definition, false, err
+		}
+		definition.SampleSet = &samples
+	}
 	if plan.Ref.Kind == platform.AssetEvaluation {
 		descriptor, err := platform.ReadEvaluationSet(asset.Body)
 		if err != nil {
@@ -680,7 +690,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
 				continue
 			}
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation:
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation, platform.AssetSampleSet:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {
@@ -707,7 +717,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	}
 	for i, def := range out {
 		switch def.Ref.Kind {
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation:
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation, platform.AssetSampleSet:
 			out[i].Requires = slices.DeleteFunc(slices.Clone(def.Requires), func(ref platform.AssetRef) bool { return !visible[ref] })
 		}
 	}

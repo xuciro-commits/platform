@@ -117,7 +117,19 @@ func (t *TxnLink) UnmarshalJSON(raw []byte) error {
 // field permissions, compute and validation, without another kernel decision.
 // All rows carry the parent receipt and remain private until the host accepts
 // its complete result. This is not an authoritative write entry point.
-func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) *kernel.Error {
+func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) (refusal *kernel.Error) {
+	if c.TraceEnabled() {
+		before, _ := c.ReadRecord(e.Type, id, now)
+		defer func() {
+			event := DecisionTrace{Kind: "transaction-change", Type: e.Type, ID: id, Operation: verb, Before: before}
+			if refusal != nil {
+				event.Refusal = refusal.Message
+			} else {
+				event.After, _ = c.ReadRecord(e.Type, id, now)
+			}
+			c.Trace(event)
+		}()
+	}
 	if !c.Staging() || c.Replaying || c.App != l.authority || r.GetSubmission().GetAuthority() != c.App ||
 		r.GetSubmission().GetTenantId() != l.tenant || r.GetSubmission().GetPrincipalId() != c.ID || r.GetChangeId() == "" || id == "" || !strings.HasPrefix(e.Type, c.App+".") ||
 		(verb != "create" && verb != "edit" && verb != "archive") {

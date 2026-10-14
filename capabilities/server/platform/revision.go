@@ -461,6 +461,15 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	}
 	var required []AssetRef
 	switch ref.Kind {
+	case AssetSampleSet:
+		var samples SampleSet
+		if err := json.Unmarshal(body, &samples); err != nil {
+			return err
+		}
+		if err := samples.Check(); err != nil {
+			return err
+		}
+		required = samples.Dependencies()
 	case AssetMigration:
 		var declaration MigrationDescriptor
 		if err := json.Unmarshal(body, &declaration); err != nil {

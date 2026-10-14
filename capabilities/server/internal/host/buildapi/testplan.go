@@ -13,6 +13,10 @@ const TestPlanType = "build.testplan"
 // TestPlan stores fixed inputs, not test state or a claim about the next draft.
 type TestPlan struct {
 	platform.Record
+	Application       string                 `json:"application,omitempty" ref:"build.app" title:"Saved application draft"`
+	CandidateID       string                 `json:"candidateId,omitempty" title:"Fixed candidate version"`
+	Actors            []string               `json:"actors,omitempty" title:"Comparison members"`
+	Sample            string                 `json:"sample,omitempty" title:"Application sample set"`
 	Name              string                 `json:"name,omitempty" title:"Evaluation set name"`
 	FunctionVersion   int                    `json:"functionVersion,omitempty" title:"Evaluated function version"`
 	DefinitionVersion int                    `json:"definitionVersion,omitempty" field:"readonly"`
@@ -39,6 +43,7 @@ type TestSample struct {
 }
 
 type TestStep struct {
+	Read           bool             `json:"read,omitempty"`
 	Type           string           `json:"type"`
 	ID             string           `json:"id"`
 	Action         string           `json:"action"`

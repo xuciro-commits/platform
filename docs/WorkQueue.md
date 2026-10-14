@@ -28,11 +28,11 @@
 - **MES 第二探针**：[ADR-0113](ADR/0113-mes-baseline.md) 的八个范围与反例清单，用于域中立性的第二证据。
 - **第二次交付**（候选：大疆的 MES + WMS）：**可能是别人的领域**，可能不由本平台完成；它证明**武器库可移交**，不发生则记为未验证，不作验收要求。
 
-**ADR-0100 起的能力块按依赖表推进**（[ADR-0098 §8](ADR/0098-build-the-capability-to-build.md#8-后续-adr-与依赖顺序)），只保留当前施工块。已交付能力的实现与证据边界归各自 As built，不另占队列位。当前能力块为 **[ADR-0111 构建者验证](ADR/0111-builder-verification.md)**；完整事务的其他 Kind、通用规则编辑器仍按其规范主人及依赖推进。
+**ADR-0100 起的能力块按依赖表推进**（[ADR-0098 §8](ADR/0098-build-the-capability-to-build.md#8-后续-adr-与依赖顺序)），只保留当前施工块。已交付能力的实现与证据边界归各自 As built，不另占队列位。当前能力块为 **[ADR-0116 AI 与人工在应用中的位置](ADR/0116-ai-and-human-in-applications.md)**；完整事务的其他 Kind、通用规则编辑器仍按其规范主人及依赖推进。
 
 每次只推进一块；块内按实际依赖迁移。已经通过且未受影响的证据直接复用。检查按 [Testing](Testing.md) 选择，代码合入 main 后沿既有同步协议更新两宿主，保留原数据卷。
 
-ADR-0111 在原草稿闭包、固定测试与候选模拟 owner 中打通未发布试跑、应用样本与多角色对照，停止条件归其 §4；不新建第二套测试或前端规则模拟器。专业图、矩阵和工作站配置的工程边界与独立作者/负责人验收归 [ADR-0110 As built](ADR/0110-professional-components.md#5-as-built)，原生 MES 仍保留。模型驱动绑定与共享规则、集合、路径及权限状态的现状归 [ADR-0109 As built](ADR/0109-model-driven-ui.md#5-as-built)；应用上下文和原编辑器装配归 [ADR-0108 As built](ADR/0108-application-studio.md#5-as-built)。实际构建者体验保持待验收，不继续占工程施工项。应用工件与运行/恢复证据归 ADR-0107。
+ADR-0116 在原 AI 函数、agent、work 与事务 owner 中打通提议、人工采纳/接管及应用用量和评测归属，停止条件归其 §4。构建者草稿试跑、版本化合成样本、多成员对照与原测试计划的实现和隔离 fixture 边界归 [ADR-0111 As built](ADR/0111-builder-verification.md#5-as-built)。专业图、矩阵和工作站配置的工程边界与独立作者/负责人验收归 [ADR-0110 As built](ADR/0110-professional-components.md#5-as-built)，原生 MES 仍保留。模型绑定与应用工作区现状归 ADR-0109 / ADR-0108；负责人体验验收保持待验证，不占工程施工项。应用工件与运行/恢复证据归 ADR-0107。
 
 ## 收口规则
 

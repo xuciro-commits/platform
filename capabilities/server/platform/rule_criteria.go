@@ -21,7 +21,17 @@ type RuleCriteria struct {
 	Conditions []RuleCriterion `json:"conditions"`
 }
 
-func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) (ExprResult, *kernel.Error) {
+func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) (result ExprResult, refusal *kernel.Error) {
+	var observed *ExprContext
+	if caller.TraceEnabled() {
+		defer func() {
+			event := DecisionTrace{Kind: "rule", Type: reads.Object, Expression: &expr, Reads: observed, Result: &result}
+			if refusal != nil {
+				event.Refusal = refusal.Message
+			}
+			caller.Trace(event)
+		}()
+	}
 	if _, supported := caller.rt.(AuthorizationRuntime); supported && !caller.Replaying && reads.Object != "" {
 		var subject struct {
 			ID string `json:"id"`
@@ -56,6 +66,10 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 	context, err := caller.RuleContext(expr, reads, lookup, record, inputs, at)
 	if err != nil {
 		return ExprResult{}, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule input: {reason} / 规则输入：{reason}", err.Error(), err.Error())
+	}
+	if caller.TraceEnabled() {
+		filtered := ruleTraceContext(expr, context)
+		observed = &filtered
 	}
 	program, err := CompileExpr(expr, schema)
 	if err != nil {

@@ -22,17 +22,22 @@ import (
 // CandidateSimulationRequest fixes all business inputs of an isolated run.
 // Create actions establish its sample data; nothing is copied from live rows.
 type CandidateSimulationRequest struct {
-	ObjectID   string             `json:"objectId,omitempty"`
-	ProcessID  string             `json:"processId,omitempty"`
-	FunctionID string             `json:"functionId,omitempty"`
-	Model      string             `json:"model,omitempty"`
-	As         string             `json:"as,omitempty"`
-	At         time.Time          `json:"at"`
-	Steps      []SimulationStep   `json:"steps"`
-	Samples    []SimulationSample `json:"samples,omitempty"`
+	ApplicationID string             `json:"applicationId,omitempty"`
+	CandidateID   string             `json:"candidateId,omitempty"`
+	Actors        []string           `json:"actors,omitempty"`
+	Sample        string             `json:"sample,omitempty"`
+	ObjectID      string             `json:"objectId,omitempty"`
+	ProcessID     string             `json:"processId,omitempty"`
+	FunctionID    string             `json:"functionId,omitempty"`
+	Model         string             `json:"model,omitempty"`
+	As            string             `json:"as,omitempty"`
+	At            time.Time          `json:"at"`
+	Steps         []SimulationStep   `json:"steps"`
+	Samples       []SimulationSample `json:"samples,omitempty"`
 }
 
 type SimulationStep struct {
+	Read           bool            `json:"read,omitempty"`
 	Type           string          `json:"type"`
 	ID             string          `json:"id"`
 	Action         string          `json:"action"`
@@ -49,14 +54,23 @@ type SimulationStep struct {
 	Compute  *build.ComputeFixture  `json:"compute,omitempty"`
 }
 
+type SimulationActor struct {
+	Member    string       `json:"member"`
+	Steps     []Simulation `json:"steps"`
+	TestID    string       `json:"testId"`
+	Recovered bool         `json:"recovered"`
+	Passed    *bool        `json:"passed,omitempty"`
+}
+
 type CandidateSimulation struct {
-	CandidateID string       `json:"candidateId"`
-	TestID      string       `json:"testId,omitempty"`
-	Model       string       `json:"model,omitempty"`
-	Fixture     bool         `json:"fixture,omitempty"`
-	Steps       []Simulation `json:"steps"`
-	Recovered   bool         `json:"recovered"`
-	Passed      *bool        `json:"passed,omitempty"`
+	Actors      []SimulationActor `json:"actors,omitempty"`
+	CandidateID string            `json:"candidateId"`
+	TestID      string            `json:"testId,omitempty"`
+	Model       string            `json:"model,omitempty"`
+	Fixture     bool              `json:"fixture,omitempty"`
+	Steps       []Simulation      `json:"steps"`
+	Recovered   bool              `json:"recovered"`
+	Passed      *bool             `json:"passed,omitempty"`
 }
 
 // SimulateCandidate installs a saved object, process or function draft in a fresh, bounded tenant.
@@ -67,17 +81,18 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if err := t.admits(builder); err != nil {
 		return empty, err
 	}
-	if builder.Roles[build.ID] != build.Builder {
-		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	caller := platform.NewCaller(runtime{t}, builder, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
+		return empty, err
 	}
 	roots := 0
-	for _, root := range []string{request.ObjectID, request.ProcessID, request.FunctionID} {
+	for _, root := range []string{request.ObjectID, request.ProcessID, request.FunctionID, request.ApplicationID, request.CandidateID} {
 		if root != "" {
 			roots++
 		}
 	}
-	if roots != 1 || len(request.Model) > 256 || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 {
-		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one saved object, process or function, a fixed time and 1–20 test steps")
+	if roots != 1 || len(request.Model) > 256 || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 || len(request.Actors) > 3 || len(request.Sample) > 64 || len(request.Actors) > 0 && request.As != "" {
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one saved application, object, process, function or candidate, a fixed time and 1–20 test steps")
 	}
 	t.mu.Lock()
 	if t.quarantined() {
@@ -85,6 +100,9 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	m := builder
+	if len(request.Actors) > 0 {
+		request.As = request.Actors[0]
+	}
 	if request.As != "" {
 		var ok bool
 		m, ok = t.member(request.As)
@@ -94,7 +112,32 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		}
 	}
 	members := []platform.Member{m}
+	seenActors := map[string]bool{}
+	for _, id := range request.Actors {
+		if seenActors[id] {
+			t.mu.Unlock()
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose distinct known members for role comparison")
+		}
+		seenActors[id] = true
+		if id == "" {
+			t.mu.Unlock()
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose known members for role comparison")
+		}
+		if slices.ContainsFunc(members, func(m platform.Member) bool { return m.ID == id }) {
+			continue
+		}
+		actor, ok := t.member(id)
+		if !ok {
+			t.mu.Unlock()
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", id)
+		}
+		members = append(members, actor)
+	}
 	for _, step := range request.Steps {
+		if len(request.Actors) > 0 && step.As != "" {
+			t.mu.Unlock()
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Role comparisons use the same member for every scenario step")
+		}
 		if step.Compute != nil && !step.Compute.Check() {
 			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded compute fixture with a completed or failed outcome")
@@ -123,7 +166,48 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if request.FunctionID != "" {
 		kind, id = platform.AssetFunction, request.FunctionID
 	}
-	review, candidate, err := t.previewReleaseLocked([]build.JointDraftRef{{Kind: kind, ID: id}}, m)
+	drafts := []build.JointDraftRef{{Kind: kind, ID: id}}
+	var candidate platform.ReleaseCandidate
+	var err error
+	diagnostic := ""
+	if request.CandidateID != "" {
+		candidate, err = t.releases.candidate(request.CandidateID)
+	} else {
+		if request.ApplicationID != "" {
+			owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+			if !ok {
+				err = fmt.Errorf("Construction draft owner is unavailable")
+			} else {
+				drafts, err = owner.ApplicationDrafts(request.ApplicationID)
+			}
+		}
+		if err == nil {
+			review, prepared, problem := t.previewReleaseLocked(drafts, builder)
+			candidate, err, diagnostic = prepared, problem, review.Diagnostic
+		}
+	}
+	if request.Sample != "" && err == nil {
+		found := false
+		for _, asset := range candidate.Assets {
+			if asset.Ref.Kind == platform.AssetSampleSet && asset.Ref.Name == request.Sample {
+				var sample platform.SampleSet
+				if json.Unmarshal(asset.Body, &sample) != nil || sample.Check() != nil {
+					err = fmt.Errorf("Invalid application sample asset")
+					break
+				}
+				found = true
+				if request.Samples == nil {
+					for _, group := range sample.Samples {
+						request.Samples = append(request.Samples, SimulationSample{Type: group.Type, Records: group.Records})
+					}
+				}
+				break
+			}
+		}
+		if !found && err == nil {
+			err = fmt.Errorf("Choose a sample asset in this application's draft closure")
+		}
+	}
 	functionName := ""
 	if request.FunctionID != "" {
 		selected, _ := platform.Get[build.Function](t.automation(build.ID, false), request.FunctionID)
@@ -134,8 +218,8 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		err = environmentErr
 	}
 	t.mu.Unlock()
-	if err == nil && review.Diagnostic != "" {
-		err = fmt.Errorf("%s", review.Diagnostic)
+	if err == nil && diagnostic != "" {
+		err = fmt.Errorf("%s", diagnostic)
 	}
 	if err != nil {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
@@ -156,10 +240,31 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 			}
 		}
 	}
+	out, problem := runCandidateSimulation(request, candidate, environment, m, members, functionName)
+	if problem != nil {
+		return empty, problem
+	}
+	if len(request.Actors) > 0 {
+		out.Actors = []SimulationActor{{Member: m.ID, Steps: out.Steps, TestID: out.TestID, Recovered: out.Recovered, Passed: out.Passed}}
+		for _, id := range request.Actors[1:] {
+			actor := members[slices.IndexFunc(members, func(m platform.Member) bool { return m.ID == id })]
+			other, err := runCandidateSimulation(request, candidate, environment, actor, members, functionName)
+			if err != nil {
+				return empty, err
+			}
+			out.Actors = append(out.Actors, SimulationActor{Member: actor.ID, Steps: other.Steps, TestID: other.TestID, Recovered: other.Recovered, Passed: other.Passed})
+		}
+	}
+	return out, nil
+}
+
+func runCandidateSimulation(request CandidateSimulationRequest, candidate platform.ReleaseCandidate, environment simulationEnvironment, m platform.Member, members []platform.Member, functionName string) (CandidateSimulation, *kernel.Error) {
+	var empty CandidateSimulation
+	var err error
 	// The constructor takes exact owner-produced bytes, not callbacks closing
 	// over the production Build or its host. Each invocation owns every app.
 	compose := func() (*Tenant, error) {
-		sandbox, err := candidateTestTenantWithEnvironment(candidate, m, environment, members[1:]...)
+		sandbox, err := candidateTestTenantWithEnvironment(candidate, m, environment, slices.DeleteFunc(slices.Clone(members), func(actor platform.Member) bool { return actor.ID == m.ID })...)
 		if err == nil && sandbox.ai != nil {
 			err = configureFunctionFixtureModel(sandbox, request.Model, request.At)
 		}
@@ -170,12 +275,12 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
 	out := CandidateSimulation{CandidateID: candidate.ID, Steps: []Simulation{}}
-	out.TestID, err = canonicalDigest([]any{candidate.ID, request, members})
+	out.TestID, err = canonicalDigest([]any{candidate.ID, request, members, m.ID})
 	if err != nil {
 		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if sandbox.ai != nil {
-		out.TestID, err = canonicalDigest([]any{candidate.ID, request, members})
+		out.TestID, err = canonicalDigest([]any{candidate.ID, request, members, m.ID})
 		if err != nil {
 			return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
@@ -255,9 +360,58 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	if step.As != "" {
 		actor, _ = r.sandbox.Member(step.As)
 	}
+	before := map[string]SimulatedChange{}
+	if r.request.ApplicationID != "" || r.request.CandidateID != "" {
+		for _, change := range r.visibleChanges(actor) {
+			before[change.Type+"/"+change.ID] = change
+		}
+	}
+	trace := []platform.DecisionTrace{}
+	truncated := false
+	traceBytes := 0
+	deniedReads := map[string]bool{}
+	r.sandbox.simulationTrace = func(event platform.DecisionTrace) {
+		// Row filtering may ask about rows the actor cannot see. Explain the
+		// original denial once without revealing those rows' IDs or their count.
+		if event.Request != nil && event.Authorization != nil && event.Request.Kind == "read" && !event.Authorization.Allow {
+			question := *event.Request
+			question.Record = ""
+			question.From = ""
+			event.Request = &question
+			key := string(platform.Raw(event))
+			if deniedReads[key] {
+				return
+			}
+			deniedReads[key] = true
+		}
+		if len(trace) >= 512 || traceBytes >= 1<<20 {
+			truncated = true
+			return
+		}
+		raw, _ := json.Marshal(event)
+		if len(raw) > 64<<10 {
+			event.Reads = nil
+			event.Before = nil
+			event.After = nil
+			truncated = true
+			raw, _ = json.Marshal(event)
+		}
+		traceBytes += len(raw)
+		trace = append(trace, event)
+	}
+	defer func() { r.sandbox.simulationTrace = nil }()
+	var read json.RawMessage
 	var refusal *kernel.Error
 	var sub *pb.Submission
-	if step.Answer != "" {
+	if step.Read {
+		if step.Action != "" || step.Answer != "" || step.AdvanceSeconds != 0 || step.ID == "" || !slices.ContainsFunc(r.candidate.Assets, func(a platform.ReleaseAsset) bool {
+			return a.Ref.Kind == platform.AssetObject && a.Ref.Name == step.Type
+		}) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A read step needs a candidate object and record ID")
+		}
+		caller := r.sandbox.caller(actor, r.sandbox.app(build.ID), false)
+		read, refusal = caller.ReadRecord(step.Type, step.ID, r.now)
+	} else if step.Answer != "" {
 		if step.Action != "" || step.Flow == "" || step.Step == "" || step.ID == "" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An answer test step needs a r.candidate flow, source record and ask step")
 		}
@@ -321,7 +475,11 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		_, refusal = r.sandbox.RecordOf(actor, step.Type, step.ID, r.now)
 	} else {
 		action := r.sandbox.owner["action:"+step.Action]
-		if action == nil || step.ID == "" || action.Manifest().ID != build.ID || !strings.HasPrefix(step.Type, build.ID+".") ||
+		business := slices.ContainsFunc(r.candidate.Assets, func(asset platform.ReleaseAsset) bool {
+			return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == step.Type
+		})
+		function := step.Type == build.FunctionCallType && slices.ContainsFunc(r.candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
+		if (!business && !function) || action == nil || step.ID == "" || action.Manifest().ID != build.ID || !strings.HasPrefix(step.Type, build.ID+".") ||
 			step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == build.FunctionType {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the r.candidate objects", fmt.Sprint(i+1))
 		}
@@ -340,7 +498,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		r.now = r.now.Add(time.Duration(step.AdvanceSeconds) * time.Second)
 		r.sandbox.Work(r.now)
 	}
-	result := Simulation{Accepted: refusal == nil, Changes: []SimulatedChange{}}
+	result := Simulation{Accepted: refusal == nil, Changes: []SimulatedChange{}, Input: &step, Read: read, RolledBack: refusal != nil && sub != nil}
 	if step.Compute != nil {
 		matched, err := settleComputeFixture(r.sandbox, actor, *step.Compute, r.now)
 		if err != nil {
@@ -375,25 +533,17 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	if refusal != nil {
 		result.Refusal = refusal.Message
 	} else {
-		// All rows here are test rows. Record/field permissions still bound
-		// the result, including records created by another object's action.
-		for _, asset := range r.candidate.Assets {
-			if asset.Ref.Kind != platform.AssetObject {
-				continue
-			}
-			page, kerr := r.sandbox.Records(actor, asset.Ref.Name, platform.Query{Limit: 100}, r.now)
-			if kerr != nil {
-				continue
-			}
-			for _, record := range page.Records {
-				raw, _ := json.Marshal(record)
-				var identity struct {
-					ID string `json:"id"`
+		for _, change := range r.visibleChanges(actor) {
+			prior, exists := before[change.Type+"/"+change.ID]
+			if r.request.ApplicationID != "" || r.request.CandidateID != "" {
+				if exists && bytes.Equal(prior.Record, change.Record) {
+					continue
 				}
-				_ = json.Unmarshal(raw, &identity)
-				result.Changes = append(result.Changes, SimulatedChange{Type: asset.Ref.Name, ID: identity.ID, Record: raw})
+				change.Before = prior.Record
 			}
+			result.Changes = append(result.Changes, change)
 		}
+
 	}
 	if r.sandbox.app(platform.FlowApp) != nil {
 		page, _ := r.sandbox.Records(actor, platform.FlowInstanceType, platform.Query{Limit: 100}, r.now)
@@ -407,8 +557,43 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 			result.Tasks = inbox.([]platform.WorkTask)
 		}
 	}
+	result.Trace = trace
+	result.TraceTruncated = truncated
 	r.out.Steps = append(r.out.Steps, result)
 	return nil
+}
+
+// visibleChanges is a role-filtered projection of this run's synthetic rows.
+func (r *candidateRun) visibleChanges(actor platform.Member) []SimulatedChange {
+	trace := r.sandbox.simulationTrace
+	r.sandbox.simulationTrace = nil
+	defer func() { r.sandbox.simulationTrace = trace }()
+	changes := []SimulatedChange{}
+	for _, asset := range r.candidate.Assets {
+		if asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		offset := 0
+		for {
+			page, err := r.sandbox.Records(actor, asset.Ref.Name, platform.Query{Limit: 500, Offset: offset, Archived: true, Sort: []string{"id"}}, r.now)
+			if err != nil {
+				break
+			}
+			for _, record := range page.Records {
+				raw, _ := json.Marshal(record)
+				var identity struct {
+					ID string `json:"id"`
+				}
+				_ = json.Unmarshal(raw, &identity)
+				changes = append(changes, SimulatedChange{Type: asset.Ref.Name, ID: identity.ID, Record: raw})
+			}
+			offset += len(page.Records)
+			if offset >= page.Total || len(page.Records) == 0 {
+				break
+			}
+		}
+	}
+	return changes
 }
 
 func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, member platform.Member, environment simulationEnvironment, others ...platform.Member) (*Tenant, error) {
@@ -492,7 +677,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if asset.Ref.App != build.ID {
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent {
+		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || ownedMetadataKind(asset.Ref.Kind) {
 			continue // compiled after its source objects below
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
@@ -597,6 +782,29 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			}
 		}
 	}
+	// Passive owner declarations stay in the application closure. Their live
+	// connections, credentials, datasets and migration runs are never imported.
+	for _, asset := range candidate.Assets {
+		if ownedMetadataKind(asset.Ref.Kind) {
+			definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: asset.Requires}
+			switch asset.Ref.Kind {
+			case platform.AssetSampleSet:
+				var sample platform.SampleSet
+				if json.Unmarshal(asset.Body, &sample) != nil || sample.Check() != nil {
+					return nil, fmt.Errorf("Invalid sample asset")
+				}
+				definition.SampleSet = &sample
+			case platform.AssetEvaluation:
+				evaluation, err := platform.ReadEvaluationSet(asset.Body)
+				if err != nil {
+					return nil, err
+				}
+				definition.Evaluation = &evaluation
+			}
+			sandbox.definitions = append(sandbox.definitions, definition)
+		}
+	}
+
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetApp {
 			var application platform.Application

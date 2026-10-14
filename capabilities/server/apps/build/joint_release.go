@@ -305,6 +305,12 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if buildapi.ValueIntegrationKind(kind) {
 		return b.integrationDraftAssets(kind, id)
 	}
+	if kind == platform.AssetEvaluation {
+		return b.evaluationDraftAssets(id)
+	}
+	if kind == platform.AssetSampleSet {
+		return b.sampleSetDraftAssets(id)
+	}
 	if kind == platform.AssetMigration {
 		return b.migrationPlanDraftAssets(id)
 	}
@@ -325,6 +331,9 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	}
 	if kind == platform.AssetAgent {
 		return b.agentDraftAssets(id)
+	}
+	if !recordKind(kind) {
+		return nil, nil, prior, next, false, fmt.Errorf("draft kind %q cannot be previewed", kind)
 	}
 	assets, err := b.DraftReleaseAssetsMulti([]JointDraftRef{{Kind: kind, ID: id}}, platform.Member{})
 	if err != nil {

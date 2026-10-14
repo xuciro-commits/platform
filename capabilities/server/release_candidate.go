@@ -241,8 +241,9 @@ type ReleasePreview struct {
 }
 
 type ReleasePreviewRequest struct {
-	Kind platform.AssetKind `json:"kind,omitempty"`
-	ID   string             `json:"id,omitempty"`
+	ApplicationDrafts bool               `json:"applicationDrafts,omitempty"`
+	Kind              platform.AssetKind `json:"kind,omitempty"`
+	ID                string             `json:"id,omitempty"`
 	// Drafts selects several saved drafts as one joint candidate (ADR-0048 D1).
 	// A request carries either one kind/id or a non-empty drafts list.
 	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
@@ -540,4 +541,27 @@ func codeApprovalDescriptor(approval *platform.Approval) any {
 		Pending, Rejected string
 		Levels            []level
 	}{Pending: approval.Pending, Rejected: approval.Rejected, Levels: levels}
+}
+
+// PreviewApplicationDrafts uses the same owner graph and candidate compiler
+// as execution. The builder gate precedes access to authoring inventories.
+func (t *Tenant) PreviewApplicationDrafts(m platform.Member, id string) (ReleasePreview, error) {
+	if err := t.admits(m); err != nil {
+		return ReleasePreview{}, err
+	}
+	if !m.Holds(build.ID, build.Builder) {
+		return ReleasePreview{}, fmt.Errorf("Only a builder can inspect application drafts")
+	}
+	t.mu.Lock()
+	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	if !ok {
+		t.mu.Unlock()
+		return ReleasePreview{}, fmt.Errorf("Construction owner is unavailable")
+	}
+	drafts, err := owner.ApplicationDrafts(id)
+	t.mu.Unlock()
+	if err != nil {
+		return ReleasePreview{}, err
+	}
+	return t.PreviewReleaseDrafts(m, drafts)
 }

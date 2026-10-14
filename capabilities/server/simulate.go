@@ -18,15 +18,20 @@ import (
 // in a private staged decision that is then discarded (ADR-0040 21d): no
 // journal entry, no record, notice, effect or delivery leaves it.
 type Simulation struct {
-	Accepted        bool                `json:"accepted"`
-	Refusal         string              `json:"refusal,omitempty"`
-	Changes         []SimulatedChange   `json:"changes"`
-	Matched         *bool               `json:"matched,omitempty"`
-	Flows           []SimulatedFlow     `json:"flows,omitempty"`
-	Tasks           []platform.WorkTask `json:"tasks,omitempty"`
-	Functions       []build.FunctionRun `json:"functions,omitempty"`
-	ComputeMatched  *bool               `json:"computeMatched,omitempty"`
-	FunctionMatched *bool               `json:"functionMatched,omitempty"`
+	TraceTruncated  bool                     `json:"traceTruncated,omitempty"`
+	Input           *SimulationStep          `json:"input,omitempty"`
+	Trace           []platform.DecisionTrace `json:"trace,omitempty"`
+	Read            json.RawMessage          `json:"read,omitempty"`
+	RolledBack      bool                     `json:"rolledBack,omitempty"`
+	Accepted        bool                     `json:"accepted"`
+	Refusal         string                   `json:"refusal,omitempty"`
+	Changes         []SimulatedChange        `json:"changes"`
+	Matched         *bool                    `json:"matched,omitempty"`
+	Flows           []SimulatedFlow          `json:"flows,omitempty"`
+	Tasks           []platform.WorkTask      `json:"tasks,omitempty"`
+	Functions       []build.FunctionRun      `json:"functions,omitempty"`
+	ComputeMatched  *bool                    `json:"computeMatched,omitempty"`
+	FunctionMatched *bool                    `json:"functionMatched,omitempty"`
 }
 
 // SimulatedFlow exposes native progress/trace, never its raw source Data.
@@ -44,6 +49,7 @@ type SimulatedFlow struct {
 
 // SimulatedChange is one record the decision would write, as it would read.
 type SimulatedChange struct {
+	Before json.RawMessage `json:"before,omitempty"`
 	Type   string          `json:"type"`
 	ID     string          `json:"id"`
 	Record json.RawMessage `json:"record"`

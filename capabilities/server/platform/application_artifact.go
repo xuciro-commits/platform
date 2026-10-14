@@ -67,6 +67,7 @@ func (p ApplicationProfile) Check() error {
 // at one application. Bindings carry immutable owner versions; no second
 // publication, asset registry or runtime state is kept here.
 type ApplicationArtifact struct {
+	Samples      []AssetBinding       `json:"samples"`
 	Ref          AssetRef             `json:"ref"`
 	Version      string               `json:"version"`
 	Title        string               `json:"title"`
@@ -101,7 +102,7 @@ type ApplicationBinding struct {
 }
 
 func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (ApplicationArtifact, error) {
-	artifact := ApplicationArtifact{Ref: root, Model: []AssetBinding{}, Rules: []AssetBinding{}, Pages: []AssetBinding{}, Flows: []AssetBinding{}, AI: []AssetBinding{}, Integrations: []AssetBinding{}, Roles: []ApplicationRole{}, Depends: []AssetBinding{}, Environment: []ApplicationBinding{}}
+	artifact := ApplicationArtifact{Ref: root, Model: []AssetBinding{}, Rules: []AssetBinding{}, Pages: []AssetBinding{}, Flows: []AssetBinding{}, AI: []AssetBinding{}, Integrations: []AssetBinding{}, Samples: []AssetBinding{}, Roles: []ApplicationRole{}, Depends: []AssetBinding{}, Environment: []ApplicationBinding{}}
 	if root.Kind != AssetApp {
 		return artifact, fmt.Errorf("an application artifact needs its application root")
 	}
@@ -141,6 +142,8 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 			artifact.AI = append(artifact.AI, binding)
 		case AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching:
 			artifact.Integrations = append(artifact.Integrations, binding)
+		case AssetSampleSet:
+			artifact.Samples = append(artifact.Samples, binding)
 		case AssetCompute, AssetMigration:
 			artifact.Rules = append(artifact.Rules, binding)
 		}

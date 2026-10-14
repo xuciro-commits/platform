@@ -1,5 +1,7 @@
 import {InputDraftProvider} from "@platform/ui";
 import {useInputDrafts} from "@platform/ui";
+import type { Project } from "../projects/project";
+import { ApplicationSamples } from "./samples";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { AppSelect, PayloadFields, useHost, useRecordInventory } from "@platform/app";
@@ -14,14 +16,14 @@ type FunctionDraft = { id: string; revision: number; name: string; title: string
 type Step = Omit<Api.SimulationStep, "payload" | "expect"> & { payload: string; expect: "accepted" | "refused" };
 type EvaluationCase = { name: string; input: string; expected: string };
 type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
-type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
+type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; application?:string;candidateId?:string;actors?:string[];sample?:string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
 export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
   return <InputDraftProvider isolated scope="candidate-test"><CandidateTestForm {...props}/></InputDraftProvider>;
 }
-function CandidateTestForm({ processId = "", functionId = "", objectId = "", planId = "", embedded = false, onStepSelect }: {
-  processId?: string; functionId?: string; objectId?: string; planId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
+function CandidateTestForm({ applicationId = "", processId = "", functionId = "", objectId = "", planId = "", embedded = false, onStepSelect }: {
+  applicationId?: string; processId?: string; functionId?: string; objectId?: string; planId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
 }) {
   const { client, role, decide, action } = useHost();
   const { open } = useApplicationWorkspace();
@@ -29,7 +31,8 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
   const plans = useRecordInventory<TestPlan>("build.testplan");
   const processes = useRecordInventory<WorkflowDraft>("build.process");
   const functions = useRecordInventory<FunctionDraft>("build.function");
-  const [kind, setKind] = useState<"object" | "flow" | "function">(functionId ? "function" : processId ? "flow" : "object");
+ const applications=useRecordInventory<Project>("build.app");
+  const [kind, setKind] = useState<"object" | "flow" | "function" | "app">(applicationId ? "app" : functionId ? "function" : processId ? "flow" : "object");
   const [model, setModel] = useState("fixture/probe");
   const [planID, setPlanID] = useState(""),[createID,setCreateID]=useState(()=>crypto.randomUUID());
   const [revision, setRevision] = useState(0);
@@ -38,11 +41,15 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
   const [edited, setDirty] = useState(false);
  const inputDrafts=useInputDrafts(),dirty=edited||!!inputDrafts?.dirty;
   const [saved, setSaved] = useState(false);
-  const [id, setID] = useState(functionId || processId || objectId);
+  const [id, setID] = useState(applicationId || functionId || processId || objectId);
   const [member, setMember] = useState("");
   const [at, setAt] = useState("2026-01-01T09:00:00Z");
   const [steps, setSteps] = useState<Step[]>([]);
   const [samples, setSamples] = useState("[]");
+ const [sample,setSample]=useState("");
+ const [members,setMembers]=useState("");
+ const [candidateID,setCandidateID]=useState("");
+ const application=kind==="app"?applications.data?.records.find(record=>record.id===id):undefined;
   const [evaluationEnabled, setEvaluationEnabled] = useState(false);
   const [minQuality, setMinQuality] = useState(1);
   const [maxCostUsd, setMaxCostUsd] = useState(0.1);
@@ -54,12 +61,12 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
   const process = kind === "flow" ? processes.data?.records.find((record) => record.id === id) : undefined;
   const fn = kind === "function" ? functions.data?.records.find((record) => record.id === id) : undefined;
   const object = kind === "object" ? objects.data?.records.find((record) => record.id === id)
-    : installedObjects(objects.data?.records ?? []).find((record) => `build.${record.name}` === (fn?.object ?? process?.object));
-  const rootRevision = kind === "object" ? object?.revision : kind === "flow" ? process?.revision : fn?.revision;
+    : kind==="app" ? objects.data?.records.find(record=>application?.resources?.some(ref=>ref.kind==="object"&&ref.name===`build.${record.name}`)) : installedObjects(objects.data?.records ?? []).find((record) => `build.${record.name}` === (fn?.object ?? process?.object));
+  const rootRevision = kind==="app" ? application?.revision : kind === "object" ? object?.revision : kind === "flow" ? process?.revision : fn?.revision;
   const candidateInputs = useQuery({
     queryKey: [client.connection.token, client.connection.tenant, "candidate-inputs", kind, id, rootRevision],
     queryFn: async () => {
-      const response = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", { kind, id });
+      const response = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", { kind, id,...(kind==="app"?{applicationDrafts:true}:{}) });
       if (!response.ok) throw new Error(apiErrorMessage(response.body) ?? t("Candidate input fields are unavailable. Use advanced JSON or check the saved draft."));
       return response.body;
     },
@@ -97,14 +104,14 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
   const actions = [{ name: "create", title: t("Create records") }, { name: "edit", title: t("Edit records") },
     { name: "archive", title: t("Archive records") }, ...(object?.actions ?? [])];
   const clear = () => { setResult(undefined); setError(""); setSaved(false); setDirty(true); };
-  const matchesAsset = (plan: TestPlan) => kind === "function" ? plan.function === id
+  const matchesAsset = (plan: TestPlan) => kind==="app"?plan.application===id:kind === "function" ? plan.function === id
     : kind === "flow" ? !plan.function && plan.process === id : !plan.function && !plan.process && plan.object === id;
   const ownPlans = (plans.data?.records ?? []).filter(matchesAsset);
   const switchAsset = (nextKind: typeof kind, nextID: string) => {
     clear(); setKind(nextKind); setID(nextID); setSteps([]);
     // A new root gets a new plan identity; Save must never move the previous
     // asset's plan simply because the user selected a different draft.
-    setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");
+    setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");setSample("");setMembers("");setCandidateID("");
     setModel("fixture/probe"); setEvaluationEnabled(false);
     setMinQuality(1); setMaxCostUsd(0.1); setMaxLatencyMillis(30000);
     setCases([{ name: "synthetic", input: "{}", expected: "{}" }]);
@@ -116,7 +123,8 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
   const load = (plan: TestPlan, initial = false) => {
     if (!initial && !matchesAsset(plan)) return;
     clear(); setPlanID(plan.id); setRevision(plan.revision);
-    setTitle(plan.title);setSetName(plan.name??""); setKind(plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.function || plan.process || plan.object || ""); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
+    setTitle(plan.title);setSetName(plan.name??""); setKind(plan.application ? "app" : plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.application || plan.function || plan.process || plan.object || ""); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
+    setSample(plan.sample??"");setMembers((plan.actors??[]).join(", "));setCandidateID(plan.candidateId??"");
     setSteps(plan.steps); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setDirty(false);
     const policy = plan.evaluation?.[0];
     setEvaluationEnabled(Boolean(policy));
@@ -144,9 +152,9 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
     else { switchAsset(kind, id); setDirty(false); }
   }, busy);
   const inputs = (): Api.CandidateSimulationRequest => ({
-    ...(kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
+    ...(kind==="app" ? candidateID?{candidateId:candidateID}:{applicationId:id}:kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
       ...step, payload: JSON.parse(step.payload),
-    })), samples: JSON.parse(samples) as Api.SimulationSample[],
+    })),...(kind==="app"?{actors:members.split(",").map(id=>id.trim()).filter(Boolean),sample}:{}), samples: JSON.parse(samples) as Api.SimulationSample[],
   });
   const save = async () => {
     setError(""); setSaved(false);
@@ -166,7 +174,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
-        { name:setName||undefined,title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, samples: JSON.parse(samples), evaluation },
+        { name:setName||undefined,title, application:kind==="app"?id:"",candidateId:kind==="app"?candidateID:"",actors:kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:kind==="app"?sample:"", object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, samples: JSON.parse(samples), evaluation },
         { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) {
         const refreshed = await plans.refetch();
         const record = refreshed.data?.records.find((plan) => plan.id === target);
@@ -177,7 +185,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
     finally { setBusy(false); }
   };
   const run = async () => {
-    if (!object && !process?.manual) return;
+    if (kind!=="app" && !object && !process?.manual) return;
     setResult(undefined); setError("");
     let plan: Api.CandidateSimulationRequest;
     try { plan = inputs(); }
@@ -197,7 +205,8 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
   return <div className="grid gap-3">
     {!embedded && <PageHeader title={t("Test a candidate")} description={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
       actions={<Button disabled={!id || busy} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}
-    <Card className="p-3">
+    {kind==="app" && <PageHeader title={t("Draft trial")} description={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
+ <Card className="p-3">
       <fieldset disabled={busy} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">{t("Saved test plan")}
@@ -223,10 +232,15 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
         {!embedded && <label className="grid gap-1 text-xs">{t("Candidate kind")}
           <Select value={kind} onChange={(e) => switchAsset(e.target.value as typeof kind, "")}>
-            <option value="object">{t("Objects")}</option><option value="flow">{t("Workflows")}</option><option value="function">{t("AI functions")}</option>
+            <option value="app">{t("Application")}</option><option value="object">{t("Objects")}</option><option value="flow">{t("Workflows")}</option><option value="function">{t("AI functions")}</option>
           </Select>
         </label>}
-        {kind === "function" ? <>
+        {kind==="app" ? <div className="grid gap-3">
+ <label className="grid gap-1 text-xs">{t("Saved application draft")}<Select value={id} disabled={embedded} onChange={event=>switchAsset("app",event.target.value)}><option value="">{t("Choose a saved draft")}</option>{applications.data?.records.map(app=><option key={app.id} value={app.id}>{app.title}</option>)}</Select></label>
+ {application && <ApplicationSamples application={application} selected={sample} samples={samples} onChange={(name,rows)=>{setSample(name);setSamples(rows);clear();}} />}
+ <label className="grid gap-1 text-xs">{t("Comparison members (up to three, comma separated)")}<Input value={members} onChange={event=>{setMembers(event.target.value);setMember("");clear();}}/></label>
+ <label className="grid gap-1 text-xs">{t("Fixed candidate version (optional)")}<Input value={candidateID} onChange={event=>{setCandidateID(event.target.value);clear();}}/></label>
+ </div> : kind === "function" ? <>
           <label className="grid gap-1 text-xs">{t("Saved function draft")}
             <Select value={id} onChange={(e) => { switchAsset(kind, e.target.value); const chosen = functions.data?.records.find((f) => f.id === e.target.value); setSteps(chosen ? functionSteps(chosen) : []); }}>
               <option value="">{t("Choose a saved draft")}</option>{functions.data?.records.map((f) => <option key={f.id} value={f.id}>{f.title || f.name}</option>)}
@@ -275,7 +289,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
         {(objects.isError || processes.isError || functions.isError) && <p role="alert" className="text-sm text-danger">{t("The candidate test could not be run.")}</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">{t("Member ID (empty: you)")}
-            <Input value={member} onChange={(event) => { setMember(event.target.value); clear(); }} />
+            <Input disabled={kind==="app"&&!!members.trim()} value={member} onChange={(event) => { setMember(event.target.value); clear(); }} />
           </label>
           <label className="grid gap-1 text-xs">{t("Fixed test time")}
             <Input value={at} onChange={(event) => { setAt(event.target.value); clear(); }} />
@@ -286,7 +300,12 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
             <Button disabled={steps.length === 1} onClick={() => { clear(); setSteps((old) => old.filter((_, i) => i !== index)); }}>{t("Remove")}</Button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <label className="grid gap-1 text-xs">{t("Test record ID")}<Input value={step.id} onChange={(event) => update(index, { id: event.target.value })} /></label>
+            {kind==="app"&&<>
+ <label className="grid gap-1 text-xs">{t("Object type")}<Select value={step.type} onChange={event=>update(index,{type:event.target.value,action:step.read?"":`${event.target.value}.edit`,payload:"{}"})}><option value="">{t("Choose an object")}</option>{objects.data?.records.map(o=><option key={o.id} value={`build.${o.name}`}>{o.title}</option>)}</Select></label>
+ <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.read?"read":"action"} onChange={event=>update(index,{read:event.target.value==="read",action:event.target.value==="read"?"":`${step.type}.edit`})}><option value="action">{t("Object action")}</option><option value="read">{t("Read record")}</option></Select></label>
+ {step.action&&<label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={event=>update(index,{action:event.target.value})}>{(candidateInputs.data?.candidateActions??[]).filter(action=>action.target===step.type).map(action=><option key={action.schema} value={action.schema}>{action.title}</option>)}{!candidateInputs.data?.candidateActions?.some(action=>action.schema===step.action)&&<option value={step.action}>{step.action}</option>}</Select></label>}
+ </>}
+ <label className="grid gap-1 text-xs">{t("Test record ID")}<Input value={step.id} onChange={(event) => update(index, { id: event.target.value })} /></label>
             {kind === "flow" && <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.answer !== undefined ? "answer" : step.action ? "action" : "clock"} onChange={(e) => update(index, e.target.value === "answer"
               ? { action: "", flow: `build.${process?.name}`, step: askSteps[0]?.name, answer: askSteps[0]?.answers?.[0] ?? "", payload: "{}" }
               : { action: e.target.value === "clock" ? "" : process?.manual ? "build.process.run" : `${object ? `build.${object.name}` : step.type}.create`,
@@ -299,7 +318,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
                 {askSteps.map((ask) => <option key={ask.name} value={ask.name}>{ask.title || ask.name}</option>)}</Select></label>
               <label className="grid gap-1 text-xs">{t("Human answer")}<Select value={step.answer} onChange={(e) => update(index, { answer: e.target.value })}>
                 {askSteps.find((ask) => ask.name === step.step)?.answers?.map((answer) => <option key={answer} value={answer}>{answer}</option>)}</Select></label>
-            </> : step.action ? <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: event.target.value === "build.process.run" ? "build.process" : event.target.value === "build.function-call.start" ? "build.function-call" : `build.${object?.name}`, function: event.target.value === "build.function-call.start" ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>
+            </> : step.action && kind!=="app" ? <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: event.target.value === "build.process.run" ? "build.process" : event.target.value === "build.function-call.start" ? "build.function-call" : `build.${object?.name}`, function: event.target.value === "build.function-call.start" ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>
               {process?.manual && <option value="build.process.run">{t("Start workflow")}</option>}
               {kind === "function" && <option value="build.function-call.start">{t("Call AI function")}</option>}
               {step.action !== "build.function-call.start" && step.action !== "build.process.run" && !actions.some((action) => `build.${object?.name}.${action.name}` === step.action) && <option value={step.action}>{step.action}</option>}
@@ -347,22 +366,26 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
           </fieldset>}
         </Card>)}
         <div className="flex flex-wrap gap-2">
-          <Button disabled={(!object && !process?.manual) || steps.length >= 20} onClick={() => { clear(); setSteps((old) => [...old, process?.manual
+          <Button disabled={(kind!=="app" && !object && !process?.manual) || steps.length >= 20} onClick={() => { clear(); setSteps((old) => [...old, kind==="app" ? {type:object?`build.${object.name}`:"",id:"TEST-1",action:object?`build.${object.name}.edit`:"",payload:"{}",expect:"accepted"} : process?.manual
             ? { type: "build.process", id: "sample", action: "", payload: "{}", expect: "accepted", advanceSeconds: 2 }
             : { type: `build.${object?.name}`, id: "TEST-1", action: `build.${object?.name}.${object?.actions?.[0]?.name ?? "edit"}`, payload: "{}", expect: "accepted" }]); }}>{t("Add a test step")}</Button>
           <AssetControls type="build.testplan" record={planID ? { id: planID, revision } : undefined} dirty={dirty} busy={busy} onCancel={discardChanges} />
-          <Button disabled={(!object && !process?.manual) || !steps.length || !title.trim()} onClick={save}>{t("Save test plan")}</Button>
+          <Button disabled={(kind!=="app" && !object && !process?.manual) || !steps.length || !title.trim()} onClick={save}>{t("Save test plan")}</Button>
           {kind==="function"&&evaluationEnabled&&<Button disabled={!planID||dirty||busy||!setName.trim()} onClick={()=>void open({view:"release-review",params:{kind:"evaluation-set",id:planID}})}>{t("Publish evaluation set")}</Button>}
           <Button disabled={!planID} onClick={reload}>{t("Reload saved plan")}</Button>
           <Button onClick={() => { clear(); setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); }}>{t("New test plan")}</Button>
-          <Button variant="primary" disabled={(!object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
+          <Button variant="primary" disabled={(kind!=="app" && !object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
         </div>
       </fieldset>
     </Card>
     {saved && <p role="status" className="text-sm">{t("Test plan saved. Reload it to repeat these fixed inputs.")}</p>}
     {planID && dirty && <p className="text-sm text-warning">{t("This plan has unsaved changes.")}</p>}
     {error && <Card role="alert" className="p-3 text-sm text-danger">{error}</Card>}
-    {result && <Card className="grid gap-3 p-3" aria-live="polite">
+    {result?.actors?.length ? <Card className="grid gap-3 p-3" role="region" aria-label={t("Role comparison")}>
+ <p className="break-all text-xs">{t("Tested candidate")}: <code>{result.candidateId}</code></p>
+ <div className="grid gap-3 overflow-x-auto" style={{gridTemplateColumns:`repeat(${result.actors.length}, minmax(280px, 1fr))`}}>{result.actors.map(actor=><div key={actor.member} className="min-w-0 grid content-start gap-2" role="region" aria-label={actor.member}><h3 className="font-medium">{actor.member}</h3><p className="break-all text-xs">{t("Fixed test identity")}: {actor.testId}</p>{actor.recovered&&<p className="text-xs">{t("Test state recovered exactly. Sample records stayed isolated.")}</p>}{actor.steps.map((step,index)=><Card key={index} className="grid gap-2 p-2"><p className="text-sm">{t("Test step {n}",{n:index+1})} · {step.accepted?t("Accepted"):t("Refused")}</p>{step.refusal&&<p className="text-danger text-sm">{step.refusal}</p>}<SimulationExplanation step={step}/><Disclosure summary={`${t("Record changes")} · ${step.changes.length}`}>{step.changes.map(change=><div key={`${change.type}/${change.id}`} className="text-xs"><p>{change.type}/{change.id}</p>{!!change.before&&<pre className="overflow-auto">{JSON.stringify(change.before,null,2)}</pre>}<pre className="overflow-auto">{JSON.stringify(change.record,null,2)}</pre></div>)}</Disclosure></Card>)}</div>)}</div>
+ </Card>:null}
+ {result && !result.actors?.length && <Card className="grid gap-3 p-3" aria-live="polite">
       {result.passed !== undefined && <p role="status" className="text-sm font-medium">{result.passed ? t("All expected outcomes matched.") : t("Some expected outcomes did not match.")}</p>}
       <p className="break-all text-xs">{t("Tested candidate")}: <code>{result.candidateId}</code></p>
       {result.fixture && <>
@@ -384,6 +407,7 @@ function CandidateTestForm({ processId = "", functionId = "", objectId = "", pla
           {call.withheld && <p>{t("Some sources cannot be read")}</p>}
         </Card>)}
         {step.refusal && <p className="text-sm text-danger">{step.refusal}</p>}
+ <SimulationExplanation step={step}/>
         {step.flows?.map((flow) => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
           <FlowRun instance={{ ...flow, title: process?.title ?? flow.flow, key: flow.id, undo: null }} onStepSelect={onStepSelect} />
           {flow.outputs && <Disclosure summary={<span className="text-xs font-medium">{t("Accepted block outputs")}</span>}><pre className="mt-2 overflow-auto rounded bg-background p-2 text-[11px]">{JSON.stringify(flow.outputs, null, 2)}</pre></Disclosure>}
@@ -426,4 +450,19 @@ function TestPayload({ fields, payload, onChange }: { fields?: ActionDeclaration
       </label>}
     <p className="text-xs text-muted">{t("Reference values are fixed test record IDs. Complex values and deliberate invalid inputs use advanced JSON.")}</p>
   </fieldset>;
+}
+
+function SimulationExplanation({step}:{step:Api.Simulation}){
+ return <div className="grid gap-2 text-xs">
+ {step.input&&<p className="break-all">{step.input.read?t("Read record"):step.input.action} · {step.input.type}/{step.input.id}</p>}
+ {step.rolledBack&&<p>{t("Refused changes were rolled back.")}</p>}
+ {!!step.read&&<Disclosure summary={t("Visible record")}><pre className="overflow-auto">{JSON.stringify(step.read,null,2)}</pre></Disclosure>}
+ {step.input&&<Disclosure summary={t("Step input")}><pre className="overflow-auto">{JSON.stringify(step.input,null,2)}</pre></Disclosure>}
+ {step.traceTruncated&&<p>{t("The explanation reached its display budget. Execution results are complete.")}</p>}
+ {!!step.trace?.length&&<Disclosure summary={`${t("Execution explanation")} · ${step.trace.length}`}><div className="grid gap-1 py-1">{step.trace.map((event,index)=><Disclosure key={index} summary={<span>{t(event.kind==="authorization"?"Authorization":event.kind==="rule"?"Rule":event.kind==="constraint"?"Constraint":event.kind==="transaction-step"?"Transaction step":"Record change")} · {event.name||event.operation||event.request?.kind||event.type} {event.authorization?(event.authorization.allow?t("Allowed"):t("Denied")):event.refusal?t("Refused"):""}</span>}>
+ {event.authorization?.layers.map(layer=><p key={layer.name}>{layer.name} · {layer.allowed?t("Allowed"):t("Denied")} · {layer.reason}</p>)}
+ {event.refusal&&<p className="text-danger">{event.refusal}</p>}
+ <pre className="overflow-auto whitespace-pre-wrap break-words">{JSON.stringify(event,null,2)}</pre>
+ </Disclosure>)}</div></Disclosure>}
+ </div>
 }

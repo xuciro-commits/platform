@@ -215,7 +215,16 @@ func constraintLocked(info platform.EntityInfo, before *row) bool {
 	return false
 }
 
-func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *row, before *row) *kernel.Error {
+func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *row, before *row) (refusal *kernel.Error) {
+	if d.TraceEnabled() {
+		defer func() {
+			event := platform.DecisionTrace{Kind: "constraint", Name: rule.Name, Type: info.Type, ID: recordOf(after.value).ID, Operation: rule.Kind}
+			if refusal != nil {
+				event.Refusal = refusal.Message
+			}
+			d.RecordDecisionTrace(event)
+		}()
+	}
 	values := constraintValues(info, after.value)
 	fail := func(reason string) *kernel.Error {
 		visible := map[string]json.RawMessage{}

@@ -19,7 +19,8 @@ func (r runtime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.T
 	if at.IsZero() {
 		at = Now()
 	}
-	return r.t.authorizeFrom(r.t.records, c, q, at, false)
+	decision := r.t.authorizeFrom(r.t.records, c, q, at, false)
+	return decision
 }
 func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
 	c.Member = d.tenant.authorizationMember(c.Member)
@@ -46,6 +47,9 @@ type authorizationEvidence struct {
 func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.AuthzRequest, decision platform.AuthzDecision) {
 	c.Member = d.tenant.authorizationMember(c.Member)
 	d.authorizations = append(d.authorizations, authorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+	if d.TraceEnabled() {
+		d.RecordDecisionTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
+	}
 }
 
 // Recovery checks the saved shape, never current grants or policies. Missing
@@ -224,7 +228,12 @@ func (t *Tenant) authorizationMember(m platform.Member) platform.Member {
 // authorizeFrom is the host's one fact resolver. Scope implementations remain
 // with the record owner, but every result passes the engine's fixed order.
 // held belongs to read projections and avoids reacquiring the record lock.
-func (t *Tenant) authorizeFrom(store *recordStore, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool) platform.AuthzDecision {
+func (t *Tenant) authorizeFrom(store *recordStore, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool) (decision platform.AuthzDecision) {
+	if t.simulationTrace != nil {
+		defer func() {
+			t.simulationTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
+		}()
+	}
 	return t.authorizeDepth(store, c, q, at, held, 0, newAuthorizationWalk())
 }
 
