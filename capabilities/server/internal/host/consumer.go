@@ -13,6 +13,7 @@ type BuildHost interface {
 	Caller(parent platform.Caller, m platform.Member, app string) platform.Caller
 	Declares(name string) bool
 	Entity(typ string) (platform.EntityInfo, bool)
+	EntitySource(typ string) (platform.AssetBinding, bool)
 	Function(app, name string, version int) (platform.AIFunction, int, bool)
 	Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error
 	InstallApplication(c platform.Caller, a platform.Application) error

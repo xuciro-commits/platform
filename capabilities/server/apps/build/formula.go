@@ -148,12 +148,25 @@ func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) f
 // validateOf is the entity hook of an extension object (ADR-0058 A3): one
 // extension record per base record, so the base type's pages can merge the
 // extension's fields as if they were its own.
-func validateOf(o Object, model any) func(c platform.Caller, record any) *kernel.Error {
+func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
 	if o.Extends == "" {
 		return nil
 	}
 	typ := reflect.TypeOf(model)
 	return func(c platform.Caller, record any) *kernel.Error {
+		if !c.Replaying && lookup != nil {
+			base, exists := lookup(o.Extends)
+			if !exists {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
+			}
+			shape := platform.EntityInfo{Type: buildapi.TypeOf(o.Name), Extends: o.Extends, ExtensionSource: o.ExtensionSource}
+			for _, field := range o.Fields {
+				shape.Fields = append(shape.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type, Ref: field.Ref, Required: field.Required, ReadOnly: field.ReadOnly, AliasOf: field.AliasOf})
+			}
+			if err := platform.CheckExtension(shape, base); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+			}
+		}
 		v := reflect.ValueOf(record).Elem()
 		base := v.FieldByName(goName(BaseField))
 		if !base.IsValid() || base.String() == "" {

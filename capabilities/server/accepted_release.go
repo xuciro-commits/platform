@@ -206,7 +206,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 			if err != nil {
 				return saved, err
 			}
-			running, err := draft.runningReleaseLocked(candidate)
+			running, err := draft.acceptedInstallationReleaseLocked(candidate)
 			if err != nil || running.ID != candidate.ID {
 				return saved, fmt.Errorf("accepted installation differs from its frozen candidate: %v", err)
 			}
@@ -427,6 +427,42 @@ func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform
 	roots := make([]platform.AssetRef, 0, len(saved.Assets))
 	for _, asset := range saved.Assets {
 		roots = append(roots, asset.Ref)
+	}
+	return t.candidateWithBindings(roots, available, nil)
+}
+
+// Recovery checks the saved installation's controlled assets, not today's
+// native prerequisites. Native assets in a release are declarations, never
+// installation images: keep their original bytes for this comparison only.
+// New activation still requires runtimeAssetOwner.controlled's exact match;
+// old Flow execution keeps its separate code-dependency admission gate.
+func (t *Tenant) acceptedInstallationReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
+	available, err := t.releaseAssetsLocked(nil, false)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	code := map[platform.AssetRef]bool{}
+	for _, app := range t.apps {
+		assets, err := t.codeReleaseAssetsLocked(app)
+		if err != nil {
+			return platform.ReleaseCandidate{}, err
+		}
+		for _, asset := range assets {
+			code[asset.Ref] = true
+		}
+	}
+	frozen := map[platform.AssetRef]platform.ReleaseAsset{}
+	roots := []platform.AssetRef{}
+	for _, asset := range saved.Assets {
+		roots = append(roots, asset.Ref)
+		if code[asset.Ref] {
+			frozen[asset.Ref] = asset
+		}
+	}
+	for index, asset := range available {
+		if original, exists := frozen[asset.Ref]; exists {
+			available[index] = original
+		}
 	}
 	return t.candidateWithBindings(roots, available, nil)
 }

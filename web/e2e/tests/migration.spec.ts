@@ -1,5 +1,76 @@
 import { expect, fresh, shots, slug, test } from "./kit";
 
+test("customer extension fields and actions survive an upgrade and resolve a declared field conflict", async ({ page, builder, operator }, info) => {
+  test.setTimeout(90_000);
+  const baseFields = [{ name: "name", title: "Material name", type: "text" }];
+  const base = await builder.object({ title: "Shared material", fields: baseFields });
+  const fields = [
+    { name: "base", title: "Material", type: "reference", ref: base.type, required: true, inverse: "extension" },
+    { name: "customergrade", title: "Customer grade", type: "text" },
+    { name: "inspectiondue", title: "Inspection due", type: "date" },
+  ];
+  const extension = await builder.object({ title: "Customer material extension", extends: base.type, fields,
+    states: [{ name: "open", title: "Open" }, { name: "reviewed", title: "Reviewed" }],
+    actions: [{ name: "review", title: "Review", from: ["open"], to: "reviewed" }],
+  });
+  await builder.activate(await builder.candidate(extension.id));
+  const materials = await builder.records(base.type, [{ name: "One" }, { name: "Two" }, { name: "Three" }]);
+  const rows = await builder.records(extension.type, materials.map((base, index) => ({ base, customergrade: `Grade ${index}`, inspectiondue: "2027-01-01" })));
+  const before = await Promise.all(rows.map(id => operator.record(extension.type, id)));
+
+  const compatibleFields = [...baseFields, { name: "description", title: "Description", type: "text" }];
+  await builder.decide("build.object.edit", { type: "build.object", id: base.id }, { fields: compatibleFields });
+  const compatible = await builder.candidate(base.id);
+  await builder.open(page, "/release-review");
+  await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(compatible);
+  const extensions = page.getByRole("region", { name: "Customer extensions", exact: true });
+  await expect(extensions).toContainText(extension.type);
+  await expect(extensions).toContainText("customergrade");
+  await page.getByRole("checkbox", { name: "Confirm this optional field upgrade plan", exact: true }).check();
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toContainText(compatible);
+  expect(await Promise.all(rows.map(id => operator.record(extension.type, id)))).toEqual(before);
+  await operator.decide(`${extension.type}.review`, { type: extension.type, id: rows[0]! }, {});
+
+  // A new base field cannot silently shadow the customer field.
+  await builder.decide("build.object.edit", { type: "build.object", id: base.id }, { fields: [...compatibleFields, { name: "customergrade", title: "Package grade", type: "text" }] });
+  const conflict = await builder.request.post("/v1/releases/preview", { headers: builder.headers, data: { kind: "object", id: base.id } });
+  expect(conflict.ok()).toBeTruthy();
+  expect((await conflict.json()).diagnostic).toContain("customergrade");
+  expect(await operator.record(extension.type, rows[1]!)).toEqual(before[1]);
+  await builder.decide("build.object.edit", { type: "build.object", id: extension.id }, { fields: [
+    fields[0], { ...fields[1], readOnly: true, aliasOf: "localgrade" }, fields[2], { name: "localgrade", title: "Local customer grade", type: "text" },
+  ] });
+  const target = await builder.candidate([{ kind: "object", id: base.id }, { kind: "object", id: extension.id }]);
+  await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(target);
+  const migration = page.getByRole("region", { name: "Data migration", exact: true });
+  await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(extension.type);
+  await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
+    { kind: "rename", types: [extension.type], batch: 2, fields: [{ from: "customergrade", to: "localgrade" }] },
+  ]));
+  await migration.getByRole("button", { name: "Save migration plan", exact: true }).click();
+  await migration.getByRole("button", { name: "Publish migration plan", exact: true }).click();
+  await migration.getByRole("button", { name: "Review migration", exact: true }).click();
+  await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
+  await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
+  await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText("Migrated: 2");
+  await page.reload();
+  await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(target);
+  await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
+  await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText("Migrated: 3");
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toContainText(target);
+  await shots(page, extensions, "customer-extension-upgrade", info);
+  for (const [index, id] of rows.entries()) {
+    expect(await operator.record(extension.type, id)).toMatchObject({ localgrade: `Grade ${index}`, customergrade: `Grade ${index}`, inspectiondue: "2027-01-01" });
+  }
+  await operator.decide(`${base.type}.edit`, { type: base.type, id: materials[1]! }, { customergrade: "Package grade" });
+  await operator.decide(`${extension.type}.edit`, { type: extension.type, id: rows[1]! }, { localgrade: "Customer grade" });
+  expect(await operator.record(base.type, materials[1]!)).toMatchObject({ customergrade: "Package grade" });
+  expect(await operator.record(extension.type, rows[1]!)).toMatchObject({ localgrade: "Customer grade" });
+  await operator.decide(`${extension.type}.review`, { type: extension.type, id: rows[1]! }, {});
+});
+
 test("a builder reviews a rename, resumes its data batches and activates the sealed target", async ({ page, builder, operator }, info) => {
   test.setTimeout(90_000);
   const object = await builder.object({ name: slug("rename"), title: "Migration records", fields: [{ name: "name", title: "Original name", type: "text", sourceType: "user-input" }] });

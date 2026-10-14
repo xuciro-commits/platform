@@ -218,6 +218,19 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			if err != nil {
 				return err
 			}
+			if source := info.ExtensionSource; source != nil {
+				base, exists := lookup[source.Base.Ref]
+				shape, err := queryObjectDescriptor(base.Body)
+				if !exists || err != nil || !slices.Contains(asset.Requires, source.Base.Ref) {
+					return fmt.Errorf("extension %s needs its base object in the frozen closure", ref)
+				}
+				if err := source.Check(info.Extends); err != nil {
+					return err
+				}
+				if shape.App != source.Base.Ref.App {
+					return fmt.Errorf("extension base authority differs from its frozen closure")
+				}
+			}
 			for _, f := range info.Fields {
 				if f.Property == nil {
 					continue
@@ -1076,13 +1089,15 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 // these representations before the shared query checker reads the schema.
 func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	var shape struct {
-		Type       string                       `json:"type"`
-		Implements []string                     `json:"implements"`
-		Entity     *EntityInfo                  `json:"entity"`
-		Fields     []map[string]json.RawMessage `json:"fields"`
-		Lifecycle  *LifecycleInfo               `json:"lifecycle"`
-		States     []State                      `json:"states"`
-		Actions    []struct {
+		Type            string                       `json:"type"`
+		Implements      []string                     `json:"implements"`
+		Extends         string                       `json:"extends"`
+		ExtensionSource *ExtensionSource             `json:"extensionSource"`
+		Entity          *EntityInfo                  `json:"entity"`
+		Fields          []map[string]json.RawMessage `json:"fields"`
+		Lifecycle       *LifecycleInfo               `json:"lifecycle"`
+		States          []State                      `json:"states"`
+		Actions         []struct {
 			Name    string   `json:"name"`
 			Title   string   `json:"title"`
 			From    []string `json:"from"`
@@ -1182,7 +1197,7 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		shape.Lifecycle = &l
 	}
-	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements}, nil
+	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
 // The narrow finite context profile keeps original complete object identity.

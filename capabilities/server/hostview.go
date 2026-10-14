@@ -311,6 +311,15 @@ func (h hostView) ValidateInstallApplication(a platform.Application) error {
 // Entity is an entity type's declaration.
 func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.entity(typ) }
 
+func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
+	for _, definition := range h.t.definitions {
+		if definition.Ref.Kind == platform.AssetObject && definition.Ref.Name == typ && definition.Version != "" {
+			return platform.AssetBinding{Ref: definition.Ref, SourceVersion: definition.Version}, true
+		}
+	}
+	return platform.AssetBinding{}, false
+}
+
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
 // Interfaces are the shapes declared across the tenant's apps (ADR-0058 A2).

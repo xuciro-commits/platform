@@ -1233,6 +1233,8 @@
   "Edit data source": "编辑数据源",
   "Edit decision table": "编辑决策表",
   "Extends": "继承",
+  "Extension source": "扩展来源",
+  "The original base package version and field shape captured at publication": "发布时记录的原基础包版本与字段形状",
   "Field mapping": "字段映射",
   "Implements": "实现",
   "Interfaces whose fields this object has, e.g. core.coded": "此对象具备其字段的接口，例如 core.coded",

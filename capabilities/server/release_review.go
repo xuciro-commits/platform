@@ -68,17 +68,18 @@ type ReleasePage struct {
 }
 
 type SavedReleaseReview struct {
-	Preview              ReleasePreview          `json:"preview"`
-	Assets               []platform.ReleaseAsset `json:"assets"`
-	Active               bool                    `json:"active"`
-	RunningMatches       bool                    `json:"runningMatches"`
-	RunningDiagnostic    string                  `json:"runningDiagnostic,omitempty"`
-	CanActivate          bool                    `json:"canActivate"`
-	ActivationDiagnostic string                  `json:"activationDiagnostic,omitempty"`
-	UpgradePlan          *ReleaseUpgradePlan     `json:"upgradePlan,omitempty"`
-	From                 string                  `json:"from,omitempty"`
-	PromotedAt           time.Time               `json:"promotedAt,omitzero"`
-	PromotedTo           []PromotionTarget       `json:"promotedTo,omitempty"`
+	Preview              ReleasePreview           `json:"preview"`
+	Assets               []platform.ReleaseAsset  `json:"assets"`
+	Active               bool                     `json:"active"`
+	RunningMatches       bool                     `json:"runningMatches"`
+	RunningDiagnostic    string                   `json:"runningDiagnostic,omitempty"`
+	CanActivate          bool                     `json:"canActivate"`
+	ActivationDiagnostic string                   `json:"activationDiagnostic,omitempty"`
+	UpgradePlan          *ReleaseUpgradePlan      `json:"upgradePlan,omitempty"`
+	Extensions           []ReleaseExtensionReview `json:"extensions,omitempty"`
+	From                 string                   `json:"from,omitempty"`
+	PromotedAt           time.Time                `json:"promotedAt,omitzero"`
+	PromotedTo           []PromotionTarget        `json:"promotedTo,omitempty"`
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePage, error) {
@@ -161,6 +162,10 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if origin, ok := t.releases.origin(id); ok {
 		reply.From, reply.PromotedAt = origin.From, origin.At
 	}
+	reply.Extensions, err = t.releaseExtensionReview(saved)
+	if err != nil {
+		return reply, err
+	}
 	running, err := t.runningReleaseLocked(saved)
 	if err != nil {
 		reply.RunningDiagnostic = err.Error()
@@ -173,7 +178,10 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 		}
 	}
 	if reply.RunningMatches {
-		err = t.pendingWorkFitsLocked(id, raw)
+		err = t.checkExtensionSet()
+		if err == nil {
+			err = t.pendingWorkFitsLocked(id, raw)
+		}
 	} else {
 		_, _, err = t.prepareReleaseLifecycleLocked(saved, m, time.Now().UTC(), false)
 	}

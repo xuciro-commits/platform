@@ -44,7 +44,7 @@ export class Member {
   open(page: Page, route: string) { return open(page, this.token, route); }
 }
 
-export type ObjectSpec = { name?: string; title: string; fields: unknown[]; states?: unknown[]; actions?: unknown[]; access?: unknown[]; plural?: string; implements?: string[] };
+export type ObjectSpec = { name?: string; title: string; fields: unknown[]; states?: unknown[]; actions?: unknown[]; access?: unknown[]; plural?: string; implements?: string[]; extends?: string };
 
 /** The builder's hands: objects, records, pages, releases. */
 export class Builder extends Member {

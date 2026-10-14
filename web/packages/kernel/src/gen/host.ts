@@ -2704,6 +2704,14 @@ export type ReleaseEvaluationStarted = {
   id: string;
 };
 
+export type ReleaseExtensionReview = {
+  type: string;
+  base: AssetBinding;
+  targetVersion: string;
+  fields: string[];
+  issue?: string;
+};
+
 export type ReleaseFieldAddition = {
   type: string;
   field: string;
@@ -2822,6 +2830,7 @@ export type SavedReleaseReview = {
   canActivate: boolean;
   activationDiagnostic?: string;
   upgradePlan?: ReleaseUpgradePlan;
+  extensions?: ReleaseExtensionReview[];
   from?: string;
   promotedAt?: string;
   promotedTo?: PromotionTarget[];

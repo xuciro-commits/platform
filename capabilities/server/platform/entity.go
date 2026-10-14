@@ -92,7 +92,8 @@ type Entity struct {
 	Implements []string
 	// Extends names the type this one adds fields to, one record per base
 	// record through its `base` reference (ADR-0058 A3); its pages merge them.
-	Extends string
+	Extends         string
+	ExtensionSource *ExtensionSource
 	// Lifecycle makes the type a document that moves through states (ADR-0017).
 	Lifecycle *Lifecycle
 	// Seed are the records the type starts with in a tenant (a deployment's or
@@ -387,25 +388,26 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
-	Versioning     *Versioning         `json:"versioning,omitempty"`
-	VersionPins    []VersionPinBinding `json:"versionPins,omitempty"`
-	Sets           []RecordSet         `json:"sets,omitempty"`
-	Constraints    []Constraint        `json:"constraints,omitempty"`
-	Type           string              `json:"type"`
-	Title          string              `json:"title"`
-	Plural         string              `json:"plural"`
-	Description    string              `json:"description,omitempty"`
-	Synonyms       string              `json:"synonyms,omitempty"`
-	KnowledgeFiles bool                `json:"knowledgeFiles,omitempty"` // its attached text files are knowledge (ADR-0028)
-	App            string              `json:"app"`
-	Display        string              `json:"display"`
-	Fields         []FieldInfo         `json:"fields"`
-	Standard       []string            `json:"standard"`             // the generated actions' schemas
-	Implements     []string            `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0058 A2)
-	Extends        string              `json:"extends,omitempty"`    // the type it adds fields to (ADR-0058 A3)
-	Lifecycle      *LifecycleInfo      `json:"lifecycle,omitempty"`
-	Go             reflect.Type        `json:"-"`
-	Scope          Scope               `json:"-"`
+	Versioning      *Versioning         `json:"versioning,omitempty"`
+	VersionPins     []VersionPinBinding `json:"versionPins,omitempty"`
+	Sets            []RecordSet         `json:"sets,omitempty"`
+	Constraints     []Constraint        `json:"constraints,omitempty"`
+	Type            string              `json:"type"`
+	Title           string              `json:"title"`
+	Plural          string              `json:"plural"`
+	Description     string              `json:"description,omitempty"`
+	Synonyms        string              `json:"synonyms,omitempty"`
+	KnowledgeFiles  bool                `json:"knowledgeFiles,omitempty"` // its attached text files are knowledge (ADR-0028)
+	App             string              `json:"app"`
+	Display         string              `json:"display"`
+	Fields          []FieldInfo         `json:"fields"`
+	Standard        []string            `json:"standard"`             // the generated actions' schemas
+	Implements      []string            `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0058 A2)
+	Extends         string              `json:"extends,omitempty"`    // the type it adds fields to (ADR-0058 A3)
+	ExtensionSource *ExtensionSource    `json:"-"`
+	Lifecycle       *LifecycleInfo      `json:"lifecycle,omitempty"`
+	Go              reflect.Type        `json:"-"`
+	Scope           Scope               `json:"-"`
 	// Derived and Withheld are ADR-0033's declaration, resolved: the host
 	// narrows these fields to the sources the reader may still read.
 	Derived  []DerivationInfo `json:"-"`
@@ -437,7 +439,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	if info.Title == "" {
 		info.Title = e.Type
 	}

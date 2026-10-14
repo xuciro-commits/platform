@@ -47,8 +47,9 @@ type Object struct {
 	// Implements names the interfaces this object carries the fields of; Extends
 	// names an installed object type this one adds fields to, one record per base
 	// record through its `base` reference (ADR-0058 A2, A3).
-	Implements []string `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
-	Extends    string   `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
+	Implements      []string                  `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
+	Extends         string                    `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
+	ExtensionSource *platform.ExtensionSource `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
 	// Numbering (ADR-0076) gives every new record a document number in a text field: <prefix>[<year>-]<n>, gapless in order of creation.
 	Numbering *Numbering `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
 	State     string     `json:"state" field:"readonly" choices:"draft,published"`

@@ -228,6 +228,9 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 	if err != nil {
 		return nil, err
 	}
+	if err := trial.checkExtensionSet(); err != nil {
+		return nil, err
+	}
 	targets := map[string]platform.EntityInfo{}
 	for _, typ := range types {
 		if next := trial.records.types[typ]; next != nil {

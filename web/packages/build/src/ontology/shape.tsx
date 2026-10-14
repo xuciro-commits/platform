@@ -5,7 +5,7 @@
 import { useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, Select, t, type EntityInfo } from "@platform/ui";
-import { baseField, missingInterfaceFields, type Field, type Process } from "./object-model";
+import { baseField, missingInterfaceFields, type Field, type ObjectRecord, type Process } from "./object-model";
 
 /** Every interface the tenant's apps declare, with the app declaring it. */
 export function useInterfaces() {
@@ -13,7 +13,7 @@ export function useInterfaces() {
   return (apps.data ?? []).flatMap((app) => (app.interfaces ?? []).map((shape) => ({ ...shape, app: app.id })));
 }
 
-export function ShapeEditor({ process, parent, entities, onChange }: { process: Process; parent: string; entities: EntityInfo[]; onChange: (next: Process) => void }) {
+export function ShapeEditor({ process, parent, entities, source, onChange }: { process: Process; parent: string; entities: EntityInfo[]; source?: ObjectRecord["extensionSource"]; onChange: (next: Process) => void }) {
   const interfaces = useInterfaces();
   const implemented = process.implements ?? [];
   const bases = entities.filter((entity) => entity.type !== parent);
@@ -23,7 +23,7 @@ export function ShapeEditor({ process, parent, entities, onChange }: { process: 
   const extend = (type: string) => {
     const fields = process.fields.filter((f) => f.name !== baseField);
     if (type) fields.unshift({ name: baseField, title: entities.find((e) => e.type === type)?.title ?? t("Base record"), type: "reference", ref: type, required: true, inverse: parent.split(".").pop() });
-    onChange({ ...process, extends: type, fields, states: type ? [] : process.states, actions: type ? [] : process.actions });
+    onChange({ ...process, extends: type, fields });
   };
   return <div className="grid gap-3 rounded-md border border-border p-3">
     <h3 className="text-sm font-semibold">{t("Shape")}</h3>
@@ -43,7 +43,8 @@ export function ShapeEditor({ process, parent, entities, onChange }: { process: 
         <option value="">{t("Nothing: a type of its own")}</option>
         {bases.map((entity) => <option key={entity.type} value={entity.type}>{entity.title} · {entity.type}</option>)}
       </Select>
-      <span className="text-muted">{t("An extension adds fields to an installed object: one record per base record through its required base reference. Its lifecycle stays the base type's, so it has no states or actions of its own.")}</span>
+      <span className="text-muted">{t("An extension owns its fields and actions through one record per base record. Publishing captures the base package version; upgrades report conflicting fields.")}</span>
+      {source && source.base.ref.name === process.extends && <span>{t("Published against {base} version {version}", { base: source.base.ref.name, version: source.base.sourceVersion })}</span>}
     </label>
   </div>;
 }

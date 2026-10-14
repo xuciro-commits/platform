@@ -87,6 +87,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [canActivate, setCanActivate] = useState(false);
   const [activationDiagnostic, setActivationDiagnostic] = useState("");
   const [upgradePlan, setUpgradePlan] = useState<Api.ReleaseUpgradePlan>();
+  const [extensions, setExtensions] = useState<Api.ReleaseExtensionReview[]>([]);
   const [origin, setOrigin] = useState<{ from: string; at?: string }>();
   const [promotedTo, setPromotedTo] = useState<Api.PromotionTarget[]>([]);
   const wentTo = (targets?: Api.PromotionTarget[]) => (targets ?? []).map((target) => `${target.tenant} (${target.active ? t("active") : t("awaiting review")})`).join(", ");
@@ -138,7 +139,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   }
   const clearReview = () => {
     setReview(undefined); setAssets([]); setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic("");
-    setCanActivate(false); setActivationDiagnostic(""); setUpgradePlan(undefined); setOrigin(undefined); setPromotedTo([]);
+    setCanActivate(false); setActivationDiagnostic(""); setUpgradePlan(undefined); setExtensions([]); setOrigin(undefined); setPromotedTo([]);
     setPlanID(""); setReportID("");
   };
   const readSaved = async (candidateID: string) => {
@@ -152,6 +153,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
       setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
       setUpgradePlan(result.body.upgradePlan);
+      setExtensions(result.body.extensions ?? []);
       setOrigin(result.body.from ? { from: result.body.from, at: result.body.promotedAt } : undefined);
       setPromotedTo(result.body.promotedTo ?? []);
       setConfirmedUpgrade(current => current === result.body.upgradePlan?.id ? current : "");
@@ -348,6 +350,14 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {savedReview && <p className="text-sm" role="status">{runningDiagnostic ? t("Current definitions could not be compared with this candidate.") : runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
       {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation installs the candidate's included objects, pages, applications, workflows, AI functions and code functions together.")}</p>}
       {savedReview && activationDiagnostic && <p role="alert" className="text-sm text-warning">{activationDiagnostic}</p>}
+      {savedReview && extensions.length > 0 && <Card role="region" aria-label={t("Customer extensions")} className="grid gap-2 p-3">
+        <h3 className="text-sm font-medium">{t("Customer extensions")}</h3>
+        {extensions.map(extension => <div key={extension.type} className="grid gap-1 text-xs">
+          <span>{extension.type} · {extension.base.ref.name} · {extension.base.sourceVersion || t("Original version not recorded")} → {extension.targetVersion}</span>
+          <span>{t("Retained fields")}: {extension.fields.join(", ")}</span>
+          {extension.issue && <p role="alert" className="text-warning">{extension.issue}</p>}
+        </div>)}
+      </Card>}
       {savedReview && upgradePlan && <Card role="group" className="grid gap-2 p-3" aria-label={t("Storage upgrade plan")}>
         <h3 className="text-sm font-semibold">{t("Storage upgrade plan")}</h3>
         <p className="text-xs text-muted">{t("Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.")}</p>

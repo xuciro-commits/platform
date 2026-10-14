@@ -270,6 +270,9 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := trial.checkExtensionSet(); err != nil {
+		return nil, nil, err
+	}
 	if activating {
 		if err := t.validateAssetStorage(trial, upgrade); err != nil {
 			return nil, nil, err

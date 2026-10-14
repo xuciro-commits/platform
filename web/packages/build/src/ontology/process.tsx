@@ -101,7 +101,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
         {[[t("Properties"), process.fields.length], [t("States"), process.states.length], [t("Actions"), process.actions.length], [t("Roles"), process.access.length]].map(([label, n]) => <div key={String(label)} className="rounded-md border border-border p-3"><dt className="text-xs text-muted">{label}</dt><dd className="text-xl font-semibold">{n}</dd></div>)}
       </dl>
       <p className="text-sm text-muted">{t("Properties describe a record; the lifecycle says which states it passes through; actions are the governed steps people take; permissions say who may read and change it. Preview shows the object as people will see it.")}</p>
-      <ShapeEditor process={process} parent={parent} entities={entities} onChange={change} />
+      <ShapeEditor process={process} parent={parent} entities={entities} source={object.extensionSource} onChange={change} />
       {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
     </div>,
     properties: <div className="grid content-start gap-3 p-4">

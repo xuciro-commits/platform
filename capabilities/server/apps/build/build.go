@@ -112,6 +112,9 @@ func (b *Build) objectEntity() platform.Entity {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
 					if !c.Replaying {
+						if err := b.captureExtensionSource(object); err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+						}
 						if err := b.normalizeObjectRules(object); err != nil {
 							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 						}
@@ -254,6 +257,11 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 		if !ok || record.State != "published" || record.ID != published.ID ||
 			record.Name != published.Name || record.Installed != buildapi.TypeOf(published.Name) {
 			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted object has no matching published definition")
+		}
+		if published.ExtensionSource != nil {
+			if err := published.ExtensionSource.Check(published.Extends); err != nil {
+				return platform.Entity{}, nil, nil, nil, err
+			}
 		}
 		entity := b.entity(published)
 		actions := platform.EntityActions(entity)
@@ -772,12 +780,21 @@ func (b *Build) checkShape(o Object) error {
 		if o.Extends == buildapi.TypeOf(o.Name) || !b.fieldKnown(o.Extends) {
 			return fmt.Errorf("the object cannot extend %s: not an object type this tenant has", o.Extends)
 		}
-		if len(o.States) > 0 || len(o.Actions) > 0 {
-			return fmt.Errorf("an extension adds fields to %s; its lifecycle stays the base type's", o.Extends)
-		}
 		k := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == BaseField })
 		if k < 0 || o.Fields[k].Type != "reference" || o.Fields[k].Ref != o.Extends || !o.Fields[k].Required {
 			return fmt.Errorf("an extension of %s needs a required reference field %q pointing at it", o.Extends, BaseField)
+		}
+		if base, exists := b.lookupEntity(o.Extends); exists {
+			info, err := platform.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
+			if err != nil {
+				return err
+			}
+			// An editable draft may explicitly rebind its base at publication.
+			// Installed declarations retain their source and are checked at upgrade.
+			info.ExtensionSource = nil
+			if err := platform.CheckExtension(info, base); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1250,7 +1267,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model), ValidateAt: numberingOf(o, model)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model, lookup), ValidateAt: numberingOf(o, model)}
 }
 
 // page is the list and detail page a defined object comes with: the same
