@@ -119,6 +119,15 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			}
 			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
 				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+		case platform.AssetAgent:
+			if def.Agent == nil {
+				return nil, fmt.Errorf("code agent has no owner descriptor")
+			}
+			body, err := json.Marshal(def.Agent)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
 		case platform.AssetCompute:
 			if def.Operation == nil {
 				return nil, fmt.Errorf("compute %s has no owner declaration", def.Ref)
@@ -139,13 +148,19 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			available = append(available, asset)
 		}
 	}
-	if len(manifest.Pages) > 0 {
+	if len(available) > 0 {
 		pages := make([]string, len(manifest.Pages))
 		for i, page := range manifest.Pages {
 			pages[i] = page.Name
 		}
+		resources := []platform.AssetRef{}
+		for _, asset := range available {
+			if asset.Ref.Kind != platform.AssetPage && asset.Ref.Kind != platform.AssetApp {
+				resources = append(resources, asset.Ref)
+			}
+		}
 		asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
-			platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages})
+			platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: resources})
 		if err != nil {
 			return nil, err
 		}

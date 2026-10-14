@@ -458,6 +458,13 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			apps = append(apps, app)
 		}
 	}
+	if slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetAgent }) {
+		app, err := fresh(AgentApp)
+		if err != nil {
+			return nil, err
+		}
+		apps = append(apps, app)
+	}
 	for _, manifest := range environment.Manifests {
 		apps = append(apps, newSampleOwner(member.Tenant, manifest))
 	}
@@ -485,7 +492,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if asset.Ref.App != build.ID {
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute {
+		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent {
 			continue // compiled after its source objects below
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
@@ -557,6 +564,13 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetQuery {
 			if err := b.InstallQueryAsset(asset); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind == platform.AssetAgent && asset.Ref.App == build.ID {
+			if err := b.InstallAgentAsset(asset); err != nil {
 				return nil, err
 			}
 		}

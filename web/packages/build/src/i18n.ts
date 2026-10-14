@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Capacity and recovery declarations": "容量与恢复声明",
+  "Declare the expected scale and retention for this application. Recovery targets require evidence from its environment.": "声明此应用的预期规模与保留周期。恢复目标须由所属环境的演练证据支持。",
+  "Expected records: {type}": "预期记录数：{type}",
+  "Expected runs": "预期运行数量",
+  "Retention: {kind}": "保留周期：{kind}",
+  "Maximum acceptable data loss period": "最大可接受数据丢失时段",
+  "Target recovery time": "目标恢复时间",
+  "Use durations such as 24h, 168h or 30m. These declarations do not delete data or grant access.": "时段填写如 24h、168h 或 30m。这些声明不会删除数据或授予访问权限。",
   "Read alias of": "只读别名目标",
   "No read alias": "不设置读取别名",
   "Keep an old field name readable after migration. It follows the selected field and cannot be edited directly.": "迁移后保留旧字段名的读取；其值跟随所选字段，不可直接编辑。",

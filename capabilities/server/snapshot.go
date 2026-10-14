@@ -27,34 +27,35 @@ import (
 // CheckReplay holds every composition to that. A snapshot is only a shortcut:
 // the journal stays the truth, and a snapshot of other code is never used.
 type tenantState struct {
-	SubmissionSchemas map[string]platform.SchemaVersion `json:"submissionSchemas,omitempty"`
-	Apps              map[string]json.RawMessage        `json:"apps"`
-	Records           map[string][]recordState          `json:"records"`
-	Audit             []AuditEntry                      `json:"audit"`
-	Refusals          map[string]refusedResult          `json:"refusals,omitempty"`
-	AcceptedAnswers   map[string]json.RawMessage        `json:"acceptedAnswers,omitempty"`
-	AcceptedInputs    map[string]json.RawMessage        `json:"acceptedInputs,omitempty"`
-	ReleaseCandidates map[string]json.RawMessage        `json:"releaseCandidates,omitempty"`
-	ReleaseRequests   map[string]string                 `json:"releaseRequests,omitempty"`
-	ReleaseApplied    map[string]string                 `json:"releaseApplied,omitempty"`
-	ActiveRelease     string                            `json:"activeRelease,omitempty"`
-	Deliveries        []Delivery                        `json:"deliveries"`
-	Acted             int                               `json:"acted"`
-	Bindings          map[string]string                 `json:"bindings"` // protocol → provider app
-	Works             json.RawMessage                   `json:"works"`
-	Queues            map[string][]string               `json:"queues"` // subscriber → task IDs, head first
-	Failed            []string                          `json:"failed"`
-	Tasks             []taskState                       `json:"tasks"` // every delivery task, by ID
-	Jobs              []Task                            `json:"jobs"`
-	Connectors        json.RawMessage                   `json:"connectors"`
-	Marks             []kernel.ConnectorMark            `json:"marks"`
-	LastError         map[string]ConnectorError         `json:"lastError"`
-	Notices           []platform.Notification           `json:"notices"`
-	NoticeSeq         int                               `json:"noticeSeq"`
-	Settings          map[string]string                 `json:"settings"`
-	Words             map[string]map[string]string      `json:"words,omitempty"` // the tenant's translations (ADR-0083)
-	Endpoints         []*Endpoint                       `json:"endpoints"`
-	Outbound          []effectState                     `json:"outbound"`
+	DecisionDefinitions map[string]*DecisionDefinition    `json:"decisionDefinitions,omitempty"`
+	SubmissionSchemas   map[string]platform.SchemaVersion `json:"submissionSchemas,omitempty"`
+	Apps                map[string]json.RawMessage        `json:"apps"`
+	Records             map[string][]recordState          `json:"records"`
+	Audit               []AuditEntry                      `json:"audit"`
+	Refusals            map[string]refusedResult          `json:"refusals,omitempty"`
+	AcceptedAnswers     map[string]json.RawMessage        `json:"acceptedAnswers,omitempty"`
+	AcceptedInputs      map[string]json.RawMessage        `json:"acceptedInputs,omitempty"`
+	ReleaseCandidates   map[string]json.RawMessage        `json:"releaseCandidates,omitempty"`
+	ReleaseRequests     map[string]string                 `json:"releaseRequests,omitempty"`
+	ReleaseApplied      map[string]string                 `json:"releaseApplied,omitempty"`
+	ActiveRelease       string                            `json:"activeRelease,omitempty"`
+	Deliveries          []Delivery                        `json:"deliveries"`
+	Acted               int                               `json:"acted"`
+	Bindings            map[string]string                 `json:"bindings"` // protocol → provider app
+	Works               json.RawMessage                   `json:"works"`
+	Queues              map[string][]string               `json:"queues"` // subscriber → task IDs, head first
+	Failed              []string                          `json:"failed"`
+	Tasks               []taskState                       `json:"tasks"` // every delivery task, by ID
+	Jobs                []Task                            `json:"jobs"`
+	Connectors          json.RawMessage                   `json:"connectors"`
+	Marks               []kernel.ConnectorMark            `json:"marks"`
+	LastError           map[string]ConnectorError         `json:"lastError"`
+	Notices             []platform.Notification           `json:"notices"`
+	NoticeSeq           int                               `json:"noticeSeq"`
+	Settings            map[string]string                 `json:"settings"`
+	Words               map[string]map[string]string      `json:"words,omitempty"` // the tenant's translations (ADR-0083)
+	Endpoints           []*Endpoint                       `json:"endpoints"`
+	Outbound            []effectState                     `json:"outbound"`
 	// The host console's lifecycle and support sessions (ADR-0047 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
 	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
@@ -394,6 +395,20 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 				if owner == nil || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 					return fmt.Errorf("composite snapshot has no accepted receipt")
 				}
+			}
+		}
+	}
+	if len(s.DecisionDefinitions) > 0 {
+		receipts := map[string]*pb.ChangeRecord{}
+		for _, app := range t.apps {
+			for _, receipt := range app.AcceptedLedger().RecordsFor(t.ID) {
+				receipts[app.Manifest().ID+"/"+receipt.GetChangeId()] = receipt
+			}
+		}
+		for key, definition := range s.DecisionDefinitions {
+			receipt := receipts[key]
+			if definition == nil || receipt == nil || definition.check(receipt.GetSubmission().GetAuthority(), receipt.GetSubmission().GetSchema().GetName()) != nil || definition.Contract.Family != receipt.GetSubmission().GetSchema().GetVersion() {
+				return fmt.Errorf("tenant %s: decision definition snapshot %s has no matching receipt", t.ID, key)
 			}
 		}
 	}

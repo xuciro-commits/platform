@@ -31,6 +31,13 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	bound.jointEntities = map[string]platform.EntityInfo{}
 	bound.jointMode = true
 	for _, asset := range assets {
+		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetAgent {
+			agent, err := decodeAgentAsset(asset)
+			if err != nil {
+				return nil, err
+			}
+			bound.agents[agent.Name] = agent
+		}
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}

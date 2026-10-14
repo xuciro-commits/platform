@@ -263,6 +263,24 @@ func (t *Tenant) registerDefinitions() error {
 				return err
 			}
 		}
+		for _, agent := range manifest.Agents {
+			cases := []map[string]any{}
+			for _, test := range agent.Cases {
+				cases = append(cases, map[string]any{"name": test.Name, "goal": test.Goal, "ref": test.Ref, "check": test.Check != nil})
+			}
+			raw, err := json.Marshal(cases)
+			if err != nil {
+				return err
+			}
+			descriptor := platform.AgentReleaseDescriptor{Name: agent.Name, Title: agent.Title, Description: agent.Description, Instructions: agent.Instructions, Tools: slices.Clone(agent.Tools), Budget: agent.Budget, Native: true, Guard: agent.Guard != nil, Handoff: agent.To != nil, Cases: raw}
+			if err := descriptor.Check(); err != nil {
+				return err
+			}
+			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetAgent, Name: agent.Name}
+			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: descriptor.Dependencies(manifest.ID), Agent: &descriptor}); err != nil {
+				return err
+			}
+		}
 		for _, operation := range manifest.Operations {
 			o := operation
 			if err := o.Check(); err != nil {
@@ -281,6 +299,27 @@ func (t *Tenant) registerDefinitions() error {
 			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetCompute, Name: o.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: []platform.AssetRef{}, Operation: &o}); err != nil {
 				return err
 			}
+		}
+	}
+	for _, app := range t.apps {
+		manifest := app.Manifest()
+		pages, resources := []string{}, []platform.AssetRef{}
+		for _, definition := range t.definitions {
+			if definition.Ref.App != manifest.ID || definition.Source != "code" {
+				continue
+			}
+			if definition.Ref.Kind == platform.AssetPage {
+				pages = append(pages, definition.Ref.Name)
+			} else if definition.Ref.Kind != platform.AssetApp {
+				resources = append(resources, definition.Ref)
+			}
+		}
+		if len(pages) == 0 && len(resources) == 0 {
+			continue
+		}
+		declaration := platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: resources}
+		if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetApp, Name: manifest.ID}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: declaration.Dependencies(manifest.ID), Application: &declaration}); err != nil {
+			return err
 		}
 	}
 	for _, et := range t.records.sortedTypes() {
@@ -350,6 +389,41 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 // publication images. Direct publication and recovery use the same index;
 // reading it never installs definitions or changes the live registry.
 func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.Definition, error) {
+	base = slices.Clone(base)
+	base = slices.DeleteFunc(base, func(definition platform.Definition) bool {
+		return definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
+	})
+	for _, owner := range t.apps {
+		provider, ok := owner.(platform.AssetLifecycleOwner)
+		if !ok {
+			continue
+		}
+		assets, err := provider.ReleaseAssets()
+		if err != nil {
+			return nil, err
+		}
+		for _, asset := range assets {
+			if asset.Ref.Kind != platform.AssetAgent {
+				continue
+			}
+			var descriptor platform.AgentReleaseDescriptor
+			if json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Check() != nil {
+				return nil, fmt.Errorf("agent descriptor is unavailable")
+			}
+			ownerRecord := ""
+			t.records.mu.Lock()
+			if records := t.records.types[asset.Ref.App+".agent"]; records != nil {
+				for id, row := range records.rows.all() {
+					if businessField(records.info, row.value, "name") == asset.Ref.Name && !recordOf(row.value).Archived {
+						ownerRecord = records.info.Type + "/" + id
+						break
+					}
+				}
+			}
+			t.records.mu.Unlock()
+			base = append(base, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Agent: &descriptor, OwnerRecord: ownerRecord})
+		}
+	}
 	type image struct {
 		app, schema, record string
 		raw                 json.RawMessage
@@ -551,6 +625,18 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				return !found
 			}) {
 				continue
+			}
+		case platform.AssetAgent:
+			if def.Agent == nil || !m.Active() || len(m.RolesIn(def.Ref.App)) == 0 && !m.Holds(AgentApp, AgentAdmin) {
+				continue
+			}
+			if def.Source == "builder" && (def.OwnerRecord == "" || !t.Readable(m, def.OwnerRecord, time.Now())) {
+				continue
+			}
+			if !slices.Contains(m.RolesIn(def.Ref.App), "builder") {
+				projection := *def.Agent
+				projection.Instructions, projection.Tools, projection.Checkpoints, projection.Cases = "", nil, nil, nil
+				def.Agent = &projection
 			}
 		case platform.AssetCompute:
 			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
@@ -1024,7 +1110,7 @@ func (t *Tenant) visibleApplication(registered platform.Definition, m platform.M
 		return !opens[platform.AssetRef{App: def.Ref.App, Kind: platform.AssetPage, Name: name}]
 	}
 	application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), closed)
-	if len(application.Pages) == 0 {
+	if len(application.Pages) == 0 && len(application.Resources) == 0 {
 		return platform.Definition{}, false
 	}
 	// A heading over none of this member's pages is not in their navigation.
@@ -1042,6 +1128,9 @@ func (t *Tenant) visibleApplication(registered platform.Definition, m platform.M
 		}
 		return !visibleResources[ref]
 	})
+	if len(application.Pages) == 0 && len(application.Resources) == 0 {
+		return platform.Definition{}, false
+	}
 	application.Queries = maps.Clone(application.Queries)
 	application.Variables = maps.Clone(application.Variables)
 	for id, q := range application.Queries {

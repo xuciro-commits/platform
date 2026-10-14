@@ -31,7 +31,7 @@ func (rt *routes) handle(route Route, f func(w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if t.quarantined() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") &&
+		if t.quarantined() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health" && r.Pattern != "GET /v1/applications/{app}/{name}/runtime") &&
 			(r.Method != http.MethodPost || r.URL.Path != "/v1/recovery/retry") {
 			WriteJSON(w, http.StatusServiceUnavailable, map[string]any{
 				"error": map[string]string{"code": "TENANT_QUARANTINED"}})

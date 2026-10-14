@@ -3,7 +3,7 @@ import { releaseDraftsValue } from "../releases/release";
 // makes. A project is the host's Application (`build.app`); its tree lists what
 // it owns by the host's asset kinds, `+ New` creates a resource inside it, `Add
 // existing` brings one in, and its pages, navigation and header are its interface.
-import { pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
+import { ApplicationRuns, pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, t, useUnsavedChanges, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { Boxes, Braces, Database, FolderKanban, Layers, LayoutTemplate, Link2, Plus, Search, Sparkles, Tags, Workflow } from "lucide-react";
@@ -11,14 +11,13 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
 import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
-import { ProjectRuns } from "./project-runs";
 import { ProjectRoles } from "./project-roles";
 import { kindOfType, refKey, resourceGroups, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
 export const kindIcon: Record<string, ReactNode> = {
-  object: <Boxes />, "link-type": <Link2 />, "property-type": <Tags />, query: <Search />, page: <LayoutTemplate />, flow: <Workflow />, function: <Sparkles />, compute: <Braces />,
+  object: <Boxes />, "link-type": <Link2 />, "property-type": <Tags />, query: <Search />, page: <LayoutTemplate />, flow: <Workflow />, function: <Sparkles />, agent: <Sparkles />, compute: <Braces />,
   connection: <Link2 />, source: <Database />, dataset: <Database />, pipeline: <Workflow />, writeback: <Link2 />, matching: <Layers />,
 };
 
@@ -128,7 +127,7 @@ export function ProjectHome({ id }: { id: string }) {
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string>();
   const [tab, setTab] = useState<"resources" | "runs" | "roles" | "settings">("resources");
-  const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string }>();
+  const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
   const [importedDependencies, setImportedDependencies] = useState<ApplicationImportDependency[]>([]);
@@ -145,7 +144,7 @@ export function ProjectHome({ id }: { id: string }) {
   const [edited, setEdited] = useState(false);
   const lock = useRef(false);
   const baseline = useRef<{ values: NonNullable<typeof settings>; revision: number } | undefined>(undefined);
-  const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes" });
+  const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes", profile: structuredClone(p.profile ?? {}) });
   useEffect(() => {
     if (project && !edited) {
       const values = fromRecord(project);
@@ -159,6 +158,7 @@ export function ProjectHome({ id }: { id: string }) {
     if (!current) return {} as Partial<Api.Application>;
     const out: Partial<Api.Application> = {};
     for (const key of ["title", "name", "description", "icon"] as const) if (settings[key] !== current[key]) out[key] = settings[key];
+    if (JSON.stringify(settings.profile) !== JSON.stringify(current.profile)) out.profile = settings.profile;
     return out;
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
@@ -295,7 +295,7 @@ export function ProjectHome({ id }: { id: string }) {
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || !!pendingPatch || !!createdResource || !project.pages?.length} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
+        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Project resources"), content: tree }}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
@@ -352,13 +352,36 @@ export function ProjectHome({ id }: { id: string }) {
             </div>
           </aside>
         </div>}
-        {tab === "runs" && <ProjectRuns owned={owned} project={project.id} />}
+        {tab === "runs" && <ApplicationRuns owner="build" name={project.name} />}
         {tab === "roles" && <ProjectRoles owned={owned} />}
         {tab === "settings" && settings && <fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Icon")}<IconPicker value={settings.icon} disabled={!builder} onChange={(icon) => editSettings({ ...settings, icon })} /></label>
           <label className="grid gap-1 text-xs">{t("Description")}<Textarea rows={3} value={settings.description} disabled={!builder} onChange={(event) => editSettings({ ...settings, description: event.target.value })} /></label>
+          <PanelSection title={t("Capacity and recovery declarations")}>
+            <p className="text-xs text-muted">{t("Declare the expected scale and retention for this application. Recovery targets require evidence from its environment.")}</p>
+            {owned.filter(resource => resource.ref.kind === "object").map(resource => <label className="grid gap-1 text-xs" key={refKey(resource.ref)}>
+              {t("Expected records: {type}", { type: resource.title })}
+              <Input type="number" step={1} min={1} value={settings.profile.expectedRecords?.[resource.ref.name] ?? ""} disabled={!builder} onChange={event => {
+                const expectedRecords = { ...settings.profile.expectedRecords };
+                if (event.target.value) expectedRecords[resource.ref.name] = Number(event.target.value); else delete expectedRecords[resource.ref.name];
+                editSettings({ ...settings, profile: { ...settings.profile, expectedRecords } });
+              }} />
+            </label>)}
+            <label className="grid gap-1 text-xs">{t("Expected runs")}<Input type="number" step={1} min={0} value={settings.profile.expectedRuns ?? ""} disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, expectedRuns: Number(event.target.value) } })} /></label>
+            {(["runs", "logs", "effects", "ai", "compute"] as const).map(kind => <label className="grid gap-1 text-xs" key={kind}>
+              {t("Retention: {kind}", { kind: t(kind) })}
+              <Input value={settings.profile.retention?.[kind] ?? ""} placeholder="168h" disabled={!builder} onChange={event => {
+                const retention = { ...settings.profile.retention };
+                if (event.target.value) retention[kind] = event.target.value; else delete retention[kind];
+                editSettings({ ...settings, profile: { ...settings.profile, retention } });
+              }} />
+            </label>)}
+            <label className="grid gap-1 text-xs">{t("Maximum acceptable data loss period")}<Input value={settings.profile.rpo ?? ""} placeholder="1h" disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, rpo: event.target.value } })} /></label>
+            <label className="grid gap-1 text-xs">{t("Target recovery time")}<Input value={settings.profile.rto ?? ""} placeholder="4h" disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, rto: event.target.value } })} /></label>
+            <p className="text-xs text-muted">{t("Use durations such as 24h, 168h or 30m. These declarations do not delete data or grant access.")}</p>
+          </PanelSection>
           {error && <p role="alert" className="text-xs text-danger">{error}</p>}
           <p className="text-xs text-muted">{t("Changes save automatically.")}</p>
           <div className="flex gap-2">

@@ -76,6 +76,10 @@ func TestCommittedResultCorruptionQuarantinesOnlyItsTenant(t *testing.T) {
 	if code, body := call("/v1/health", "t-1"); code != 200 || !strings.Contains(body, `"status":"quarantined"`) {
 		t.Fatalf("health: %d %s", code, body)
 	}
+	if code, body := call("/v1/applications/stock/stock/runtime", "t-1"); code != 200 || !strings.Contains(body, `"state":"isolated"`) || !strings.Contains(body, `"predecessors":"unverified"`) || strings.Contains(body, `"records":1`) {
+		t.Fatalf("isolated application recovery projection: %d %s", code, body)
+	}
+
 	if code, body := call("/v1/me", "t-2"); code != 200 || !strings.Contains(body, `"tenantId":"t-2"`) {
 		t.Fatalf("good tenant: %d %s", code, body)
 	}

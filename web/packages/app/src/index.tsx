@@ -1,5 +1,5 @@
 import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
-export { ApplicationRuns, OperationRunView } from "./automation/application-runs";
+export { ApplicationRuns, ApplicationRuntimePanel, OperationRunView } from "./automation/application-runs";
 export {createRecordExploration,type RecordExplorationReader} from "./exploration/reader";
 import {createRecordCollaboration} from "./collaboration/service";
 export {createRecordCollaboration} from "./collaboration/service";

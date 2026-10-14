@@ -19,6 +19,7 @@ import (
 // Application is an application this organisation hands to its people.
 type Application struct {
 	platform.Record
+	Profile     *platform.ApplicationProfile     `json:"profile,omitempty" field:"aside" type:"json" title:"Application profile" help:"Expected records and runs, retention and recovery declarations; actual guarantees require environment evidence"`
 	Header      *platform.ApplicationHeader      `json:"header,omitempty" field:"aside" type:"json" title:"Application header"`
 	UIProfile   string                           `json:"uiProfile,omitempty" field:"aside" title:"UI profile"`
 	Queries     map[string]platform.PageQuery    `json:"queries,omitempty" field:"aside" type:"json" title:"Application queries"`
@@ -51,6 +52,11 @@ func (b *Build) applicationEntity() platform.Entity {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			a.Variables = d.Variables
+			if a.Profile != nil {
+				if err := a.Profile.Check(); err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+			}
 			return nil
 		},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "applications"},
@@ -98,7 +104,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
+	return platform.Application{Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
 }
 
 // checkApplication refuses an application people could not open: a name that is
@@ -107,8 +113,8 @@ func (b *Build) checkApplication(a Application) error {
 	if err := b.checkName(a.Name, a.ID); err != nil {
 		return err
 	}
-	if len(a.Pages) == 0 {
-		return fmt.Errorf("an application holds at least one page")
+	if len(a.Pages) == 0 && len(a.Resources) == 0 {
+		return fmt.Errorf("an application needs pages or declared resources")
 	}
 	if a.Icon != "" && !platform.IconName(a.Icon) {
 		return fmt.Errorf("%q is not an icon name: lower-case letters, digits and dashes", a.Icon)

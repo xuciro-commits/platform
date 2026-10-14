@@ -29,7 +29,7 @@ export const entries: CatalogEntry[] = [
     dependencies: ["ui/record-page", "app/record-actions"], uses: ["code", "widget"], widgets: ["detail", "timeline", "tasks"],
     states: ["loading", "error", "pending", "conflict"], snippet: 'import { RecordDetail } from "@platform/app";\n<RecordDetail type="your.object" id={selectedID} />',
   }),
-  asset("application-runs", "Application runtime diagnostics", "Inspect authorized current and historical resource-linked runs without claiming exclusive application origin.", ["ApplicationRuns"], "ApplicationRunsExample", {
+  asset("application-runs", "Application runtime diagnostics", "Inspect authorized current and historical resource-linked runs without claiming exclusive application origin.", ["ApplicationRuns", "ApplicationRuntimePanel"], "ApplicationRunsExample", {
     source: "web/packages/app/src/automation/application-runs.tsx", uses: ["code", "reference"], dependencies: ["ui/data-table", "app/flow-instance", "app/agent-run", "app/operation-run"], states: ["loading", "error", "shared", "failed"],
     snippet: 'import { ApplicationRuns } from "@platform/app";\n<ApplicationRuns owner="build" name="yourapp" />',
   }),

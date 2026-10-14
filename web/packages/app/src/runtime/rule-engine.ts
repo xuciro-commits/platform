@@ -10,7 +10,15 @@ let loading:Promise<void>|undefined;
 export function initializeRules():Promise<void>{
  if(runtime.platformRuleVersion==="platform.expr.v1")return Promise.resolve();
  return loading??= (async()=>{
-  const runtimeURL="/rules/wasm_exec.js";await import(/* @vite-ignore */ runtimeURL);
+  if(!runtime.Go && typeof document !== "undefined"){
+   await new Promise<void>((resolve,reject)=>{
+    const script=document.createElement("script");
+    script.src="/rules/wasm_exec.js";
+    script.onload=()=>resolve();
+    script.onerror=()=>reject(new Error("Rule runtime is unavailable."));
+    document.head.appendChild(script);
+   });
+  }
   if(!runtime.Go)throw new Error("Rule runtime is unavailable.");
   const go=new runtime.Go(),response=await fetch("/rules/engine.wasm");
   if(!response.ok)throw new Error("Rule module is unavailable.");

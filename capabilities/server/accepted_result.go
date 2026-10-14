@@ -26,6 +26,7 @@ const acceptedResultVersion = 4
 const maxAcceptedResultBytes = 1 << 20
 
 type acceptedResult struct {
+	Definition     *DecisionDefinition     `json:"definition,omitempty"`
 	SchemaVersion  *platform.SchemaVersion `json:"schemaVersion,omitempty"`
 	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
 	Version        int                     `json:"version"`
@@ -140,7 +141,8 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		version, kind = acceptedResultVersion, "pure-transition"
 	}
 	result := acceptedResult{Version: version, Tenant: receipt.GetSubmission().GetTenantId(),
-		Kind: kind, App: app, At: submittedAt.UTC(), RequestHash: hash, Receipt: raw, SchemaVersion: d.schemaVersion,
+		Definition: d.definitions[app+"/"+receipt.GetChangeId()],
+		Kind:       kind, App: app, At: submittedAt.UTC(), RequestHash: hash, Receipt: raw, SchemaVersion: d.schemaVersion,
 		Row:   acceptedRow{Type: typ, ID: id, Value: value, History: history},
 		Event: d.tenant.planAcceptedEvent(d.events[0]), Authorizations: slices.Clone(d.authorizations)}
 	result.Digest, err = digestAcceptedResult(result)
@@ -224,6 +226,11 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 	}
 	if err := validateSubmissionSchemaVersion(sub, result.SchemaVersion); err != nil {
 		return result, nil, err
+	}
+	if result.Definition != nil {
+		if err := result.Definition.check(result.App, sub.GetSchema().GetName()); err != nil {
+			return result, nil, err
+		}
 	}
 	hash, err := submissionHash(sub, result.SchemaVersion)
 	if err != nil || result.RequestHash != hash {
@@ -320,6 +327,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.mu.Unlock()
 		changed, err := l.ApplyAcceptedChange(receipt)
 		if err == nil {
+			t.committed.saveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
 			t.committed.saveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
 		}
 		return changed, err
@@ -353,6 +361,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return false, err
 	}
 	t.committed.saveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
+	t.committed.saveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
 	if changed && publisher != nil {
 		if err := publisher.ApplyAcceptedPublication(receipt.GetSubmission().GetSchema().GetName(), result.Row.Value); err != nil {
 			return false, err

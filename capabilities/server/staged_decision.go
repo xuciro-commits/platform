@@ -20,6 +20,7 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
+	definitions          map[string]*DecisionDefinition
 	schemaVersion        *platform.SchemaVersion
 	retirements          []migrationRetirement
 	migrationDefinitions []releaseInstallation
@@ -119,6 +120,10 @@ func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submi
 }
 
 func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return d.decideAppFrom(c, app, s, at, d.routingTenant(), d.tenant.releases.active)
+}
+
+func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, view *Tenant, release string, retained ...[]platform.ReleaseAsset) (*pb.ChangeRecord, *kernel.Error) {
 	if app.AcceptedLedger() == nil {
 		unsupportedStagedEffect()
 	}
@@ -135,6 +140,10 @@ func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Su
 		d.at = at
 	}
 	c.Roles = maps.Clone(c.Roles)
+	definition, definitionErr := view.decisionDefinition(app, s, release, retained...)
+	if definitionErr != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The execution definition and dependencies are unavailable")
+	}
 	// Callers may reuse/edit their request object for a later nested action.
 	// Receipts and their staged idempotency entries must own the input bytes.
 	r, err := app.Submit(c, proto.Clone(s).(*pb.Submission), at)
@@ -143,6 +152,13 @@ func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Su
 	}
 	if d.failure != nil {
 		return nil, d.failure
+	}
+	if r != nil && definition != nil {
+		definition.Contract.Family = r.GetSubmission().GetSchema().GetVersion()
+		if d.definitions == nil {
+			d.definitions = map[string]*DecisionDefinition{}
+		}
+		d.definitions[id+"/"+r.GetChangeId()] = definition
 	}
 	return r, nil
 }

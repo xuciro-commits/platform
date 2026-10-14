@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -219,6 +220,11 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 }
 
 func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]releaseInstallation, json.RawMessage, error) {
+	if t.agents == nil && slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
+		return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetAgent
+	}) {
+		return nil, nil, fmt.Errorf("agent artifacts require the target's original agent runtime")
+	}
 	migrated := false
 	if activating {
 		var err error

@@ -252,6 +252,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		}
 	}
 	fork.events, fork.notices = slices.Clone(d.events), slices.Clone(d.notices)
+	fork.definitions = maps.Clone(d.definitions)
 	fork.sequences, fork.allocated, fork.sequenceBases = maps.Clone(d.sequences), maps.Clone(d.allocated), maps.Clone(d.sequenceBases)
 	fork.writers, fork.changed = cloneLists(d.writers), cloneLists(d.changed)
 	fork.noticeEffects, fork.publications = slices.Clone(d.noticeEffects), maps.Clone(d.publications)

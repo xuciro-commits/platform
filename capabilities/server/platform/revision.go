@@ -250,6 +250,13 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			if err := application.CheckVariables(); err != nil {
 				return err
 			}
+			contracts := make([]ReleaseAsset, 0, len(lookup))
+			for _, asset := range lookup {
+				contracts = append(contracts, asset)
+			}
+			if err := checkApplicationProfileClosure(ref, contracts); err != nil {
+				return err
+			}
 			if err := checkFrozenQueries(application.QueryPage(), lookup); err != nil {
 				return err
 			}
@@ -494,6 +501,18 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			return err
 		}
 		required = append(required, AssetRef{App: ref.App, Kind: AssetObject, Name: function.Object})
+	case AssetAgent:
+		var agent AgentReleaseDescriptor
+		if err := json.Unmarshal(body, &agent); err != nil {
+			return err
+		}
+		if agent.Name != ref.Name {
+			return fmt.Errorf("agent descriptor identity differs")
+		}
+		if err := agent.Check(); err != nil {
+			return err
+		}
+		required = append(required, agent.Dependencies(ref.App)...)
 	case AssetCompute:
 		var operation Operation
 		if err := json.Unmarshal(body, &operation); err != nil {
@@ -590,7 +609,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		}
 	case AssetApp:
 		var app Application
-		if err := json.Unmarshal(body, &app); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&app); err != nil {
 			return fmt.Errorf("release application %s: %w", ref, err)
 		}
 		if err := app.CheckResources(); err != nil {

@@ -55,9 +55,36 @@ func (h *Host) routesDiscovery(rt *routes) {
 	rt.metadata(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Entities(m), t.Language(m, r)))
 	})
-	rt.handle(Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: ApplicationRunPage{}, Query: []Param{{"offset", "Nonnegative run offset"}, {"limit", "1–100, default 50"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: ApplicationRunPage{}, Query: []Param{{"offset", "Nonnegative run offset"}, {"limit", "1–100, default 50"}, {"kind", "Run kind"}, {"state", "Original owner state"}, {"subject", "Exact type/id"}, {"since", "Inclusive RFC3339 startup time"}, {"until", "Inclusive RFC3339 startup time"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 50)
-		answer, err := t.ApplicationRuns(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, offset, limit, time.Now().UTC())
+		filter := ApplicationRunFilter{Kind: r.URL.Query().Get("kind"), State: r.URL.Query().Get("state"), Subject: r.URL.Query().Get("subject")}
+		for key, target := range map[string]*time.Time{"since": &filter.Since, "until": &filter.Until} {
+			if value := r.URL.Query().Get(key); value != "" {
+				parsed, err := time.Parse(time.RFC3339, value)
+				if err != nil {
+					Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run time range"))
+					return
+				}
+				*target = parsed
+			}
+		}
+		answer, err := t.ApplicationRuns(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, offset, limit, h.Now(), filter)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	rt.handle(Route{Pattern: "GET /v1/applications/{app}/{name}/runtime", Summary: "Installed application artifact, retained versions, authorized capacity and original-owner recovery projection", Answer: ApplicationRuntime{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.ApplicationRuntimeOf(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	rt.handle(Route{Pattern: "GET /v1/applications/{app}/{name}/records/{type}/{id}/diagnostic", Summary: "Original authorized record decisions and application runs without time-based execution attribution", Answer: ApplicationDiagnostic{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.ApplicationRecordDiagnostic(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetApp, Name: r.PathValue("name")}, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return

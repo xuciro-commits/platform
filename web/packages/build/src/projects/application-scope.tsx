@@ -5,7 +5,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { useWorkspace, type Route } from "@platform/ui";
 
 const Scope = createContext<string | undefined>(undefined);
-const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "code", "link-type", "property-type", "release-review", "changes", "release-history"]);
+const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "agent", "code", "link-type", "property-type", "release-review", "changes", "release-history"]);
 
 /** Everything a view renders inside carries the application it belongs to. */
 export function ApplicationScope({ application, children }: { application?: string; children: ReactNode }) {

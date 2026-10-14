@@ -103,6 +103,21 @@ export type AgentOverview = {
   judged: Record<string, number>;
 };
 
+export type AgentReleaseDescriptor = {
+  name: string;
+  title: string;
+  description: string;
+  instructions: string;
+  tools: string[];
+  budget: Budget;
+  checkpoints?: string[];
+  handoffRole?: string;
+  cases?: unknown;
+  native?: boolean;
+  guard?: boolean;
+  handoff?: boolean;
+};
+
 export type AgentRunRecord = {
   id: string;
   revision: number;
@@ -233,6 +248,7 @@ export type AppSettings = {
 };
 
 export type Application = {
+  profile?: ApplicationProfile;
   header?: ApplicationHeader;
   uiProfile?: string;
   variables?: Record<string, PageVariable>;
@@ -244,6 +260,51 @@ export type Application = {
   pages: string[];
   groups?: AppGroup[];
   resources?: AssetRef[];
+};
+
+export type ApplicationArtifact = {
+  ref: AssetRef;
+  version: string;
+  title: string;
+  profile?: ApplicationProfile;
+  model: AssetBinding[];
+  rules: AssetBinding[];
+  pages: AssetBinding[];
+  flows: AssetBinding[];
+  ai: AssetBinding[];
+  integrations: AssetBinding[];
+  roles: ApplicationRole[];
+  depends: AssetBinding[];
+  environment: ApplicationBinding[];
+};
+
+export type ApplicationBinding = {
+  ref: AssetRef;
+  kind: string;
+  credential?: boolean;
+};
+
+export type ApplicationData = {
+  ref: AssetRef;
+  records: number;
+  expected?: number;
+};
+
+export type ApplicationDecisionTrace = {
+  change: string;
+  schema: string;
+  at: string;
+  content?: SchemaVersion;
+  versions: ApplicationVersion[];
+  definition?: DecisionDefinition;
+};
+
+export type ApplicationDiagnostic = {
+  application: AssetRef;
+  type: string;
+  record: string;
+  decisions: ApplicationDecisionTrace[];
+  runs: ApplicationRun[];
 };
 
 export type ApplicationHeader = {
@@ -262,7 +323,41 @@ export type ApplicationHeaderItem = {
   action?: string;
 };
 
+export type ApplicationMonitoring = {
+  accepted: number;
+  refused: number;
+  constraintFailures: number;
+  refusalRate: number;
+  runs: ApplicationRunSummary;
+};
+
+export type ApplicationProfile = {
+  expectedRecords?: Record<string, number>;
+  expectedRuns?: number;
+  retention?: Record<string, string>;
+  rpo?: string;
+  rto?: string;
+};
+
+export type ApplicationRecovery = {
+  state: string;
+  predecessors: string;
+  quarantined: boolean;
+  scope: string;
+  pendingEffects: number;
+  failedRuns: number;
+};
+
+export type ApplicationRole = {
+  resource: AssetBinding;
+  role: string;
+  scope?: string;
+  readFields?: string[];
+  writeFields?: string[];
+};
+
 export type ApplicationRun = {
+  subject?: string;
   id: string;
   kind: string;
   title: string;
@@ -278,6 +373,9 @@ export type ApplicationRun = {
   association: string;
   shared: string[];
   created: string;
+  aiTokens?: number;
+  aiUsd?: number;
+  costReported?: boolean;
 };
 
 export type ApplicationRunPage = {
@@ -285,6 +383,43 @@ export type ApplicationRunPage = {
   title: string;
   runs: ApplicationRun[];
   total: number;
+  summary: ApplicationRunSummary;
+};
+
+export type ApplicationRunSummary = {
+  failed: number;
+  pendingEffects: number;
+  waitingFlows: number;
+  aiTokens: number;
+  aiUsd: number;
+  unmeteredAI: number;
+};
+
+export type ApplicationRuntime = {
+  artifact: ApplicationArtifact;
+  state: string;
+  scope: string;
+  versions: ApplicationVersion[];
+  previous?: string;
+  data: ApplicationData[];
+  runs: number;
+  warnings: ApplicationWarning[];
+  recovery: ApplicationRecovery;
+  monitoring: ApplicationMonitoring;
+};
+
+export type ApplicationVersion = {
+  version: string;
+  release?: string;
+  at?: string;
+  active: boolean;
+};
+
+export type ApplicationWarning = {
+  kind: string;
+  resource?: string;
+  actual: number;
+  expected: number;
 };
 
 export type ApprovalRequest = {
@@ -717,6 +852,16 @@ export type DateRange = {
   inclusive?: boolean;
 };
 
+export type DecisionDefinition = {
+  definition: AssetBinding;
+  contract: SchemaVersion;
+  closure?: string;
+  dependenciesState: string;
+  release?: string;
+  dependencies: AssetBinding[];
+  applications: AssetBinding[];
+};
+
 export type Definition = {
   contentVersion?: string;
   propertyType?: PropertyType;
@@ -735,6 +880,7 @@ export type Definition = {
   query?: NamedQuery;
   queryVersions?: Record<string, NamedQuery>;
   function?: AIFunction;
+  agent?: AgentReleaseDescriptor;
   operation?: Operation;
 };
 

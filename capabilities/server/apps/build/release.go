@@ -33,6 +33,11 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	assets = append(assets, functions...)
+	agents, err := b.agentAssets()
+	if err != nil {
+		return nil, err
+	}
+	assets = append(assets, agents...)
 	queries, err := b.queryAssets()
 	if err != nil {
 		return nil, err

@@ -13,12 +13,13 @@ import (
 // composite commands applied. Guarded by the tenant's lock; rebuilt by replay
 // and carried by snapshots. Retries read here before any decision runs.
 type committed struct {
-	schemaVersions   map[string]platform.SchemaVersion
-	refusals         map[string]refusedResult   // "<app>/<key>"
-	answers          map[string]json.RawMessage // "<app>/<key>", "release:<key>"
-	inputs           map[string]json.RawMessage // "<app>/<key>"
-	compositeAnswers map[string]json.RawMessage
-	composites       map[string]string // key → applied digest
+	decisionDefinitions map[string]*DecisionDefinition
+	schemaVersions      map[string]platform.SchemaVersion
+	refusals            map[string]refusedResult   // "<app>/<key>"
+	answers             map[string]json.RawMessage // "<app>/<key>", "release:<key>"
+	inputs              map[string]json.RawMessage // "<app>/<key>"
+	compositeAnswers    map[string]json.RawMessage
+	composites          map[string]string // key → applied digest
 }
 
 func (c *committed) saveAnswer(key string, raw json.RawMessage) {
@@ -50,12 +51,14 @@ func (c *committed) saveComposite(key, digest string) {
 }
 
 func (c *committed) snapshot(s *tenantState) {
+	s.DecisionDefinitions = maps.Clone(c.decisionDefinitions)
 	s.SubmissionSchemas = maps.Clone(c.schemaVersions)
 	s.CompositeAnswers = maps.Clone(c.compositeAnswers)
 	s.Refusals, s.AcceptedAnswers, s.AcceptedInputs, s.Composites = maps.Clone(c.refusals), maps.Clone(c.answers), maps.Clone(c.inputs), maps.Clone(c.composites)
 }
 
 func (c *committed) restore(s *tenantState) {
+	c.decisionDefinitions = maps.Clone(s.DecisionDefinitions)
 	c.schemaVersions = maps.Clone(s.SubmissionSchemas)
 	c.compositeAnswers = maps.Clone(s.CompositeAnswers)
 	c.refusals, c.answers, c.inputs = maps.Clone(s.Refusals), maps.Clone(s.AcceptedAnswers), maps.Clone(s.AcceptedInputs)
@@ -65,6 +68,16 @@ func (c *committed) restore(s *tenantState) {
 	if s.Composites != nil {
 		c.composites = s.Composites
 	}
+}
+
+func (c *committed) saveDecisionDefinition(app, change string, definition *DecisionDefinition) {
+	if definition == nil {
+		return
+	}
+	if c.decisionDefinitions == nil {
+		c.decisionDefinitions = map[string]*DecisionDefinition{}
+	}
+	c.decisionDefinitions[app+"/"+change] = definition
 }
 
 func (c *committed) saveSchemaVersion(app, key string, binding *platform.SchemaVersion) {

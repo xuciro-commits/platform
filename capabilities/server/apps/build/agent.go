@@ -81,9 +81,15 @@ func (b *Build) checkAgent(a Agent) error {
 	}
 	for _, tool := range a.Tools {
 		if query, ok := strings.CutPrefix(tool, "query:"); ok {
+			if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: query}] {
+				continue
+			}
 			if _, found := b.queries[query]; !found {
 				return fmt.Errorf("The agent %s uses query %s, which is not published", a.Name, query)
 			}
+			continue
+		}
+		if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: tool}] {
 			continue
 		}
 		if _, ok := b.ledger.Catalog.Action(tool); !ok || !strings.HasPrefix(tool, ID+".") || b.installedActionOf(tool) == "" {

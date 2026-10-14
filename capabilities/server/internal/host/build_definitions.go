@@ -35,6 +35,7 @@ type ConstructionSandbox interface {
 	ProcessFromAsset(platform.ReleaseAsset) (build.Process, error)
 	InstallPropertyTypeAsset(platform.ReleaseAsset) error
 	InstallFunctionAsset(platform.ReleaseAsset) error
+	InstallAgentAsset(platform.ReleaseAsset) error
 	InstallOperationAsset(platform.ReleaseAsset) error
 	InstallLinkTypeAsset(platform.ReleaseAsset) error
 	InstallQueryAsset(platform.ReleaseAsset) error

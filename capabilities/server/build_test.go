@@ -303,7 +303,7 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"a page under two headings", map[string]any{"groups": []map[string]any{{"title": "A", "pages": []string{"visits"}}, {"title": "B", "pages": []string{"visits"}}}}, "under \"A\" and \"B\""},
 		{"a heading over nothing", map[string]any{"groups": []map[string]any{{"title": "Empty", "pages": []string{}}}}, "holds no page"},
 		{"a page that is not there", map[string]any{"groups": []map[string]any{}, "pages": []string{"nothing"}}, "no page nothing"},
-		{"no page at all", map[string]any{"pages": []string{}}, "holds at least one page"},
+		{"no page or resource", map[string]any{"pages": []string{}}, "needs pages or declared resources"},
 		{"missing resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetCompute, Name: "missing"}}}, "no published resource"},
 		{"duplicate resource", map[string]any{"resources": []platform.AssetRef{shared, shared}}, "declared twice"},
 		{"page duplicated as a resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "visits"}}}, "non-navigation"},

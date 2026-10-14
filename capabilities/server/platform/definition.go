@@ -26,6 +26,7 @@ const (
 	// AssetFlow is a versioned definition executed by the existing flow app.
 	AssetFlow     AssetKind = "flow"
 	AssetFunction AssetKind = "function"
+	AssetAgent    AssetKind = "agent"
 	AssetCompute  AssetKind = "compute"
 	// Integration assets describe existing owner configuration. They never
 	// include target credentials, cursors, data or running-work state.
@@ -70,7 +71,7 @@ func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + 
 
 func (r AssetRef) Check() error {
 	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration}, r.Kind) {
+		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -277,6 +278,7 @@ var Filterable = []string{"choice", "boolean", "reference"}
 // name, an icon from the platform's set, and the pages it holds in order. It
 // grants nothing; each page is offered to whoever may read what it shows.
 type Application struct {
+	Profile     *ApplicationProfile     `json:"profile,omitempty"`
 	Header      *ApplicationHeader      `json:"header,omitempty"`
 	UIProfile   string                  `json:"uiProfile,omitempty"`
 	Variables   map[string]PageVariable `json:"variables,omitempty"`
@@ -298,6 +300,11 @@ type Application struct {
 // CheckResources checks explicit non-navigation resource membership. Assets
 // keep their existing owner and may be shared by several applications.
 func (a Application) CheckResources() error {
+	if a.Profile != nil {
+		if err := a.Profile.Check(); err != nil {
+			return err
+		}
+	}
 	if len(a.Resources) > 1000 {
 		return fmt.Errorf("application resources exceed 1000 assets")
 	}
@@ -399,5 +406,6 @@ type Definition struct {
 	Query            *NamedQuery             `json:"query,omitempty"`
 	QueryVersions    map[string]NamedQuery   `json:"queryVersions,omitempty"`
 	Function         *AIFunction             `json:"function,omitempty"`
+	Agent            *AgentReleaseDescriptor `json:"agent,omitempty"`
 	Operation        *Operation              `json:"operation,omitempty"`
 }

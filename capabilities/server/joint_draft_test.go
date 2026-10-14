@@ -180,3 +180,61 @@ func TestJointDraftFirstScheduledFlowRetainsPublisher(t *testing.T) {
 	}
 	CheckReplay(t, tn, entries, compose)
 }
+
+// ADR-0107: the same owner-produced agent bytes travel with an application,
+// while the original target owners compile/install its tools and evaluations.
+func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
+	const tenant = "application-agents"
+	at := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
+	compose := func(id string) *Tenant {
+		return composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "agent:admin", "flow:member")}, work.New(id), flow.New(id), build.New(id), NewAgents(id))
+	}
+	source := compose(tenant)
+	var entries []Entry
+	source.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	decide(t, source, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{"name": "case", "title": "Case", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, source, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
+	decide(t, source, "builder", build.ID, build.AgentType+".create", build.AgentType, "AG", map[string]any{"name": "assist", "title": "Assist", "description": "Prepare case updates", "instructions": "Prepare a note update", "tools": []string{"build.case.edit"}, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Takes: []string{"build.case.edit"}}}}, at)
+	decide(t, source, "builder", build.ID, build.SchemaAgentPublish, build.AgentType, "AG", map[string]any{}, at)
+	decide(t, source, "builder", build.ID, build.ProcessType+".create", build.ProcessType, "FLOW", map[string]any{"name": "closecase", "title": "Close case", "manual": true, "steps": []build.ProcessStep{{Name: "done", Kind: "end"}}}, at)
+	resources := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.case"}, {App: build.ID, Kind: platform.AssetAction, Name: "build.case.edit"}, {App: build.ID, Kind: platform.AssetAgent, Name: "assist"}, {App: build.ID, Kind: platform.AssetFlow, Name: "build.closecase"}}
+	decide(t, source, "builder", build.ID, build.AppType+".create", build.AppType, "APP", map[string]any{"name": "cases", "title": "Cases", "resources": resources, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.case": 1}, ExpectedRuns: 1, Retention: map[string]string{"runs": "24h"}}}, at)
+	member := memberOf(t, source, "builder")
+	selection := []build.JointDraftRef{{Kind: platform.AssetFlow, ID: "FLOW"}, {Kind: platform.AssetApp, ID: "APP"}}
+	preview, err := source.PreviewReleaseDrafts(member, selection)
+	if err != nil || preview.Diagnostic != "" {
+		t.Fatalf("agent/application preview: %+v %v", preview, err)
+	}
+	saved, err := source.SaveReleaseCandidates(member, selection, preview.CandidateID, "save-app", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.ActivateRelease(member, saved, "activate-app", at); err != nil {
+		t.Fatal(err)
+	}
+	root := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "cases"}
+	runtime, refusal := source.ApplicationRuntimeOf(member, root, at)
+	if refusal != nil || len(runtime.Artifact.AI) != 1 || runtime.Artifact.AI[0].Ref.Kind != platform.AssetAgent || len(runtime.Artifact.Flows) != 1 || len(runtime.Artifact.Roles) == 0 {
+		t.Fatalf("complete application projection: %+v %v", runtime, refusal)
+	}
+	target := compose("application-target")
+	target.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	if _, err := PromoteCandidate(source, target, saved, "promote-app", true, memberOf(t, target, "builder"), at); err != nil {
+		t.Fatal(err)
+	}
+	installed, refusal := target.ApplicationRuntimeOf(memberOf(t, target, "builder"), root, at)
+	if refusal != nil || installed.Artifact.Version != runtime.Artifact.Version {
+		t.Fatalf("target changed immutable artifact: %+v %v", installed, refusal)
+	}
+	CheckReplay(t, source, entries, func() *Tenant { return compose(tenant) })
+	decide(t, source, "builder", build.ID, build.SchemaProcessRun, build.ProcessType, "FLOW", map[string]any{"key": "run-one"}, at)
+	source.Work(at)
+	runs, refusal := source.ApplicationRuns(member, root, 0, 50, at, ApplicationRunFilter{Kind: "flow", Since: at, Until: at})
+	if refusal != nil || runs.Total != 1 || runs.Runs[0].ResourceName != "build.closecase" {
+		t.Fatalf("filtered original flow: %+v %v", runs, refusal)
+	}
+	filtered, refusal := source.ApplicationRuns(member, root, 0, 50, at, ApplicationRunFilter{Kind: "flow", Since: at.Add(time.Second)})
+	if refusal != nil || filtered.Total != 0 {
+		t.Fatalf("time filter: %+v %v", filtered, refusal)
+	}
+}

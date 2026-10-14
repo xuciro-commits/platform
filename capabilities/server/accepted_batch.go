@@ -66,6 +66,7 @@ func (e *acceptedResultBudgetError) Error() string {
 }
 
 type acceptedDecision struct {
+	Definition  *DecisionDefinition  `json:"definition,omitempty"`
 	Receipt     json.RawMessage      `json:"receipt"`
 	Event       acceptedEvent        `json:"event"`
 	Publication *acceptedPublication `json:"publication,omitempty"`
@@ -171,7 +172,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if plan.Hops > maxHops {
 			plan.Stopped, plan.Subscribers = plan.Subscribers, nil
 		}
-		result.Decisions = append(result.Decisions, acceptedDecision{Receipt: raw, Event: plan,
+		result.Decisions = append(result.Decisions, acceptedDecision{Receipt: raw, Event: plan, Definition: d.definitions[event.App+"/"+event.Record.GetChangeId()],
 			Publication: d.publications[event.App+"/"+event.Record.GetChangeId()]})
 		for _, ref := range event.Changed {
 			if !d.records.writes[ref] {
@@ -310,6 +311,11 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 		}
 		s, e := r.GetSubmission(), decision.Event
 		key := e.App + "/" + r.GetChangeId()
+		if decision.Definition != nil {
+			if err := decision.Definition.check(e.App, s.GetSchema().GetName()); err != nil {
+				return result, nil, err
+			}
+		}
 		if s == nil || s.GetTenantId() != result.Tenant || s.GetAuthority() != e.App ||
 			s.GetIdempotencyKey() == "" || s.GetPrincipalId() == "" || s.GetTarget() == nil || s.GetSchema() == nil ||
 			r.GetChangeId() == "" || r.GetRecordedTime() == nil || r.GetValidTime() == nil ||
@@ -604,6 +610,9 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 		return false, err
 	}
 	t.sequences.set(result.Sequences)
+	for _, child := range result.Decisions {
+		t.committed.saveDecisionDefinition(child.Event.App, receiptID(child.Receipt), child.Definition)
+	}
 	if result.SchemaVersion != nil {
 		_, request, _ := strings.Cut(key, "/")
 		t.committed.saveSchemaVersion(result.App, request, result.SchemaVersion)

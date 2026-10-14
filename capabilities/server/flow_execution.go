@@ -24,6 +24,7 @@ type flowExecutionRuntime struct {
 	view    *Tenant
 	release string
 	shapes  map[string]platform.EntityInfo
+	assets  []platform.ReleaseAsset
 	// Cache only neutral decoded rows. Every protected read still evaluates
 	// current membership/field grants through the original reader below.
 	readStore   *recordStore
@@ -57,7 +58,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 	}
 	view := h.installationDraft()
 	view.apps = slices.Clone(h.t.apps)
-	rt := &flowExecutionRuntime{stagedDecision: h.decision, view: view, release: release, shapes: map[string]platform.EntityInfo{}}
+	rt := &flowExecutionRuntime{stagedDecision: h.decision, view: view, release: release, shapes: map[string]platform.EntityInfo{}, assets: slices.Clone(assets)}
 	for i, owner := range view.apps {
 		selected := []platform.ReleaseAsset{}
 		for _, asset := range assets {
@@ -188,14 +189,14 @@ func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb
 		if work, ok := private.(host.AttachedWork); ok {
 			work.AttachWork(flowExecution{hostView: hostView{t: r.tenant, app: private, decision: r.stagedDecision}, rt: r})
 		}
-		return r.decideApp(c, private, s, at)
+		return r.decideAppFrom(c, private, s, at, r.view, r.release, r.assets)
 	}
 	if bound := r.view.app(app.Manifest().ID); bound != nil {
 		if bound != r.tenant.app(app.Manifest().ID) {
-			return r.decideApp(c, bound, s, at)
+			return r.decideAppFrom(c, bound, s, at, r.view, r.release, r.assets)
 		}
 	}
-	return r.stagedDecision.Decide(c, app, s, at)
+	return r.stagedDecision.decideAppFrom(c, r.stateApp(app), s, at, r.view, r.release, r.assets)
 }
 
 // Rows stay current; the selected metadata decodes retained fields. A renamed

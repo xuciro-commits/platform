@@ -93,7 +93,7 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 		"states":  []map[string]any{{"name": "open", "title": "Open"}, {"name": "done", "title": "Done"}},
 		"actions": []map[string]any{{"name": "close", "title": "Close", "from": []string{"open"}, "to": "done"}}}
 	deskV1 := map[string]any{"name": "desk", "title": "Visit desk", "object": "build.visit", "list": []string{"note"}, "detail": []string{"note"}}
-	appV1 := map[string]any{"name": "frontdesk", "title": "Front desk", "pages": []string{"desk"}}
+	appV1 := map[string]any{"name": "frontdesk", "title": "Front desk", "pages": []string{"desk"}, "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetAction, Name: "build.visit.close"}}, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.visit": 2}, Retention: map[string]string{"runs": "168h"}, RPO: "1h", RTO: "30m"}}
 	drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O1"}, {Kind: platform.AssetPage, ID: "P1"}, {Kind: platform.AssetApp, ID: "A1"}}
 
 	// 1. Definition and dependencies in dev; one joint candidate; activate.
@@ -125,6 +125,19 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	}
 	if got := submit(dev, "ops", "build.visit", "V1", "build.visit.close", map[string]any{}); got != "ok" {
 		t.Fatalf("dev close: %s", got)
+	}
+
+	appRef := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "frontdesk"}
+	runtimeV1, refusal := dev.ApplicationRuntimeOf(member(dev, "ops"), appRef, at)
+	if refusal != nil || len(runtimeV1.Warnings) != 1 || runtimeV1.Warnings[0].Actual != 3 || runtimeV1.Artifact.Profile.RPO != "1h" || runtimeV1.Recovery.Predecessors != "admitted" {
+		t.Fatalf("application operating projection: %+v %v", runtimeV1, refusal)
+	}
+	diagnosticV1, refusal := dev.ApplicationRecordDiagnostic(member(dev, "ops"), appRef, "build.visit", "V1", at)
+	if refusal != nil || len(diagnosticV1.Decisions) != 2 || diagnosticV1.Decisions[1].Definition == nil || diagnosticV1.Decisions[1].Content == nil || len(diagnosticV1.Decisions[1].Definition.Dependencies) == 0 {
+		t.Fatalf("original decision definitions absent: %+v %v", diagnosticV1, refusal)
+	}
+	if _, refusal := dev.ApplicationRecordDiagnostic(member(dev, "ops"), appRef, build.ObjectType, "O1", at); refusal == nil {
+		t.Fatal("application diagnostic reached unrelated owner metadata")
 	}
 
 	// 3. Promotion into prod: prod holds the owner drafts the assets resolve
@@ -258,6 +271,11 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 		t.Fatal("prod lacks the optional field after the upgrade")
 	}
 
+	runtimeV2, refusal := prod.ApplicationRuntimeOf(member(prod, "ops"), appRef, at)
+	if refusal != nil || runtimeV2.Artifact.Version == runtimeV1.Artifact.Version || runtimeV2.Previous != runtimeV1.Artifact.Version || len(runtimeV2.Warnings) == 0 {
+		t.Fatalf("application version/capacity history: %+v %v", runtimeV2, refusal)
+	}
+
 	// 6. Failure handling and restart: a snapshot is taken after the upgrade,
 	// work continues, and prod comes back from that snapshot plus the journal
 	// tail written after it — with the v2 shape, both releases, the migrated
@@ -295,6 +313,11 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if restored.records.types["build.visit"].rows.len() != 4 {
 		t.Fatal("recovery changed the record count")
 	}
+	recoveredRuntime, refusal := restored.ApplicationRuntimeOf(member(prod, "ops"), appRef, at)
+	if refusal != nil || recoveredRuntime.Artifact.Version != runtimeV2.Artifact.Version || recoveredRuntime.Previous != runtimeV2.Previous {
+		t.Fatalf("application runtime did not survive snapshot/tail: %+v %v", recoveredRuntime, refusal)
+	}
+
 	seen := map[string]bool{}
 	for _, entry := range restored.Audit() {
 		seen[entry.Action] = true

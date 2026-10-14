@@ -137,3 +137,14 @@ func TestReleaseCandidateNormalizesNumbersWithoutLosingPrecision(t *testing.T) {
 		t.Fatal("revision rounded a large integer")
 	}
 }
+
+func TestApplicationArtifactRefusesForeignCapacityAndCredentials(t *testing.T) {
+	object := AssetRef{App: "crm", Kind: AssetObject, Name: "crm.account"}
+	root := AssetRef{App: "crm", Kind: AssetApp, Name: "accounts"}
+	model := ReleaseAsset{Ref: object, ContractVersion: 1, SourceVersion: "1", Body: json.RawMessage(`{"type":"crm.account"}`)}
+	for _, body := range []string{`{"name":"accounts","resources":[{"app":"crm","kind":"object","name":"crm.account"}],"profile":{"expectedRecords":{"crm.other":1}}}`, `{"name":"accounts","resources":[{"app":"crm","kind":"object","name":"crm.account"}],"credential":"forbidden"}`, `{"name":"accounts","resources":[{"app":"crm","kind":"object","name":"crm.account"}],"profile":{"url":"https://forbidden.test"}}`} {
+		if _, err := Candidate([]AssetRef{root}, []ReleaseAsset{model, {Ref: root, ContractVersion: 1, SourceVersion: "1", Requires: []AssetRef{object}, Body: json.RawMessage(body)}}); err == nil {
+			t.Fatalf("accepted invalid application declaration: %s", body)
+		}
+	}
+}

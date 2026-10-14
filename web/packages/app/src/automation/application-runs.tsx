@@ -1,20 +1,23 @@
 import { useRunControl } from "./use-run-control";
 import type { Api } from "@platform/kernel";
-import { Button, DataTable, PageHeader, Panel, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
+import { Button, DataTable, PageHeader, Panel, Input, Select, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
 import { FlowInstanceView } from "./flows";
 import { RunView } from "./agents";
 import { ChainGraph, useHost, useReadQuery, useRecordInventory } from "../index";
 
 type Run = Api.ApplicationRun;
-const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation" } as Record<string, string>)[kind] ?? kind);
+const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation", function: "AI function", effect: "External effect", job: "Scheduled job" } as Record<string, string>)[kind] ?? kind);
 const stateName = (state: string) => t(({ running: "Working", waiting: "Waiting", done: "Done", stopped: "Stopped", stuck: "Stuck", completed: "Completed", pending: "Pending", failed: "Failed", canceled: "Canceled", cancelled: "Canceled" } as Record<string,string>)[state] ?? state);
 
 /** One application projection, preserving original run readers and controls. */
 export function ApplicationRuns({ owner, name }: { owner: string; name: string }) {
  const { role } = useHost(), { open } = useWorkspace();
  const [offset,setOffset]=useState(0),[chosen,setChosen]=useState<string>();
- const query=useReadQuery<Api.ApplicationRunPage>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/runs?offset=${offset}&limit=50`);
+ const [kind,setKind]=useState(""),[state,setState]=useState("");
+ const [since,setSince]=useState(""),[until,setUntil]=useState("");
+ const timeParam=(value:string)=>value && Number.isFinite(Date.parse(value))?new Date(value).toISOString():"";
+ const query=useReadQuery<Api.ApplicationRunPage>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/runs?offset=${offset}&limit=50&kind=${encodeURIComponent(kind)}&state=${encodeURIComponent(state)}&since=${encodeURIComponent(timeParam(since))}&until=${encodeURIComponent(timeParam(until))}`);
  const builder=role("build")==="builder" && !!query.data && !query.isError;
  const applications=useRecordInventory<{id:string;name:string}>("build.app",1000,builder && owner==="build");
  const selected=query.isError?undefined:query.data?.runs.find(run=>`${run.kind}/${run.id}`===chosen);
@@ -34,6 +37,13 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
  const draft=applications.data?.records.find(record=>record.name===name);
  return <div className="grid min-w-0 gap-3">
   <PageHeader title={query.data?.title ?? name} description={t("Runs related to this application's referenced resources. Shared use does not establish which application started a run.")} />
+  <ApplicationRuntimePanel owner={owner} name={name}/>
+  <div className="flex flex-wrap gap-2">
+   <Select aria-label={t("Run kind")} value={kind} onChange={event=>{setKind(event.target.value);setOffset(0);setChosen(undefined);}}><option value="">{t("All run kinds")}</option>{["flow","agent","function","compute","effect","job"].map(value=><option key={value} value={value}>{kindName(value)}</option>)}</Select>
+   <Select aria-label={t("Run state")} value={state} onChange={event=>{setState(event.target.value);setOffset(0);setChosen(undefined);}}><option value="">{t("All run states")}</option>{["running","waiting","pending","ready","done","completed","failed","stuck","rejected","delivered","scheduled"].map(value=><option key={value} value={value}>{stateName(value)}</option>)}</Select>
+   <label className="text-xs">{t("Started after")}<Input type="datetime-local" value={since} onChange={event=>{setSince(event.target.value);setOffset(0);setChosen(undefined);}}/></label>
+   <label className="text-xs">{t("Started before")}<Input type="datetime-local" value={until} onChange={event=>{setUntil(event.target.value);setOffset(0);setChosen(undefined);}}/></label>
+  </div>
   {query.isError?<Panel role="alert">{t("Application runs are unavailable to you.")}</Panel>:<>
    <DataTable data={query.data?.runs??[]} columns={columns} getRowId={run=>`${run.kind}/${run.id}`} selectedId={chosen} onRowClick={run=>setChosen(`${run.kind}/${run.id}`)} searchable={false} loading={query.isPending} empty={t("No related runs you can read.")} height={320}/>
    <div className="flex items-center gap-2 text-xs"><Button size="sm" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-50))}>{t("Previous page")}</Button>
@@ -41,7 +51,7 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
     <Button size="sm" disabled={offset+50>=(query.data?.total??0)} onClick={()=>setOffset(offset+50)}>{t("Next page")}</Button></div>
   </>}
   {selected&&<Panel className="grid min-w-0 gap-3">
-   <div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:selected.kind==="flow"?"flow-instance":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,application}}, {window:"beside"})}>{t("Open run")}</Button>
+   <div className="flex flex-wrap gap-2">{["flow","agent","compute"].includes(selected.kind)&&<Button onClick={()=>open({view:selected.kind==="flow"?"flow-instance":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,application}}, {window:"beside"})}>{t("Open run")}</Button>}
     {source&&<Button onClick={()=>open({view:selected.kind==="flow"?"flow":"code",params:{id:source.id,...(draft?{application:draft.id}:{})}})}>{t("Open current source editor")}</Button>}
     {selected.kind==="agent"&&<Button onClick={()=>open({view:"agents",params:{surface:"tenant"}})}>{t("Current agent registry")}</Button>}
    </div>
@@ -49,9 +59,47 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
    <RunBinding run={selected}/>
    {selected.error&&<p role="alert">{selected.node?`${t("Failed node")}: ${selected.node} · `:""}{selected.error}</p>}
    {!!selected.shared.length&&<p role="status" className="text-xs text-muted">{t("Also referenced by: {applications}",{applications:selected.shared.join(", ")})}</p>}
-   {selected.kind==="flow"?<FlowInstanceView key={selected.id} id={selected.id} application={application}/>:selected.kind==="agent"?<RunView key={selected.id} id={selected.id} application={application}/>:<OperationRunView key={selected.id} id={selected.id} application={application}/>}
+   {selected.kind==="flow"?<FlowInstanceView key={selected.id} id={selected.id} application={application}/>:selected.kind==="agent"?<RunView key={selected.id} id={selected.id} application={application}/>:selected.kind==="compute"?<OperationRunView key={selected.id} id={selected.id} application={application}/>:selected.kind==="function"?<ChainGraph of={`build.function-call/${selected.id}`}/>:selected.kind==="effect"?<ChainGraph of={`platform.effect/${selected.id}`}/>:<p className="text-xs text-muted">{t("Shared scheduler work remains with its original owner.")}</p>}
   </Panel>}
  </div>;
+}
+
+export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string}) {
+ const query=useReadQuery<Api.ApplicationRuntime>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/runtime`),runtime=query.isError?undefined:query.data;
+ if(query.isError)return <Panel role="alert">{t("Application runtime is unavailable. Refresh after publishing the application.")}</Panel>;
+ if(!runtime)return <p role="status">{t("Loading…")}</p>;
+ return <Panel className="grid min-w-0 gap-3" aria-label={t("Application artifact")}>
+  <div className="flex flex-wrap gap-2"><strong>{t("Application artifact")}</strong><Tag label={t(runtime.state)} tone={runtime.state==="isolated"?"danger":runtime.state==="degraded"?"warning":"success"}/><span className="text-xs text-muted">{t("Counts and diagnostics follow your authorized scope.")}</span></div>
+  <dl className="grid gap-2 text-xs"><div><dt>{t("Current content version")}</dt><dd className="break-all font-mono">{runtime.artifact.version}</dd></div>{runtime.previous&&<div><dt>{t("Previous content version")}</dt><dd className="break-all font-mono">{runtime.previous}</dd></div>}<div><dt>{t("Recovery")}</dt><dd>{t(runtime.recovery.state)} · {t("Predecessors")}: {t(runtime.recovery.predecessors)} · {t("{pending} pending effects · {failed} failed runs",{pending:runtime.recovery.pendingEffects,failed:runtime.recovery.failedRuns})}</dd></div></dl>
+  <p className="text-xs">{t("{accepted} accepted · {refused} refused · {constraints} constraint failures",{accepted:runtime.monitoring.accepted,refused:runtime.monitoring.refused,constraints:runtime.monitoring.constraintFailures})} · {t("{tokens} AI tokens · {pending} pending effects · {waiting} waiting workflows",{tokens:runtime.monitoring.runs.aiTokens,pending:runtime.monitoring.runs.pendingEffects,waiting:runtime.monitoring.runs.waitingFlows})}</p>
+  <p className="text-xs text-muted">{t("Reported AI cost: ${cost}; {unknown} runs lack complete cost reporting.",{cost:runtime.monitoring.runs.aiUsd.toFixed(4),unknown:runtime.monitoring.runs.unmeteredAI})}</p>
+  {runtime.warnings.map((warning,index)=><p role="alert" className="text-sm text-warning" key={index}>{t("Declared {resource} scale exceeded: {actual} / {expected}",{resource:warning.resource||t("Runs"),actual:warning.actual,expected:warning.expected})}</p>)}
+  <ul className="grid gap-1 text-xs">{runtime.data.map(data=><li key={`${data.ref.app}:${data.ref.name}`}><span className="font-mono">{data.ref.name}</span> · {data.records}{data.expected?` / ${data.expected}`:""}</li>)}</ul>
+  <details><summary className="cursor-pointer text-sm">{t("Artifact contents and dependencies")}</summary><ul className="mt-2 grid gap-1 text-xs">{[...runtime.artifact.model,...runtime.artifact.rules,...runtime.artifact.pages,...runtime.artifact.flows,...runtime.artifact.ai,...runtime.artifact.integrations].map(binding=><li key={`${binding.ref.app}:${binding.ref.kind}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.app} · {binding.ref.kind} · {binding.ref.name} @ {binding.sourceVersion}</li>)}</ul></details>
+  {!!runtime.artifact.environment.length&&<details><summary className="cursor-pointer text-sm">{t("Required environment bindings")}</summary><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.environment.map(binding=><li key={`${binding.ref.app}:${binding.ref.name}`}>{binding.ref.name} · {binding.kind} · {binding.credential?t("Credential required"):t("No credential required")}</li>)}</ul></details>}
+  {!!runtime.artifact.roles.length&&<details><summary className="cursor-pointer text-sm">{t("Declared roles and scopes")}</summary><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.roles.map((role,index)=><li key={index}>{role.resource.ref.name} · {role.role} · {role.scope||t("Declared action role")}{role.readFields?.length?` · ${t("Read fields")}: ${role.readFields.join(", ")}`:""}{role.writeFields?.length?` · ${t("Write fields")}: ${role.writeFields.join(", ")}`:""}</li>)}</ul></details>}
+  <RecordDiagnostic owner={owner} name={name} types={runtime.data.map(data=>data.ref.name)}/>
+  {runtime.artifact.profile&&<details><summary className="cursor-pointer text-sm">{t("Operating declarations")}</summary><p className="text-xs text-muted">{t("Declared retention and recovery targets require environment evidence.")}</p><pre className="overflow-auto text-xs">{JSON.stringify(runtime.artifact.profile,null,2)}</pre></details>}
+ </Panel>;
+}
+
+function RecordDiagnostic({owner,name,types}:{owner:string;name:string;types:string[]}) {
+ const [typ,setType]=useState(""),[id,setID]=useState(""),[selection,setSelection]=useState<{type:string;id:string}>();
+ const selectedType=typ||types[0]||"";
+ const query=useReadQuery<Api.ApplicationDiagnostic>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/records/${encodeURIComponent(selection?.type??"")}/${encodeURIComponent(selection?.id??"")}/diagnostic`,undefined,!!selection);
+ return <details><summary className="cursor-pointer text-sm">{t("Diagnose a record")}</summary>
+  <div className="mt-2 flex flex-wrap gap-2"><Select aria-label={t("Object type")} value={selectedType} onChange={event=>setType(event.target.value)}>{types.map(value=><option key={value} value={value}>{value}</option>)}</Select><Input aria-label={t("Record ID")} value={id} onChange={event=>setID(event.target.value)}/><Button disabled={!selectedType||!id.trim()} onClick={()=>setSelection({type:selectedType,id:id.trim()})}>{t("Diagnose")}</Button></div>
+  {selection&&query.isPending&&<p role="status">{t("Loading…")}</p>}
+  {selection&&query.isError&&<p role="alert">{t("This record diagnostic is unavailable to you.")}</p>}
+  {selection&&query.data&&!query.isError&&<div className="mt-2 grid gap-3">
+   <ol className="grid gap-2 text-xs">{query.data.decisions.map(decision=><li key={decision.change}><strong>{decision.schema}</strong> · <span className="font-mono">{decision.change}</span> · {new Date(decision.at).toLocaleString()}
+    <p className="break-all font-mono">{t("Definition content")}: {decision.content?.version??t("Not recorded")}</p>
+    {decision.definition&&<ul>{decision.definition.dependencies.map(binding=><li key={`${binding.ref.app}:${binding.ref.kind}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.name} @ {binding.sourceVersion}</li>)}</ul>}
+   </li>)}</ol>
+   <p className="text-xs">{t("{count} related runs",{count:query.data.runs.length})}</p>
+   <ChainGraph of={`${selection.type}/${selection.id}`}/>
+  </div>}
+ </details>;
 }
 
 function RunBinding({run}:{run:Pick<Run,"release"|"version"|"dependencies"|"module">}) {

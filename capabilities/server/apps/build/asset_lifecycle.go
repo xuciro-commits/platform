@@ -16,7 +16,7 @@ import (
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
 		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration,
+		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent,
 	}
 }
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {
@@ -71,6 +71,18 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	}
 	if ref.Kind == platform.AssetFunction {
 		return b.FunctionReleaseAsset(ref.Name, version)
+	}
+	if ref.Kind == platform.AssetAgent {
+		for _, record := range b.agents {
+			asset, err := agentReleaseAsset(record, b.Manifest().Version)
+			if err != nil {
+				return platform.ReleaseAsset{}, err
+			}
+			if asset.Ref == ref && asset.SourceVersion == version {
+				return asset, nil
+			}
+		}
+		return platform.ReleaseAsset{}, fmt.Errorf("agent version is not installed; use its retained candidate")
 	}
 	if ref.Kind == platform.AssetCompute {
 		return b.OperationReleaseAsset(ref.Name, version)
@@ -440,6 +452,10 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		var r Function
 		_ = json.Unmarshal(image, &r)
 		ref = platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: r.Name}
+	case SchemaAgentPublish:
+		var r Agent
+		_ = json.Unmarshal(image, &r)
+		ref = platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: r.Name}
 	case SchemaCodePublish:
 		var r Code
 		_ = json.Unmarshal(image, &r)
@@ -837,6 +853,13 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 			return "", nil, err
 		}
 		return FunctionType, d, nil
+	case platform.AssetAgent:
+		d, err := decodeAgentAsset(asset)
+		if err != nil {
+			return "", nil, err
+		}
+		d.Version, d.State = 0, "draft"
+		return AgentType, d, nil
 	case platform.AssetCompute:
 		rows, err := b.codeInventory()
 		if err != nil {
@@ -857,11 +880,14 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 // a registry, extending the live ledger or validating an unfinished closure.
 func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), error) {
 	saved, savedMode := b.jointEntities, b.jointMode
+	savedAssets := b.jointAssets
+	available := map[platform.AssetRef]bool{}
 	shapes := maps.Clone(saved)
 	if shapes == nil {
 		shapes = map[string]platform.EntityInfo{}
 	}
 	for _, asset := range assets {
+		available[asset.Ref] = true
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
@@ -876,5 +902,6 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 		shapes[asset.Ref.Name] = shape
 	}
 	b.jointEntities, b.jointMode = shapes, true
-	return func() { b.jointEntities, b.jointMode = saved, savedMode }, nil
+	b.jointAssets = available
+	return func() { b.jointEntities, b.jointMode, b.jointAssets = saved, savedMode, savedAssets }, nil
 }

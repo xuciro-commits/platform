@@ -323,6 +323,9 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if kind == platform.AssetFunction {
 		return b.functionDraftAssets(id)
 	}
+	if kind == platform.AssetAgent {
+		return b.agentDraftAssets(id)
+	}
 	assets, err := b.DraftReleaseAssetsMulti([]JointDraftRef{{Kind: kind, ID: id}}, platform.Member{})
 	if err != nil {
 		return nil, nil, prior, next, false, err

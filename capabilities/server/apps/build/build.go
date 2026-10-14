@@ -34,6 +34,7 @@ type Build struct {
 	// same validation answers entity lookups as the candidate would install
 	// them (ADR-0048). Empty outside a joint build.
 	jointEntities map[string]platform.EntityInfo
+	jointAssets   map[platform.AssetRef]bool
 	// jointMode is set while a candidate holds more than one draft: the host's
 	// installed-state install checks then move to the candidate's own install
 	// dry run, because no single draft's image is installed yet (ADR-0048 D2).
@@ -1329,7 +1330,7 @@ func goName(name string) string {
 // validation context, while retaining declarations and the ledger identity.
 func (b *Build) ForkDecision() (platform.App, error) {
 	return &Build{host: b.host, ledger: b.ledger,
-		releaseDraftIDs: maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointMode: b.jointMode,
+		releaseDraftIDs: maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointAssets: maps.Clone(b.jointAssets), jointMode: b.jointMode,
 		linkTypes: maps.Clone(b.linkTypes), propertyTypes: maps.Clone(b.propertyTypes),
 		queries: maps.Clone(b.queries), functions: maps.Clone(b.functions), agents: maps.Clone(b.agents),
 		codes: maps.Clone(b.codes), tables: maps.Clone(b.tables)}, nil

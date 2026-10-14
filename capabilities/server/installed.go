@@ -159,7 +159,7 @@ func (t *Tenant) reinstall() error {
 			return fmt.Errorf("tenant %s: %s: %v", t.ID, a.Manifest().ID, err)
 		}
 	}
-	return nil
+	return t.registerOwnedAssetMetadata()
 }
 
 // InstallPage offers a page an app composed at runtime: it must name an object
@@ -908,8 +908,8 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	if a.Name == "" || a.Title == "" {
 		return fmt.Errorf("application %q: it needs a name and a title", a.Name)
 	}
-	if len(a.Pages) == 0 {
-		return fmt.Errorf("application %s: it holds no page", a.Name)
+	if len(a.Pages) == 0 && len(a.Resources) == 0 {
+		return fmt.Errorf("application %s: it needs pages or declared resources", a.Name)
 	}
 	if a.Icon != "" && !platform.IconName(a.Icon) {
 		return fmt.Errorf("application %s: %q is not an icon name", a.Name, a.Icon)
@@ -935,8 +935,12 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	if err := a.CheckResources(); err != nil {
 		return fmt.Errorf("application %s: %w", a.Name, err)
 	}
+	registered, err := t.ownedAssetDefinitions(t.definitions)
+	if err != nil {
+		return err
+	}
 	for _, ref := range a.Resources {
-		known := slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
+		known := slices.ContainsFunc(registered, func(d platform.Definition) bool { return d.Ref == ref })
 		if ref.Kind == platform.AssetFlow {
 			known = t.procs != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.procs.HasPublishedFlow(ref.Name)
 		}
