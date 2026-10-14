@@ -1,6 +1,6 @@
 # ADR-0055 — What a workbench holds: projects, Ontology, interface, logic, functions
 
-Status: accepted · 2026-10-06 · Builds on ADR-0053 (builder experience) and ADR-0054 (IDE workspaces).
+Status: accepted · 2026-10-06 · Builds on ADR-0053 (builder experience) and ADR-0054 (IDE workspaces). Application delivery terminology is superseded by [ADR-0107](0107-application-artifact-and-runtime.md): projects organize authoring drafts; the closed application artifact is the delivery boundary.
 
 ## 1. Problem
 

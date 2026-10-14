@@ -1,6 +1,6 @@
 import { useRunControl } from "./use-run-control";
 import type { Api } from "@platform/kernel";
-import { Button, DataTable, PageHeader, Panel, Input, Select, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
+import { Button, DataTable, Disclosure, PageHeader, Panel, Input, Select, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
 import { FlowInstanceView } from "./flows";
 import { RunView } from "./agents";
@@ -75,11 +75,11 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
   <p className="text-xs text-muted">{t("Reported AI cost: ${cost}; {unknown} runs lack complete cost reporting.",{cost:runtime.monitoring.runs.aiUsd.toFixed(4),unknown:runtime.monitoring.runs.unmeteredAI})}</p>
   {runtime.warnings.map((warning,index)=><p role="alert" className="text-sm text-warning" key={index}>{t("Declared {resource} scale exceeded: {actual} / {expected}",{resource:warning.resource||t("Runs"),actual:warning.actual,expected:warning.expected})}</p>)}
   <ul className="grid gap-1 text-xs">{runtime.data.map(data=><li key={`${data.ref.app}:${data.ref.name}`}><span className="font-mono">{data.ref.name}</span> · {data.records}{data.expected?` / ${data.expected}`:""}</li>)}</ul>
-  <details><summary className="cursor-pointer text-sm">{t("Artifact contents and dependencies")}</summary><ul className="mt-2 grid gap-1 text-xs">{[...runtime.artifact.model,...runtime.artifact.rules,...runtime.artifact.pages,...runtime.artifact.flows,...runtime.artifact.ai,...runtime.artifact.integrations].map(binding=><li key={`${binding.ref.app}:${binding.ref.kind}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.app} · {binding.ref.kind} · {binding.ref.name} @ {binding.sourceVersion}</li>)}</ul></details>
-  {!!runtime.artifact.environment.length&&<details><summary className="cursor-pointer text-sm">{t("Required environment bindings")}</summary><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.environment.map(binding=><li key={`${binding.ref.app}:${binding.ref.name}`}>{binding.ref.name} · {binding.kind} · {binding.credential?t("Credential required"):t("No credential required")}</li>)}</ul></details>}
-  {!!runtime.artifact.roles.length&&<details><summary className="cursor-pointer text-sm">{t("Declared roles and scopes")}</summary><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.roles.map((role,index)=><li key={index}>{role.resource.ref.name} · {role.role} · {role.scope||t("Declared action role")}{role.readFields?.length?` · ${t("Read fields")}: ${role.readFields.join(", ")}`:""}{role.writeFields?.length?` · ${t("Write fields")}: ${role.writeFields.join(", ")}`:""}</li>)}</ul></details>}
+  <Disclosure summary={t("Artifact contents and dependencies")}><ul className="mt-2 grid gap-1 text-xs">{[...runtime.artifact.model,...runtime.artifact.rules,...runtime.artifact.pages,...runtime.artifact.flows,...runtime.artifact.ai,...runtime.artifact.integrations].map(binding=><li key={`${binding.ref.app}:${binding.ref.kind}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.app} · {binding.ref.kind} · {binding.ref.name} @ {binding.sourceVersion}</li>)}</ul></Disclosure>
+  {!!runtime.artifact.environment.length&&<Disclosure summary={t("Required environment bindings")}><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.environment.map(binding=><li key={`${binding.ref.app}:${binding.ref.name}`}>{binding.ref.name} · {binding.kind} · {binding.credential?t("Credential required"):t("No credential required")}</li>)}</ul></Disclosure>}
+  {!!runtime.artifact.roles.length&&<Disclosure summary={t("Declared roles and scopes")}><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.roles.map((role,index)=><li key={index}>{role.resource.ref.name} · {role.role} · {role.scope||t("Declared action role")}{role.readFields?.length?` · ${t("Read fields")}: ${role.readFields.join(", ")}`:""}{role.writeFields?.length?` · ${t("Write fields")}: ${role.writeFields.join(", ")}`:""}</li>)}</ul></Disclosure>}
   <RecordDiagnostic owner={owner} name={name} types={runtime.data.map(data=>data.ref.name)}/>
-  {runtime.artifact.profile&&<details><summary className="cursor-pointer text-sm">{t("Operating declarations")}</summary><p className="text-xs text-muted">{t("Declared retention and recovery targets require environment evidence.")}</p><pre className="overflow-auto text-xs">{JSON.stringify(runtime.artifact.profile,null,2)}</pre></details>}
+  {runtime.artifact.profile&&<Disclosure summary={t("Operating declarations")}><p className="text-xs text-muted">{t("Declared retention and recovery targets require environment evidence.")}</p><pre className="overflow-auto text-xs">{JSON.stringify(runtime.artifact.profile,null,2)}</pre></Disclosure>}
  </Panel>;
 }
 
@@ -87,7 +87,7 @@ function RecordDiagnostic({owner,name,types}:{owner:string;name:string;types:str
  const [typ,setType]=useState(""),[id,setID]=useState(""),[selection,setSelection]=useState<{type:string;id:string}>();
  const selectedType=typ||types[0]||"";
  const query=useReadQuery<Api.ApplicationDiagnostic>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/records/${encodeURIComponent(selection?.type??"")}/${encodeURIComponent(selection?.id??"")}/diagnostic`,undefined,!!selection);
- return <details><summary className="cursor-pointer text-sm">{t("Diagnose a record")}</summary>
+ return <Disclosure summary={t("Diagnose a record")}>
   <div className="mt-2 flex flex-wrap gap-2"><Select aria-label={t("Object type")} value={selectedType} onChange={event=>setType(event.target.value)}>{types.map(value=><option key={value} value={value}>{value}</option>)}</Select><Input aria-label={t("Record ID")} value={id} onChange={event=>setID(event.target.value)}/><Button disabled={!selectedType||!id.trim()} onClick={()=>setSelection({type:selectedType,id:id.trim()})}>{t("Diagnose")}</Button></div>
   {selection&&query.isPending&&<p role="status">{t("Loading…")}</p>}
   {selection&&query.isError&&<p role="alert">{t("This record diagnostic is unavailable to you.")}</p>}
@@ -99,7 +99,7 @@ function RecordDiagnostic({owner,name,types}:{owner:string;name:string;types:str
    <p className="text-xs">{t("{count} related runs",{count:query.data.runs.length})}</p>
    <ChainGraph of={`${selection.type}/${selection.id}`}/>
   </div>}
- </details>;
+ </Disclosure>;
 }
 
 function RunBinding({run}:{run:Pick<Run,"release"|"version"|"dependencies"|"module">}) {

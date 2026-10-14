@@ -18,10 +18,10 @@ type Definition = Api.Definition;
 export function tenantApps(definitions: Definition[], context?: { application?: string; instance?: string }): AppUI[] {
   return definitions.flatMap((definition) => {
     const application = definition.application;
-    if (definition.ref.kind !== "app" || !application) return [];
+    if (definition.ref.kind !== "app" || !application || definition.source === "code") return [];
     const pages = new Map(definitions.filter((d) => d.ref.kind === "page" && d.ref.app === definition.ref.app).map((d) => [d.ref.name, d.page]));
     const held = application.pages.filter((name) => pages.has(name));
-    if (held.length === 0) return [];
+    if (held.length === 0 && !application.resources?.length) return [];
     const icon = <IconGlyph name={application.icon} />; // the kit's vocabulary (ADR-0084 D1)
     const id = `${definition.ref.app}:${application.name}`;
     const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
@@ -37,7 +37,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
       id,
       title: application.title,
       icon,
-      home: route(sections[0]!.pages[0]!), // the first page people see in its navigation
+      home: sections.length ? route(sections[0]!.pages[0]!) : {view:"application-runs",params:{app:definition.ref.app,name:application.name,application:id}},
       views: [], // its pages are the workspace's own page view (ADR-0032)
       nav,
     }];

@@ -35,7 +35,7 @@ export function ProjectsList() {
   const rows = (projects.data?.records ?? []).filter((project) => !project.archived && `${project.title} ${project.name}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid min-w-0 gap-4">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-xl font-semibold tracking-tight">{t("Projects")}</h1><p className="text-sm text-muted">{t("Each project owns its object types, pages, automations and functions, and is published as one release.")}</p></div>
+      <div><h1 className="text-xl font-semibold tracking-tight">{t("Projects")}</h1><p className="text-sm text-muted">{t("Projects organize drafts. Applications are delivered as one closed artifact.")}</p></div>
       <div className="flex items-center gap-2">
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
         {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New project")}</Button>}
@@ -363,13 +363,13 @@ export function ProjectHome({ id }: { id: string }) {
             <p className="text-xs text-muted">{t("Declare the expected scale and retention for this application. Recovery targets require evidence from its environment.")}</p>
             {owned.filter(resource => resource.ref.kind === "object").map(resource => <label className="grid gap-1 text-xs" key={refKey(resource.ref)}>
               {t("Expected records: {type}", { type: resource.title })}
-              <Input type="number" step={1} min={1} value={settings.profile.expectedRecords?.[resource.ref.name] ?? ""} disabled={!builder} onChange={event => {
+              <Input type="number" optional step={1} max={Number.MAX_SAFE_INTEGER} min={1} value={settings.profile.expectedRecords?.[resource.ref.name] ?? ""} disabled={!builder} onChange={event => {
                 const expectedRecords = { ...settings.profile.expectedRecords };
-                if (event.target.value) expectedRecords[resource.ref.name] = Number(event.target.value); else delete expectedRecords[resource.ref.name];
+                if (event.target.value) expectedRecords[resource.ref.name] = event.target.valueAsNumber; else delete expectedRecords[resource.ref.name];
                 editSettings({ ...settings, profile: { ...settings.profile, expectedRecords } });
               }} />
             </label>)}
-            <label className="grid gap-1 text-xs">{t("Expected runs")}<Input type="number" step={1} min={0} value={settings.profile.expectedRuns ?? ""} disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, expectedRuns: Number(event.target.value) } })} /></label>
+            <label className="grid gap-1 text-xs">{t("Expected runs")}<Input type="number" optional step={1} max={Number.MAX_SAFE_INTEGER} min={0} value={settings.profile.expectedRuns ?? ""} disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, expectedRuns: event.target.value ? event.target.valueAsNumber : undefined } })} /></label>
             {(["runs", "logs", "effects", "ai", "compute"] as const).map(kind => <label className="grid gap-1 text-xs" key={kind}>
               {t("Retention: {kind}", { kind: t(kind) })}
               <Input value={settings.profile.retention?.[kind] ?? ""} placeholder="168h" disabled={!builder} onChange={event => {

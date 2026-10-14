@@ -57,6 +57,7 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 | 共享组件行为 | `web/packages/ui`；翻译完整性由 i18n 检查 |
 | Catalog 一致性与查询 | `scripts/catalog.mjs check` 已接入 Web：公共导出/示例/翻译/Widget 引用与私有导入；`@platform/catalog` 验证有界查询，Catalog 预览隔离和 Studio 草稿路线只保留核心行为 |
 | 代码编译与计算装配 | `compute`/`assembled_compute` 行为检查；真实 Go/TinyGo profile、私有 socket 与 worker 需要部署 README 的运行环境，显式启用后验证，不能用默认跳过当通过 |
+| 应用交付 | `make test-go PKG=. RUN='TestApplicationLifecycleAcrossEnvironments|TestApplicationArtifactAgentDeliveryAndRuntime|TestCommittedResultCorruptionQuarantinesOnlyItsTenant'` 检查原工件晋级、目标权限/工具、升级、超限、确切决策版本、快照/日志尾、隔离与原运行过滤。`make test-go PKG=./platform RUN=TestApplicationArtifact` 检查闭包外容量、未知/凭据字段拒绝。`make e2e SPEC=application-delivery` 走原对象/应用 owner、容量保存与恢复声明、发布、普通成员写入、无页面运行入口、超限告警与原记录诊断；`PLATFORM_SCREENSHOTS=1` 保存运行面截图。完整混合工件的两环境持久交付尚未证明；沿原 `make rehearse` 补充，不能把上述单元/HTTP 路线或 ADR-0106 的迁移演练当成完整验收 |
 | 浏览器主路径 | `web/e2e/tests` 保留规范入口与任务路线：`routes`（动作/刷新、审批、字段安全、只读预览）、`business-access`（拒绝保留输入与独立业务主管）、`release-roles`（发布者/审计者）、`workflow`（流程编写与应答，含 Inspector 关闭/重开、页签键盘、Dock 测试输入保留、同一发布任务重开和窄容器切换）、`workspaces`（壳与任务工作区）、`host-sign-out`（会话）、`integration-fabric`（两宿主接入→联合发布→普通成员收货→外部投递恢复）、`page-notice`（编辑器→导入→发布→运行时的 kit 样板）、`migration`（演进计划→有界接受/丢失回复重试→续接→激活→别名更新）。按部件/按功能的路线已删除（ADR-0082）：那层由 Go 的发布/重放测试与负责人走查证明 |
 | OIDC 与持久部署 | `deploy/local/rehearse.sh`、`web/e2e/deploy`；在部署边界改变或发布检查点运行 |
 

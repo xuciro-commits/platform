@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:08086b86f58772d4",
+  "revision": "sha256:d35be9c9bcbae178",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -132,7 +132,8 @@
       ],
       "source": "web/packages/app/src/automation/application-runs.tsx",
       "exports": [
-        "ApplicationRuns"
+        "ApplicationRuns",
+        "ApplicationRuntimePanel"
       ],
       "example": "ApplicationRunsExample",
       "constraints": [
@@ -172,6 +173,7 @@
         "app/flow-instance",
         "ui/button",
         "ui/data-table",
+        "ui/input",
         "ui/page-header",
         "ui/panels",
         "ui/status"
@@ -12181,7 +12183,6 @@
       "web/packages/build/src/ontology/shape.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
-      "web/packages/build/src/projects/project-runs.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
@@ -12292,6 +12293,7 @@
     "ui/input": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
@@ -12699,6 +12701,7 @@
     ],
     "ui/disclosure": [
       "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
@@ -12728,7 +12731,6 @@
       "web/packages/build/src/ontology/marking.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
-      "web/packages/build/src/projects/project-runs.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/mes/src/index.tsx",
@@ -13306,6 +13308,10 @@
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
     ],
+    "app/application-runs": [
+      "web/packages/build/src/projects/project.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
     "ui/icon-picker": [
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
@@ -13351,9 +13357,6 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/HostOnly.tsx"
-    ],
-    "app/application-runs": [
-      "web/apps/workspace/src/chrome.tsx"
     ],
     "app/operation-run": [
       "web/apps/workspace/src/chrome.tsx"

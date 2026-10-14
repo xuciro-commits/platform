@@ -935,12 +935,15 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	if err := a.CheckResources(); err != nil {
 		return fmt.Errorf("application %s: %w", a.Name, err)
 	}
-	registered, err := t.ownedAssetDefinitions(t.definitions)
-	if err != nil {
-		return err
-	}
 	for _, ref := range a.Resources {
-		known := slices.ContainsFunc(registered, func(d platform.Definition) bool { return d.Ref == ref })
+		known := slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
+		if !known && ref.Kind == platform.AssetAgent {
+			registered, err := t.ownedAssetDefinitions(t.definitions)
+			if err != nil {
+				return err
+			}
+			known = slices.ContainsFunc(registered, func(d platform.Definition) bool { return d.Ref == ref })
+		}
 		if ref.Kind == platform.AssetFlow {
 			known = t.procs != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.procs.HasPublishedFlow(ref.Name)
 		}

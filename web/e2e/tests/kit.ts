@@ -87,6 +87,12 @@ export class Builder extends Member {
     });
     return { id, name };
   }
+  /** An application draft over original published resources; publication stays explicit. */
+  async application(spec: {name?:string;title:string;pages?:string[];resources?:unknown[];profile?:unknown}): Promise<{id:string;name:string}> {
+    const name=spec.name??slug("app"),id=fresh("APP");
+    await this.decide("build.app.create",{type:"build.app",id},{...spec,name,pages:spec.pages??[]});
+    return {id,name};
+  }
   /** Rewrites a page draft's sections and document over the API (what a later edit would do). */
   edit(pageID: string, draft: { sections?: unknown; document?: unknown }) {
     return this.decide("build.page.edit", { type: "build.page", id: pageID }, draft);
