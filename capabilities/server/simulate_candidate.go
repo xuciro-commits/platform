@@ -396,6 +396,10 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 			truncated = true
 			raw, _ = json.Marshal(event)
 		}
+		if len(raw) > 64<<10 || traceBytes+len(raw) > 1<<20 {
+			truncated = true
+			return
+		}
 		traceBytes += len(raw)
 		trace = append(trace, event)
 	}
