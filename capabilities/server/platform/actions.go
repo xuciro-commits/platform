@@ -17,13 +17,14 @@ import (
 // description that screens and automation callers (AI agents included) read.
 // Roles say who may call it; attribute conditions stay in the domain's policy.
 type Action struct {
-	Schema      string   `json:"schema"`
-	Target      string   `json:"target"`
-	Capability  string   `json:"capability"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Payload     []Field  `json:"payload"`
-	Roles       []string `json:"-"`
+	SchemaVersion *SchemaVersion `json:"schemaVersion,omitempty"`
+	Schema        string         `json:"schema"`
+	Target        string         `json:"target"`
+	Capability    string         `json:"capability"`
+	Title         string         `json:"title"`
+	Description   string         `json:"description"`
+	Payload       []Field        `json:"payload"`
+	Roles         []string       `json:"-"`
 	// Uses names protocol actions this one invokes (ProtocolAction); a caller
 	// is offered it only when it may call the bound provider's (ADR-0009, ADR-0011).
 	Uses []string `json:"uses,omitempty"`
@@ -203,6 +204,11 @@ func NewCatalog(actions ...Action) *Catalog {
 	for i := range actions {
 		if err := CheckInputs(actions[i].Payload); err != nil {
 			panic(err)
+		}
+		if actions[i].SchemaVersion != nil {
+			if err := actions[i].SchemaVersion.Check(); err != nil {
+				panic(err)
+			}
 		}
 		actions[i].NeedsApproval = actions[i].Approval != nil
 	}

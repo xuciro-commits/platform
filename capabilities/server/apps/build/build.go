@@ -118,6 +118,9 @@ func (b *Build) objectEntity() platform.Entity {
 						if err := b.normalizeObjectRules(object); err != nil {
 							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 						}
+						if err := b.captureObjectSchema(object); err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+						}
 					}
 					if c.Staging() {
 						if err := b.Check(*object, object.ID); err != nil {
@@ -264,7 +267,10 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 			}
 		}
 		entity := b.entity(published)
-		actions := platform.EntityActions(entity)
+		if err := checkObjectSchemas(published); err != nil {
+			return platform.Entity{}, nil, nil, nil, err
+		}
+		actions := objectActions(published, entity)
 		return entity, actions, []platform.Page{page(published)}, nil, nil
 	case SchemaRelease:
 		var record Page
@@ -963,7 +969,7 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	entity := b.entity(o)
-	actions := platform.EntityActions(entity)
+	actions := objectActions(o, entity)
 	pages, _, err := b.objectInstallationPages(o)
 	if err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}

@@ -73,7 +73,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       if (options.onRefused) options.onRefused(reason); else notify.error(reason);
       return false;
     }
-    const key = pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision);
+    const key = pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision, actions?.find(action => action.schema === schema)?.schemaVersion);
     const answered = await client.send();
     for (const entry of answered) {
       const ok = entry.state === "SUBMISSION_STATE_CONFIRMED", own = entry.submission.tenantId === client.connection.tenant && entry.submission.idempotencyKey === key;
@@ -92,7 +92,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       }
     }
     setOutbox([...client.authorities.outbox]);
-    if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED")) await refresh().catch(() => undefined);
+    if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED" || entry.outcome === "ERROR_CODE_UNKNOWN_SCHEMA")) await refresh().catch(() => undefined);
     return confirmedDecision(client.authorities.outbox, client.connection.tenant, key);
   }, [actions, client, refresh]);
 

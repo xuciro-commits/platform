@@ -44,7 +44,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	srv := httptest.NewServer(host.Handler())
 	defer srv.Close()
 
-	call := func(method, tenant, token, path string, body any) (int, map[string]any) {
+	call := func(method, tenant, token, path string, body any, binding ...*platform.SchemaVersion) (int, map[string]any) {
 		t.Helper()
 		var reader io.Reader
 		if body != nil {
@@ -54,6 +54,9 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 		request, _ := http.NewRequest(method, srv.URL+path, reader)
 		request.Header.Set("Authorization", "Bearer "+token)
 		request.Header.Set("Content-Type", "application/json")
+		if len(binding) > 0 && binding[0] != nil {
+			request.Header.Set(SchemaVersionHeader, binding[0].Version)
+		}
 		if tenant != "" {
 			request.Header.Set(TenantHeader, tenant)
 		}
@@ -77,10 +80,17 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 		keys++
 		raw, _ := json.Marshal(payload)
 		authority := build.ID
+		var binding *platform.SchemaVersion
+		family := uint32(1)
+		for _, action := range host.tenantByID(tenant).Catalog(memberOf(t, host.tenantByID(tenant), token)) {
+			if action.Schema == schema && action.SchemaVersion != nil {
+				binding, family = action.SchemaVersion, action.SchemaVersion.Family
+			}
+		}
 		code, out := call(http.MethodPost, tenant, token, "/v1/submissions", map[string]any{
 			"tenantId": tenant, "principalId": token, "authority": authority, "idempotencyKey": fmt.Sprintf("http-%s-%d", tenant, keys),
-			"target": map[string]string{"type": typ, "id": target}, "schema": map[string]any{"name": schema, "version": 1},
-			"payload": base64.StdEncoding.EncodeToString(raw)})
+			"target": map[string]string{"type": typ, "id": target}, "schema": map[string]any{"name": schema, "version": family},
+			"payload": base64.StdEncoding.EncodeToString(raw)}, binding)
 		if code != http.StatusOK {
 			return fmt.Sprintf("HTTP %d %v", code, out)
 		}

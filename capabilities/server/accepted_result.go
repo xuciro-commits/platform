@@ -26,6 +26,7 @@ const acceptedResultVersion = 4
 const maxAcceptedResultBytes = 1 << 20
 
 type acceptedResult struct {
+	SchemaVersion  *platform.SchemaVersion `json:"schemaVersion,omitempty"`
 	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
 	Version        int                     `json:"version"`
 	Kind           string                  `json:"kind,omitempty"` // version 4: callback-free lifecycle transition
@@ -126,11 +127,10 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	if err != nil {
 		return nil, err
 	}
-	request, err := proto.MarshalOptions{Deterministic: true}.Marshal(receipt.GetSubmission())
+	hash, err := submissionHash(receipt.GetSubmission(), d.schemaVersion)
 	if err != nil {
 		return nil, err
 	}
-	hash := sha256.Sum256(request)
 	version := 2
 	kind := ""
 	if publisher, ok := d.tenant.app(app).(platform.AcceptedPublisher); ok &&
@@ -140,7 +140,7 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		version, kind = acceptedResultVersion, "pure-transition"
 	}
 	result := acceptedResult{Version: version, Tenant: receipt.GetSubmission().GetTenantId(),
-		Kind: kind, App: app, At: submittedAt.UTC(), RequestHash: hex.EncodeToString(hash[:]), Receipt: raw,
+		Kind: kind, App: app, At: submittedAt.UTC(), RequestHash: hash, Receipt: raw, SchemaVersion: d.schemaVersion,
 		Row:   acceptedRow{Type: typ, ID: id, Value: value, History: history},
 		Event: d.tenant.planAcceptedEvent(d.events[0]), Authorizations: slices.Clone(d.authorizations)}
 	result.Digest, err = digestAcceptedResult(result)
@@ -222,12 +222,11 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 		standard && result.Version == 2 && result.Kind == "" || publication || pureTransition) {
 		return result, nil, fmt.Errorf("accepted result is outside the supported generated action family")
 	}
-	request, err := proto.MarshalOptions{Deterministic: true}.Marshal(sub)
-	if err != nil {
+	if err := validateSubmissionSchemaVersion(sub, result.SchemaVersion); err != nil {
 		return result, nil, err
 	}
-	hash := sha256.Sum256(request)
-	if result.RequestHash != hex.EncodeToString(hash[:]) {
+	hash, err := submissionHash(sub, result.SchemaVersion)
+	if err != nil || result.RequestHash != hash {
 		return result, nil, fmt.Errorf("accepted result request digest differs from receipt")
 	}
 	last := result.Row.History[len(result.Row.History)-1]
@@ -319,7 +318,11 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	if prior != nil && reflect.DeepEqual(prior.value.Interface(), value.Interface()) &&
 		reflect.DeepEqual(prior.history, result.Row.History) {
 		draft.mu.Unlock()
-		return l.ApplyAcceptedChange(receipt)
+		changed, err := l.ApplyAcceptedChange(receipt)
+		if err == nil {
+			t.committed.saveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
+		}
+		return changed, err
 	}
 	verb, _ := strings.CutPrefix(receipt.GetSubmission().GetSchema().GetName(), result.Row.Type+".")
 	before := len(result.Row.History) - 1
@@ -349,6 +352,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	if err := s.promoteRecords(draft); err != nil {
 		return false, err
 	}
+	t.committed.saveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
 	if changed && publisher != nil {
 		if err := publisher.ApplyAcceptedPublication(receipt.GetSubmission().GetSchema().GetName(), result.Row.Value); err != nil {
 			return false, err

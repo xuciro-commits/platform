@@ -12,11 +12,13 @@ let n = 0;
 export async function decide(request: APIRequestContext, token: string, app: string, schema: string, target: { type: string; id: string }, payload: unknown) {
   const headers = { Authorization: `Bearer ${token}` };
   const me = await (await request.get("/v1/me", { headers })).json();
+  const actions = await (await request.get("/v1/actions", { headers })).json();
+  const binding = actions.find((action: any) => action.schema === schema)?.schemaVersion;
   const body = {
     tenantId: me.tenantId, principalId: me.principalId, authority: app, idempotencyKey: `e2e-${Date.now()}-${n++}`,
-    schema: { name: schema, version: 1 }, target, payload: Buffer.from(JSON.stringify(payload)).toString("base64"),
+    schema: { name: schema, version: binding?.family ?? 1 }, target, payload: Buffer.from(JSON.stringify(payload)).toString("base64"),
   };
-  const answer = await (await request.post("/v1/submissions", { headers, data: body })).json();
+  const answer = await (await request.post("/v1/submissions", { headers: { ...headers, ...(binding ? { "Platform-Schema-Version": binding.version } : {}) }, data: body })).json();
   if (answer.error) throw new Error(`${schema} ${target.id}: ${JSON.stringify(answer.error)}`);
   return { ...answer, key: body.idempotencyKey };
 }
@@ -47,5 +49,51 @@ export const fresh = (prefix: string) => `${prefix}-${Date.now().toString(36).to
 // Keep request-count assertions within one revision; unrelated tenant inputs
 // legitimately invalidate all readers. Explicit local writes still refresh.
 export async function stableReadRevision(page: Page) {
- await page.route("**/v1/changes",route=>route.fulfill({status:200,contentType:"text/event-stream",body:""}));
+  await page.route("**/v1/changes", route => route.fulfill({ status: 200, contentType: "text/event-stream", body: "" }));
+}
+
+/** Retains an old action catalog in both HTTP discovery and live snapshots.
+ * Other reads remain live; release lets the original refresh learn current definitions. */
+export async function retainActionCatalog(page: Page, actions: unknown[]) {
+  await page.addInitScript(retained => {
+    const state: { retained?: unknown[]; current?: any[] } = { retained };
+    (window as any).__retainedActionCatalog = state;
+    const fetchOriginal = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const response = await fetchOriginal(input, init);
+      const path = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.href).pathname;
+      if (path === "/v1/actions" && response.ok) {
+        state.current = await response.clone().json();
+        if (state.retained) return new Response(JSON.stringify(state.retained), { status: response.status, headers: response.headers });
+      }
+      if (path !== "/v1/changes" || !response.ok || !response.body) return response;
+      let buffer = "";
+      const stream = response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new TransformStream<string, string>({
+        transform(chunk, controller) {
+          buffer += chunk;
+          let end: number;
+          while ((end = buffer.indexOf("\n\n")) >= 0) {
+            let event = buffer.slice(0, end);
+            buffer = buffer.slice(end + 2);
+            if (event.startsWith("event: snapshot\n")) {
+              const frame = JSON.parse(event.slice(event.indexOf("data: ") + 6));
+              for (const result of frame.results ?? []) {
+                if (result.path === "/v1/actions" && result.status === 200) {
+                  state.current = result.body;
+                  if (state.retained) result.body = state.retained;
+                }
+              }
+              event = `event: snapshot\ndata: ${JSON.stringify(frame)}`;
+            }
+            controller.enqueue(event + "\n\n");
+          }
+        },
+      })).pipeThrough(new TextEncoderStream());
+      return new Response(stream, { status: response.status, headers: response.headers });
+    };
+  }, actions);
+  return {
+    release: () => page.evaluate(() => { (window as any).__retainedActionCatalog.retained = undefined; }),
+    currentFamily: (schema: string) => page.evaluate(name => (window as any).__retainedActionCatalog.current?.find((action: any) => action.schema === name)?.schemaVersion.family, schema),
+  };
 }

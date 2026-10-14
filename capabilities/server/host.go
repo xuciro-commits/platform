@@ -322,7 +322,7 @@ func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.T
 	return record, err, t.readableFieldIssues(m, issues, now)
 }
 
-func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue)) (record *pb.ChangeRecord, err *kernel.Error) {
+func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue), contentVersion ...string) (record *pb.ChangeRecord, err *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
@@ -330,11 +330,16 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	a := t.owner["action:"+s.GetSchema().GetName()]
+	retired := a == nil
 	if a == nil {
-		return nil, unknown()
+		// Retirement removes an exposed action, not its original receipts.
+		a = t.app(s.GetAuthority())
+		if a == nil {
+			return nil, unknown()
+		}
 	}
 	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
-		if record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now); handled {
+		if record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, contentVersion...); handled {
 			return record, refusal
 		}
 	}
@@ -343,13 +348,30 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
+	if retired {
+		key := a.Manifest().ID + "/" + s.GetIdempotencyKey()
+		_, refused := t.committed.refusals[key]
+		if !refused && len(t.committed.answers[key]) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
+		}
+	}
 	// A builder role held only through projects is bounded to their assets,
 	// from this submission's target under the tenant lock, before any app decides it.
 	if err = t.delegatedBound(m, s); err != nil {
 		return nil, err
 	}
+	var binding *platform.SchemaVersion
+	var schemaRefusal *kernel.Error
+	if len(contentVersion) > 0 {
+		binding, schemaRefusal = t.submissionSchemaVersion(a, s, contentVersion[0])
+		if schemaRefusal != nil && schemaRefusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+			return nil, schemaRefusal
+		}
+	} else {
+		s = t.currentSubmissionSchema(a, s)
+	}
 	if prior, ok := t.committed.refusals[s.GetAuthority()+"/"+s.GetIdempotencyKey()]; ok {
-		hash, _ := submissionHash(s)
+		hash, _ := submissionHash(s, binding)
 		if hash != prior.RequestHash || s.GetPrincipalId() != m.ID {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -362,10 +384,10 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
-	record, err = t.submitAccepted(a, m, s, now, false)
+	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal)
 	if report != nil && err != nil {
 		if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
-			hash, _ := submissionHash(s)
+			hash, _ := submissionHash(s, binding)
 			if prior.RequestHash == hash {
 				report(err, prior.Issues)
 			}
@@ -392,6 +414,10 @@ func acceptsPureTransition(a platform.App, schema string) bool {
 }
 
 func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+	return t.submitAcceptedVersion(a, m, t.currentSubmissionSchema(a, s), now, automation, nil, nil, input...)
+}
+
+func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// A malformed transport identity cannot reserve a durable key for another
 	// tenant, authority or member. The kernel still supplies its ordinary
 	// refusal, but no result under this tenant can represent that submission.
@@ -407,7 +433,7 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 	ledger := a.AcceptedLedger()
 	if saved := t.committed.answers[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; len(saved) > 0 {
 		result, receipt, err := decodeAcceptedBatch(saved)
-		hash, hashErr := submissionHash(s)
+		hash, hashErr := submissionHash(s, binding)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -417,9 +443,13 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 		if !proto.Equal(prior.GetSubmission(), s) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
+		saved, bound := t.committed.schemaVersions[a.Manifest().ID+"/"+s.GetIdempotencyKey()]
+		if bound != (binding != nil) || binding != nil && saved != *binding {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		}
 		return prior, nil
 	}
-	hash, err := submissionHash(s)
+	hash, err := submissionHash(s, binding)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
 	}
@@ -434,6 +464,7 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
 	draft := t.newStagedDecision()
+	draft.schemaVersion = binding
 	if len(input) > 0 {
 		draft.operationInputs = make(map[string][]*preparedOperationInput, len(input))
 		for _, prepared := range input {
@@ -442,7 +473,11 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 			}
 		}
 	}
-	record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
+	if schemaRefusal != nil {
+		refusal = schemaRefusal
+	} else {
+		record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
+	}
 	if refusal == nil && pendingOperationInputs(draft.operationInputs) > 0 {
 		record = nil
 		refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A prepared Compute input was not consumed by this accepted Flow decision")
@@ -450,7 +485,7 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 	var raw []byte
 	if refusal != nil {
 		refusal = explained(refusal, a, s.GetSchema().GetName(), target(s))
-		raw, err = encodeRefusedResult(s, now, refusal, draft.inputIssues[refusal]...)
+		raw, err = encodeSchemaRefusedResult(s, now, refusal, binding, draft.inputIssues[refusal]...)
 	} else {
 		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
 		if err != nil {
@@ -459,7 +494,7 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 			if errors.As(err, &budget) {
 				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted result needs {bytes} bytes; limit is {limit} bytes / 接受结果超出字节预算", budget.Bytes, budget.Limit)
 			}
-			raw, err = encodeRefusedResult(s, now, refusal)
+			raw, err = encodeSchemaRefusedResult(s, now, refusal, binding)
 		}
 	}
 	if err != nil {
@@ -760,6 +795,9 @@ func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 				owner, schema, _ := t.provider(used)
 				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
 			}) {
+				if version, err := t.actionSchemaVersion(a, action); err == nil {
+					action.SchemaVersion = &version
+				}
 				// Generated create/edit forms use this member's writable fields.
 				// Custom actions keep their own declared inputs and policy.
 				if info, ok := entities[action.Target]; ok && info.App == a.Manifest().ID &&

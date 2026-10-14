@@ -1,7 +1,7 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition } from "./gen/host";
+import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition, SchemaVersion } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
 
@@ -264,17 +264,19 @@ export class EdgeClient {
 
   /** Builds and queues a decision about `target`; returns its idempotency key. `expectedRevision`
    *  is the target's revision the user saw (K4 C12): a stale screen is refused, not applied. */
-  draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = [], expectedRevision?: number): string {
+  draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = [], expectedRevision?: number, schemaVersion?: SchemaVersion): string {
     const key = crypto.randomUUID();
     const submission: SubmissionJson = {
       tenantId: this.connection.tenant, principalId: this.connection.principal,
       authority: this.authorities.authorityOf(this.connection.tenant, target.type) ?? "",
-      target, schema: { name: schema, version: 1 }, idempotencyKey: key,
+      target, schema: { name: schema, version: schemaVersion?.family ?? 1 }, idempotencyKey: key,
       payload: btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload)))),
       ...(evidenceFactIds.length ? { evidenceFactIds } : {}),
       ...(expectedRevision === undefined ? {} : { expectedRevision }),
     };
     this.authorities.enqueue(submission);
+    const entry = this.authorities.outbox.find(entry => entry.submission.idempotencyKey === key);
+    if (entry && schemaVersion) entry.schemaVersion = { ...schemaVersion };
     this.save();
     return key;
   }
@@ -290,7 +292,7 @@ export class EdgeClient {
       try {
         const response = await fetch(`${this.connection.server}/v1/submissions`, {
           method: "POST", body: JSON.stringify(entry.submission), signal: AbortSignal.timeout(timeoutMs),
-          headers: this.headers(true),
+          headers: { ...this.headers(true), ...(entry.schemaVersion ? { "Platform-Schema-Version": entry.schemaVersion.version } : {}) },
         });
         const body = await response.json().catch(() => ({})) as { record?: { changeId?: string }; error?: { code?: string; message?: string; issues?: import("./gen/host").FieldIssue[] } };
         if (response.ok || body.error?.code) {

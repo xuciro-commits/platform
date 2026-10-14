@@ -27,33 +27,34 @@ import (
 // CheckReplay holds every composition to that. A snapshot is only a shortcut:
 // the journal stays the truth, and a snapshot of other code is never used.
 type tenantState struct {
-	Apps              map[string]json.RawMessage   `json:"apps"`
-	Records           map[string][]recordState     `json:"records"`
-	Audit             []AuditEntry                 `json:"audit"`
-	Refusals          map[string]refusedResult     `json:"refusals,omitempty"`
-	AcceptedAnswers   map[string]json.RawMessage   `json:"acceptedAnswers,omitempty"`
-	AcceptedInputs    map[string]json.RawMessage   `json:"acceptedInputs,omitempty"`
-	ReleaseCandidates map[string]json.RawMessage   `json:"releaseCandidates,omitempty"`
-	ReleaseRequests   map[string]string            `json:"releaseRequests,omitempty"`
-	ReleaseApplied    map[string]string            `json:"releaseApplied,omitempty"`
-	ActiveRelease     string                       `json:"activeRelease,omitempty"`
-	Deliveries        []Delivery                   `json:"deliveries"`
-	Acted             int                          `json:"acted"`
-	Bindings          map[string]string            `json:"bindings"` // protocol → provider app
-	Works             json.RawMessage              `json:"works"`
-	Queues            map[string][]string          `json:"queues"` // subscriber → task IDs, head first
-	Failed            []string                     `json:"failed"`
-	Tasks             []taskState                  `json:"tasks"` // every delivery task, by ID
-	Jobs              []Task                       `json:"jobs"`
-	Connectors        json.RawMessage              `json:"connectors"`
-	Marks             []kernel.ConnectorMark       `json:"marks"`
-	LastError         map[string]ConnectorError    `json:"lastError"`
-	Notices           []platform.Notification      `json:"notices"`
-	NoticeSeq         int                          `json:"noticeSeq"`
-	Settings          map[string]string            `json:"settings"`
-	Words             map[string]map[string]string `json:"words,omitempty"` // the tenant's translations (ADR-0083)
-	Endpoints         []*Endpoint                  `json:"endpoints"`
-	Outbound          []effectState                `json:"outbound"`
+	SubmissionSchemas map[string]platform.SchemaVersion `json:"submissionSchemas,omitempty"`
+	Apps              map[string]json.RawMessage        `json:"apps"`
+	Records           map[string][]recordState          `json:"records"`
+	Audit             []AuditEntry                      `json:"audit"`
+	Refusals          map[string]refusedResult          `json:"refusals,omitempty"`
+	AcceptedAnswers   map[string]json.RawMessage        `json:"acceptedAnswers,omitempty"`
+	AcceptedInputs    map[string]json.RawMessage        `json:"acceptedInputs,omitempty"`
+	ReleaseCandidates map[string]json.RawMessage        `json:"releaseCandidates,omitempty"`
+	ReleaseRequests   map[string]string                 `json:"releaseRequests,omitempty"`
+	ReleaseApplied    map[string]string                 `json:"releaseApplied,omitempty"`
+	ActiveRelease     string                            `json:"activeRelease,omitempty"`
+	Deliveries        []Delivery                        `json:"deliveries"`
+	Acted             int                               `json:"acted"`
+	Bindings          map[string]string                 `json:"bindings"` // protocol → provider app
+	Works             json.RawMessage                   `json:"works"`
+	Queues            map[string][]string               `json:"queues"` // subscriber → task IDs, head first
+	Failed            []string                          `json:"failed"`
+	Tasks             []taskState                       `json:"tasks"` // every delivery task, by ID
+	Jobs              []Task                            `json:"jobs"`
+	Connectors        json.RawMessage                   `json:"connectors"`
+	Marks             []kernel.ConnectorMark            `json:"marks"`
+	LastError         map[string]ConnectorError         `json:"lastError"`
+	Notices           []platform.Notification           `json:"notices"`
+	NoticeSeq         int                               `json:"noticeSeq"`
+	Settings          map[string]string                 `json:"settings"`
+	Words             map[string]map[string]string      `json:"words,omitempty"` // the tenant's translations (ADR-0083)
+	Endpoints         []*Endpoint                       `json:"endpoints"`
+	Outbound          []effectState                     `json:"outbound"`
 	// The host console's lifecycle and support sessions (ADR-0047 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
 	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
@@ -332,6 +333,28 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 // verifyCommitted checks that every committed answer in the snapshot is one
 // this tenant and its apps still recognise, before it is restored.
 func (t *Tenant) verifyCommitted(s *tenantState) error {
+	for key, binding := range s.SubmissionSchemas {
+		app, request, _ := strings.Cut(key, "/")
+		owner := t.app(app)
+		if owner == nil || request == "" || binding.Check() != nil {
+			return fmt.Errorf("tenant %s: schema snapshot %s is incompatible", t.ID, key)
+		}
+		receipt := owner.AcceptedLedger().AcceptedFor(t.ID, request)
+		sub := receipt.GetSubmission()
+		if raw := s.AcceptedAnswers[key]; len(raw) > 0 {
+			result, answer, err := decodeAcceptedBatch(raw)
+			if err != nil {
+				return fmt.Errorf("tenant %s: schema snapshot %s has an invalid answer", t.ID, key)
+			}
+			sub, err = batchSubmission(result, answer)
+			if err != nil || sub.GetIdempotencyKey() != request || result.App != app {
+				return fmt.Errorf("tenant %s: schema snapshot %s has no matching request", t.ID, key)
+			}
+		}
+		if sub == nil || validateSubmissionSchemaVersion(sub, &binding) != nil {
+			return fmt.Errorf("tenant %s: schema snapshot %s has no matching receipt", t.ID, key)
+		}
+	}
 	for key, result := range s.Refusals {
 		raw, err := json.Marshal(result)
 		if err != nil {
@@ -387,6 +410,10 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		}
 		if _, refused := t.committed.refusals[key]; refused {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
+		}
+		binding, bound := s.SubmissionSchemas[key]
+		if bound != (result.SchemaVersion != nil) || result.SchemaVersion != nil && binding != *result.SchemaVersion {
+			return fmt.Errorf("tenant %s: accepted answer snapshot %s has a different schema binding", t.ID, key)
 		}
 	}
 	for key, raw := range s.AcceptedInputs {

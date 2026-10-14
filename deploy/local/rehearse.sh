@@ -80,16 +80,23 @@ echo "ok   principals come from Rauthy (demo tokens and forged claims refused)"
 echo "ok   health: the processes are alive; the plant's administrator reads its tenant's health"
 
 submit() { # token key schema target-type target-id payload [expected-revision]
-  local body who
+  local body who binding family
   local server=${SERVER:-$MANUFACTURING}
+  local headers=(-H "Authorization: Bearer $1" -H 'Content-Type: application/json')
   who=$(curl -s -H "Authorization: Bearer $1" "$server/v1/me" | jq -r .principalId)
+  binding=$(curl -sf -H "Authorization: Bearer $1" "$server/v1/actions" | jq -c --arg schema "$3" '[.[] | select(.schema == $schema) | .schemaVersion][0] // null')
+  family=$(jq -r '.family // 1' <<<"$binding")
+  if [[ $binding != null ]]; then
+    headers+=(-H "Platform-Schema-Version: $(jq -r .version <<<"$binding")")
+  fi
   body=$(jq -n --arg w "$who" --arg k "$2" --arg s "$3" --arg tt "$4" --arg ti "$5" --arg p "$(printf %s "$6" | base64 | tr -d '\n')" --arg r "${7:-}" \
+    --argjson family "$family" \
     --arg e "${EVIDENCE:-}" --arg tenant "${TENANT:-plant-sz}" --arg authority "${AUTHORITY:-mes}" \
     '{tenantId:$tenant, principalId:$w, authority:$authority, idempotencyKey:$k,
-      schema:{name:$s, version:1}, target:{type:$tt, id:$ti}, payload:$p}
+      schema:{name:$s, version:$family}, target:{type:$tt, id:$ti}, payload:$p}
      + (if $r == "" then {} else {expectedRevision:($r|tonumber)} end)
      + (if $e == "" then {} else {evidenceFactIds:[$e]} end)')
-  curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$server/v1/submissions" -d "$body"
+  curl -s "${headers[@]}" "$server/v1/submissions" -d "$body"
 }
 state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500" downtime planned-orders notifications "records/erp.production?limit=500" trial-balance; do curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/$path"; done
   curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/connectors" | jq -c '[.[] | {id, disabled}]'

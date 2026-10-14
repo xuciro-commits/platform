@@ -49,7 +49,7 @@ func (h *Host) routesCore(rt *routes) {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
-		record, err, issues := t.submitDiagnosed(m, sub, h.Now())
+		record, err, issues := t.submitSchemaDiagnosed(m, sub, r.Header.Get(SchemaVersionHeader), h.Now())
 		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))
 		Reply(w, record, t.i18n.said(err, t.Language(m, r)), localized...)
 	})

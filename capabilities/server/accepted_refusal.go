@@ -23,28 +23,40 @@ import (
 // cannot be mistaken for a kernel change receipt or applied to the record
 // store. The bounded envelope carries the original submission and answer.
 type refusedResult struct {
-	Version     int                   `json:"version"`
-	Kind        string                `json:"kind"`
-	Tenant      string                `json:"tenant"`
-	App         string                `json:"app"`
-	At          time.Time             `json:"at"`
-	RequestHash string                `json:"requestHash"`
-	Digest      string                `json:"digest"`
-	Submission  json.RawMessage       `json:"submission"`
-	Issues      []platform.FieldIssue `json:"issues,omitempty"`
-	Error       kernel.Error          `json:"error"`
+	SchemaVersion *platform.SchemaVersion `json:"schemaVersion,omitempty"`
+	Version       int                     `json:"version"`
+	Kind          string                  `json:"kind"`
+	Tenant        string                  `json:"tenant"`
+	App           string                  `json:"app"`
+	At            time.Time               `json:"at"`
+	RequestHash   string                  `json:"requestHash"`
+	Digest        string                  `json:"digest"`
+	Submission    json.RawMessage         `json:"submission"`
+	Issues        []platform.FieldIssue   `json:"issues,omitempty"`
+	Error         kernel.Error            `json:"error"`
 }
 
-func submissionHash(s *pb.Submission) (string, error) {
+func submissionHash(s *pb.Submission, versions ...*platform.SchemaVersion) (string, error) {
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(s)
 	if err != nil {
 		return "", err
+	}
+	if len(versions) > 0 && versions[0] != nil {
+		binding, err := json.Marshal(versions[0])
+		if err != nil {
+			return "", err
+		}
+		raw = append(append(raw, 0), binding...)
 	}
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:]), nil
 }
 
 func encodeRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, issues ...platform.FieldIssue) ([]byte, error) {
+	return encodeSchemaRefusedResult(s, at, refusal, nil, issues...)
+}
+
+func encodeSchemaRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, binding *platform.SchemaVersion, issues ...platform.FieldIssue) ([]byte, error) {
 	if s == nil || refusal == nil {
 		return nil, fmt.Errorf("refused result needs a submission and answer")
 	}
@@ -52,12 +64,12 @@ func encodeRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, 
 	if err != nil {
 		return nil, err
 	}
-	hash, err := submissionHash(s)
+	hash, err := submissionHash(s, binding)
 	if err != nil {
 		return nil, err
 	}
 	result := refusedResult{Version: 1, Kind: "refusal", Tenant: s.GetTenantId(), App: s.GetAuthority(),
-		At: at.UTC(), RequestHash: hash, Submission: sub, Error: *refusal}
+		At: at.UTC(), RequestHash: hash, Submission: sub, Error: *refusal, SchemaVersion: binding}
 	if len(issues) > 0 {
 		result.Version = 2
 		result.Issues = issues
@@ -100,7 +112,10 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 	if err := protojson.Unmarshal(result.Submission, &sub); err != nil {
 		return result, nil, fmt.Errorf("refused submission: %w", err)
 	}
-	hash, err := submissionHash(&sub)
+	if err := validateSubmissionSchemaVersion(&sub, result.SchemaVersion); err != nil {
+		return result, nil, err
+	}
+	hash, err := submissionHash(&sub, result.SchemaVersion)
 	if err != nil {
 		return result, nil, err
 	}

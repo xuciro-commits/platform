@@ -64,6 +64,8 @@ Flow/Automation 的发布审阅先确认当前草稿，再进入原候选审阅�
 
 真实数据迁移（[ADR-0106 As built](ADR/0106-data-and-definition-evolution.md#as-built)，实施中）：源候选先激活，目标草稿保存为封存候选。在原发布工作台选目标候选，展开“Data migration / 数据迁移”，选择对象并填写显式步骤与可选筛选表达式。先“Save migration plan / 保存迁移计划”，再“Publish migration plan / 发布迁移计划”固定版本；可从“Saved migration plan / 已保存迁移计划”重载草稿。发布不会执行数据迁移。点击“Review migration / 审阅迁移”核对当前记录量与问题，再“Start reviewed migration / 开始已审阅的迁移”；每次“Run next migration batch / 运行下一迁移批次”保存数据与进度，刷新或重开后继续。回复丢失时“Retry original migration decision / 重试原迁移决定”复用原 key，避免重新执行。来源对象在迁移期间只读；完成且无失败后，沿下方原按钮激活目标，目标值/引用/约束仍须通过。“Cancel migration and restore source / 取消迁移并恢复源数据”按批写补偿事实；继续取消直到 `cancelled`，历史保留，可审阅修正后的计划。
 
+客户端定义版本：标准工作区按动作目录的原 `schemaVersion` 建稿并保存进 outbox，兼容升级仍可按旧声明提交。跨兼容族提交会显示刷新原因，自动刷新定义并保留输入；再次确认产生新键并使用新定义。未知结果始终重发原键和原版本，升级或动作退役后也先取得原收据，不能把重试改成新请求。自建 HTTP 客户端从 `GET /v1/actions` 读取 `{version, family}`，在 `POST /v1/submissions` 同时提交 `Platform-Schema-Version: <version>` 与原 Protobuf JSON 的 `schema.version: <family>`；新构建对象不接受缺失声明。既有原生第 1 版客户端与历史收据保留原路径，未声明兼容的旧代码包内容不获自动放行。范围见 [ADR-0106 As built](ADR/0106-data-and-definition-evolution.md#as-built)。
+
 共享对象扩展：在对象的 Shape / 形状中选择 Extends / 继承并保留必填的 `base` 引用；客户字段、状态与动作归扩展对象，基础记录仍归原 owner。发布捕获只读 `extensionSource`，概述显示所依据的基础包版本。升级时在发布审阅的“Customer extensions / 客户扩展”核对原/目标版本、保留字段与问题，闭包外的扩展也受检查；冲突暂停升级和该扩展的新写入，不覆盖客户值。基础包新增同名字段时，把扩展字段显式重命名，原名保留 `readOnly` + `aliasOf`，基础对象及扩展草稿一起封存为目标，再按上面的重命名迁移分批执行/恢复/激活。基础字段形状不兼容须重新审阅并显式发布扩展的新基础版本；历史来源未记录的旧扩展不会被补写或改字节。
 
 重命名在对象字段编辑器保留旧名，选择“Read alias of / 只读别名目标”指向新名；旧名不可直接写，读取权限跟随目标。退役保留旧字段并勾选“Read only / 只读”，新建不再要求该字段时取消其必填；迁移步骤声明 `retire`。动作退役从目标对象草稿撤下动作，封存目标后声明 `retire-action`、原完整 `action` schema、`types` 与 `batch`；每批拒绝该动作的待审批请求、关闭任务并退出原待审批状态，再激活目标。已记账的审批拒绝不会因取消后续迁移而恢复；要求重新发起。不能按单行筛选退役一个定义。

@@ -33,11 +33,13 @@ type Ledger struct {
 }
 
 // NewLedger declares authority as the tenant server for classes and accepts the
-// catalog's actions (version 1 of each schema).
+// catalog's actions and their retained numeric families.
 func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *Ledger {
 	var schemas []*pb.SchemaRef
 	for _, a := range catalog.actions {
-		schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: 1})
+		for family := uint32(1); family <= schemaFamily(a); family++ {
+			schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: family})
+		}
 	}
 	registry := kernel.NewSchemaRegistry(schemas, nil)
 	l := &Ledger{tenant: tenant, authority: authority, changes: kernel.NewChangeLog(registry), schemas: registry,
@@ -63,7 +65,14 @@ func (l *Ledger) Extend(classes []string, actions []Action) error {
 		if a.Schema == "" || a.Target == "" || a.Title == "" || len(a.Roles) == 0 && !a.Automation {
 			return fmt.Errorf("action %q lacks a schema, target, title or roles", a.Schema)
 		}
-		schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: 1})
+		if a.SchemaVersion != nil {
+			if err := a.SchemaVersion.Check(); err != nil {
+				return err
+			}
+		}
+		for family := uint32(1); family <= schemaFamily(a); family++ {
+			schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: family})
+		}
 	}
 	if err := l.schemas.Learn(schemas...); err != nil { // K7 S7
 		return err
@@ -78,6 +87,13 @@ func (l *Ledger) Extend(classes []string, actions []Action) error {
 		l.declarations = append(l.declarations, d)
 	}
 	return nil
+}
+
+func schemaFamily(action Action) uint32 {
+	if action.SchemaVersion != nil {
+		return action.SchemaVersion.Family
+	}
+	return 1
 }
 
 // HistoricalSchemas retains retired schemas for journal and snapshot recovery.

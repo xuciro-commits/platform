@@ -6,9 +6,9 @@
 // an operator (`desk`).
 import { readFileSync } from "node:fs";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
-import { decide, fresh, open, pageUIProfile, stableReadRevision } from "./host";
+import { decide, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision } from "./host";
 
-export { expect, fresh, open, pageUIProfile, stableReadRevision };
+export { expect, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision };
 
 export const BUILDER = "manager";
 export const OPERATOR = "desk";

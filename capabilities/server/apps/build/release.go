@@ -216,7 +216,7 @@ func (b *Build) validateObjectInstallation(record Object) error {
 	if err != nil {
 		return err
 	}
-	return b.host.ValidateInstallDependents(entity, platform.EntityActions(entity), generated, pages...)
+	return b.host.ValidateInstallDependents(entity, objectActions(record, entity), generated, pages...)
 }
 
 // An explicitly published page owns its name after it replaces an object's
@@ -308,7 +308,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			Requires: requires, Body: body}, false); err != nil {
 			return nil, err
 		}
-		for _, action := range platform.EntityActions(Entity(saved)) {
+		for _, action := range objectActions(saved, Entity(saved)) {
 			actionBody, err := json.Marshal(struct {
 				Schema string          `json:"schema"`
 				Target string          `json:"target"`

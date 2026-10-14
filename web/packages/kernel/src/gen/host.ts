@@ -67,6 +67,7 @@ export type Account = {
 };
 
 export type Action = {
+  schemaVersion?: SchemaVersion;
   schema: string;
   target: string;
   capability: string;
@@ -2847,6 +2848,11 @@ export type SavedView = {
   entity: string;
   state: string;
   owner: string;
+};
+
+export type SchemaVersion = {
+  version: string;
+  family: number;
 };
 
 export type Section = {

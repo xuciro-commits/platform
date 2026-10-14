@@ -53,6 +53,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			objects[i].State, objects[i].Installed = "published", buildapi.TypeOf(frozen.Name)
 			objects[i].Published = published(frozen)
 			objects[i].ExtensionSource = frozen.ExtensionSource
+			objects[i].SchemaVersions = frozen.SchemaVersions
 			if err := add(SchemaPublish, objects[i]); err != nil {
 				return nil, err
 			}

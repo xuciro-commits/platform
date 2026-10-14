@@ -1,4 +1,78 @@
-import { expect, fresh, shots, slug, test } from "./kit";
+import { expect, fresh, retainActionCatalog, shots, slug, test } from "./kit";
+
+test("an old client keeps its schema through compatible publication and lost replies, then refreshes across families", async ({ page, builder, operator }) => {
+  test.setTimeout(90_000);
+  const fields = [{ name: "note", title: "Note", type: "text" }];
+  const object = await builder.object({ title: "Schema record", fields,
+    states: [{ name: "open", title: "Open" }, { name: "reviewed", title: "Reviewed" }],
+    actions: [{ name: "review", title: "Review", from: ["open"], to: "reviewed" }],
+  });
+  const catalog = await operator.read<any[]>("actions");
+  const original = catalog.find(action => action.schema === `${object.type}.create`).schemaVersion;
+  expect(original.family).toBe(1);
+
+  // This tab retains the definitions it originally read, as an offline client would.
+  const retained = await retainActionCatalog(page, catalog);
+  await operator.open(page, `/page?app=build&kind=page&name=${object.name}`);
+  await page.getByRole("button", { name: "Create schema record", exact: true }).click();
+  const form = page.getByRole("dialog");
+  const acceptedID = fresh("SCHEMA");
+  await form.getByRole("textbox", { name: "ID *", exact: true }).fill(acceptedID);
+  await form.getByRole("textbox", { name: "Note", exact: true }).fill("Keep the original contract");
+  await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { fields: [...fields, { name: "description", title: "Description", type: "text" }] });
+  await builder.decide("build.object.publish", { type: "build.object", id: object.id }, {});
+  const compatible = (await operator.read<any[]>("actions")).find(action => action.schema === `${object.type}.create`).schemaVersion;
+  expect(compatible.family).toBe(original.family);
+  expect(compatible.version).not.toBe(original.version);
+
+  // The host accepts the old content version. Losing its reply retains the exact outbox declaration.
+  const requests: { key: string; family: number; content: string }[] = [];
+  await page.route("**/v1/submissions", async route => {
+    const body = route.request().postDataJSON();
+    if (body.schema?.name !== `${object.type}.create`) { await route.continue(); return; }
+    requests.push({ key: body.idempotencyKey, family: body.schema.version, content: route.request().headers()["platform-schema-version"]! });
+    if (requests.length === 1) {
+      const response = await route.fetch();
+      expect(response.ok()).toBeTruthy();
+      await route.abort("connectionreset");
+      return;
+    }
+    if (requests.length === 3) await retained.release();
+    await route.continue();
+  });
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(form.getByRole("button", { name: "Retry confirmation", exact: true })).toBeVisible();
+  expect(await operator.record(object.type, acceptedID)).toMatchObject({ note: "Keep the original contract" });
+  const stored = await page.evaluate(key => {
+    const entries = Object.keys(localStorage).filter(name => name.startsWith("outbox:")).flatMap(name => JSON.parse(localStorage.getItem(name)!));
+    return entries.find(entry => entry.submission.idempotencyKey === key);
+  }, requests[0]!.key);
+  expect(stored.schemaVersion).toEqual(original);
+
+  await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { actions: [{ name: "review", title: "Review", from: ["open"], to: "open" }] });
+  await builder.decide("build.object.publish", { type: "build.object", id: object.id }, {});
+  await form.getByRole("button", { name: "Retry confirmation", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  expect(requests[1]).toEqual(requests[0]);
+  expect((await operator.record(object.type, acceptedID)).revision).toBe(1);
+
+  // A new request from that stale tab cannot execute current rules. Refresh keeps its entered values.
+  const newID = fresh("SCHEMA");
+  await page.getByRole("button", { name: "Create schema record", exact: true }).click();
+  await form.getByRole("textbox", { name: "ID *", exact: true }).fill(newID);
+  await form.getByRole("textbox", { name: "Note", exact: true }).fill("Keep my draft after refresh");
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(form.getByRole("alert")).toContainText("refresh definitions");
+  await expect.poll(() => retained.currentFamily(`${object.type}.create`)).toBe(2);
+  expect(await operator.record(object.type, newID)).toBeUndefined();
+  await expect(form.getByRole("textbox", { name: "Note", exact: true })).toHaveValue("Keep my draft after refresh");
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  expect(await operator.record(object.type, newID)).toMatchObject({ note: "Keep my draft after refresh", revision: 1 });
+  expect(requests[2]!.family).toBe(1);
+  expect(requests[3]!.family).toBe(2);
+  expect(requests[3]!.key).not.toBe(requests[2]!.key);
+});
 
 test("customer extension fields and actions survive an upgrade and resolve a declared field conflict", async ({ page, builder, operator }, info) => {
   test.setTimeout(90_000);

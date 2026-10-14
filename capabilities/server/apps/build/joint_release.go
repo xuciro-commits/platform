@@ -249,6 +249,9 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		if err = b.captureExtensionSource(&record); err != nil {
 			return prior, next, hadPrior, err
 		}
+		if err = b.captureObjectSchema(&record); err != nil {
+			return prior, next, hadPrior, err
+		}
 		if err = b.Check(record, record.ID); err == nil {
 			err = b.validateObjectInstallation(record)
 		}

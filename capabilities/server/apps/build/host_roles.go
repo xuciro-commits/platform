@@ -14,7 +14,7 @@ func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action
 	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject || json.Unmarshal(asset.Body, &object) != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
 		return nil, fmt.Errorf("invalid construction object descriptor")
 	}
-	return platform.EntityActions(Entity(object)), nil
+	return objectActions(object, Entity(object)), nil
 }
 
 var _ host.ConstructionDrafts = (*Build)(nil)

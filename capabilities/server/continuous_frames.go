@@ -242,14 +242,28 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 
 // prepareContinuousDeadLetterReplay recognizes only signal replay. Business
 // action replay stays inside the original Flow decision without outside I/O.
-func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time, contentVersion ...string) (*pb.ChangeRecord, *kernel.Error, bool) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
 	t.mu.Lock()
-	if owner, ok := t.procs.(platform.ContinuousFlowOwner); ok && owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
-		record, err := t.submitAccepted(owner, m, sub, now, false)
-		t.mu.Unlock()
-		return record, err, true
+	var binding *platform.SchemaVersion
+	if owner, ok := t.procs.(platform.ContinuousFlowOwner); ok {
+		var schemaRefusal *kernel.Error
+		if len(contentVersion) > 0 {
+			binding, schemaRefusal = t.submissionSchemaVersion(owner, sub, contentVersion[0])
+			if schemaRefusal != nil && schemaRefusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+				t.mu.Unlock()
+				return nil, schemaRefusal, true
+			}
+		} else {
+			sub = t.currentSubmissionSchema(owner, sub)
+		}
+		_, refused := t.committed.refusals[owner.Manifest().ID+"/"+sub.GetIdempotencyKey()]
+		if schemaRefusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+			record, err := t.submitAcceptedVersion(owner, m, sub, now, false, binding, schemaRefusal)
+			t.mu.Unlock()
+			return record, err, true
+		}
 	}
 	view, err := t.RecordOf(m, "flow.dead-letter", sub.GetTarget().GetId(), now)
 	if err != nil {
@@ -332,7 +346,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			return nil, refusal, true
 		}
 	}
-	record, err := t.submitAccepted(prepared.Decision(), current, sub, now, false, preparedInput)
+	record, err := t.submitAcceptedVersion(prepared.Decision(), current, sub, now, false, binding, nil, preparedInput)
 	_, refused := t.committed.refusals[platform.FlowApp+"/"+sub.GetIdempotencyKey()]
 	// A durable refusal names no prepared bytes. An uncertain append must
 	// retain them until the original accepted journal resolves its outcome.

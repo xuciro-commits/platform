@@ -24,6 +24,7 @@ import (
 // One top-level input, not one row or one nested decision. Before validates
 // the predecessor image/history before any authoritative ledger is advanced.
 type acceptedBatch struct {
+	SchemaVersion  *platform.SchemaVersion         `json:"schemaVersion,omitempty"`
 	Authorizations []authorizationEvidence         `json:"authorizations,omitempty"`
 	Version        int                             `json:"version"`
 	Kind           string                          `json:"kind"`
@@ -139,7 +140,8 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 			return nil, err
 		}
 	}
-	result.RequestHash, err = submissionHash(request)
+	result.SchemaVersion = d.schemaVersion
+	result.RequestHash, err = submissionHash(request, result.SchemaVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +293,10 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err := validateTxnIterations(result.App, result.Iterations); err != nil {
 		return result, nil, err
 	}
-	hash, err := submissionHash(sub)
+	if err := validateSubmissionSchemaVersion(sub, result.SchemaVersion); err != nil {
+		return result, nil, err
+	}
+	hash, err := submissionHash(sub, result.SchemaVersion)
 	if err != nil || result.RequestHash != hash {
 		return result, nil, fmt.Errorf("record batch request digest differs")
 	}
@@ -599,6 +604,10 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 		return false, err
 	}
 	t.sequences.set(result.Sequences)
+	if result.SchemaVersion != nil {
+		_, request, _ := strings.Cut(key, "/")
+		t.committed.saveSchemaVersion(result.App, request, result.SchemaVersion)
+	}
 	if len(result.Submission) > 0 {
 		t.committed.saveAnswer(key, raw)
 	}

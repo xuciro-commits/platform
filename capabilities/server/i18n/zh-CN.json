@@ -1874,5 +1874,12 @@
   "Migration plan": "迁移计划",
   "Migration plans": "迁移计划",
   "Retain this migration plan as an immutable asset without executing it": "将迁移计划保留为不可变资产，发布不执行迁移",
-  "The pinned migration plan asset": "固定版本的迁移计划资产"
+  "The pinned migration plan asset": "固定版本的迁移计划资产",
+  "Schema versions": "定义版本记录",
+  "Family": "兼容族",
+  "Retained content versions and compatible schema families captured at publication": "发布时保留的内容版本及兼容版本族",
+  "The action definition is unavailable; refresh definitions": "动作定义不可用，请刷新定义",
+  "The submission needs its schema content version; refresh definitions": "本次提交必须声明所依据的定义版本，请刷新定义",
+  "The submission schema content version is invalid": "提交的定义版本声明无效",
+  "The schema version is unknown or belongs to another family; refresh definitions": "定义版本未知或属于不同的兼容族，请刷新定义"
 }
