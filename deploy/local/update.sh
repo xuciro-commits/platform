@@ -9,7 +9,7 @@ fi
 export PLATFORM_REVISION
 PLATFORM_REVISION=$(git rev-parse HEAD)
 mkdir -p .build/local-update
-local_mode=$(python3 - <<'PY'
+local_mode=${PLATFORM_LOCAL_MODE:-$(python3 - <<'PY'
 import importlib.util
 from pathlib import Path
 spec = importlib.util.spec_from_file_location('dev_environment', Path('deploy/dev/environment.py'))
@@ -17,7 +17,11 @@ environment = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(environment)
 print('native' if environment.alive(environment.read_state()) else 'docker')
 PY
-)
+)}
+case "$local_mode" in
+  native|docker) ;;
+  *) echo 'PLATFORM_LOCAL_MODE must be native or docker.' >&2; exit 1 ;;
+esac
 if [[ $local_mode == native ]]; then
   python3 - <<'PY'
 import datetime, importlib.util, json, os, re, subprocess, urllib.request

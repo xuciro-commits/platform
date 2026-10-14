@@ -111,6 +111,66 @@ func resultWorkTenant(t *testing.T, id string) *Tenant {
 	return tn
 }
 
+func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) {
+	newTenant := func() *Tenant {
+		tn := resultWorkTenant(t, "legacy-job-binding")
+		tn.app("worker").(*resultWorker).idle = true
+		return tn
+	}
+	live := newTenant()
+	job := live.work.jobs[0]
+	if len(job.Applications) != 0 {
+		t.Fatal("startup rewrote the historical job predecessor")
+	}
+	var entries []Entry
+	legacy := true
+	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		if legacy {
+			result, err := decodeAcceptedWork(e.Body)
+			if err != nil {
+				return nil, err
+			}
+			// An older writer had no application field. Its original digest
+			// and predecessor still pass the ordinary recovery checks.
+			result.After.Applications = nil
+			result.Digest, err = digestAcceptedWork(result)
+			if err != nil {
+				return nil, err
+			}
+			e.Body, err = json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+		}
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	at := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
+	for i := range 2 {
+		live.mu.Lock()
+		out := live.run(job, at.Add(time.Duration(i)*time.Hour), false)
+		live.mu.Unlock()
+		if out != "ok" {
+			t.Fatalf("job generation %d: %s", i, out)
+		}
+		legacy = false
+	}
+	first, err := decodeAcceptedWork(entries[0].Body)
+	if err != nil || len(first.Input.Applications) != 0 || len(first.After.Applications) != 0 {
+		t.Fatalf("legacy job image changed: %v", err)
+	}
+	second, err := decodeAcceptedWork(entries[1].Body)
+	if err != nil || len(second.Input.Applications) != 0 || len(second.After.Applications) == 0 {
+		t.Fatalf("new labels did not join the accepted result: %v", err)
+	}
+	CheckReplay(t, live, entries, newTenant)
+	wrong := newTenant()
+	wrong.work.jobs[0].Applications = second.After.Applications
+	if _, err := wrong.applyAcceptedWork(entries[0].Body); err == nil {
+		t.Fatal("a different job predecessor bypassed recovery validation")
+	}
+}
+
 func TestAcceptedIdleWorkDoesNotInvalidateBusinessData(t *testing.T) {
 	live := resultWorkTenant(t, "idle-work")
 	live.app("worker").(*resultWorker).idle = true
