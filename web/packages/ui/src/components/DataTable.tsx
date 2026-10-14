@@ -41,6 +41,8 @@ export type DataTableProps<T> = {
   loadingText?: ReactNode;
   /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */
   onCellEdit?: (row: T, column: string, value: unknown) => void;
+	/** An original owner decision, consumed without a client permission rule. */
+	cellAccess?: (row:T,column:string)=>{allow:boolean;reason:string}|undefined;
   /** Drag header edges to resize. Default on; set false to lock layout. */
   resizable?: boolean;
   /** Virtualize flat leaf columns as well as rows; pinned metadata stays mounted. */
@@ -60,7 +62,7 @@ const focusSel = (root: HTMLElement | null, sel: string, n = 3) => {
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
   data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
-  selectedIds,loading = false, loadingText, onCellEdit, resizable = true, virtualColumns = false, onRowContextMenu,
+  selectedIds,loading = false, loadingText, onCellEdit, cellAccess,resizable = true, virtualColumns = false, onRowContextMenu,
 }: DataTableProps<T>) {
   const editorPrefix=useId();
   const [editing, setEditing] = useState<Session<T> | null>(null);
@@ -233,7 +235,8 @@ export function DataTable<T>({
                   {row.getVisibleCells().map((cell, ci) => {
                     if(mountedColumns&&!mountedColumns.has(ci)&&editing?.columnId!==cell.column.id)return null;
                     const field = cell.column.columnDef.meta?.field;
-                    const editable = grid && !!field?.editor && !field.readOnly;
+                    const access=cellAccess?.(row.original,cell.column.id);
+                    const editable = grid && !!field?.editor && !field.readOnly && access?.allow!==false;
                     const isEditing = editing?.rowId === row.id && editing.columnId === cell.column.id;
                     const pin = pins[ci];
                     const raw = cell.getValue();
@@ -246,7 +249,8 @@ export function DataTable<T>({
                     return (
                       <div role="cell" key={cell.id} data-nav={coord} tabIndex={grid ? 0 : undefined}
                         aria-colindex={ci+1}
-                        title={!isEditing && (typeof raw === "string" || typeof raw === "number") ? String(raw) : undefined}
+                        aria-disabled={grid&&access?.allow===false?true:undefined}
+                        title={access?.allow===false?t(access.reason):!isEditing && (typeof raw === "string" || typeof raw === "number") ? String(raw) : undefined}
                         onClick={grid ? (e) => { e.stopPropagation(); e.currentTarget.focus(); } : undefined}
                         onDoubleClick={editable ? (e) => { e.stopPropagation(); begin(); } : undefined}
                         onKeyDown={grid && !isEditing ? (e) => {

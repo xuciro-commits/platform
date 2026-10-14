@@ -1,3 +1,5 @@
+import {usePageModel} from "../runtime/PageModel";
+import {materializeModelSection,modelWindowKey,modelWindowWidget} from "../runtime/model-bindings";
 import {interfaceQueryForSection} from "../runtime/ontology-interface";
 import {boundQueryDefinition} from "../runtime/query-plans";
 import {pageWidgetRegistry as widgets} from "../widgets/plugins";
@@ -42,7 +44,7 @@ type Bound = import("../widgets/bindings").WidgetBindingContext;
 type Composing = { slotViews?:Readonly<Record<string,ReactNode>>; chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
   wrapLayout?: (id: string, node: Api.PageLayoutNode, body: ReactNode) => ReactNode };
 
-const objectOf = (page: Page, section: Section) => section.object?.name || page.object.name;
+const objectOf = (page: Page, section: Section) => (!interfaceQueryForSection(page,section)?section.model?.type:undefined) || section.object?.name || page.object.name;
 const parentTypeOf = (page: Page, section: Section) => section.parentSelection
   ? page.selections?.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : page.object.name;
 // Named and unnamed selections use one typed slot model.
@@ -52,7 +54,7 @@ const selectionKey = recordSlot;
  *  the declared relation when the section names one (ADR-0040 21b), else the
  *  first reference to the page's object. */
 const relatedField = (fields: { name: string; title: string; type: string; ref?: string; inverse?: string; readOnly?: boolean }[] | undefined, page: Page, section: Section) =>
-  fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
+  section.model ? fields?.find(f=>f.name===section.model?.relation?.field) : fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 
 
@@ -63,12 +65,15 @@ class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolea
 }
 
 export function SectionView(bound: Bound & Composing) {
-  const host=useContext(HostContext),source=host?.source;
+  const host=useContext(HostContext),model=usePageModel(bound,host?.source),source=model.source;
+  bound={...bound,...model.bound};
   const { section, chosen, onChoose, at, nested } = bound;
+  if(model.active&&model.data?.hidden&&!onChoose)return null;
   const aggregateSource=source?.aggregate?{aggregate:source.aggregate,scope:bound.aggregateScope??source.scope,revision:source.revision,watchAggregate:source.watchAggregate}:undefined;
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
-  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(bound.recordObject??objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions} catalog={host?.catalog} decide={host?.decide}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
+  const modelStatus=model.active&&(model.error||!model.ready||!model.data)?<Panel role={model.error?"alert":"status"}>{t(model.error??(!model.ready?"Select the model binding context.":"Loading model fields and relationships…"))}</Panel>:undefined;
+  const body = modelStatus??(Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(bound.recordObject??objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions} catalog={host?.catalog} decide={host?.decide}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>);
   const slots=(placement:"before"|"after")=>implementation&&"slots" in implementation.contract?implementation.contract.slots.filter(slot=>slot.placement===placement).map(slot=>bound.slotViews?.[slot.id]?<div key={slot.id} data-widget-slot={slot.id} onClick={event=>event.stopPropagation()}>{bound.slotViews[slot.id]}</div>:null):null;
   const template=section.tablePresentation?.titleTemplate,total=bound.window?.error||!["value","empty"].includes(bound.collection?.status??"")?undefined:bound.window?.page?.total;
   const title=template===undefined?section.title:template.replace("{count}",total===undefined||!Number.isSafeInteger(total)||total<0?"…":total.toLocaleString());
@@ -79,6 +84,7 @@ export function SectionView(bound: Bound & Composing) {
       className={cn("grid min-w-0 grid-cols-1 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
         onChoose && "cursor-pointer", inHand && "outline outline-2 outline-primary")}>
       {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      {model.active&&model.data?.partial&&<p role="status" className="text-xs text-muted">{t("Some records or fields are outside your permissions.")}</p>}
       {slots("before")}
       <WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary>
       {slots("after")}
@@ -93,16 +99,17 @@ export function SectionView(bound: Bound & Composing) {
  * same records, with nothing that writes.
  */
 type ComposedPageProps = {
-  page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;pageCall?:import("../runtime/PageNavigation").PageCall;
+  modelDraft?:boolean;page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;pageCall?:import("../runtime/PageNavigation").PageCall;
   editingRoot?: string;
   onVariableValues?: (values: Record<string, VariableResult>) => void;
 } & Composing;
 export function ComposedPage(props: ComposedPageProps) {
-  const { me } = useHost();const application=useApplicationContext();
-  return <PageEmbeddingBoundary page={props.page}><PageSession key={JSON.stringify([me, props.definitionKey, props.page, application?.identity, application?.session.readScope])} {...props} /></PageEmbeddingBoundary>;
+  const { me,source } = useHost();const application=useApplicationContext();
+  const effective={...props.page,sections:props.page.sections?.map(section=>{const value=materializeModelSection(section,source.entity);return interfaceQueryForSection(props.page,section)?{...value,object:undefined}:value;})};
+  return <PageEmbeddingBoundary page={props.page}><PageSession key={JSON.stringify([me, props.definitionKey, props.page, application?.identity, application?.session.readScope])} {...props} page={effective} /></PageEmbeddingBoundary>;
 }
 
-function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot,pageCall }: ComposedPageProps) {
+function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot,pageCall }: ComposedPageProps) {
   const { source,definitions } = useHost();
   const openRecord=useOpenRecord();
   const viewVisible = useViewVisible();
@@ -148,6 +155,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   for(const [id,q] of Object.entries(page.document?.queries??{})){const v=initialVariables[q.for?.variable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);if(!["query","link-type"].includes(q.query?.ref.kind??"")||v?.source?.kind!=="record"||!producer)continue;const parent=recordResourceSlot(page,q.for?.variable);if(!parent)continue;queryParents.set(planKey(id),parent);for(const child of querySelections.get(planKey(id))??[]){if(!children.has(parent))children.set(parent,new Set());(children.get(parent) as Set<string>).add(child);}}
   for(const graph of page.sections??[]){if(graph.widget!=="graph-explorer")continue;const parent=recordResourceSlot(page,graph.recordVariable);if(!parent)continue;if(!children.has(parent))children.set(parent,new Set());for(const output of graph.graphExplorer?.outputs??[])children.get(parent)!.add(recordOutputSlot(page,graph,output.id));}
   for(const section of page.sections??[]){const c=section.observation;if(c?.kind!=="table")continue;const v=initialVariables[section.collectionVariable??""],key=planKey(v?.source?.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());for(const port of ["row","asset"])if(recordOutputObject(page,section,port))querySelections.get(key)!.add(recordOutputSlot(page,section,port));if(c.rowOutput&&c.assetOutput){const row=recordOutputSlot(page,section,"row");if(!children.has(row))children.set(row,new Set());children.get(row)!.add(recordOutputSlot(page,section,"asset"));}}
+  for(const section of page.sections??[]){if(!modelWindowWidget(section)||["detail","record-card"].includes(section.widget))continue;const key=modelWindowKey(section);querySelections.set(key,new Set([selectionSlot(page,section),...(section.selectionSetVariable?[selectionSetSlot(page,section)]:[])]));const inputs=new Set([section.model?.set?.recordVariable,section.model?.options?.set?.recordVariable,...Object.values(section.model?.options?.rule?.inputs??{})]);for(const id of inputs){if(!id||initialVariables[id]?.type!=="record")continue;const parent=recordResourceSlot(page,id)??inputSlot(id),child=selectionSlot(page,section);if(parent===child)continue;if(!children.has(parent))children.set(parent,new Set());children.get(parent)!.add(child);}}
   const recordScalars=new Map<string,Map<string,ScalarValue>>();
   for(const section of page.sections??[]){if(!["record-comments","record-uploader","media-preview","pdf-viewer","image-annotation","scene-3d","ai-assistant"].includes(section.widget))continue;const slot=section.widget==="ai-assistant"?aiRecordSlot(page,section.recordVariable):recordResourceSlot(page,section.recordVariable);if(!slot)continue;if(!recordScalars.has(slot))recordScalars.set(slot,new Map());for(const id of [section.commentDraftVariable,section.fileVariable,section.pdfPageVariable,section.ai?.questionVariable,section.scenePartVariable]){if(id&&initialVariables[id]?.mode==="state")recordScalars.get(slot)!.set(id,id===section.pdfPageVariable?String(initialVariables[id]!.initial??"1"):"");}}
   const { session, snapshot } = usePageSession(source, {interfaces,recordScalars, maxSelectionSetRecords:pageVariableContract.recordSelection.maxRecords,objects: slots, children, queryParents, querySelections, ...(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?filterSessionBindings(page):{}), overlayScopes:overlaySessionScopes(page) });
@@ -184,7 +192,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const collectionInputs={...queries.collectionInputs,...application.collectionInputs,...Object.fromEntries(Object.keys(initialVariables).flatMap(id=>{const shared=applicationVariable(id);return shared?[[id,application.collectionInputs[shared]??{status:"empty" as const}]]:[]}))};
   const effects = usePageEffects(page, live, {...variables.values,...collectionInputs}, variables.set,pageCall);
   useEffect(() => { onVariableValues?.({...variables.values,...Object.fromEntries(Object.entries(initialVariables).filter(([,v])=>v.scope==="overlay").map(([id,v])=>[id,overlayValues[v.owner??""]?.[id]??{status:"empty" as const}]))}); }, [onVariableValues, variables.values, overlayValues]);
-  const selectionQuery=(section:Section)=>{if(!(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=15))return undefined;const v=initialVariables[section.collectionVariable??""];return v?.source?.kind==="plan"?planKey(v.source.query??""):v?.mode==="shared"?`application/${section.collectionVariable}`:section.id;};
+  const selectionQuery=(section:Section)=>{if(modelWindowWidget(section)&&!interfaceQueryForSection(page,section))return modelWindowKey(section);if(!(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=15))return undefined;const v=initialVariables[section.collectionVariable??""];return v?.source?.kind==="plan"?planKey(v.source.query??""):v?.mode==="shared"?`application/${section.collectionVariable}`:section.id;};
   const onSelect = (key: string, record?: EntityRecord, query?:string) => session.select(key, record,query);
   const indexed = new Map((page.sections ?? []).map((section, i) => [section.id, { section, i }]));
   const writeState = (id: string, value: ScalarValue, owner?: string) => {
@@ -246,7 +254,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     const actionRecord=actionSlot&&actionRef?.object===applicationAction?.object&&actionRef?.id===applicationAction?.id?session.selected(actionSlot):undefined;
     const actionReady=(!actionVariable||actionVariable.mode!=="shared"||application.resources[section.recordVariable??""]?.status==="value")&&(!actionSlot||snapshot.records[actionSlot]?.status==="value")&&enabled!==false;
     return (
-      <SectionView recordObject={interfaceQueryForSection(page,section)?recordReadReference(snapshot.records[recordResourceSlot(page,section.recordVariable)??selectionSlot(page,section)])?.object:undefined} interfaceReference={interfaceQueryForSection(page,section)?recordReadReference(snapshot.records[selectionSlot(page,section)]):undefined} onInterfaceSelect={interfaceQueryForSection(page,section)?row=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const query=selectionQuery(section);if(query)void session.confirmInterfaceSelection(selectionSlot(page,section),row,query);}:undefined} slotViews={slotViews} builder={queries.builders[section.id??""]} key={section.id || i} page={page} section={section} session={session} readSource={context?.source} actionReady={actionReady} selected={mapShared?(mapReady?mapRecord:undefined):section.widget==="inline-action"&&actionSlot? actionRecord:section.selectionVariable?session.selected(inputSlot(section.selectionVariable)):section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const slot=recordResourceSlot(page,section.recordVariable);return slot?session.selected(slot):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
+      <SectionView modelDraft={modelDraft} modelInterface={!!interfaceQueryForSection(page,section)} modelValues={values} recordObject={interfaceQueryForSection(page,section)?recordReadReference(snapshot.records[recordResourceSlot(page,section.recordVariable)??selectionSlot(page,section)])?.object:undefined} interfaceReference={interfaceQueryForSection(page,section)?recordReadReference(snapshot.records[selectionSlot(page,section)]):undefined} onInterfaceSelect={interfaceQueryForSection(page,section)?row=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const query=selectionQuery(section);if(query)void session.confirmInterfaceSelection(selectionSlot(page,section),row,query);}:undefined} slotViews={slotViews} builder={queries.builders[section.id??""]} key={section.id || i} page={page} section={section} session={session} readSource={context?.source} actionReady={actionReady} selected={mapShared?(mapReady?mapRecord:undefined):section.widget==="inline-action"&&actionSlot? actionRecord:section.selectionVariable?session.selected(inputSlot(section.selectionVariable)):section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const slot=recordResourceSlot(page,section.recordVariable);return slot?session.selected(slot):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
         keepActive={!!binding("select")} master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {if((section.widget==="record-scatter"||section.widget==="record-map")||section.recordList?.layout==="tiles"){if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const query=selectionQuery(section);if(!record){session.select(selectionSlot(page,section),undefined);if(section.selectionVariable)application.select(section.selectionVariable,undefined,recordProducer(section.id??""),true);return;}if(query){const complete=section.selectionVariable?application.beginSelect(section.selectionVariable,recordProducer(section.id??"")):undefined;void session.confirmSelection(selectionSlot(page,section),record,query).then(confirmed=>{if(!currentContextRead(source.scope,session.snapshotScope())||overlay&&session.overlayEpoch(overlay)!==epoch||confirmed&&session.confirmedSelected(selectionSlot(page,section))!==confirmed){complete?.(undefined);return;}complete?.(confirmed?{object:objectOf(page,section),id:confirmed.id}:undefined);});}return;}onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));if(record)emit("select");}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={collectionID?applicationVariable(collectionID)?application.windows[applicationVariable(collectionID)!]:queries.windows[initialVariables[collectionID]?.source?.query??""]:undefined}

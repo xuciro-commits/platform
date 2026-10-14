@@ -152,10 +152,7 @@ func (p Page) RecordResourceObject(variable string) AssetRef {
 		if !compatible {
 			return AssetRef{}
 		}
-		if s.Object.Name != "" {
-			return s.Object
-		}
-		return p.Object
+		return s.ModelObject(p)
 	}
 	return AssetRef{}
 }

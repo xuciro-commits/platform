@@ -83,7 +83,7 @@ export class Builder extends Member {
     await this.decide("build.page.create", { type: "build.page", id }, {
       name, title: spec.title, object: spec.object,
       sections: spec.sections ?? [{ id: "initial", widget: "text", configVersion: 1, text: "Initial" }],
-      document: spec.document ?? { formatVersion: 2, uiProfile: pageUIProfile, root: "root", nodes: { root: { kind: "rows", children: ["initial"] }, initial: { kind: "widget", section: "initial" } } },
+      document: spec.document===null?undefined:spec.document ?? { formatVersion: 2, uiProfile: pageUIProfile, root: "root", nodes: { root: { kind: "rows", children: ["initial"] }, initial: { kind: "widget", section: "initial" } } },
     });
     return { id, name };
   }

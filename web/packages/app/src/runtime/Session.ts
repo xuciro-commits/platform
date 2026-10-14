@@ -149,6 +149,16 @@ export class PageSessionStore {
     const removed=changed?slots:ids?slots.filter((slot)=>{const value=this.state.records[slot];return value&&"value" in value&&value.value&&!ids.includes(value.value.id)||this.selectionSetReferences(slot).some(r=>!ids.includes(r.id));}):slots.filter(slot=>!!this.state.recordSets[slot]);
     if(removed.length)this.publish({records:this.clear(removed)});
   }
+
+  /** A host-authorized model window joins the original resource and selection
+   * lifecycle. It stores no alternate record authority or predicate. */
+  adoptModelWindow(key:string,signature:string,window?:{object:string;query:RecordQuery;records:EntityRecord[];total:number;partial?:boolean},error?:string) {
+    this.reconcileExternalWindow(key,signature,window?.records.map(r=>r.id));
+    if(window){this.queryObjects.set(key,window.object);this.queryData.set(key,{records:window.records,total:window.total});}
+    else {this.queryObjects.delete(key);this.queryData.delete(key);}
+    const value:ReadState<QueryWindow>=error?{status:'error',error}:window?{status:window.records.length?'value':'empty',value:{object:window.object,query:window.query,records:window.records.map(r=>({object:window.object,id:r.id})),total:window.total,complete:!window.partial&&window.records.length===window.total}}:signature?{status:'pending'}:{status:'empty'};
+    this.publish({queries:{...this.state.queries,[key]:value}});
+  }
   setItemScalar(owner: string, key: string, id: string, value: ScalarValue) {
     this.itemOwners.set(key, owner);
     if (this.state.items[key]?.[id] !== value) this.publish({ items: { ...this.state.items, [key]: { ...this.state.items[key], [id]: value } } });

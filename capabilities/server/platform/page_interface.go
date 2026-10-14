@@ -106,6 +106,9 @@ func (p Page) RecordVariableObject(variable string) string {
 	}
 	for _, s := range p.Sections {
 		if s.ID == section {
+			if s.Model != nil {
+				return s.Model.Type
+			}
 			if s.Object.Name != "" {
 				return s.Object.Name
 			}

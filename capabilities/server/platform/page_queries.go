@@ -313,6 +313,13 @@ func (p Page) WindowVariableObject(id string) string {
 	if v.Source.Kind == "plan" && p.Document != nil {
 		return p.Document.Queries[v.Source.Query].Object.Name
 	}
+	if v.Source.Kind == "query" {
+		for _, s := range p.Sections {
+			if s.ID == v.Source.Section && s.Model != nil {
+				return s.Model.Type
+			}
+		}
+	}
 	return ""
 }
 

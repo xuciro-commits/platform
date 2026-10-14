@@ -1337,6 +1337,7 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, roles []string, now t
 type RecordPage struct {
 	Records []any `json:"records"`
 	Total   int   `json:"total"`
+	Partial bool  `json:"partial,omitempty"`
 }
 
 // Records serves a member's query over a type, within the member's scope.
@@ -1392,6 +1393,12 @@ func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ stri
 		return RecordPage{}, err
 	}
 	out := RecordPage{Records: make([]any, len(page)), Total: total}
+	// The owner exposes a scope marker, never the hidden count or identities.
+	probe := q
+	probe.Offset, probe.Limit = 0, 1
+	if _, unscoped, probeErr := s.find(et, probe, nil); probeErr == nil {
+		out.Partial = unscoped > total
+	}
 	var ids []string
 	w := t.narrowerIn(s, m, now, true)
 	for i, v := range page {

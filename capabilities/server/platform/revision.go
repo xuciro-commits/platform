@@ -48,13 +48,14 @@ type AssetBinding struct {
 // PageReleaseAsset is the single descriptor path for a code page and a page
 // assembled by the builder. Its bindings become closure dependencies.
 func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error) {
-	if err := page.Document.Check(page.Sections); err != nil {
+	effective := page.EffectiveModelPage(nil)
+	if err := effective.Document.Check(effective.Sections); err != nil {
 		return ReleaseAsset{}, err
 	}
-	if err := page.CheckCollectionPorts(); err != nil {
+	if err := effective.CheckCollectionPorts(); err != nil {
 		return ReleaseAsset{}, err
 	}
-	if err := page.CheckRecordPorts(); err != nil {
+	if err := effective.CheckRecordPorts(); err != nil {
 		return ReleaseAsset{}, err
 	}
 	body, err := json.Marshal(page)
@@ -62,6 +63,7 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		return ReleaseAsset{}, err
 	}
 	requires := append([]AssetRef{page.Object}, page.NavigationTargets()...)
+	requires = append(requires, page.ModelDependencies()...)
 	for _, c := range page.ComputeResources() {
 		requires = append(requires, c.Operation.Ref)
 	}
@@ -601,6 +603,7 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			required = append(required, c.Operation.Ref)
 		}
 		required = append(required, page.Object)
+		required = append(required, page.ModelDependencies()...)
 		required = append(required, page.NavigationTargets()...)
 		for _, e := range page.EmbeddingBindings() {
 			required = append(required, e.Page.Ref)
@@ -820,6 +823,37 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 }
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
+	modelLookup := func(typ string) (EntityInfo, bool) {
+		asset, ok := lookup[ModelObject(typ)]
+		info, err := queryObjectDescriptor(asset.Body)
+		return ConstraintEntity(info), ok && err == nil
+	}
+	criteria := func(ref AssetRef) (*RuleCriteria, bool) {
+		asset, ok := lookup[ref]
+		var action Action
+		if !ok || json.Unmarshal(asset.Body, &action) != nil {
+			return nil, false
+		}
+		reads := RuleReadSpec{Object: action.Target, Inputs: map[string]ExprType{}}
+		mapped := map[string]bool{}
+		for _, section := range page.Sections {
+			if section.Model != nil && section.Model.Options != nil && section.Model.Options.Rule != nil && section.Model.Options.Rule.Action == ref {
+				for name := range section.Model.Options.Rule.Inputs {
+					mapped[name] = true
+				}
+			}
+		}
+		for _, f := range action.Payload {
+			if mapped[f.Name] {
+				reads.Inputs[f.Name] = ExprType{Kind: RuleFieldKind(f.Type), Object: f.Ref}
+			}
+		}
+		return &RuleCriteria{Reads: reads}, true
+	}
+	if err := page.CheckModelBindings(modelLookup, criteria); err != nil {
+		return err
+	}
+	page = page.EffectiveModelPage(modelLookup)
 	for _, s := range page.Sections {
 		if q, ok := page.InterfaceQueryForSection(s); ok {
 			named, err := frozenPageInterfaceQuery(q, lookup)
@@ -1027,7 +1061,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 			ref := page.RecordResourceObject(c.RecordVariable)
 			objectAsset, exists := lookup[ref]
 			object, err := queryObjectDescriptor(objectAsset.Body)
-			if !ok || !exists || err != nil || json.Unmarshal(asset.Body, &op) != nil || page.CheckComputeResource(c, object, op, page.Document.Variables[id].Type) != nil {
+			if !ok || !exists || err != nil || json.Unmarshal(asset.Body, &op) != nil || page.CheckComputeResource(c, object, op, page.Document.Variables[id].Type, modelLookup) != nil {
 				return fmt.Errorf("frozen compute resource contract is unavailable")
 			}
 		}

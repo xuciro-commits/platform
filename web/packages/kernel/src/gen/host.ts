@@ -1232,6 +1232,13 @@ export type FieldIssue = {
   relatedPaths?: string[][];
 };
 
+export type FieldRef = {
+  name?: string;
+  path?: string[];
+  slot?: string;
+  transform?: string;
+};
+
 export type FlowDefinition = {
   id: string;
   app: string;
@@ -1770,6 +1777,35 @@ export type Model = {
   dailyTokens?: number;
 };
 
+export type ModelBinding = {
+  type: string;
+  fields?: FieldRef[];
+  relation?: ModelRelation;
+  set?: ModelRecordSet;
+  where?: Expr[];
+  label?: Expr;
+  options?: OptionsRef;
+  visibility?: "hide" | "mark";
+};
+
+export type ModelRecordSet = {
+  recordVariable?: string;
+  name?: string;
+  query?: AssetBinding;
+};
+
+export type ModelRelation = {
+  parentType: string;
+  parentSelection?: string;
+  field: string;
+  name?: string;
+};
+
+export type ModelRule = {
+  action: AssetRef;
+  inputs?: Record<string, string>;
+};
+
 export type NamedQuery = {
   name: string;
   title: string;
@@ -1857,6 +1893,11 @@ export type OperationResult = {
   error?: string;
   generation: number;
   millis?: number;
+};
+
+export type OptionsRef = {
+  set?: ModelRecordSet;
+  rule?: ModelRule;
 };
 
 export type OrgSeed = {
@@ -2176,6 +2217,46 @@ export type PageMetricPresentation = {
   formatter: string;
   variant: string;
   tone: string;
+};
+
+export type PageModelRead = {
+  page: AssetRef;
+  contentVersion?: string;
+  query?: Query;
+  draft?: Page;
+  section: string;
+  records?: Record<string, PageModelRecord>;
+  values?: Record<string, unknown>;
+  offset?: number;
+  limit?: number;
+  search?: string;
+  sort?: string[];
+};
+
+export type PageModelRecord = {
+  object: string;
+  id: string;
+};
+
+export type PageModelResult = {
+  object: string;
+  records: Record<string, unknown>[];
+  total: number;
+  partial: boolean;
+  hidden: boolean;
+  fields: FieldInfo[];
+  access: Record<string, Record<string, Verdict>>;
+  authorization?: AuthzCollection;
+  model: ModelBinding;
+  labelField?: string;
+  sort?: string[];
+  sortLocked?: boolean;
+};
+
+export type PageModelRule = {
+  action: AssetRef;
+  title: string;
+  criteria: RuleCriteria;
 };
 
 export type PageNavigation = {
@@ -2802,6 +2883,7 @@ export type RecordChange = {
 export type RecordPage = {
   records: unknown[];
   total: number;
+  partial?: boolean;
 };
 
 export type RecordSet = {
@@ -3025,6 +3107,16 @@ export type RuleCollection = {
   policy: string;
 };
 
+export type RuleCriteria = {
+  reads: RuleReadSpec;
+  conditions: RuleCriterion[];
+};
+
+export type RuleCriterion = {
+  expr: Expr;
+  message: string;
+};
+
 export type RuleReadSpec = {
   object?: string;
   inputs?: Record<string, Type>;
@@ -3086,6 +3178,7 @@ export type SchemaVersion = {
 };
 
 export type Section = {
+  model?: ModelBinding;
   tablePresentation?: PageTablePresentation;
   collectionBuilder?: PageCollectionBuilder;
   collectionOutputVariable?: string;
@@ -3847,7 +3940,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.109",
+  "uiProfile": "platform.page.v2.110",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -9053,7 +9146,8 @@ export const pageUIManifest = {
     "platform.page.v2.106",
     "platform.page.v2.107",
     "platform.page.v2.108",
-    "platform.page.v2.109"
+    "platform.page.v2.109",
+    "platform.page.v2.110"
   ],
   "runtime": {
     "telemetry": {
@@ -9760,6 +9854,50 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.107",
       "kinds": [
         "handheld"
+      ]
+    },
+    "modelBinding": {
+      "requiredUIProfile": "platform.page.v2.110",
+      "maxFields": 64,
+      "maxPath": 16,
+      "maxRecords": 10000,
+      "maxWindow": 200,
+      "maxBytes": 8388608,
+      "fieldSlots": [
+        "group",
+        "columnGroup",
+        "timeStart",
+        "timeEnd",
+        "timeLabel",
+        "timeGroup",
+        "cardLabel",
+        "summaryField",
+        "measure",
+        "recordGantt.startField",
+        "recordGantt.endField",
+        "recordGantt.titleField",
+        "recordGantt.statusField",
+        "recordCalendar.dateField",
+        "recordCalendar.labelField",
+        "recordEvents.timeField",
+        "recordEvents.titleField",
+        "recordEvents.severityField",
+        "recordPicker.labelField",
+        "recordCard.labelField",
+        "recordComparison.labelField",
+        "recordChart.xField",
+        "recordChart.yField",
+        "scatter.xField",
+        "scatter.yField",
+        "scatter.labelField",
+        "scatter.colorField",
+        "histogram.field",
+        "leaderboard.valueField",
+        "leaderboard.labelField",
+        "statusTracker.field",
+        "breadcrumb.labelField",
+        "avatar.labelField",
+        "sparkline.field"
       ]
     }
   },

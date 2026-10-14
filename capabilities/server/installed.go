@@ -171,6 +171,14 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 }
 
 func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) error {
+	if err := p.CheckModelBindings(t.entity, t.modelCriteria); err != nil {
+		return err
+	}
+	if err := t.checkModelQueries(p); err != nil {
+		return err
+	}
+	canonical := p
+	p = p.EffectiveModelPage(t.entity)
 	id := app.Manifest().ID
 	if p.Name == "" || (p.Layout != "list-detail" && p.Layout != "composed") {
 		return fmt.Errorf("page %q: a page is list-detail, or composed of sections (ADR-0035)", p.Name)
@@ -239,7 +247,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) er
 			return err
 		}
 	}
-	t.installDefinitions(id, info, nil, []platform.Page{p})
+	t.installDefinitions(id, info, nil, []platform.Page{canonical})
 	return nil
 }
 
@@ -249,6 +257,7 @@ var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 // knows, an object, the fields, actions and measures that object declares
 // (ADR-0035). What the registry offers must open.
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
+	p = p.EffectiveModelPage(t.entity)
 	if err := p.Document.Check(p.Sections); err != nil {
 		return fmt.Errorf("page %s: %w", p.Name, err)
 	}
@@ -402,6 +411,7 @@ func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, 
 		}
 		info = shown
 	}
+	info = platform.ModelFields(info, s.Model, t.entity)
 	if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "collection-analysis" || s.Widget == "resource-list" || s.Widget == "graph-explorer" || s.Widget == "vertex-graph" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
 		object := s.Object
 		if object.Name == "" {

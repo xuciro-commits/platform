@@ -19,6 +19,7 @@ type pageWidgetContract struct {
 	ConfigVersion     int               `json:"configVersion"`
 	RequiredUIProfile string            `json:"requiredUIProfile"`
 	SelectionMode     string            `json:"selectionMode"`
+	BindingKinds      []string          `json:"bindingKinds"`
 	PropsSchema       ValueSchema       `json:"propsSchema"`
 	Defaults          map[string]any    `json:"defaults"`
 	InputPorts        []pageWidgetPort  `json:"inputPorts"`

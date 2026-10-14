@@ -77,7 +77,7 @@ export function conditionSubjects(process: Process, action: Action, parent: stri
   const root = { ...current, type: parent, fields } as EntityInfo;
   return [...recordPaths(parent, (type) => type === parent ? root : entities.find((entity) => entity.type === type))
     .map(({ path, label, field }) => ({ value: path.join("."), label, type: field.type, ref: field.ref })),
-    ...(action.inputs ?? []).map((input) => ({ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: input.type, ref: input.ref }))];
+    ...(action.inputs ?? []).flatMap((input) => [{ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: input.type, ref: input.ref },...(input.type==='reference'&&input.ref?recordPaths(input.ref,type=>entities.find(e=>e.type===type)).map(({path,label,field})=>({value:`input.${input.name}.${path.join('.')}`,label:`${input.title} → ${label}`,type:field.type,ref:field.ref})):[])])];
 }
 export const comparisonFits = (left: { type: string; ref?: string }, right: { type: string; ref?: string }) =>
   (left.type === right.type || [left.type, right.type].every((kind) => ["integer", "decimal"].includes(kind))) && (left.type !== "reference" || left.ref === right.ref);

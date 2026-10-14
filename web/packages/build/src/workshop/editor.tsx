@@ -1,3 +1,5 @@
+import {ModelBindingInspector} from "./page-editor/ModelBindingInspector";
+import {materializeModelSection,canonicalModelSection,foldModelPorts,modelEntity} from "@platform/app/model";
 import {InputDraftProvider} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import {WidgetGlyph,LayoutGlyph} from "./page-editor/WidgetGlyph";
@@ -67,14 +69,14 @@ const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetCont
 
 type StudioSelection = { kind: "page" | "variables" | "interface" | "queries" } | { kind: "widget" | "container"; id: string };
 const emptyDraft = (): PageDraft => ({ sections: [], document: pageDocumentFromSections<Draft>([]).document, selections: [], title: "", description: "" });
-const loadDraft = (record: PageRecord): PageDraft => {
+const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined=()=>undefined): PageDraft => {
   const shorthand: Draft[] = (record.list ?? []).length ? [
     { widget: "table", title: t("Table"), width: "half", fields: record.list },
     { widget: "detail", title: t("Detail"), width: "half", fields: record.detail },
     ...((record.actions ?? []).length ? [{ widget: "actions", title: t("Actions"), actions: record.actions }] : []),
   ] : [];
   const lifted = pageDocumentFromSections(record.sections?.length ? record.sections : shorthand);
-  return { sections: record.document ? record.sections ?? [] : lifted.sections, document: record.document ?? lifted.document,
+  return { sections: (record.document ? record.sections ?? [] : lifted.sections).map(s=>materializeModelSection(s,lookup,true)), document: record.document ?? lifted.document,
     selections: record.selections ?? [], title: record.title, description: record.description ?? "" };
 };
 /** The field types a filter offers: values that repeat (the host's platform.Filterable). */
@@ -87,7 +89,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   listFields: [], detailFields: [], actions: [],
   selections: record.selections,
   document,
-  sections: sections.map((s) => ({actionDefaults:s.actionDefaults,
+  sections: sections.map((s) => ({model:s.model,actionDefaults:s.actionDefaults,
 collectionBuilder:s.collectionBuilder,collectionOutputVariable:s.collectionOutputVariable,map:s.map,scene:s.scene,sceneSampleCollectionVariable:s.sceneSampleCollectionVariable,sceneSampleVariable:s.sceneSampleVariable,scenePartVariable:s.scenePartVariable,ai:s.ai,externalFrame:s.externalFrame,embedding:s.embedding,observation:s.observation,observationHistoryVariable:s.observationHistoryVariable,observationContextVariable:s.observationContextVariable,observationSignalVariable:s.observationSignalVariable,observationThresholdVariable:s.observationThresholdVariable,observationRowsVariable:s.observationRowsVariable,observationCountVariable:s.observationCountVariable,observationMeanVariable:s.observationMeanVariable,actionTable:s.actionTable,notepadVariable:s.notepadVariable,analysis:s.analysis,analysisXVariable:s.analysisXVariable,analysisYVariable:s.analysisYVariable,analysisCountVariable:s.analysisCountVariable,analysisMeanVariable:s.analysisMeanVariable,resourceList:s.resourceList,assetDirectory:s.assetDirectory,graphExplorer:s.graphExplorer,vertexGraph:s.vertexGraph,breadcrumb:s.breadcrumb,avatar:s.avatar,image:s.image,historyLimit:s.historyLimit,commentDraftVariable:s.commentDraftVariable,fileVariable:s.fileVariable,pdfPageVariable:s.pdfPageVariable,recordComparison:s.recordComparison,recordSetVariable:s.recordSetVariable,recordCard:s.recordCard,sparkline:s.sparkline,sparklineDecimalVariable:s.sparklineDecimalVariable,sparklineNumberVariable:s.sparklineNumberVariable,groupValueVariable:s.groupValueVariable,groupSetVariable:s.groupSetVariable,rowValueVariable:s.rowValueVariable,rowSetVariable:s.rowSetVariable,columnValueVariable:s.columnValueVariable,columnSetVariable:s.columnSetVariable,scatter:s.scatter,histogram:s.histogram,inputKind:s.inputKind,spacer:s.spacer,separator:s.separator,notice:s.notice,alertValueVariable:s.alertValueVariable,alertBanner:s.alertBanner,pickerValueVariable:s.pickerValueVariable,recordPicker:s.recordPicker,dateKind:s.dateKind,dateOffset:s.dateOffset,dateVariable:s.dateVariable,dateLabel:s.dateLabel,choiceSetVariable:s.choiceSetVariable,choiceVariable:s.choiceVariable,choiceInput:s.choiceInput,booleanVariant:s.booleanVariant,booleanVariable:s.booleanVariable,booleanLabel:s.booleanLabel,rangeInput:s.rangeInput,rangeMinVariable:s.rangeMinVariable,rangeMaxVariable:s.rangeMaxVariable,leaderboard:s.leaderboard,summaryField:s.summaryField,statisticsVariable:s.statisticsVariable,gauge:s.gauge,gaugeValueVariable:s.gaugeValueVariable,progressLabel:s.progressLabel,progressValueVariable:s.progressValueVariable,progressTotalVariable:s.progressTotalVariable,progressTotal:s.progressTotal,recordGantt:s.recordGantt,recordCalendar:s.recordCalendar,recordEvents:s.recordEvents,recordChart:s.recordChart,recordList:s.recordList,headingLevel:s.headingLevel,countVariable:s.countVariable,metricPresentation:s.metricPresentation,statusTracker:s.statusTracker,recordLinks:s.recordLinks,buttons:s.buttons,recordView:s.recordView,detailPresentation:s.detailPresentation,tablePresentation:s.tablePresentation,tableColumns:s.tableColumns,showSearch:s.showSearch,facets:s.facets,filterSearchVariable:s.filterSearchVariable,selectionSetVariable:s.selectionSetVariable,
     id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, mark:s.mark,chartVariant:s.chartVariant, columnGroup: s.columnGroup,timeStart:s.timeStart,timeEnd:s.timeEnd,timeLabel:s.timeLabel,timeGroup:s.timeGroup,cardLabel:s.cardLabel, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
@@ -133,12 +135,12 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0);
   const busy = saving || publishing;
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
-    if (page) { session.load(loadDraft(page)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
+    if (page) { session.load(loadDraft(page,authoringEntity)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
     select({ kind: "page" }); setRefused(undefined);
   }, busy);
   useEffect(() => {
     if (!page || dirty || busy || loaded.current === `${page.id}:${page.revision}`) return;
-    session.load(loadDraft(page)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`;
+    session.load(loadDraft(page,authoringEntity)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`;
   }, [page, dirty, busy, session.load]);
   useEffect(() => {
     if (selection.kind === "widget" && !sections.some((section) => section.id === selection.id) ||
@@ -152,7 +154,13 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
     // Profile changes are explicit reviewed commands; ordinary editing retains
     // the original profile even when a layout helper returns the latest one.
     const document=key==="module-import"?next.document:{...next.document,uiProfile:old.document.uiProfile};
-    return { ...next, ...synchronizeLoopBindings(document, next.sections) };
+    const sections=next.sections.map(section=>{
+      if(!section.model)return section;
+      const previous=old.sections.find(s=>s.id===section.id);
+      const canonical=JSON.stringify(previous?.model)!==JSON.stringify(section.model)?canonicalModelSection(section):foldModelPorts(section,authoringEntity);
+      return materializeModelSection(canonical,authoringEntity,true);
+    });
+    return { ...next, ...synchronizeLoopBindings({...document,...sections.some(s=>s.model)?{uiProfile:pageVariableContract.modelBinding.requiredUIProfile}:{}}, sections) };
   }, key); };
   const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setRefused(undefined); };
   const selectionProblem = selections.some((v, i) => !/^[a-z][a-z0-9_-]{0,63}$/.test(v.name) || selections.some((other, at) => at !== i && other.name === v.name))
@@ -186,8 +194,8 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const titleProblem=sections.some(s=>s.widget==="heading"&&(!s.text?.trim()||new TextEncoder().encode(s.text).length>pageVariableContract.titles.maxTextBytes)||s.widget==="collection-title"&&(!s.collectionVariable||!s.countVariable));
   const leaderboardProblem=sections.some(s=>{if(s.widget!=="record-leaderboard")return false;const c=s.leaderboard,v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""];return !c||!c.valueField||!c.labelField||!Number.isInteger(c.limit)||c.limit<1||c.limit>32||q?.limit!==c.limit||!!q?.offset||JSON.stringify(q?.sort)!==JSON.stringify([`${c.ascending?"":"-"}${c.valueField}`,"id"]);});
   const summaryProblem=sections.some(s=>{if(s.widget!=="summary-stats")return false;const set=document.variables?.[s.collectionVariable??""],v=document.variables?.[s.statisticsVariable??""];return !s.summaryField||!s.statisticsVariable||v?.type!=="statistics"||v.source?.measure!==s.summaryField||v.source.query!==set?.source?.query;});
-  const pickerValueProblem=sections.some(s=>{if(s.widget!=="record-picker"||!s.pickerValueVariable)return false;const v=document.variables?.[s.pickerValueVariable],set=document.variables?.[s.collectionVariable??""];return !v||v.type!=="string"||v.mode!=="state"||v.scope!==set?.scope||v.owner!==set?.owner;});
-  const pickerProblem=sections.some(s=>{if(s.widget!=="record-picker")return false;const v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""];return !s.recordPicker?.labelField||v?.source?.kind!=="plan"||q?.limit!==20||!!q?.offset||JSON.stringify(q?.sort)!==JSON.stringify(["id"]);});
+  const pickerValueProblem=sections.some(s=>{if(s.widget!=="record-picker"||!s.pickerValueVariable)return false;if(s.model){const v=document.variables?.[s.pickerValueVariable];return !v||v.type!=="string"||v.mode!=="state";}const v=document.variables?.[s.pickerValueVariable],set=document.variables?.[s.collectionVariable??""];return !v||v.type!=="string"||v.mode!=="state"||v.scope!==set?.scope||v.owner!==set?.owner;});
+  const pickerProblem=sections.some(s=>{if(s.widget!=="record-picker"||s.model)return false;const v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""];return !s.recordPicker?.labelField||v?.source?.kind!=="plan"||q?.limit!==20||!!q?.offset||JSON.stringify(q?.sort)!==JSON.stringify(["id"]);});
   const spacerProblem=sections.some(s=>s.widget==="spacer"&&(!s.spacer||typeof s.spacer.size!=="number"||!Number.isFinite(s.spacer.size)||s.spacer.size<0||s.spacer.size>pageUIManifest.layout.maxSize));
   const separatorProblem=sections.some(s=>s.widget==="separator"&&(!s.separator||new TextEncoder().encode(s.separator.label??"").length>pageVariableContract.separator.maxLabelBytes));
   const noticeProblem=sections.some(s=>s.widget==="notice"&&(!s.notice||!(pageVariableContract.notice.tones as readonly string[]).includes(s.notice.tone)||new TextEncoder().encode(s.notice.title??"").length>pageVariableContract.notice.maxTitleBytes||new TextEncoder().encode(s.notice.message).length>pageVariableContract.notice.maxMessageBytes));
@@ -234,7 +242,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     const contract = widgetContract(widget); if (!contract) return;
     const defaults = JSON.parse(JSON.stringify(contract.defaults)) as Partial<Draft>;
     if(widget==="record-calendar")defaults.recordCalendar={dateField:"",labelField:"id",initialMonth:new Date().toISOString().slice(0,7)};
-    const section: Draft = { ...defaults, id: layoutID("section"), configVersion: contract.configVersion, widget, title: t(contract.title) };
+    const section: Draft = { ...defaults,...contract.bindingKinds.some(k=>k==="object")?{model:{type:page.object}}:{}, id: layoutID("section"), configVersion: contract.configVersion, widget, title: t(contract.title) };
     if (contract.fieldPreset === "list") section.fields = info?.fields.slice(0, 4).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "filter") section.fields = info?.fields.filter((f) => filterable.includes(f.type)).slice(0, 2).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "create") section.fields = info?.fields.filter((f) => f.required && !f.readOnly).map((f) => f.name) ?? [];
@@ -289,12 +297,13 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     const submitted = session.draft;
     const expectedRevision = baseRevision.current;
     try {
-      const ok = await decide("build.page.edit", { type: "build.page", id }, submitted, { expectedRevision, onRefused: setRefused });
+      const payload={...submitted,document:{...submitted.document,uiProfile:pageVariableContract.modelBinding.requiredUIProfile},sections:submitted.sections.map(canonicalModelSection)};
+      const ok = await decide("build.page.edit", { type: "build.page", id }, payload, { expectedRevision, onRefused: setRefused });
       if (ok) {
         const result = await query.refetch();
         const confirmed = result.isSuccess && result.data?.record?.revision === expectedRevision + 1 ? result.data.record : undefined;
         baseRevision.current = expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
-        session.saved(submitted, confirmed ? loadDraft(confirmed) : undefined); markSaved();
+        session.saved(submitted, confirmed ? loadDraft(confirmed,authoringEntity) : undefined); markSaved();
       }
       return ok;
     } catch { setRefused(t("The page could not be saved. Your draft is still here.")); return false; }
@@ -428,7 +437,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     </div> },
   ] : [];
   const widgetTabs: WorkbenchTab[] = canvasSelection ? widgetInspectorTabs({
-    section: canvasSelection, sections, document, info: authoringEntity(canvasSelection.object || page.object), object: page.object, selections, relatedObjects,
+    section: canvasSelection, sections, document, info: modelEntity(authoringEntity(canvasSelection.model?.type||canvasSelection.object || page.object),canvasSelection.model,authoringEntity), object: page.object, selections, relatedObjects,
     catalog: catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target })), onChange: (patch) => change(chosen, patch),
     onResourcesChange: (patch, variables) => edit((old) => ({ ...old, document: { ...old.document, variables }, sections: old.sections.map((s) => s.id === canvasSelection.id ? { ...s, ...patch } : s) }), "graph-resources"),
     events: (() => { const Inspector = widgetInspector(canvasSelection.widget, canvasSelection.configVersion ?? 0)?.events; return <InspectorFrame id={canvasSelection.id ?? String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion ?? 0} part="events">{Inspector && <Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons, document) => edit({ document, sections: sections.map((s) => s.id === canvasSelection.id ? { ...s, buttons } : s) })} document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}</InspectorFrame>; })(),
@@ -513,7 +522,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
           </div>
           <div data-canvas-scroll className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
-              <ApplicationPage pageRef={{ app: "build", kind: "page", name: page.name }} route={canvasRoute} preview><ComposedPage editingRoot={preview ? undefined : (() => {
+              <ApplicationPage pageRef={{ app: "build", kind: "page", name: page.name }} route={canvasRoute} preview><ComposedPage modelDraft editingRoot={preview ? undefined : (() => {
                 if (selection.kind === "queries") return queryPreviewOwner ? document.overlays?.[queryPreviewOwner]?.root : undefined;
                 const node = container ?? (canvasSelection?.id ? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection.id)?.[0] : undefined);
                 return Object.values(document.overlays ?? {}).find((overlay) => {
@@ -608,7 +617,8 @@ function Properties({ section, sections, document, info, catalog, object, select
   return (
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
-      {relatedObjects.length > 0 && allows("object") && !interfaceQueryForSection({document,sections},section) && (
+      {allows("object")&&<ModelBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={type=>type===info?.type?info:source.entity(type)} definitions={definitions} onChange={onChange}/>}
+      {!section.model&&relatedObjects.length > 0 && allows("object") && !interfaceQueryForSection({document,sections},section) && (
         <label className="grid gap-1 text-xs">{t("Object")}
           <SemanticObjectSelect label={t("Object")} value={section.object ?? object} filter={(definition) => definition.ref.name === object || relatedObjects.includes(definition.ref.name)}
             onChange={(ref) => { if (ref) onChange({ object: ref.name === object ? undefined : ref.name,
@@ -629,7 +639,7 @@ function Properties({ section, sections, document, info, catalog, object, select
             {selections.filter((v) => v.object.name === (section.object || object)).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
           </Select>
         </label>}
-      {(selections.length > 0 || section.parentSelection) && section.object && relatedObjects.includes(section.object) &&
+      {!section.model&&(selections.length > 0 || section.parentSelection) && section.object && relatedObjects.includes(section.object) &&
         !section.collectionVariable && allows("relation") &&
         <label className="grid gap-1 text-xs">{t("Parent selection")}
           <Select value={section.parentSelection ?? ""} onChange={(e) => { const nextType = e.target.value ? selections.find((selection) => selection.name === e.target.value)?.object.name : object; onChange({ parentSelection: e.target.value || undefined, ...(nextType !== parentType ? { relation: undefined, inputs: undefined } : {}) }); }}>
@@ -639,7 +649,7 @@ function Properties({ section, sections, document, info, catalog, object, select
             {selections.filter((v) => fields.some((field) => field.type === "reference" && field.ref === v.object.name)).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
           </Select>
         </label>}
-      {section.object && relations.length > 0 && !section.collectionVariable && allows("relation") && (
+      {!section.model&&section.object && relations.length > 0 && !section.collectionVariable && allows("relation") && (
         <label className="grid gap-1 text-xs">{t("Through")}
           <Select value={section.relation ?? ""} onChange={(e) => {
             const parent = fields.find((f) => f.type === "reference" && f.ref === parentType && f.inverse === e.target.value);
@@ -651,7 +661,7 @@ function Properties({ section, sections, document, info, catalog, object, select
           </Select>
         </label>
       )}
-      {!section.collectionVariable && allows("query") && queriesOf(section.object || object).length > 0 && (
+      {!section.model&&!section.collectionVariable && allows("query") && queriesOf(section.object || object).length > 0 && (
         <label className="grid gap-1 text-xs">{t("Query")}
           <Select value={section.query ?? ""} onChange={(e) => onChange({ query: e.target.value || undefined })}>
             <option value="">{t("All records it may read")}</option>

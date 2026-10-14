@@ -1,4 +1,5 @@
 import {assignmentSugar,conditionSugar} from "../editor/rule-text";
+import {ExpressionEditor} from '../editor/ExpressionEditor';
 // The action type workbench (ADR-0053 §6, built under ADR-0054): an action is a
 // first-class resource with its own sections — Overview, Parameters, Form,
 // Rules, Submission criteria, Side effects, Approval, Permissions. Left: the
@@ -282,14 +283,16 @@ function AssignmentEditor({ fields, sources, set:storedSet, onChange:save }: { f
 
 type Subject = { value: string; label: string; type: string; ref?: string };
 function ConditionEditor({ condition:storedCondition, subjects, onChange:save, guard = false }: { condition: Condition; subjects: Subject[]; onChange: (patch: Partial<Condition>) => void; guard?: boolean }) {
+	const {source}=useHost();
   const projected=storedCondition.expr?conditionSugar(storedCondition.expr):undefined;
   const c=projected?{...storedCondition,...projected}:storedCondition;
   const patch=(change:Partial<Condition>)=>save(storedCondition.expr?{...c,...change,expr:undefined}:change);
-  if(storedCondition.expr&&!projected)return <Textarea readOnly value={JSON.stringify(storedCondition.expr,null,2)} aria-label={t("Submission criterion")} />;
+  if(storedCondition.expr)return <><ExpressionEditor value={storedCondition.expr} choices={[...subjects,{value:'caller.id',label:t('Current member'),type:'text'}]} lookup={source.entity} onChange={expr=>save({expr,field:'',operator:'',value:undefined,valueField:undefined,when:undefined})}/>{!guard&&<Label text={t('Message when it does not hold')}><Input value={storedCondition.message} onChange={e=>save({message:e.target.value})}/></Label>}{projected&&<Button size="sm" onClick={()=>save({...projected,expr:undefined})}>{t('Use simple condition fields')}</Button>}</>;
 
 
   const current = subjects.find((s) => s.value === c.field) ?? { type: "" };
   return <>
+	<Button size="sm" onClick={()=>{const operand=(name:string):Api.Expr=>{if(name==='$me')return {op:'',kind:'text',ref:'caller.id'};const choice=subjects.find(s=>s.value===name),kind=choice?.type==='longtext'?'text':choice?.type??'text',parts=name.split('.'),count=name.startsWith('input.')?2:1;return parts.length>count?{op:'path',kind,args:[{op:'',kind:'reference',ref:parts.slice(0,count).join('.')}],path:parts.slice(count)}:{op:'',kind,ref:name};};const lower=(value:Condition):Api.Expr=>{const left=operand(value.field),op=value.operator==='not empty'?'not-empty':value.operator,args=[left];if(!op.includes('empty'))args.push(value.valueField?operand(value.valueField):value.value==='$me'?operand('$me'):{op:'',kind:left.kind,lit:{value:left.kind==='boolean'?value.value==='true':value.value??''}});const body:Api.Expr={op,kind:'boolean',args};return value.when?{op:'or',kind:'boolean',args:[{op:'not',kind:'boolean',args:[lower(value.when)]},body]}:body;};save({expr:lower(c),field:'',operator:'',value:undefined,valueField:undefined,when:undefined});}}>{t('Compose rule expression')}</Button>
     <Label text={t("Field")}><Select value={c.field} onChange={(e) => patch({ field: e.target.value, valueField: undefined })}>{subjects.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Label>
     <Label text={t("Operator")}><Select value={c.operator} onChange={(e) => patch({ operator: e.target.value, ...(e.target.value.includes("empty") ? { value: undefined, valueField: undefined } : {}) })}>{operators.map((o) => <option key={o} value={o}>{t(o)}</option>)}</Select></Label>
     {c.operator !== "empty" && c.operator !== "not empty" && <>

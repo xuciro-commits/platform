@@ -3,6 +3,7 @@ import type { PageSessionSnapshot } from "./Session";
 import { variablePlan } from "./query-plans";
 import type { VariableResult } from "./variables";
 import {interfaceQueryForSection} from "./ontology-interface";
+import {modelWindowKey,modelWindowWidget} from './model-bindings';
 
 export const recordSlot = (object: string, name?: string, overlay?:string) => `${overlay?`overlay:${overlay}/`:""}${name ? `selection:${name}` : "object"}/${object}`;
 export const recordOutputSlot=(page:Api.Page,section:Api.Section,port:string)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-output/${section.id??""}/${port}`;
@@ -88,7 +89,7 @@ export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot)
       const fields = snapshot.filters[filterSlot(object,filterOwner(page,section))] ?? {}, payload = { kind: "filter" as const, object, fields };
       value = Object.keys(fields).length ? { status: "value", value: payload } : { status: "empty", value: payload };
     } else {
-      const state = snapshot.queries[source.section ?? ""];
+      const state = snapshot.queries[modelWindowWidget(section)?modelWindowKey(section):source.section ?? ""];
       value = state?.status === "value" ? { status: "value", value: { kind: "object-set", window: state.value } }
         : state?.status === "empty" && state.value ? { status: "empty", value: { kind: "object-set", window: state.value } }
         : state?.status === "pending" ? { status: "pending" } : state?.status === "error" ? { status: "error", code: "Resource read failed" } : { status: "empty" };

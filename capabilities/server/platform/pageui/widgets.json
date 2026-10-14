@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.109",
+  "uiProfile": "platform.page.v2.110",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5205,7 +5205,8 @@
     "platform.page.v2.106",
     "platform.page.v2.107",
     "platform.page.v2.108",
-    "platform.page.v2.109"
+    "platform.page.v2.109",
+    "platform.page.v2.110"
   ],
   "runtime": {
     "telemetry": {
@@ -5912,6 +5913,50 @@
       "requiredUIProfile": "platform.page.v2.107",
       "kinds": [
         "handheld"
+      ]
+    },
+    "modelBinding": {
+      "requiredUIProfile": "platform.page.v2.110",
+      "maxFields": 64,
+      "maxPath": 16,
+      "maxRecords": 10000,
+      "maxWindow": 200,
+      "maxBytes": 8388608,
+      "fieldSlots": [
+        "group",
+        "columnGroup",
+        "timeStart",
+        "timeEnd",
+        "timeLabel",
+        "timeGroup",
+        "cardLabel",
+        "summaryField",
+        "measure",
+        "recordGantt.startField",
+        "recordGantt.endField",
+        "recordGantt.titleField",
+        "recordGantt.statusField",
+        "recordCalendar.dateField",
+        "recordCalendar.labelField",
+        "recordEvents.timeField",
+        "recordEvents.titleField",
+        "recordEvents.severityField",
+        "recordPicker.labelField",
+        "recordCard.labelField",
+        "recordComparison.labelField",
+        "recordChart.xField",
+        "recordChart.yField",
+        "scatter.xField",
+        "scatter.yField",
+        "scatter.labelField",
+        "scatter.colorField",
+        "histogram.field",
+        "leaderboard.valueField",
+        "leaderboard.labelField",
+        "statusTracker.field",
+        "breadcrumb.labelField",
+        "avatar.labelField",
+        "sparkline.field"
       ]
     }
   },

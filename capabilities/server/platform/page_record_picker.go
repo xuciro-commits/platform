@@ -17,6 +17,21 @@ func (d *PageDocument) checkRecordPicker(s Section) error {
 		}
 		return nil
 	}
+	if s.Model != nil {
+		if !PageUIProfileSupports(d.UIProfile, PageModelProfile) {
+			return fmt.Errorf("model selector requires its model binding profile")
+		}
+		if len(s.Fields) > 0 || len(s.Actions) > 0 || s.SelectionVariable != "" {
+			return fmt.Errorf("model selector retains its original selection output")
+		}
+		if s.PickerValueVariable != "" {
+			v := d.Variables[s.PickerValueVariable]
+			if v.Type != "string" || v.Mode != "state" || !slices.Contains([]string{"page", "overlay"}, v.Scope) {
+				return fmt.Errorf("model picker ID output requires its original scoped text state")
+			}
+		}
+		return nil
+	}
 	v := d.Variables[s.CollectionVariable]
 	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordPicker.RequiredUIProfile) || s.RecordPicker == nil || s.RecordPicker.Label != nil && len(*s.RecordPicker.Label) > 1024 || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > 0 || len(s.Actions) > 0 || s.SelectionVariable != "" {
 		return fmt.Errorf("record picker needs an original scoped query window and bounded label")

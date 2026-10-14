@@ -24,6 +24,42 @@ func enterpriseApp(t *Tenant) host.EnterpriseQueries {
 
 // routesRecords serves records, files, links, aggregates, search, knowledge and transcripts.
 func (h *Host) routesRecords(rt *routes) {
+	rt.handle(Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request *PageModelRead
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&request) != nil || request == nil || decoder.Decode(new(any)) != io.EOF {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A model read needs one bounded request"))
+			return
+		}
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		value, err := t.readPageModel(m, *request, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, value)
+	})
+	rt.handle(Route{Pattern: "GET /v1/page-model/rules", Summary: "List original action criteria available to the builder model inspector", Answer: []PageModelRule{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		c := platform.NewCaller(runtime{t}, m, "build", false, false)
+		if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/page-model/rules", "read", []string{"builder"}, true)); err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		values := []PageModelRule{}
+		for _, entry := range t.definitions {
+			if entry.Action == nil {
+				continue
+			}
+			if criteria, ok := t.modelCriteria(entry.Ref); ok {
+				values = append(values, PageModelRule{Action: entry.Ref, Title: entry.Action.Title, Criteria: *criteria})
+			}
+		}
+		WriteJSON(w, http.StatusOK, values)
+	})
 	rt.handle(Route{Pattern: "GET /v1/record-sets/{type}/{id}/{name}", Summary: "Read a bounded declared collection through its original owner", Answer: platform.RecordSetResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		t.mu.Lock()
 		defer t.mu.Unlock()

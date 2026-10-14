@@ -396,3 +396,19 @@ func (h hostView) RuleQuery(app, name string, version int) (platform.NamedQuery,
 	}
 	return platform.NamedQuery{}, 0, false
 }
+
+func (h hostView) ModelQueryBinding(ref platform.AssetRef) (platform.AssetBinding, bool) {
+	for _, d := range h.t.definitions {
+		if d.Ref == ref && d.Query != nil {
+			return platform.AssetBinding{Ref: ref, SourceVersion: d.Version}, true
+		}
+	}
+	return platform.AssetBinding{}, false
+}
+
+func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
+	if err := p.CheckModelBindings(h.t.modelVisibleLookup(c.Member), h.t.modelCriteria); err != nil {
+		return err
+	}
+	return h.t.checkModelQueries(p)
+}

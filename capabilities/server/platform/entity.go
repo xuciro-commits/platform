@@ -159,6 +159,9 @@ type State struct {
 // status among To (the first is the default). It runs inside the decision, so
 // replay runs it again; an error refuses the transition.
 type Transition struct {
+	// Criteria is the owner's pure rule plan, shared with model-bound reads.
+	// It is not serialized into legacy action descriptors or accepted images.
+	Criteria    *RuleCriteria `json:"-"`
 	Name        string
 	Title       string
 	Description string

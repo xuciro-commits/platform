@@ -136,29 +136,48 @@ func assignmentExpr(kind string, set Set, spec platform.RuleReadSpec) (platform.
 		return platform.ExprReference(kind, name), nil
 	}
 }
-func evalRule(e platform.Expr, s platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (platform.EntityInfo, bool)) (platform.ExprResult, *kernel.Error) {
-	schema, err := platform.RuleSchema(e, s, lookup)
-	if err != nil {
-		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())
-	}
-	ctx, err := c.RuleContext(e, s, lookup, record, inputs, now)
-	if err != nil {
-		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule input: {reason} / 规则输入：{reason}", err.Error(), err.Error())
-	}
-	p, err := platform.CompileExpr(e, schema)
-	if err != nil {
-		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	result, err := p.Eval(ctx)
-	if err != nil {
-		code := pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT
-		if issue, ok := err.(*platform.ExprIssue); ok && issue.Code == "withheld" {
-			code = pb.ErrorCode_ERROR_CODE_POLICY_DENIED
-		}
-		return result, platform.Refuse(code, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())
-	}
-	return result, nil
+func evalRule(e platform.Expr, spec platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (platform.EntityInfo, bool)) (platform.ExprResult, *kernel.Error) {
+	return platform.EvaluateRule(e, spec, c, record, inputs, now, lookup)
 }
+
+func actionCriteria(o Object, a Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
+	plan := &platform.RuleCriteria{Reads: ruleSpec(o, a, a.Reads)}
+	used := map[string]bool{}
+	var visit func(platform.Expr)
+	visit = func(expr platform.Expr) {
+		if strings.HasPrefix(expr.Ref, "input.") {
+			name, _, _ := strings.Cut(strings.TrimPrefix(expr.Ref, "input."), ".")
+			used[name] = true
+		}
+		for _, arg := range expr.Args {
+			visit(arg)
+		}
+		if expr.In != nil {
+			visit(*expr.In)
+		}
+	}
+	for _, condition := range a.Conditions {
+		expr, err := conditionExpr(o, a, condition, ruleLookup(o, lookup))
+		if err != nil {
+			return nil, err
+		}
+		plan.Conditions = append(plan.Conditions, platform.RuleCriterion{Expr: expr, Message: condition.Message})
+		visit(expr)
+	}
+	for _, set := range plan.Reads.Collections {
+		if strings.HasPrefix(set.Of, "input.") {
+			name, _, _ := strings.Cut(strings.TrimPrefix(set.Of, "input."), ".")
+			used[name] = true
+		}
+	}
+	for name := range plan.Reads.Inputs {
+		if !used[name] {
+			delete(plan.Reads.Inputs, name)
+		}
+	}
+	return plan, nil
+}
+
 func ruleAssignment(e platform.Expr, s platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (platform.EntityInfo, bool)) (any, *kernel.Error) {
 	r, err := evalRule(e, s, c, record, inputs, now, lookup)
 	if err != nil {

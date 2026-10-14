@@ -62,7 +62,7 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		ref := p.RecordResourceObject(c.RecordVariable)
 		object, ok := t.entity(ref.Name)
 		op, _, err := t.pageOperation(&c.Operation)
-		if !ok || err != nil || p.CheckComputeResource(c, object, op, p.Document.Variables[id].Type) != nil {
+		if !ok || err != nil || p.CheckComputeResource(c, object, op, p.Document.Variables[id].Type, t.entity) != nil {
 			return fmt.Errorf("compute resource contract is unavailable")
 		}
 	}

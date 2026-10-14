@@ -20,7 +20,10 @@ func (d *PageDocument) checkStatusTracker(s Section) error {
 	}
 	limits := pageWidgets.Runtime.StatusTracker
 	value := s.StatusTracker
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || value == nil || value.Field == "" || len(value.Stages) == 0 || len(value.Stages) > limits.MaxStages || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Query.Name != "" || s.Relation != "" {
+	if s.Model != nil && value == nil {
+		return nil
+	} // the model-aware schema check resolves lifecycle defaults
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || value == nil || value.Field == "" || len(value.Stages) == 0 && s.Model == nil || len(value.Stages) > limits.MaxStages || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Query.Name != "" || s.Relation != "" {
 		return fmt.Errorf("status tracker needs its profile and bounded original states")
 	}
 	seen := map[string]bool{}

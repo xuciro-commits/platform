@@ -25,7 +25,7 @@ func (d *PageDocument) checkComputeResource(v PageVariable) error {
 	}
 	subject := false
 	for name, b := range c.Inputs {
-		if !pageNodeID.MatchString(name) || b.Check() != nil || b.Source != "literal" && b.Source != "subject" || b.Source == "subject" && (len(b.Path) != 1 || !pageNodeID.MatchString(b.Path[0])) {
+		if !pageNodeID.MatchString(name) || b.Check() != nil || b.Source != "literal" && b.Source != "subject" || b.Source == "subject" && (len(b.Path) < 1 || len(b.Path) > 16 || slices.ContainsFunc(b.Path, func(part string) bool { return !pageNodeID.MatchString(part) })) {
 			return fmt.Errorf("compute input needs a scalar source field or typed literal")
 		}
 		subject = subject || b.Source == "subject"
@@ -50,7 +50,11 @@ func (p Page) ComputeResources() map[string]PageComputeResource {
 	}
 	return out
 }
-func (p Page) CheckComputeResource(c PageComputeResource, object EntityInfo, op Operation, valueType string) error {
+func (p Page) CheckComputeResource(c PageComputeResource, object EntityInfo, op Operation, valueType string, lookups ...func(string) (EntityInfo, bool)) error {
+	lookup := func(typ string) (EntityInfo, bool) { return object, typ == object.Type }
+	if len(lookups) > 0 {
+		lookup = lookups[0]
+	}
 	ref := p.RecordResourceObject(c.RecordVariable)
 	if ref.App != object.App || ref.Name != object.Type || ref.Kind != AssetObject || op.Check() != nil || op.Name != c.Operation.Ref.Name || op.Input.Type != "object" || op.Input.Nullable {
 		return fmt.Errorf("compute resource original object or operation differs")
@@ -71,11 +75,11 @@ func (p Page) CheckComputeResource(c PageComputeResource, object EntityInfo, op 
 			}
 			continue
 		}
-		if b.Source != "subject" || len(b.Path) != 1 {
+		if b.Source != "subject" || len(b.Path) < 1 || len(b.Path) > 16 {
 			return fmt.Errorf("compute source binding differs")
 		}
-		f, ok := object.Field(b.Path[0])
-		if !ok {
+		f, err := RecordPathField(object.Type, b.Path, lookup)
+		if err != nil {
 			return fmt.Errorf("compute source field is unavailable")
 		}
 		typ := map[string]string{"text": "string", "longtext": "string", "choice": "string", "boolean": "boolean", "integer": "integer", "decimal": "number", "date": "string", "datetime": "string"}[f.Type]

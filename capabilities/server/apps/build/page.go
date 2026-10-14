@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/host"
 
 	"slices"
 	"strings"
@@ -47,6 +48,7 @@ type InlineEdit struct {
 }
 
 type Section struct {
+	Model                         *platform.ModelBinding          `json:"model,omitempty"`
 	TablePresentation             *platform.PageTablePresentation `json:"tablePresentation,omitempty"`
 	CollectionBuilder             *platform.PageCollectionBuilder `json:"collectionBuilder,omitempty"`
 	CollectionOutputVariable      string                          `json:"collectionOutputVariable,omitempty"`
@@ -192,6 +194,9 @@ func (b *Build) pageEntity() platform.Entity {
 				return nil
 			}
 			p := record.(*Page)
+			if err := b.normalizePageModel(p); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
 			if p.Document != nil {
 				if err := descriptor(*p).BindRuleTypes(b.conditionLookup); err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -213,6 +218,13 @@ func (b *Build) pageEntity() platform.Entity {
 					page, ok := record.(*Page)
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+					}
+					if !c.Replaying {
+						if owner, ok := b.host.(host.ModelPageHost); ok {
+							if err := owner.CheckPageModel(c, descriptor(*page)); err != nil {
+								return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+							}
+						}
 					}
 					if !c.Replaying && page.Document != nil {
 						if err := descriptor(*page).BindRuleTypes(b.conditionLookup); err != nil {
@@ -272,7 +284,7 @@ func descriptor(p Page) platform.Page {
 	}
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
-		section := platform.Section{ActionDefaults: s.ActionDefaults, TablePresentation: s.TablePresentation, CollectionBuilder: s.CollectionBuilder, CollectionOutputVariable: s.CollectionOutputVariable, Map: s.Map, Scene: s.Scene, SceneSampleCollectionVariable: s.SceneSampleCollectionVariable, SceneSampleVariable: s.SceneSampleVariable, ScenePartVariable: s.ScenePartVariable, AI: s.AI, ExternalFrame: s.ExternalFrame, Embedding: s.Embedding, Observation: s.Observation, ObservationHistoryVariable: s.ObservationHistoryVariable, ObservationContextVariable: s.ObservationContextVariable, ObservationSignalVariable: s.ObservationSignalVariable, ObservationThresholdVariable: s.ObservationThresholdVariable, ObservationRowsVariable: s.ObservationRowsVariable, ObservationCountVariable: s.ObservationCountVariable, ObservationMeanVariable: s.ObservationMeanVariable, ActionTable: s.ActionTable, NotepadVariable: s.NotepadVariable, Analysis: s.Analysis, AnalysisXVariable: s.AnalysisXVariable, AnalysisYVariable: s.AnalysisYVariable, AnalysisCountVariable: s.AnalysisCountVariable, AnalysisMeanVariable: s.AnalysisMeanVariable, ResourceList: s.ResourceList, AssetDirectory: s.AssetDirectory, GraphExplorer: s.GraphExplorer, VertexGraph: s.VertexGraph, Breadcrumb: s.Breadcrumb, Avatar: s.Avatar, Image: s.Image, HistoryLimit: s.HistoryLimit, CommentDraftVariable: s.CommentDraftVariable, FileVariable: s.FileVariable, PdfPageVariable: s.PdfPageVariable, RecordComparison: s.RecordComparison, RecordSetVariable: s.RecordSetVariable, RecordCard: s.RecordCard, Sparkline: s.Sparkline, SparklineDecimalVariable: s.SparklineDecimalVariable, SparklineNumberVariable: s.SparklineNumberVariable, GroupValueVariable: s.GroupValueVariable, GroupSetVariable: s.GroupSetVariable, RowValueVariable: s.RowValueVariable, RowSetVariable: s.RowSetVariable, ColumnValueVariable: s.ColumnValueVariable, ColumnSetVariable: s.ColumnSetVariable, Scatter: s.Scatter, Histogram: s.Histogram, InputKind: s.InputKind, PickerValueVariable: s.PickerValueVariable, RecordPicker: s.RecordPicker, Spacer: s.Spacer, Separator: s.Separator, Notice: s.Notice, AlertValueVariable: s.AlertValueVariable, AlertBanner: s.AlertBanner, DateKind: s.DateKind, DateOffset: s.DateOffset, DateVariable: s.DateVariable, DateLabel: s.DateLabel, ChoiceSetVariable: s.ChoiceSetVariable, ChoiceVariable: s.ChoiceVariable, ChoiceInput: s.ChoiceInput, BooleanVariant: s.BooleanVariant, BooleanVariable: s.BooleanVariable, BooleanLabel: s.BooleanLabel, RangeInput: s.RangeInput, RangeMinVariable: s.RangeMinVariable, RangeMaxVariable: s.RangeMaxVariable, Leaderboard: s.Leaderboard, SummaryField: s.SummaryField, StatisticsVariable: s.StatisticsVariable, Gauge: s.Gauge, GaugeValueVariable: s.GaugeValueVariable, ProgressLabel: s.ProgressLabel, ProgressValueVariable: s.ProgressValueVariable, ProgressTotalVariable: s.ProgressTotalVariable, ProgressTotal: s.ProgressTotal, RecordGantt: s.RecordGantt, RecordCalendar: s.RecordCalendar, RecordEvents: s.RecordEvents, RecordChart: s.RecordChart, RecordList: s.RecordList, HeadingLevel: s.HeadingLevel, CountVariable: s.CountVariable, MetricPresentation: s.MetricPresentation, StatusTracker: s.StatusTracker, RecordLinks: slices.Clone(s.RecordLinks), Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
+		section := platform.Section{Model: s.Model, ActionDefaults: s.ActionDefaults, TablePresentation: s.TablePresentation, CollectionBuilder: s.CollectionBuilder, CollectionOutputVariable: s.CollectionOutputVariable, Map: s.Map, Scene: s.Scene, SceneSampleCollectionVariable: s.SceneSampleCollectionVariable, SceneSampleVariable: s.SceneSampleVariable, ScenePartVariable: s.ScenePartVariable, AI: s.AI, ExternalFrame: s.ExternalFrame, Embedding: s.Embedding, Observation: s.Observation, ObservationHistoryVariable: s.ObservationHistoryVariable, ObservationContextVariable: s.ObservationContextVariable, ObservationSignalVariable: s.ObservationSignalVariable, ObservationThresholdVariable: s.ObservationThresholdVariable, ObservationRowsVariable: s.ObservationRowsVariable, ObservationCountVariable: s.ObservationCountVariable, ObservationMeanVariable: s.ObservationMeanVariable, ActionTable: s.ActionTable, NotepadVariable: s.NotepadVariable, Analysis: s.Analysis, AnalysisXVariable: s.AnalysisXVariable, AnalysisYVariable: s.AnalysisYVariable, AnalysisCountVariable: s.AnalysisCountVariable, AnalysisMeanVariable: s.AnalysisMeanVariable, ResourceList: s.ResourceList, AssetDirectory: s.AssetDirectory, GraphExplorer: s.GraphExplorer, VertexGraph: s.VertexGraph, Breadcrumb: s.Breadcrumb, Avatar: s.Avatar, Image: s.Image, HistoryLimit: s.HistoryLimit, CommentDraftVariable: s.CommentDraftVariable, FileVariable: s.FileVariable, PdfPageVariable: s.PdfPageVariable, RecordComparison: s.RecordComparison, RecordSetVariable: s.RecordSetVariable, RecordCard: s.RecordCard, Sparkline: s.Sparkline, SparklineDecimalVariable: s.SparklineDecimalVariable, SparklineNumberVariable: s.SparklineNumberVariable, GroupValueVariable: s.GroupValueVariable, GroupSetVariable: s.GroupSetVariable, RowValueVariable: s.RowValueVariable, RowSetVariable: s.RowSetVariable, ColumnValueVariable: s.ColumnValueVariable, ColumnSetVariable: s.ColumnSetVariable, Scatter: s.Scatter, Histogram: s.Histogram, InputKind: s.InputKind, PickerValueVariable: s.PickerValueVariable, RecordPicker: s.RecordPicker, Spacer: s.Spacer, Separator: s.Separator, Notice: s.Notice, AlertValueVariable: s.AlertValueVariable, AlertBanner: s.AlertBanner, DateKind: s.DateKind, DateOffset: s.DateOffset, DateVariable: s.DateVariable, DateLabel: s.DateLabel, ChoiceSetVariable: s.ChoiceSetVariable, ChoiceVariable: s.ChoiceVariable, ChoiceInput: s.ChoiceInput, BooleanVariant: s.BooleanVariant, BooleanVariable: s.BooleanVariable, BooleanLabel: s.BooleanLabel, RangeInput: s.RangeInput, RangeMinVariable: s.RangeMinVariable, RangeMaxVariable: s.RangeMaxVariable, Leaderboard: s.Leaderboard, SummaryField: s.SummaryField, StatisticsVariable: s.StatisticsVariable, Gauge: s.Gauge, GaugeValueVariable: s.GaugeValueVariable, ProgressLabel: s.ProgressLabel, ProgressValueVariable: s.ProgressValueVariable, ProgressTotalVariable: s.ProgressTotalVariable, ProgressTotal: s.ProgressTotal, RecordGantt: s.RecordGantt, RecordCalendar: s.RecordCalendar, RecordEvents: s.RecordEvents, RecordChart: s.RecordChart, RecordList: s.RecordList, HeadingLevel: s.HeadingLevel, CountVariable: s.CountVariable, MetricPresentation: s.MetricPresentation, StatusTracker: s.StatusTracker, RecordLinks: slices.Clone(s.RecordLinks), Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Mark: s.Mark, ChartVariant: s.ChartVariant, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.InlineEdit != nil {
 			section.InlineEdit = &platform.PageInlineEdit{Action: platform.AssetRef{App: strings.SplitN(s.InlineEdit.Action, ".", 2)[0], Kind: platform.AssetAction, Name: s.InlineEdit.Action}, Fields: slices.Clone(s.InlineEdit.Fields)}
@@ -307,7 +319,7 @@ func (b *Build) checkPage(p Page) error {
 	if p.Document != nil && len(p.Sections) == 0 {
 		return fmt.Errorf("page %s: a structured layout needs sections", p.Name)
 	}
-	if err := p.Document.Check(descriptor(p).Sections); err != nil {
+	if err := p.Document.Check(descriptor(p).EffectiveModelPage(b.conditionLookup).Sections); err != nil {
 		return fmt.Errorf("page %s: %w", p.Name, err)
 	}
 	if b.host == nil {
@@ -354,4 +366,43 @@ func names(info platform.EntityInfo) string {
 		out = append(out, f.Name)
 	}
 	return strings.Join(out, ", ")
+}
+
+// Canonicalize the author's original page in place. Only presentation bindings
+// migrate; action identities, saved publication bytes and layout stay intact.
+func (b *Build) normalizePageModel(p *Page) error {
+	if p.Document == nil {
+		return nil
+	}
+	d := descriptor(*p)
+	if err := d.NormalizeModelBindings(b.conditionLookup); err != nil {
+		return err
+	}
+	for _, section := range d.Sections {
+		if section.Model == nil {
+			continue
+		}
+		for _, set := range []*platform.ModelRecordSet{section.Model.Set} {
+			if set != nil && set.Query != nil && set.Query.SourceVersion == "" {
+				if owner, ok := b.host.(host.ModelPageHost); ok {
+					if binding, known := owner.ModelQueryBinding(set.Query.Ref); known {
+						*set.Query = binding
+					}
+				}
+			}
+		}
+	}
+	for i, section := range d.Sections {
+		values := map[string]any{}
+		_ = json.Unmarshal(platform.Raw(p.Sections[i]), &values)
+		canonical := map[string]any{}
+		_ = json.Unmarshal(platform.Raw(section), &canonical)
+		platform.ReplaceModelPorts(values, canonical)
+		var next Section
+		if err := json.Unmarshal(platform.Raw(values), &next); err != nil {
+			return err
+		}
+		p.Sections[i] = next
+	}
+	return nil
 }

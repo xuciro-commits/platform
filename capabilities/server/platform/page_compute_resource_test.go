@@ -45,8 +45,6 @@ func TestComputeResourceThreeConsumersRetainTypedInputAndFrozenOperation(t *test
 	}, func(p *Page) {
 		p.Document.Variables["number"].Source.Compute.Inputs["qty"] = Binding{Source: "input", Path: []string{"qty"}}
 	}, func(p *Page) {
-		p.Document.Variables["number"].Source.Compute.Inputs["qty"] = Binding{Source: "subject", Path: []string{"qty", "nested"}}
-	}, func(p *Page) {
 		v := p.Document.Variables["number"]
 		v.Source.Section = "table"
 		p.Document.Variables["number"] = v
@@ -56,6 +54,11 @@ func TestComputeResourceThreeConsumersRetainTypedInputAndFrozenOperation(t *test
 		if p.Document.Check(p.Sections) == nil {
 			t.Fatal("accepted invalid computation owner")
 		}
+	}
+	invalidPath := *p.Document.Variables["number"].Source.Compute
+	invalidPath.Inputs = map[string]Binding{"qty": {Source: "subject", Path: []string{"qty", "nested"}}}
+	if p.CheckComputeResource(invalidPath, info, op, "number") == nil {
+		t.Fatal("a non-reference field admitted a further computation hop")
 	}
 	hidden := info
 	hidden.Fields = nil

@@ -44,6 +44,13 @@ type RecordSetHost interface {
 	ValidateRecordSet(platform.EntityInfo, platform.RecordSet) error
 }
 
+// ModelPageHost checks a publisher's model reads through the original member
+// projection. It adds no installation or business-decision authority.
+type ModelPageHost interface {
+	CheckPageModel(platform.Caller, platform.Page) error
+	ModelQueryBinding(platform.AssetRef) (platform.AssetBinding, bool)
+}
+
 type FileHost interface {
 	Readable(m platform.Member, ref string, now time.Time) bool
 	Stored(tenant, hash string) bool

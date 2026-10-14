@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:041cb479e2007e62",
+  "revision": "sha256:6269048c38f2dba9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -315,6 +315,13 @@
       "snippet": "import { ComposedPage } from \"@platform/app\";\n<ComposedPage page={installedPage.page} live={false} />",
       "props": [
         {
+          "name": "modelDraft",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
           "name": "page",
           "type": "Page",
           "optional": false,
@@ -427,7 +434,7 @@
         {
           "name": "ComposedPageProps",
           "kind": "type",
-          "signature": "type ComposedPageProps = {\n  page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;pageCall?:import(\"../runtime/PageNavigation\").PageCall;\n  editingRoot?: string;\n  onVariableValues?: (values: Record<string, VariableResult>) => void;\n} & Composing;"
+          "signature": "type ComposedPageProps = {\n  modelDraft?:boolean;page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;pageCall?:import(\"../runtime/PageNavigation\").PageCall;\n  editingRoot?: string;\n  onVariableValues?: (values: Record<string, VariableResult>) => void;\n} & Composing;"
         },
         {
           "name": "Page",
@@ -3825,6 +3832,13 @@
           "isSlot": false
         },
         {
+          "name": "cellAccess",
+          "type": "(row:T,column:string)=>{allow:boolean;reason:string}|undefined",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
           "name": "resizable",
           "type": "boolean",
           "optional": true,
@@ -3872,7 +3886,7 @@
         {
           "name": "DataTableProps",
           "kind": "type",
-          "signature": "export type DataTableProps<T> = {\n  data: T[];\n  columns: ColumnDef<T, any>[];\n  getRowId: (row: T) => string;\n  /** Viewport height; rows outside it are not rendered, so 100k rows stay fast. */\n  height?: number | string;\n  rowHeight?: number;\n  onRowClick?: (row:T,modifiers?:{shift:boolean;toggle:boolean})=>void;\n  selectedIds?:readonly string[];\n  selectedId?: string;\n  searchable?: boolean;\n  toolbar?: ReactNode;\n  empty?: ReactNode;\n  /** Shows a loading state when rows are being fetched. */\n  loading?: boolean;\n  loadingText?: ReactNode;\n  /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */\n  onCellEdit?: (row: T, column: string, value: unknown) => void;\n  /** Drag header edges to resize. Default on; set false to lock layout. */\n  resizable?: boolean;\n  /** Virtualize flat leaf columns as well as rows; pinned metadata stays mounted. */\n  virtualColumns?: boolean;\n  /** Right-click a data row (browser menu is suppressed when provided). */\n  onRowContextMenu?: (row: T) => void;\n};"
+          "signature": "export type DataTableProps<T> = {\n  data: T[];\n  columns: ColumnDef<T, any>[];\n  getRowId: (row: T) => string;\n  /** Viewport height; rows outside it are not rendered, so 100k rows stay fast. */\n  height?: number | string;\n  rowHeight?: number;\n  onRowClick?: (row:T,modifiers?:{shift:boolean;toggle:boolean})=>void;\n  selectedIds?:readonly string[];\n  selectedId?: string;\n  searchable?: boolean;\n  toolbar?: ReactNode;\n  empty?: ReactNode;\n  /** Shows a loading state when rows are being fetched. */\n  loading?: boolean;\n  loadingText?: ReactNode;\n  /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */\n  onCellEdit?: (row: T, column: string, value: unknown) => void;\n\t/** An original owner decision, consumed without a client permission rule. */\n\tcellAccess?: (row:T,column:string)=>{allow:boolean;reason:string}|undefined;\n  /** Drag header edges to resize. Default on; set false to lock layout. */\n  resizable?: boolean;\n  /** Virtualize flat leaf columns as well as rows; pinned metadata stays mounted. */\n  virtualColumns?: boolean;\n  /** Right-click a data row (browser menu is suppressed when provided). */\n  onRowContextMenu?: (row: T) => void;\n};"
         }
       ]
     },
@@ -12177,6 +12191,7 @@
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/editor/ExpressionEditor.tsx",
       "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/functions/agent.tsx",
@@ -12184,6 +12199,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/model-editor/ModelFieldPicker.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -12222,6 +12238,7 @@
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
@@ -12332,11 +12349,13 @@
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/editor/ExpressionEditor.tsx",
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/model-editor/ModelFieldPicker.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -12379,6 +12398,7 @@
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
+      "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
@@ -12510,6 +12530,7 @@
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
+      "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
@@ -13333,6 +13354,7 @@
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
     ],

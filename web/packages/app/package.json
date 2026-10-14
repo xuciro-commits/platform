@@ -12,7 +12,8 @@
     "./action-table": "./src/widgets/action-table.ts",
     "./action-defaults": "./src/widgets/action-defaults.ts",
     "./query-inventory": "./src/runtime/query-inventory.ts",
-    "./rules": "./src/runtime/rule-engine.ts"
+    "./rules": "./src/runtime/rule-engine.ts",
+    "./model": "./src/runtime/model-bindings.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

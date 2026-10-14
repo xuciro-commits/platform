@@ -4,10 +4,10 @@ import {NewActions,RecordActions} from '../actions/actions';
 import {useOpenRecord} from '../index';
 import {pageVariableContract} from '../runtime/PageRuntime';
 type RecordPorts={source?:RecordSource;object:string;record?:EntityRecord};
-export function DetailRenderer({source,object,record,fields,presentation}:RecordPorts&{fields?:string[];presentation?:Api.PageDetailPresentation}){
+export function DetailRenderer({source,object,record,fields,presentation,model,onOpen}:RecordPorts&{fields?:string[];presentation?:Api.PageDetailPresentation;model?:Api.ModelBinding;onOpen?:(type:string,record:EntityRecord)=>void}){
  if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;
  if(!source)return <Panel role="alert">{t('No source for records')}</Panel>;
- return <RecordPage key={`${object}/${record.id}`} source={source} type={object} id={record.id} fields={fields} detailPresentation={presentation} detailOnly/>;
+ return <RecordPage key={`${object}/${record.id}`} source={source} type={object} id={record.id} fields={fields} detailPresentation={presentation} detailOnly={!model} recordTabs={model?['properties','links']:undefined} onOpen={onOpen}/>;
 }
 export function StatusRenderer({source,object,record,config}:RecordPorts&{config?:Api.PageStatusTracker}){
  if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;

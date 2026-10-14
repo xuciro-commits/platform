@@ -121,6 +121,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	Model                         *ModelBinding          `json:"model,omitempty"`
 	TablePresentation             *PageTablePresentation `json:"tablePresentation,omitempty"`
 	CollectionBuilder             *PageCollectionBuilder `json:"collectionBuilder,omitempty"`
 	CollectionOutputVariable      string                 `json:"collectionOutputVariable,omitempty"`

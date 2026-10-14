@@ -378,7 +378,8 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 				approval.Levels = append(approval.Levels, platform.ApprovalLevel{Title: level.Title, AppRole: level.Role, All: level.All})
 			}
 		}
-		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
+		criteria, _ := actionCriteria(o, a, lookup)
+		l.Transitions = append(l.Transitions, platform.Transition{Criteria: criteria, Name: a.Name, Title: a.Title, Description: a.Description,
 			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)
@@ -447,22 +448,12 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 	}
 	v := reflect.ValueOf(record).Elem()
 	lookup = ruleLookup(o, lookup)
-	for _, cond := range a.Conditions {
-		e, err := conditionExpr(o, a, cond, lookup)
-		if err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		result, refusal := evalRule(e, ruleSpec(o, a, a.Reads), c, record, inputs, now, lookup)
-		if refusal != nil {
-			return refusal
-		}
-		if string(result.Value.Data) != "true" {
-			reason := cond.Message
-			for _, issue := range result.Reasons {
-				reason += " · " + issue.At + ": " + issue.Message
-			}
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", reason)
-		}
+	criteria, err := actionCriteria(o, a, lookup)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	if refusal := criteria.Check(c, record, inputs, now, lookup); refusal != nil {
+		return refusal
 	}
 	if a.ToInput != "" {
 		state, ok := inputs[a.ToInput].(string)

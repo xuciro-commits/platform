@@ -52,6 +52,8 @@ Flow/Automation 的发布审阅先确认当前草稿，再进入原候选审阅�
 
 ## 构建者路径与当前边界
 
+模型绑定（[ADR-0109](ADR/0109-model-driven-ui.md#5-as-built)）：页面组件选中后打开 Data / 数据，在 Model binding / 模型绑定选择模型、逐段字段路径与原声明集合。Inferred from model / 从模型推导显示当前默认；Add model field / 添加模型字段改成显式覆盖，Use model field defaults / 使用模型字段默认值恢复推导。选择器的 Original action criteria / 原动作条件指向 Behavior 中已有动作，并将其所需输入映射到页面变量；原规则只在动作里修改。Model predicates / 模型过滤条件与 Model label expression / 模型显示标签表达式使用原 Expr 编辑器。Partial visibility / 部分可见行为默认隐藏整个组件，也可显示明确标记。关系字段只读、逐跳加载，读取失败时移除旧值；不可写单元格显示原授权原因。保存、审查候选、激活沿原发布流程，历史页面在保存时升级绑定，已冻结字节保持原样。
+
 对象不变式：在对象类型编辑器打开“Business constraints / 业务约束”，添加稳定名称、种类、涉及字段、检查时机与英中失败消息；唯一性选择 tenant、无歧义的 parent 或最多 16 段的引用路径。required 在初始生命周期外检查，immutable 离开初始状态后永久锁定，返回初始状态也不能修改。其他种类配置布尔 Expr；模式用 `matches`，日期区间用 `within-period` 或有序比较。跨记录规则绑定原已发布查询的固定版本，集合 policy 必须 complete。保存与发布沿原对象流程，未发布草稿不改运行行为，冻结候选不受后续草稿影响。标准表单、事务、CSV、受权 AI 动作和协议提供方共用约束；拒绝保留输入并标记字段。详情见 [ADR-0102](ADR/0102-business-constraints.md#6-as-built)。
 
 应用入口（[ADR-0108](ADR/0108-application-studio.md)）：从 Builder → Applications 创建或打开一个应用，在 Model / Behavior / Interface / Assemble / Verify 五工作区编辑、装配与交付。左栏按业务概念组织该应用的成员，New 创建并加入原成员列表，Add existing 纳入已有草稿或共享定义；关联失败保留已创建资源并重试同一成员更新。Business concepts 可命名、重命名、排序与移动引用，只改变导航元数据。原编辑器与 Shell 页签保留草稿；上下文入口携带选中资产，跨资产使用处从声明依赖读取。未发布草稿的依赖和错误由 Verify 的原发布 owner 检查；应用成员关系不增加权限。

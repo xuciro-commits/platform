@@ -774,6 +774,7 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 	if len(page.Sections) > 0 {
 		sections := make([]platform.Section, 0, len(page.Sections))
 		for _, section := range page.Sections {
+			section = page.EffectiveModelSection(section, func(typ string) (platform.EntityInfo, bool) { info, ok := entities[typ]; return info, ok })
 			if q, ok := page.InterfaceQueryForSection(section); ok {
 				named := visiblePageInterfaceQuery(page, q, entities, registeredDefinitions)
 				if named != nil && page.CheckInterfaceSection(section, named) == nil {
@@ -801,6 +802,10 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 				}
 				shown = other
 			}
+			shown = platform.ModelFields(shown, section.Model, func(typ string) (platform.EntityInfo, bool) {
+				value, ok := entities[typ]
+				return platform.ConstraintEntity(value), ok
+			})
 			section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
 				field, visible := shown.Field(name)
 				return !visible || section.Widget == "form" && (field.ReadOnly || !field.WritesAny(m.RolesIn(shown.App)))
@@ -1029,7 +1034,7 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 					continue
 				}
 			}
-			sections = append(sections, section)
+			sections = append(sections, platform.CanonicalModelSection(section))
 		}
 		page.Sections = sections
 		if page.Document != nil {
@@ -1041,7 +1046,7 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 					ref := page.RecordResourceObject(c.Compute.RecordVariable)
 					object, ok := entities[ref.Name]
 					op, _, err := t.pageOperation(&c.Compute.Operation)
-					if !ok || err != nil || !m.May(c.Compute.Operation.Ref.App, op.Name, op.Roles).Allow || page.CheckComputeResource(*c.Compute, object, op, v.Type) != nil {
+					if !ok || err != nil || !m.May(c.Compute.Operation.Ref.App, op.Name, op.Roles).Allow || page.CheckComputeResource(*c.Compute, object, op, v.Type, func(typ string) (platform.EntityInfo, bool) { v, ok := entities[typ]; return v, ok }) != nil {
 						delete(doc.Variables, id)
 						continue
 					}

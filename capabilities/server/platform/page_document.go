@@ -66,6 +66,11 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 // Check rejects cycles, shared children, unreachable nodes and references to
 // missing or duplicated sections. Each published section must appear once.
 func (d *PageDocument) Check(sections []Section) error {
+	// Presentation contracts still consume their original ports. Materialize
+	// model references only for this validation; accepted bytes stay canonical.
+	if slices.ContainsFunc(sections, func(s Section) bool { return s.Model != nil }) {
+		sections = (Page{Document: d, Sections: sections}).EffectiveModelPage(nil).Sections
+	}
 	if d == nil {
 		for _, s := range sections {
 			if s.Widget == "collection-builder" || s.CollectionBuilder != nil || s.CollectionOutputVariable != "" {
