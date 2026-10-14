@@ -3,6 +3,7 @@ package platformserver
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"platformserver/apps/build"
@@ -62,5 +63,51 @@ func TestMigrationReviewUsesSealedShapesWithoutChangingLiveRows(t *testing.T) {
 	var row map[string]json.RawMessage
 	if json.Unmarshal(after, &row) != nil || string(row["name"]) != `"Old value"` {
 		t.Fatal("original value was lost")
+	}
+}
+
+func TestMigrationRetypeRequiresQuarantineForReferencesOutsideItsRelease(t *testing.T) {
+	tenant := builderTenant(t, "migration-referrer")
+	builder := memberOf(t, tenant, "builder")
+	fields := []build.Field{{Name: "value", Title: "Value", Type: "text"}}
+	publishObject(t, tenant, "builder", "source", map[string]any{"name": "refasset", "title": "Source", "fields": fields}, txnAt)
+	save := func(key string) string {
+		t.Helper()
+		preview, err := tenant.PreviewRelease(builder, platform.AssetObject, "source")
+		if err != nil || preview.Diagnostic != "" {
+			t.Fatalf("candidate: %+v %v", preview, err)
+		}
+		id, err := tenant.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "source"}}, preview.CandidateID, key, txnAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	from := save("source")
+	if _, err := tenant.ActivateRelease(builder, from, "activate-source", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	decide(t, tenant, "user", build.ID, "build.refasset.create", "build.refasset", "A", map[string]any{"value": "12"}, txnAt)
+	publishObject(t, tenant, "builder", "consumer", map[string]any{"name": "consumer", "title": "Consumer", "fields": []build.Field{{Name: "source", Title: "Source", Type: "reference", Ref: "build.refasset"}}}, txnAt)
+	decide(t, tenant, "user", build.ID, "build.consumer.create", "build.consumer", "B", map[string]any{"source": "A"}, txnAt)
+	fields[0].Type = "decimal"
+	decide(t, tenant, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "source", map[string]any{"fields": fields}, txnAt)
+	to := save("target")
+	parse := platform.Expr{Kind: "decimal", Op: "parse-decimal", Args: []platform.Expr{platform.ExprReference("text", "value")}}
+	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.refasset"}, Steps: []platform.MigrateStep{{Kind: "retype", Types: []string{"build.refasset"}, Batch: 1, OnFailure: "reject", Fields: []platform.MigrateField{{From: "value", To: "value", Expr: &parse}}}}}
+	before, _, err := tenant.Snapshot(func() int64 { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tenant.ReviewMigrationPlan(builder, plan, txnAt); err == nil || !strings.Contains(err.Error(), "quarantine") {
+		t.Fatalf("outside reference passed conversion admission: %v", err)
+	}
+	plan.Steps[0].OnFailure = "quarantine"
+	if review, err := tenant.ReviewMigrationPlan(builder, plan, txnAt); err != nil || len(review.Types) != 1 || review.Types[0].Type != "build.refasset" {
+		t.Fatalf("reference check expanded the migration or refused its explicit strategy: %+v %v", review, err)
+	}
+	after, _, err := tenant.Snapshot(func() int64 { return 0 })
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("conversion review changed live data", err)
 	}
 }

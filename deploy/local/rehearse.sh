@@ -106,7 +106,7 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/ai-usage" | jq -c '.totals'
   workflow_state
   function_state
-  industry_source_state; native_stream_state; } |
+  industry_source_state; native_stream_state; migration_state; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) | if (.profile | type) == "object" then del(.profile.lastSeen) else . end else . end)'; } # record clocks and login presence are not durable business state
 same_state() {
   local expected=$1 actual
@@ -170,6 +170,22 @@ workflow_submit() {
     jq -c '{error}' <<<"$result" >&2 || true
     fail "workflow decision: $3"
   fi
+}
+migration_route() {
+  local phase=$1 suffix=$2 server tenant builder operator
+  if [[ $suffix == plant ]]; then
+    server=$MANUFACTURING tenant=plant-sz builder=$SUP operator=$OP1
+  else
+    server=$HOSPITALITY tenant=hotel-a builder=$MGR operator=$SALES_TOKEN
+  fi
+  SERVER="$server" TENANT="$tenant" MIGRATION_BUILDER_TOKEN="$builder" MIGRATION_OPERATOR_TOKEN="$operator" MIGRATION_SUFFIX="$suffix" \
+    python3 migration_rehearsal.py --phase "$phase" --saved "$backup/migration-$suffix.json"
+}
+migration_state() {
+  local suffix
+  for suffix in plant hotel; do
+    [[ ! -f $backup/migration-$suffix.json ]] || migration_route state "$suffix"
+  done
 }
 # The original seven-node stream runs on real PostgreSQL and RustFS. The
 # window/threshold state belongs to Flow; the original supplied f32 Wasm kernel
@@ -913,6 +929,8 @@ for _ in $(seq 30); do [[ $(wo S01-WO) == confirmed* ]] && break; sleep 1; done
 curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/erp.production/S01-PLAN" |
   jq -e '.record | .product == "P-100" and .quantity == 2 and .state == "confirmed" and .shopOrder == "S01-WO" and .yield == 2' >/dev/null || fail "source production not confirmed in ERP"
 echo "ok   native industry tasks: real source customer became an ordinary member's CRM/PMS stay; real production row became ERP release, operator SFC work and protocol confirmation"
+migration_route prepare plant
+migration_route prepare hotel
 before=$(settled_state)
 
 compose restart manufacturing-server hospitality-server >/dev/null 2>&1
@@ -945,6 +963,11 @@ logged() { for _ in $(seq 10); do compose logs "$1" | grep "$2" >/dev/null && re
 for host in manufacturing-server hospitality-server; do
   logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
   logged $host "from the snapshot at" || fail "$host did not start from its snapshot"
+done
+for suffix in plant hotel; do
+  # Retrying the saved first batch preserves progress; leave the migration
+  # paused so backup and complete journal recovery also carry it in flight.
+  migration_route retry "$suffix"
 done
 function_after_restart "$MANUFACTURING" plant-sz "$OP2" plant
 function_after_restart "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
@@ -1062,6 +1085,9 @@ echo "ok   native seven-node chain: both industries retained Wasm statistics, bu
 workflow_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
 workflow_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 echo "ok   workflows: PostgreSQL restart, backup restore and full mixed journal rebuild preserved plans, bindings, versions and inbox tasks; old/new asks continued along their original paths in both industries"
+migration_route resume plant
+migration_route resume hotel
+echo "ok   migrations: both industries resumed bounded batches after snapshot, backup restore and full journal rebuild; original retries, historical bytes and old/new flows preserved"
 function_after_recovery "$MANUFACTURING" plant-sz "$OP2" plant
 function_after_recovery "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
 function_joint_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
@@ -1084,3 +1110,8 @@ preview=$(AUTHORITY=build SERVER=$HOSPITALITY workflow_post "$MGR" releases/prev
 candidate=$(jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId' <<<"$preview") || { jq -c '{diagnostic,diagnostics}' <<<"$preview" >&2; fail "production preview"; }
 joint=$(AUTHORITY=build SERVER=$HOSPITALITY workflow_post "$MGR" releases/preview '{"drafts":[{"kind":"object","id":"WF-O"},{"kind":"page","id":"FN-P"}]}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "production joint preview"
 echo "ok   delivery profile: production refuses the direct install with the candidate route named; single and joint candidates still preview"
+compose restart manufacturing-server hospitality-server >/dev/null 2>&1
+for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
+migration_route verify plant
+migration_route verify hotel
+echo "ok   completed migrations: final restart retains target records, progress, histories and completed original/new flows"

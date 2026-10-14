@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -237,7 +238,16 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 			targets[typ] = next.info
 		}
 	}
-	program, err := platform.CompileMigrationPlan(plan, sources, targets)
+	// Incoming references may be outside this release's selected closure.
+	// Include their contracts for conversion admission without adding them to
+	// the migration's rows, authorities or stored source shapes.
+	contracts := maps.Clone(sources)
+	for typ, entity := range store.types {
+		if _, selected := contracts[typ]; !selected {
+			contracts[typ] = entity.info
+		}
+	}
+	program, err := platform.CompileMigrationPlan(plan, contracts, targets)
 	if err != nil {
 		return nil, err
 	}

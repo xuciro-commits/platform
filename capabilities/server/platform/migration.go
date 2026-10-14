@@ -38,6 +38,14 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 		return nil, err
 	}
 	program := &MigrationProgram{Plan: plan, sources: sources, targets: targets, predicates: map[string]*ExprProgram{}, conversions: map[string]*ExprProgram{}, identities: map[string]*ExprProgram{}}
+	referenced := map[string]bool{}
+	for _, source := range sources {
+		for _, field := range source.Fields {
+			if field.Ref != "" {
+				referenced[field.Ref] = true
+			}
+		}
+	}
 	for index, step := range plan.Steps {
 		authority := ""
 		for _, typ := range step.Types {
@@ -115,7 +123,7 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 				if step.Kind == "rebind" && (from.Type != "reference" || to.Type != "reference" || from.Ref == to.Ref || from.Ref == "" || to.Ref == "") {
 					return nil, fmt.Errorf("rebind needs two explicit reference target types")
 				}
-				if step.Kind == "retype" && step.OnFailure != "quarantine" && slices.ContainsFunc(source.Fields, func(f FieldInfo) bool { return f.Ref == typ }) {
+				if step.Kind == "retype" && step.OnFailure != "quarantine" && referenced[typ] {
 					return nil, fmt.Errorf("referenced type conversion needs an explicit quarantine strategy")
 				}
 				if step.Kind == "add" && fromOK {

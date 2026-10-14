@@ -60,6 +60,7 @@ cd deploy/local && docker compose ps
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
 - 灌酒店业演示数据：`./seed-hospitality.sh`。可以重复执行，结果不变。
 - 完整演练：在仓库根目录运行 `make rehearse`（即 `scripts/verify.sh deploy`）。它用另一组端口和一套全新的数据，不会动你的本地数据；需 Docker、Node/pnpm 与 Google Chrome（或在 `CI=1` 下已安装的 Playwright Chromium）。两行业 OIDC 浏览器会在发布前及 PostgreSQL 恢复后执行共同函数/页面/Flow 路线，自动截图保存在 `web/e2e/test-results/deploy-*`；脚本结束后移除一次性容器。
+- 数据/定义迁移演练：本地 Air/Vite 与基础设施运行后，在根目录执行 `make rehearse PROFILE=migration`。使用当前 HEAD 的两个行业二进制及真实 OIDC/PostgreSQL/RustFS，创建独立临时数据库与进程，验证首批暂停、快照重启、备份恢复、全日志重建、原键续接/激活与旧/新 Flow；结束清理本次资源。不会重建镜像或更改 8495/8490 与现有租户数据；完整容器演练仍走上面的入口。
 
 真实供应商的密钥放在 `deploy/local/.env`，compose 启动时自动读取。一行一个：
 

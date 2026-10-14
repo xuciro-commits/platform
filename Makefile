@@ -132,8 +132,8 @@ images: ## 构建解决方案 Docker 镜像并打上 VERSION 标签（需先构�
 	docker tag platform-manufacturing-server platform/manufacturing-server:$(VERSION)
 
 .PHONY: rehearse
-rehearse: ## 一次性交付演练（临时容器环境验证交付链路；不影响本地数据卷）
-	scripts/verify.sh deploy
+rehearse: ## 一次性交付演练（默认临时容器；PROFILE=migration 复用本地基础设施，不重建镜像）
+	$(if $(filter migration,$(PROFILE)),python3 deploy/local/migration_rehearsal.py,scripts/verify.sh deploy)
 
 .PHONY: tag
 tag: ## 标记正式版本：make tag VERSION=v0.12.0（推送标签将触发发布流水线）

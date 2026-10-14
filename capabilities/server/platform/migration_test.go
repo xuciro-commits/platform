@@ -99,6 +99,14 @@ func TestMigrationRejectsUncontrolledAndDestructivePlans(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"from":"a","to":"b","scope":{"type":"x"},"steps":[],"script":"arbitrary code"}`), &copy); err == nil {
 		t.Fatal("unknown plan property was accepted")
 	}
+	deleted := map[string]EntityInfo{}
+	for name, info := range to {
+		info.Fields = append([]FieldInfo{}, info.Fields[1:]...)
+		deleted[name] = info
+	}
+	if _, err := CompileMigrationPlan(plan, from, deleted); err == nil || !strings.Contains(err.Error(), "physically deleted") {
+		t.Fatalf("physical field removal passed the plan compiler: %v", err)
+	}
 	shape := to["build.asset"]
 	shape.Fields = append([]FieldInfo{}, shape.Fields...)
 	shape.Fields[0].ReadOnly = false
