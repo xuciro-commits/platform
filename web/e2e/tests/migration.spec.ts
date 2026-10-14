@@ -23,13 +23,17 @@ test("a builder reviews a rename, resumes its data batches and activates the sea
     { kind: "rename", types: [object.type], batch: 1, fields: [{ from: "name", to: "title" }] },
   ]);
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(steps);
-  await migration.getByRole("button", { name: "Review migration", exact: true }).click();
+  await migration.getByRole("button", { name: "Save migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Publish migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Review migration", exact: true }).click();
   await expect(migration.getByRole("region", { name: "Migration review", exact: true })).toContainText("2 existing records");
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill("null");
   await expect(migration.getByRole("button", { name: "Review migration", exact: true })).toBeDisabled();
   await expect(migration.getByRole("button", { name: "Start reviewed migration", exact: true })).toHaveCount(0);
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(steps);
-  await migration.getByRole("button", { name: "Review migration", exact: true }).click();
+  await migration.getByRole("button", { name: "Save migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Publish migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Review migration", exact: true }).click();
   await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
 
   // Accept the first batch but lose its reply. Retry keeps the original K5 key.
@@ -69,8 +73,8 @@ test("a builder reviews a rename, resumes its data batches and activates the sea
   expect(record.title).toBe("Changed after migration");
 });
 
-for (const change of ["rename", "split"] as const) {
-  test(`a waiting flow finishes its retired action after a ${change} migration`, async ({ page, builder, operator, browser }) => {
+for (const change of ["rename", "split", "extract"] as const) {
+  test(`a waiting flow finishes its retired action after ${change === "extract" ? "an" : "a"} ${change} migration`, async ({ page, builder, operator, browser }) => {
     test.setTimeout(90_000);
     const object = await builder.object({ name: slug("evolve"), title: "Evolving visits", fields: [{ name: "note", title: "Note", type: "text", sourceType: "user-input" }], states: [
       { name: "open", title: "Open" }, { name: "done", title: "Done" }, { name: "rejected", title: "Rejected" },
@@ -87,6 +91,7 @@ for (const change of ["rename", "split"] as const) {
     await builder.decide("build.process.create", { type: "build.process", id: flowID }, { name: flowName, title: "Migration review", object: object.type, when: "open", steps });
     await builder.decide("build.process.publish", { type: "build.process", id: flowID }, {});
     const drafts = [{ kind: "object", id: object.id }, { kind: "flow", id: flowID }];
+    const detailName = slug("detail"), detailID = fresh("DETAIL");
     const from = await builder.candidate(drafts);
     await builder.activate(from);
     const oldID = slug("oldvisit");
@@ -98,6 +103,11 @@ for (const change of ["rename", "split"] as const) {
       await expect(inbox.getByRole("listitem").filter({ hasText: oldID })).toBeVisible();
       const starting = await builder.record("flow.instance", `build.${flowName}:${oldID}`);
       expect(starting.release).toBe(from);
+
+      if (change === "extract") {
+        await builder.decide("build.object.create", { type: "build.object", id: detailID }, { name: detailName, title: "Extracted details", fields: [{ name: "name", title: "Name", type: "text", sourceType: "user-input", required: true }] });
+        drafts.push({ kind: "object", id: detailID });
+      }
 
       await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { fields: [
         { name: "note", title: "Old note", type: "text", sourceType: "user-input", readOnly: true, aliasOf: change === "rename" ? "label" : undefined },
@@ -117,13 +127,17 @@ for (const change of ["rename", "split"] as const) {
       await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(object.type);
       const fields = change === "rename"
         ? [{ from: "note", to: "label" }]
-        : [{ from: "note", to: "label", expr: { kind: "text", ref: "note" } }, { from: "note", to: "detail", expr: { kind: "text", ref: "note" } }];
+        : change === "split"
+          ? [{ from: "note", to: "label", expr: { kind: "text", ref: "note" } }, { from: "note", to: "detail", expr: { kind: "text", ref: "note" } }]
+          : [{ from: "note", to: "name", expr: { kind: "text", ref: "note" } }];
       await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
-        { kind: change, types: [object.type], batch: 1, fields },
+        { kind: change, types: [object.type], batch: 1, fields, ...(change === "extract" ? { target: `build.${detailName}`, identity: { kind: "reference", ref: "id" } } : {}) },
         { kind: "default", types: [object.type], batch: 1, fields: [{ to: "enabled", expr: { op: "", kind: "boolean", lit: { value: true } } }] },
         { kind: "retire-action", types: [object.type], action: `${object.type}.close`, batch: 1 },
       ]));
-      await migration.getByRole("button", { name: "Review migration", exact: true }).click();
+      await migration.getByRole("button", { name: "Save migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Publish migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Review migration", exact: true }).click();
       await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
       for (let batch = 0; batch < 3; batch++) {
         await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
@@ -137,7 +151,12 @@ for (const change of ["rename", "split"] as const) {
       await inbox.getByRole("listitem").filter({ hasText: oldID }).getByRole("button", { name: "yes", exact: true }).click();
       await expect.poll(async () => (await operator.record(object.type, oldID)).state).toBe("done");
       const old = await operator.record(object.type, oldID);
-      expect(old.label).toBe("Old flow finished");
+      if (change === "extract") {
+        expect(old.note).toBe("Original note");
+        expect((await operator.record(`build.${detailName}`, oldID)).name).toBe("Old flow finished");
+      } else {
+        expect(old.label).toBe("Old flow finished");
+      }
       expect(old.enabled).toBe(true);
       if (change === "split") {
         expect(old.note).toBe("Original note");
@@ -186,7 +205,9 @@ test(redirect ? "a declared redirect opens and executes a new approval after tar
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
     { kind: "retire-action", types: [object.type], action: `${object.type}.finish`, batch: 1, ...(redirect ? { redirect: `${object.type}.finishnew` } : {}) },
   ]));
-  await migration.getByRole("button", { name: "Review migration", exact: true }).click();
+  await migration.getByRole("button", { name: "Save migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Publish migration plan", exact: true }).click();
+    await migration.getByRole("button", { name: "Review migration", exact: true }).click();
   await migration.getByRole("button", { name: "Start reviewed migration", exact: true }).click();
   await migration.getByRole("button", { name: "Run next migration batch", exact: true }).click();
   await expect(migration.getByRole("region", { name: "Migration progress", exact: true })).toContainText("complete");

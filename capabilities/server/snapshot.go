@@ -72,6 +72,7 @@ type recordState struct {
 	Value      json.RawMessage   `json:"value"`
 	History    []RecordChange    `json:"history"`
 	Projection *recordProjection `json:"projection,omitempty"`
+	Extraction *extractionOrigin `json:"extraction,omitempty"`
 }
 
 type taskState struct {
@@ -105,7 +106,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 			if err != nil {
 				return nil, 0, err
 			}
-			saved[i] = recordState{Value: raw, History: r.history, Projection: cloneRecordProjection(r.projection)}
+			saved[i] = recordState{Value: raw, History: r.history, Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}
 		}
 		slices.SortFunc(saved, func(a, b recordState) int { return strings.Compare(string(a.Value), string(b.Value)) })
 		s.Records[typ] = saved
@@ -199,7 +200,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 				return nil, err
 			}
 			emptyLists(v) // a snapshot of older code may hold null lists
-			recovered := &row{value: v, history: r.History, projection: cloneRecordProjection(r.Projection)}
+			recovered := &row{value: v, history: r.History, projection: cloneRecordProjection(r.Projection), extraction: r.Extraction}
 			recovered.retainOriginal(r.Value)
 			et.rows[recordOf(v).ID] = recovered
 		}
@@ -317,6 +318,14 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 			return fmt.Errorf("tenant %s: no entity type %s", t.ID, slices.Sorted(maps.Keys(left))[0])
 		}
 	}
+	for typ, et := range t.records.types {
+		for _, row := range et.rows {
+			if err := validateExtractionOrigin(t.records, typ, row.extraction); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 

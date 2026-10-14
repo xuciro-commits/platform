@@ -211,7 +211,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 				next, found := current.info.Field(old.Name)
 				if found && next.AliasOf != "" {
 					fields[old.Name] = fields[next.AliasOf]
-				} else if !found || next.Type != old.Type || next.Ref != old.Ref {
+				} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && projectionFor(value.projection, r.release) != nil {
 					var prior map[string]json.RawMessage
 					source := projectionFor(value.projection, r.release)
 					shape, _ := canonicalDigest(info.Fields)
@@ -371,9 +371,12 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if prior := old.rows[id]; prior != nil {
 		_ = json.Unmarshal(jsonOf(prior.value.Interface()), &before)
 	}
-	mappedBefore, mappedInput, mappingErr := r.mapRetainedWrite(c.ID, old.info.Type, before, input)
+	mappedBefore, mappedInput, extractions, mappingErr := r.mapRetainedWrite(c.ID, old.info.Type, before, input)
 	if mappingErr != nil {
 		return migrationRefusal(mappingErr)
+	}
+	if err := r.applyRetainedExtractions(c, receipt, extractions); err != nil {
+		return err
 	}
 	if prior := current.rows[id]; prior != nil {
 		raw, _ := prior.image()

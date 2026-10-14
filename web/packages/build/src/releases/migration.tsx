@@ -9,6 +9,16 @@ type Migration = {
   failures?: { type: string; record: string; step: number; reason: string }[];
 };
 
+type PlanRecord = {
+  id: string; revision: number; name: string; title: string; plan: Api.MigrationPlan;
+  definitionVersion?: number; published?: string;
+};
+
+function planSignature(plan: Api.MigrationPlan): string {
+  return JSON.stringify(plan, (_, value) => value && typeof value === "object" && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value);
+}
+
 /** A migration stays in the original release task. Decisions use the original
  * record submitter/outbox; progress is read from accepted build records. */
 export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
@@ -17,6 +27,7 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
 }) {
   const host = useHost(), inputs = useInputDrafts();
   const inventory = useRecordInventory<Migration>("build.migration");
+  const plans = useRecordInventory<PlanRecord>("build.migration-plan");
   const objects = assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "object");
   const [type, setType] = useState("");
   const [steps, setSteps] = useState<Api.MigrateStep[]>([]);
@@ -24,21 +35,29 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
   const [where, setWhere] = useState<Api.Expr>();
   const [review, setReview] = useState<Api.MigrationReview>();
   const [id, setID] = useState("");
+  const [planID, setPlanID] = useState("");
+  const [savedSignature, setSavedSignature] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [uncertain, setUncertain] = useState(false);
   const live = useRef(true), lock = useRef(false);
   const plan: Api.MigrationPlan = { from, to, scope: { type, ...(where ? { where } : {}) }, steps };
-  const signature = JSON.stringify(plan), context = useRef(signature); context.current = signature;
+  const signature = planSignature(plan), context = useRef(signature); context.current = signature;
   const runs = (inventory.isError ? [] : inventory.data?.records ?? []).filter(run => run.plan.from === from && run.plan.to === to);
   const run = runs.find(run => run.id === id) ?? runs.find(run => run.state !== "cancelled");
-  const pending = host.outbox.some(entry => entry.submission.target?.type === "build.migration"
+  const savedPlans = (plans.data?.records ?? []).filter(item => item.plan.from === from && item.plan.to === to);
+  const savedPlan = savedPlans.find(item => item.id === planID);
+  const pinned: Api.ReleaseAsset | undefined = savedPlan?.published ? JSON.parse(savedPlan.published) : undefined;
+  const saved = signature === savedSignature;
+  const published = pinned && planSignature((pinned.body as { plan: Api.MigrationPlan }).plan) === signature;
+  const pending = host.outbox.some(entry => ["build.migration", "build.migration-plan"].includes(entry.submission.target?.type ?? "")
     && ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(entry.state));
   const blocked = busy || uncertain || pending;
-  const dirty = steps.length > 0 && !run;
+  const dirty = steps.length > 0 && !run && !saved;
   const submit = useMemo(() => createRecordActionSubmitter(host, () => live.current), [host.client]);
   const { markSaved, discardChanges } = useUnsavedChanges(dirty || uncertain, () => {
     setSteps([]); setStepsValid(true); setWhere(undefined); setReview(undefined); setError(""); setUncertain(false);
+    setPlanID(""); setSavedSignature("");
   }, busy);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, [host.client]);
   useEffect(() => { onLock(blocked || dirty); return () => onLock(false); }, [blocked, dirty, onLock]);
@@ -69,10 +88,30 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
     await inventory.refetch(); await onChanged();
   });
   const start = () => {
-    if (!review) return;
+    if (!review || !published || !saved) return;
     const target = id || newId("MIGRATION"); setID(target);
-    return decide("build.migration.start", target, 0, { plan, review: review.id, reviewedAt: review.at });
+    return decide("build.migration.start", target, 0, { asset: { ref: pinned.ref, sourceVersion: pinned.sourceVersion }, review: review.id, reviewedAt: review.at });
   };
+  const choosePlan = (item?: PlanRecord) => {
+    setPlanID(item?.id ?? ""); setReview(undefined); setError("");
+    if (!item) { setSavedSignature(""); return; }
+    setType(item.plan.scope.type); setSteps(item.plan.steps); setStepsValid(true); setWhere(item.plan.scope.where);
+    setSavedSignature(planSignature(item.plan)); markSaved();
+  };
+  const savePlan = (publish = false) => perform(async () => {
+    const target = planID || newId("MPLAN"); setPlanID(target);
+    const payload = publish ? {} : { plan, ...(savedPlan ? {} : { name: target.toLowerCase().replace(/[^a-z0-9]/g, ""), title: `${t("Migration plan")} · ${type}` }) };
+    const schema = `build.migration-plan.${publish ? "publish" : savedPlan ? "edit" : "create"}`;
+    const answer = await submit(schema, { type: "build.migration-plan", id: target }, savedPlan?.revision ?? 0, payload);
+    if (!live.current) return;
+    if (!answer.accepted) {
+      setUncertain(host.client.authorities.outbox.some(entry => entry.submission.target?.id === target && ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(entry.state)));
+      throw Error(answer.error ?? t("The migration decision was not confirmed. Retry the original decision."));
+    }
+    setUncertain(false);
+    const refreshed = await plans.refetch();
+    choosePlan(refreshed.data?.records.find(item => item.id === target));
+  });
   const editSteps = (value: string) => {
     const parsed: unknown = JSON.parse(value);
     if (!Array.isArray(parsed)) { setStepsValid(false); setReview(undefined); setError(t("Migration steps must be an array.")); return; }
@@ -88,6 +127,10 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
       {runs.map(item => <option key={item.id} value={item.id}>{item.id} · {t(item.state)}</option>)}
     </Select></label>}
     {!run && <>
+      <label className="grid gap-1 text-xs">{t("Saved migration plan")}<Select aria-label={t("Saved migration plan")} disabled={blocked} value={planID} onChange={event => choosePlan(savedPlans.find(item => item.id === event.target.value))}>
+        <option value="">{t("New migration plan")}</option>
+        {savedPlans.map(item => <option key={item.id} value={item.id}>{item.title} · {item.definitionVersion ?? 0}</option>)}
+      </Select></label>
       <label className="grid gap-1 text-xs">{t("Migration object")}<Select aria-label={t("Migration object")} disabled={blocked} value={type} onChange={event => setType(event.target.value)}>
         <option value="">{t("Choose a migration object")}</option>
         {objects.map(asset => <option key={asset.ref.name} value={asset.ref.name}>{asset.ref.name}</option>)}
@@ -98,6 +141,8 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
         <Textarea aria-label={t("Record filter expression")} disabled={blocked} parse="json" rows={5} value={where ? JSON.stringify(where, null, 2) : "null"} onChange={event => setWhere(JSON.parse(event.target.value) ?? undefined)} />
       </Disclosure>
       <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" disabled={!type || !steps.length || !stepsValid || blocked || plans.isError || plans.isPending} onClick={() => void savePlan()}>{t("Save migration plan")}</Button>
+        <Button variant="ghost" disabled={!savedPlan || !saved || blocked} onClick={() => void savePlan(true)}>{t("Publish migration plan")}</Button>
         <Button disabled={!type || !steps.length || !stepsValid || blocked || !!inputs?.invalid} onClick={() => void inspect()}>{t("Review migration")}</Button>
         <Button variant="ghost" disabled={blocked} onClick={() => discardChanges()}>{t("Discard migration draft")}</Button>
       </div>
@@ -105,7 +150,7 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
         <ul className="grid gap-1">{review.types.map(item => <li key={item.type}>{item.type} · {t("{count} existing records", { count: item.records })}</li>)}</ul>
         <p>{t("{count} migration steps", { count: review.steps })} · {new Date(review.at).toLocaleString()}</p>
         {review.issues.length > 0 && <ul className="grid gap-1 text-warning" aria-label={t("Migration issues")}>{review.issues.map((issue, index) => <li key={index}>{issue.type}/{issue.record} · {t("Step {number}", { number: issue.step })}: {issue.reason}</li>)}</ul>}
-        <Button disabled={blocked || inventory.isError || inventory.isPending || !!inputs?.invalid} onClick={() => void start()}>{t("Start reviewed migration")}</Button>
+        <Button disabled={!saved || !published || blocked || inventory.isError || inventory.isPending || !!inputs?.invalid} onClick={() => void start()}>{t("Start reviewed migration")}</Button>
       </div>}
     </>}
     {run && <div className="grid gap-2" role="region" aria-label={t("Migration progress")}>
@@ -124,6 +169,6 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
     </div>}
     {(uncertain || pending) && <div className="grid gap-2" role="alert"><p className="text-sm">{t("The migration decision was not confirmed. Retry the original decision.")}</p><Button disabled={busy} onClick={() => void perform(async () => { await host.resend(); setUncertain(false); await inventory.refetch(); await onChanged(); })}>{t("Retry original migration decision")}</Button></div>}
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-    <Button size="sm" variant="ghost" disabled={busy} onClick={() => void perform(async () => { await inventory.refetch(); await onChanged(); })}>{t("Refresh migration progress")}</Button>
+    <Button size="sm" variant="ghost" disabled={busy} onClick={() => void perform(async () => { await inventory.refetch(); await plans.refetch(); await onChanged(); })}>{t("Refresh migration progress")}</Button>
   </Card>;
 }

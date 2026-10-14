@@ -14,15 +14,16 @@ import (
 
 // Retained decisions use the same reviewed forward conversions as migration.
 // Conversion is part of this new decision; recovery only applies its images.
-func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after map[string]json.RawMessage) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
+func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after map[string]json.RawMessage) (map[string]json.RawMessage, map[string]json.RawMessage, []retainedExtractionWrite, error) {
 	before, after = maps.Clone(before), maps.Clone(after)
 	release := r.release
 	declared := r.shapes
 	seen := map[string]bool{}
+	writes := []retainedExtractionWrite{}
 	convertedSources := map[string]bool{}
 	for {
 		if seen[release] {
-			return nil, nil, fmt.Errorf("retained write migration path contains a cycle")
+			return nil, nil, nil, fmt.Errorf("retained write migration path contains a cycle")
 		}
 		seen[release] = true
 		var selected *platform.MigrationRun
@@ -33,7 +34,7 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 					continue
 				}
 				if selected != nil {
-					return nil, nil, fmt.Errorf("retained write has ambiguous completed migrations")
+					return nil, nil, nil, fmt.Errorf("retained write has ambiguous completed migrations")
 				}
 				copy := run
 				selected = &copy
@@ -60,55 +61,72 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 				}
 				field, found := declared[typ].Field(target.Name)
 				if !found || field.Type != target.Type || field.Ref != target.Ref {
-					return nil, nil, fmt.Errorf("retained write %s lacks its declared field conversion", target.Name)
+					return nil, nil, nil, fmt.Errorf("retained write %s lacks its declared field conversion", target.Name)
 				}
 			}
-			return before, after, nil
+			return before, after, writes, nil
 		}
 		sources, err := r.tenant.releaseShapes(selected.Plan.From)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		targets, err := r.tenant.releaseShapes(selected.Plan.To)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for name, want := range selected.SourceShapes {
 			shape, err := canonicalDigest(sources[name].Fields)
 			if err != nil || shape != want {
-				return nil, nil, fmt.Errorf("retained write source shape differs from its accepted migration")
+				return nil, nil, nil, fmt.Errorf("retained write source shape differs from its accepted migration")
 			}
 		}
 		for name, want := range selected.TargetShapes {
 			shape, err := canonicalDigest(targets[name].Fields)
 			if err != nil || shape != want {
-				return nil, nil, fmt.Errorf("retained write target shape differs from its accepted migration")
+				return nil, nil, nil, fmt.Errorf("retained write target shape differs from its accepted migration")
 			}
 		}
 		program, err := platform.CompileMigrationPlan(selected.Plan, sources, targets)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		context := platform.ExprContext{Me: me, Now: r.at, Today: r.at.UTC().Format(time.DateOnly)}
 		for index, step := range selected.Plan.Steps {
 			if !slices.Contains(step.Types, typ) || step.Kind == "retire-action" {
 				continue
 			}
-			if step.Kind == "extract" {
-				return nil, nil, fmt.Errorf("retained extraction writes require their explicit object identities")
-			}
+			var previous platform.MigrationRecordResult
 			if before != nil {
-				previous, err := program.Transform(index, typ, jsonOf(before), context)
+				var err error
+				previous, err = program.Transform(index, typ, jsonOf(before), context)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
 				before = previous.Values
 			}
 			next, err := program.Transform(index, typ, jsonOf(after), context)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			after = next.Values
+			if step.Kind == "extract" && next.Selected {
+				if previous.Selected && string(previous.Extracted["id"]) != string(next.Extracted["id"]) {
+					return nil, nil, nil, fmt.Errorf("retained extraction cannot change its declared record identity")
+				}
+				child := *r
+				child.release, child.shapes = selected.Plan.To, targets
+				a, b, nested, err := child.mapRetainedWrite(me, step.Target, previous.Extracted, next.Extracted)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				writes = append(writes, nested...)
+				var id string
+				_ = json.Unmarshal(after["id"], &id)
+				writes = append(writes, retainedExtractionWrite{typ: step.Target, before: a, after: b, origin: extractionOrigin{Migration: selected.ID, Source: typ + "/" + id, Step: index}})
+				for _, field := range step.Fields {
+					convertedSources[field.From] = true
+				}
+			}
 			if step.Kind == "split" || step.Kind == "merge" {
 				for _, field := range next.Retired {
 					convertedSources[field] = true

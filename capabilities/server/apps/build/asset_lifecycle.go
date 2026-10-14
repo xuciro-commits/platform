@@ -16,7 +16,7 @@ import (
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
 		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching,
+		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration,
 	}
 }
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {
@@ -62,6 +62,9 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 			return platform.PageReleaseAsset(ID, version, page)
 		}
 		return platform.ReleaseAsset{}, fmt.Errorf("page content %s@%s is not retained", ref, contentVersion[0])
+	}
+	if ref.Kind == platform.AssetMigration {
+		return b.migrationPlanPinned(ref, version)
 	}
 	if ref.Kind == platform.AssetQuery {
 		return b.QueryReleaseAsset(ref.Name, version)
@@ -272,7 +275,10 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 	if err != nil {
 		return nil, err
 	}
-	var out []platform.AssetInstallation
+	out, err := b.prepareMigrationPlanInstallations(assets)
+	if err != nil {
+		return nil, err
+	}
 	for _, p := range publications {
 		plan, err := b.DecodeAssetInstallation(p.Schema, p.Image)
 		if err != nil {
@@ -343,6 +349,9 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 	return orderOwnerInstallations(assets, out)
 }
 func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
+	if schema == SchemaMigrationPlan {
+		return migrationPlanInstallation(image)
+	}
 	typ, _, _ := strings.Cut(schema, ".publish")
 	if schema != typ+".publish" {
 		return platform.AssetInstallation{}, fmt.Errorf("invalid publication schema")
@@ -450,6 +459,9 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	}
 	if decoded.Ref != plan.Ref || decoded.Record != plan.Record {
 		return fmt.Errorf("installation identity differs from its saved image")
+	}
+	if plan.Ref.Kind == platform.AssetMigration {
+		return nil
 	}
 	if !buildapi.ValueIntegrationKind(plan.Ref.Kind) {
 		return b.ValidateAcceptedPublication(plan.Schema, plan.Image)
@@ -572,7 +584,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 			}
 		}
 	}
-	if buildapi.ValueIntegrationKind(plan.Ref.Kind) {
+	if buildapi.ValueIntegrationKind(plan.Ref.Kind) || plan.Ref.Kind == platform.AssetMigration {
 		_, err := b.DecodeAssetInstallation(plan.Schema, plan.Image)
 		return err
 	}
@@ -783,7 +795,7 @@ func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member pla
 }
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
-	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow}
+	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, MigrationPlanType: platform.AssetMigration}
 	kind := kinds[typ]
 	if kind == "" {
 		return platform.AssetRef{}, fmt.Errorf("unknown native release draft %s", typ)
@@ -795,6 +807,12 @@ func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 }
 func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, any, error) {
 	switch asset.Ref.Kind {
+	case platform.AssetMigration:
+		d, _, err := decodeMigrationAsset(asset)
+		if err != nil {
+			return "", nil, err
+		}
+		return MigrationPlanType, MigrationPlanRecord{Name: d.Name, Title: d.Title, Plan: d.Plan}, nil
 	case platform.AssetPropertyType:
 		var d platform.PropertyType
 		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {

@@ -21,7 +21,7 @@ func migrationEntity() platform.Entity {
 
 func migrationActions() []platform.Action {
 	return []platform.Action{
-		{Schema: migrationStart, Target: platform.MigrationRunType, Capability: "migrations", Title: "Start migration", Description: "Start the reviewed migration between sealed releases", Roles: []string{Builder}, New: true, Payload: []platform.Field{{Name: "plan", Type: "json", Required: true, Description: "The reviewed migration plan"}, {Name: "review", Type: "string", Required: true, Description: "The sealed review identity"}, {Name: "reviewedAt", Type: "datetime", Required: true, Description: "The captured migration review time"}}},
+		{Schema: migrationStart, Target: platform.MigrationRunType, Capability: "migrations", Title: "Start migration", Description: "Start the reviewed migration between sealed releases", Roles: []string{Builder}, New: true, Payload: []platform.Field{{Name: "plan", Type: "json", Description: "The reviewed migration plan"}, {Name: "asset", Type: "json", Description: "The pinned migration plan asset"}, {Name: "review", Type: "string", Required: true, Description: "The sealed review identity"}, {Name: "reviewedAt", Type: "datetime", Required: true, Description: "The captured migration review time"}}},
 		{Schema: migrationAdvance, Target: platform.MigrationRunType, Capability: "migrations", Title: "Run migration batch", Description: "Accept the next bounded migration batch and its progress", Roles: []string{Builder}, Payload: []platform.Field{}},
 		{Schema: migrationCancel, Target: platform.MigrationRunType, Capability: "migrations", Title: "Cancel migration", Description: "Restore source facts in bounded accepted batches before releasing the migration", Roles: []string{Builder}, Payload: []platform.Field{}},
 	}
@@ -33,6 +33,7 @@ func (b *Build) submitMigration(c platform.Caller, s *pb.Submission, at time.Tim
 			Plan       platform.MigrationPlan `json:"plan"`
 			Review     string                 `json:"review"`
 			ReviewedAt time.Time              `json:"reviewedAt"`
+			Asset      *platform.AssetBinding `json:"asset,omitempty"`
 		}
 		var run platform.MigrationRun
 		if s.GetSchema().GetName() == migrationStart {
@@ -58,7 +59,13 @@ func (b *Build) submitMigration(c platform.Caller, s *pb.Submission, at time.Tim
 			var result platform.MigrationRun
 			var err *kernel.Error
 			if s.GetSchema().GetName() == migrationStart {
-				result, err = c.BeginMigration(r, input.Plan, input.Review, input.ReviewedAt, at)
+				plan, asset, refusal := b.freezeMigrationInput(c, r, input.Plan, input.Asset)
+				if refusal != nil {
+					c.FailDecision(refusal)
+					return
+				}
+				result, err = c.BeginMigration(r, plan, input.Review, input.ReviewedAt, at)
+				result.Asset = asset
 			} else {
 				result, err = c.AdvanceMigration(r, run, at)
 			}

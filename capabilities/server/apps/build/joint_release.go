@@ -299,6 +299,9 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if buildapi.ValueIntegrationKind(kind) {
 		return b.integrationDraftAssets(kind, id)
 	}
+	if kind == platform.AssetMigration {
+		return b.migrationPlanDraftAssets(id)
+	}
 	if kind == platform.AssetPropertyType {
 		return b.propertyTypeDraftAssets(id)
 	}

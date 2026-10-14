@@ -1470,6 +1470,7 @@ export type MigrateStep = {
   action?: string;
   redirect?: string;
   target?: string;
+  identity?: Expr;
 };
 
 export type MigrationManifest = {

@@ -323,7 +323,7 @@ func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error
 }
 
 func ownedMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching}, kind)
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration}, kind)
 }
 
 // ownedAssetDefinition indexes only an owner's accepted descriptor identity.

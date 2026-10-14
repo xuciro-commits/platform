@@ -94,7 +94,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			}
 			platform.ApplyFieldAliases(info, v)
 			emptyLists(v)
-			et.rows[id] = &row{value: v, history: copyHistory(r.history), projection: cloneRecordProjection(r.projection)}
+			et.rows[id] = &row{value: v, history: copyHistory(r.history), projection: cloneRecordProjection(r.projection), extraction: r.extraction}
 			et.rows[id].retainOriginal(raw)
 		}
 		delete(s.byGo, before.info.Go)

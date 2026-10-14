@@ -45,6 +45,7 @@ type acceptedRow struct {
 	Value      json.RawMessage   `json:"value"`
 	History    []RecordChange    `json:"history"`
 	Projection *recordProjection `json:"projection,omitempty"`
+	Extraction *extractionOrigin `json:"extraction,omitempty"`
 }
 
 type acceptedEvent struct {

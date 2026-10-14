@@ -510,6 +510,7 @@
   "Start flow": "启动流程",
   "State": "状态",
   "Step": "步骤",
+  "Extractions": "提取记录",
   "Steps": "步骤",
   "Stop a run; what it did stays done. Anyone may stop a run on their behalf.": "停止一次运行；已做的不会撤销。代表谁运行的，谁就可以停止。",
   "Stop a running instance; its open tasks close. Nothing is undone.": "停止运行中的实例；其未完成任务关闭，已做的不会撤销。",
@@ -1860,5 +1861,16 @@
   "The declared target action has a new approval request": "已为声明的目标动作创建新的审批请求",
   "Approval redirect": "审批重定向",
   "The held action has no retained owner": "该持有的动作没有保留版本的归属方",
-  "Redirected by": "重定向操作人"
+  "Redirected by": "重定向操作人",
+  "Archive a migration plan: it leaves lists but stays referenced and in history.": "归档迁移计划：从列表退出，仍保留引用和历史。",
+  "Archive migration plan": "归档迁移计划",
+  "Change fields of a migration plan; fields left out keep their value.": "修改迁移计划字段；未指定的字段保留原值。",
+  "Create a migration plan.": "创建迁移计划。",
+  "Create migration plan": "创建迁移计划",
+  "Definition version": "定义版本",
+  "Edit migration plan": "编辑迁移计划",
+  "Migration plan": "迁移计划",
+  "Migration plans": "迁移计划",
+  "Retain this migration plan as an immutable asset without executing it": "将迁移计划保留为不可变资产，发布不执行迁移",
+  "The pinned migration plan asset": "固定版本的迁移计划资产"
 }

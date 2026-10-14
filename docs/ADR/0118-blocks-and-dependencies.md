@@ -134,3 +134,7 @@ type Capability struct {
 7. 反例：新增一种资产类型却没有 `AssetRef` kind、新增一个 `Capability` 却没有 `Side`、为某一块单独维护依赖列表 → 分别拒绝。
 
 测试归宿主 platform 包与 build owner 包；`docs/Testing.md` 增"依赖与能力发现"手测行。
+
+## As built
+
+ADR-0106 已登记 `migration` 资产：唯一生命周期归 Build / `build.migration-plan`，描述体为 `MigrationDescriptor`，固定源/目标封存发布、受控步骤与范围。版本边为既有发布的内容 ID；计划不能依赖自身目标候选，也不另维持一份对象当前形状图。声明读取与版本解析为 pure，`migrations` 的 start/advance/cancel 为 authoritative，仅写 build 权威；目标新声明和对象行仍走原接受结果。能力和版本化资产已注册；本 ADR 的通用 `Provides`/`Side` 推导、统一反向图和发现验收仍未实施，不用此登记宣称 §4 通过。

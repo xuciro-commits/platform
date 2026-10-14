@@ -47,6 +47,7 @@ type acceptedBatch struct {
 	Control        *acceptedControl                `json:"control,omitempty"`
 	DirectRows     []acceptedCallbackRow           `json:"directRows,omitempty"`
 	Iterations     []platform.TxnIteration         `json:"iterations,omitempty"`
+	Definitions    []releaseInstallation           `json:"definitions,omitempty"`
 }
 
 type acceptedBatchRow struct {
@@ -95,7 +96,7 @@ func canonicalDigest(v any) (string, error) {
 
 func acceptedRowOf(typ, id string, r *row) (acceptedRow, error) {
 	value, err := r.image()
-	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.history), Projection: cloneRecordProjection(r.projection)}, err
+	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.history), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}, err
 }
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
@@ -191,6 +192,10 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		result.Iterations = slices.Clone(d.iterations)
 		result.Version = 5
 	}
+	if len(d.migrationDefinitions) > 0 {
+		result.Definitions = slices.Clone(d.migrationDefinitions)
+		result.Version = 6
+	}
 	d.records.mu.Lock()
 	defer d.records.mu.Unlock()
 	d.records.parent.mu.Lock()
@@ -272,7 +277,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version < 1 || result.Version > 5 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > 6 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
@@ -280,7 +285,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 		len(result.Decisions) == 0 {
 		return result, nil, fmt.Errorf("record batch has inconsistent identity or effects")
 	}
-	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || (result.Version == 5) != (len(result.Iterations) > 0) {
+	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || (result.Version == 6) != (len(result.Definitions) > 0) {
 		return result, nil, fmt.Errorf("record batch control format differs")
 	}
 	if err := validateTxnIterations(result.App, result.Iterations); err != nil {
@@ -479,6 +484,12 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
 	}
 	draft := t.records.forkRecords()
+	if len(result.Definitions) > 0 {
+		draft, err = t.prepareExtractionDefinitions(result, receipt, draft)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := t.validateAcceptedControl(result.Control); err != nil {
 		return nil, err
 	}
@@ -529,6 +540,9 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := draft.validateLinkConstraints(); err != nil {
 		return nil, err
 	}
+	if err := validateExtractionOrigins(draft); err != nil {
+		return nil, err
+	}
 	if err := t.sequences.check(result.SequenceBases, result.Sequences); err != nil {
 		return nil, err
 	}
@@ -555,6 +569,9 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 		}
 	}
 	if err := t.records.promoteRecords(draft); err != nil {
+		return false, err
+	}
+	if err := t.applyExtractionDefinitions(result.Definitions); err != nil {
 		return false, err
 	}
 	if err := t.applyAcceptedControl(result.Control); err != nil {
@@ -610,6 +627,9 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			return fmt.Errorf("record batch needs installed entity %s", image.Type)
 		}
 		prior := et.rows[image.ID]
+		if prior != nil && !reflect.DeepEqual(prior.extraction, image.Extraction) {
+			return fmt.Errorf("record extraction origin changed")
+		}
 		if result.Version == 1 {
 			if restored := legacyAgentContextPredecessor(prior, image); restored != nil {
 				prior = restored
@@ -691,7 +711,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 				rec.Created.By != image.History[0].By || !rec.Created.At.Equal(image.History[0].At)) {
 			return fmt.Errorf("record batch image differs from its decisions")
 		}
-		recovered := &row{value: value, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection)}
+		recovered := &row{value: value, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
 		recovered.retainOriginal(image.Value)
 		et.rows[rec.ID] = recovered
 		draft.writes[image.Type+"/"+rec.ID] = true

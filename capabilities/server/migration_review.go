@@ -65,6 +65,7 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 	program, sources, targets, types := prepared.program, prepared.sources, prepared.targets, prepared.types
 	review := MigrationReview{At: captured, From: plan.From, To: plan.To, Steps: len(plan.Steps), Types: []MigrationReviewType{}, Issues: []MigrationReviewIssue{}}
 	witnesses := map[string]string{}
+	extractions := map[string]bool{}
 	for _, typ := range types {
 		source, exists := sources[typ]
 		if !exists {
@@ -97,6 +98,16 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 				if err != nil {
 					review.Issues = append(review.Issues, MigrationReviewIssue{Type: typ, Record: id, Step: index + 1, Reason: err.Error()})
 					break
+				}
+				if step.Kind == "extract" && result.Selected {
+					var id string
+					_ = json.Unmarshal(result.Extracted["id"], &id)
+					key := step.Target + "/" + id
+					existing := t.records.types[step.Target]
+					if extractions[key] || existing != nil && existing.rows[id] != nil {
+						review.Issues = append(review.Issues, MigrationReviewIssue{Type: typ, Record: id, Step: index + 1, Reason: "extraction identity is already used"})
+					}
+					extractions[key] = true
 				}
 				image, err = json.Marshal(result.Values)
 				if err != nil {
@@ -167,6 +178,9 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 	records.readRelease = plan.To // This is the private target decoder context.
 	sources := map[string]platform.EntityInfo{}
 	for _, typ := range types {
+		if !slices.ContainsFunc(plan.Steps, func(step platform.MigrateStep) bool { return slices.Contains(step.Types, typ) }) {
+			continue
+		}
 		old := records.types[typ]
 		if old == nil {
 			continue

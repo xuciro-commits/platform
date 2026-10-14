@@ -194,6 +194,7 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 
 func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
+	fork.migrationDefinitions = slices.Clone(d.migrationDefinitions)
 	fork.callbackWrites = maps.Clone(d.callbackWrites)
 	if d.callbackOrigin != nil {
 		origin := *d.callbackOrigin

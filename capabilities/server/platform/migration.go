@@ -17,6 +17,7 @@ type MigrationProgram struct {
 	Plan        MigrationPlan
 	predicates  map[string]*ExprProgram
 	conversions map[string]*ExprProgram
+	identities  map[string]*ExprProgram
 	sources     map[string]EntityInfo
 	targets     map[string]EntityInfo
 }
@@ -27,6 +28,7 @@ type MigrationRecordResult struct {
 	Retired   []string
 	Extracted map[string]json.RawMessage
 	Changed   bool
+	Selected  bool
 }
 
 // CompileMigrationPlan validates actual source and target shapes, not names
@@ -35,7 +37,7 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 	if err := plan.Check(); err != nil {
 		return nil, err
 	}
-	program := &MigrationProgram{Plan: plan, sources: sources, targets: targets, predicates: map[string]*ExprProgram{}, conversions: map[string]*ExprProgram{}}
+	program := &MigrationProgram{Plan: plan, sources: sources, targets: targets, predicates: map[string]*ExprProgram{}, conversions: map[string]*ExprProgram{}, identities: map[string]*ExprProgram{}}
 	for index, step := range plan.Steps {
 		authority := ""
 		for _, typ := range step.Types {
@@ -57,6 +59,7 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 				}
 			}
 			schema := ExprSchema{Refs: map[string]ExprType{}}
+			schema.Refs["id"] = ExprType{Kind: "reference", Object: typ}
 			for _, f := range source.Fields {
 				schema.Refs[f.Name] = ExprType{Kind: RuleFieldKind(f.Type), Object: f.Ref}
 			}
@@ -79,12 +82,20 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 				if !found || source.App != target.App {
 					return nil, fmt.Errorf("extraction needs a target of the same authority")
 				}
+				identity, err := CompileExpr(*step.Identity, schema)
+				if err != nil {
+					return nil, err
+				}
+				program.identities[fmt.Sprintf("%d/%s", index, typ)] = identity
 			}
 			for fi, change := range step.Fields {
 				from, fromOK := source.Field(change.From)
 				to, toOK := target.Field(change.To)
 				if change.From != "" && !fromOK || !toOK {
 					return nil, fmt.Errorf("migration field %s/%s is absent from its sealed shape", change.From, change.To)
+				}
+				if step.Kind == "extract" && (to.ReadOnly || slices.Contains([]string{"id", "revision", "created", "changed", "archived", "versionPins"}, change.To)) {
+					return nil, fmt.Errorf("extraction writes declared business fields only")
 				}
 				if slices.Contains([]string{"rename", "split", "merge", "retire"}, step.Kind) {
 					retained, exists := targets[typ].Field(change.From)
@@ -149,6 +160,10 @@ func (p *MigrationProgram) Transform(index int, typ string, raw json.RawMessage,
 		values[name] = slices.Clone(value)
 	}
 	captured.Refs = make(map[string]ExprValue, len(p.sources[typ].Fields))
+	captured.Refs["id"] = ExprValue{Kind: "reference", Status: "missing"}
+	if id, exists := source["id"]; exists {
+		captured.Refs["id"] = ExprValue{Kind: "reference", Status: "value", Data: slices.Clone(id)}
+	}
 	for _, field := range p.sources[typ].Fields {
 		kind := RuleFieldKind(field.Type)
 		value := ExprValue{Kind: kind, Status: "missing"}
@@ -177,7 +192,19 @@ func (p *MigrationProgram) Transform(index int, typ string, raw json.RawMessage,
 			return out, nil
 		}
 	}
+	out.Selected = true
 	step := p.Plan.Steps[index]
+	if step.Kind == "extract" {
+		identity, err := p.identities[fmt.Sprintf("%d/%s", index, typ)].Eval(captured)
+		if err != nil {
+			return MigrationRecordResult{}, err
+		}
+		var id string
+		if identity.Value.Status != "value" || json.Unmarshal(identity.Value.Data, &id) != nil || id == "" || len(id) > 512 || strings.Contains(id, "/") {
+			return MigrationRecordResult{}, fmt.Errorf("extraction needs a nonempty declared record identity")
+		}
+		out.Extracted["id"] = Raw(id)
+	}
 	for fi, change := range step.Fields {
 		if step.Kind == "retire" {
 			out.Retired = append(out.Retired, change.From)
@@ -255,25 +282,49 @@ type MigrationPlan struct {
 	Steps []MigrateStep  `json:"steps"`
 }
 
+// MigrationDescriptor is a declarative asset, not a second migration runtime.
+// From/To identify already sealed closures; it cannot be part of its own To.
+type MigrationDescriptor struct {
+	Name  string        `json:"name"`
+	Title string        `json:"title"`
+	Plan  MigrationPlan `json:"plan"`
+}
+
+func (d MigrationDescriptor) Check() error {
+	if d.Name == "" || d.Title == "" || strings.Contains(d.Name, "/") {
+		return fmt.Errorf("migration asset needs a name and title")
+	}
+	return d.Plan.Check()
+}
+
 const MigrationRunType = "build.migration"
 
 // MigrationRun is the accepted progress record, in the same authority as the
 // customer objects a builder owns. A batch advances its cursor with its rows.
 type MigrationRun struct {
 	Record
-	Plan         MigrationPlan      `json:"plan" type:"json" field:"readonly"`
-	Review       string             `json:"review" field:"readonly" source:"record"`
-	State        string             `json:"state" choices:"pending,running,blocked,complete,cancelling,cancelled" field:"readonly"`
-	Step         int                `json:"step" field:"readonly"`
-	Cursor       string             `json:"cursor,omitempty" field:"readonly" source:"record"`
-	Processed    int                `json:"processed" field:"readonly"`
-	Migrated     int                `json:"migrated" field:"readonly"`
-	Failures     []MigrationFailure `json:"failures,omitempty" field:"readonly"`
-	StartedBy    string             `json:"startedBy" field:"readonly" source:"record"`
-	EvaluationAt time.Time          `json:"evaluationAt" field:"readonly"`
-	SourceShapes map[string]string  `json:"sourceShapes" type:"json" field:"readonly"`
-	TargetShapes map[string]string  `json:"targetShapes" type:"json" field:"readonly"`
-	Targets      []string           `json:"targets" field:"readonly"`
+	Plan         MigrationPlan         `json:"plan" type:"json" field:"readonly"`
+	Review       string                `json:"review" field:"readonly" source:"record"`
+	State        string                `json:"state" choices:"pending,running,blocked,complete,cancelling,cancelled" field:"readonly"`
+	Step         int                   `json:"step" field:"readonly"`
+	Cursor       string                `json:"cursor,omitempty" field:"readonly" source:"record"`
+	Processed    int                   `json:"processed" field:"readonly"`
+	Migrated     int                   `json:"migrated" field:"readonly"`
+	Failures     []MigrationFailure    `json:"failures,omitempty" field:"readonly"`
+	StartedBy    string                `json:"startedBy" field:"readonly" source:"record"`
+	EvaluationAt time.Time             `json:"evaluationAt" field:"readonly"`
+	SourceShapes map[string]string     `json:"sourceShapes" type:"json" field:"readonly"`
+	TargetShapes map[string]string     `json:"targetShapes" type:"json" field:"readonly"`
+	Targets      []string              `json:"targets" field:"readonly"`
+	Extractions  []MigrationExtraction `json:"extractions,omitempty" field:"readonly"`
+	Asset        *AssetBinding         `json:"asset,omitempty" field:"readonly" type:"json"`
+}
+
+type MigrationExtraction struct {
+	Source string `json:"source"`
+	Type   string `json:"type"`
+	ID     string `json:"id"`
+	Step   int    `json:"step"`
 }
 
 type MigrationFailure struct {
@@ -320,6 +371,7 @@ type MigrateStep struct {
 	Action    string            `json:"action,omitempty"`
 	Redirect  string            `json:"redirect,omitempty"`
 	Target    string            `json:"target,omitempty"`
+	Identity  *Expr             `json:"identity,omitempty"`
 }
 
 type MigrateField struct {
@@ -379,7 +431,7 @@ func (p MigrationPlan) Check() error {
 			if p.Scope.Where != nil {
 				return fail("action retirement changes a definition and cannot select individual rows")
 			}
-			if step.Action == "" || len(step.Fields) > 0 || step.Expr != nil || len(step.Mapping) > 0 || step.Target != "" {
+			if step.Action == "" || len(step.Fields) > 0 || step.Expr != nil || len(step.Mapping) > 0 || step.Target != "" || step.Identity != nil {
 				return fail("action retirement names an action and an optional redirect only")
 			}
 			continue
@@ -403,6 +455,13 @@ func (p MigrationPlan) Check() error {
 		}
 		if (step.Kind == "extract") != (step.Target != "") {
 			return fail("only extraction names a new target object")
+		}
+		if step.Kind == "extract" {
+			if step.Identity == nil || !slices.Contains([]string{"text", "reference"}, step.Identity.Kind) || slices.Contains(step.Types, step.Target) {
+				return fail("extraction needs an explicit record identity and a different target type")
+			}
+		} else if step.Identity != nil {
+			return fail("only extraction declares a target record identity")
 		}
 		seenFields := map[string]bool{}
 		for _, field := range step.Fields {

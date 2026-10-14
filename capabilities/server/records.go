@@ -159,6 +159,13 @@ type row struct {
 	// current format; these bytes have no writable or executable API.
 	original   json.RawMessage
 	projection *recordProjection
+	extraction *extractionOrigin
+}
+
+type extractionOrigin struct {
+	Migration string `json:"migration"`
+	Source    string `json:"source"`
+	Step      int    `json:"step"`
 }
 
 // A migration retains the source release's read image while its target facts
@@ -311,7 +318,7 @@ func (s *recordStore) forkRecords() *recordStore {
 	for typ, et := range s.types {
 		copied := &entityType{info: et.info, knowledge: et.knowledge, rows: make(map[string]*row, len(et.rows))}
 		for id, r := range et.rows {
-			copied.rows[id] = &row{value: copyOf(et.info.Go, r.value.Interface()), history: copyHistory(r.history), original: slices.Clone(r.original), projection: cloneRecordProjection(r.projection)}
+			copied.rows[id] = &row{value: copyOf(et.info.Go, r.value.Interface()), history: copyHistory(r.history), original: slices.Clone(r.original), projection: cloneRecordProjection(r.projection), extraction: r.extraction}
 		}
 		draft.types[typ] = copied
 		draft.byGo[et.info.Go] = copied
@@ -554,13 +561,15 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		rec.Revision = r.GetRevision()
 	}
 	var projection *recordProjection
+	var extraction *extractionOrigin
 	if prev != nil {
+		extraction = prev.extraction
 		projection = cloneRecordProjection(prev.projection)
 		if err := refreshRecordProjection(projection, v.Interface()); err != nil {
 			return err
 		}
 	}
-	et.rows[rec.ID] = &row{value: v, history: append(history, change), projection: projection}
+	et.rows[rec.ID] = &row{value: v, history: append(history, change), projection: projection, extraction: extraction}
 	s.generation++
 	s.liveTouched(et.info.Type)
 	if s.writes != nil {
