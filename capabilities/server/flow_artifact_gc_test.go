@@ -163,7 +163,7 @@ func TestFlowArtifactReferencesRetainOriginalRecoveryBytes(t *testing.T) {
 	}
 	records := newRecordStore()
 	et := &entityType{}
-	et.rows.set("old", &row{value: reflect.ValueOf(platform.FlowInstance{}), original: platform.Raw(map[string]any{"batch": map[string]any{"sealed": ref}})})
+	et.setRow("old", &row{value: reflect.ValueOf(platform.FlowInstance{}), original: platform.Raw(map[string]any{"batch": map[string]any{"sealed": ref}})})
 	records.types[platform.FlowInstanceType] = et
 	keep, err := records.flowArtifactReferences(store)
 	if err != nil || !keep[key] {

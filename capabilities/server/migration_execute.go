@@ -288,7 +288,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			if err != nil || json.Unmarshal(raw, v.Addr().Interface()) != nil {
 				return run, migrationRefusal(fmt.Errorf("migration value does not match its target shape"))
 			}
-			trialType.rows.set(id, &row{value: v, history: copyHistory(et.rows.get(id).history)})
+			trialType.setRow(id, &row{value: v, history: copyHistory(et.rows.get(id).history)})
 			decision := d.tenant.authorizeFrom(prepared.trial.records, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: typ, Record: id, Fields: writeFields}, at, false)
 			if err := authorizationRefusal(decision); err != nil {
 				return run, err
@@ -334,7 +334,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			written := d.records.types[write.typ]
 			updated := *written.rows.get(write.id)
 			updated.extraction = &extractionOrigin{Migration: run.ID, Source: write.source, Step: before.Step}
-			written.rows.set(write.id, &updated)
+			written.setRow(write.id, &updated)
 			sourceType, sourceID, _ := strings.Cut(write.source, "/")
 			question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: sourceType, Record: sourceID}
 			grant := d.tenant.authorizeFrom(d.records, c, question, at, false)
@@ -455,7 +455,7 @@ func (d *stagedDecision) cancelMigrationBatch(c platform.Caller, r *pb.ChangeRec
 				retained.Prior = slices.Clone(remaining[1:])
 				updated.projection = &retained
 			}
-			et.rows.set(id, &updated)
+			et.setRow(id, &updated)
 		}
 		run.Cursor = ref
 		processed++
@@ -588,6 +588,6 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 		}
 		current.projection.Prior = append(current.projection.Prior, retained.Prior...)
 	}
-	et.rows.set(id, current)
+	et.setRow(id, current)
 	return nil
 }

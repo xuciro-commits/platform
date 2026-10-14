@@ -5,16 +5,94 @@ import (
 	"errors"
 	"fmt"
 	"net/http/httptest"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
 	"platformserver/platform"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
+	t.Run("incremental constraints and isolated reverse indexes", func(t *testing.T) {
+		tn := builderTenant(t, "local-reference-index")
+		parent := publishObject(t, tn, "builder", "parent", map[string]any{"name": "parent", "title": "Parent", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, txnAt)
+		child := publishObject(t, tn, "builder", "child", map[string]any{"name": "child", "title": "Child", "fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: parent}}}, txnAt)
+		decide(t, tn, "builder", build.ID, build.LinkTypeType+".create", build.LinkTypeType, "link", map[string]any{
+			"name": "children", "title": "Children", "description": "Constrained references", "parent": parent, "child": child, "via": "parent", "forward": "children", "reverse": "parent", "cardinality": "one-to-one", "deletePolicy": "restrict-active",
+		}, txnAt)
+		decide(t, tn, "builder", build.ID, build.SchemaLinkType, build.LinkTypeType, "link", map[string]any{}, txnAt)
+		for _, id := range []string{"P1", "P2", "P3", "P4"} {
+			decide(t, tn, "user", build.ID, parent+".create", parent, id, map[string]any{"note": id}, txnAt)
+		}
+		for i, id := range []string{"C1", "C2"} {
+			decide(t, tn, "user", build.ID, child+".create", child, id, map[string]any{"parent": fmt.Sprintf("P%d", i+1)}, txnAt)
+		}
+		et := tn.records.types[child]
+		field, _ := et.info.Field("parent")
+		initial := et.referenceIndex(field).targets.root
+		decide(t, tn, "user", build.ID, parent+".edit", parent, "P4", map[string]any{"note": "Unrelated update"}, txnAt)
+		et = tn.records.types[child]
+		if et.referenceIndex(field).targets.root != initial {
+			t.Fatal("unrelated write invalidated the reference index")
+		}
+		draft := tn.records.forkRecords()
+		private := draft.types[child]
+		changed := *private.rows.get("C2")
+		changed.value = copyOf(private.info.Go, changed.value.Interface())
+		changed.value.FieldByIndex(field.Index).SetString("P1")
+		private.setRow("C2", &changed)
+		draft.writes[child+"/C2"] = true
+		if private.referenceIndex(field).targets.get("P1").ids.len() != 2 || et.referenceIndex(field).targets.get("P1").ids.len() != 1 {
+			t.Fatal("private reverse-index updates leaked into live records")
+		}
+		if err := tn.records.promoteRecords(draft); err == nil || et.referenceIndex(field).targets.root != initial {
+			t.Fatal("final image admitted conflicting references or changed its predecessor")
+		}
+		bulk := tn.records.forkRecords()
+		image, err := recordIndexFrom([]recordEntry[*row]{{"C1", et.rows.get("C1")}, {"C2", &changed}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		bulk.types[child].setRows(image)
+		if err := tn.records.promoteRecords(bulk); err == nil {
+			t.Fatal("bulk schema image skipped complete relation admission")
+		}
+		if got := refuse(t, tn, "user", build.ID, child+".edit", child, "C2", map[string]any{"parent": "P1"}, txnAt); got == "ok" {
+			t.Fatal("incremental uniqueness accepted a duplicate")
+		}
+		if got := refuse(t, tn, "user", build.ID, parent+".archive", parent, "P2", map[string]any{}, txnAt); got == "ok" {
+			t.Fatal("reverse index missed an active child")
+		}
+		decide(t, tn, "user", build.ID, child+".archive", child, "C2", map[string]any{}, txnAt)
+		decide(t, tn, "user", build.ID, parent+".archive", parent, "P2", map[string]any{}, txnAt)
+		if got := refuse(t, tn, "user", build.ID, child+".create", child, "C3", map[string]any{"parent": "P2"}, txnAt); got == "ok" {
+			t.Fatal("archiving changed the original uniqueness semantics")
+		}
+		decide(t, tn, "user", build.ID, parent+".archive", parent, "P3", map[string]any{}, txnAt)
+		if got := refuse(t, tn, "user", build.ID, child+".create", child, "C3", map[string]any{"parent": "P3"}, txnAt); got == "ok" {
+			t.Fatal("an active child was attached to an archived parent")
+		}
+		decide(t, tn, "user", build.ID, child+".edit", child, "C1", map[string]any{"parent": "P4"}, txnAt)
+		et = tn.records.types[child]
+		if et.referenceIndex(field).targets.get("P1").ids.len() != 0 || et.referenceIndex(field).targets.get("P4").ids.len() != 1 {
+			t.Fatal("changing a reference left the old key behind")
+		}
+		decide(t, tn, "user", build.ID, child+".edit", child, "C1", map[string]any{"parent": ""}, txnAt)
+		page, refusal := tn.Records(memberOf(t, tn, "user"), child, platform.Query{Domain: platform.Raw([]any{[]any{"parent", "=", ""}})}, txnAt)
+		if refusal != nil || page.Total != 1 {
+			t.Fatalf("empty reference filtering: total=%d %v", page.Total, refusal)
+		}
+		// Bulk replacement invalidates only this type's derived indexes.
+		before := tn.records.types[child]
+		if err := tn.records.install(before.info); err != nil {
+			t.Fatal(err)
+		}
+		if next := tn.records.types[child]; next == before || next.referenceIndexes != nil || !reflect.DeepEqual(next.rows.get("C1").value.Interface(), before.rows.get("C1").value.Interface()) {
+			t.Fatal("schema replacement retained a stale index or changed record facts")
+		}
+	})
 	const tenant = "link-type-state"
 	compose := func() *Tenant {
 		tn, err := NewTenant(tenant, NewConsole(tenant, Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}, Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: build.User}}}, Seat{Subjects: []string{"restricted"}, Member: platform.Member{ID: "restricted", Roles: map[string]string{build.ID: "guest"}}}), build.New(tenant))
@@ -29,7 +107,6 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	at := time.Now().UTC()
 	var entries []Entry
 	fail := false
-	key := 0
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if fail {
 			return nil, errors.New("append failed")
@@ -38,8 +115,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		return e.Body, nil
 	}
 	submit := func(m platform.Member, typ, id, verb string, payload any) *kernel.Error {
-		key++
-		_, err := tn.Submit(m, &pb.Submission{TenantId: tenant, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: fmt.Sprint(key), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + "." + verb, Version: 1}, Payload: platform.Raw(payload)}, at)
+		_, err := tn.Submit(m, submission(tn, m, build.ID, typ+"."+verb, typ, id, payload), at)
 		return err
 	}
 	must := func(typ, id, verb string, payload any) {

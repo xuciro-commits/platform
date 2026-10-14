@@ -193,7 +193,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			held[typ] = rows
 			continue
 		}
-		et.rows = recordIndex[*row]{}
+		entries := make([]recordEntry[*row], 0, len(rows))
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
 			decode, err := rowDecodeImage(et.info, r.Value, r.Projection, t.records.readRelease)
@@ -206,8 +206,13 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			emptyLists(v) // a snapshot of older code may hold null lists
 			recovered := &row{value: v, history: r.History, projection: cloneRecordProjection(r.Projection), extraction: r.Extraction}
 			recovered.retainOriginal(r.Value)
-			et.rows.set(recordOf(v).ID, recovered)
+			entries = append(entries, recordEntry[*row]{recordOf(v).ID, recovered})
 		}
+		index, err := recordIndexFrom(entries)
+		if err != nil {
+			return nil, err
+		}
+		et.setRows(index)
 		t.records.generation++
 	}
 	return held, nil

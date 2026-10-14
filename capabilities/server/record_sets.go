@@ -98,7 +98,7 @@ func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, n
 	} else {
 		recordOf(value).Created.By = c.ID
 	}
-	et.rows.set(id, &row{value: value})
+	et.setRow(id, &row{value: value})
 	return d.tenant.readRecordSetFrom(store, c, object, id, name, at)
 }
 

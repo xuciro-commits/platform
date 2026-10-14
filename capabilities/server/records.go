@@ -23,14 +23,13 @@ import (
 // A projection into PostgreSQL (stage 3) will serve the same reads.
 
 type recordStore struct {
-	mu               sync.Mutex
-	readRelease      string // decoder context, derived from the release owner's pointer
-	referenceIndexes map[string]referenceIndex
-	liveVersions     map[string]uint64
-	uniqueLinks      map[string]platform.LinkType
-	archiveLinks     map[string]platform.LinkType
-	types            map[string]*entityType
-	byGo             map[reflect.Type]*entityType
+	mu           sync.Mutex
+	readRelease  string // decoder context, derived from the release owner's pointer
+	liveVersions map[string]uint64
+	uniqueLinks  map[string]platform.LinkType
+	archiveLinks map[string]platform.LinkType
+	types        map[string]*entityType
+	byGo         map[reflect.Type]*entityType
 	// A private 19a decision view has no projection callback. It may replace
 	// its parent only if no direct write reached that parent in the meantime.
 	parent         *recordStore
@@ -87,6 +86,10 @@ func (t *Tenant) Held(ref string) (any, bool) {
 type entityType struct {
 	info platform.EntityInfo
 	rows recordIndex[*row]
+	// Derived indexes share the same immutable rows. Writes update only built
+	// reference buckets; schema replacement discards them with its type image.
+	referenceIndexes map[string]referenceIndex
+	fullImage        bool // private schema/bulk replacement needs full admission once
 	// knowledge says a record of this type may become knowledge: it declares a
 	// knowledge field, it is a knowledge document, or it is a file that may be
 	// attached to one (ADR-0022 D1).
@@ -308,12 +311,16 @@ func newRecordStore() *recordStore {
 func (s *recordStore) forkRecords() *recordStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.forkRecordsLocked()
+}
+
+func (s *recordStore) forkRecordsLocked() *recordStore {
 	draft := &recordStore{readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, changed: s.changed,
 		order: slices.Clone(s.order)}
 	for typ, et := range s.types {
-		copied := &entityType{info: et.info, knowledge: et.knowledge, rows: et.rows}
+		copied := &entityType{info: et.info, knowledge: et.knowledge, rows: et.rows, referenceIndexes: maps.Clone(et.referenceIndexes), fullImage: s.parent != nil && et.fullImage}
 		draft.types[typ] = copied
 		draft.byGo[et.info.Go] = copied
 	}
@@ -346,12 +353,17 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	if draft.sealed || s.generation != draft.baseGeneration {
 		return fmt.Errorf("record draft is stale or already promoted")
 	}
-	if err := draft.validateLinkConstraintsLocked(); err != nil {
+	if err := draft.validateChangedLinkConstraintsLocked(); err != nil {
 		return err
 	}
 	s.uniqueLinks = draft.uniqueLinks
 	s.archiveLinks = draft.archiveLinks
 	s.types, s.byGo = draft.types, draft.byGo
+	if s.parent == nil {
+		for _, et := range s.types {
+			et.fullImage = false
+		}
+	}
 	s.readRelease = draft.readRelease
 	s.dirty, s.changed, s.order = draft.dirty, draft.changed, draft.order
 	s.generation++
@@ -557,7 +569,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 			return err
 		}
 	}
-	et.rows.set(rec.ID, &row{value: v, history: append(history, change), projection: projection, extraction: extraction})
+	et.setRow(rec.ID, &row{value: v, history: append(history, change), projection: projection, extraction: extraction})
 	s.generation++
 	s.liveTouched(et.info.Type)
 	if s.writes != nil {

@@ -34,8 +34,12 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 // Validation uses the same installation code against a private registry and
 // record store; a failed or refused publication cannot change live metadata.
 func (h hostView) installationDraft() *Tenant {
+	return h.installationView(h.t.records.forkRecords())
+}
+
+func (h hostView) installationView(records *recordStore) *Tenant {
 	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, owner: maps.Clone(h.t.owner),
-		identity: h.t.identity, records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
+		identity: h.t.identity, records: records, definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
 	return draft
 }
 
@@ -48,7 +52,7 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 	if current := draft.records.types[e.Type]; current != nil && current.info.Go != reflect.TypeOf(e.Model) {
 		// Definition review cannot decode source rows as the unmigrated target.
 		// Admission of actual rows is checked by migration and activation.
-		current.rows = recordIndex[*row]{}
+		current.setRows(recordIndex[*row]{})
 	}
 	if err := draft.Install(h.app, e, actions, pages...); err != nil {
 		return err

@@ -107,7 +107,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if receipt == nil || len(d.events) == 0 || d.failure != nil {
 		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
 	}
-	if err := d.records.validateLinkConstraints(); err != nil {
+	if err := d.records.validateChangedLinkConstraints(); err != nil {
 		return nil, err
 	}
 	result := acceptedBatch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
@@ -542,7 +542,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 			}
 		}
 	}
-	if err := draft.validateLinkConstraints(); err != nil {
+	if err := draft.validateChangedLinkConstraints(); err != nil {
 		return nil, err
 	}
 	if err := validateExtractionOrigins(draft); err != nil {
@@ -722,7 +722,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		}
 		recovered := &row{value: value, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
 		recovered.retainOriginal(image.Value)
-		et.rows.set(rec.ID, recovered)
+		et.setRow(rec.ID, recovered)
 		draft.writes[image.Type+"/"+rec.ID] = true
 		for _, change := range image.History[baseHistory:] {
 			draft.remember(image.App+"/"+change.Change, image.Type+"/"+rec.ID)

@@ -127,7 +127,7 @@ func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.
 		}
 		installed := *et.rows.get(id)
 		installed.value, installed.original = value, nil
-		et.rows.set(id, &installed)
+		et.setRow(id, &installed)
 	}
 	assets, err := check.releaseAssetsLocked(nil, false)
 	if err != nil {

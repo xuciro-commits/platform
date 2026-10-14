@@ -78,7 +78,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 		}
 		for typ, shape := range shapes {
 			if old := view.records.types[typ]; old != nil && old.info.Go != shape.Go {
-				old.rows = recordIndex[*row]{}
+				old.setRows(recordIndex[*row]{})
 			}
 		}
 	}

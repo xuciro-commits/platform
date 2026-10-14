@@ -105,6 +105,42 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 				t.Fatal(bindErr)
 			}
 			caller := execution.Caller(parent, memberOf(t, tn, "user"), build.ID)
+			retained, ok := execution.(flowExecution)
+			if !ok {
+				t.Fatal("migration did not select its retained executor")
+			}
+			firstView, readErr := retained.rt.readView()
+			secondView, nextReadErr := retained.rt.readView()
+			if readErr != nil || nextReadErr != nil || firstView.records != secondView.records {
+				t.Fatal("unchanged retained data was rebuilt between reads", readErr, nextReadErr)
+			}
+			stored := draft.records.types["build.sample"]
+			unchanged := *stored.rows.get("A")
+			generation := draft.records.generation
+			stored.setRow("A", &unchanged)
+			thirdView, readErr := retained.rt.readView()
+			if readErr != nil || thirdView.records == secondView.records || draft.records.generation != generation {
+				t.Fatal("retained view ignored a row image replacement without a generation bump", readErr)
+			}
+			// A record created only under the target schema may have no old
+			// image. Reading the original subject must not decode that record.
+			pointDraft := tn.newStagedDecision()
+			pointParent := platform.NewCaller(pointDraft, memberOf(t, tn, "user"), flow.ID, false, false)
+			pointExecution, bindErr := (hostView{t: tn, decision: pointDraft}).FlowExecution(pointParent, build.ID, "review", 1, host.FlowBinding{Dependencies: starting.Dependencies, Release: starting.Release})
+			if bindErr != nil {
+				t.Fatal(bindErr)
+			}
+			point := pointExecution.(flowExecution)
+			pointCaller := pointExecution.Caller(pointParent, memberOf(t, tn, "user"), build.ID)
+			current := pointDraft.records.types["build.sample"]
+			newValue := copyOf(current.info.Go, current.rows.get("A").value.Interface())
+			recordOf(newValue).ID = "new-only"
+			current.setRow("new-only", &row{value: newValue})
+			shape := point.rt.shapes["build.sample"]
+			value, found := point.rt.Get(pointCaller, shape.Go, "A")
+			if !found || value == nil || pointDraft.failure != nil {
+				t.Fatal("single retained read visited an unrelated target-only row", pointDraft.failure)
+			}
 			beforeRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows.get("A"))
 			_, invalid := platform.Attempt(caller, func() (*pb.ChangeRecord, *kernel.Error) {
 				return execution.Submit(caller, submission(tn, caller.Member, build.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "unmapped"}), at)

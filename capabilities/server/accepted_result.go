@@ -336,7 +336,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}
 	recovered := &row{value: value, history: copyHistory(result.Row.History)}
 	recovered.retainOriginal(result.Row.Value)
-	et.rows.set(rec.ID, recovered)
+	et.setRow(rec.ID, recovered)
 	draft.writes[result.Row.Type+"/"+rec.ID] = true
 	draft.remember(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
 	if et.knowledge {

@@ -116,7 +116,8 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	t.Run("immutable index snapshots", func(t *testing.T) {
 		var index recordIndex[int]
 		for i := range 3000 {
-			index.set(fmt.Sprintf("%04d", i), i+1)
+			key := (i * 137) % 3000
+			index.set(fmt.Sprintf("%04d", key), key+1)
 		}
 		saved := index
 		for i := range 3000 {
@@ -148,6 +149,24 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 		}
 		check(saved.root)
 		check(index.root)
+		entries := make([]recordEntry[int], 0, saved.len())
+		for key, value := range saved.all() {
+			entries = append(entries, recordEntry[int]{key, value})
+		}
+		slices.Reverse(entries)
+		bulk, err := recordIndexFrom(entries)
+		if err != nil || bulk.len() != saved.len() {
+			t.Fatal("bulk image did not recover an unordered record set", err)
+		}
+		check(bulk.root)
+		for key, value := range saved.all() {
+			if bulk.get(key) != value {
+				t.Fatal("bulk image changed a retained record")
+			}
+		}
+		if _, err := recordIndexFrom([]recordEntry[int]{{"same", 1}, {"same", 2}}); err == nil {
+			t.Fatal("bulk image silently overwrote a duplicate identity")
+		}
 		last, seen := "", 0
 		for key, value := range index.all() {
 			if key <= last || value >= 0 || saved.get(key) != -value {
@@ -203,7 +222,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	untouched := &row{value: reflect.ValueOf(Item{Record: platform.Record{ID: "I2"}, Tags: []string{"steel"}}),
 		original: json.RawMessage(`{"id":"I2"}`), projection: &recordProjection{From: "old", Value: json.RawMessage(`{"id":"I2"}`)}}
 	et := tn.records.types["stock.item"]
-	et.rows.set("I2", untouched)
+	et.setRow("I2", untouched)
 	var touched []string
 	tn.records.touched = func(typ, id string) { touched = append(touched, typ+"/"+id) }
 	discarded := tn.records.forkRecords()

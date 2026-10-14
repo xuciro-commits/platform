@@ -79,6 +79,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		if before.info.Versioning != nil && !reflect.DeepEqual(before.info.Versioning, info.Versioning) || len(before.info.VersionPins) > 0 && !reflect.DeepEqual(before.info.VersionPins, info.VersionPins) {
 			return fmt.Errorf("published business versioning and pin bindings are retained")
 		}
+		entries := make([]recordEntry[*row], 0, before.rows.len())
 		for id, r := range before.rows.all() {
 			raw, err := r.image()
 			if err != nil {
@@ -96,8 +97,13 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			emptyLists(v)
 			installed := &row{value: v, history: r.history, projection: r.projection, extraction: r.extraction}
 			installed.retainOriginal(raw)
-			et.rows.set(id, installed)
+			entries = append(entries, recordEntry[*row]{id, installed})
 		}
+		index, err := recordIndexFrom(entries)
+		if err != nil {
+			return err
+		}
+		et.setRows(index)
 		delete(s.byGo, before.info.Go)
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et

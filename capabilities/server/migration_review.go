@@ -191,7 +191,7 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 			return nil, fmt.Errorf("migration source type is outside the sealed release")
 		}
 		sources[typ] = old.info
-		old.rows = recordIndex[*row]{}
+		old.setRows(recordIndex[*row]{})
 	}
 	view, err := t.assetInstallationView(records)
 	if err != nil {

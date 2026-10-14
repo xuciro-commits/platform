@@ -73,7 +73,7 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 		}
 		recovered := &row{value: value, history: copyHistory(image.History)}
 		recovered.retainOriginal(image.Value)
-		et.rows.set(image.ID, recovered)
+		et.setRow(image.ID, recovered)
 		draft.writes[image.Type+"/"+image.ID] = true
 		if et.knowledge {
 			draft.dirty.set(image.Type+"/"+image.ID, true)

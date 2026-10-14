@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"platformserver/internal/host"
 	"reflect"
+	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -24,16 +25,79 @@ func (s *recordStore) validateUniqueLinkLocked(l platform.LinkType) error {
 	if !ok || f.Type != "reference" || f.Ref != l.Parent.Name {
 		return fmt.Errorf("link reference is unavailable")
 	}
-	seen := map[string]bool{}
-	for _, row := range et.rows.all() {
-		id := row.value.FieldByIndex(f.Index).String()
-		if id == "" {
-			continue
-		}
-		if seen[id] {
+	for _, bucket := range et.referenceIndex(f).targets.all() {
+		if bucket.ids.len() > 1 {
 			return fmt.Errorf("%s", linkCardinalityFailure)
 		}
-		seen[id] = true
+	}
+	return nil
+}
+
+// The parent admitted its complete image and generation must still match at
+// promotion. Ordinary writes therefore need only their final relation keys;
+// new declarations and replaced type images still receive full admission.
+func (s *recordStore) validateChangedLinkConstraintsLocked() error {
+	changed := map[string][]string{}
+	for ref := range s.writes {
+		typ, id, _ := strings.Cut(ref, "/")
+		changed[typ] = append(changed[typ], id)
+	}
+	full := func(typ string) bool {
+		et := s.types[typ]
+		return s.parent == nil || et == nil || et.fullImage || s.parent.types[typ] == nil
+	}
+	for key, link := range s.uniqueLinks {
+		if full(link.Child.Name) || !reflect.DeepEqual(s.parent.uniqueLinks[key], link) {
+			if err := s.validateUniqueLinkLocked(link); err != nil {
+				return err
+			}
+			continue
+		}
+		et := s.types[link.Child.Name]
+		field, ok := et.info.Field(link.Via)
+		if !ok || field.Type != "reference" || field.Ref != link.Parent.Name {
+			return fmt.Errorf("link reference is unavailable")
+		}
+		for _, id := range changed[link.Child.Name] {
+			if value := et.rows.get(id); value != nil {
+				target := value.value.FieldByIndex(field.Index).String()
+				if target != "" && et.referenceIndex(field).targets.get(target).ids.len() > 1 {
+					return fmt.Errorf("%s", linkCardinalityFailure)
+				}
+			}
+		}
+	}
+	for key, link := range s.archiveLinks {
+		if full(link.Child.Name) || full(link.Parent.Name) || !reflect.DeepEqual(s.parent.archiveLinks[key], link) {
+			if err := s.validateArchiveLinkLocked(link); err != nil {
+				return err
+			}
+			continue
+		}
+		child, parent := s.types[link.Child.Name], s.types[link.Parent.Name]
+		field, ok := child.info.Field(link.Via)
+		if !ok || field.Type != "reference" || field.Ref != link.Parent.Name {
+			return fmt.Errorf("link reference is unavailable")
+		}
+		for _, id := range changed[link.Child.Name] {
+			row := child.rows.get(id)
+			if row == nil || row.value.Field(0).Interface().(platform.Record).Archived {
+				continue
+			}
+			target := row.value.FieldByIndex(field.Index).String()
+			if target != "" {
+				value := parent.rows.get(target)
+				if value == nil || value.value.Field(0).Interface().(platform.Record).Archived {
+					return fmt.Errorf("%s", linkArchiveFailure)
+				}
+			}
+		}
+		for _, id := range changed[link.Parent.Name] {
+			row := parent.rows.get(id)
+			if (row == nil || row.value.Field(0).Interface().(platform.Record).Archived) && child.referenceIndex(field).targets.get(id).active > 0 {
+				return fmt.Errorf("%s", linkArchiveFailure)
+			}
+		}
 	}
 	return nil
 }
@@ -55,6 +119,11 @@ func (s *recordStore) validateLinkConstraints() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.validateLinkConstraintsLocked()
+}
+func (s *recordStore) validateChangedLinkConstraints() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.validateChangedLinkConstraintsLocked()
 }
 func (s *recordStore) installLinkConstraint(l platform.LinkType) error {
 	if l.Storage == "edge" {
@@ -113,10 +182,13 @@ func (s *recordStore) checkLinkWriteLocked(et *entityType, value reflect.Value) 
 		if parent == "" {
 			continue
 		}
-		for otherID, row := range et.rows.all() {
-			if otherID != id && row.value.FieldByIndex(f.Index).String() == parent {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkCardinalityFailure)
-			}
+		bucket := et.referenceIndex(f).targets.get(parent).ids
+		allowed := 0
+		if bucket.has(id) {
+			allowed = 1
+		}
+		if bucket.len() > allowed {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkCardinalityFailure)
 		}
 	}
 	return s.checkArchiveWriteLocked(et, value)

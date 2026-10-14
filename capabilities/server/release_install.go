@@ -83,7 +83,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 		installed := *et.rows.get(id)
 		installed.value, installed.original = value, nil
 		installed.retainOriginal(plan.Image)
-		et.rows.set(id, &installed)
+		et.setRow(id, &installed)
 		draft.records.writes[plan.Record] = true
 		if err := draft.registerInstalledAsset(plan); err != nil {
 			return nil, err

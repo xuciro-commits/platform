@@ -88,7 +88,7 @@ func (r *flowExecutionRuntime) applyRetainedExtractions(c platform.Caller, recei
 		origin := write.origin
 		updated := *et.rows.get(id)
 		updated.extraction = &origin
-		et.rows.set(id, &updated)
+		et.setRow(id, &updated)
 	}
 	return nil
 }

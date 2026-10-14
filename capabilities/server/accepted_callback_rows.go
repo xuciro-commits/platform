@@ -90,7 +90,7 @@ func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedCallbac
 		image := private.types[typ].rows.get(id)
 		private.mu.Unlock()
 		target.mu.Lock()
-		target.types[typ].rows.set(id, image)
+		target.types[typ].setRow(id, image)
 		target.writes[ref] = true
 		if target.types[typ].knowledge {
 			target.dirty.set(ref, true)

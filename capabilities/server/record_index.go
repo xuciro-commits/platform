@@ -1,12 +1,44 @@
 package platformserver
 
-import "iter"
+import (
+	"fmt"
+	"iter"
+	"slices"
+	"strings"
+)
 
 // recordIndex is the record store's immutable AVL index. Copying its root is
 // a snapshot; a write replaces only the search path. It has no parent/delta
 // chain to lengthen reads as decisions accumulate, and is never persisted.
 // Values are immutable once published in the index.
 type recordIndex[V any] struct{ root *recordNode[V] }
+
+type recordEntry[V any] struct {
+	key   string
+	value V
+}
+
+// Complete images own this temporary slice. Sorting by record ID also accepts
+// historical snapshots whose JSON image order differs from their ID order.
+// Each node is allocated once, without retaining intermediate insertion roots.
+func recordIndexFrom[V any](entries []recordEntry[V]) (recordIndex[V], error) {
+	slices.SortFunc(entries, func(a, b recordEntry[V]) int { return strings.Compare(a.key, b.key) })
+	for i, entry := range entries {
+		if entry.key == "" || i > 0 && entries[i-1].key == entry.key {
+			return recordIndex[V]{}, fmt.Errorf("record index needs unique nonempty keys")
+		}
+	}
+	var build func(int, int) *recordNode[V]
+	build = func(start, end int) *recordNode[V] {
+		if start == end {
+			return nil
+		}
+		middle := start + (end-start)/2
+		entry := entries[middle]
+		return recordBranch(entry.key, entry.value, build(start, middle), build(middle+1, end))
+	}
+	return recordIndex[V]{root: build(0, len(entries))}, nil
+}
 
 type recordNode[V any] struct {
 	key          string
@@ -16,6 +48,16 @@ type recordNode[V any] struct {
 }
 
 func (s recordIndex[V]) get(key string) V {
+	if n := s.find(key); n != nil {
+		return n.value
+	}
+	var absent V
+	return absent
+}
+
+func (s recordIndex[V]) has(key string) bool { return s.find(key) != nil }
+
+func (s recordIndex[V]) find(key string) *recordNode[V] {
 	for n := s.root; n != nil; {
 		switch {
 		case key < n.key:
@@ -23,11 +65,10 @@ func (s recordIndex[V]) get(key string) V {
 		case key > n.key:
 			n = n.right
 		default:
-			return n.value
+			return n
 		}
 	}
-	var absent V
-	return absent
+	return nil
 }
 
 func (s recordIndex[V]) len() int { return recordSize(s.root) }

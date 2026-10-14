@@ -24,6 +24,16 @@ type flowExecutionRuntime struct {
 	view    *Tenant
 	release string
 	shapes  map[string]platform.EntityInfo
+	// Cache only neutral decoded rows. Every protected read still evaluates
+	// current membership/field grants through the original reader below.
+	readStore   *recordStore
+	readSource  *recordStore
+	readOrigins map[string]retainedReadOrigin
+}
+
+type retainedReadOrigin struct {
+	typ  *entityType
+	root *recordNode[*row]
 }
 
 func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding host.FlowBinding) (host.FlowHost, error) {
@@ -190,59 +200,111 @@ func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb
 
 // Rows stay current; the selected metadata decodes retained fields. A renamed
 // field follows its explicit alias, while a retyped field needs its saved image.
-func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
-	store := r.records.forkRecords()
-	for typ, info := range r.shapes {
-		current := store.types[typ]
-		if current == nil {
-			return nil, migrationRefusal(fmt.Errorf("retained object %s has no current storage", typ))
+func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info platform.EntityInfo, value *row) (*row, *kernel.Error) {
+	raw, err := value.image()
+	if err != nil {
+		return nil, migrationRefusal(err)
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return nil, migrationRefusal(fmt.Errorf("retained record cannot be decoded"))
+	}
+	var prior map[string]json.RawMessage
+	for _, old := range info.Fields {
+		next, found := current.Field(old.Name)
+		if found && next.AliasOf != "" {
+			fields[old.Name] = fields[next.AliasOf]
+		} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && projectionFor(value.projection, r.release) != nil {
+			if prior == nil {
+				source := projectionFor(value.projection, r.release)
+				shape, _ := canonicalDigest(info.Fields)
+				if source == nil || source.Shape != shape || json.Unmarshal(source.Value, &prior) != nil {
+					return nil, migrationRefusal(fmt.Errorf("retained field %s.%s has no saved source image", info.Type, old.Name))
+				}
+			}
+			fields[old.Name] = prior[old.Name]
 		}
-		rows := recordIndex[*row]{}
-		for id, value := range current.rows.all() {
-			raw, err := value.image()
+	}
+	decoded := reflect.New(info.Go)
+	raw, _ = json.Marshal(fields)
+	if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
+		return nil, migrationRefusal(err)
+	}
+	return &row{value: decoded.Elem(), history: value.history}, nil
+}
+
+func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
+	r.records.mu.Lock()
+	valid := r.readSource == r.records && r.readStore != nil
+	for typ, et := range r.records.types {
+		origin, exists := r.readOrigins[typ]
+		if !exists || origin.typ != et || origin.root != et.rows.root {
+			valid = false
+			break
+		}
+	}
+	valid = valid && len(r.readOrigins) == len(r.records.types)
+	store := r.readStore
+	var origins map[string]retainedReadOrigin
+	if !valid {
+		store = r.records.forkRecordsLocked()
+		origins = map[string]retainedReadOrigin{}
+		for typ, et := range r.records.types {
+			origins[typ] = retainedReadOrigin{typ: et, root: et.rows.root}
+		}
+	}
+	r.records.mu.Unlock()
+	if !valid {
+		for typ, info := range r.shapes {
+			current := store.types[typ]
+			if current == nil {
+				return nil, migrationRefusal(fmt.Errorf("retained object %s has no current storage", typ))
+			}
+			entries := make([]recordEntry[*row], 0, current.rows.len())
+			for id, value := range current.rows.all() {
+				decoded, refusal := r.retainedRow(current.info, info, value)
+				if refusal != nil {
+					return nil, refusal
+				}
+				entries = append(entries, recordEntry[*row]{id, decoded})
+			}
+			rows, err := recordIndexFrom(entries)
 			if err != nil {
 				return nil, migrationRefusal(err)
 			}
-			var fields map[string]json.RawMessage
-			if json.Unmarshal(raw, &fields) != nil {
-				return nil, migrationRefusal(fmt.Errorf("retained record cannot be decoded"))
-			}
-			for _, old := range info.Fields {
-				next, found := current.info.Field(old.Name)
-				if found && next.AliasOf != "" {
-					fields[old.Name] = fields[next.AliasOf]
-				} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && projectionFor(value.projection, r.release) != nil {
-					var prior map[string]json.RawMessage
-					source := projectionFor(value.projection, r.release)
-					shape, _ := canonicalDigest(info.Fields)
-					if source == nil || source.Shape != shape || json.Unmarshal(source.Value, &prior) != nil {
-						return nil, migrationRefusal(fmt.Errorf("retained field %s.%s has no saved source image", typ, old.Name))
-					}
-					fields[old.Name] = prior[old.Name]
-				}
-			}
-			decoded := reflect.New(info.Go)
-			raw, _ = json.Marshal(fields)
-			if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
-				return nil, migrationRefusal(err)
-			}
-			rows.set(id, &row{value: decoded.Elem(), history: value.history})
+			delete(store.byGo, current.info.Go)
+			store.types[typ] = &entityType{info: info, rows: rows, knowledge: current.knowledge}
+			store.byGo[info.Go] = store.types[typ]
 		}
-		store.types[typ] = &entityType{info: info, rows: rows, knowledge: current.knowledge}
-		store.byGo[info.Go] = store.types[typ]
+		r.readSource, r.readStore, r.readOrigins = r.records, store, origins
 	}
-	view := (hostView{t: r.view}).installationDraft()
-	view.records = store
-	return view, nil
+	return (hostView{t: r.view}).installationView(store), nil
 }
 
 func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id string) (any, bool) {
-	view, err := r.readView()
-	if err != nil {
-		r.FailDecision(err)
-		return nil, false
+	for name, info := range r.shapes {
+		if info.Go != typ || info.App != c.App {
+			continue
+		}
+		r.records.mu.Lock()
+		current := r.records.types[name]
+		var value *row
+		var stored platform.EntityInfo
+		if current != nil {
+			value, stored = current.rows.get(id), current.info
+		}
+		r.records.mu.Unlock()
+		if value == nil {
+			return nil, false
+		}
+		decoded, refusal := r.retainedRow(stored, info, value)
+		if refusal != nil {
+			r.FailDecision(refusal)
+			return nil, false
+		}
+		return decoded.value.Interface(), true
 	}
-	return view.records.get(c, typ, id)
+	return r.records.get(c, typ, id)
 }
 func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) *kernel.Error {
 	view, err := r.readView()
@@ -429,7 +491,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		if refusal := refreshRecordProjection(updated.projection, updated.value.Interface()); refusal != nil {
 			return refusal
 		}
-		current.rows.set(id, &updated)
+		current.setRow(id, &updated)
 	}
 	return nil
 }
