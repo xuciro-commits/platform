@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9704414bddcfa86e",
+  "revision": "sha256:7284e74f9b77ae48",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -3707,6 +3707,14 @@
           "isCallback": false,
           "isSlot": false,
           "defaultValue": "false"
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "!compact"
         },
         {
           "name": "open",
@@ -13430,6 +13438,7 @@
     "ui/content-tabs": [
       "web/packages/app/src/pages/sections.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
+      "web/packages/build/src/ontology/process.tsx",
       "web/packages/ui/src/layout/Workbench.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],

@@ -6,10 +6,10 @@ import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
 /** Controlled, lazy first mount; visited panels retain local input while
  * hidden. Stable item identities survive reorder. No application state here.
  */
-export function ContentTabs({ label, items, value, onChange, compact = false, open = true, actions, className }: {
+export function ContentTabs({ label, items, value, onChange, compact = false, wrap = !compact, open = true, actions, className }: {
   label: string; items: { id: string; title: ReactNode; content: ReactNode }[];
   value?: string; onChange: (id: string) => void;
-  compact?: boolean; open?: boolean; actions?: ReactNode; className?: string;
+  compact?: boolean; wrap?: boolean; open?: boolean; actions?: ReactNode; className?: string;
 }) {
   const visible = useViewVisible(), shown = visible && open;
   const prefix = useId(), active = items.some((item) => item.id === value) ? value : items[0]?.id;
@@ -17,7 +17,7 @@ export function ContentTabs({ label, items, value, onChange, compact = false, op
   if (shown && active && !visited.has(active)) setVisited(new Set([...visited, active]));
   return <div className={cn(compact ? "flex min-h-0 min-w-0 flex-1 flex-col" : "grid min-w-0 gap-3", className)}>
     <div className={cn("flex min-w-0 shrink-0 items-center border-b border-border", !compact && "pb-2")}>
-      <div role="tablist" aria-label={label} className={cn("flex min-w-0 flex-1 gap-1", compact ? "overflow-x-auto px-1 pt-1" : "flex-wrap")}>
+      <div role="tablist" aria-label={label} className={cn("flex min-w-0 flex-1 gap-1", wrap ? "flex-wrap" : "overflow-x-auto", compact && "px-1 pt-1")}>
         {items.map((item, index) => <Button key={item.id} id={`${prefix}-tab-${item.id}`} role="tab" variant={compact ? "ghost" : item.id === active && open ? "primary" : "ghost"} size={compact ? "sm" : "md"}
           aria-selected={open && item.id === active} aria-controls={`${prefix}-panel-${item.id}`} tabIndex={item.id === active ? 0 : -1}
           className={compact ? cn("shrink-0 rounded-none rounded-t border-0 border-b-2 text-xs", open && item.id === active ? "border-primary font-semibold" : "border-transparent text-muted") : undefined}

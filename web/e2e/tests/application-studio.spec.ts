@@ -33,7 +33,9 @@ test("one application retains drafts across five workspaces and delivers grouped
   const definition = (record: any) => Object.fromEntries(Object.entries(record).filter(([key]) => !["id", "name", "revision", "created", "changed"].includes(key)));
   expect(definition(guided)).toEqual(definition(manual));
 
-  await page.getByRole("button", { name: "Add a property", exact: true }).first().click();
+  const objectSections = page.getByRole("tablist", { name: "Object sections", exact: true });
+  await objectSections.getByRole("tab", { name: "Properties", exact: true }).click();
+  await page.getByRole("button", { name: "Add a property", exact: true }).click();
   const inspector = page.getByRole("region", { name: "Object inspector", exact: true });
   await inspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Service note");
   await inspector.getByRole("textbox", { name: "Name", exact: true }).fill("note");
@@ -46,12 +48,18 @@ test("one application retains drafts across five workspaces and delivers grouped
   await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: /^Service case/ }).click();
   await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+  await objectSections.getByRole("tab", { name: "Properties", exact: true }).press("ArrowRight");
+  await expect(objectSections.getByRole("tab", { name: "Links", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
+  await objectSections.getByRole("tab", { name: "Lifecycle", exact: true }).click();
   await page.getByRole("button", { name: "Add a state", exact: true }).click();
   await inspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Open");
   await inspector.getByRole("textbox", { name: "Name", exact: true }).fill("open");
+  await objectSections.getByRole("tab", { name: "Actions", exact: true }).click();
   await page.getByRole("button", { name: "Add an action", exact: true }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(async () => (await builder.record("build.object", objectID)).actions?.length).toBe(1);
+  await shots(page, page.locator("body"), "object-editor", testInfo);
 
   const pageDraft = await builder.page({ title: "Service desk", object: `build.${objectName}`, sections: [{ id: "initial", widget: "text", configVersion: 1, text: "Service desk" }] });
   // Add existing uses the same membership decision as creating a page here.

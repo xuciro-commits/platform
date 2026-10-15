@@ -6,16 +6,16 @@ import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action,
 import { ShapeEditor } from "./shape";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
-// take on its records, in the page editor's three panes — what there is on the
-// left, what a person will see in the middle, the piece in hand on the right.
+// take on its records. The main tables and map own selection; the Inspector
+// edits that selection, without a second copy in a structure sidebar.
 // It writes the object's own record through its own action; the host checks
 // everything again when the object is published.
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
 import {
-  Button, Card, Checkbox, Disclosure, Input, FlowCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
+  Button, Card, Checkbox, ContentTabs, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
 } from "@platform/ui";
-import { Boxes, Link2, Plus, Shield, Tags, Trash2, Zap } from "lucide-react";
+import { Boxes, Link2, Plus, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useObjectDraft } from "./object-draft";
 import { ConstraintsEditor } from "./constraints";
@@ -24,13 +24,18 @@ import { RecordSetsEditor } from "./record-sets";
 import { BusinessVersionEditor } from "./business-version";
 
 /** The objects of this organisation: open one to give it states and actions. */
-type Tab = "overview" | "properties" | "links" | "actions" | "constraints" | "sets" | "versions" | "lifecycle" | "permissions" | "data" | "preview";
+const objectSections = [
+  { id: "overview", title: "Overview" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "actions", title: "Actions" },
+  { id: "versions", title: "Business versions" }, { id: "constraints", title: "Business constraints" }, { id: "sets", title: "Record sets" },
+  { id: "lifecycle", title: "Lifecycle" }, { id: "permissions", title: "Permissions" }, { id: "data", title: "Data" }, { id: "preview", title: "Preview" },
+] as const;
+type Tab = typeof objectSections[number]["id"];
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const [chosen, setChosen] = useState<Chosen>();
   const draft = useObjectDraft(id, () => setChosen(undefined));
   const { object, process, dirty, busy, blocked, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
   const initiallyChosen = useRef("");
-  const [tab, setTab] = useState<Tab>((["overview", "properties", "links", "actions", "constraints", "sets", "versions", "lifecycle", "permissions", "data", "preview"] as Tab[]).includes(initialTab as Tab) ? initialTab as Tab : "overview");
+  const [tab, setTab] = useState<Tab>(objectSections.find(section => section.id === initialTab)?.id ?? "overview");
   useEffect(() => {
     const key = `${id}:${initialField ?? ""}:${initialAction ?? ""}:${initialAccess ?? false}`;
     if (!object || initiallyChosen.current === key) return;
@@ -61,29 +66,6 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const addAccess = () => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); choose({ kind: "access", at: process.access.length }, "permissions"); };
   const references = process.fields.filter((f) => f.type === "reference");
   const incoming = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent));
-  const tabs: { id: Tab; title: string }[] = [
-    { id: "overview", title: t("Overview") }, { id: "properties", title: t("Properties") }, { id: "links", title: t("Links") }, { id: "actions", title: t("Actions") },
-    { id: "versions", title: t("Business versions") }, { id: "constraints", title: t("Business constraints") }, { id: "sets", title: t("Record sets") }, { id: "lifecycle", title: t("Lifecycle") }, { id: "permissions", title: t("Permissions") }, { id: "data", title: t("Data") }, { id: "preview", title: t("Preview") },
-  ];
-  const structure = <div className="grid min-w-0 content-start">
-    <PanelSection title={t("Object type")}>
-      <StructureRow icon={<Boxes />} label={object.title} selected={!chosen && tab === "overview"} onClick={() => choose(undefined, "overview")} />
-    </PanelSection>
-    <PanelSection title={t("Properties")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a property")} title={t("Add a property")} onClick={addField}><Plus /></Button>}>
-      {process.fields.map((f, at) => <StructureRow key={`${f.name}:${at}`} depth={1} icon={<Tags />} label={f.title || f.name} meta={t(f.type)} selected={chosen?.kind === "field" && chosen.at === at} onClick={() => choose({ kind: "field", at }, "properties")} />)}
-      {!process.fields.length && <p className="px-2 text-[11px] text-muted">{t("No properties yet.")}</p>}
-    </PanelSection>
-    <PanelSection title={t("Lifecycle")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a state")} title={t("Add a state")} onClick={() => { addState(); setTab("lifecycle"); }}><Plus /></Button>}>
-      {process.states.map((s, at) => <StructureRow key={`${s.name}:${at}`} depth={1} icon={<span className={cn("size-2 rounded-full", `bg-[var(--tone-${s.tone ?? "info"})]`)} />} label={s.title || s.name} selected={chosen?.kind === "state" && chosen.at === at} onClick={() => choose({ kind: "state", at }, "lifecycle")} />)}
-    </PanelSection>
-    <PanelSection title={t("Actions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add an action")} title={t("Add an action")} disabled={!process.states.length} onClick={() => { addAction(); setTab("actions"); }}><Plus /></Button>}>
-      {process.actions.map((a, at) => <StructureRow key={`${a.name}:${at}`} depth={1} icon={<Zap />} label={a.title || a.name} meta={actionResultEdges(a).map(name=>process.states.find(state=>state.name===name)?.title??name).join(", ")} selected={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at }, "actions")} />)}
-      {!process.states.length && <p className="px-2 text-[11px] text-muted">{t("Add a lifecycle state first: every action starts from a state.")}</p>}
-    </PanelSection>
-    <PanelSection title={t("Permissions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a role")} title={t("Add a role")} onClick={addAccess}><Plus /></Button>}>
-      {process.access.map((a, at) => <StructureRow key={`${a.role}:${at}`} depth={1} icon={<Shield />} label={a.role} meta={t(a.read)} selected={chosen?.kind === "access" && chosen.at === at} onClick={() => choose({ kind: "access", at }, "permissions")} />)}
-    </PanelSection>
-  </div>;
   const inspector = <div className="p-2">
     {field && chosen && <FieldProperties field={field} others={process.fields.filter((_, at) => at !== chosen.at)} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
     {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
@@ -98,9 +80,14 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const main: Record<Tab, ReactNode> = {
     overview: <div className="grid max-w-3xl gap-4 p-4">
       <div><h2 className="text-lg font-semibold">{object.title}</h2><p className="text-xs text-muted">{parent}</p></div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-        {[[t("Properties"), process.fields.length], [t("States"), process.states.length], [t("Actions"), process.actions.length], [t("Roles"), process.access.length]].map(([label, n]) => <div key={String(label)} className="rounded-md border border-border p-3"><dt className="text-xs text-muted">{label}</dt><dd className="text-xl font-semibold">{n}</dd></div>)}
-      </dl>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {([
+          ["properties", "Properties", process.fields.length], ["lifecycle", "States", process.states.length],
+          ["actions", "Actions", process.actions.length], ["permissions", "Roles", process.access.length],
+        ] as const).map(([section, label, count]) => <Button key={section} variant="ghost" onClick={() => setTab(section)} className="grid h-auto justify-items-start gap-1 rounded-md border border-border p-3 text-left">
+          <span className="text-xs text-muted">{t(label)}</span><span className="text-xl font-semibold">{count}</span>
+        </Button>)}
+      </div>
       <p className="text-sm text-muted">{t("Properties describe a record; the lifecycle says which states it passes through; actions are the governed steps people take; permissions say who may read and change it. Preview shows the object as people will see it.")}</p>
       <ShapeEditor process={process} parent={parent} entities={entities} source={object.extensionSource} onChange={change} />
       {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
@@ -133,7 +120,10 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
         <span className="text-[11px] text-muted">{t("{inputs} parameters · {steps} transaction steps", {inputs:a.inputs?.length??0,steps:a.transaction?.steps.length??0})}</span>
       </Button>)}</div>
     </div>,
-    lifecycle: <div className="min-h-0 flex-1 overflow-auto p-3"><ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} /></div>,
+    lifecycle: <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
+      <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Lifecycle")}</h2><Button size="sm" onClick={addState}><Plus />{t("Add a state")}</Button></div>
+      <ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
+    </div>,
     versions: <BusinessVersionEditor process={process} entities={entities} onChange={change} />,
     constraints: <ConstraintsEditor process={process} onChange={change} />,
     sets: <RecordSetsEditor process={process} parent={parent} entities={entities} onChange={change} />,
@@ -155,15 +145,12 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
     actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "object-type", params: { id } }} />}
-    left={{ label: t("Object structure"), content: structure }}
     right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    <div role="tablist" aria-label={t("Object sections")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 pt-2">
-      {tabs.map((item) => <Button variant="row" key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}
-        className={cn("whitespace-nowrap rounded-t border-b-2 px-3 py-1.5 text-sm", tab === item.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{item.title}</Button>)}
-    </div>
-    <fieldset disabled={busy || blocked} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[tab]}</fieldset>
+    <ContentTabs compact wrap label={t("Object sections")} value={tab} onChange={value => setTab(value as Tab)} items={objectSections.map(section => ({
+      id: section.id, title: t(section.title), content: <fieldset disabled={busy || blocked} className="flex h-full min-h-0 min-w-0 flex-col">{main[section.id]}</fieldset>,
+    }))} />
   </Workbench>;
 }
 
