@@ -193,6 +193,16 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 				restore()
 				return nil, fmt.Errorf("connection %s needs a ready target binding with matching kind and credential", asset.Ref)
 			}
+			if !reflect.DeepEqual(buildapi.PortableDriverBinding(conn.Protocol), d.Protocol) {
+				restore()
+				return nil, fmt.Errorf("connection %s needs the same protocol package, profile and logical point shape", asset.Ref)
+			}
+			if conn.Protocol != nil {
+				if err := b.validConnection(conn); err != nil {
+					restore()
+					return nil, fmt.Errorf("connection %s: %s", asset.Ref, err.Message)
+				}
+			}
 			b.releaseDraftIDs[asset.Ref] = target
 		} else {
 			rows, err := b.integrationInventory(asset.Ref.Kind)

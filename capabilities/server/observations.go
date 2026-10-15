@@ -58,6 +58,7 @@ type observationReadPlan struct {
 	device     string
 	stamp      string
 	sources    []string
+	retained   bool
 }
 
 func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Error) {
@@ -271,6 +272,9 @@ func checkObservationRead(q *ObservationRead, now time.Time) error {
 
 func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan, q ObservationRead) (platform.ObservationResult, error) {
 	result := platform.ObservationResult{Ref: plan.info.Ref, Version: plan.info.Version, Object: plan.info.Definition.Object, Record: q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Sources: plan.sources}
+	if err := t.configureProtocol(ctx, plan.connection, plan.retained); err != nil {
+		return result, err
+	}
 	body, err := json.Marshal(struct {
 		Device string    `json:"device"`
 		Signal string    `json:"signal"`
@@ -308,8 +312,9 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		return result, fmt.Errorf("observation answer exceeds its read budget")
 	}
 	var answer struct {
-		Window platform.ObservationWindow  `json:"window"`
-		Points []platform.ObservationPoint `json:"points,omitempty"`
+		Window   platform.ObservationWindow  `json:"window"`
+		Points   []platform.ObservationPoint `json:"points,omitempty"`
+		Coverage *platform.DriverCoverage    `json:"coverage,omitempty"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -322,6 +327,14 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	if err := platform.CheckObservationWindowRange(answer.Window, q.Since, q.Until, plan.info.Definition.Unit); err != nil {
 		return result, err
 	}
+	if plan.connection.Protocol != nil || plan.info.Definition.RequireComplete {
+		if answer.Coverage == nil {
+			return result, fmt.Errorf("observation storage did not declare window coverage")
+		}
+		if err := platform.CheckObservationCoverage(*answer.Coverage, answer.Window); err != nil {
+			return result, err
+		}
+	}
 	if q.Mode == "summary" && len(answer.Points) > 0 || q.Mode == "points" && len(answer.Points) > q.Limit {
 		return result, fmt.Errorf("observation storage exceeded the requested point shape")
 	}
@@ -331,6 +344,7 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		}
 	}
 	result.Window, result.Points = answer.Window, answer.Points
+	result.Coverage = answer.Coverage
 	return result, nil
 }
 

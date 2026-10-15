@@ -265,14 +265,19 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	t.mu.Unlock()
 	for _, c := range conns {
 		check := build.ConnectionCheck{At: now}
-		detail, err := t.checkConnection(c)
-		check.OK, check.Detail = err == nil, detail
-		if err != nil {
-			check.Error = err.Error()
+		if c.Protocol != nil {
+			check = t.checkProtocolConnection(context.Background(), c, now)
+		} else {
+			detail, err := t.checkConnection(c)
+			check.OK, check.Detail = err == nil, detail
+			if err != nil {
+				check.Error = err.Error()
+			}
 		}
+		check.Samples = nil
 		payload, _ := json.Marshal(map[string]any{"revision": c.Revision, "check": check})
 		caller := t.automation(build.ID, false)
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: "checked:" + c.ID + ":" + now.UTC().Format(time.RFC3339Nano),
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),
 			Target: &pb.EntityRef{Type: build.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: build.SchemaConnectionChecked, Version: 1}, Payload: payload}
 		func() {
 			t.mu.Lock()

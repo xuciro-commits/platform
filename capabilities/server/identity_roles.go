@@ -44,6 +44,10 @@ var _ HostIdentities = (*Console)(nil)
 // Recovery and package composition are separate from sign-in consumers.
 type IdentityRecovery interface{ CloseTokenSecretWindows() }
 type PackageCatalog interface{ BindPackageIndex(*PackageIndex) }
+type ProtocolPackageCatalog interface {
+	ProtocolPackages() []platform.DriverPackage
+	ResolveDriver(id, version, digest, profile string) (platform.DriverRuntime, error)
+}
 type IdentityCounts interface{ MemberCount() int }
 type ProjectAccess interface {
 	EditsProjectAsset(string, ProjectAsset) bool

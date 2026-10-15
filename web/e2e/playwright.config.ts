@@ -5,6 +5,7 @@ import process from "node:process";
 import { defineConfig } from "@playwright/test";
 
 const port = 18496;
+const protocolPackages = process.env.PLATFORM_PACKAGES_DIR ? ' -packages "$PLATFORM_PACKAGES_DIR"' : "";
 
 export default defineConfig({
   testDir: "tests",
@@ -14,13 +15,13 @@ export default defineConfig({
   // On a Mac the installed Google Chrome runs the tests; CI installs Playwright's Chromium.
   use: { baseURL: `http://127.0.0.1:${port}`, locale: "en-US", trace: "retain-on-failure", screenshot: process.env.PLATFORM_SCREENSHOTS ? "on" : "only-on-failure", channel: process.env.CI ? undefined : "chrome" },
   webServer: [{
-    command: `go run ./cmd/hospitality-server -addr 127.0.0.1:${port} -web ../../web/apps/workspace/dist`,
+    command: `go run ./cmd/hospitality-server -addr 127.0.0.1:${port} -web ../../web/apps/workspace/dist${protocolPackages}`,
     cwd: "../../solutions/hospitality",
     url: `http://127.0.0.1:${port}/healthz`,
     timeout: 180_000,
     reuseExistingServer: false,
   }, {
-    command: `go run ./cmd/manufacturing-server -addr 127.0.0.1:18497 -web ../../web/apps/workspace/dist`,
+    command: `go run ./cmd/manufacturing-server -addr 127.0.0.1:18497 -web ../../web/apps/workspace/dist${protocolPackages}`,
     cwd: "../../solutions/manufacturing",
     url: "http://127.0.0.1:18497/healthz",
     timeout: 180_000,

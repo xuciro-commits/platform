@@ -3,12 +3,14 @@ package build
 import (
 	"encoding/json"
 	"net/url"
+	"reflect"
 	"slices"
 
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -19,7 +21,7 @@ func (b *Build) connectionEntity() platform.Entity {
 			if err := b.validConnection(*next); err != nil {
 				return err
 			}
-			if old, ok := platform.Get[Connection](c, next.ID); ok && (old.Kind != next.Kind || old.Address != next.Address || old.Secret != next.Secret || old.AllowPrivate != next.AllowPrivate) {
+			if old, ok := platform.Get[Connection](c, next.ID); ok && (old.Kind != next.Kind || old.Address != next.Address || old.Secret != next.Secret || old.AllowPrivate != next.AllowPrivate || !reflect.DeepEqual(old.Protocol, next.Protocol)) {
 				next.State, next.Requested, next.Last = "draft", false, nil
 			}
 			return nil
@@ -60,6 +62,21 @@ func (b *Build) validConnection(c Connection) *kernel.Error {
 	if !slices.Contains(ConnectionKinds, c.Kind) {
 		return refuse("A connection is one of http, odata, postgres")
 	}
+	if c.Protocol != nil {
+		if c.Kind != "http" {
+			return refuse("A protocol package uses an HTTP gateway connection")
+		}
+		if err := c.Protocol.Check(); err != nil {
+			return refuse("Protocol configuration is invalid: {reason}", err.Error())
+		}
+		packages, ok := b.host.(host.DriverPackages)
+		if !ok {
+			return refuse("Protocol packages are unavailable on this host")
+		}
+		if err := packages.CheckDriverBinding(*c.Protocol); err != nil {
+			return refuse("Protocol package is unavailable: {reason}", err.Error())
+		}
+	}
 	u, err := url.Parse(c.Address)
 	if err != nil || u.Host == "" {
 		return refuse("The address is not a URL")
@@ -95,6 +112,7 @@ func (b *Build) submitConnectionChecked(c platform.Caller, s *pb.Submission, now
 		}
 		return func(r *pb.ChangeRecord) {
 			check := payload.Check
+			check.Samples = nil // Samples are read-only preview data, never accepted business state.
 			conn.Last, conn.Requested = &check, false
 			conn.State = "draft"
 			if check.OK {

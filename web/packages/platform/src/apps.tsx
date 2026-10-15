@@ -51,6 +51,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
   const { can, decide } = useHost();
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
+  const [versions, setVersions] = useState<Record<string, string>>({});
   if (!items.length) return <p className="text-sm text-muted">{t("No packages: the host offers no index and nothing is installed.")}</p>;
   const act = async (schema: string, id: string, payload: unknown) => {
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
@@ -59,35 +60,51 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
   };
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {items.map(({ descriptor: d, installed: held, precheck }) => {
+      {[...new Set(items.map(item => item.descriptor.id || item.installed?.id || ""))].map(packageID => {
+        const available = items.filter(item => (item.descriptor.id || item.installed?.id) === packageID);
+        const held = available.find(item => item.installed)?.installed;
+        const protocol = available.some(item => item.descriptor.runtime);
+        const version = versions[packageID] ?? held?.version ?? (protocol ? "" : available[0]!.descriptor.version);
+        const chosen = available.find(item => item.descriptor.version === version);
+        const { descriptor: d, precheck } = chosen ?? available[0]!;
         const id = d.id || held?.id || "";
         const state = held?.state;
         const newer = !!held && state !== "retired" && !!d.version && d.version !== held.version;
         const next = !held || state === "retired" ? "install" : state === "active" ? "drain" : state === "draining" ? "retire" : undefined;
         return (
-          <Panel key={id} className="grid content-start gap-2">
+          <Panel key={id} aria-label={t("Package {id}", { id })} className="grid min-w-0 content-start gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">{d.title || held?.title || id}</span><span className="font-mono text-xs text-muted">{id}</span>
+              <span className="font-semibold">{d.title || held?.title || id}</span><span className="break-all font-mono text-xs text-muted">{id}</span>
               <Tag label={state ? t(state) : t("not installed")} tone={stateTone(state)} />
+              {d.runtime && <Tag label={d.runtime.profiles.some(profile => profile.simulation) ? t("Simulation protocol package") : t("Device protocol package")} tone={d.runtime.profiles.some(profile => profile.simulation) ? "warning" : "neutral"} />}
             </div>
             {d.description && <p className="text-xs text-muted">{d.description}</p>}
-            <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-0.5 text-xs">
-              <dt className="text-muted">{t("Namespace")}</dt><dd className="font-mono">{d.namespace || held?.namespace}</dd>
+            {(protocol || available.length > 1) && <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select value={version} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
+              <option value="">{t("Choose an exact version")}</option>{available.map(item => <option key={item.descriptor.version} value={item.descriptor.version}>{item.descriptor.version}{item.descriptor.version === held?.version ? ` · ${t("Installed")}` : ""}</option>)}
+            </Select></label>}
+            <dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
+              <dt className="text-muted">{t("Namespace")}</dt><dd className="break-all font-mono">{d.namespace || held?.namespace}</dd>
               <dt className="text-muted">{t("Offered")}</dt><dd>{d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
               <dt className="text-muted">{t("Installed")}</dt><dd>{held ? `${held.version}${held.installedAt ? ` · ${when(held.installedAt)}` : ""}` : "—"}</dd>
               <dt className="text-muted">{t("Requires")}</dt><dd>{d.requires?.length ? d.requires.join(", ") : t("nothing")}</dd>
               <dt className="text-muted">{t("Contributions")}</dt><dd>{(held?.contributions ?? d.contributions ?? []).map((c) => c.title || c.view).join(", ") || "—"}</dd>
               {held?.artifact && <><dt className="text-muted">{t("Sealed artifact")}</dt><dd className="break-all font-mono">{held.artifact}</dd></>}
               {!!held?.retained?.length && <><dt className="text-muted">{t("Retained")}</dt><dd>{held.retained.map((r) => `${r.version} (${when(r.at)})`).join(", ")}</dd></>}
+              {d.runtime && <>
+                <dt className="text-muted">{t("Driver interface")}</dt><dd>{d.runtime.abi}</dd>
+                <dt className="text-muted">{t("Binary targets")}</dt><dd>{d.runtime.targets.map(target => `${target.os}/${target.arch}`).join(", ")}</dd>
+                <dt className="text-muted">{t("Driver profiles")}</dt><dd className="grid gap-1">{d.runtime.profiles.map(profile => <span key={profile.id}>{t(profile.title)} · {profile.operations.map(operation => t(operation)).join(", ")}</span>)}</dd>
+              </>}
             </dl>
+            {d.runtime && <p className="text-xs text-muted">{t("Installing makes this exact version available to Connections. Configure and check a connection before publishing it; installation does not enable device writes.")}</p>}
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <Tag label={precheck.ok ? t("precheck ok") : t("precheck failed")} tone={precheck.ok ? "success" : "danger"} />
               {!!precheck.missing?.length && <span className="text-[var(--tone-danger)]">{t("needs {packages} installed first", { packages: precheck.missing.join(", ") })}</span>}
               {precheck.problems?.map((x) => <span key={x} className="text-[var(--tone-danger)]">{x}</span>)}
             </div>
             {can("platform.package.install") && <div className="flex flex-wrap gap-2">
-              {next === "install" && <Button size="sm" variant="primary" disabled={!precheck.ok || busy === id} title={precheck.ok ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t("Install")}</Button>}
-              {newer && <Button size="sm" variant="primary" disabled={!precheck.ok || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Upgrade to {v}", { v: d.version })}</Button>}
+              {next === "install" && <Button size="sm" variant="primary" disabled={!chosen || !precheck.ok || busy === id} title={precheck.ok ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t("Install")}</Button>}
+              {newer && <Button size="sm" variant="primary" disabled={!chosen || !precheck.ok || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Upgrade to {v}", { v: d.version })}</Button>}
               {next === "drain" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.drain", id, { id })}>{t("Drain")}</Button>}
               {next === "retire" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.retire", id, { id })}>{t("Retire")}</Button>}
             </div>}

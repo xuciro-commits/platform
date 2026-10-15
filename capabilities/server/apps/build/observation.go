@@ -76,7 +76,7 @@ func (b *Build) observationDefinition(record Observation) (platform.ObservationD
 		Connection: platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: connection}, Object: platform.AssetRef{App: object.App, Kind: platform.AssetObject, Name: record.Object},
 		DeviceField: record.DeviceField, Signal: record.Signal, Unit: record.Unit, Path: record.Path, WindowSeconds: record.WindowSeconds,
 		ExpectedRetentionSeconds: record.ExpectedRetentionSeconds, ExpectedGranularitySeconds: record.ExpectedGranularitySeconds,
-		Roles: slices.Clone(record.Roles), Scheduled: record.Scheduled, Decision: record.Decision}, nil
+		Roles: slices.Clone(record.Roles), Scheduled: record.Scheduled, RequireComplete: record.RequireComplete, Decision: record.Decision}, nil
 }
 
 func (b *Build) checkObservation(c platform.Caller, record Observation) error {

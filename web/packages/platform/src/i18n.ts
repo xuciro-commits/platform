@@ -2,6 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Simulated device points": "模拟设备点位",
+  "sample": "采样",
+  "execute": "执行",
+  "Binary targets": "二进制目标平台",
+  "Choose an exact version": "选择确切版本",
+  "Device protocol package": "设备协议包",
+  "Driver interface": "驱动接口",
+  "Driver profiles": "驱动配置",
+  "Exact package version": "确切软件包版本",
+  "Installing makes this exact version available to Connections. Configure and check a connection before publishing it; installation does not enable device writes.": "安装后，可在连接中选择此确切版本。配置并检查连接后才能发布；安装本身不启用设备写入。",
+  "Package {id}": "软件包 {id}",
+  "Simulation protocol package": "模拟协议包",
   "Observations": "观测",
   "Observation sources": "观测源",
   "Resolve unknown delivery": "裁决结果不明的投递",

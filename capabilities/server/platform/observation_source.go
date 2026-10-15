@@ -30,6 +30,7 @@ type ObservationDefinition struct {
 	ExpectedGranularitySeconds int                  `json:"expectedGranularitySeconds"`
 	Roles                      []string             `json:"roles"`
 	Scheduled                  bool                 `json:"scheduled,omitempty"`
+	RequireComplete            bool                 `json:"requireComplete,omitempty"`
 	Decision                   *ObservationDecision `json:"decision,omitempty"`
 }
 
@@ -47,16 +48,28 @@ type ObservationPoint struct {
 }
 
 type ObservationResult struct {
-	Ref     AssetRef           `json:"ref"`
-	Version string             `json:"version"`
-	Object  AssetRef           `json:"object"`
-	Record  string             `json:"record"`
-	Device  string             `json:"device"`
-	Signal  string             `json:"signal"`
-	Window  ObservationWindow  `json:"window"`
-	Points  []ObservationPoint `json:"points,omitempty"`
-	Sources []string           `json:"sources"`
-	Matched *bool              `json:"matched,omitempty"`
+	Ref      AssetRef           `json:"ref"`
+	Version  string             `json:"version"`
+	Object   AssetRef           `json:"object"`
+	Record   string             `json:"record"`
+	Device   string             `json:"device"`
+	Signal   string             `json:"signal"`
+	Window   ObservationWindow  `json:"window"`
+	Points   []ObservationPoint `json:"points,omitempty"`
+	Sources  []string           `json:"sources"`
+	Matched  *bool              `json:"matched,omitempty"`
+	Coverage *DriverCoverage    `json:"coverage,omitempty"`
+}
+
+// CheckObservationCoverage validates the source's completeness claim without reconstructing limited points.
+func CheckObservationCoverage(coverage DriverCoverage, window ObservationWindow) error {
+	if coverage.AvailableSince.IsZero() || coverage.CompleteUntil.IsZero() || coverage.AvailableSince.After(window.Since) || coverage.CompleteUntil.Before(window.Until) || coverage.Truncated {
+		return fmt.Errorf("observation window is not complete or is outside available storage")
+	}
+	if coverage.Good != window.Count || coverage.Bad != 0 || coverage.Uncertain != 0 || coverage.Stale != 0 {
+		return fmt.Errorf("observation window contains missing, uncertain or stale measurements")
+	}
+	return nil
 }
 
 func (d *ObservationDefinition) UnmarshalJSON(raw []byte) error {

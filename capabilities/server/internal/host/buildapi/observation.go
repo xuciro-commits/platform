@@ -23,6 +23,7 @@ type Observation struct {
 	ExpectedGranularitySeconds int                           `json:"expectedGranularitySeconds" field:"required" title:"Expected external granularity in seconds"`
 	Roles                      []string                      `json:"roles" field:"required"`
 	Scheduled                  bool                          `json:"scheduled,omitempty" title:"Evaluate completed windows"`
+	RequireComplete            bool                          `json:"requireComplete,omitempty" title:"Require complete, good-quality windows"`
 	Decision                   *platform.ObservationDecision `json:"decision,omitempty" type:"json"`
 	State                      string                        `json:"state" field:"readonly" choices:"draft,published,retired"`
 	Publisher                  string                        `json:"publisher,omitempty" field:"readonly" source:"record"`

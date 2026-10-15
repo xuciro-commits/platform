@@ -13,6 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/driver"
 	"platformserver/platform"
 )
 
@@ -44,29 +45,31 @@ type PackageContribution struct {
 
 // PackageDescriptor is one installable package, as the index declares it.
 type PackageDescriptor struct {
-	ID             string                `json:"id"`
-	Version        string                `json:"version"`
-	Title          string                `json:"title,omitempty"`
-	Namespace      string                `json:"namespace"`
-	Requires       []string              `json:"requires,omitempty"` // package IDs
-	Compatibility  string                `json:"compatibility,omitempty"`
-	Contributions  []PackageContribution `json:"contributions,omitempty"`
-	ArtifactDigest string                `json:"artifactDigest,omitempty"` // sha256 over the descriptor
-	Description    string                `json:"description,omitempty"`
+	Runtime        *platform.DriverRuntime `json:"runtime,omitempty"`
+	ID             string                  `json:"id"`
+	Version        string                  `json:"version"`
+	Title          string                  `json:"title,omitempty"`
+	Namespace      string                  `json:"namespace"`
+	Requires       []string                `json:"requires,omitempty"` // package IDs
+	Compatibility  string                  `json:"compatibility,omitempty"`
+	Contributions  []PackageContribution   `json:"contributions,omitempty"`
+	ArtifactDigest string                  `json:"artifactDigest,omitempty"` // sha256 over the descriptor
+	Description    string                  `json:"description,omitempty"`
 }
 
 // InstalledPackage is the tenant's state for one installed package.
 type InstalledPackage struct {
-	ID            string                `json:"id"`
-	Version       string                `json:"version"`
-	Namespace     string                `json:"namespace"`
-	Title         string                `json:"title,omitempty"`
-	State         string                `json:"state"` // active, draining, retired
-	Contributions []PackageContribution `json:"contributions,omitempty"`
-	Digest        string                `json:"digest,omitempty"`   // the index's artifact digest, when it declares one
-	Artifact      string                `json:"artifact,omitempty"` // sha256 over the bytes sealed in this tenant's store
-	InstalledAt   time.Time             `json:"installedAt,omitempty"`
-	ChangedAt     time.Time             `json:"changedAt,omitempty"`
+	Runtime       *platform.DriverRuntime `json:"runtime,omitempty"`
+	ID            string                  `json:"id"`
+	Version       string                  `json:"version"`
+	Namespace     string                  `json:"namespace"`
+	Title         string                  `json:"title,omitempty"`
+	State         string                  `json:"state"` // active, draining, retired
+	Contributions []PackageContribution   `json:"contributions,omitempty"`
+	Digest        string                  `json:"digest,omitempty"`   // the index's artifact digest, when it declares one
+	Artifact      string                  `json:"artifact,omitempty"` // sha256 over the bytes sealed in this tenant's store
+	InstalledAt   time.Time               `json:"installedAt,omitempty"`
+	ChangedAt     time.Time               `json:"changedAt,omitempty"`
 	// Retained are versions this tenant replaced: their artifacts stay.
 	Retained []RetainedArtifact `json:"retained,omitempty"`
 }
@@ -140,17 +143,18 @@ func PackageActions() []platform.Action {
 	}
 }
 
-// PackageIndex is the deployment's index: descriptors from a directory (local
-// files) or an HTTP document (an online index), read at start and cached.
+// PackageIndex is the deployment's trusted directory or an in-memory index.
+// Console reads a directory afresh for each listing and installation decision.
 type PackageIndex struct {
-	Packages []PackageDescriptor
+	Packages  []PackageDescriptor
+	Directory string
 }
 
 // LoadPackageIndex reads every *.json descriptor of a directory, or one JSON
 // document with an array of descriptors when the path is a URL's file name.
 // The online case uses the same reader: a mirror is a directory of JSON files.
 func LoadPackageIndex(dir string) (*PackageIndex, error) {
-	index := &PackageIndex{}
+	index := &PackageIndex{Directory: dir}
 	if dir == "" {
 		return index, nil
 	}
@@ -202,6 +206,9 @@ func (p PackageDescriptor) validate() error {
 			return fmt.Errorf("package %s: a contribution needs a view", p.ID)
 		}
 	}
+	if p.Runtime != nil {
+		return p.Runtime.Check()
+	}
 	return nil
 }
 
@@ -227,6 +234,141 @@ func (i *PackageIndex) find(id, version string) (PackageDescriptor, bool) {
 	return PackageDescriptor{}, false
 }
 
+func packageBinaryKey(tenant, id, version, digest string) string {
+	return "packages/" + tenant + "/" + id + "/" + version + "/" + strings.TrimPrefix(digest, "sha256:") + ".bin"
+}
+
+// ResolveDriver uses this deployment's existing trusted package index. It is
+// also the gateway's artifact resolver; bindings cannot supply program paths.
+func (i *PackageIndex) ResolveDriver(id, version, digest, profile string) (platform.DriverRuntime, error) {
+	p, found := i.find(id, version)
+	if !found || version == "" || p.Runtime == nil {
+		return platform.DriverRuntime{}, fmt.Errorf("the exact protocol package is unavailable")
+	}
+	if err := checkDriverRuntime(*p.Runtime, digest, profile); err != nil {
+		return platform.DriverRuntime{}, err
+	}
+	target, err := p.Runtime.Target()
+	if err != nil || strings.TrimPrefix(target.Artifact, "sha256:") != strings.TrimPrefix(digest, "sha256:") {
+		return platform.DriverRuntime{}, fmt.Errorf("this protocol binary does not target the gateway operating system and architecture")
+	}
+	if _, _, err := driver.Binary(i.Directory, digest); err != nil {
+		return platform.DriverRuntime{}, err
+	}
+	return *p.Runtime, nil
+}
+func checkDriverRuntime(r platform.DriverRuntime, digest, profile string) error {
+	if err := r.Check(); err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(r.Targets, func(target platform.DriverTarget) bool {
+		return strings.TrimPrefix(target.Artifact, "sha256:") == strings.TrimPrefix(digest, "sha256:")
+	}) {
+		return fmt.Errorf("the protocol binary digest differs from the selected package")
+	}
+	if !slices.ContainsFunc(r.Profiles, func(p platform.DriverProfile) bool { return p.ID == profile }) {
+		return fmt.Errorf("the protocol package does not provide this profile")
+	}
+	return nil
+}
+
+func (d *Console) ProtocolPackages() []platform.DriverPackage {
+	d.mu.Lock()
+	installed := make([]InstalledPackage, 0, len(d.packages))
+	for _, p := range d.packages {
+		if p.State == "active" || p.State == "draining" {
+			copy := *p
+			copy.Retained = slices.Clone(p.Retained)
+			installed = append(installed, copy)
+		}
+	}
+	d.mu.Unlock()
+	out := []platform.DriverPackage{}
+	for _, p := range installed {
+		appendVersion := func(version, artifact, state string) {
+			descriptor, err := d.driverDescriptor(p.ID, version, artifact)
+			if err != nil {
+				return
+			}
+			for _, target := range descriptor.Runtime.Targets {
+				out = append(out, platform.DriverPackage{ID: p.ID, Version: version, Title: descriptor.Title, Digest: target.Artifact, State: state, Runtime: *descriptor.Runtime})
+			}
+		}
+		if p.Runtime != nil {
+			appendVersion(p.Version, p.Artifact, p.State)
+		}
+		for _, retained := range p.Retained {
+			state := "retained"
+			if p.State == "draining" {
+				state = "draining"
+			}
+			appendVersion(retained.Version, retained.Digest, state)
+		}
+	}
+	slices.SortFunc(out, func(a, b platform.DriverPackage) int {
+		if a.ID != b.ID {
+			return strings.Compare(a.ID, b.ID)
+		}
+		return strings.Compare(a.Version, b.Version)
+	})
+	return out
+}
+
+func (d *Console) driverDescriptor(id, version, artifact string) (PackageDescriptor, error) {
+	raw, err := d.host.GetPackageArtifact(packageArtifactKey(d.tenant, id, version))
+	if err != nil {
+		return PackageDescriptor{}, err
+	}
+	sealed := sha256.Sum256(raw)
+	if "sha256:"+hex.EncodeToString(sealed[:]) != artifact {
+		return PackageDescriptor{}, fmt.Errorf("the retained protocol descriptor content differs")
+	}
+	var descriptor PackageDescriptor
+	if json.Unmarshal(raw, &descriptor) != nil || descriptor.ID != id || descriptor.Version != version || descriptor.Runtime == nil {
+		return PackageDescriptor{}, fmt.Errorf("the retained protocol descriptor is unavailable")
+	}
+	return descriptor, nil
+}
+
+// Retained versions remain resolvable for the original in-flight binding.
+// Authoring selects only active ProtocolPackages; it cannot grant installation.
+func (d *Console) ResolveDriver(id, version, digest, profile string) (platform.DriverRuntime, error) {
+	d.mu.Lock()
+	held := d.packages[id]
+	artifact := ""
+	if held != nil {
+		if held.Version == version {
+			artifact = held.Artifact
+		}
+		for _, retained := range held.Retained {
+			if retained.Version == version {
+				artifact = retained.Digest
+				break
+			}
+		}
+	}
+	d.mu.Unlock()
+	if artifact == "" || version == "" {
+		return platform.DriverRuntime{}, fmt.Errorf("the exact protocol package has not been installed")
+	}
+	descriptor, err := d.driverDescriptor(id, version, artifact)
+	if err != nil {
+		return platform.DriverRuntime{}, err
+	}
+	if err = checkDriverRuntime(*descriptor.Runtime, digest, profile); err != nil {
+		return platform.DriverRuntime{}, err
+	}
+	binary, err := d.host.GetPackageArtifact(packageBinaryKey(d.tenant, id, version, digest))
+	if err != nil {
+		return platform.DriverRuntime{}, err
+	}
+	sum := sha256.Sum256(binary)
+	if hex.EncodeToString(sum[:]) != strings.TrimPrefix(digest, "sha256:") {
+		return platform.DriverRuntime{}, fmt.Errorf("the retained protocol binary content differs")
+	}
+	return *descriptor.Runtime, nil
+}
+
 // packagesOf is the tenant's installed map, when the console runs it.
 func (d *Console) packagesOf() map[string]*InstalledPackage {
 	d.mu.Lock()
@@ -239,7 +381,45 @@ func (d *Console) packagesOf() map[string]*InstalledPackage {
 
 // Precheck tells whether this tenant may install a descriptor now.
 func (d *Console) Precheck(p PackageDescriptor) Precheck {
+	index, err := d.packageIndex()
+	if err != nil {
+		return Precheck{ID: p.ID, Version: p.Version, Problems: []string{err.Error()}}
+	}
+	if current, found := index.find(p.ID, p.Version); found {
+		p = current
+	}
+	return d.precheck(p, index)
+}
+
+// A fresh index belongs to this call. The shared deployment index is never
+// replaced by a reader; in-memory indexes keep their original behavior.
+func (d *Console) packageIndex() (*PackageIndex, error) {
+	d.mu.Lock()
+	bound := d.index
+	d.mu.Unlock()
+	if bound.Directory == "" {
+		return bound, nil
+	}
+	current, err := LoadPackageIndex(bound.Directory)
+	if err != nil {
+		return bound, err
+	}
+	return current, nil
+}
+
+func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 	out := Precheck{ID: p.ID, Version: p.Version, OK: true}
+	if p.Runtime != nil {
+		if err := p.Runtime.Check(); err != nil {
+			out.Problems = append(out.Problems, err.Error())
+		} else {
+			for _, target := range p.Runtime.Targets {
+				if _, _, err := driver.Binary(index.Directory, target.Artifact); err != nil {
+					out.Problems = append(out.Problems, err.Error())
+				}
+			}
+		}
+	}
 	if p.Compatibility != "" && !strings.HasPrefix(platformCompatibility, p.Compatibility) {
 		out.Problems = append(out.Problems, fmt.Sprintf("needs platform %s, this host is %s", p.Compatibility, platformCompatibility))
 	}
@@ -247,7 +427,7 @@ func (d *Console) Precheck(p PackageDescriptor) Precheck {
 	for _, need := range p.Requires {
 		held, ok := installed[need]
 		if !ok || held.State == "retired" {
-			if _, offered := d.index.latest(need); offered {
+			if _, offered := index.latest(need); offered {
 				out.Missing = append(out.Missing, need)
 			} else {
 				out.Problems = append(out.Problems, fmt.Sprintf("requires %s, which is not installed and not in the index", need))
@@ -294,9 +474,20 @@ func packageArtifactKey(tenant, id, version string) string {
 // descriptor seals to the same key and digest, so a retried install writes the
 // same bytes. The sealed artifact is what an upgrade verifies before it
 // replaces the version, and what a retained version keeps.
-func (d *Console) sealPackageBytes(descriptor PackageDescriptor) (string, error) {
+func (d *Console) sealPackageBytes(descriptor PackageDescriptor, directory string) (string, error) {
 	if d.host == nil {
 		return "", fmt.Errorf("the console is not composed with a tenant")
+	}
+	if descriptor.Runtime != nil {
+		for _, target := range descriptor.Runtime.Targets {
+			_, binary, err := driver.Binary(directory, target.Artifact)
+			if err != nil {
+				return "", err
+			}
+			if err = d.host.PutPackageArtifact(packageBinaryKey(d.tenant, descriptor.ID, descriptor.Version, target.Artifact), binary); err != nil {
+				return "", err
+			}
+		}
 	}
 	raw, err := json.Marshal(descriptor)
 	if err != nil {
@@ -355,11 +546,18 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 			held.ChangedAt = time.Now().UTC()
 		}, nil
 	}
-	descriptor, ok := d.index.find(p.ID, p.Version)
+	index, indexErr := d.packageIndex()
+	if indexErr != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package index cannot be read: {reason}", indexErr.Error())
+	}
+	descriptor, ok := index.find(p.ID, p.Version)
 	if !ok {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	pre := d.Precheck(descriptor)
+	if descriptor.Runtime != nil && p.Version == "" {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A protocol package requires its exact version")
+	}
+	pre := d.precheck(descriptor, index)
 	if len(pre.Missing) > 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The package {package} needs {required} installed first", p.ID, strings.Join(pre.Missing, ", "))
 	}
@@ -368,6 +566,9 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 	}
 	upgrade := schema == SchemaPackageUpgrade
 	prior := d.packagesOf()[p.ID]
+	if descriptor.Runtime != nil && prior != nil && (prior.Version == descriptor.Version || slices.ContainsFunc(prior.Retained, func(r RetainedArtifact) bool { return r.Version == descriptor.Version })) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A protocol package version cannot be replaced; publish a new version")
+	}
 	if upgrade {
 		if prior == nil || prior.State == "retired" {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -378,7 +579,7 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 	} else if prior != nil && prior.State == "active" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} is already installed; upgrade it instead", p.ID)
 	}
-	sealed, err := d.sealPackageBytes(descriptor)
+	sealed, err := d.sealPackageBytes(descriptor, index.Directory)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} cannot be sealed: {reason}", p.ID, err.Error())
 	}
@@ -391,7 +592,8 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 		}
 		prior := d.packages[descriptor.ID]
 		installed := &InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, Namespace: descriptor.Namespace,
-			Title: descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
+			Runtime: descriptor.Runtime,
+			Title:   descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
 			Artifact: sealed, InstalledAt: now, ChangedAt: now}
 		if upgrade && prior != nil {
 			installed.InstalledAt = prior.InstalledAt
@@ -409,8 +611,14 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 // PackageViews lists the index beside what the tenant holds.
 func (d *Console) PackageViews() []PackageView {
 	out := []PackageView{}
-	for _, descriptor := range d.index.Packages {
-		view := PackageView{Descriptor: descriptor, Precheck: d.Precheck(descriptor)}
+	index, indexErr := d.packageIndex()
+	for _, descriptor := range index.Packages {
+		pre := d.precheck(descriptor, index)
+		if indexErr != nil {
+			pre.OK = false
+			pre.Problems = append(pre.Problems, indexErr.Error())
+		}
+		view := PackageView{Descriptor: descriptor, Precheck: pre}
 		if held := d.packagesOf()[descriptor.ID]; held != nil {
 			copy := *held
 			view.Installed = &copy

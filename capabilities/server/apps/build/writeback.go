@@ -76,6 +76,9 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 	if conn.Kind != "http" && conn.Kind != "odata" {
 		return refuse("A writeback goes through an http or OData connection")
 	}
+	if conn.Protocol != nil && (w.On != "dispatch" || w.Method != "" && w.Method != "POST" || strings.Trim(w.Path, "/") != "execute") {
+		return refuse("Protocol commands use a dispatch-only POST execute writeback")
+	}
 	info, ok := b.lookupEntity(w.Object)
 	if !ok {
 		return refuse("The object {object} is not installed", w.Object)

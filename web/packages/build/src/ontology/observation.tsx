@@ -10,7 +10,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 type ObservationDraft = Omit<Api.ObservationDefinition, "connection" | "object"> & {
   id: string; revision: number; created?: Api.Stamp; changed?: Api.Stamp; connection: string; object: string; state: string; published?: string; definitionVersion?: number;
 };
-const empty = (): ObservationDraft => ({ id: "", revision: 0, name: "", title: "", description: "", connection: "", object: "", deviceField: "", signal: "", unit: "", path: "/observations", windowSeconds: 300, expectedRetentionSeconds: 86400, expectedGranularitySeconds: 1, roles: ["user", "builder"], state: "draft", scheduled: false });
+const empty = (): ObservationDraft => ({ id: "", revision: 0, name: "", title: "", description: "", connection: "", object: "", deviceField: "", signal: "", unit: "", path: "/observations", windowSeconds: 300, expectedRetentionSeconds: 86400, expectedGranularitySeconds: 1, roles: ["user", "builder"], state: "draft", scheduled: false, requireComplete: true });
 
 export function ObservationSources() {
   const { source, can } = useHost(), { open } = useApplicationWorkspace();
@@ -31,7 +31,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   const [createID] = useState(() => crypto.randomUUID());
   const inputDrafts = useInputDrafts(), dirty = edited || !!inputDrafts?.dirty;
   const original = useRef<ObservationDraft>(empty()), loaded = useRef(""), lock = useRef(false);
-  const load = (value: ObservationDraft) => { original.current = structuredClone({ ...empty(), ...value }); loaded.current = `${value.id}:${value.revision}`; setDraft(original.current); };
+  const load = (value: ObservationDraft) => { original.current = structuredClone({ ...empty(), ...value, requireComplete: value.requireComplete ?? false }); loaded.current = `${value.id}:${value.revision}`; setDraft(original.current); };
   useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(structuredClone(original.current)); setEdited(false); setError(""); }, busy);
   const patch = (change: Partial<ObservationDraft>) => { if (!lock.current) { setDraft(value => ({ ...value, ...change })); setEdited(true); setError(""); } };
@@ -39,8 +39,8 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   const save = async () => {
     if (inputDrafts?.invalid) return;
     const snapshot = structuredClone(draft), target = snapshot.id || createID;
-    const { name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, decision, scheduled } = snapshot;
-    const payload = { name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, scheduled: !!decision && !!scheduled, decision: decision ?? null };
+    const { name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, decision, scheduled, requireComplete } = snapshot;
+    const payload = { name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, scheduled: !!decision && !!scheduled, decision: decision ?? null, requireComplete: !!requireComplete };
     if (!await decide(`build.observation.${snapshot.id ? "edit" : "create"}`, { type: "build.observation", id: target }, payload, { expectedRevision: snapshot.id ? snapshot.revision : 0, quiet: true, onRefused: setError })) return;
     load({ ...snapshot, id: target, revision: (snapshot.id ? snapshot.revision : 0) + 1 }); markSaved(); setEdited(false);
     if (!snapshot.id) { open({ view: "observation-source", params: { id: target } }); close({ view: "observation-source", params: { id } }); }
@@ -81,6 +81,8 @@ export function ObservationSourceEditor({ id }: { id: string }) {
         <label className="grid gap-1 text-xs">{t("Relative adapter path")}<Input value={draft.path} onChange={event => patch({ path: event.target.value })} /></label>
         <fieldset className="grid gap-1 text-xs"><legend>{t("Source roles")}</legend><Toggles options={sourceRoles.map(role => ({ value: role, label: role }))} value={draft.roles} onChange={roles => patch({ roles })} /></fieldset>
         {[{ field: "windowSeconds", title: "Decision window (seconds)", min: 1 }, { field: "expectedRetentionSeconds", title: "Expected external retention (seconds)", min: 1 }, { field: "expectedGranularitySeconds", title: "Expected external granularity (seconds)", min: 1 }].map(item => <label key={item.field} className="grid gap-1 text-xs">{t(item.title)}<Input type="number" min={item.min} value={draft[item.field as "windowSeconds"]} onChange={event => patch({ [item.field]: Number(event.target.value) })} /></label>)}
+        <Checkbox checked={!!draft.requireComplete} onChange={requireComplete => patch({ requireComplete })}>{t("Require complete, good-quality windows")}</Checkbox>
+        <p className="text-xs text-muted">{t("Protocol connections always require complete coverage and good-quality samples before a window can decide an action.")}</p>
         <p className="text-xs text-muted">{t("Retention and granularity are expectations of the external store. The platform does not collect, store or downsample raw points.")}</p>
       </Panel>
       <Panel title={t("Observation decision")} className="grid content-start gap-3">

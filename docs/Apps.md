@@ -334,6 +334,43 @@ WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造�
 
 外部适配器接收 POST `{device,signal,since,until,mode,limit}`；窗口为 `[since,until)`。响应 `{window:{since,until,count,firstAt,lastAt,first,last,min,max,sum,mean,unit},points?:[{at,value}]}`，数值用有限十进制字符串；空窗 count=0，不含数值与样本时刻。summary 不返回点，points 至多 5000 个。平台保存判定结果和聚合值，**原始点的保留、降采样与过期恢复由外部存储负责，不承诺与业务记录相同的历史保证**。原记录观测组件用于低频业务记录；高频时序不通过 Source/Dataset 导入。
 
+## 协议包与模拟采集
+
+[ADR-0123](ADR/0123-pluggable-protocol-packages.md) 的首轮实现提供两个独立 Go 驱动：`protocol.simulator` 和只读 `protocol.s7-1200`。先构建本机包：
+
+```sh
+make protocol-packages
+```
+
+从本地受保护配置加载 `GATEWAY_TOKEN` 后，执行 `make gateway`；默认网关为 `127.0.0.1:8510`，技术配置与命令收据保存在忽略的 `.build/protocol/state`。原始采样以 NDJSON 输出，供外部采集/存储接收，不进入业务宿主。另一个终端从同一配置加载令牌，启动带包目录的业务宿主：
+
+```sh
+export PLATFORM_PACKAGES_DIR="$PWD/.build/protocol/packages"
+export PLATFORM_SECRET_PROTOCOL_GATEWAY="Bearer ${GATEWAY_TOKEN:?load from local protected configuration}"
+make dev SOLUTION=hospitality
+```
+
+Control Panel 的 Packages 中明确选择版本并安装；Data Connection → Connections 选择已安装的 profile，网关地址填 `http://127.0.0.1:8510`、Secret name 填 `protocol-gateway`，并允许本地 HTTP/私有地址。添加逻辑设备 `station-01`，下列内容保存为 CSV 后可导入点表：
+
+```csv
+id,device,address,type,unit,intervalMS
+supply-temperature,station-01,58.4,decimal,°C,1000
+return-temperature,station-01,42.8,decimal,°C,1000
+flow,station-01,4.2,decimal,m3/h,1000
+valve-position,station-01,40,decimal,%,1000
+pump-running,station-01,true,boolean,,1000
+```
+
+模拟 profile 的地址是初始值，场景支持 normal/anomaly/offline/stale/unknown；设备设置可覆盖这些值。先只读预览，查看时间、质量和错误，再保存、Check，并沿原发布审阅保存候选/激活。预览读数不存入 Connection 或业务日志。模拟数据始终有标识；第二份环境保持逻辑点名不变，只换现场绑定或模拟初值。
+
+数值 Observation 的相对路径为 `/observation`；协议源强制检查覆盖时间与质量，普通适配器可开启“Require complete, good-quality windows”。模拟器按场景计算确定性窗口；真实 S7 的窗口历史仍需外部 TSDB/适配器，网关不会把最近几个点冒充完整窗口。
+
+模拟写入先声明命令（例如 `set-valve` → `valve-position`，范围 0–100），再用原设备派发流程：专用 Writeback 为 `POST execute`，参数 `name`/`value` 由业务映射提供；缺省 name 使用原具名命令。请求的尝试身份与配置版本由宿主填写。unknown 场景会改变模拟值但丢失答复，之后靠新鲜 Observation 或状态 Source 回读；不因答复不明自动再发。真实 S7 包没有写入口。
+
+S7 profile 使用连接字段 `address`、`rack`、`slot`、`timeoutMs`，点地址例如 `DB1.DBX0.3`、`DB1.DBW2`、`DB1.DBD4`，并声明对应 `dataType`（BOOL/INT/DINT/REAL 等）。仅本地 S7 服务已用于工程检查，具体 CPU、固件、优化 DB 和安全通信不宣称兼容。
+
+新版包使用 `make protocol-packages PROTOCOL_VERSION=0.1.1`，版本化描述与旧二进制保留；同版本不同内容拒绝覆盖。网关与包目录属于部署配置，不给行业包增加 Go/React 实现。
+
 ## 设备派发与状态回读
 
 在业务对象的 Action types → Transaction 中声明设备指令：选择原 Connection 下已发布的专用 Writeback，给指令命名，明确目标类别、重发是否安全，以及是否依赖接收方按业务键去重。Writeback 的 After action 选择设备派发专用入口；它不会同时订阅普通业务动作。事务选择这条命令，参数沿原表达式编辑器配置，稳定键取自业务主体或主体字段。

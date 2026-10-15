@@ -1,6 +1,7 @@
 package buildapi
 
 import (
+	"net/url"
 	"strings"
 	"time"
 
@@ -26,6 +27,8 @@ type Connection struct {
 	Title string `json:"title" field:"required,search" source:"record"`
 	// Kind is http (REST or files), odata (an OData v2/v4 service root, e.g. SAP Gateway) or postgres (a read-only database).
 	Kind string `json:"kind" field:"required" choices:"http,odata,postgres" source:"record"`
+	// Protocol pins a trusted native driver; its local settings stay in this environment.
+	Protocol *platform.DriverBinding `json:"protocol,omitempty" type:"json" title:"Protocol binding"`
 	// Address is the service root URL, or for postgres a DSN without a password.
 	Address string `json:"address" field:"required" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
 	// Secret names the credential in the host's secret store: the Authorization header's value for http/odata, the password for postgres.
@@ -48,12 +51,21 @@ type ConnectionCheck struct {
 	OK    bool      `json:"ok"`
 	Error string    `json:"error,omitempty"`
 	// Detail is what answered: a status, a server version, an OData version.
-	Detail string `json:"detail,omitempty"`
+	Detail          string                  `json:"detail,omitempty"`
+	Samples         []platform.DriverSample `json:"samples,omitempty"`
+	BindingRevision string                  `json:"bindingRevision,omitempty"`
 }
 
 // Resolve is the address a source on this connection reads: an absolute URL
 // stays, a relative one joins the service root.
 func (c Connection) Resolve(ref string) string {
+	if c.Protocol != nil {
+		u, err := url.Parse(ref)
+		if err != nil || u.IsAbs() || u.Host != "" || u.User != nil || strings.Contains(u.Path, "..") || strings.HasPrefix(ref, "//") {
+			return ""
+		}
+		return strings.TrimRight(c.Address, "/") + "/bindings/" + url.PathEscape(c.ID) + "/revisions/" + c.Protocol.Revision() + "/" + strings.TrimLeft(ref, "/")
+	}
 	if ref == "" {
 		return c.Address
 	}

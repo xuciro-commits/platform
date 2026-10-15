@@ -25,6 +25,10 @@ WEB_PORT.hospitality := 5176
 WEB_PORT.manufacturing := 5175
 WEB_PORT ?= $(WEB_PORT.$(SOLUTION))
 LITE_HOST ?= 127.0.0.1
+GATEWAY_LISTEN ?= 127.0.0.1:8510
+GATEWAY_PACKAGES ?= $(ROOT)/.build/protocol/packages
+GATEWAY_STATE ?= $(ROOT)/.build/protocol/state
+PROTOCOL_VERSION ?= 0.1.0
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
 
@@ -73,6 +77,15 @@ dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依
 .PHONY: web
 web: ## 在 Vite 下热重载运行工作区（HMR），将 /v1 反向代理到对应解决方案宿主
 	cd web && PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
+
+.PHONY: protocol-packages
+protocol-packages: ## 构建独立网关、模拟与 S7 只读驱动，生成 .build/protocol/packages 中的本机协议包
+	GO="$(GO)" PROTOCOL_VERSION="$(PROTOCOL_VERSION)" python3 scripts/protocol-packages.py
+
+.PHONY: gateway
+gateway: protocol-packages ## 启动本地协议网关（默认 8510；需环境变量 GATEWAY_TOKEN，技术收据保留在 .build/protocol/state）
+	@test -n "$$GATEWAY_TOKEN" || { echo 'Set GATEWAY_TOKEN in the environment before running make gateway'; exit 1; }
+	@.build/protocol/bin/gateway -listen "$(GATEWAY_LISTEN)" -packages "$(GATEWAY_PACKAGES)" -state "$(GATEWAY_STATE)" -token-env GATEWAY_TOKEN
 
 .PHONY: setup
 setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright 浏览器内核

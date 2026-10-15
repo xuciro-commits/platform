@@ -13,6 +13,7 @@ export type Connection = { server: string; token: string; tenant: string; princi
 /** The HTTP edge accepts both the host's structured refusal and a plain
  * diagnostic. Callers render only text, never the error object itself. */
 export function apiErrorMessage(body: unknown): string | undefined {
+  if (body instanceof Error) return body.message.trim() ? body.message : undefined;
   if (!body || typeof body !== "object" || !("error" in body)) return undefined;
   const error = body.error;
   const message = typeof error === "string" ? error

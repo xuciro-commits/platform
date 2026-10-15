@@ -1,0 +1,75 @@
+import type * as Api from "../../packages/kernel/src/gen/host";
+import { expect, shots, slug, test } from "./kit";
+
+test("an installed protocol binary configures devices, previews points and publishes a connection", async ({ page, builder }, info) => {
+  // The host's package directory contains binaries built by make protocol-packages.
+  // Installation and every read below use the real package owner and gateway.
+  const packageID = "protocol.simulator", version = "0.1.0";
+  const gateway = process.env.PROTOCOL_GATEWAY_URL ?? "http://127.0.0.1:8510";
+  await builder.open(page, "/apps?surface=tenant");
+  const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
+  await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);
+  await card.getByRole("button", { name: "Install", exact: true }).click();
+  await expect(card.getByText("active", { exact: true })).toBeVisible();
+
+  const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");
+  const simulator = kinds.items.find(kind => kind.package === packageID && kind.version === version && kind.profile?.id === "simulator");
+  expect(simulator?.profile?.simulation).toBe(true);
+  expect(simulator?.digest).toMatch(/^(sha256:)?[0-9a-f]{64}$/);
+  const name = slug("heating");
+  await builder.open(page, "/connection?id=new");
+  await page.getByRole("textbox", { name: "Connection name", exact: true }).fill(name);
+  await page.getByRole("textbox", { name: "Connection title", exact: true }).fill("Simulated heating station");
+  await page.getByRole("combobox", { name: "Kind", exact: true }).selectOption(simulator!.id);
+  await page.getByRole("textbox", { name: "Gateway address", exact: true }).fill(gateway);
+  await page.getByRole("textbox", { name: "Secret name", exact: true }).fill("protocol-gateway");
+  await page.getByRole("checkbox", { name: "Allow http and private addresses (on-premise systems)", exact: true }).check();
+  await page.getByRole("combobox", { name: "Simulation scenario", exact: true }).selectOption("normal");
+  await page.getByRole("button", { name: "Add device", exact: true }).click();
+  await page.getByRole("textbox", { name: "Device ID", exact: true }).fill("station-01");
+  await page.getByRole("textbox", { name: "Device title", exact: true }).fill("Station 01");
+
+  await page.getByRole("button", { name: "Import a point table", exact: true }).click();
+  const pointFile = page.getByLabel("Point table file", { exact: true });
+  await pointFile.setInputFiles({ name: "invalid-points.csv", mimeType: "text/csv", buffer: Buffer.from("id,device,address,type\nsupply-temperature,station-01,,decimal\n") });
+  await expect(page.getByText("address is required.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replace points with this table", exact: true })).toBeDisabled();
+  const points = [
+    { id: "supply-temperature", device: "station-01", address: "58.4", type: "decimal", unit: "°C", intervalMS: 1000 },
+    { id: "valve-position", device: "station-01", address: "40", type: "decimal", unit: "%", intervalMS: 1000 },
+  ];
+  await pointFile.setInputFiles({ name: "heating-points.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(points)) });
+  await page.getByRole("button", { name: "Replace points with this table", exact: true }).click();
+  await page.getByRole("button", { name: "Add command", exact: true }).click();
+  await page.getByRole("textbox", { name: "Command ID", exact: true }).fill("set-valve");
+  await page.getByRole("combobox", { name: "Command point", exact: true }).selectOption("valve-position");
+  await page.getByRole("textbox", { name: "Minimum command value", exact: true }).fill("0");
+  await page.getByRole("textbox", { name: "Maximum command value", exact: true }).fill("100");
+  await page.getByRole("button", { name: "Read-only preview", exact: true }).click();
+  const preview = page.getByRole("region", { name: "Read-only preview", exact: true });
+  await expect(preview.getByText("Read confirmed", { exact: true })).toBeVisible();
+  await expect(preview.getByRole("cell", { name: "supply-temperature", exact: true })).toBeVisible();
+  await expect(preview.getByRole("cell", { name: "58.4", exact: true })).toBeVisible();
+  await expect(preview.getByRole("columnheader", { name: "Sample time", exact: true })).toBeVisible();
+  await expect(preview.getByRole("cell", { name: "good", exact: true }).first()).toBeVisible();
+  await expect(preview.getByText("Simulation", { exact: true })).toBeVisible();
+  await shots(page, preview, "protocol-connection-preview", info);
+
+  await page.getByRole("button", { name: "Save connection", exact: true }).click();
+  let saved: Api.Connection | undefined;
+  await expect.poll(async () => {
+    const result = await builder.read<{ records: Api.Connection[] }>("records/build.connection?limit=100");
+    saved = result.records.find(connection => connection.name === name);
+    return saved?.protocol?.configuration.points.length;
+  }).toBe(2);
+  expect(saved!.protocol).toMatchObject({ package: packageID, version, digest: simulator!.digest, profile: "simulator", configuration: { commands: [{ id: "set-valve", point: "valve-position", min: "0", max: "100" }] } });
+  await expect(page.getByRole("button", { name: "Save connection", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await expect.poll(async () => (await builder.record<Api.Connection>("build.connection", saved!.id)).state, { timeout: 20_000 }).toBe("ready");
+  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
+  await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
+});

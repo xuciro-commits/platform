@@ -44,10 +44,10 @@ func (t *Tenant) assetReleaseContextLocked(registry *platform.AssetRegistry, ass
 			return context, fmt.Errorf("target environment binding %s is not ready or has an incompatible connection kind", requirement.Ref)
 		}
 		if requirement.Credential {
-			if connection.Secret == "" || t.Secrets == nil {
+			if connection.Secret == "" {
 				return context, fmt.Errorf("target environment binding %s needs its own credential", requirement.Ref)
 			}
-			if _, ok := t.Secrets(connection.Secret); !ok {
+			if _, ok := t.secret(connection.Secret); !ok {
 				return context, fmt.Errorf("target environment binding %s has no credential", requirement.Ref)
 			}
 		}

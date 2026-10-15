@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -211,7 +212,13 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 	return t.readSourceWithConnection(s, conn)
 }
 
-func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection) ([]map[string]any, error) {
+func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection, retained ...bool) ([]map[string]any, error) {
+	if conn != nil && conn.Protocol != nil {
+		readOnly := len(retained) > 0 && retained[0]
+		if err := t.configureProtocol(context.Background(), *conn, readOnly); err != nil {
+			return nil, err
+		}
+	}
 	switch s.Profile {
 	case "odata":
 		return t.readOData(s, *conn)
