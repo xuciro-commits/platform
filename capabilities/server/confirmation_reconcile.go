@@ -10,6 +10,7 @@ import (
 	"platformserver/internal/host"
 	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
+	"slices"
 )
 
 // Reconciliation uses the original bounded source readers on their outside
@@ -19,31 +20,53 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		return
 	}
 	t.mu.Lock()
-	runs, _, _ := platform.Find[platform.ConfirmationRun](t.automation(build.ID, false), platform.Query{Limit: 500, Sort: []string{"id"}})
+	runs, err := platform.PendingConfirmations(t.automation(build.ID, false))
 	t.mu.Unlock()
-	for _, run := range runs {
-		if run.State == "confirmed" || run.State == "compensated" {
+	if err != nil {
+		return
+	}
+	// Poll the oldest due evidence first, including runs beyond the first page.
+	due := func(r platform.ConfirmationRun) time.Time {
+		var earliest time.Time
+		found := false
+		for _, p := range r.Parties {
+			if p.State == "pending" || p.State == "unknown" {
+				if !found || p.ReconcileDue.Before(earliest) {
+					earliest, found = p.ReconcileDue, true
+				}
+			}
+		}
+		return earliest
+	}
+	slices.SortStableFunc(runs, func(a, b platform.ConfirmationRun) int { return due(a).Compare(due(b)) })
+	reads := 0
+	for _, saved := range runs {
+		if !slices.Contains([]string{"pending", "partial", "expired"}, saved.State) || saved.Completion != "" {
 			continue
 		}
-		for i, p := range run.Parties {
+		for i := range saved.Parties {
+			t.mu.Lock()
+			run, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), saved.ID)
+			valid := exists && i < len(run.Parties) && i < len(run.Definition.Parties) && run.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, run.State)
+			if valid {
+				valid = (hostView{t: t}).CheckConfirmationRead(run, i, at) == nil
+			}
+			t.mu.Unlock()
+			if !valid {
+				continue
+			}
+			p := run.Parties[i]
 			policy := run.Definition.Parties[i].Reconcile
 			if policy == nil || (p.State != "pending" && p.State != "unknown") || p.ReconcileDue.After(at) {
 				continue
 			}
-			member, known := t.Member(run.Member)
-			if !known || !member.Active() {
-				continue
+			if reads >= 64 {
+				return
 			}
-			if !t.Readable(member, run.Subject, at) {
-				continue
-			}
+			reads++
 			var source build.Source
 			var connection build.Connection
 			if json.Unmarshal(p.Source, &source) != nil || json.Unmarshal(p.Connection, &connection) != nil {
-				continue
-			}
-			sourceMember, sourceKnown := t.Member(source.Puller)
-			if !sourceKnown || !sourceMember.Active() || !t.Readable(sourceMember, build.SourceType+"/"+policy.Source, at) {
 				continue
 			}
 			diff := platform.ConfirmationDifference{At: at}
@@ -75,6 +98,9 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			}
 			if problem != nil {
 				diff.Error = problem.Error()
+				if len(diff.Error) > 4096 {
+					diff.Error = diff.Error[:4096]
+				}
 			}
 			if matches == 0 && problem == nil {
 				diff.Error = "The requested source record is absent"
@@ -84,27 +110,18 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				diff.Matched = false
 				diff.Error = "Reconciliation evidence exceeds its scalar budget"
 			}
-			t.mu.Lock()
-			current, ok := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
-			valid := ok && current.Revision == run.Revision && current.Parties[i].Intent == p.Intent
-			t.mu.Unlock()
-			member, known = t.Member(run.Member)
-			if !valid || !known || !t.Readable(member, run.Subject, at) {
-				continue
-			}
-			sourceMember, sourceKnown = t.Member(source.Puller)
-			if !sourceKnown || !sourceMember.Active() || !t.Readable(sourceMember, build.SourceType+"/"+policy.Source, at) {
-				continue
-			}
 			outcome := "unknown"
 			if diff.Matched {
 				outcome = "accepted"
 			}
-			payload := map[string]any{"party": p.Name, "outcome": outcome, "reason": "Source reconciliation", "difference": diff, "answer": diff.Observed}
+			payload := map[string]any{"party": p.Name, "revision": run.Revision, "outcome": outcome, "reason": "Source reconciliation", "difference": diff, "answer": diff.Observed}
 			caller := t.automation(build.ID, false).Member
-			_, refusal := t.Submit(caller, &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}, at)
+			submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}
+			t.mu.Lock()
+			_, refusal := t.submitAccepted(t.app(build.ID), caller, submission, at, true)
+			t.mu.Unlock()
 			if refusal != nil {
-				return
+				continue // A stale read or revoked access is not an accepted difference.
 			}
 		}
 	}

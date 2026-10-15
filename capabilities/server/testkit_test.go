@@ -77,7 +77,7 @@ func decide(t *testing.T, tn *Tenant, who, app, schema, typ, id string, payload 
 	t.Helper()
 	rec, err := tn.Submit(memberOf(t, tn, who), submission(tn, memberOf(t, tn, who), app, schema, typ, id, payload), at)
 	if err != nil {
-		t.Fatalf("%s %s/%s as %s: %s: %s", schema, typ, id, who, err.Code, err.Message)
+		t.Fatalf("%s %s/%s as %s: %s: %s (fault=%+v)", schema, typ, id, who, err.Code, err.Message, tn.fault.Load())
 	}
 	return rec
 }

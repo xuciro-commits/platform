@@ -1,18 +1,10 @@
 package host
 
-import (
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	"platformserver/platform"
-	"time"
-)
+import "platformserver/platform"
 
-// Confirmation transport composes the original declaration compiler, outbox
-// and accepted caller. It supplies no independent decision or scheduler.
+// The caller provides the private transport; the attached owner also reads
+// current reviewer membership. There is no independent decision or scheduler.
 type ConfirmationHost interface {
+	platform.ConfirmationTransport
 	Holding(string, string) []string
-	ResolveConfirmationDelivery(platform.Caller, platform.ConfirmationRun, int, bool, time.Time) *kernel.Error
-	FreezeConfirmation(platform.Caller, string, platform.Confirmation, time.Time) (string, []platform.ReleaseAsset, error)
-	QueueConfirmation(platform.Caller, *pb.ChangeRecord, platform.ConfirmationRun, int, bool, time.Time) *kernel.Error
-	CompleteConfirmation(platform.Caller, *pb.ChangeRecord, platform.ConfirmationRun, string, time.Time) (string, *kernel.Error)
 }

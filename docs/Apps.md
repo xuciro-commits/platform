@@ -314,6 +314,8 @@ Guided start 可从任何一步进入或跳过：描述业务意图、审阅原�
 
 冲突保留本地编辑，显式重载取得最新修订。对象、页面、流程、AI 与代码编辑器切换标签保留草稿；关闭、重载或切换身份时可继续编辑或放弃修改，浏览器刷新有原生提示。新代码编辑器使用共享 `useUnsavedChanges(dirty, discard)`，只在原保存确认后 `markSaved()`，不自建另一套离开拦截。对象/页面/应用/流程/代码可保存候选后激活，安装冻结闭包并保留后续草稿；AI 仍由函数 owner 的版本/评测治理负责。已有记录的存储形状变化、重命名、动作退役或页面能力绑定改变受原升级门禁约束。编译容器与 Wasm worker 已隔离；候选数据模拟仍是空租户内存环境，不冒称完整物理沙箱或通用客户升级。
 
+构建跨系统确认：先发布业务对象与原完成动作，再在 Data Connection 建立并检查 Connection，发布 After action = Only explicit business confirmations 的 Writeback；需要对账时发布受控 Connection 下的 Source。回到 Action types 的 Transaction，开启 Wait for declared parties，选择完成动作、复核角色、部分策略与截止策略，并逐方选择 Writeback 或 Protocol；反向请求与回读字段/周期由构建者明确声明。保存并沿原候选/激活发布；业务人员在原记录页看 Business confirmation progress，复核者凭证据裁决或重试已拒绝的请求。未知结果不重发，补偿使用独立身份；原版本映射不可用时的拒绝可在记录或 Integrations 中查看。支持边界见 [ADR-0112 As built](ADR/0112-cross-system-coordination.md#5-as-built)。
+
 ## 工作台中的 WMS
 
 WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造宿主的域名、端口和平台 App Shell。仓库中的旧装配脚本、定义样本和托盘算法已清理；已有租户应用、草稿及数据保留。

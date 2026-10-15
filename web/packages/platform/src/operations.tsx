@@ -133,6 +133,7 @@ function Webhooks() {
     { accessorKey: "attempts", header: t("Tries"), meta: { width: 60, align: "right" } },
     { accessorKey: "due", header: t("Next"), meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
     { accessorKey: "error", header: t("Last answer"), meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
+    { accessorKey: "callbackError", header: t("Receipt refusal"), meta: { width: 240 }, cell: (c) => <span className="text-xs text-danger">{c.getValue() ?? ""}</span> },
     { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
       {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
       {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decideOn("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}

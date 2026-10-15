@@ -5,10 +5,35 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 )
 
 const ConfirmationType = "build.confirmation"
 const ConfirmationAnswerSchema = ConfirmationType + ".answer"
+
+// ConfirmationTransport is provided by the caller's private decision, so
+// compiled owner closures never retain a live host as their writing context.
+type ConfirmationTransport interface {
+	FreezeConfirmationProtocol(ConfirmationParty) (*ConfirmationProtocol, error)
+	FreezeConfirmation(Caller, string, Confirmation, time.Time) (string, []ReleaseAsset, error)
+	QueueConfirmation(Caller, *pb.ChangeRecord, ConfirmationRun, int, bool, time.Time) *kernel.Error
+	CompleteConfirmation(Caller, *pb.ChangeRecord, ConfirmationRun, string, time.Time) (string, *kernel.Error)
+	ResolveConfirmationDelivery(Caller, ConfirmationRun, int, bool, time.Time) *kernel.Error
+	RetryConfirmationDelivery(Caller, ConfirmationRun, int, bool, time.Time) *kernel.Error
+	CheckConfirmationRead(ConfirmationRun, int, time.Time) *kernel.Error
+}
+
+type ConfirmationRuntime interface{ ConfirmationTransport() ConfirmationTransport }
+
+func (c Caller) ConfirmationTransport() ConfirmationTransport {
+	rt, ok := c.rt.(ConfirmationRuntime)
+	if !ok || !c.Staging() || c.Replaying {
+		return nil
+	}
+	return rt.ConfirmationTransport()
+}
 
 // Confirmation declares coordination after a single authority accepts its
 // transaction. Each party's request, reply and compensation stays independent.
@@ -55,6 +80,9 @@ func (c Confirmation) Check() error {
 			return fmt.Errorf("Each confirmation party needs a unique name, title and one declared transport")
 		}
 		seen[p.Name] = true
+		if p.Writeback != "" && p.CompensateAction != "" || p.Protocol != "" && p.CompensateWriteback != "" {
+			return fmt.Errorf("Compensation uses the party's declared transport")
+		}
 		if c.OnExpire == "compensate" && p.CompensateWriteback == "" && p.CompensateAction == "" {
 			return fmt.Errorf("Compensation must be declared for every party")
 		}
@@ -75,6 +103,7 @@ type ConfirmationRun struct {
 	State           string                 `json:"state" field:"readonly" choices:"pending,partial,confirmed,expired,rejected,compensating,compensated" source:"record"`
 	Deadline        time.Time              `json:"deadline" field:"readonly"`
 	Partial         bool                   `json:"partial" field:"readonly"`
+	Escalated       bool                   `json:"escalated,omitempty" field:"readonly"`
 	Definition      Confirmation           `json:"definition" field:"readonly,aside" type:"json"`
 	Release         string                 `json:"release,omitempty" field:"readonly" source:"record"`
 	Assets          []ReleaseAsset         `json:"assets" field:"readonly,aside" type:"json"`
@@ -100,11 +129,23 @@ type ConfirmationProgress struct {
 	Source              json.RawMessage          `json:"source,omitempty"`
 	Connection          json.RawMessage          `json:"connection,omitempty"`
 	SourceVersion       string                   `json:"sourceVersion,omitempty"`
+	Protocol            *ConfirmationProtocol    `json:"protocol,omitempty"`
 	CompensationRequest json.RawMessage          `json:"compensationRequest,omitempty"`
 	Compensation        string                   `json:"compensation,omitempty"`
 	CompensationState   string                   `json:"compensationState,omitempty"`
+	CompensationAt      time.Time                `json:"compensationAt,omitzero"`
+	CompensationAnswer  json.RawMessage          `json:"compensationAnswer,omitempty"`
+	CompensationReason  string                   `json:"compensationReason,omitempty"`
 	ReconcileDue        time.Time                `json:"reconcileDue,omitzero"`
 	Differences         []ConfirmationDifference `json:"differences,omitempty"`
+}
+
+// ConfirmationProtocol freezes the selected provider and its declared mapping.
+type ConfirmationProtocol struct {
+	Provider         string `json:"provider"`
+	Version          string `json:"version"`
+	Action           string `json:"action"`
+	CompensateAction string `json:"compensateAction,omitempty"`
 }
 
 type ConfirmationDifference struct {
@@ -112,4 +153,23 @@ type ConfirmationDifference struct {
 	Matched  bool            `json:"matched"`
 	Observed json.RawMessage `json:"observed,omitempty"`
 	Error    string          `json:"error,omitempty"`
+}
+
+// PendingConfirmations reads every unfinished run through the original paged
+// record reader. Historical completed runs cannot hide due work past page one.
+func PendingConfirmations(c Caller) ([]ConfirmationRun, *kernel.Error) {
+	var all []ConfirmationRun
+	for {
+		rows, count, err := Find[ConfirmationRun](c, Query{Domain: json.RawMessage(`[["state","!=","compensated"],["completion","=",""],["completionError","=",""]]`), Sort: []string{"id"}, Limit: 500, Offset: len(all)})
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, rows...)
+		if len(all) >= count {
+			return all, nil
+		}
+		if len(rows) == 0 {
+			return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation inventory changed while being read")
+		}
+	}
 }

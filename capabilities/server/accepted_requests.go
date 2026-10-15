@@ -40,13 +40,17 @@ func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kerne
 	}()
 	s := q.record.GetSubmission()
 	key := fmt.Sprintf("%s:%s#%d", q.caller.App, s.GetIdempotencyKey(), q.n)
+	providerKey := key
+	if q.Key != "" {
+		providerKey = q.Key
+	}
 	answer := platform.Answer{Tag: q.Tag, Call: q.Target, Action: q.Action, Outcome: "accepted"}
 	var ref *pb.EntityRef
 	_, err := d.Attempt(func() (*pb.ChangeRecord, *kernel.Error) {
 		var record *pb.ChangeRecord
 		var refusal *kernel.Error
 		ref, record, refusal = d.routingTenant().invoke(q.caller, q.Protocol, q.Action, q.Target,
-			platform.Raw(q.Payload), key, s.GetIdempotencyKey(), now)
+			platform.Raw(q.Payload), providerKey, s.GetIdempotencyKey(), now, q.Provider)
 		return record, refusal
 	})
 	if err != nil {

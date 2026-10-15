@@ -41,7 +41,8 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	for _, effect := range t.Effects(now) {
 		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
 		books := strings.HasPrefix(effect.Event, "journal/") && effect.Endpoint == build.BooksEndpoint
-		if effect.App != build.ID || !writeback && !books {
+		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		if effect.App != build.ID || !writeback && !books && !confirmation {
 			continue
 		}
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
@@ -83,7 +84,7 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 		if err != nil {
 			continue
 		}
-		if w.Schema() != schema {
+		if w.On == "confirmation" || w.Schema() != schema {
 			continue
 		}
 		conn, ok := platform.Get[build.Connection](c, w.Connection)
@@ -162,8 +163,15 @@ func (t *Tenant) sendWriteback(x platform.Effect) platform.Outcome {
 	case err != nil:
 		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
 	default:
-		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		answer, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
 		resp.Body.Close()
+		if readErr != nil || len(answer) > 64<<10 {
+			out.Result, out.Detail = "unknown", "The delivery answer is incomplete or exceeds its retained evidence budget"
+			return out
+		}
+		if len(answer) > 0 && !json.Valid(answer) {
+			answer = platform.Raw(clipDetail(answer))
+		}
 		out.Answer = answer
 		code := resp.StatusCode
 		switch {

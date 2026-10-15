@@ -396,6 +396,7 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedControl) error {
 				old := all[i]
 				fixed := next
 				fixed.State, fixed.Due, fixed.Since = old.State, old.Due, old.Since
+				fixed.Last, fixed.Error, fixed.CallbackError = old.Last, old.Error, old.CallbackError
 				oldHash, _ := canonicalDigest(old)
 				fixedHash, _ := canonicalDigest(fixed)
 				if oldHash != fixedHash {

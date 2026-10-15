@@ -23,7 +23,7 @@ func (b *Build) confirmationEntity() platform.Entity {
 		Description: "Independent party receipts, unknown outcomes, source reconciliation and declared compensation.",
 		Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}, Participants: func(value any) []string {
 			r := value.(platform.ConfirmationRun)
-			return append([]string{r.Member}, r.Reviewers...)
+			return append([]string{r.Member}, b.host.(host.ConfirmationHost).Holding(ID, r.Definition.ReviewerRole)...)
 		}},
 		Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"input", "parties", "definition", "assets"}}},
 	}
@@ -32,7 +32,7 @@ func confirmationActions() []platform.Action {
 	return []platform.Action{
 		{Schema: confirmationAnswer, Target: confirmationType, Title: "Record confirmation answer", Description: "Retain the original party request identity and answer.", Capability: "confirmations", Automation: true, Payload: []platform.Field{}},
 		{Schema: confirmationTick, Target: confirmationType, Title: "Advance confirmation work", Description: "Apply deadlines and retain completion results through original owned work.", Capability: "confirmations", Automation: true, Payload: []platform.Field{}},
-		{Schema: confirmationReview, Target: confirmationType, Title: "Review business confirmation", Description: "Resolve a party from checked evidence, or request its declared compensation.", Capability: "confirmations", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "party", Type: "string", Required: true, Description: "The declared party"}, {Name: "outcome", Type: "string", Required: true, Choices: []string{"accepted", "refused", "compensate"}, Description: "The evidenced decision"}, {Name: "reason", Type: "string", Required: true, Description: "Evidence supporting the decision"}}},
+		{Schema: confirmationReview, Target: confirmationType, Title: "Review business confirmation", Description: "Resolve or retry a party from checked evidence, or request its declared compensation.", Capability: "confirmations", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "party", Type: "string", Description: "The declared party"}, {Name: "outcome", Type: "string", Required: true, Choices: []string{"accepted", "refused", "retry", "compensate", "complete"}, Description: "The evidenced decision"}, {Name: "compensation", Type: "boolean", Description: "Resolve the compensation instead of the original request"}, {Name: "reason", Type: "string", Required: true, Description: "Evidence supporting the decision"}}},
 	}
 }
 
@@ -64,7 +64,92 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 			return fmt.Errorf("Confirmation completion cannot consume an AI proposal")
 		}
 	}
+	if b.host != nil {
+		_, err := b.confirmationDependencies(spec)
+		return err
+	}
 	return nil
+}
+
+// Dependencies belong to the starting action, avoiding an object/writeback
+// cycle while keeping the declared transports in the original release graph.
+func (b *Build) confirmationDependencies(spec *platform.Confirmation) ([]platform.AssetRef, error) {
+	var requires []platform.AssetRef
+	for _, party := range spec.Parties {
+		for _, id := range []string{party.Writeback, party.CompensateWriteback} {
+			if id == "" {
+				continue
+			}
+			record, ok := b.host.Record(WritebackType + "/" + id)
+			w, valid := record.(Writeback)
+			if !ok || !valid {
+				return nil, fmt.Errorf("Confirmation writeback is unavailable")
+			}
+			requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: w.Name})
+		}
+		if party.Reconcile != nil {
+			record, ok := b.host.Record(SourceType + "/" + party.Reconcile.Source)
+			s, valid := record.(Source)
+			if !ok || !valid {
+				return nil, fmt.Errorf("Reconciliation source is unavailable")
+			}
+			requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: s.Name})
+		}
+		if party.Protocol != "" {
+			p, err := b.host.(host.ConfirmationHost).FreezeConfirmationProtocol(party)
+			if err != nil {
+				return nil, err
+			}
+			for _, schema := range []string{p.Action, p.CompensateAction} {
+				if schema != "" {
+					requires = append(requires, platform.AssetRef{App: p.Provider, Kind: platform.AssetAction, Name: schema})
+				}
+			}
+		}
+	}
+	return requires, nil
+}
+
+func (b *Build) withConfirmationDependencies(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+	dependencies := map[string][]platform.AssetRef{}
+	for _, asset := range assets {
+		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		var object Object
+		if err := json.Unmarshal(asset.Body, &object); err != nil {
+			return nil, err
+		}
+		for _, action := range object.Actions {
+			if action.Transaction == nil || action.Transaction.Confirmation == nil {
+				continue
+			}
+			spec := action.Transaction.Confirmation
+			requires, err := b.confirmationDependencies(spec)
+			if err != nil {
+				return nil, err
+			}
+			for _, name := range []string{spec.OnComplete, spec.OnPartialAction} {
+				if name == "" {
+					continue
+				}
+				if !strings.HasPrefix(name, asset.Ref.Name+".") {
+					name = asset.Ref.Name + "." + name
+				}
+				requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: name})
+			}
+			dependencies[asset.Ref.Name+"."+action.Name] = requires
+		}
+	}
+	for i, asset := range assets {
+		if asset.Ref.Kind != platform.AssetAction || len(dependencies[asset.Ref.Name]) == 0 {
+			continue
+		}
+		requires := append(slices.Clone(asset.Requires), dependencies[asset.Ref.Name]...)
+		slices.SortFunc(requires, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
+		assets[i].Requires = slices.Compact(requires)
+	}
+	return assets, nil
 }
 
 func (b *Build) confirmationProtocols() []platform.Consumption {
@@ -93,8 +178,8 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 		return nil
 	}
 	spec := *txn.Confirmation
-	transport, ok := b.host.(host.ConfirmationHost)
-	if !ok {
+	transport := c.ConfirmationTransport()
+	if transport == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Confirmation transport is unavailable")
 	}
 	if c.Simulating() {
@@ -106,11 +191,17 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 	}
 	id := "confirmation:" + r.GetChangeId()
 	run := platform.ConfirmationRun{Record: platform.Record{ID: id}, Subject: txn.Subject + "/" + r.GetSubmission().GetTarget().GetId(), Action: r.GetSubmission().GetSchema().GetName(), Member: c.ID, State: "pending", Deadline: at.Add(time.Duration(spec.DeadlineSeconds) * time.Second), Definition: spec, Release: release, Assets: assets, Input: slices.Clone(r.GetSubmission().GetPayload()), Parties: []platform.ConfirmationProgress{}, Reviewers: []string{}}
-	for _, member := range transport.Holding(ID, spec.ReviewerRole) {
+	for _, member := range b.host.(host.ConfirmationHost).Holding(ID, spec.ReviewerRole) {
 		run.Reviewers = append(run.Reviewers, member)
 	}
 	for _, party := range spec.Parties {
 		p := platform.ConfirmationProgress{Name: party.Name, Title: party.Title, State: "pending", Key: id + ":" + party.Name, Intent: c.Tenant + ":" + ID + ":" + id + ":" + party.Name}
+		if party.Protocol != "" {
+			p.Protocol, err = transport.FreezeConfirmationProtocol(party)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+			}
+		}
 		prepare := func(writeback string, compensate bool) (json.RawMessage, int, error) {
 			if writeback == "" {
 				return nil, 0, nil
@@ -120,7 +211,10 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 				return nil, 0, fmt.Errorf("Confirmation writeback is unavailable")
 			}
 			w, err = b.ExecutionWriteback(w)
-			if err != nil || w.State != "published" {
+			if err != nil {
+				return nil, 0, err
+			}
+			if w.State != "published" || w.Object != txn.Subject {
 				return nil, 0, fmt.Errorf("Confirmation writeback must be published")
 			}
 			conn, known := platform.Get[Connection](c, w.Connection)
@@ -145,6 +239,7 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
+		p.Intent = confirmationIntent(c.Tenant, p.Key, p.Request, p.Protocol)
 		p.CompensationRequest, _, err = prepare(party.CompensateWriteback, true)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
@@ -171,6 +266,9 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			}
 			p.Connection = platform.Raw(conn)
 			s.Cursor = ""
+			if s.State != "published" {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reconciliation source must be published")
+			}
 			p.Source, p.SourceVersion = platform.Raw(s), s.ExecutionVersion()
 			p.ReconcileDue = at
 		}
@@ -195,10 +293,12 @@ func (b *Build) updateConfirmation(c platform.Caller, s *pb.Submission, at time.
 		}
 		var in struct {
 			Party, Outcome, Reason, Tag, Completion, CompletionError string
+			Compensation                                             bool
+			Revision                                                 uint32
 			Answer                                                   json.RawMessage
 			Difference                                               *platform.ConfirmationDifference
 		}
-		if json.Unmarshal(s.GetPayload(), &in) != nil {
+		if json.Unmarshal(s.GetPayload(), &in) != nil || len(in.Reason) > 4096 || len(in.Answer) > 64<<10 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid confirmation answer")
 		}
 		manual := s.GetSchema().GetName() == confirmationReview
@@ -210,48 +310,95 @@ func (b *Build) updateConfirmation(c platform.Caller, s *pb.Submission, at time.
 			if _, err := c.ReadRecord(typ, id, at); err != nil {
 				return nil, err
 			}
+			if !slices.Contains([]string{"accepted", "refused", "retry", "compensate", "complete"}, in.Outcome) || in.Difference != nil || in.Tag != "" || in.Completion != "" || in.CompletionError != "" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid confirmation decision")
+			}
 		} else if !c.Automation {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation receipts belong to their original transport")
 		}
-		compensate := in.Outcome == "compensate"
 		if in.Tag != "" {
 			in.Party, _, _ = strings.Cut(in.Tag, ":")
+			in.Compensation = strings.HasSuffix(in.Tag, ":compensate")
 		}
 		i := slices.IndexFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.Name == in.Party })
-		if s.GetSchema().GetName() != confirmationTick && i < 0 {
+		if s.GetSchema().GetName() != confirmationTick && in.Outcome != "complete" && i < 0 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a declared confirmation party")
 		}
+		transport := c.ConfirmationTransport()
+		if transport == nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Confirmation transport is unavailable")
+		}
+		if in.Difference != nil {
+			if manual || in.Revision != run.Revision || len(in.Difference.Observed) > 4096 || len(in.Difference.Error) > 4096 {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation changed while its source was read")
+			}
+			if err := transport.CheckConfirmationRead(run, i, at); err != nil {
+				return nil, err
+			}
+		}
+		if manual && in.Outcome == "complete" && (run.State != "expired" && run.CompletionError == "" || slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State != "confirmed" || p.Compensation != "" })) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Completion requires every original party to be confirmed")
+		}
+		if manual && i >= 0 && in.Outcome != "complete" {
+			p := run.Parties[i]
+			state := p.State
+			if in.Compensation {
+				state = p.CompensationState
+				if p.Compensation == "" || in.Outcome == "compensate" {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "There is no compensation to review")
+				}
+			} else if p.Compensation != "" && in.Outcome != "compensate" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Review the compensation for this party")
+			}
+			if in.Outcome == "retry" && state != "rejected" && state != "failed" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a rejected or failed request may be retried")
+			}
+			if (in.Outcome == "accepted" || in.Outcome == "refused") && state != "unknown" && state != "rejected" && state != "failed" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This party has no unresolved result to review")
+			}
+			if in.Outcome == "compensate" && (p.State != "confirmed" && p.State != "unknown" || run.Definition.Parties[i].CompensateWriteback == "" && run.Definition.Parties[i].CompensateAction == "") {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Compensation needs a declared reverse request and an applied or unknown original result")
+			}
+		}
 		return func(r *pb.ChangeRecord) {
-			if i >= 0 {
+			if i >= 0 && in.Outcome != "complete" {
 				p := &run.Parties[i]
-				if compensate {
-					if p.Compensation == "" {
-						p.Compensation = p.Intent + ":compensate"
-						p.CompensationState = "pending"
-						run.State = "compensating"
-						if err := b.host.(host.ConfirmationHost).QueueConfirmation(c, r, run, i, true, at); err != nil {
+				if in.Outcome == "compensate" {
+					b.compensateParty(c, r, &run, i, at)
+				} else if in.Outcome == "retry" {
+					if err := transport.RetryConfirmationDelivery(c, run, i, in.Compensation, at); err != nil {
+						c.FailDecision(err)
+						return
+					}
+					if in.Compensation {
+						p.CompensationState, p.CompensationReason = "pending", in.Reason
+					} else {
+						p.State, p.Reason = "pending", in.Reason
+						run.State = "pending"
+					}
+					if p.Protocol != nil {
+						if err := transport.QueueConfirmation(c, r, run, i, in.Compensation, at); err != nil {
 							c.FailDecision(err)
 							return
 						}
 					}
-				} else if strings.HasSuffix(in.Tag, ":compensate") {
-					p.CompensationState = map[string]string{"accepted": "confirmed", "refused": "rejected", "unknown": "unknown"}[in.Outcome]
-					p.Reason = in.Reason
-					if p.CompensationState == "confirmed" {
-						if err := b.host.(host.ConfirmationHost).ResolveConfirmationDelivery(c, run, i, true, at); err != nil {
-							c.FailDecision(err)
-							return
-						}
-					}
-				} else if !slices.Contains([]string{"confirmed", "rejected"}, p.State) {
-					p.State = map[string]string{"accepted": "confirmed", "refused": "rejected", "unknown": "unknown"}[in.Outcome]
-					if p.State == "" {
+				} else {
+					state := map[string]string{"accepted": "confirmed", "refused": "rejected", "unknown": "unknown", "failed": "failed"}[in.Outcome]
+					if state == "" {
 						c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid confirmation result"))
 						return
 					}
-					p.At, p.Reason, p.Answer = at, in.Reason, in.Answer
-					if manual || in.Difference != nil {
-						if err := b.host.(host.ConfirmationHost).ResolveConfirmationDelivery(c, run, i, false, at); err != nil {
+					answer := in.Answer
+					if len(answer) == 0 && !manual && in.Difference == nil {
+						answer = slices.Clone(s.GetPayload())
+					}
+					if in.Compensation {
+						p.CompensationState, p.CompensationAt, p.CompensationReason, p.CompensationAnswer = state, at, in.Reason, answer
+					} else if p.State != "confirmed" && p.State != "rejected" && p.State != "failed" || manual {
+						p.State, p.At, p.Reason, p.Answer = state, at, in.Reason, answer
+					}
+					if manual || in.Difference != nil || in.Compensation && state == "confirmed" {
+						if err := transport.ResolveConfirmationDelivery(c, run, i, in.Compensation, at); err != nil {
 							c.FailDecision(err)
 							return
 						}
@@ -270,48 +417,100 @@ func (b *Build) updateConfirmation(c platform.Caller, s *pb.Submission, at time.
 			if in.Completion != "" || in.CompletionError != "" {
 				run.Completion, run.CompletionError = in.Completion, in.CompletionError
 			}
+			if in.Outcome == "complete" {
+				run.State, run.CompletionError = "confirmed", ""
+			}
 			b.confirmationState(c, r, &run, at)
-			c.Put(r, run)
+			if run.State == "expired" && run.Definition.OnExpire == "compensate" || run.State == "compensating" {
+				for i, p := range run.Parties {
+					if (p.State == "confirmed" || p.State == "unknown") && p.Compensation == "" {
+						b.compensateParty(c, r, &run, i, at)
+					}
+				}
+			}
+			if err := c.Put(r, run); err != nil {
+				c.FailDecision(err)
+			}
 		}, nil
 	})
 }
 
+func (b *Build) compensateParty(c platform.Caller, r *pb.ChangeRecord, run *platform.ConfirmationRun, i int, at time.Time) {
+	p := &run.Parties[i]
+	if p.Compensation != "" {
+		return
+	}
+	p.Compensation, p.CompensationState = confirmationIntent(c.Tenant, p.Key+":compensate", p.CompensationRequest, p.Protocol), "pending"
+	run.State = "compensating"
+	if err := c.ConfirmationTransport().QueueConfirmation(c, r, *run, i, true, at); err != nil {
+		p.CompensationState, p.CompensationAt, p.CompensationReason = "rejected", at, err.Code.String()+": "+err.Message
+	}
+}
+
+func confirmationIntent(tenant, key string, request json.RawMessage, protocol *platform.ConfirmationProtocol) string {
+	endpoint := ""
+	if protocol != nil {
+		endpoint = "protocol:" + protocol.Provider
+	} else {
+		var req WritebackRequest
+		_ = json.Unmarshal(request, &req)
+		endpoint = WritebackEndpoint + req.Connection
+	}
+	return tenant + ":" + ID + ":confirmation:" + key + ":" + endpoint
+}
+
 func (b *Build) confirmationState(c platform.Caller, r *pb.ChangeRecord, run *platform.ConfirmationRun, at time.Time) {
-	all := !slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State != "confirmed" })
-	rejected := slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State == "rejected" })
-	if run.State == "compensating" {
-		if !slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool {
-			return p.Compensation != "" && p.CompensationState != "confirmed"
-		}) {
+	if run.State == "compensating" || run.State == "compensated" {
+		unresolved := slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool {
+			return p.State == "pending" || (p.State == "confirmed" || p.State == "unknown") && (p.Compensation == "" || p.CompensationState != "confirmed")
+		})
+		if !unresolved {
 			run.State = "compensated"
+			c.Assign(r, platform.Assignment{Key: run.ID, Close: true})
+		} else if slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool {
+			return p.CompensationState == "unknown" || p.CompensationState == "rejected" || p.CompensationState == "failed"
+		}) {
+			c.Assign(r, confirmationAssignment(*run))
 		}
 		return
 	}
-	if all {
+	if run.Completion != "" {
+		return // A declared partial result never silently turns into full completion.
+	}
+	all := !slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State != "confirmed" })
+	if all && (at.Before(run.Deadline) || run.State == "confirmed") {
 		run.State = "confirmed"
 		c.Assign(r, platform.Assignment{Key: run.ID, Close: true})
 		return
 	}
-	if rejected {
-		run.State = "partial"
-		run.Partial = true
+	if slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State == "rejected" || p.State == "failed" }) {
+		run.State, run.Partial = "partial", true
 		if run.Definition.OnPartial == "reject" {
 			run.State = "rejected"
 		}
 	}
-	if !at.Before(run.Deadline) {
+	if !at.Before(run.Deadline) && run.State != "confirmed" && run.State != "rejected" {
 		run.State = "expired"
 	}
-	if run.State == "partial" || run.State == "expired" || slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State == "unknown" }) {
-		c.Assign(r, platform.Assignment{Key: run.ID, Ref: confirmationType + "/" + run.ID, Title: "Review business confirmation", Body: "A party rejected, did not answer, or reached its deadline.", To: []platform.Recipient{{AppRole: run.Definition.ReviewerRole}}})
+	unknown := slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State == "unknown" })
+	if run.State == "partial" || run.State == "expired" || run.State == "rejected" || unknown || run.CompletionError != "" {
+		c.Assign(r, confirmationAssignment(*run))
 	}
+	if run.State == "expired" && run.Definition.OnExpire == "escalate" && !run.Escalated {
+		run.Escalated = true
+		c.Notify(platform.Notification{Key: "confirmation-expired:" + run.ID, Title: "Business confirmation overdue", Body: "A declared party has not confirmed before the business deadline.", Ref: confirmationType + "/" + run.ID}, at, platform.Recipient{AppRole: run.Definition.ReviewerRole})
+	}
+}
+
+func confirmationAssignment(run platform.ConfirmationRun) platform.Assignment {
+	return platform.Assignment{Key: run.ID, Ref: confirmationType + "/" + run.ID, Title: "Review business confirmation", Body: "A party rejected, did not answer, or reached its deadline.", To: []platform.Recipient{{AppRole: run.Definition.ReviewerRole}}}
 }
 
 func (b *Build) Run(c platform.Caller, job string, at time.Time) *kernel.Error {
 	if job != "confirmations" {
 		return nil
 	}
-	runs, _, err := platform.Find[platform.ConfirmationRun](c, platform.Query{Limit: 200, Sort: []string{"id"}})
+	runs, err := platform.PendingConfirmations(c)
 	if err != nil {
 		return err
 	}
@@ -320,35 +519,24 @@ func (b *Build) Run(c platform.Caller, job string, at time.Time) *kernel.Error {
 			continue
 		}
 		if !at.Before(run.Deadline) && !slices.Contains([]string{"confirmed", "expired", "compensating", "rejected"}, run.State) {
-			if _, err := platform.Decide(c, b, confirmationSubmission(c, run.ID, confirmationTick, "deadline", map[string]any{}, at), at); err != nil {
-				return err
-			}
-			run, _ = platform.Get[platform.ConfirmationRun](c, run.ID)
-		}
-		if run.State == "expired" && run.Definition.OnExpire == "compensate" {
-			for _, p := range run.Parties {
-				if (p.State == "confirmed" || p.State == "unknown") && p.Compensation == "" {
-					if _, err := platform.Decide(c, b, confirmationSubmission(c, run.ID, confirmationAnswer, "compensate:"+p.Name, map[string]any{"party": p.Name, "outcome": "compensate"}, at), at); err != nil {
-						return err
-					}
-				}
-			}
+			_, err := platform.Decide(c, b, confirmationSubmission(c, run.ID, confirmationTick, "deadline", map[string]any{}, at), at)
+			return err
 		}
 		action := ""
 		if run.State == "confirmed" {
 			action = run.Definition.OnComplete
-		} else if run.Partial && run.Definition.OnPartial != "hold" {
+		} else if run.Partial && run.Definition.OnPartial != "hold" && run.State != "expired" && run.State != "compensating" {
 			action = run.Definition.OnPartialAction
 		}
 		if action != "" {
-			change, problem := b.host.(host.ConfirmationHost).CompleteConfirmation(c, nil, run, action, at)
+			change, problem := c.ConfirmationTransport().CompleteConfirmation(c, nil, run, action, at)
 			payload := map[string]any{"completion": change}
 			if problem != nil {
 				payload["completionError"] = problem.Code.String() + ": " + problem.Message
 			}
-			if _, err := platform.Decide(c, b, confirmationSubmission(c, run.ID, confirmationTick, "completion", payload, at), at); err != nil {
-				return err
-			}
+			key := fmt.Sprintf("completion:%d", run.Revision)
+			_, err := platform.Decide(c, b, confirmationSubmission(c, run.ID, confirmationTick, key, payload, at), at)
+			return err
 		}
 	}
 	return nil

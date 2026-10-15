@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"slices"
 	"strings"
@@ -149,12 +150,16 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 		return nil
 	}
 	if req.Confirmation != "" {
-		outcome := map[string]string{"delivered": "accepted", "rejected": "refused", "unknown": "unknown", "failed": "refused", "discarded": "refused"}[out.Result]
+		outcome := map[string]string{"delivered": "accepted", "rejected": "refused", "unknown": "unknown", "discarded": "refused"}[out.Result]
+		if effect.State == "failed" {
+			outcome = "failed"
+		}
 		tag := req.Party
 		if req.Compensates != "" {
 			tag += ":compensate"
 		}
-		_, err := platform.Decide(c, b, confirmationSubmission(c, req.Confirmation, confirmationAnswer, effect.ID+":"+out.Result, map[string]any{"tag": tag, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
+		key := fmt.Sprintf("%s:%d:%s", effect.ID, effect.Attempts, out.Result)
+		_, err := platform.Decide(c, b, confirmationSubmission(c, req.Confirmation, confirmationAnswer, key, map[string]any{"tag": tag, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
 		return err
 	}
 	w, ok := platform.Get[Writeback](c, req.Writeback)

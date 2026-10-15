@@ -322,7 +322,9 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		body = WritebackDefinition{Name: r.Name, Title: r.Title, Connection: conn, Object: r.Object, On: r.On, Method: r.Method, Path: r.Path, Mapping: r.Mapping, Result: r.Result}
 		add(platform.AssetConnection, conn)
 		object(r.Object)
-		add(platform.AssetAction, r.Object+"."+r.On)
+		if r.On != "confirmation" {
+			add(platform.AssetAction, r.Object+"."+r.On)
+		}
 	case Match:
 		body = MatchingDefinition{Name: r.Name, Title: r.Title, Object: r.Object, Keys: r.Keys, Prefer: r.Prefer}
 		object(r.Object)

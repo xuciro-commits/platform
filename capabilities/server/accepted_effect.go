@@ -84,10 +84,13 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	hash, hashErr := effectResultHash(result.Before, result.Outcome, result.At)
 	expected := &effect{Effect: result.Before.Effect, since: result.Before.Since}
 	markEffect(expected, result.Outcome, result.At)
+	if result.Version >= 3 {
+		expected.CallbackError = result.CallbackError
+	}
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash ||
-		(result.Version != 1 && result.Version != 2) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
+		(result.Version != 1 && result.Version != 2 && result.Version != 3) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
 		result.App != PlatformApp || result.At.IsZero() || result.Before.ID == "" ||
-		!slices.Contains([]string{"delivered", "rejected", "retry"}, result.Outcome.Result) ||
+		!slices.Contains([]string{"delivered", "rejected", "retry", "unknown"}, result.Outcome.Result) ||
 		len(result.Outcome.Answer) > 64<<10 ||
 		len(result.Outcome.Answer) > 0 && !json.Valid(result.Outcome.Answer) ||
 		result.Outcome.Effect != result.Before.ID || result.Key != effectResultKey(result.Before) ||
@@ -286,6 +289,9 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		t.quarantine(fmt.Errorf("external answer for an unknown or different effect %s", id))
 		return
 	}
+	if settled(before.State) && before.State != "discarded" {
+		return // A late transport answer cannot replace an accepted human/source resolution.
+	}
 	if usage != nil {
 		copy := *usage
 		copy.Applications = slices.Clone(before.Effect.Applications)
@@ -355,6 +361,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		}
 	}
 	result.Authorizations = append(result.Authorizations, draft.authorizations...)
+	result.After.CallbackError = result.CallbackError
 	if draft.failure != nil {
 		t.quarantine(fmt.Errorf("stage effect %s: %v", id, draft.failure))
 		return
@@ -402,6 +409,9 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	}
 	if result.Control != nil {
 		result.Version = 2
+	}
+	if result.CallbackError != "" || result.Before.CallbackError != "" {
+		result.Version = 3
 	}
 	result.Digest, err = digestAcceptedEffect(result)
 	if err != nil {

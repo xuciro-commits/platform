@@ -79,6 +79,8 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 // submits the Answer — its Text the model's — to Reply; a replay asks nothing.
 type Request struct {
 	Tag                string
+	Provider           string // optional original provider; rebinding cannot move an in-flight request
+	Key                string // optional stable intent identity across explicit retries
 	Protocol, Action   string
 	Model              string
 	Target             string // the provider's record the action is about

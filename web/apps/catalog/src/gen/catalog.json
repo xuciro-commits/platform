@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d5bb0a234535206a",
+  "revision": "sha256:57d111874dd72681",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12224,7 +12224,7 @@
       "failed": "失败",
       "loading": "加载中",
       "pending": "待完成",
-      "refused": "已拒绝",
+      "refused": "拒绝",
       "running": "运行中",
       "shared": "共享",
       "stopped": "停止",
@@ -12605,6 +12605,7 @@
     "ui/checkbox": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
+      "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/functions/agent.tsx",

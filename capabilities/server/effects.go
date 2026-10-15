@@ -293,6 +293,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		span     trace.SpanContext
 	}
 	var jobs []job
+	t.mu.Lock()
 	t.opsMu.Lock()
 	// Apps' model requests go to the built-in model destination (ADR-0029 D3);
 	// the model door keeps each provider's own breaker.
@@ -313,6 +314,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		jobs = append(jobs, job{t.outbound[i].Effect, *ep, t.outbound[i].span})
 	}
 	t.opsMu.Unlock()
+	t.mu.Unlock()
 	var sends []func()
 	for _, j := range jobs {
 		sends = append(sends, func() {
@@ -734,6 +736,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 	return func(*pb.ChangeRecord) {
 		t.opsMu.Lock()
 		x.State, x.Due, x.since = "pending", now, x.Attempts
+		x.CallbackError = ""
 		t.opsMu.Unlock()
 	}, nil
 }

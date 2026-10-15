@@ -100,11 +100,21 @@ func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
 
 // invoke calls a protocol action for a consumer: a flow's step, an agent, or a
 // decision's request once it is accepted (ADR-0026).
-func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time, original ...string) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 	if !t.consumes(c, protocol) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{app} does not consume {protocol}", c.App, protocol)
 	}
 	b, ok := t.resolve(protocol)
+	pinned := len(original) > 0 && original[0] != ""
+	if pinned {
+		ok = false
+		for _, provider := range t.providers(protocol) {
+			if provider.provider.Manifest().ID == original[0] {
+				b, ok = provider, true
+				break
+			}
+		}
+	}
 	if _, mapped := b.provision.Actions[action]; !ok || !mapped {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No app provides {protocol} here", protocol)
 	}
@@ -124,7 +134,10 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 		}
 		return target, record, explained(err, b.provider, schema, target.GetType()+"/"+id)
 	}
-	return call(t.holder(c, b, protocol, action, call), c)
+	if !pinned {
+		b = t.holder(c, b, protocol, action, call)
+	}
+	return call(b, c)
 }
 
 // holder is the provider a call about an existing target goes to: the bound

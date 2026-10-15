@@ -393,3 +393,24 @@ func TestJournalAcceptedModelUsageCrashBeforeApplication(t *testing.T) {
 		t.Fatalf("model outcome was not recovered atomically: %v", err)
 	}
 }
+
+func TestAcceptedEffectRetainsHistoricalCallbackFailureFormat(t *testing.T) {
+	at := time.Date(2026, 10, 14, 22, 0, 0, 0, time.UTC)
+	before := effectState{Effect: platform.Effect{ID: "historical-reply", State: "pending", At: at, Due: at, Endpoint: "sink"}}
+	outcome := platform.Outcome{Effect: before.ID, Result: "delivered"}
+	after := &effect{Effect: before.Effect}
+	markEffect(after, outcome, at)
+	old := acceptedEffect{Version: 1, Kind: "effect-result", Tenant: "historical", App: PlatformApp, Key: effectResultKey(before), At: at, Before: before, After: effectState{Effect: after.Effect}, Outcome: outcome, CallbackError: "The original mapping is unavailable"}
+	old.RequestHash, _ = effectResultHash(before, outcome, at)
+	old.Digest, _ = digestAcceptedEffect(old)
+	raw, _ := json.Marshal(old)
+	if _, err := decodeAcceptedEffect(raw); err != nil {
+		t.Fatalf("new receipt metadata made historical failure unreadable: %v", err)
+	}
+	old.Version, old.After.CallbackError = 3, old.CallbackError
+	old.Digest, _ = digestAcceptedEffect(old)
+	raw, _ = json.Marshal(old)
+	if _, err := decodeAcceptedEffect(raw); err != nil {
+		t.Fatalf("current receipt failure metadata is unreadable: %v", err)
+	}
+}

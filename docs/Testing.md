@@ -185,3 +185,12 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 工程验证：`make check`；`make test-go PKG='./platform ./apps/build'`；`make test-go PKG=. RUN='TestApplicationStudio|TestLanguages|TestAPIContract|TestJointDraft'`。分组测试核对非应用资产定义的完整字节、声明依赖、用户权限、应用候选分页以及日志重放/快照恢复。浏览器主线：`PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-studio`，在同一应用创建对象/状态动作、保留跨工作区草稿、装配页面、移动业务分组并联合发布；原 `workspaces` 和 `application-delivery` 用于导航与运行回归。
 
 人工走查：由非平台开发者从一个业务意图开始，完成模型、行为、页面、验证与交付，再自由切换五个工作区，检查资产分组词汇、依赖入口、草稿恢复和窄屏操作。记录实际任务、断点与结论；尚未完成，ADR-0108 保持“体验待验收”。截图与自动发布路线不替代该走查。
+
+
+### 跨系统协同（ADR-0112）
+
+`make test-go PKG='. ./apps/build/... ./apps/work/... ./platform/...' RUN='TestBusinessConfirmation|TestConfirmation|TestAcceptedEffect|TestJournalAcceptedEffect|TestControl|TestAcceptedControl|TestJournalWriteback|TestWriteback|TestLanguages|TestTenantComposition'` 核对独立回执、部分策略、全部补偿、未知结果裁决/原键重试、源读取期间的过期证据拒绝、旧定义与协议、文件重开及接受结果恢复。配置真实 `PLATFORM_TEST_DATABASE` 时 DurableUnknownRecovery 同跑 PostgreSQL；它在持久追加后、内存应用前注入故障，关闭重开，不把内存回放算成持久恢复。
+
+`PLATFORM_SCREENSHOTS=1 make e2e SPEC=business-confirmation` 走原动作 Transaction 编辑器：显式两方与 Source 配置 → 操作员创建/启动业务记录 → ERP 确认/WMS unknown → 源回读差异/匹配 → 原完成动作，核对未盲目重发并保存桌面/窄屏截图。HTTP 接收方是受控本地替身；不算真实外部系统交付或负责人手感认可。
+
+手测：在业务记录的 Business confirmation progress 看等谁、等待时长、截止、拒绝原因、部分标记与差异。选择 hold / proceed-with-flag / reject 检查对应动作；选择 escalate 核对原收件箱与通知。对一方的 unknown 保存可读证据，撤去复核角色应拒绝；未知补偿不允许直接重试，被拒补偿可原键重试，确认补偿后原未知意图收敛。升级对象/回写后到达的原回执仍按原映像处理；缺原映射在 Integrations 的 Receipt refusal 明确显示。重启保留确认与差异，继续运行时接收方按原键幂等；未发生的现实故障与专有连接器仍须另验。

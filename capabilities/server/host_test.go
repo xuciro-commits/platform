@@ -123,7 +123,7 @@ func TestTenantComposition(t *testing.T) {
 	}
 	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaProfileUpdate, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaDelegate, SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaTokenIssue, SchemaTokenRevoke,
 		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead, SchemaTranslationSet,
-		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, SchemaEffectApprove, SchemaOperationCall,
+		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectResolve, SchemaEffectDiscard, SchemaEffectApprove, SchemaOperationCall,
 		SchemaProjectSave, SchemaProjectArchive, SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
 	}

@@ -168,7 +168,12 @@ func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
 		}
 		add(platform.AssetConnection, d.Connection)
 		object(d.Object)
-		add(platform.AssetAction, d.Object+"."+d.On)
+		legacy := platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: d.Object + ".confirmation"}
+		if d.On != "confirmation" || slices.Contains(asset.Requires, legacy) {
+			// Retain exact historical virtual edges when reading old images.
+			// New confirmation-only publications depend on their object/connection.
+			add(platform.AssetAction, d.Object+"."+d.On)
+		}
 	case platform.AssetMatching:
 		var d MatchingDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {

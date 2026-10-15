@@ -877,11 +877,22 @@ export type ConfirmationProgress = {
   source?: unknown;
   connection?: unknown;
   sourceVersion?: string;
+  protocol?: ConfirmationProtocol;
   compensationRequest?: unknown;
   compensation?: string;
   compensationState?: string;
+  compensationAt?: string;
+  compensationAnswer?: unknown;
+  compensationReason?: string;
   reconcileDue?: string;
   differences?: ConfirmationDifference[];
+};
+
+export type ConfirmationProtocol = {
+  provider: string;
+  version: string;
+  action: string;
+  compensateAction?: string;
 };
 
 export type ConfirmationRead = {
@@ -905,6 +916,7 @@ export type ConfirmationRun = {
   state: "pending" | "partial" | "confirmed" | "expired" | "rejected" | "compensating" | "compensated";
   deadline: string;
   partial: boolean;
+  escalated?: boolean;
   definition: Confirmation;
   release?: string;
   assets: ReleaseAsset[];
@@ -1154,6 +1166,7 @@ export type Effect = {
   last?: string;
   due?: string;
   error?: string;
+  callbackError?: string;
   digest?: string;
   body?: string;
   generation?: number;
