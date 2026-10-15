@@ -1,0 +1,20 @@
+{
+  "connection": { "address": "127.0.0.1:18512", "timeoutMs": 3000 },
+  "devices": [
+    { "id": "mau-01", "title": "风柜（本地模拟）", "settings": { "unitID": 1 } },
+    { "id": "ddc-01", "title": "DDC 干盘管（本地模拟）", "settings": { "unitID": 2 } },
+    { "id": "plant-01", "title": "高效机房（本地模拟）", "settings": { "unitID": 3 } }
+  ],
+  "points": [
+    { "id": "mau-running", "device": "mau-01", "address": "coil:1", "type": "boolean", "dataType": "BOOL", "intervalMS": 1000 },
+    { "id": "mau-temperature-setpoint", "device": "mau-01", "address": "holding:0", "type": "decimal", "dataType": "INT16", "unit": "℃", "scale": "0.1", "intervalMS": 1000 },
+    { "id": "mau-supply-temperature", "device": "mau-01", "address": "holding:172", "type": "decimal", "dataType": "INT16", "unit": "℃", "scale": "0.1", "intervalMS": 1000 },
+    { "id": "mau-supply-humidity", "device": "mau-01", "address": "holding:173", "type": "decimal", "dataType": "INT16", "unit": "%", "scale": "0.1", "intervalMS": 1000 },
+    { "id": "mau-supply-pressure", "device": "mau-01", "address": "holding:175", "type": "decimal", "dataType": "INT16", "unit": "Pa", "scale": "0.1", "intervalMS": 1000 },
+    { "id": "ddc-temperature", "device": "ddc-01", "address": "holding:3000", "type": "decimal", "dataType": "INT16", "unit": "℃", "scale": "0.1", "intervalMS": 1000 },
+    { "id": "ddc-valve-position", "device": "ddc-01", "address": "holding:3001", "type": "decimal", "dataType": "INT16", "unit": "%", "scale": "0.1", "intervalMS": 1000 },
+    { "id": "ddc-sensor-alarm", "device": "ddc-01", "address": "holding:3003", "type": "integer", "dataType": "INT16", "intervalMS": 1000 },
+    { "id": "plant-cooling-supply-temperature", "device": "plant-01", "address": "holding:2012", "type": "decimal", "dataType": "INT16", "unit": "℃", "scale": "0.1", "intervalMS": 1000 },
+    { "id": "plant-cooling-return-temperature", "device": "plant-01", "address": "holding:2013", "type": "decimal", "dataType": "INT16", "unit": "℃", "scale": "0.1", "intervalMS": 1000 }
+  ]
+}

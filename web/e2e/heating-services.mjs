@@ -15,6 +15,9 @@ const state = mkdtempSync(join(tmpdir(), "platform-heating-test-"));
 const gateway = spawn(join(root, ".build/protocol/bin/gateway" + (process.platform === "win32" ? ".exe" : "")), [
   "-packages", packages, "-state", state, "-listen", "127.0.0.1:18510", "-token-env", "HEATING_GATEWAY_TOKEN",
 ], { env: { ...process.env, HEATING_GATEWAY_TOKEN: "heating-browser-only" }, stdio: ["ignore", "ignore", "inherit"] });
+const modbus = spawn(join(root, ".build/protocol/bin/driver-modbus" + (process.platform === "win32" ? ".exe" : "")), [
+  "-test-listen", "127.0.0.1:18512", "-test-data", join(root, "deploy/examples/hvac/modbus-memory.json"),
+], { stdio: ["ignore", "ignore", "inherit"] });
 const received = [];
 const server = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json");
@@ -52,11 +55,19 @@ const server = createServer(async (request, response) => {
   if (request.url === "/received") { response.end(JSON.stringify(received)); return; }
   response.writeHead(404).end('{"error":"not found"}');
 });
-gateway.on("error", error => { console.error(error.message); server.close(); process.exitCode = 1; });
-gateway.on("exit", code => {
+let stopping = false;
+const stop = code => {
+  if (stopping) return;
+  stopping = true;
+  gateway.kill("SIGTERM");
+  modbus.kill("SIGTERM");
   server.close();
-  rmSync(state, { recursive: true, force: true });
-  process.exitCode = code ?? 0;
-});
-for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => gateway.kill("SIGTERM"));
+  process.exitCode = code;
+};
+for (const child of [gateway, modbus]) {
+  child.on("error", error => { console.error(error.message); stop(1); });
+  child.on("exit", code => stop(code ?? 1));
+}
+gateway.on("exit", () => rmSync(state, { recursive: true, force: true }));
+for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => stop(0));
 server.listen(18511, "127.0.0.1");

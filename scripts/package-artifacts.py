@@ -14,6 +14,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 SERVER = ROOT / "capabilities" / "server"
 OUTPUT = ROOT / ".build" / "protocol"
+DRIVERS = (("driver-simulator", "protocol.simulator"), ("driver-s7", "protocol.s7-1200"), ("driver-modbus", "protocol.modbus-tcp"))
 
 
 def run(arguments, **options):
@@ -33,11 +34,11 @@ def main():
     binaries.mkdir(parents=True, exist_ok=True)
     artifacts.mkdir(parents=True, exist_ok=True)
 
-    for command in ("gateway", "driver-simulator", "driver-s7"):
+    for command in ("gateway", *(command for command, _ in DRIVERS)):
         run([go, "build", "-trimpath", "-buildvcs=false", "-o", str(binaries / (command + suffix)), "./cmd/" + command])
 
     manifests = []
-    for command, identity in (("driver-simulator", "protocol.simulator"), ("driver-s7", "protocol.s7-1200")):
+    for command, identity in DRIVERS:
         binary = binaries / (command + suffix)
         reply = run(
             [str(binary)],

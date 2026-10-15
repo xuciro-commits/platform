@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Modbus TCP ABCD (read only)": "Modbus TCP ABCD（只读）",
+  "Read-only TCP with ABCD register order. Addresses use zero-based offsets: coil:0, discrete:0, holding:0, input:0; holding:0.3 selects register bit 3. Local protocol service verified; real devices are unverified.": "只读 TCP，寄存器按 ABCD 顺序解析。地址使用从 0 开始的偏移：coil:0、discrete:0、holding:0、input:0；holding:0.3 表示寄存器第 3 位。已用本地协议服务检查，真实设备尚未确认。",
+  "Modbus TCP address, with optional port (default 502)": "Modbus TCP 地址，可附端口（默认 502）",
+  "Modbus unit ID (0–255; default 1)": "Modbus 单元编号（0–255，默认 1）",
+  "Read timeout in milliseconds (default 5000)": "读取超时时间，单位毫秒（默认 5000）",
   "This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.": "此可移交计划保存具名定义。成员对比和模型选择仅用于本次试跑。",
   "Business test plan": "业务测试计划",
   "Business test plans": "业务测试计划",

@@ -301,7 +301,7 @@
 
 设备派发（[ADR-0121](ADR/0121-device-dispatch.md#as-built)）在同一机制内区分发送与完成：具名指令和状态回读归 `build.dispatch`，专用 Writeback 不订阅普通动作，不把 HTTP 成功当作设备完成。不能安全重发的指令发送前先接受开始尝试，发送中断后保留 `unknown`，恢复和效果控制台都不自动再发；状态回读及带证据的人工裁定负责后续处理。控制回路、安全联锁与急停始终归设备本地。
 
-协议能力包（[ADR-0123](ADR/0123-pluggable-protocol-packages.md)）扩展原 Package 分发可信 Go 二进制，在独立网关按版本运行；原 Connection 配置设备与点表，协议字段来自包描述。Source/Observation/Dispatch 保持原归属，地址与凭据留在环境绑定；命令身份和最小技术收据防止同次尝试重复发送，旧修订可继续只读回查。首轮为模拟包与 S7-1200 标准 DB 只读子集，真实设备/固件与生产 TSDB 尚未交付。
+协议能力包（[ADR-0123](ADR/0123-pluggable-protocol-packages.md)）扩展原 Package 分发可信 Go 二进制，在独立网关按版本运行；原 Connection 配置设备与点表，协议字段来自包描述。Source/Observation/Dispatch 保持原归属，地址与凭据留在环境绑定；命令身份和最小技术收据防止同次尝试重复发送，旧修订可继续只读回查。现有模拟包、S7-1200 标准 DB 只读子集与 Modbus TCP ABCD 只读包；实际点表格式已用于本地模拟，真实设备/固件与生产 TSDB 尚未交付。
 
 行业定义包（[ADR-0119](ADR/0119-packages-and-assembly.md#as-built)）由同一 Package 分发受控 `blueprint`，包含应用根、原 owner 的定义、样本/版本化业务测试计划与构建说明。构建者从确切安装版本创建原草稿，再配置环境、验证和发布；不自动建立业务记录或授予权限。模拟供暖首版和两城市配置归 [ADR-0122](ADR/0122-first-real-delivery.md#as-built)，真实客户交付及独立接手仍未验证。
 

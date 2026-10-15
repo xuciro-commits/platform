@@ -142,7 +142,10 @@ func (t *Tenant) protocolHTTP(ctx context.Context, connection build.Connection, 
 	}
 	defer response.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
-	if err != nil || len(data) > 1<<20 {
+	if err != nil {
+		return fmt.Errorf("the protocol gateway answer could not be read: %w", err)
+	}
+	if len(data) > 1<<20 {
 		return fmt.Errorf("the protocol gateway answer exceeds its read budget")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {

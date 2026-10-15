@@ -17,6 +17,34 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
+func TestGuardedReadsResponseBodyAfterHeaders(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+			_, _ = io.WriteString(w, "complete response")
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	request, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := guarded(request, true)
+	close(release)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil || string(body) != "complete response" {
+		t.Fatalf("returning headers cancelled the unread body: %q %v", body, err)
+	}
+}
+
 // receiver is a webhook consumer as ADR-0014 expects one: it checks the
 // signature and keeps one copy per webhook-id.
 type receiver struct {

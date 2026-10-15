@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type * as Api from "../../packages/kernel/src/gen/host";
 import { expect, shots, slug, test } from "./kit";
 
@@ -66,6 +67,66 @@ test("an installed protocol binary configures devices, previews points and publi
   await expect(page.getByRole("button", { name: "Save connection", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Check", exact: true }).click();
   await expect.poll(async () => (await builder.record<Api.Connection>("build.connection", saved!.id)).state, { timeout: 20_000 }).toBe("ready");
+  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
+  await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
+});
+
+test("a third protocol imports documented HVAC points through the same connection editor", async ({ page, builder }, info) => {
+  const packageID = "protocol.modbus-tcp", version = "0.1.2";
+  const configuration: Api.DriverConfiguration = JSON.parse(readFileSync(new URL("../../../deploy/examples/hvac/modbus.json", import.meta.url), "utf8"));
+  await builder.open(page, "/apps?surface=tenant");
+  const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
+  await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);
+  await card.getByRole("button", { name: "Install", exact: true }).click();
+  await expect(card.getByText("active", { exact: true })).toBeVisible();
+  const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");
+  const kind = kinds.items.find(item => item.package === packageID && item.version === version);
+  expect(kind?.profile?.operations).toEqual(["read", "sample"]);
+
+  const name = slug("hvac");
+  await builder.open(page, "/connection?id=new");
+  await page.getByRole("textbox", { name: "Connection name", exact: true }).fill(name);
+  await page.getByRole("textbox", { name: "Connection title", exact: true }).fill("HVAC protocol service · simulated values");
+  await page.getByRole("combobox", { name: "Kind", exact: true }).selectOption(kind!.id);
+  await page.getByRole("textbox", { name: "Gateway address", exact: true }).fill("http://127.0.0.1:18510");
+  await page.getByRole("textbox", { name: "Secret name", exact: true }).fill("protocol-gateway");
+  await page.getByRole("checkbox", { name: "Allow http and private addresses (on-premise systems)", exact: true }).check();
+  await page.getByRole("textbox", { name: "Modbus TCP address, with optional port (default 502) *", exact: true }).fill(String(configuration.connection!.address));
+  for (const [index, device] of configuration.devices.entries()) {
+    await page.getByRole("button", { name: "Add device", exact: true }).click();
+    await page.getByRole("textbox", { name: "Device ID", exact: true }).nth(index).fill(device.id);
+    await page.getByRole("textbox", { name: "Device title", exact: true }).nth(index).fill(device.title);
+    await page.getByLabel("Modbus unit ID (0–255; default 1)", { exact: true }).nth(index).fill(String(device.settings!.unitID));
+  }
+  await page.getByRole("button", { name: "Import a point table", exact: true }).click();
+  await page.getByLabel("Point table file", { exact: true }).setInputFiles({
+    name: "hvac-points.csv", mimeType: "text/csv",
+    buffer: readFileSync(new URL("../../../deploy/examples/hvac/modbus-points.csv", import.meta.url)),
+  });
+  await page.getByRole("button", { name: "Replace points with this table", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add command", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Read-only preview", exact: true }).click();
+  const preview = page.getByRole("region", { name: "Read-only preview", exact: true });
+  await expect(preview.getByText("Read confirmed", { exact: true })).toBeVisible();
+  for (const value of ["23.5", "123.4", "21.5", "35", "7.5", "12.5"]) {
+    await expect(preview.getByRole("cell", { name: value, exact: true })).toBeVisible();
+  }
+  await expect(preview.getByRole("cell", { name: "good", exact: true })).toHaveCount(10);
+  await shots(page, preview, "modbus-hvac-preview", info);
+  await page.getByRole("button", { name: "Save connection", exact: true }).click();
+  let saved: Api.Connection | undefined;
+  await expect.poll(async () => {
+    const records = await builder.read<{ records: Api.Connection[] }>("records/build.connection?limit=100");
+    saved = records.records.find(record => record.name === name);
+    return saved?.protocol?.configuration.points.length;
+  }).toBe(10);
+  await expect(page.getByRole("button", { name: "Save connection", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await expect.poll(async () => (await builder.record<Api.Connection>("build.connection", saved!.id)).state).toBe("ready");
   await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();

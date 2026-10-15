@@ -1,0 +1,11 @@
+id,device,address,type,dataType,unit,scale,offset,intervalMS
+mau-running,mau-01,coil:1,boolean,BOOL,,,,1000
+mau-temperature-setpoint,mau-01,holding:0,decimal,INT16,℃,0.1,,1000
+mau-supply-temperature,mau-01,holding:172,decimal,INT16,℃,0.1,,1000
+mau-supply-humidity,mau-01,holding:173,decimal,INT16,%,0.1,,1000
+mau-supply-pressure,mau-01,holding:175,decimal,INT16,Pa,0.1,,1000
+ddc-temperature,ddc-01,holding:3000,decimal,INT16,℃,0.1,,1000
+ddc-valve-position,ddc-01,holding:3001,decimal,INT16,%,0.1,,1000
+ddc-sensor-alarm,ddc-01,holding:3003,integer,INT16,,,,1000
+plant-cooling-supply-temperature,plant-01,holding:2012,decimal,INT16,℃,0.1,,1000
+plant-cooling-return-temperature,plant-01,holding:2013,decimal,INT16,℃,0.1,,1000

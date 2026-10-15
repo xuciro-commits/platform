@@ -348,7 +348,7 @@ WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造�
 
 ## 协议包与模拟采集
 
-[ADR-0123](ADR/0123-pluggable-protocol-packages.md) 的首轮实现提供两个独立 Go 驱动：`protocol.simulator` 和只读 `protocol.s7-1200`。先构建本机包：
+[ADR-0123](ADR/0123-pluggable-protocol-packages.md) 提供三个独立 Go 驱动：`protocol.simulator`、只读 `protocol.s7-1200` 与只读 `protocol.modbus-tcp`。先构建本机包：
 
 ```sh
 make packages
@@ -382,6 +382,26 @@ pump-running,station-01,true,boolean,,1000
 S7 profile 使用连接字段 `address`、`rack`、`slot`、`timeoutMs`，点地址例如 `DB1.DBX0.3`、`DB1.DBW2`、`DB1.DBD4`，并声明对应 `dataType`（BOOL/INT/DINT/REAL 等）。仅本地 S7 服务已用于工程检查，具体 CPU、固件、优化 DB 和安全通信不宣称兼容。
 
 新版包使用 `make packages PROTOCOL_VERSION=0.1.2`，版本化描述与旧二进制保留；同版本不同内容拒绝覆盖。网关与包目录属于部署配置，不给行业包增加 Go/React 实现。
+
+### Modbus TCP：实际点表格式、本地模拟读数
+
+`deploy/examples/hvac/modbus.json` 是统一 DriverConfiguration，`modbus-points.csv` 是同一组可直接导入的十个点。地址、类型与比例来自负责人提供的风柜和高效机房工作簿；设备编号、TCP 地址、单元编号及 `modbus-memory.json` 的读数均为本地模拟。源文件不随应用发布，示例不包含客户网络地址或认证信息。
+
+```sh
+.build/protocol/bin/driver-modbus -test-listen 127.0.0.1:18512 -test-data deploy/examples/hvac/modbus-memory.json
+```
+
+另开终端按上文启动网关，在 Packages 安装 `protocol.modbus-tcp@0.1.2`；创建连接，选择 `modbus-tcp-abcd-read`，设备地址填 `127.0.0.1:18512`。依次添加 `mau-01`、`ddc-01`、`plant-01`，单元编号分别为 1、2、3，再导入 CSV，执行只读预览、保存、检查和原候选发布。不改宿主或前端即可加载这个包；该 profile 不出现设备命令入口。
+
+| 源工作簿、页与行 | 配置点 / 地址 | 类型与比例 | 模拟读数 |
+|---|---|---|---|
+| 风柜空调Modbus通讯协议 / MAU协议 / 6 | `mau-running` / `coil:1` | BOOL | true |
+| 同上 / 27 | `mau-temperature-setpoint` / `holding:0` | INT16 × 0.1 | 22 ℃ |
+| 同上 / 93、94、96 | `mau-supply-temperature` / `holding:172`；`mau-supply-humidity` / `holding:173`；`mau-supply-pressure` / `holding:175` | INT16 × 0.1 | 23.5 ℃、56 %、123.4 Pa |
+| 风柜空调Modbus通讯协议 / DDC / 5、6、8 | `ddc-temperature` / `holding:3000`；`ddc-valve-position` / `holding:3001`；`ddc-sensor-alarm` / `holding:3003` | INT16；前两项 × 0.1 | 21.5 ℃、35 %、1 |
+| 高效机房通讯协议（V1.2) / 水冷高效机房PLC协议 / 255、256 | `plant-cooling-supply-temperature` / `holding:2012`；`plant-cooling-return-temperature` / `holding:2013` | INT16 × 0.1 | 7.5 ℃、12.5 ℃ |
+
+地址明确使用从 0 开始的协议偏移：工作簿的 Coil 2 → `coil:1`，40001 → `holding:0`，43001 → `holding:3000`。不会自动对输入再减一。四个区域为 coil/discrete/holding/input，对应读功能码 01/02/03/04；寄存器 BOOL 要显式写位号，如 `holding:191.3`，最低位编号 0。不能仅凭 S7 字节位号推断其 Modbus 位号。解码类型为 BOOL、INT16、UINT16、INT32、UINT32、FLOAT32；32 位仅支持源资料所列 ABCD 顺序。设备异常、断线或非有限浮点显示错误与无有效值。实际 S7/Modbus 历史窗口仍需外部 TSDB；控制算法与真实设备写入未由本演示提供。
 
 ## 设备派发与状态回读
 

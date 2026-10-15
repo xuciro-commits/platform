@@ -2,7 +2,6 @@ package platformserver
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -426,9 +425,9 @@ func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 	dialer := guardedDialer(allowPrivate)
 	client := &http.Client{Timeout: effectTimeout, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	ctx, cancel := context.WithTimeout(req.Context(), effectTimeout)
-	defer cancel()
-	return client.Do(req.WithContext(ctx))
+	// Client.Timeout covers reading the body too. Cancelling a derived context
+	// here would close a streamed response before its caller can read it.
+	return client.Do(req)
 }
 
 func guardedDialer(allowPrivate bool) *net.Dialer {
