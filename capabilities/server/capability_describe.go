@@ -44,7 +44,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 	if app == nil || version < 1 {
 		return platform.CapabilityDescriptor{}, false
 	}
-	d := platform.CapabilityDescriptor{Ref: ref, Version: app.Manifest().Version, Revision: version, Source: "tenant", Effects: []string{}, Ports: []platform.BlockPort{
+	d := platform.CapabilityDescriptor{Ref: ref, Version: app.Manifest().Version, Revision: version, Source: "tenant", Side: platform.CapabilityPure, Effects: []string{}, Ports: []platform.BlockPort{
 		{ID: "in", Title: "In", Direction: "input", Channel: "control", Type: "flow"},
 		{ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"},
 		{ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"},
@@ -75,6 +75,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 		return d, true
 	}
 	if ref.Kind == platform.AssetFunction {
+		d.Side = platform.CapabilityEffect
 		f, ordinal, ok := functionDefinition(app, ref.Name, version)
 		if !ok || ordinal != version || !slices.Contains(f.Roles, m.Roles[ref.App]) {
 			return d, false
@@ -89,7 +90,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 			return d, false
 		}
 		input := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}
-		output := fieldsSchema(f.Output)
+		output := platform.CapabilityFieldsSchema(f.Output)
 		d.Kind, d.Title, d.Description, d.Group, d.Icon, d.Tone, d.Target, d.Input, d.Output = "ai", f.Title, f.Description, "AI", "sparkles", "info", f.Object, &input, &output
 		d.Version += ".function-" + strconv.Itoa(version)
 		d.Effects = []string{"model"}

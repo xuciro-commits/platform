@@ -275,7 +275,10 @@ func codeImage(image []byte) (Code, error) {
 }
 func codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
 	raw, err := json.Marshal(code.Definition())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Requires: []platform.AssetRef{}, Body: raw}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
 }
 func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	out := []platform.ReleaseAsset{}
@@ -299,13 +302,16 @@ func (b *Build) OperationReleaseAsset(name, version string) (platform.ReleaseAss
 		return platform.ReleaseAsset{}, fmt.Errorf("compute version is not retained")
 	}
 	raw, err := json.Marshal(op)
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Requires: []platform.AssetRef{}, Body: raw}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
 }
 func (b *Build) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	var op platform.Operation
 	text, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".compute-")
 	ordinal, err := strconv.Atoi(text)
-	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil {
+	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid compute candidate asset")
 	}
 	code := Code{Name: op.Name, Title: op.Title, Description: op.Description, Input: op.Input, Output: op.Output, Roles: op.Roles, Limits: op.Limits, Module: op.Binding.Module, State: "published", Version: ordinal}

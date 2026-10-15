@@ -213,14 +213,14 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		selected, _ := platform.Get[build.Function](t.automation(build.ID, false), request.FunctionID)
 		functionName = selected.Name
 	}
+	if err == nil && diagnostic != "" {
+		err = fmt.Errorf("%s", diagnostic)
+	}
 	environment, environmentErr := t.simulationEnvironment(candidate, request.Samples)
 	if err == nil {
 		err = environmentErr
 	}
 	t.mu.Unlock()
-	if err == nil && diagnostic != "" {
-		err = fmt.Errorf("%s", diagnostic)
-	}
 	if err != nil {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
@@ -277,12 +277,12 @@ func runCandidateSimulation(request CandidateSimulationRequest, candidate platfo
 	out := CandidateSimulation{CandidateID: candidate.ID, Steps: []Simulation{}}
 	out.TestID, err = canonicalDigest([]any{candidate.ID, request, members, m.ID})
 	if err != nil {
-		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
 	if sandbox.ai != nil {
 		out.TestID, err = canonicalDigest([]any{candidate.ID, request, members, m.ID})
 		if err != nil {
-			return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 		}
 		out.Model, out.Fixture = request.Model, true
 	}
@@ -697,6 +697,12 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if asset.Ref.App != build.ID {
 			continue
 		}
+		// Native Build records (for example a proposal's original function
+		// call) are already provided by this fresh Build. They are fixed code
+		// prerequisites, never tenant object drafts to reconstruct.
+		if asset.Ref.Kind == platform.AssetObject && slices.ContainsFunc(b.Manifest().Entities, func(e platform.Entity) bool { return e.Type == asset.Ref.Name }) {
+			continue
+		}
 		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || ownedMetadataKind(asset.Ref.Kind) {
 			continue // compiled after its source objects below
 		}
@@ -806,7 +812,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	// connections, credentials, datasets and migration runs are never imported.
 	for _, asset := range candidate.Assets {
 		if ownedMetadataKind(asset.Ref.Kind) {
-			definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: asset.Requires}
+			definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: asset.Requires, Provides: asset.Provides}
 			switch asset.Ref.Kind {
 			case platform.AssetSampleSet:
 				var sample platform.SampleSet

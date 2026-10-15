@@ -36,6 +36,10 @@ func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetPropertyType, Name: p.Name}
 	d := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".property-" + strconv.Itoa(version), ContractVersion: 1, PropertyType: &p, PropertyVersions: map[string]platform.PropertyType{}}
+	d, err := h.t.describeDefinition(d)
+	if err != nil {
+		return err
+	}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 	if i >= 0 {
 		old := h.t.definitions[i]

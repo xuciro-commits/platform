@@ -13,8 +13,11 @@ import (
 
 func queryReleaseAsset(f Query, sourceVersion string) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(f.Definition())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".query-" + strconv.Itoa(f.Version), Requires: f.Definition().Dependencies(), Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, ContractVersion: 1,
+		SourceVersion: sourceVersion + ".query-" + strconv.Itoa(f.Version), Body: body})
 }
 
 // QueryReleaseAsset resolves only a retained version from this owner.
@@ -29,8 +32,11 @@ func (b *Build) QueryReleaseAsset(name string, sourceVersion string) (platform.R
 		return platform.ReleaseAsset{}, fmt.Errorf("query %s version %d is not retained", name, version)
 	}
 	body, err := json.Marshal(f)
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: name}, ContractVersion: 1,
-		SourceVersion: b.Manifest().Version + ".query-" + strconv.Itoa(version), Requires: f.Dependencies(), Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: name}, ContractVersion: 1,
+		SourceVersion: b.Manifest().Version + ".query-" + strconv.Itoa(version), Body: body})
 }
 
 func (b *Build) queryAssets() ([]platform.ReleaseAsset, error) {
@@ -59,7 +65,7 @@ func (b *Build) InstallQueryAsset(asset platform.ReleaseAsset) error {
 	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal ||
 		asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetQuery ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.Definition().Check() != nil || !slices.Equal(asset.Requires, f.Definition().Dependencies()) {
+		f.Definition().Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid builder query asset %s", asset.Ref)
 	}
 	if _, exists := b.queries[f.Name]; exists {

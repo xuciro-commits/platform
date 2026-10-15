@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"platformserver/internal/host"
 	"platformserver/platform"
+	"slices"
 )
 
 func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (platform.ReleaseAsset, error) {
@@ -14,7 +15,7 @@ func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (
 	manifest := owner.Manifest()
 	refs := []platform.AssetRef{}
 	for _, definition := range t.definitions {
-		if definition.Source == "code" && definition.Ref.App == manifest.ID && definition.Ref.Kind != platform.AssetApp && definition.Ref.Kind != platform.AssetFlow {
+		if definition.Source == "code" && definition.Ref.App == manifest.ID && !slices.Contains([]platform.AssetKind{platform.AssetApp, platform.AssetFlow, platform.AssetProtocol, platform.AssetInterface}, definition.Ref.Kind) {
 			refs = append(refs, definition.Ref)
 		}
 	}

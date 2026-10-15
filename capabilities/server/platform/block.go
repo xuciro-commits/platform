@@ -5,6 +5,7 @@ package platform
 type CapabilityDescriptor struct {
 	Ref         AssetRef     `json:"ref"`
 	Kind        string       `json:"kind"`
+	Side        string       `json:"side"`
 	Title       string       `json:"title"`
 	Description string       `json:"description"`
 	Group       string       `json:"group"`

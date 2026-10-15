@@ -3,11 +3,11 @@
 // membership stay visible without rebuilding the asset or its route.
 import { createContext, useContext, type ReactNode } from "react";
 import { Button, Select, t, useWorkspace, type Route } from "@platform/ui";
-import { useHost, useReadQuery } from "@platform/app";
+import { useDependencies, useHost, useReadQuery } from "@platform/app";
 import type { Project } from "./project";
 import { useProjectResources } from "./resource-inventory";
 import { refKey } from "./resources";
-import { assetDependencies, assetRoute, studioAreas, studioRoute } from "./studio-model";
+import { assetRoute, studioAreas, studioRoute } from "./studio-model";
 
 const Scope = createContext<string | undefined>(undefined);
 const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "agent", "code", "link-type", "property-type", "decision-table", "alert", "connection", "data-source", "dataset", "pipeline", "writeback", "match", "integration-health", "studio-templates", "evaluation-set", "sample-set", "release-review", "changes", "release-history"]);
@@ -26,7 +26,8 @@ function ApplicationContextBar({ application, route }: { application: string; ro
   const selected = owned.find(item => item.record?.id === route.params?.page || item.record?.id === route.params?.id || item.ref.name === route.params?.object);
   const ref = route.view === "action-type" && selected && route.params?.action
     ? { app: selected.ref.app, kind: "action", name: `${selected.ref.name}.${route.params.action}` } : selected?.ref;
-  const links = ref ? assetDependencies(ref, host.definitions) : undefined;
+  const dependencies = useDependencies(ref, undefined, !!ref);
+  const links = dependencies.data;
   const related = links ? [...links.requires, ...links.usedBy] : [];
   return <div role="navigation" aria-label={t("Application context")} className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border bg-surface px-2 py-1">
     <Button size="sm" variant="ghost" onClick={() => open({ view: "project", params: { id: application } })}>{project?.title || t("Application")}</Button>

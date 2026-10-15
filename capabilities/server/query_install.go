@@ -72,7 +72,11 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 		return err
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetQuery, Name: q.Name}
-	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".query-" + strconv.Itoa(version), ContractVersion: 1, Requires: q.Dependencies(), Query: &q}
+	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".query-" + strconv.Itoa(version), ContractVersion: 1, Query: &q}
+	def, err := h.t.describeDefinition(def)
+	if err != nil {
+		return err
+	}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 	if i >= 0 {
 		old := h.t.definitions[i]

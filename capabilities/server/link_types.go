@@ -60,7 +60,11 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 		return err
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetLinkType, Name: l.Name}
-	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".link-" + strconv.Itoa(version), ContractVersion: l.Contract(), Requires: uniqueRefs([]platform.AssetRef{l.Parent, l.Child}), LinkType: &l, LinkVersions: map[string]platform.LinkType{}}
+	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".link-" + strconv.Itoa(version), ContractVersion: l.Contract(), LinkType: &l, LinkVersions: map[string]platform.LinkType{}}
+	def, err := h.t.describeDefinition(def)
+	if err != nil {
+		return err
+	}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 	if i >= 0 {
 		old := h.t.definitions[i]

@@ -24,6 +24,10 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 	if sourceVersion != "" {
 		available[i].SourceVersion = sourceVersion
 	}
+	available[i], err = t.describeOwnedAsset(available[i])
+	if err != nil {
+		return platform.ReleaseCandidate{}, "", err
+	}
 	candidate, err := platform.Candidate([]platform.AssetRef{ref}, available)
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
@@ -45,8 +49,8 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 		}
 		return candidate, "", nil
 	}
-	active, err := platform.Candidate([]platform.AssetRef{ref}, saved.Assets)
-	if err != nil || active.ID != candidate.ID {
+	active, err := saved.Closure([]platform.AssetRef{ref})
+	if err != nil || !sameRetainedCapability(candidate, active) {
 		// A published version retained by its owner may be used by an old page
 		// after a later compute-only activation. Resolve only an exact saved
 		// closure, never a caller-selected release or an arbitrary descriptor.
@@ -57,15 +61,32 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 				if err != nil {
 					continue
 				}
-				closed, err := platform.Candidate([]platform.AssetRef{ref}, prior.Assets)
-				if err == nil && closed.ID == candidate.ID {
-					return candidate, id, nil
+				closed, err := prior.Closure([]platform.AssetRef{ref})
+				if err == nil && sameRetainedCapability(candidate, closed) {
+					return closed, id, nil
 				}
 			}
 		}
 		return platform.ReleaseCandidate{}, "", fmt.Errorf("capability %s differs from its activated release", ref)
 	}
-	return candidate, release, nil
+	return active, release, nil
+}
+
+func sameRetainedCapability(current, retained platform.ReleaseCandidate) bool {
+	if current.ID == retained.ID {
+		return true
+	}
+	for _, original := range retained.Assets {
+		index := slices.IndexFunc(current.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == original.Ref })
+		if index < 0 {
+			return false
+		}
+		same, err := immutableCodeAssetMatches(current.Assets[index], original)
+		if err != nil || !same {
+			return false
+		}
+	}
+	return len(retained.Assets) > 0
 }
 func (t *Tenant) operationClosure(app string, op platform.Operation, version int, retained *string) (platform.ReleaseCandidate, string, error) {
 	body, err := json.Marshal(op)

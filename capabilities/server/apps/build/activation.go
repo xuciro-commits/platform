@@ -38,8 +38,12 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 		}
 		switch asset.Ref.Kind {
 		case platform.AssetObject:
-			if slices.ContainsFunc([]platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity()}, func(e platform.Entity) bool { return e.Type == asset.Ref.Name }) {
-				continue // immutable code-owned metadata, not a tenant-authored object
+			code, err := b.retainedCodeObject(asset)
+			if err != nil {
+				return nil, err
+			}
+			if code {
+				continue
 			}
 			var frozen Object
 			if err := json.Unmarshal(asset.Body, &frozen); err != nil || buildapi.TypeOf(frozen.Name) != asset.Ref.Name {

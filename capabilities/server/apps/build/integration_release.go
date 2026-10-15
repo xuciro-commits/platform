@@ -253,19 +253,15 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 	name, _, _, _ := integrationMetadata(record)
 	asset.Ref.Name = name
 	var body any
-	add := func(kind platform.AssetKind, name string) {
-		if name != "" {
-			asset.Requires = append(asset.Requires, platform.AssetRef{App: ID, Kind: kind, Name: name})
+	objectBindings := func(typ string) map[string]platform.AssetRef {
+		if typ == "" {
+			return nil
 		}
-	}
-	object := func(typ string) {
-		if typ != "" {
-			if info, ok := b.lookupEntity(typ); ok {
-				asset.Requires = append(asset.Requires, platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: typ})
-			} else {
-				asset.Requires = append(asset.Requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: typ})
-			}
+		owner, _, _ := strings.Cut(typ, ".")
+		if info, ok := b.lookupEntity(typ); ok {
+			owner = info.App
 		}
+		return map[string]platform.AssetRef{typ: {App: owner, Kind: platform.AssetObject, Name: typ}}
 	}
 	switch r := record.(type) {
 	case Connection:
@@ -282,10 +278,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		if err != nil {
 			return asset, err
 		}
-		body = SourceDefinition{Name: r.Name, Title: r.Title, Connection: conn, Profile: r.Profile, URL: r.URL, Entity: r.Entity, Filter: r.Filter, Since: r.Since, Path: r.Path, Dataset: dataset, Object: r.Object, Key: r.Key, Mapping: r.Mapping, Stream: r.Stream, Every: r.Every}
-		add(platform.AssetConnection, conn)
-		add(platform.AssetDataset, dataset)
-		object(r.Object)
+		body = SourceDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Profile: r.Profile, URL: r.URL, Entity: r.Entity, Filter: r.Filter, Since: r.Since, Path: r.Path, Dataset: dataset, Object: r.Object, Key: r.Key, Mapping: r.Mapping, Stream: r.Stream, Every: r.Every}
 	case Dataset:
 		body = DatasetDefinition{Name: r.Name, Title: r.Title, Keep: r.Keep, Marking: r.Marking}
 	case Pipeline:
@@ -304,13 +297,9 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 				if err != nil {
 					return asset, err
 				}
-				add(platform.AssetDataset, steps[i].Dataset)
 			}
 		}
-		body = PipelineDefinition{Name: r.Name, Title: r.Title, Input: input, Steps: steps, Expectations: r.Expectations, OutputDataset: output, OutputObject: r.OutputObject, OutputEnterprise: r.OutputEnterprise, Key: r.Key, Every: r.Every}
-		add(platform.AssetDataset, input)
-		add(platform.AssetDataset, output)
-		object(r.OutputObject)
+		body = PipelineDefinition{ObjectBindings: objectBindings(r.OutputObject), Name: r.Name, Title: r.Title, Input: input, Steps: steps, Expectations: r.Expectations, OutputDataset: output, OutputObject: r.OutputObject, OutputEnterprise: r.OutputEnterprise, Key: r.Key, Every: r.Every}
 		if r.OutputEnterprise != nil {
 			return asset, fmt.Errorf("portable enterprise landing requires a separate owner migration and is unsupported")
 		}
@@ -319,30 +308,133 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		if err != nil {
 			return asset, err
 		}
-		body = WritebackDefinition{Name: r.Name, Title: r.Title, Connection: conn, Object: r.Object, On: r.On, Method: r.Method, Path: r.Path, Mapping: r.Mapping, Result: r.Result}
-		add(platform.AssetConnection, conn)
-		object(r.Object)
-		if r.On != "confirmation" {
-			add(platform.AssetAction, r.Object+"."+r.On)
-		}
+		body = WritebackDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Object: r.Object, On: r.On, Method: r.Method, Path: r.Path, Mapping: r.Mapping, Result: r.Result}
 	case Match:
-		body = MatchingDefinition{Name: r.Name, Title: r.Title, Object: r.Object, Keys: r.Keys, Prefer: r.Prefer}
-		object(r.Object)
+		producers := map[string]platform.AssetRef{}
 		for _, preference := range r.Prefer {
 			ref, err := b.matchingProducer(preference.Producer)
 			if err != nil {
 				return asset, err
 			}
-			asset.Requires = append(asset.Requires, ref)
+			producers[preference.Producer] = ref
 		}
+		body = MatchingDefinition{Name: r.Name, Title: r.Title, Object: r.Object, Keys: r.Keys, Prefer: r.Prefer, Producers: producers, ObjectBindings: objectBindings(r.Object)}
 	default:
 		return asset, fmt.Errorf("unknown integration descriptor")
 	}
-	slices.SortFunc(asset.Requires, func(a, z platform.AssetRef) int { return strings.Compare(a.String(), z.String()) })
-	asset.Requires = slices.Compact(asset.Requires)
 	raw, err := json.Marshal(body)
+	if err != nil {
+		return asset, err
+	}
 	asset.Body = raw
-	return asset, err
+	return platform.WithDependencies(asset)
+}
+
+// New candidates read a current description of an old accepted integration.
+// Stable bindings come only from that version's frozen edges, never today's
+// editable producer rows. Published and Versions continue to hold old bytes.
+func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
+	if asset.Provides != nil {
+		return asset, nil
+	}
+	if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) || asset.ContractVersion != 1 {
+		return asset, fmt.Errorf("unsupported retained integration %s", asset.Ref)
+	}
+	if _, err := buildapi.ValueIntegrationOrdinal(asset); err != nil {
+		return asset, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(asset.Body, &fields); err != nil {
+		return asset, err
+	}
+	var definition struct {
+		Object       string       `json:"object"`
+		OutputObject string       `json:"outputObject"`
+		On           string       `json:"on"`
+		Prefer       []Preference `json:"prefer"`
+	}
+	if err := json.Unmarshal(asset.Body, &definition); err != nil {
+		return asset, err
+	}
+	for _, ref := range asset.Requires {
+		if err := ref.Check(); err != nil {
+			return asset, err
+		}
+	}
+	resolve := func(name string, kinds ...platform.AssetKind) (platform.AssetRef, error) {
+		var refs []platform.AssetRef
+		for _, ref := range asset.Requires {
+			if ref.Name == name && slices.Contains(kinds, ref.Kind) {
+				refs = append(refs, ref)
+			}
+		}
+		if len(refs) != 1 {
+			return platform.AssetRef{}, fmt.Errorf("retained integration %s needs one frozen binding for %s", asset.Ref, name)
+		}
+		return refs[0], nil
+	}
+	bindings := map[string]platform.AssetRef{}
+	for _, name := range []string{definition.Object, definition.OutputObject} {
+		if name == "" {
+			continue
+		}
+		ref, err := resolve(name, platform.AssetObject)
+		if err != nil {
+			return asset, err
+		}
+		bindings[name] = ref
+	}
+	producers := map[string]platform.AssetRef{}
+	if asset.Ref.Kind == platform.AssetMatching {
+		for _, preference := range definition.Prefer {
+			ref, err := resolve(preference.Producer, platform.AssetSource, platform.AssetPipeline)
+			if err != nil {
+				return asset, err
+			}
+			if ref.App != asset.Ref.App {
+				return asset, fmt.Errorf("retained matching %s has a different producer owner", asset.Ref)
+			}
+			producers[preference.Producer] = ref
+		}
+	}
+	if asset.Ref.Kind == platform.AssetWriteback && definition.On == "confirmation" && slices.Contains(asset.Requires, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: definition.Object + ".confirmation"}) {
+		return asset, fmt.Errorf("writeback %s retains a retired confirmation action; publish a new writeback version before including it in a candidate", asset.Ref)
+	}
+	for key, refs := range map[string]map[string]platform.AssetRef{"objectBindings": bindings, "producers": producers} {
+		if existing := fields[key]; len(existing) != 0 {
+			var original map[string]platform.AssetRef
+			if json.Unmarshal(existing, &original) != nil || !reflect.DeepEqual(original, refs) {
+				return asset, fmt.Errorf("retained integration %s binding differs from its frozen references", asset.Ref)
+			}
+		}
+		if len(refs) == 0 {
+			continue
+		}
+		raw, err := json.Marshal(refs)
+		if err != nil {
+			return asset, err
+		}
+		fields[key] = raw
+	}
+	body, err := json.Marshal(fields)
+	if err != nil {
+		return asset, err
+	}
+	projected := asset
+	projected.Body = body
+	projected, err = platform.WithDependencies(projected)
+	if err != nil {
+		return asset, err
+	}
+	requires := slices.Clone(asset.Requires)
+	slices.SortFunc(requires, func(a, z platform.AssetRef) int { return strings.Compare(a.String(), z.String()) })
+	if !slices.Equal(requires, projected.Requires) {
+		return asset, fmt.Errorf("retained integration %s references differ from its original closure", asset.Ref)
+	}
+	if err := buildapi.ValueValidateIntegrationDescriptor(projected); err != nil {
+		return asset, err
+	}
+	return projected, nil
 }
 
 func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
@@ -357,6 +449,10 @@ func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 			if published != "" {
 				var asset platform.ReleaseAsset
 				if err := buildapi.ValueDecodeIntegration([]byte(published), &asset); err != nil {
+					return nil, err
+				}
+				asset, err = integrationCandidateAsset(asset)
+				if err != nil {
 					return nil, err
 				}
 				out = append(out, asset)
@@ -734,6 +830,20 @@ func equalIntegrationAsset(a, z platform.ReleaseAsset) bool {
 	if a.Ref != z.Ref || a.SourceVersion != z.SourceVersion || a.ContractVersion != z.ContractVersion || !slices.Equal(a.Requires, z.Requires) {
 		return false
 	}
+	if buildapi.ValueIntegrationKind(a.Ref.Kind) && (a.Provides == nil) != (z.Provides == nil) {
+		var err error
+		if a.Provides == nil {
+			a, err = integrationCandidateAsset(a)
+		} else {
+			z, err = integrationCandidateAsset(z)
+		}
+		if err != nil {
+			return false
+		}
+	}
+	if a.Provides != nil && z.Provides != nil && !reflect.DeepEqual(a.Provides, z.Provides) {
+		return false
+	}
 	var left, right any
 	return json.Unmarshal(a.Body, &left) == nil && json.Unmarshal(z.Body, &right) == nil && reflect.DeepEqual(left, right)
 }
@@ -794,6 +904,9 @@ func canonicalIntegrationExecution(asset platform.ReleaseAsset) ([]byte, error) 
 			return nil, err
 		}
 		definition.Title = ""
+		// Fixed Requires already compares the resolved object owner. Binding
+		// metadata added to new definitions does not change an issued operation.
+		definition.ObjectBindings = nil
 		return json.Marshal(definition)
 	case platform.AssetPipeline:
 		var definition PipelineDefinition
@@ -801,6 +914,9 @@ func canonicalIntegrationExecution(asset platform.ReleaseAsset) ([]byte, error) 
 			return nil, err
 		}
 		definition.Title = ""
+		// Fixed Requires already compares the resolved object owner. Binding
+		// metadata added to new definitions does not change an issued operation.
+		definition.ObjectBindings = nil
 		return json.Marshal(definition)
 	}
 	return nil, fmt.Errorf("unsupported execution definition")

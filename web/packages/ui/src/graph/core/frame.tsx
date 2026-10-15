@@ -40,20 +40,22 @@ export function CanvasFurniture() {
  * not again while the reader works on it. A view change renders once with the
  * previous nodes, so the fit waits until the new positions and measurements have
  * reached the canvas, and a quick change of view cancels the fit still pending. */
-export function CanvasRefit({ signature, ready = true, once = false }: { signature: string; ready?: boolean; once?: boolean }) {
+export function CanvasRefit({ signature, ready = true, once = false, onReady }: { signature: string; ready?: boolean; once?: boolean; onReady?: (ready: boolean) => void }) {
   const { fitView } = useReactFlow();
   const measured = useNodesInitialized();
   const width = useStore((s) => s.width), height = useStore((s) => s.height);
   const fitted = useRef<string | undefined>(undefined);
   const previous = useRef<{ signature: string; width: number; height: number } | undefined>(undefined);
+  const callback = useRef(onReady); callback.current = onReady;
   const usable = ready && measured && width > 0 && height > 0;
   useEffect(() => {
     if (!usable) return;
     if (once) {
       const fitSignature = `${signature}#${width}x${height}`;
       if (fitted.current === fitSignature) return;
+      callback.current?.(false);
       let cancelled = false;
-      const timer = setTimeout(() => { void fitView(fitting).then((done) => { if (done && !cancelled) fitted.current = fitSignature; }); }, 60);
+      const timer = setTimeout(() => { void fitView(fitting).then((done) => { if (done && !cancelled) { fitted.current = fitSignature; callback.current?.(true); } }); }, 60);
       return () => { cancelled = true; clearTimeout(timer); };
     }
     const last = previous.current;

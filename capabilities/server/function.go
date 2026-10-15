@@ -248,7 +248,11 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 		return err
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetFunction, Name: f.Name}
-	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".function-" + strconv.Itoa(version), ContractVersion: 1, Requires: []platform.AssetRef{{App: ref.App, Kind: platform.AssetObject, Name: f.Object}}, Function: &f}
+	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".function-" + strconv.Itoa(version), ContractVersion: 1, Function: &f}
+	def, err := h.t.describeDefinition(def)
+	if err != nil {
+		return err
+	}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 	if i >= 0 {
 		if h.t.definitions[i].Source != "tenant" {

@@ -60,10 +60,8 @@ func TestDeclaredSetReleaseRetainsItsSourceDependencies(t *testing.T) {
 	if index < 0 || !slices.Contains(assets[index].Requires, binding.Ref) || !slices.Contains(assets[index].Requires, child) {
 		t.Fatal("release omitted the set's retained source or element owner")
 	}
-	reads := &platform.RuleReadSpec{Collections: map[string]platform.RuleCollection{"children": {App: ID, Set: "children", Object: "build.child", Policy: "visible"}}}
-	for _, ref := range ruleRequirements(reads) {
-		if ref.Check() != nil {
-			t.Fatalf("declared set produced an invalid query dependency: %v", ref)
-		}
+	description, err := platform.DescribeAsset(assets[index])
+	if err != nil || !slices.Equal(description.Requires, assets[index].Requires) {
+		t.Fatal("release dependencies differ from the frozen declaration", description, err)
 	}
 }

@@ -18,6 +18,31 @@ type runtimeAssetOwner struct {
 	nativeFlow func(platform.AssetRef, string) (platform.ReleaseAsset, error)
 }
 
+// ValidateCodeAsset checks the immutable prerequisite through its original
+// code owner. Build uses this when a business definition refers to a native
+// platform record; it must never compile that record as a tenant object.
+func (h hostView) ValidateCodeAsset(asset platform.ReleaseAsset) error {
+	owner := h.t.app(asset.Ref.App)
+	if owner == nil {
+		return fmt.Errorf("code asset %s has no original owner", asset.Ref)
+	}
+	assets, err := h.t.codeReleaseAssetsLocked(owner)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(assets, func(current platform.ReleaseAsset) bool { return current.Ref == asset.Ref }) {
+		return fmt.Errorf("asset %s is not an original code declaration", asset.Ref)
+	}
+	remaining, err := (runtimeAssetOwner{App: owner, code: assets}).controlled([]platform.ReleaseAsset{asset})
+	if err != nil {
+		return err
+	}
+	if len(remaining) != 0 {
+		return fmt.Errorf("asset %s is not an immutable prerequisite", asset.Ref)
+	}
+	return nil
+}
+
 func (o runtimeAssetOwner) AssetKinds() []platform.AssetKind {
 	var kinds []platform.AssetKind
 	if o.lifecycle != nil {
@@ -71,12 +96,11 @@ func (o runtimeAssetOwner) controlled(assets []platform.ReleaseAsset) ([]platfor
 			}
 			selected = retained
 		}
-		prior, err := canonicalDigest(selected)
+		matches, err := immutableCodeAssetMatches(selected, asset)
 		if err != nil {
 			return nil, err
 		}
-		next, err := canonicalDigest(asset)
-		if err != nil || next != prior {
+		if !matches {
 			return nil, fmt.Errorf("immutable code asset %s differs from the target runtime", asset.Ref)
 		}
 	}
@@ -85,6 +109,78 @@ func (o runtimeAssetOwner) controlled(assets []platform.ReleaseAsset) ([]platfor
 	}
 	return out, nil
 }
+
+// A retained candidate predates dependency metadata only when Provides is
+// absent. Its original code contract still has to match this exact owner and
+// source version; the release is never rewritten with today's metadata.
+func immutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, error) {
+	if retained.Ref != current.Ref || retained.SourceVersion != current.SourceVersion || retained.ContractVersion != current.ContractVersion {
+		return false, nil
+	}
+	if retained.Provides != nil {
+		before, err := canonicalDigest(current)
+		if err != nil {
+			return false, err
+		}
+		after, err := canonicalDigest(retained)
+		return err == nil && before == after, err
+	}
+	if err := platform.CheckAssetDependencies(retained); err != nil {
+		return false, nil
+	}
+	if err := platform.CheckAssetDependencies(current); err != nil {
+		return false, err
+	}
+	for _, dependency := range retained.Requires {
+		if !slices.Contains(current.Requires, dependency) {
+			return false, nil
+		}
+	}
+	var original, selected map[string]json.RawMessage
+	if err := json.Unmarshal(retained.Body, &original); err != nil {
+		return false, err
+	}
+	if err := json.Unmarshal(current.Body, &selected); err != nil {
+		return false, err
+	}
+	// Only metadata newly added by the owner may be absent in old bytes.
+	// A binding already present in the retained body must match exactly.
+	for _, key := range []string{"objectBindings", "protocolBindings", "toolBindings"} {
+		if _, exists := original[key]; !exists {
+			delete(selected, key)
+		}
+	}
+	if current.Ref.Kind == platform.AssetApp {
+		var before, after []platform.AssetRef
+		if err := json.Unmarshal(original["resources"], &before); err != nil && len(original["resources"]) != 0 {
+			return false, err
+		}
+		if err := json.Unmarshal(selected["resources"], &after); err != nil && len(selected["resources"]) != 0 {
+			return false, err
+		}
+		// Protocols and interfaces now have their own descriptor. Their new
+		// code resources add no execution semantics to the old application.
+		after = slices.DeleteFunc(after, func(ref platform.AssetRef) bool {
+			return (ref.Kind == platform.AssetProtocol || ref.Kind == platform.AssetInterface) && !slices.Contains(before, ref)
+		})
+		if len(after) == 0 && len(original["resources"]) == 0 {
+			delete(selected, "resources")
+		} else if len(selected["resources"]) != 0 {
+			var err error
+			selected["resources"], err = json.Marshal(after)
+			if err != nil {
+				return false, err
+			}
+		}
+	}
+	before, err := canonicalDigest(original)
+	if err != nil {
+		return false, err
+	}
+	after, err := canonicalDigest(selected)
+	return err == nil && before == after, err
+}
+
 func (o runtimeAssetOwner) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
 	controlled, err := o.controlled([]platform.ReleaseAsset{asset})
 	if err != nil {

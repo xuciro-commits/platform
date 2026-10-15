@@ -67,11 +67,10 @@ func (h hostView) InstallOperation(c platform.Caller, o platform.Operation, vers
 		return err
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetCompute, Name: o.Name}
-	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".compute-" + strconv.Itoa(version), ContractVersion: 1, Requires: []platform.AssetRef{}, Operation: &o}
-	if o.Rules != nil {
-		for _, set := range o.Rules.Reads.Collections {
-			def.Requires = append(def.Requires, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, platform.AssetRef{App: strings.Split(set.Object, ".")[0], Kind: platform.AssetObject, Name: set.Object})
-		}
+	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".compute-" + strconv.Itoa(version), ContractVersion: 1, Operation: &o}
+	def, err := h.t.describeDefinition(def)
+	if err != nil {
+		return err
 	}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 	if i >= 0 {

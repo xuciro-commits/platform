@@ -463,3 +463,200 @@ func TestWritebackRequestAfterRetainedDefinitionRollback(t *testing.T) {
 		t.Fatal("unversioned legacy request lost its original identity", request, err)
 	}
 }
+
+type confirmationBindingHost struct {
+	lifecycleHost
+	records map[string]any
+}
+
+func (h confirmationBindingHost) Record(ref string) (any, bool) {
+	value, ok := h.records[ref]
+	return value, ok
+}
+
+func TestConfirmationReleaseBindsStableAssetsOnTheStartingAction(t *testing.T) {
+	b, _ := lifecycleBuild()
+	b.host = confirmationBindingHost{lifecycleHost: b.host.(lifecycleHost), records: map[string]any{
+		WritebackType + "/local-writeback": Writeback{Name: "submit-order"},
+		SourceType + "/local-source":       Source{Name: "order-status"},
+	}}
+	object := Object{Name: "order", Title: "Order", States: []State{{Name: "ready", Title: "Ready"}}, Actions: []Action{
+		{Name: "start", Title: "Start", From: []string{"ready"}, To: "ready", Transaction: &platform.BusinessTxn{Subject: "build.order", Confirmation: &platform.Confirmation{
+			Parties: []platform.ConfirmationParty{{Name: "warehouse", Writeback: "local-writeback", Reconcile: &platform.ConfirmationRead{Source: "local-source"}}}, OnComplete: "finish",
+		}}},
+		{Name: "finish", Title: "Finish", From: []string{"ready"}, To: "ready"},
+	}}
+	object.ID = "order"
+	object.Published = published(object)
+	assets, err := releaseAssets([]Object{object}, nil, nil, nil, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets, err = b.bindConfirmationAssets(assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, asset := range assets {
+		if asset.Ref.Kind == platform.AssetObject {
+			if slices.ContainsFunc(asset.Requires, func(ref platform.AssetRef) bool {
+				return ref.Kind == platform.AssetWriteback || ref.Kind == platform.AssetSource
+			}) {
+				t.Fatal("confirmation transports created an object/integration cycle")
+			}
+		}
+		if asset.Ref.Name != "build.order.start" {
+			continue
+		}
+		for _, ref := range []platform.AssetRef{
+			{App: ID, Kind: platform.AssetWriteback, Name: "submit-order"},
+			{App: ID, Kind: platform.AssetSource, Name: "order-status"},
+			{App: ID, Kind: platform.AssetAction, Name: "build.order.finish"},
+		} {
+			if !slices.Contains(asset.Requires, ref) {
+				t.Fatalf("starting action omitted its frozen transport %s", ref)
+			}
+		}
+		if strings.Contains(string(asset.Body), "local-writeback") || strings.Contains(string(asset.Body), "local-source") {
+			t.Fatal("portable action bindings retained mutable local identities")
+		}
+		if err := platform.CheckAssetDependencies(asset); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	t.Fatal("starting action was not produced")
+}
+
+func TestIssuedResultSurvivesExplicitOwnerBindings(t *testing.T) {
+	b, rows := lifecycleBuild()
+	conn := Connection{Record: platform.Record{ID: "connection"}, Name: "sap", Kind: "http"}
+	rows.rows[reflect.TypeFor[Connection]()] = []any{conn}
+	source := Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: conn.ID, URL: "rows", Object: "build.receipt", Key: "id"}
+	first, err := b.integrationAsset(platform.AssetSource, source, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacy SourceDefinition
+	if err := json.Unmarshal(first.Body, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	legacy.ObjectBindings = nil
+	first.Body, _ = json.Marshal(legacy)
+	first.Provides = nil
+	accepted, err := retainIntegration(source, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := b.integrationAsset(platform.AssetSource, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := retainIntegration(accepted, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := retainedExecutionEquivalent(current, first.SourceVersion); err != nil || !ok {
+		t.Fatal("explicit owner metadata changed original execution semantics", ok, err)
+	}
+	// A different resolved owner still changes the frozen dependency identity.
+	var changed SourceDefinition
+	if err := json.Unmarshal(second.Body, &changed); err != nil {
+		t.Fatal(err)
+	}
+	changed.ObjectBindings["build.receipt"] = platform.AssetRef{App: "other", Kind: platform.AssetObject, Name: "build.receipt"}
+	second.Body, _ = json.Marshal(changed)
+	second, err = platform.WithDependencies(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := retainIntegration(accepted, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := retainedExecutionEquivalent(other, first.SourceVersion); err != nil || ok {
+		t.Fatal("a different object owner reinterpreted an issued result", ok, err)
+	}
+}
+
+func TestLegacyIntegrationCandidateUsesFrozenReferences(t *testing.T) {
+	b, rows := lifecycleBuild()
+	object := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: "build.receipt"}
+	producer := platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: "feed"}
+	definition := MatchingDefinition{Name: "identity", Title: "Receipt identity", Object: object.Name, Keys: []MatchKey{{Fields: []string{"item"}}}, Prefer: []Preference{{Field: "document", Producer: producer.Name}}}
+	body, _ := json.Marshal(definition)
+	original := platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetMatching, Name: definition.Name}, ContractVersion: 1, SourceVersion: integrationVersion(1, platform.AssetMatching), Requires: []platform.AssetRef{object, producer}, Body: body}
+	raw, _ := json.Marshal(original)
+	retained := Match{Record: platform.Record{ID: "matching"}, Name: definition.Name, Title: definition.Title, Object: definition.Object, Keys: definition.Keys, Prefer: definition.Prefer, State: "published", DefinitionVersion: 1, Published: string(raw), Versions: []string{string(raw)}}
+	// Today's draft names a different object and producer. A pipeline also
+	// reuses the old source name. None may reinterpret the accepted version.
+	mutable := retained
+	mutable.Object = "build.other"
+	mutable.Prefer = []Preference{{Field: "document", Producer: "edited-feed"}}
+	rows.rows[reflect.TypeFor[Match]()] = []any{mutable}
+	rows.rows[reflect.TypeFor[Pipeline]()] = []any{Pipeline{Name: producer.Name, State: "draft"}}
+	assets, err := b.integrationAssets()
+	if err != nil || len(assets) != 1 {
+		t.Fatal("legacy matching was not projected for a new candidate", assets, err)
+	}
+	projected := assets[0]
+	var current MatchingDefinition
+	if json.Unmarshal(projected.Body, &current) != nil || current.Producers[producer.Name] != producer || current.ObjectBindings[object.Name] != object || projected.Provides == nil || !slices.Equal(projected.Requires, original.Requires) {
+		t.Fatal("projection did not retain the exact accepted identities", projected, current)
+	}
+	prerequisite := func(ref platform.AssetRef, body string) platform.ReleaseAsset {
+		t.Helper()
+		asset, err := platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: "1", Body: json.RawMessage(body)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return asset
+	}
+	connection := platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: "sap"}
+	available := append(slices.Clone(assets),
+		prerequisite(object, `{"type":"build.receipt","fields":[{"name":"item","type":"text"},{"name":"document","type":"text"}]}`),
+		prerequisite(producer, `{"name":"feed","title":"Feed","connection":"sap","url":"rows"}`),
+		prerequisite(connection, `{"name":"sap","title":"SAP","kind":"http"}`),
+	)
+	candidate, err := platform.Candidate([]platform.AssetRef{projected.Ref}, available)
+	if err != nil {
+		t.Fatal("accepted matching could not enter a new candidate", err)
+	}
+	if _, err := platform.ReadCandidate(candidate.ID, candidate.Bytes); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := retainIntegration(retained, projected)
+	if err != nil {
+		t.Fatal("derived bindings created another integration version", err)
+	}
+	_, version, published, versions := integrationMetadata(kept)
+	if version != 1 || published != string(raw) || len(versions) != 1 || versions[0] != string(raw) || retained.Published != string(raw) {
+		t.Fatal("candidate projection rewrote original accepted bytes")
+	}
+	bad := original
+	bad.Requires = slices.Clone(original.Requires)
+	bad.Requires[1].App = "other"
+	if _, err := integrationCandidateAsset(bad); err == nil {
+		t.Fatal("a changed frozen producer owner was accepted")
+	}
+	changed := projected
+	current.Producers[producer.Name] = platform.AssetRef{App: "other", Kind: platform.AssetSource, Name: producer.Name}
+	changed.Body, _ = json.Marshal(current)
+	changed, err = platform.WithDependencies(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := retainIntegration(retained, changed); err == nil {
+		t.Fatal("a new producer owner replaced the same accepted version")
+	}
+
+	// The old virtual confirmation edge cannot be silently erased. Reading
+	// old execution metadata remains valid; a new publication removes it.
+	writebackBody, _ := json.Marshal(WritebackDefinition{Name: "confirm", Title: "Confirm", Connection: connection.Name, Object: object.Name, On: "confirmation"})
+	oldWriteback := platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: "confirm"}, ContractVersion: 1, SourceVersion: integrationVersion(1, platform.AssetWriteback), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: object.Name + ".confirmation"}, connection, object}, Body: writebackBody}
+	if err := buildapi.ValueValidateIntegrationDescriptor(oldWriteback); err != nil {
+		t.Fatal("original confirmation metadata became unreadable", err)
+	}
+	if _, err := integrationCandidateAsset(oldWriteback); err == nil || !strings.Contains(err.Error(), "publish a new writeback version") {
+		t.Fatal("legacy virtual action did not require its explicit next publication", err)
+	}
+}

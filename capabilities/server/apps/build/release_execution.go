@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"platformserver/internal/host"
 	buildapi "platformserver/internal/host/buildapi"
@@ -19,6 +20,27 @@ func (b *releaseExecution) Manifest() platform.Manifest {
 	m := b.Build.Manifest()
 	m.Actions = b.catalog
 	return m
+}
+
+func (b *Build) retainedCodeObject(asset platform.ReleaseAsset) (bool, error) {
+	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+		return false, nil
+	}
+	manifest := b.Manifest()
+	native := slices.ContainsFunc(manifest.Entities, func(entity platform.Entity) bool {
+		_, controlled := b.installed[entity.Type]
+		return !controlled && entity.Type == asset.Ref.Name
+	})
+	if !native {
+		return false, nil
+	}
+	if b.host == nil {
+		return false, fmt.Errorf("immutable code asset %s has no original validator", asset.Ref)
+	}
+	if err := b.host.ValidateCodeAsset(asset); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.App, error) {
@@ -41,6 +63,13 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
+		code, err := b.retainedCodeObject(asset)
+		if err != nil {
+			return nil, err
+		}
+		if code {
+			continue
+		}
 		var object Object
 		if asset.SourceVersion != definitionVersion || json.Unmarshal(asset.Body, &object) != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
@@ -60,6 +89,13 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetObject {
+			code, err := b.retainedCodeObject(asset)
+			if err != nil {
+				return nil, err
+			}
+			if code {
+				continue
+			}
 			var object Object
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return nil, err

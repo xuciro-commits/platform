@@ -147,9 +147,17 @@ func TestFrozenWorkViewsServiceClosureIncludesVirtualNotificationAction(t *testi
 				if ref.App == "platform" {
 					target = "platform.notification"
 				}
-				body = Action{Schema: ref.Name, Target: target}
+				binding := AssetRef{App: ref.App, Kind: AssetObject, Name: target}
+				if ref.App == "platform" {
+					binding = AssetRef{}
+				}
+				body = map[string]any{"schema": ref.Name, "target": target, "objectBindings": map[string]AssetRef{target: binding}}
 			}
-			services = append(services, ReleaseAsset{Ref: ref, SourceVersion: "1", ContractVersion: 1, Body: Raw(body)})
+			asset, err := WithDependencies(ReleaseAsset{Ref: ref, SourceVersion: "1", ContractVersion: 1, Body: Raw(body)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			services = append(services, asset)
 		}
 	}
 	assets := append([]ReleaseAsset{page}, services...)

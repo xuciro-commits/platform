@@ -2,6 +2,27 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Declared dependencies, reverse impact and available capabilities share one versioned description. Select an asset to see what it uses and what a change reaches.": "声明的依赖、反向影响和可用能力共用同一份带版本的描述。选择资产可查看它使用什么，以及改动会影响谁。",
+  "Declared dependencies": "声明的依赖",
+  "Uses": "使用",
+  "Used by": "被使用",
+  "None": "无",
+  "Available capabilities": "可用能力",
+  "The host lists capabilities available to you. Choose a kind or invocation type to inspect their owner, version and typed inputs.": "宿主列出你可以使用的能力。按种类或调用方式查看所属应用、版本和输入类型。",
+  "Capability kind": "能力种类",
+  "All capability kinds": "全部能力种类",
+  "Invocation type": "调用方式",
+  "All invocation types": "全部调用方式",
+  "Read only": "只读",
+  "Declare an effect": "声明效果意图",
+  "Change authoritative state": "修改权威状态",
+  "Available capabilities could not be loaded.": "无法加载可用能力。",
+  "No capabilities match this selection.": "没有符合条件的能力。",
+  "Typed inputs and outputs": "输入与输出类型",
+  "Runtime evidence": "运行证据",
+  "This graph describes declared relationships. Recorded runs, delivered effects and source results remain in their original diagnostics.": "此图显示声明的关系。已记录的运行、已执行的效果和来源结果仍在原诊断页面查看。",
+  "Open asset": "打开资产",
+  "Object data and evidence": "对象数据与证据",
  "The original request does not match these inputs. Submit changed inputs as a correction.": "原请求与这些输入不符。请将修改后的输入作为纠正提交。",
  "The original answer could not be refreshed. Its saved result and inputs are retained.": "无法重新确认原答复。已保存的结果和输入仍然保留。",
  "An earlier request is awaiting confirmation. Retry it before submitting changes.": "此前的请求尚待确认。请先重试确认，再提交修改。",
@@ -162,5 +183,4 @@ register("zh-CN", {
   "Sign out": "退出登录",
   "{n} tenants": "{n} 个租户",
   "A host administrator takes no tenant decisions.": "宿主管理员不做租户内的决定。",
-  "What each installed asset is built from, declared in its own definition: applications over pages, pages over object types, functions and queries over the types they read. It proves impact — what a change to an asset reaches — not history: no record moved here. Runtime data flow is on the object's Data lineage panel. Click a node to open it.": "每个已安装资产由什么构成，取自它自己的定义：应用建立在页面上，页面建立在对象类型上，函数和查询建立在它们读取的类型上。它证明的是影响面——改动一个资产会波及什么——不是历史：这里没有任何记录流动。运行时的数据流向在对象的“数据血缘”面板上。点击节点即可打开。",
 });

@@ -58,6 +58,15 @@ func (d Definition) QueryVersion(version string) *Definition {
 	if !ok {
 		return nil
 	}
-	d.Query, d.Version, d.QueryVersions, d.Requires = &q, version, nil, q.Dependencies()
+	body, err := json.Marshal(q)
+	if err != nil {
+		return nil
+	}
+	description, err := DescribeAsset(ReleaseAsset{Ref: d.Ref, SourceVersion: version, Body: body})
+	if err != nil {
+		return nil
+	}
+	d.Query, d.Version, d.QueryVersions = &q, version, nil
+	d.Requires, d.Provides = description.Requires, description.Provides
 	return &d
 }

@@ -130,6 +130,7 @@ export type AgentReleaseDescriptor = {
   description: string;
   instructions: string;
   tools: string[];
+  toolBindings?: Record<string, AssetRef>;
   budget: Budget;
   checkpoints?: string[];
   handoffRole?: string;
@@ -741,9 +742,20 @@ export type CandidateSimulationRequest = {
   samples?: SimulationSample[];
 };
 
+export type Capability = {
+  kind: string;
+  name: string;
+  inputs: ValueSchema;
+  outputs: ValueSchema;
+  roles: string[];
+  side: string;
+  parameters?: Field[];
+};
+
 export type CapabilityDescriptor = {
   ref: AssetRef;
   kind: string;
+  side: string;
   title: string;
   description: string;
   group: string;
@@ -1146,6 +1158,8 @@ export type DecisionTrace = {
 
 export type Definition = {
   sampleSet?: SampleSet;
+  interface?: Interface;
+  protocol?: ProtocolReleaseDescriptor;
   contentVersion?: string;
   propertyType?: PropertyType;
   propertyVersions?: Record<string, PropertyType>;
@@ -1156,6 +1170,7 @@ export type Definition = {
   version: string;
   contractVersion: number;
   requires: AssetRef[];
+  provides: Capability[];
   entity?: EntityInfo;
   action?: Action;
   page?: Page;
@@ -1177,6 +1192,19 @@ export type Delivery = {
   subscriber: string;
   outcome: string;
   attempt?: number;
+};
+
+export type Dependencies = {
+  ref: AssetRef;
+  requires: AssetRef[];
+  provides: Capability[];
+  version: string;
+};
+
+export type DependencyView = {
+  descriptors: Dependencies[];
+  requires: AssetRef[];
+  usedBy: AssetRef[];
 };
 
 export type Draft = {
@@ -3139,6 +3167,22 @@ export type ProtocolInfo = {
   bound?: string;
 };
 
+export type ProtocolReleaseDescriptor = {
+  name: string;
+  version: number;
+  actions: Action[];
+  reads: string[];
+  actionBindings?: Record<string, AssetRef>;
+  actionRoles?: Record<string, string[]>;
+  readBindings?: Record<string, AssetRef>;
+};
+
+export type ProvidedCapability = {
+  ref: AssetRef;
+  version: string;
+  capability: Capability;
+};
+
 export type Provider = {
   id: string;
   kind: string;
@@ -3318,6 +3362,7 @@ export type ReleaseAsset = {
   contractVersion: number;
   sourceVersion: string;
   requires: AssetRef[];
+  provides?: Capability[];
   body: unknown;
 };
 

@@ -11,18 +11,19 @@ import (
 // Native guards/case checks remain in their pinned Go owner; builder cases
 // remain data compiled by Build.Agent.Definition, never another agent engine.
 type AgentReleaseDescriptor struct {
-	Name         string          `json:"name"`
-	Title        string          `json:"title"`
-	Description  string          `json:"description"`
-	Instructions string          `json:"instructions"`
-	Tools        []string        `json:"tools"`
-	Budget       Budget          `json:"budget"`
-	Checkpoints  []string        `json:"checkpoints,omitempty"`
-	HandoffRole  string          `json:"handoffRole,omitempty"`
-	Cases        json.RawMessage `json:"cases,omitempty"`
-	Native       bool            `json:"native,omitempty"`
-	Guard        bool            `json:"guard,omitempty"`
-	Handoff      bool            `json:"handoff,omitempty"`
+	Name         string              `json:"name"`
+	Title        string              `json:"title"`
+	Description  string              `json:"description"`
+	Instructions string              `json:"instructions"`
+	Tools        []string            `json:"tools"`
+	ToolBindings map[string]AssetRef `json:"toolBindings,omitempty"`
+	Budget       Budget              `json:"budget"`
+	Checkpoints  []string            `json:"checkpoints,omitempty"`
+	HandoffRole  string              `json:"handoffRole,omitempty"`
+	Cases        json.RawMessage     `json:"cases,omitempty"`
+	Native       bool                `json:"native,omitempty"`
+	Guard        bool                `json:"guard,omitempty"`
+	Handoff      bool                `json:"handoff,omitempty"`
 }
 
 func (a AgentReleaseDescriptor) Check() error {
@@ -31,6 +32,11 @@ func (a AgentReleaseDescriptor) Check() error {
 	}
 	if len(a.Cases) > 0 && (!json.Valid(a.Cases) || a.Cases[0] != '[') {
 		return fmt.Errorf("agent evaluation cases need an array")
+	}
+	for tool, ref := range a.ToolBindings {
+		if !slices.Contains(a.Tools, tool) || ref.Check() != nil {
+			return fmt.Errorf("agent tool binding must retain an original declared tool and asset")
+		}
 	}
 	for _, tool := range a.Checkpoints {
 		if !slices.Contains(a.Tools, tool) {
@@ -43,6 +49,10 @@ func (a AgentReleaseDescriptor) Check() error {
 func (a AgentReleaseDescriptor) Dependencies(owner string) []AssetRef {
 	refs := []AssetRef{}
 	for _, tool := range a.Tools {
+		if ref, ok := a.ToolBindings[tool]; ok {
+			refs = append(refs, ref)
+			continue
+		}
 		if a.Native && !strings.Contains(tool, ".") && !strings.HasPrefix(tool, "query:") {
 			continue
 		}

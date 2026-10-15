@@ -36,7 +36,10 @@ func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.Release
 		}
 	}
 	body, err := json.Marshal(descriptor)
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".evaluation-" + strconv.Itoa(version), Requires: []platform.AssetRef{descriptor.Function.Ref}, Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".evaluation-" + strconv.Itoa(version), Body: body})
 }
 
 func (b *Build) evaluationSetImage(raw []byte) (TestPlan, platform.ReleaseAsset, error) {
@@ -62,7 +65,7 @@ func (b *Build) evaluationSetImage(raw []byte) (TestPlan, platform.ReleaseAsset,
 
 func (b *Build) checkEvaluationAsset(asset platform.ReleaseAsset, name string, version int) error {
 	descriptor, err := platform.ReadEvaluationSet(asset.Body)
-	if err != nil || descriptor.Name != name || asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: name}) || asset.ContractVersion != 1 || asset.SourceVersion != b.Manifest().Version+".evaluation-"+strconv.Itoa(version) || !slices.Equal(asset.Requires, []platform.AssetRef{descriptor.Function.Ref}) {
+	if err != nil || descriptor.Name != name || asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: name}) || asset.ContractVersion != 1 || asset.SourceVersion != b.Manifest().Version+".evaluation-"+strconv.Itoa(version) || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("evaluation set publication differs from its descriptor")
 	}
 	return nil

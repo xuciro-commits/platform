@@ -1,70 +1,79 @@
-// Lineage (ADR-0052 batch P4): what an installed asset is built from, drawn
-// from `Definition.requires` — pages over object types, applications over
-// pages, queries and functions over the types they read. One asset at a time,
-// or every asset of an app when nothing is chosen.
-import { assetKey, useDefinitions, type AssetRef, type Definition } from "@platform/app";
-import { PageHeader, RelationCanvas, relationNodeClasses, Select, useWorkspace, type RelationEdge, type RelationNode, t } from "@platform/ui";
-import { useMemo, useState } from "react";
+// ADR-0118: declaration, reverse impact and discovery read one owner descriptor.
+import { assetKey, DependencyGraph, useDependencies, useDefinitions, useProvidedCapabilities, type AssetRef, type Definition, type ProvidedCapability } from "@platform/app";
+import { Button, DataTable, Disclosure, PageHeader, Panel, relationNodeClasses, Select, useWorkspace, t } from "@platform/ui";
+import { useState } from "react";
 
-// The kit's class table decides the glyph, the caption word and the default
-// tone (ADR-0090 D1); this lineage keeps one override — a plain object type is
-// the mutable thing here, so it stays amber beside its published siblings.
-const toneOverrides: Record<string, RelationNode["tone"]> = { object: "warning" };
 const kindLabel = (kind: string) => t(relationNodeClasses[kind]?.title ?? kind);
-const titleOf = (d: Definition) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.application?.title ?? d.ref.name;
+const titleOf = (d?: Definition) => d?.entity?.title ?? d?.action?.title ?? d?.page?.title ?? d?.application?.title ?? d?.ref.name;
+const capabilityKey = (item: ProvidedCapability) => `${assetKey(item.ref)}@${item.version}:${item.capability.kind}:${item.capability.name}`;
+const sideLabels: Record<string, string> = { pure: "Read only", effect: "Declare an effect", authoritative: "Change authoritative state" };
 
 export function Lineage({ ref: requested }: { ref?: string }) {
-  const { data, isPending, error } = useDefinitions();
+  const definitions = useDefinitions().data ?? [];
   const { open } = useWorkspace();
-  const definitions = useMemo(() => data ?? [], [data]);
   const [picked, setPicked] = useState<string>();
-  const apps = useMemo(() => [...new Set(definitions.map((d) => d.ref.app))].sort(), [definitions]);
   const [app, setApp] = useState<string>();
   const focus = picked ?? requested ?? "";
-  const scopeApp = app ?? (focus ? focus.split("/")[0] : apps[0]) ?? "";
-  const { nodes, edges } = useMemo(() => {
-    const byKey = new Map(definitions.map((d) => [assetKey(d.ref), d] as const));
-    const keep = new Set<string>();
-    if (focus && byKey.has(focus)) {
-      // Everything the chosen asset requires, transitively, and everything that requires it.
-      const down = (key: string) => { if (keep.has(key)) return; keep.add(key); for (const r of byKey.get(key)?.requires ?? []) down(assetKey(r)); };
-      down(focus);
-      for (const d of definitions) if (d.requires.some((r) => assetKey(r) === focus)) keep.add(assetKey(d.ref));
-    } else {
-      for (const d of definitions) if (d.ref.app === scopeApp) { keep.add(assetKey(d.ref)); for (const r of d.requires) keep.add(assetKey(r)); }
-    }
-    const nodes: RelationNode[] = [...keep].map((key) => {
-      const d = byKey.get(key);
-      const [appId, kind, name] = key.split("/");
-      const caption = `${kindLabel(kind ?? "")} · ${appId}${d?.version ? ` · ${d.version}` : ""}`;
-      // The class decides the glyph and default tone; only the override rides
-      // alongside, and a kind the kit has never heard of stays neutral.
-      return { id: key, label: d ? titleOf(d) : name ?? key, class: kind || undefined,
-        tone: kind && !relationNodeClasses[kind] ? "neutral" : toneOverrides[kind ?? ""], caption, detail: caption };
-    });
-    const edges: RelationEdge[] = [];
-    for (const key of keep) for (const r of byKey.get(key)?.requires ?? []) { const to = assetKey(r); if (keep.has(to)) edges.push({ id: `${to}>${key}`, source: to, target: key, directed: true }); }
-    return { nodes, edges };
-  }, [definitions, focus, scopeApp]);
-  const openAsset = (key: string) => {
-    const d = definitions.find((x) => assetKey(x.ref) === key);
-    if (!d) return;
-    const ref: AssetRef = d.ref;
-    if (d.page) return open({ view: "page", params: { app: ref.app, kind: ref.kind, name: ref.name } });
-    open({ view: "definition", params: { app: ref.app, kind: ref.kind, name: ref.name } });
+  const parts = focus.split("/");
+  const ref = focus && parts.length === 3 ? { app: parts[0]!, kind: parts[1]!, name: parts[2]! } : undefined;
+  const query = useDependencies(ref);
+  const descriptors = query.data?.descriptors ?? [];
+  const apps = [...new Set(descriptors.map(d => d.ref.app))].sort();
+  const scopeApp = ref?.app ?? app ?? apps[0] ?? "";
+  const openAsset = (ref: AssetRef) => {
+    if (ref.kind === "page") return open({ view: "page", params: { ...ref } });
+    open({ view: "definition", params: { ...ref } });
   };
-  if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
-  if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
-  return <>
-    <PageHeader title={t("Lineage")} description={t("What each installed asset is built from, declared in its own definition: applications over pages, pages over object types, functions and queries over the types they read. It proves impact — what a change to an asset reaches — not history: no record moved here. Runtime data flow is on the object's Data lineage panel. Click a node to open it.")}
+  const focused = descriptors.find(d => assetKey(d.ref) === focus);
+  return <div className="grid min-w-0 gap-4">
+    <PageHeader title={t("Lineage")} description={t("Declared dependencies, reverse impact and available capabilities share one versioned description. Select an asset to see what it uses and what a change reaches.")}
       actions={<>
-        <Select aria-label={t("App")} value={scopeApp} className="w-40" onChange={(e) => { setApp(e.target.value); setPicked(""); }}>{apps.map((id) => <option key={id} value={id}>{id}</option>)}</Select>
-        <Select aria-label={t("Asset")} value={focus} className="w-72" onChange={(e) => setPicked(e.target.value)}>
+        <Select aria-label={t("App")} value={scopeApp} className="w-40" onChange={event => { setApp(event.target.value); setPicked(""); }}>{apps.map(id => <option key={id} value={id}>{id}</option>)}</Select>
+        <Select aria-label={t("Asset")} value={focus} className="w-72" onChange={event => setPicked(event.target.value)}>
           <option value="">{t("Every asset of {app}", { app: scopeApp })}</option>
-          {definitions.filter((d) => d.ref.app === scopeApp).map((d) => <option key={assetKey(d.ref)} value={assetKey(d.ref)}>{kindLabel(d.ref.kind)} · {titleOf(d)}</option>)}
+          {descriptors.filter(d => d.ref.app === scopeApp).map(d => <option key={assetKey(d.ref)} value={assetKey(d.ref)}>{kindLabel(d.ref.kind)} · {titleOf(definitions.find(item => assetKey(item.ref) === assetKey(d.ref))) ?? d.ref.name}</option>)}
         </Select>
       </>} />
-    {nodes.length === 0 ? <p className="text-sm text-muted">{t("No definitions available.")}</p>
-      : <RelationCanvas layout="right" nodes={nodes} edges={edges} selected={focus || undefined} height={Math.max(360, (typeof window !== "undefined" ? window.innerHeight : 900) - 220)} label={t("Lineage")} storeKey={`lineage:${focus || `app:${scopeApp}`}`} onSelect={(id) => id && openAsset(id)} />}
-  </>;
+    <Panel title={t("Declared dependencies")}>
+      <DependencyGraph asset={ref} app={scopeApp} height={400} onSelect={item => setPicked(assetKey(item))} onOpen={openAsset} />
+      {focused && <div className="grid gap-2 border-t border-border pt-3 text-xs sm:grid-cols-2">
+        {[{ title: "Uses", refs: query.data?.requires ?? [] }, { title: "Used by", refs: query.data?.usedBy ?? [] }].map(group => <div key={group.title}><h3 className="font-semibold">{t(group.title)}</h3><div className="flex flex-wrap gap-1">{group.refs.length ? group.refs.map(item => <Button variant="ghost" size="sm" key={assetKey(item)} onClick={() => setPicked(assetKey(item))}>{item.name}</Button>) : <span className="text-muted">{t("None")}</span>}</div></div>)}
+      </div>}
+    </Panel>
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(16rem,1fr)]">
+      <CapabilityDiscovery app={scopeApp} focus={focused?.ref} onOpen={openAsset} />
+      <Panel title={t("Runtime evidence")} description={t("This graph describes declared relationships. Recorded runs, delivered effects and source results remain in their original diagnostics.")}>
+        {focused && <Button size="sm" onClick={() => openAsset(focused.ref)}>{t("Open asset")}</Button>}
+        <Button size="sm" variant="ghost" onClick={() => open({ view: "integration-health" })}>{t("Integration health")}</Button>
+        {focused?.ref.kind === "object" && <Button size="sm" variant="ghost" onClick={() => open({ view: "object-type", params: { object: focused.ref.name, tab: "data" } })}>{t("Object data and evidence")}</Button>}
+      </Panel>
+    </div>
+  </div>;
+}
+
+function CapabilityDiscovery({ app, focus, onOpen }: { app: string; focus?: AssetRef; onOpen: (ref: AssetRef) => void }) {
+  const [kind, setKind] = useState("");
+  const [side, setSide] = useState("");
+  const [selected, setSelected] = useState<string>();
+  const query = useProvidedCapabilities(kind, side);
+  const rows = (query.data ?? []).filter(item => focus ? assetKey(item.ref) === assetKey(focus) : item.ref.app === app);
+  const chosen = rows.find(item => capabilityKey(item) === selected);
+  return <Panel title={t("Available capabilities")} description={t("The host lists capabilities available to you. Choose a kind or invocation type to inspect their owner, version and typed inputs.")} className="grid min-w-0 gap-3">
+    <div className="flex flex-wrap gap-2">
+      <Select aria-label={t("Capability kind")} value={kind} onChange={event => setKind(event.target.value)}><option value="">{t("All capability kinds")}</option>{["action", "query", "function", "operation", "protocol", "interface"].map(value => <option key={value} value={value}>{kindLabel(value)}</option>)}</Select>
+      <Select aria-label={t("Invocation type")} value={side} onChange={event => setSide(event.target.value)}><option value="">{t("All invocation types")}</option>{Object.entries(sideLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</Select>
+    </div>
+    {query.isError && <p role="alert" className="text-sm text-danger">{t("Available capabilities could not be loaded.")}</p>}
+    <DataTable data={rows} getRowId={capabilityKey} selectedId={selected} onRowClick={item => setSelected(capabilityKey(item))} loading={query.isPending} height={280} empty={t("No capabilities match this selection.")} columns={[
+      { id: "name", header: t("Name"), accessorFn: item => item.capability.name },
+      { id: "kind", header: t("Kind"), accessorFn: item => kindLabel(item.capability.kind) },
+      { id: "side", header: t("Invocation type"), accessorFn: item => t(sideLabels[item.capability.side] ?? item.capability.side) },
+      { id: "owner", header: t("Owner"), accessorFn: item => item.ref.app },
+      { id: "version", header: t("Version"), accessorFn: item => item.version },
+    ]} />
+    {chosen && <div className="grid gap-2 text-xs">
+      <Button size="sm" variant="ghost" onClick={() => onOpen(chosen.ref)}>{t("Open asset")}: {chosen.ref.name}</Button>
+      <Disclosure summary={t("Typed inputs and outputs")}><pre className="max-h-56 overflow-auto rounded bg-subtle p-2">{JSON.stringify({ inputs: chosen.capability.inputs, outputs: chosen.capability.outputs, parameters: chosen.capability.parameters }, null, 2)}</pre></Disclosure>
+    </div>}
+  </Panel>;
 }

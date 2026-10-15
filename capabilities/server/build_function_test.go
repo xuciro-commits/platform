@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -100,6 +101,32 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	tn.releases.candidates, tn.releases.active = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
 	if closure, release, err := tn.functionClosure(build.ID, definition, 1, nil); err != nil || closure.ID != c1.ID || release != c1.ID {
 		t.Fatalf("published function did not bind its saved release: %s %s %v", closure.ID, release, err)
+	}
+	// Original releases did not seal Provides or machine-resolved bindings.
+	// A later reader keeps their exact dependency identity and source bytes.
+	legacyAssets := slices.Clone(c1.Assets)
+	for i := range legacyAssets {
+		legacyAssets[i].Provides = nil
+		var body map[string]json.RawMessage
+		if err := json.Unmarshal(legacyAssets[i].Body, &body); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"objectBindings", "protocolBindings", "toolBindings"} {
+			delete(body, key)
+		}
+		legacyAssets[i].Body = platform.Raw(body)
+	}
+	legacyBytes := platform.Raw(struct {
+		Format int                     `json:"format"`
+		Assets []platform.ReleaseAsset `json:"assets"`
+	}{1, legacyAssets})
+	legacyID := fmt.Sprintf("sha256-v1:%x", sha256.Sum256(legacyBytes))
+	if _, err := platform.ReadCandidate(legacyID, legacyBytes); err != nil {
+		t.Fatal(err)
+	}
+	tn.releases.candidates, tn.releases.active = map[string]json.RawMessage{legacyID: legacyBytes}, legacyID
+	if closure, release, err := tn.functionClosure(build.ID, definition, 1, nil); err != nil || closure.ID != legacyID || release != legacyID {
+		t.Fatalf("historical function binding changed identity: %s %s %v", closure.ID, release, err)
 	}
 	tn.releases.active = ""
 	tn.releases.candidates = nil

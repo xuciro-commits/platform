@@ -130,8 +130,20 @@ func TestInterfacePageBindingKeepsPublishedShapeAndConcreteRecordIdentity(t *tes
 		t.Fatal(err)
 	}
 	object := ReleaseAsset{Ref: root, SourceVersion: "object-1", ContractVersion: 1, Body: Raw(EntityInfo{App: root.App, Type: root.Name, Implements: []string{shape.Name}, Fields: []FieldInfo{{Name: "name", Type: "text"}}})}
-	query := ReleaseAsset{Ref: binding.Ref, SourceVersion: binding.SourceVersion, ContractVersion: 1, Requires: []AssetRef{root}, Body: Raw(named)}
-	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object}); err != nil {
+	query := ReleaseAsset{Ref: binding.Ref, SourceVersion: binding.SourceVersion, ContractVersion: 1, Body: Raw(named)}
+	object, err = WithDependencies(object)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, err = WithDependencies(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shapeAsset, err := WithDependencies(ReleaseAsset{Ref: AssetRef{App: root.App, Kind: AssetInterface, Name: shape.Name}, SourceVersion: "shape-1", ContractVersion: 1, Body: Raw(shape)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object, shapeAsset}); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {

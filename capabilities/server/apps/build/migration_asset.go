@@ -90,14 +90,17 @@ func (b *Build) checkMigrationPlan(m MigrationPlanRecord) error {
 
 func migrationPlanAsset(m MigrationPlanRecord, version int) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(m.descriptor())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetMigration, Name: m.Name}, SourceVersion: definitionVersion + ".migration-" + strconv.Itoa(version), ContractVersion: 1, Requires: []platform.AssetRef{}, Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetMigration, Name: m.Name}, SourceVersion: definitionVersion + ".migration-" + strconv.Itoa(version), ContractVersion: 1, Body: body})
 }
 
 func decodeMigrationAsset(asset platform.ReleaseAsset) (platform.MigrationDescriptor, int, error) {
 	var d platform.MigrationDescriptor
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, definitionVersion+".migration-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetMigration || asset.ContractVersion != 1 || len(asset.Requires) != 0 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetMigration || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil {
 		return d, 0, fmt.Errorf("Invalid migration asset")
 	}
 	return d, version, nil

@@ -13,8 +13,11 @@ import (
 
 func propertyTypeReleaseAsset(f PropertyType, sourceVersion string) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(f.Definition())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".property-" + strconv.Itoa(f.Version), Requires: propertyTypeRequires(f.Definition()), Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: f.Name}, ContractVersion: 1,
+		SourceVersion: sourceVersion + ".property-" + strconv.Itoa(f.Version), Body: body})
 }
 
 // PropertyTypeReleaseAsset resolves only a retained version from this owner.
@@ -29,8 +32,11 @@ func (b *Build) PropertyTypeReleaseAsset(name string, sourceVersion string) (pla
 		return platform.ReleaseAsset{}, fmt.Errorf("propertyType %s version %d is not retained", name, version)
 	}
 	body, err := json.Marshal(f)
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: name}, ContractVersion: 1,
-		SourceVersion: b.Manifest().Version + ".property-" + strconv.Itoa(version), Requires: propertyTypeRequires(f), Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: name}, ContractVersion: 1,
+		SourceVersion: b.Manifest().Version + ".property-" + strconv.Itoa(version), Body: body})
 }
 
 func (b *Build) propertyTypeAssets() ([]platform.ReleaseAsset, error) {
@@ -56,7 +62,7 @@ func (b *Build) InstallPropertyTypeAsset(asset platform.ReleaseAsset) error {
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, prefix)
 	version, err := strconv.Atoi(ordinal)
 	var declaration platform.PropertyType
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetPropertyType || json.Unmarshal(asset.Body, &declaration) != nil || declaration.Check() != nil || declaration.Name != asset.Ref.Name || !reflect.DeepEqual(asset.Requires, propertyTypeRequires(declaration)) {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetPropertyType || json.Unmarshal(asset.Body, &declaration) != nil || declaration.Check() != nil || declaration.Name != asset.Ref.Name || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid builder property type asset %s", asset.Ref)
 	}
 	f := propertyTypeFromDeclaration(declaration)
@@ -155,7 +161,6 @@ func (b *Build) preparePropertyTypeReleasePublications(assets []platform.Release
 	return out, nil
 }
 
-func propertyTypeRequires(p platform.PropertyType) []platform.AssetRef { return nil }
 func propertyTypeFromDeclaration(p platform.PropertyType) PropertyType {
 	return PropertyType{Name: p.Name, Title: p.Title, Description: p.Description, Type: p.Type}
 }

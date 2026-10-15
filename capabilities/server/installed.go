@@ -55,8 +55,7 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
 		return def.Ref.App == id && def.Source == "tenant" && def.Action != nil && def.Action.Target == info.Type && !slices.ContainsFunc(actions, func(action platform.Action) bool { return action.Schema == def.Ref.Name })
 	})
-	t.installDefinitions(id, info, actions, pages)
-	return nil
+	return t.installDefinitions(id, info, actions, pages)
 }
 
 // install declares a type, or declares it again: the rows are carried into the
@@ -113,8 +112,16 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 
 // installDefinitions puts the installed object, its actions and its pages in
 // the asset registry, so code and builder discover one set of assets (ADR-0032).
-func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page) {
+func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page) error {
+	var describeErr error
 	put := func(def platform.Definition) {
+		if describeErr != nil {
+			return
+		}
+		def, describeErr = t.describeDefinition(def)
+		if describeErr != nil {
+			return
+		}
 		if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
 			t.definitions[i] = def
 			return
@@ -123,25 +130,19 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 	}
 	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
 	entity := info
-	requires := append(platform.ConstraintDependencies(info), platform.RecordSetDependencies(info)...)
-	for _, f := range info.Fields {
-		if f.Property != nil {
-			requires = append(requires, f.Property.Ref)
-		}
-	}
-	put(platform.Definition{Ref: object, Source: "tenant", Version: "1", ContractVersion: 1, Requires: uniqueRefs(requires), Entity: &entity})
+	put(platform.Definition{Ref: object, Source: "tenant", Version: "1", ContractVersion: 1, Entity: &entity})
 	for _, action := range actions {
 		a := action
 		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetAction, Name: a.Schema}, Source: "tenant", Version: "1",
-			ContractVersion: 1, Requires: []platform.AssetRef{object}, Action: &a})
+			ContractVersion: 1, Action: &a})
 	}
 	for _, page := range pages {
 		p := page
-		requires := append([]platform.AssetRef{object}, p.Actions...)
 		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetPage, Name: p.Name}, Source: "tenant", Version: "1",
-			ContractVersion: 1, Requires: requires, Page: &p})
+			ContractVersion: 1, Page: &p})
 	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	return describeErr
 }
 
 // reinstall asks every app that installs its own definitions to install them
@@ -247,8 +248,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) er
 			return err
 		}
 	}
-	t.installDefinitions(id, info, nil, []platform.Page{canonical})
-	return nil
+	return t.installDefinitions(id, info, nil, []platform.Page{canonical})
 }
 
 var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
@@ -970,7 +970,10 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	installed := a
 	def := platform.Definition{Ref: platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, Source: "tenant", Version: "1",
 		ContractVersion: 1, Application: &installed}
-	def.Requires = a.Dependencies(id)
+	def, err := t.describeDefinition(def)
+	if err != nil {
+		return err
+	}
 	if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
 		t.definitions[i] = def
 	} else {

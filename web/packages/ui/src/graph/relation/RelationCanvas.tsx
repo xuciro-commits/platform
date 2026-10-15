@@ -34,6 +34,8 @@ export type RelationCanvasProps = {
   edgeActions?: (id: string) => CanvasAction[];
   onReconnect?: (id: string, source: string, target: string) => void;
   onLayoutReady?: (positions: Record<string, CanvasPosition>) => void;
+  /** The completed initial fit, including a change in the canvas size. */
+  onViewportReady?: (ready: boolean) => void;
   onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;
   onLink?: (source: string, target: string) => void;
   onDrop?: (payload: string, at: CanvasPosition) => void;
@@ -53,7 +55,7 @@ const layoutMeta: Record<RelationLayout, { icon: ReactNode; title: string }> = {
 
 const sizeOf = (n: RelationNode) => n.badge ? { width: n.badge.size, height: n.badge.size } : n.size ?? relationNodeSize;
 
-function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "down", dropType, children, onSelect, onOpen, onPositionsChange, onLayoutReady, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey, storeKey }: RelationCanvasProps) {
+function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "down", dropType, children, onSelect, onOpen, onPositionsChange, onLayoutReady, onViewportReady, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey, storeKey }: RelationCanvasProps) {
   const { screenToFlowPosition, fitView } = useReactFlow<RelationShapeNode, RelationLineEdge>();
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<RelationShapeNode>([]);
   const [layout, setLayout] = useState<RelationLayout>(initial);
@@ -179,7 +181,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
           if (storeKey) persist({ ...owned, ...changed });
           onPositionsChange?.(changed);
         }}>
-        <CanvasRefit signature={fitKey} ready={synchronized} once />
+        <CanvasRefit signature={fitKey} ready={synchronized} once onReady={onViewportReady} />
         <CanvasFurniture />
         {nodes.length > 12 && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor="var(--border)" maskColor="color-mix(in oklch, var(--background), transparent 40%)" style={{ width: 140, height: 90 }} />}
       </ReactFlow>

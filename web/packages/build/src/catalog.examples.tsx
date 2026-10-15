@@ -39,7 +39,7 @@ export const ObjectStudioExample = () => <CatalogFixture reads={objectReads} rol
 export const LogicStudioExample = () => <CatalogFixture reads={logicReads} roles={builderRole}><FlowEditor id="FLOW-SAMPLE" /></CatalogFixture>;
 
 const applicationDefinitions = [{ ...samplePage, ref: { app: "build", kind: "page" as const, name: "samples" } },
-  { ref: { app: "catalog", kind: "object" as const, name: sampleObject.type }, source: "code", version: "fixture-v1", contractVersion: 1, requires: [], entity: sampleObject }];
+  { ref: { app: "catalog", kind: "object" as const, name: sampleObject.type }, source: "code", version: "fixture-v1", contractVersion: 1, requires: [], provides: [], entity: sampleObject }];
 const applicationReads = {
   "/v1/records/build.app/APP-SAMPLE": { record: { id: "APP-SAMPLE", revision: 1, name: "sample", title: "Sample application", state: "draft", icon: "boxes", pages: ["samples"], resources: [applicationDefinitions[1]!.ref], groups: [] } },
   "/v1/records/build.process?limit=500&offset=0": { records: [], total: 0 },
@@ -49,8 +49,8 @@ export const ApplicationStudioExample = () => <CatalogFixture reads={application
 const querySource = {...sampleObject,app:"build",type:"build.sample"};
 const queryDeclaration = {name:"shared",title:"Shared query",description:"Read ready records.",object:querySource.type,domain:[["state","=","ready"]],sort:["id"],limit:20};
 const queryDefinitions = [
- {ref:{app:"build",kind:"object" as const,name:querySource.type},source:"tenant",version:"1",contractVersion:1,requires:[],entity:querySource},
- {ref:{app:"build",kind:"query" as const,name:"shared"},source:"tenant",version:"1.query-1",contractVersion:1,requires:[],query:queryDeclaration,queryVersions:{"1.query-1":queryDeclaration}},
+ {ref:{app:"build",kind:"object" as const,name:querySource.type},source:"tenant",version:"1",contractVersion:1,requires:[],provides:[],entity:querySource},
+ {ref:{app:"build",kind:"query" as const,name:"shared"},source:"tenant",version:"1.query-1",contractVersion:1,requires:[],provides:[],query:queryDeclaration,queryVersions:{"1.query-1":queryDeclaration}},
 ];
 const queryReads = {"/v1/records/build.query/QUERY-SAMPLE":{record:{...queryDeclaration,id:"QUERY-SAMPLE",revision:1,state:"published",version:1,published:JSON.stringify(queryDeclaration)}}};
 export const QueryStudioExample = () => <CatalogFixture reads={queryReads} roles={builderRole} definitions={queryDefinitions}><QueryEditor id="QUERY-SAMPLE" /></CatalogFixture>;

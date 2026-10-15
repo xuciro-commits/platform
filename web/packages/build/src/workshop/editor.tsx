@@ -22,7 +22,7 @@ import { recordPaths } from "../ontology/record-paths";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
   validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, Card, CanvasEditor, CanvasRegion, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
@@ -591,35 +591,35 @@ function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: 
 
 function Properties({ section, sections, document, info, catalog, object, selections, relatedObjects = [], onChange }: PropertiesProps) {
   const { definitions, source } = useHost();
-  const functionRecords = useRecordInventory<{ name: string; title: string; object: string; versions?: string[] }>("build.function");
-  const codeRecords = useRecordInventory<{ versions?: string[] }>("build.code");
-  const computations = (codeRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
-    try { const code = JSON.parse(raw) as { name: string; title: string; version: number; input: HostApi.ValueSchema };
-      return [{ binding: { ref: { app: "build", kind: "compute" as const, name: code.name }, sourceVersion: `1.compute-${code.version}` }, ...code }]; } catch { return []; }
-  })).concat(definitions.filter((item) => item.ref.kind === "compute" && item.source === "code" && item.operation).map((item) => ({
-    binding: { ref: { ...item.ref, kind: "compute" as const }, sourceVersion: item.version }, name: item.ref.name, title: item.operation!.title, version: 0, input: item.operation!.input,
-  })));
-  const functions = (functionRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
-    try { const version = JSON.parse(raw) as { name: string; title: string; object: string; version: number };
-      return version.object === object ? [version] : []; } catch { return []; }
+  const capabilityQuery = useProvidedCapabilities();
+  const provided = capabilityQuery.data ?? [];
+  const computations = provided.filter(item => item.ref.kind === "compute" && item.capability.kind === "operation" && item.capability.side === "pure").map(item => ({
+    binding: { ref: item.ref, sourceVersion: item.version }, name: item.ref.name,
+    title: definitions.find(definition => definition.ref.app === item.ref.app && definition.ref.name === item.ref.name && definition.ref.kind === "compute")?.operation?.title ?? item.capability.name,
+    input: item.capability.inputs,
   }));
-  // Named queries of an object (ADR-0040 21c), as "<app>.<name>".
-  const queriesOf = (obj: string) => (definitions ?? [])
-    .filter((d) => d.ref.kind === "query" && d.query?.object === obj)
-    .map((d) => ({ key: `${d.ref.app}.${d.ref.name}`, title: d.query?.title ?? d.ref.name }));
+  const functions = provided.filter(item => item.ref.app === "build" && item.capability.kind === "function").flatMap(item => {
+    const definition = definitions.find(definition => definition.ref.app === item.ref.app && definition.ref.kind === "function" && definition.ref.name === item.ref.name && definition.version === item.version);
+    const version = Number(item.version.match(/\.function-(\d+)$/)?.[1]);
+    return definition?.function?.object === object && version > 0 ? [{ name: item.ref.name, title: definition.function.title, version }] : [];
+  });
+  const queriesOf = (obj: string) => definitions
+    .filter(definition => definition.query?.object === obj && provided.some(item => item.capability.kind === "query" && item.capability.side === "pure" && item.ref.app === definition.ref.app && item.ref.name === definition.ref.name && item.version === definition.version))
+    .map(definition => ({ key: `${definition.ref.app}.${definition.ref.name}`, title: definition.query?.title ?? definition.ref.name }));
   if (!section) return <Card className="p-3 text-xs text-muted">{t("Choose a section to configure it.")}</Card>;
   const contract = widgetContract(section.widget);
   const allows = (kind: string) => contract?.bindingKinds.some((binding) => binding === kind) ?? false;
   const fields = info?.fields ?? [];
   const parentType = section.parentSelection ? selections.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : object;
   const relations = fields.filter((field) => field.type === "reference" && field.ref === parentType && field.inverse).map((field) => field.inverse!);
-  const actions = catalog.filter((a) => a.target === (section.object || object));
+  const actions = catalog.filter(action => action.target === (section.object || object) && provided.some(item => item.capability.kind === "action" && item.capability.side === "authoritative" && item.capability.name === action.schema));
   const leaf=Object.entries(document.nodes).find(([,n])=>n.section===section.id)?.[0],overlay=leaf?overlayOwner(document,leaf):undefined;
   const accessible=(v:HostApi.PageVariable)=>variableAccessible(v,undefined,overlay);
   const measures = ["count", ...fields.filter((f) => f.type === "integer" || f.type === "decimal" || f.type === "money").flatMap((f) => [`sum:${f.name}`, `avg:${f.name}`])];
   return (
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
+      {capabilityQuery.isError && <p role="alert" className="text-xs text-danger">{t("Available capabilities could not be loaded.")}</p>}
       {allows("composite")&&<CompositeBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={source.entity} definitions={definitions} onChange={onChange}/>}
       {allows("object")&&<ModelBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={type=>type===info?.type?info:source.entity(type)} definitions={definitions} onChange={onChange}/>}
       {!section.model&&relatedObjects.length > 0 && allows("object") && !interfaceQueryForSection({document,sections},section) && (
@@ -679,6 +679,7 @@ function Properties({ section, sections, document, info, catalog, object, select
             const selected = functions.find((f) => `${f.name}:${f.version}` === e.target.value);
             onChange({ function: selected ? { name: selected.name, version: selected.version } : undefined });
           }}><option value="">{t("Choose a published function")}</option>
+            {section.function && !functions.some(fn => fn.name === section.function!.name && fn.version === section.function!.version) && <option disabled value={`${section.function.name}:${section.function.version}`}>{t("Retained binding")}: {section.function.name} · {section.function.version}</option>}
             {functions.map((f) => <option key={`${f.name}:${f.version}`} value={`${f.name}:${f.version}`}>{f.title} · {t("Version")} {f.version}</option>)}
           </Select></label>
         <p className="text-xs text-muted">{t("The selected record supplies the function input. Its typed answer stays in a separate call record.")}</p>
@@ -688,7 +689,7 @@ function Properties({ section, sections, document, info, catalog, object, select
           <Select value={section.operation ? `${section.operation.ref.app}/${section.operation.ref.name}:${section.operation.sourceVersion}` : ""} onChange={(event) => {
             const selected = computations.find((item) => `${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}` === event.target.value);
             onChange({ operation: selected?.binding, inputs: undefined });
-          }}><option value="">{t("Choose a published code function")}</option>{computations.map((item) => <option key={`${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}`} value={`${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}`}>{item.title} · {item.binding.ref.app} · {item.binding.sourceVersion}</option>)}</Select>
+          }}><option value="">{t("Choose a published code function")}</option>{section.operation && !computations.some(item => item.name === section.operation!.ref.name && item.binding.ref.app === section.operation!.ref.app && item.binding.sourceVersion === section.operation!.sourceVersion) && <option disabled value={`${section.operation.ref.app}/${section.operation.ref.name}:${section.operation.sourceVersion}`}>{t("Retained binding")}: {section.operation.ref.name} · {section.operation.sourceVersion}</option>}{computations.map((item) => <option key={`${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}`} value={`${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}`}>{item.title} · {item.binding.ref.app} · {item.binding.sourceVersion}</option>)}</Select>
         </label>
         {(() => {
           const schema = computations.find((item) => item.binding.sourceVersion === section.operation?.sourceVersion && item.name === section.operation?.ref.name && item.binding.ref.app === section.operation?.ref.app)?.input;

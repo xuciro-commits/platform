@@ -65,53 +65,89 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 		}
 	}
 	if b.host != nil {
-		_, err := b.confirmationDependencies(spec)
+		_, err := b.bindConfirmation(spec, subject)
 		return err
 	}
 	return nil
 }
 
-// Dependencies belong to the starting action, avoiding an object/writeback
-// cycle while keeping the declared transports in the original release graph.
-func (b *Build) confirmationDependencies(spec *platform.Confirmation) ([]platform.AssetRef, error) {
-	var requires []platform.AssetRef
+// Stable transport bindings belong to the initiating action. The common
+// descriptor reads them from the same frozen body used for publication.
+type confirmationPartyBindings struct {
+	Name                string             `json:"name"`
+	Writeback           *platform.AssetRef `json:"writeback,omitempty"`
+	CompensateWriteback *platform.AssetRef `json:"compensateWriteback,omitempty"`
+	Source              *platform.AssetRef `json:"source,omitempty"`
+	Protocol            *platform.AssetRef `json:"protocol,omitempty"`
+	Action              *platform.AssetRef `json:"action,omitempty"`
+	CompensateAction    *platform.AssetRef `json:"compensateAction,omitempty"`
+}
+
+type confirmationBindings struct {
+	Parties         []confirmationPartyBindings `json:"parties"`
+	OnComplete      platform.AssetRef           `json:"onComplete"`
+	OnPartialAction *platform.AssetRef          `json:"onPartialAction,omitempty"`
+}
+
+func (b *Build) bindConfirmation(spec *platform.Confirmation, subject string) (confirmationBindings, error) {
+	out := confirmationBindings{}
 	for _, party := range spec.Parties {
-		for _, id := range []string{party.Writeback, party.CompensateWriteback} {
-			if id == "" {
+		binding := confirmationPartyBindings{Name: party.Name}
+		for _, item := range []struct {
+			id  string
+			ref **platform.AssetRef
+		}{
+			{party.Writeback, &binding.Writeback}, {party.CompensateWriteback, &binding.CompensateWriteback},
+		} {
+			if item.id == "" {
 				continue
 			}
-			record, ok := b.host.Record(WritebackType + "/" + id)
+			record, ok := b.host.Record(WritebackType + "/" + item.id)
 			w, valid := record.(Writeback)
 			if !ok || !valid {
-				return nil, fmt.Errorf("Confirmation writeback is unavailable")
+				return out, fmt.Errorf("Confirmation writeback is unavailable")
 			}
-			requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: w.Name})
+			*item.ref = &platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: w.Name}
 		}
 		if party.Reconcile != nil {
 			record, ok := b.host.Record(SourceType + "/" + party.Reconcile.Source)
 			s, valid := record.(Source)
 			if !ok || !valid {
-				return nil, fmt.Errorf("Reconciliation source is unavailable")
+				return out, fmt.Errorf("Reconciliation source is unavailable")
 			}
-			requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: s.Name})
+			binding.Source = &platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: s.Name}
 		}
 		if party.Protocol != "" {
 			p, err := b.host.(host.ConfirmationHost).FreezeConfirmationProtocol(party)
 			if err != nil {
-				return nil, err
+				return out, err
 			}
-			for _, schema := range []string{p.Action, p.CompensateAction} {
-				if schema != "" {
-					requires = append(requires, platform.AssetRef{App: p.Provider, Kind: platform.AssetAction, Name: schema})
-				}
+			name, _, _ := strings.Cut(party.Protocol, "/")
+			binding.Protocol = &platform.AssetRef{App: p.Provider, Kind: platform.AssetProtocol, Name: name}
+			binding.Action = &platform.AssetRef{App: p.Provider, Kind: platform.AssetAction, Name: p.Action}
+			if p.CompensateAction != "" {
+				binding.CompensateAction = &platform.AssetRef{App: p.Provider, Kind: platform.AssetAction, Name: p.CompensateAction}
 			}
 		}
+		out.Parties = append(out.Parties, binding)
 	}
-	return requires, nil
+	owner, _, _ := strings.Cut(subject, ".")
+	action := func(name string) platform.AssetRef {
+		if !strings.HasPrefix(name, subject+".") {
+			name = subject + "." + name
+		}
+		return platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: name}
+	}
+	out.OnComplete = action(spec.OnComplete)
+	if spec.OnPartialAction != "" {
+		ref := action(spec.OnPartialAction)
+		out.OnPartialAction = &ref
+	}
+	return out, nil
 }
 
-func (b *Build) withConfirmationDependencies(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
-	dependencies := map[string][]platform.AssetRef{}
+func (b *Build) bindConfirmationAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+	bindings := map[string]confirmationBindings{}
 	for _, asset := range assets {
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
@@ -124,30 +160,35 @@ func (b *Build) withConfirmationDependencies(assets []platform.ReleaseAsset) ([]
 			if action.Transaction == nil || action.Transaction.Confirmation == nil {
 				continue
 			}
-			spec := action.Transaction.Confirmation
-			requires, err := b.confirmationDependencies(spec)
+			binding, err := b.bindConfirmation(action.Transaction.Confirmation, asset.Ref.Name)
 			if err != nil {
 				return nil, err
 			}
-			for _, name := range []string{spec.OnComplete, spec.OnPartialAction} {
-				if name == "" {
-					continue
-				}
-				if !strings.HasPrefix(name, asset.Ref.Name+".") {
-					name = asset.Ref.Name + "." + name
-				}
-				requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: name})
-			}
-			dependencies[asset.Ref.Name+"."+action.Name] = requires
+			bindings[asset.Ref.Name+"."+action.Name] = binding
 		}
 	}
 	for i, asset := range assets {
-		if asset.Ref.Kind != platform.AssetAction || len(dependencies[asset.Ref.Name]) == 0 {
+		binding, ok := bindings[asset.Ref.Name]
+		if asset.Ref.Kind != platform.AssetAction || !ok {
 			continue
 		}
-		requires := append(slices.Clone(asset.Requires), dependencies[asset.Ref.Name]...)
-		slices.SortFunc(requires, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
-		assets[i].Requires = slices.Compact(requires)
+		var body map[string]json.RawMessage
+		if err := json.Unmarshal(asset.Body, &body); err != nil {
+			return nil, err
+		}
+		raw, err := json.Marshal(binding)
+		if err != nil {
+			return nil, err
+		}
+		body["confirmationBindings"] = raw
+		asset.Body, err = json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		assets[i], err = platform.WithDependencies(asset)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return assets, nil
 }

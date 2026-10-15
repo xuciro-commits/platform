@@ -77,7 +77,7 @@ for (const fixture of [
         if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("pipeline.png"), fullPage: true });
         await builder.open(page, `/dataset?id=${clean}`);
         await expect(page.getByText("A", { exact: true }).last()).toBeVisible();
-        await page.getByRole("region",{name:"Lineage",exact:true}).getByText("Clean external rows",{exact:true}).dblclick();
+        await page.getByRole("region",{name:"Declared dependencies",exact:true}).getByText("Clean external rows",{exact:true}).dblclick();
         await expect(page.getByLabel("Pipeline name", { exact: true })).toHaveValue(`${name}pipe`);
 
         // The object is the integration pipeline's target. The whole delivery

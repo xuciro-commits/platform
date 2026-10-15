@@ -66,10 +66,11 @@ func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding
 		binding.Release = ""
 		return binding, nil
 	}
-	closed, err := platform.Candidate([]platform.AssetRef{root}, saved.Assets)
-	if err != nil || closed.ID != closure.ID {
+	closed, err := saved.Closure([]platform.AssetRef{root})
+	if err != nil || !sameRetainedCapability(closure, closed) {
 		return binding, fmt.Errorf("flow %s version %d differs from its activated release", root, version)
 	}
+	binding.Dependencies = closed.ID
 	return binding, nil
 }
 
@@ -85,7 +86,7 @@ func (h hostView) retainedFlowClosure(app, name string, version int, prior host.
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	closed, err := platform.Candidate([]platform.AssetRef{root.Ref}, saved.Assets)
+	closed, err := saved.Closure([]platform.AssetRef{root.Ref})
 	if err != nil || closed.ID != prior.Dependencies {
 		return platform.ReleaseCandidate{}, fmt.Errorf("flow starting dependency descriptor differs")
 	}
@@ -98,9 +99,8 @@ func (h hostView) retainedFlowClosure(app, name string, version int, prior host.
 			if !descriptor.Native {
 				continue
 			}
-			before, _ := canonicalDigest(asset)
-			after, _ := canonicalDigest(root)
-			if before != after {
+			same, err := immutableCodeAssetMatches(root, asset)
+			if err != nil || !same {
 				return platform.ReleaseCandidate{}, fmt.Errorf("retained native flow differs from its starting release")
 			}
 		}

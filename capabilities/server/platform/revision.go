@@ -21,6 +21,7 @@ type ReleaseAsset struct {
 	ContractVersion int             `json:"contractVersion"`
 	SourceVersion   string          `json:"sourceVersion"`
 	Requires        []AssetRef      `json:"requires"`
+	Provides        []Capability    `json:"provides,omitempty"`
 	Body            json.RawMessage `json:"body"`
 }
 
@@ -62,46 +63,8 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 	if err != nil {
 		return ReleaseAsset{}, err
 	}
-	requires := append([]AssetRef{page.Object}, page.NavigationTargets()...)
-	requires = append(requires, page.ModelDependencies()...)
-	for _, c := range page.ComputeResources() {
-		requires = append(requires, c.Operation.Ref)
-	}
-	for _, e := range page.EmbeddingBindings() {
-		requires = append(requires, e.Page.Ref)
-	}
-	requires = append(requires, page.Actions...)
-	requires = append(requires, page.QueryReferences()...)
-	for _, selection := range page.Selections {
-		requires = append(requires, selection.Object)
-	}
-	for _, section := range page.Sections {
-		if section.Function != nil {
-			requires = append(requires, section.Function.Ref)
-		}
-		if section.Operation != nil {
-			requires = append(requires, section.Operation.Ref)
-		}
-		if section.Object.Name != "" {
-			requires = append(requires, section.Object)
-		}
-		if section.Query.Name != "" {
-			requires = append(requires, section.Query)
-		}
-		for _, group := range section.RecordLinks {
-			requires = append(requires, group.Object)
-		}
-		requires = append(requires, section.ServiceDependencies()...)
-		requires = append(requires, section.ExplorationReferences()...)
-		requires = append(requires, section.Actions...)
-		if section.InlineEdit != nil {
-			requires = append(requires, section.InlineEdit.Action)
-		}
-	}
-	slices.SortFunc(requires, compareRef)
-	requires = slices.Compact(requires)
-	return ReleaseAsset{Ref: AssetRef{App: app, Kind: AssetPage, Name: page.Name},
-		ContractVersion: 1, SourceVersion: sourceVersion, Requires: requires, Body: body}, nil
+	return WithDependencies(ReleaseAsset{Ref: AssetRef{App: app, Kind: AssetPage, Name: page.Name},
+		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
 // ApplicationReleaseAsset binds ordered navigation and explicit resources.
@@ -117,9 +80,8 @@ func ApplicationReleaseAsset(app, sourceVersion string, application Application)
 	if err != nil {
 		return ReleaseAsset{}, err
 	}
-	requires := application.Dependencies(app)
-	return ReleaseAsset{Ref: AssetRef{App: app, Kind: AssetApp, Name: application.Name},
-		ContractVersion: 1, SourceVersion: sourceVersion, Requires: requires, Body: body}, nil
+	return WithDependencies(ReleaseAsset{Ref: AssetRef{App: app, Kind: AssetApp, Name: application.Name},
+		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
 // ReleaseCandidate is a read-only closure of exact format-1 bytes. Publishing,
@@ -128,6 +90,16 @@ type ReleaseCandidate struct {
 	ID     string
 	Bytes  []byte
 	Assets []ReleaseAsset
+}
+
+// Closure selects original sealed bytes. Reading an accepted release must
+// not turn its historical descriptions into today's publication format.
+func (c ReleaseCandidate) Closure(roots []AssetRef) (ReleaseCandidate, error) {
+	checked, err := ReadCandidate(c.ID, c.Bytes)
+	if err != nil {
+		return ReleaseCandidate{}, err
+	}
+	return candidate(roots, checked.Assets, true)
 }
 
 type releaseBytes struct {
@@ -141,12 +113,25 @@ type releaseBytes struct {
 // The same logical input has the same bytes regardless of map key, declaration
 // or dependency order; semantic changes produce a new content ID.
 func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, error) {
+	return candidate(roots, available, false)
+}
+
+func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (ReleaseCandidate, error) {
 	var empty ReleaseCandidate
 	if len(roots) == 0 {
 		return empty, fmt.Errorf("a release needs at least one root")
 	}
+	available = slices.Clone(available)
 	lookup := make(map[AssetRef]ReleaseAsset, len(available))
-	for _, asset := range available {
+	for i, asset := range available {
+		if !historical && asset.Provides == nil {
+			description, err := DescribeAsset(asset)
+			if err != nil {
+				return empty, err
+			}
+			asset.Provides = description.Provides
+			available[i] = asset
+		}
 		if err := asset.Ref.Check(); err != nil {
 			return empty, err
 		}
@@ -155,83 +140,49 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		}
 		lookup[asset.Ref] = asset
 	}
-	visiting := map[AssetRef]bool{}
-	var path []AssetRef
-	visited := map[AssetRef]bool{}
+	graph, err := NewReleaseDependencyGraph(available)
+	if err != nil {
+		return empty, err
+	}
+	refs, err := graph.Closure(roots)
+	if err != nil {
+		return empty, err
+	}
 	var closed []ReleaseAsset
-	var visit func(AssetRef, AssetRef) error
-	visit = func(ref, from AssetRef) error {
-		if err := ref.Check(); err != nil {
-			return err
-		}
-		if visiting[ref] {
-			// Objects can reference one another (for example an order's SFCs
-			// and an SFC's order). They form one closed semantic graph, not a
-			// recursive publication step. Keep both edges in the exact bytes.
-			// Undeclared self-dependencies and structural page/action cycles
-			// are invalid; declared recursive data references remain data.
-			if from.Kind == AssetObject && ref.Kind == AssetObject && from != ref {
-				return nil
-			}
-			if from == ref && ref.Kind == AssetObject {
-				info, err := queryObjectDescriptor(lookup[ref].Body)
-				if err == nil && slices.ContainsFunc(info.Fields, func(field FieldInfo) bool {
-					return field.Ref == ref.Name && (field.Type == "reference" || field.Type == "references")
-				}) {
-					return nil // declared parent/child data references, not an execution cycle
-				}
-			}
-			if pageNavigationEdge(lookup[from], ref) {
-				start := slices.Index(path, ref)
-				navigation := start >= 0
-				for i := start; i >= 0 && i+1 < len(path); i++ {
-					navigation = navigation && pageNavigationEdge(lookup[path[i]], path[i+1])
-				}
-				if navigation {
-					return nil
-				}
-			}
-			return fmt.Errorf("release dependency cycle at %s", ref)
-		}
-		if visited[ref] {
-			return nil
-		}
-		asset, found := lookup[ref]
-		if !found {
-			return fmt.Errorf("release requires missing asset %s", ref)
-		}
+	for _, ref := range refs {
+		asset := lookup[ref]
 		if asset.SourceVersion == "" || asset.ContractVersion <= 0 {
-			return fmt.Errorf("release asset %s has no pinned source or contract", ref)
+			return empty, fmt.Errorf("release asset %s has no pinned source or contract", ref)
 		}
 		body, err := canonicalBody(asset.Body)
 		if err != nil {
-			return fmt.Errorf("release asset %s: %w", ref, err)
+			return empty, fmt.Errorf("release asset %s: %w", ref, err)
 		}
-		if err := checkReleaseBindings(ref, body, asset.Requires); err != nil {
-			return err
+		if err := checkAssetDescription(asset); err != nil {
+			return empty, err
 		}
 		if ref.Kind == AssetLinkType {
 			var l LinkType
 			if json.Unmarshal(body, &l) != nil || asset.ContractVersion != l.Contract() {
-				return fmt.Errorf("link asset has an incompatible cardinality contract")
+				return empty, fmt.Errorf("link asset has an incompatible cardinality contract")
 			}
 		}
 		if ref.Kind == AssetObject {
 			info, err := queryObjectDescriptor(body)
 			if err != nil {
-				return err
+				return empty, err
 			}
 			if source := info.ExtensionSource; source != nil {
 				base, exists := lookup[source.Base.Ref]
 				shape, err := queryObjectDescriptor(base.Body)
 				if !exists || err != nil || !slices.Contains(asset.Requires, source.Base.Ref) {
-					return fmt.Errorf("extension %s needs its base object in the frozen closure", ref)
+					return empty, fmt.Errorf("extension %s needs its base object in the frozen closure", ref)
 				}
 				if err := source.Check(info.Extends); err != nil {
-					return err
+					return empty, err
 				}
 				if shape.App != source.Base.Ref.App {
-					return fmt.Errorf("extension base authority differs from its frozen closure")
+					return empty, fmt.Errorf("extension base authority differs from its frozen closure")
 				}
 			}
 			for _, f := range info.Fields {
@@ -241,53 +192,53 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 				source, ok := lookup[f.Property.Ref]
 				var p PropertyType
 				if !ok || source.SourceVersion != f.Property.SourceVersion || json.Unmarshal(source.Body, &p) != nil || p.CheckField(f) != nil {
-					return fmt.Errorf("frozen object field has an unavailable or incompatible property")
+					return empty, fmt.Errorf("frozen object field has an unavailable or incompatible property")
 				}
 			}
 		}
 		if ref.Kind == AssetEvaluation {
 			evaluation, err := ReadEvaluationSet(body)
 			if err != nil {
-				return err
+				return empty, err
 			}
 			function, ok := lookup[evaluation.Function.Ref]
 			var definition AIFunction
 			if !ok || function.SourceVersion != evaluation.Function.SourceVersion || json.Unmarshal(function.Body, &definition) != nil || definition.Check() != nil {
-				return fmt.Errorf("evaluation set needs its pinned function")
+				return empty, fmt.Errorf("evaluation set needs its pinned function")
 			}
 			for _, test := range evaluation.Policy.Cases {
 				if !definition.EvaluationInput(test.Input) || definition.ValidateOutput(test.Expected) != nil {
-					return fmt.Errorf("evaluation cases differ from the pinned function")
+					return empty, fmt.Errorf("evaluation cases differ from the pinned function")
 				}
 			}
 		}
 		if ref.Kind == AssetApp {
 			var application Application
 			if err := json.Unmarshal(body, &application); err != nil {
-				return err
+				return empty, err
 			}
 			if err := application.CheckVariables(); err != nil {
-				return err
+				return empty, err
 			}
 			contracts := make([]ReleaseAsset, 0, len(lookup))
 			for _, asset := range lookup {
 				contracts = append(contracts, asset)
 			}
 			if err := checkApplicationProfileClosure(ref, contracts); err != nil {
-				return err
+				return empty, err
 			}
 			if err := checkFrozenQueries(application.QueryPage(), lookup); err != nil {
-				return err
+				return empty, err
 			}
 			for _, name := range application.Pages {
 				pageRef := AssetRef{App: ref.App, Kind: AssetPage, Name: name}
 				target, ok := lookup[pageRef]
 				var page Page
 				if !ok || json.Unmarshal(target.Body, &page) != nil {
-					return fmt.Errorf("application page %s is unavailable", pageRef)
+					return empty, fmt.Errorf("application page %s is unavailable", pageRef)
 				}
 				if err := application.CheckPageVariables(page); err != nil {
-					return err
+					return empty, err
 				}
 			}
 		}
@@ -296,14 +247,14 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			if ref.Kind == AssetFlow {
 				var flow FlowReleaseDescriptor
 				if err := json.Unmarshal(body, &flow); err != nil {
-					return err
+					return empty, err
 				}
 				bindings = append(slices.Clone(flow.Functions), flow.Operations...)
 				bindings = append(bindings, flow.Queries...)
 			} else {
 				var page Page
 				if err := json.Unmarshal(body, &page); err != nil {
-					return err
+					return empty, err
 				}
 				if page.Document != nil {
 					for _, event := range page.Document.Events {
@@ -312,11 +263,11 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 								asset, ok := lookup[effect.Action.Ref]
 								action, err := releaseActionDescriptor(asset.Body)
 								if !ok || err != nil || action.New == (effect.Action.RecordVariable != "") {
-									return fmt.Errorf("page action effect %s is unavailable", effect.Action.Ref)
+									return empty, fmt.Errorf("page action effect %s is unavailable", effect.Action.Ref)
 								}
 								for parameter := range effect.Action.Inputs {
 									if !slices.ContainsFunc(action.Payload, func(f Field) bool { return f.Name == parameter }) {
-										return fmt.Errorf("page action effect %s has no parameter %s", effect.Action.Ref, parameter)
+										return empty, fmt.Errorf("page action effect %s has no parameter %s", effect.Action.Ref, parameter)
 									}
 								}
 							}
@@ -325,19 +276,19 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 							target, ok := lookup[n.Page]
 							var targetPage Page
 							if !ok || json.Unmarshal(target.Body, &targetPage) != nil {
-								return fmt.Errorf("page navigation target %s is unavailable", n.Page)
+								return empty, fmt.Errorf("page navigation target %s is unavailable", n.Page)
 							}
 							if err := CheckPageNavigation(page, targetPage, *n); err != nil {
-								return err
+								return empty, err
 							}
 						}
 					}
 				}
 				if err := CheckPageEmbeddingGraph(ref, lookup); err != nil {
-					return err
+					return empty, err
 				}
 				if err := checkFrozenQueries(page, lookup); err != nil {
-					return err
+					return empty, err
 				}
 
 				for _, c := range page.ComputeResources() {
@@ -349,10 +300,10 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 							asset, ok := lookup[section.Function.Ref]
 							var f AIFunction
 							if !ok || json.Unmarshal(asset.Body, &f) != nil {
-								return fmt.Errorf("AI function dependency is invalid")
+								return empty, fmt.Errorf("AI function dependency is invalid")
 							}
 							if err := page.CheckAIBinding(section, f); err != nil {
-								return err
+								return empty, err
 							}
 						}
 						bindings = append(bindings, *section.Function)
@@ -366,38 +317,25 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			for _, binding := range bindings {
 				dependency, ok := lookup[binding.Ref]
 				if !ok || seen[binding.Ref] && ref.Kind == AssetFlow || binding.Ref.Kind != AssetFunction && binding.Ref.Kind != AssetCompute && !(ref.Kind == AssetFlow && binding.Ref.Kind == AssetQuery) || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
-					return fmt.Errorf("%s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
+					return empty, fmt.Errorf("%s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
 				}
 				seen[binding.Ref] = true
 			}
 		}
-		visiting[ref] = true
-		path = append(path, ref)
-		deps := slices.Clone(asset.Requires)
-		slices.SortFunc(deps, compareRef)
-		for i, dep := range deps {
-			if i > 0 && dep == deps[i-1] {
-				return fmt.Errorf("release asset %s repeats dependency %s", ref, dep)
+		if asset.Provides != nil {
+			if err := graph.CheckExecutionBindings(asset, lookup); err != nil {
+				return empty, err
 			}
-			if err := visit(dep, ref); err != nil {
-				return fmt.Errorf("%s: %w", ref, err)
+			if err := graph.CheckReadBindings(asset); err != nil {
+				return empty, err
 			}
 		}
-		visiting[ref] = false
-		path = path[:len(path)-1]
-		visited[ref] = true
-		asset.Requires = deps
+		asset.Requires = graph.Requires(ref)
 		if asset.Requires == nil {
 			asset.Requires = []AssetRef{}
 		}
 		asset.Body = body
 		closed = append(closed, asset)
-		return nil
-	}
-	for _, root := range roots {
-		if err := visit(root, AssetRef{}); err != nil {
-			return empty, err
-		}
 	}
 	slices.SortFunc(closed, func(a, b ReleaseAsset) int { return compareRef(a.Ref, b.Ref) })
 	raw, err := json.Marshal(releaseBytes{Format: 1, Assets: closed})
@@ -427,7 +365,7 @@ func ReadCandidate(id string, raw []byte) (ReleaseCandidate, error) {
 	for i, asset := range wire.Assets {
 		roots[i] = asset.Ref
 	}
-	checked, err := Candidate(roots, wire.Assets)
+	checked, err := candidate(roots, wire.Assets, true)
 	if err != nil {
 		return ReleaseCandidate{}, err
 	}
@@ -435,237 +373,6 @@ func ReadCandidate(id string, raw []byte) (ReleaseCandidate, error) {
 		return ReleaseCandidate{}, fmt.Errorf("release candidate identity or canonical bytes differ")
 	}
 	return checked, nil
-}
-
-// The declared graph must include dependencies that the canonical page and
-// application descriptors actually name. Additional dependencies are allowed
-// for owner-specific semantics (references, protocols, code contracts).
-func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error {
-	var identity struct {
-		Name   string `json:"name"`
-		Type   string `json:"type"`
-		Schema string `json:"schema"`
-	}
-	if err := json.Unmarshal(body, &identity); err != nil {
-		return err
-	}
-	want := identity.Name
-	switch ref.Kind {
-	case AssetObject:
-		want = identity.Type
-	case AssetAction:
-		want = identity.Schema
-	}
-	if want != ref.Name {
-		return fmt.Errorf("release asset %s descriptor identity differs", ref)
-	}
-	var required []AssetRef
-	switch ref.Kind {
-	case AssetSampleSet:
-		var samples SampleSet
-		if err := json.Unmarshal(body, &samples); err != nil {
-			return err
-		}
-		if err := samples.Check(); err != nil {
-			return err
-		}
-		required = samples.Dependencies()
-	case AssetMigration:
-		var declaration MigrationDescriptor
-		if err := json.Unmarshal(body, &declaration); err != nil {
-			return err
-		}
-		if err := declaration.Check(); err != nil {
-			return err
-		}
-	case AssetPropertyType:
-		var p PropertyType
-		if err := json.Unmarshal(body, &p); err != nil {
-			return err
-		}
-		if err := p.Check(); err != nil {
-			return err
-		}
-	case AssetObject:
-		info, err := queryObjectDescriptor(body)
-		if err != nil {
-			return err
-		}
-		for _, f := range info.Fields {
-			if f.Property != nil {
-				if f.Property.Ref.Kind != AssetPropertyType || f.Property.SourceVersion == "" {
-					return fmt.Errorf("invalid property binding")
-				}
-				required = append(required, f.Property.Ref)
-			}
-		}
-	case AssetLinkType:
-		var l LinkType
-		if err := json.Unmarshal(body, &l); err != nil {
-			return err
-		}
-		if err := l.Check(); err != nil {
-			return err
-		}
-		if l.Child.App != ref.App {
-			return fmt.Errorf("link type must be declared by its child owner")
-		}
-		required = append(required, l.Parent, l.Child)
-	case AssetQuery:
-		var q NamedQuery
-		if err := json.Unmarshal(body, &q); err != nil {
-			return err
-		}
-		if err := q.Check(); err != nil {
-			return err
-		}
-		required = append(required, q.Dependencies()...)
-	case AssetFunction:
-		var function AIFunction
-		if err := json.Unmarshal(body, &function); err != nil {
-			return fmt.Errorf("release function %s: %w", ref, err)
-		}
-		if err := function.Check(); err != nil {
-			return err
-		}
-		required = append(required, AssetRef{App: ref.App, Kind: AssetObject, Name: function.Object})
-	case AssetEvaluation:
-		evaluation, err := ReadEvaluationSet(body)
-		if err != nil {
-			return err
-		}
-		if evaluation.Name != ref.Name {
-			return fmt.Errorf("evaluation identity differs")
-		}
-		required = append(required, evaluation.Function.Ref)
-	case AssetAgent:
-		var agent AgentReleaseDescriptor
-		if err := json.Unmarshal(body, &agent); err != nil {
-			return err
-		}
-		if agent.Name != ref.Name {
-			return fmt.Errorf("agent descriptor identity differs")
-		}
-		if err := agent.Check(); err != nil {
-			return err
-		}
-		required = append(required, agent.Dependencies(ref.App)...)
-	case AssetCompute:
-		var operation Operation
-		if err := json.Unmarshal(body, &operation); err != nil {
-			return err
-		}
-		if operation.Name != ref.Name {
-			return fmt.Errorf("compute descriptor identity differs")
-		}
-		if err := operation.Check(); err != nil {
-			return err
-		}
-	case AssetFlow:
-		var flow FlowReleaseDescriptor
-		if err := json.Unmarshal(body, &flow); err != nil {
-			return fmt.Errorf("release flow %s: %w", ref, err)
-		}
-		if flow.Subject.Name != "" && flow.Subject.Kind != AssetObject || !json.Valid(flow.Definition) || len(flow.Definition) == 0 || flow.Definition[0] != '{' {
-			return fmt.Errorf("release flow %s needs a valid optional subject and complete definition", ref)
-		}
-		if flow.Subject.Name != "" {
-			required = append(required, flow.Subject)
-		}
-		for _, binding := range flow.Functions {
-			required = append(required, binding.Ref)
-		}
-		for _, binding := range flow.Operations {
-			if binding.Ref.Kind != AssetCompute || binding.SourceVersion == "" {
-				return fmt.Errorf("release flow %s has an invalid compute binding", ref)
-			}
-			required = append(required, binding.Ref)
-		}
-		for _, binding := range flow.Queries {
-			if binding.Ref.Kind != AssetQuery || binding.SourceVersion == "" {
-				return fmt.Errorf("release flow %s has an invalid query binding", ref)
-			}
-			required = append(required, binding.Ref)
-		}
-		required = append(required, flow.Dependencies...)
-		for _, action := range flow.Actions {
-			if action.Kind != AssetAction {
-				return fmt.Errorf("release flow %s binds a non-action", ref)
-			}
-			required = append(required, action)
-		}
-	case AssetPage:
-		var page Page
-		if err := json.Unmarshal(body, &page); err != nil {
-			return fmt.Errorf("release page %s: %w", ref, err)
-		}
-		if err := page.Document.Check(page.Sections); err != nil {
-			return fmt.Errorf("release page %s: %w", ref, err)
-		}
-		if err := page.CheckCollectionPorts(); err != nil {
-			return err
-		}
-		if err := page.CheckRecordPorts(); err != nil {
-			return err
-		}
-		for _, c := range page.ComputeResources() {
-			required = append(required, c.Operation.Ref)
-		}
-		required = append(required, page.Object)
-		required = append(required, page.ModelDependencies()...)
-		required = append(required, page.NavigationTargets()...)
-		for _, e := range page.EmbeddingBindings() {
-			required = append(required, e.Page.Ref)
-		}
-		required = append(required, page.Actions...)
-		required = append(required, page.QueryReferences()...)
-		for _, selection := range page.Selections {
-			required = append(required, selection.Object)
-		}
-		for _, section := range page.Sections {
-			if section.Function != nil {
-				required = append(required, section.Function.Ref)
-			}
-			if section.Operation != nil {
-				required = append(required, section.Operation.Ref)
-			}
-			if section.Object.Name != "" {
-				required = append(required, section.Object)
-			}
-			if section.Query.Name != "" {
-				required = append(required, section.Query)
-			}
-			for _, group := range section.RecordLinks {
-				required = append(required, group.Object)
-			}
-			required = append(required, section.ServiceDependencies()...)
-			required = append(required, section.ExplorationReferences()...)
-			required = append(required, section.Actions...)
-			if section.InlineEdit != nil {
-				required = append(required, section.InlineEdit.Action)
-			}
-		}
-	case AssetApp:
-		var app Application
-		decoder := json.NewDecoder(bytes.NewReader(body))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&app); err != nil {
-			return fmt.Errorf("release application %s: %w", ref, err)
-		}
-		if err := app.CheckResources(); err != nil {
-			return err
-		}
-		required = app.Dependencies(ref.App)
-	}
-	for _, dep := range required {
-		if err := dep.Check(); err != nil {
-			return fmt.Errorf("release asset %s has invalid binding: %w", ref, err)
-		}
-		if !slices.Contains(declared, dep) {
-			return fmt.Errorf("release asset %s omits bound dependency %s", ref, dep)
-		}
-	}
-	return nil
 }
 
 func canonicalBody(raw []byte) ([]byte, error) {

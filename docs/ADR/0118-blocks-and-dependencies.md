@@ -139,12 +139,14 @@ ADR-0111 的 `sample-set` 归 Build：有稳定名称、保留版本和合成记
 
 ## As built
 
-ADR-0117 复用 `action` 与 `object`，没有新增拒绝资产 kind。事务/步骤的 Refusals 依赖由原声明解析：处置记录目标是 object 边，route 是原 action 边，与所属对象和正常步骤共同进入候选闭包；拒绝记录的字段/引用仍由原模型 owner 校验。读取事实/纠正历史为 pure；block 是原权威的 effect-free 持久答复，flag/route 是原 authoritative 接受批次；阈值升级为 Work 的后继受权决定，不改变拒绝事务的原子边界。通用 Provides/Side、反向图与发现仍归本 ADR 剩余验收。
+统一描述由 `platform.DescribeAsset` 从原 owner 的完整描述体生成，`WithDependencies` 是新资产 `Requires` / `Provides` 的唯一写入入口。已覆盖对象、动作、页面、应用、查询、函数、计算、流程、智能体、评测集、样本、迁移和六类集成。新增 `protocol` / `interface` 两个 `AssetKind` 承载既有协议与共享结构；事务、约束和记录集仍属于对象/动作，不另建独立执行资产。字段引用、规则读取、事务步骤、拒绝记录/route、AI 采纳、确认传输与源回读均解析到原 `AssetRef`。原生类型名与 owner 不一致时，完整体保存具名 `objectBindings`；协议、智能体工具和匹配来源同样保存明确绑定，不维护第二份依赖列表。
 
-ADR-0112 登记确认能力，复用 `action`、`object`、`writeback`、`source`、`connection` 与提供方协议动作，没有新增资产 kind。启动动作的 Requires 由 Confirmation 引用产生，含传输、源回读与完成动作，进入原候选和联合候选；确认专用 Writeback 依赖对象/连接，不产生虚构动作边或对象循环。确认/差异读取为 pure；确认答复、人工裁决、截止与完成为 Build 的 authoritative 接受结果；外部派发仍为 effect，协议调用仍是提供方的独立授权决策。运行记录保存原闭包、请求映射与版本。本登记不代替本 ADR 的通用 Provides/Side、反向图和发现剩余验收。
+`DependencyGraph` 由这些描述产生正向、反向、候选集合和安装顺序。候选拒绝缺失引用、非法结构循环、描述体与独立修改的依赖/能力不一致；错误包含原资产与目标。对象数据引用、页面导航、原对象与自身动作、AI 提议来源与采纳关系允许已声明的语义循环，执行 route 循环继续由事务 owner 拒绝。跨应用动作必须带原提供方协议及其确切动作绑定；这不授予执行权，也不建立跨权威事务。条件/约束沿原规则语法只读，页面数据绑定只接 `pure`，显式动作、受控模型请求和流程提交保持原接受路径。智能体仍只可使用已声明工具，真正调用继续经过原授权。
 
-ADR-0116 扩展现有 `function`、`action`、`agent` 和 work 能力，没有新增资产 kind。函数的 Proposal 策略仍为 effect（产生原模型意图），输出/提议读取为 pure；采纳动作是 authoritative，复用原对象事务，依赖声明的函数 `AssetRef` 和提议记录引用。对象/函数闭包必须同时包含匹配版本，激活验证映射；没有第二份 AI 工具授权。原动作 Approval 与智能体 Checkpoints/HandoffRole 仍由 work/agent 执行；候选智能体的报告固定完整资产与模型配置，不成为业务权限。应用用量、位置与评测是原账目/声明的 pure 投影，通用 Provides/Side 发现仍归本文剩余验收。
+`GET /v1/dependencies` 返回成员可见的同一份描述，以及选定资产的传递依赖/反向影响；`GET /v1/provides` 返回同一描述的可用能力，可按 `kind` / `side` 选择。原 `Definitions`、Flow 能力面板和保留版本类型读取从同一数据投影，`Roles` 只作收窄。成员、行、字段、来源与动作权限仍由 ADR-0105 的原 owner 判定；隐藏资产和协议动作绑定不出现在图中。查询输出形状由原受权对象字段投影，不能借能力发现读取被隐藏字段。
 
-ADR-0106 已登记 `migration` 资产：唯一生命周期归 Build / `build.migration-plan`，描述体为 `MigrationDescriptor`，固定源/目标封存发布、受控步骤与范围。版本边为既有发布的内容 ID；计划不能依赖自身目标候选，也不另维持一份对象当前形状图。声明读取与版本解析为 pure，`migrations` 的 start/advance/cancel 为 authoritative，仅写 build 权威；目标新声明和对象行仍走原接受结果。能力和版本化资产已注册；本 ADR 的通用 `Provides`/`Side` 推导、统一反向图和发现验收仍未实施，不用此登记宣称 §4 通过。
+构建器与业务人员共用 Shell 的 Lineage：声明图、Uses/Used by、能力类型、调用方式和输入/输出形状。应用设计台、模型使用处与对象/数据集图复用 `@platform/app.DependencyGraph`；页面的查询/动作/计算/函数选择器读取后端 `Provides`，已保存的旧版本绑定仍保留。原客户端递归、项目反向扫描、集成独立图和 Build 安装排序的第二份解析已删除。集成映射、运行数据和诊断入口并列显示，运行证据不进入声明边。
 
-ADR-0107 登记 `agent` 与 `evaluation-set`：两者的构建生命周期归 Build；`agent` 冻结原智能体定义、工具边与用例，工具执行为 effect/authoritative 并仍由原 owner 授权；`evaluation-set` 的 `EvaluationSetDescriptor` 冻结原 TestPlan 的质量/费用/延迟策略及合成输入/期望，唯一版本边是被评测函数的 `AssetBinding`。声明读取、闭包与版本解析为 pure；发布为 build 权威的 authoritative 接受结果；评测的模型调用仍由原 AI effect 路径执行，报告沿原 `build.evaluation`，不授予工具或数据权限。两类制品都不携带环境地址或凭据。本登记不代替通用依赖图/Provides 的剩余验收。
+新候选封存明确的 `Provides`（空集合也保存），删除该字段不能绕过新候选校验。历史候选由原格式读取，原字节、内容身份和已保存依赖不重写。流程、审批与函数从已封存候选选取原闭包，保留旧依赖身份。旧匹配定义参加新候选时只从原体和固定引用补出绑定，不查询当前草稿；原 Published / Versions 保留。若历史写回仍引用已取消的 `.confirmation` 虚拟动作，新候选明确要求先发布下一写回版本，旧内容仍沿原读取/执行路径保留，不在同一版本下删除旧边。原生代码资产仅允许新增引用元数据的投影差异；原版本、角色、字段、生命周期和执行声明必须一致。恢复仍应用已接受结果，不重新求值、授权或发外部请求。私有构建者试跑复用同一依赖图，原平台记录由新建的原 owner 提供，不被误编译成业务对象。
+
+验证方法归 [Testing](../Testing.md) 的“依赖与能力发现”；本批 `make check`、组合应用/协议检查、platform / Build 与相关宿主测试、API 类型/双语检查及 `dependencies` 浏览器路线通过；已查看桌面与窄屏截图。原 PostgreSQL 故障恢复演练没有在本批重跑。实际客户交付与负责人手感验收不由编译或自动路线代替。

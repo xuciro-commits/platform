@@ -75,7 +75,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	assets = append(append(append(append(assets, integrations...), plans...), evaluations...), samples...)
-	return b.withConfirmationDependencies(assets)
+	return b.bindConfirmationAssets(assets)
 }
 
 // FlowReleaseAsset reads a retained native version, not the current draft or
@@ -282,44 +282,11 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 		if err != nil {
 			return nil, err
 		}
-		requires := ruleRequirements(saved.Reads)
-		requires = append(requires, platform.RecordSetDependencies(platform.EntityInfo{Type: ref.Name, Sets: saved.Sets})...)
-		for _, constraint := range saved.Constraints {
-			requires = append(requires, ruleRequirements(constraint.Reads)...)
+		asset, err := platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
+		if err != nil {
+			return nil, err
 		}
-		for _, field := range saved.Fields {
-			if field.Property != nil {
-				requires = append(requires, field.Property.Ref)
-			}
-			if field.Ref != "" && field.Ref != ref.Name {
-				app, _, ok := strings.Cut(field.Ref, ".")
-				if !ok {
-					return nil, fmt.Errorf("object %s field %s has invalid reference %s", ref, field.Name, field.Ref)
-				}
-				requires = append(requires, platform.AssetRef{App: app, Kind: platform.AssetObject, Name: field.Ref})
-			}
-		}
-		for _, action := range saved.Actions {
-			requires = append(requires, ruleRequirements(action.Reads)...)
-			if action.Transaction != nil {
-				requires = append(requires, ruleRequirements(action.Transaction.Reads)...)
-				walkBusinessTxn(action.Transaction, func(step platform.TxnStep) {
-					if step.Target.Type != "" && step.Target.Type != ref.Name {
-						requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: step.Target.Type})
-					}
-					if step.Link != nil {
-						requires = append(requires, step.Link.Binding.Ref)
-					}
-				})
-			}
-			for _, create := range action.Creates {
-				requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: create.Object})
-			}
-		}
-		slices.SortFunc(requires, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
-		requires = slices.Compact(requires)
-		if err := add(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion,
-			Requires: requires, Body: body}, false); err != nil {
+		if err := add(asset, false); err != nil {
 			return nil, err
 		}
 		for _, action := range objectActions(saved, Entity(saved)) {
@@ -332,10 +299,14 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			if err != nil {
 				return nil, fmt.Errorf("encode action %s: %w", action.Schema, err)
 			}
-			if err := add(platform.ReleaseAsset{
+			asset, err := platform.WithDependencies(platform.ReleaseAsset{
 				Ref:             platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Schema},
-				ContractVersion: 1, SourceVersion: sourceVersion, Requires: []platform.AssetRef{ref}, Body: actionBody,
-			}, false); err != nil {
+				ContractVersion: 1, SourceVersion: sourceVersion, Body: actionBody,
+			})
+			if err != nil {
+				return nil, err
+			}
+			if err := add(asset, false); err != nil {
 				return nil, err
 			}
 		}
@@ -498,21 +469,10 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		return platform.ReleaseAsset{}, err
 	}
 	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions, Operations: operations, Queries: queries, Dependencies: dependencies})
-	requires := append(slices.Clone(dependencies), actions...)
-	if subject.Name != "" {
-		requires = append(requires, subject)
+	if err != nil {
+		return platform.ReleaseAsset{}, err
 	}
-	for _, binding := range functions {
-		requires = append(requires, binding.Ref)
-	}
-	for _, binding := range operations {
-		requires = append(requires, binding.Ref)
-	}
-	for _, binding := range queries {
-		requires = append(requires, binding.Ref)
-	}
-	return platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion,
-		Requires: requires, Body: body}, err
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
 // ProcessFromAsset reconstructs the bounded owner definition, checking
@@ -522,7 +482,7 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	var envelope platform.FlowReleaseDescriptor
 	var p Process
-	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 {
+	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
 		return p, fmt.Errorf("unsupported process release asset %s", asset.Ref)
 	}
 	if err := json.Unmarshal(asset.Body, &envelope); err != nil {

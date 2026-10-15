@@ -2,7 +2,7 @@ import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // ADR-0108: one application, five workspaces and builder-named concepts.
 // Membership, edits, candidates and runtime keep their original owners.
-import { ApplicationRuns, ApplicationRuntimePanel, pageUIProfile, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
+import { ApplicationRuns, ApplicationRuntimePanel, pageUIProfile, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
@@ -19,7 +19,7 @@ export { kindIcon } from "./resource-icons";
 import { kindIcon } from "./resource-icons";
 import { useProjectResources, type OwnedResource } from "./resource-inventory";
 export type { OwnedResource } from "./resource-inventory";
-import { assetDependencies, assetRoute, conceptTree, moveConceptAsset, studioArea, studioAreas, studioRoute } from "./studio-model";
+import { assetRoute, conceptTree, moveConceptAsset, studioArea, studioAreas, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
 import { StudioGuide } from "./studio-guide";
 
@@ -214,6 +214,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection }: { id:
   const visible = owned.filter(item => (tab === "concepts" || areaKinds.includes(item.ref.kind)) && `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
   const current = owned.find(item => refKey(item.ref) === selected || item.record?.id === selected || item.ref.name === selected);
   const selectedKey = current ? refKey(current.ref) : selected;
+  const dependencyQuery = useDependencies(current?.ref, undefined, !!current?.installed);
   if (!project) return <WorkbenchFrame title={t("Project")}>{query.isError ? t("The project could not be loaded.") : t("Loading…")}</WorkbenchFrame>;
   const statusOf = (item: OwnedResource) => item.record ? (item.record.state === "published" ? undefined : t("draft")) : item.installed ? t("published") : item.missing ? t("missing") : undefined;
   const tree = <div className="grid min-w-0 content-start">
@@ -225,7 +226,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection }: { id:
   </div>;
   const conceptPatch = (concepts: Api.AppConcept[]) => patch({ concepts });
   const locked = saving || dirty || !!pendingPatch || !!createdResource;
-  const dependencies = current ? assetDependencies(current.ref, definitions) : undefined;
+  const dependencies = dependencyQuery.data;
   const header = installed?.application?.pages.find((name) => definitions.some((d) => d.ref.app === "build" && d.ref.kind === "page" && d.ref.name === name));
   return <>
     <Workbench storageKey="project" crumbs={[{ label: t("Applications"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
@@ -285,8 +286,9 @@ export function ProjectHome({ id, area, initialSelected, initialSection }: { id:
               </div>}
               {dependencies && <div className="mt-2 grid gap-2 text-xs">
                 {[{ title: "Uses", refs: dependencies.requires }, { title: "Used by", refs: dependencies.usedBy }].map(group => <div key={group.title}><strong>{t(group.title)}</strong><div className="flex flex-wrap gap-1">{group.refs.map(ref => <Button key={refKey(ref)} size="sm" variant="ghost" onClick={() => open(assetRoute(ref, owned, definitions, id))}>{ref.name}</Button>)}</div></div>)}
-                {!current.installed && <p className="text-muted">{t("Draft dependencies are checked by the release owner. Published links use declared dependencies.")}</p>}
               </div>}
+              {dependencyQuery.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}
+              {!current.installed && <p className="text-xs text-muted">{t("Draft dependencies are checked by the release owner. Published links use declared dependencies.")}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
                 {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}

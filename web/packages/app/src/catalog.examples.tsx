@@ -18,7 +18,7 @@ export function TenantReferencesExample() {
     <MemberSelect value={member} onChange={setMember} />
   </div></CatalogFixture>;
 }
-import { ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
+import { DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 import {ObservationStatistics,type EntityInfo} from "@platform/ui";
@@ -33,6 +33,16 @@ export function ObservationStatisticsReaderExample(){
  const request=useMemo(()=>({object:info.type,query:{},window:{timeField:"at",field:params.signal,rows:params.windowRows,threshold:String(params.threshold)}}),[info,params]),scope=reader.scope(request);
  useEffect(()=>{let current=true;void reader.read(request).then(result=>{if(current)setState({scope,result});},()=>{if(current)setState({scope,error:t("The original observation statistics answer is invalid.")});});return()=>{current=false;};},[reader,request,scope]);
  return <div className="grid min-w-0 grid-cols-1 gap-2"><p className="break-words text-xs text-muted">{t("The window reader example uses a fixed local answer and performs no tenant query.")}</p><ObservationStatistics scope={scope} info={info} signals={[{field:"value",unit:""}]} timeField="at" {...params} windowOptions={[1000,10000,100000]} value={state?.scope===scope?state.result?.statistics:undefined} error={state?.scope===scope?state.error:undefined} onChange={setParams}/></div>;
+}
+
+export function DependencyGraphExample() {
+  const object = sampleDefinitions[0]!, page = samplePage;
+  const descriptors = [
+    { ref: object.ref, version: object.version, requires: [], provides: [] },
+    { ref: page.ref, version: page.version, requires: [object.ref], provides: [] },
+  ];
+  const path = `/v1/dependencies?app=${object.ref.app}&kind=${object.ref.kind}&name=${object.ref.name}`;
+  return <CatalogFixture reads={{ [path]: { descriptors, requires: [], usedBy: [page.ref] } }}><DependencyGraph asset={object.ref} height={280} /></CatalogFixture>;
 }
 
 export function GeneratedFormExample() {
@@ -80,14 +90,14 @@ function SemanticChoices() {
   return <div className="grid gap-3"><SemanticObjectSelect label={t("Object")} value={object?.name} onChange={(ref) => { setObject(ref); setProperty(undefined); }} />
     {object && <SemanticPropertySelect object={object} value={property} label={t("Property")} onChange={(ref) => setProperty(ref?.field)} />}<SemanticPropertyTypeSelect label={t("Shared property version")} value={shared} onChange={p=>setShared(p?.binding)}/></div>;
 }
-export const SemanticSelectionExample = () => <CatalogFixture definitions={[...sampleDefinitions,{ref:{app:"catalog",kind:"property-type",name:"quantity"},source:"catalog-fixture",version:"fixture-v2",contractVersion:1,requires:[],propertyType:{name:"quantity",title:"Quantity",description:"A count in the local example.",type:"integer"},propertyVersions:{"fixture-v1":{name:"quantity",title:"Original quantity",description:"A retained local example.",type:"integer"}}}]}><SemanticChoices /></CatalogFixture>;
+export const SemanticSelectionExample = () => <CatalogFixture definitions={[...sampleDefinitions,{ref:{app:"catalog",kind:"property-type",name:"quantity"},source:"catalog-fixture",version:"fixture-v2",contractVersion:1,requires:[],provides:[],propertyType:{name:"quantity",title:"Quantity",description:"A count in the local example.",type:"integer"},propertyVersions:{"fixture-v1":{name:"quantity",title:"Original quantity",description:"A retained local example.",type:"integer"}}}]}><SemanticChoices /></CatalogFixture>;
 
 export function ApplicationSessionsExample() {
   const object={app:"catalog",kind:"object" as const,name:sampleObject.type};
   const variables = { draft: { scope:"application",type:"string",mode:"state",initial:"" },window:{scope:"application",type:"object-set",mode:"resource",source:{kind:"plan",query:"read"}} };
   const queries={read:{object,limit:2,sort:["id"],search:{variable:"draft"}}};
   const definition: typeof samplePage = { ...samplePage, ref:{app:"catalog",kind:"page",name:"shared"}, page:{...samplePage.page,name:"shared",layout:"composed",sections:[{id:"input",widget:"input",configVersion:1,title:t("Application draft")},{id:"table",widget:"table",configVersion:1,title:t("Shared query window"),collectionVariable:"window",fields:["title","state"]}], document:{formatVersion:2,uiProfile:"platform.page.v2.12",root:"root",nodes:{root:{kind:"rows",children:["input","table"]},input:{kind:"widget",section:"input",valueVariable:"draft"},table:{kind:"widget",section:"table"}},variables:{draft:{scope:"application",type:"string",mode:"shared",writable:true,source:{kind:"application",variable:"draft"}},window:{scope:"application",type:"object-set",mode:"shared",source:{kind:"application",variable:"window",object}}}}} };
-  const definitions: Definition[] = [...sampleDefinitions, definition, {ref:{app:"catalog",kind:"app",name:"shared"},source:"code",version:"fixture-1",contractVersion:1,requires:[],application:{name:"shared",title:t("Shared application"),pages:["shared"],uiProfile:"platform.page.v2.12",variables,queries}}];
+  const definitions: Definition[] = [...sampleDefinitions, definition, {ref:{app:"catalog",kind:"app",name:"shared"},source:"code",version:"fixture-1",contractVersion:1,requires:[],provides:[],application:{name:"shared",title:t("Shared application"),pages:["shared"],uiProfile:"platform.page.v2.12",variables,queries}}];
   return <CatalogFixture definitions={definitions}><ApplicationSessionsProvider><div className="grid gap-3 md:grid-cols-2">{["first","second"].map((view) => <ApplicationPage key={view} pageRef={definition.ref} route={{view,params:{application:"catalog:shared",instance:"example"}}}><ComposedPage page={definition.page} live={false} /></ApplicationPage>)}</div></ApplicationSessionsProvider></CatalogFixture>;
 }
 

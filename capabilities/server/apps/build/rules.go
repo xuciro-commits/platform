@@ -359,23 +359,6 @@ func ruleAssignmentFits(dst, src string) bool {
 	return dst == src || dst == "text" && src == "choice" || (dst == "decimal" || dst == "number") && (src == "integer" || src == "decimal" || src == "number")
 }
 
-func ruleRequirements(reads *platform.RuleReadSpec) []platform.AssetRef {
-	if reads == nil {
-		return nil
-	}
-	refs := []platform.AssetRef{}
-	for _, set := range reads.Collections {
-		if set.Set != "" {
-			continue // The owning object's set declaration carries its dependencies.
-		}
-		refs = append(refs, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query})
-		if app, _, ok := strings.Cut(set.Object, "."); ok {
-			refs = append(refs, platform.AssetRef{App: app, Kind: platform.AssetObject, Name: set.Object})
-		}
-	}
-	return refs
-}
-
 func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookups ...func(string) (platform.EntityInfo, bool)) error {
 	lookup := b.conditionLookup
 	if len(lookups) > 0 {

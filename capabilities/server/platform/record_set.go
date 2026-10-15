@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -201,17 +200,4 @@ func CheckRecordSets(info EntityInfo, lookup func(string) (EntityInfo, bool)) er
 		}
 	}
 	return nil
-}
-
-func RecordSetDependencies(info EntityInfo) []AssetRef {
-	var refs []AssetRef
-	for _, set := range info.Sets {
-		if set.Binding != nil {
-			refs = append(refs, set.Binding.Ref)
-		}
-		if app, _, ok := strings.Cut(set.Object, "."); ok && set.Object != info.Type {
-			refs = append(refs, AssetRef{App: app, Kind: AssetObject, Name: set.Object})
-		}
-	}
-	return refs
 }

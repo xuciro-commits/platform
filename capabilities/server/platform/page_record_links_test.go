@@ -43,7 +43,10 @@ func TestRecordLinksProfileSchemaAndFrozenDependencies(t *testing.T) {
 	body, _ := json.Marshal(parent)
 	parentAsset := ReleaseAsset{Ref: p.Object, SourceVersion: "1", ContractVersion: 1, Body: body}
 	body, _ = json.Marshal(child)
-	childAsset := ReleaseAsset{Ref: ref, SourceVersion: "1", ContractVersion: 1, Body: body}
+	childAsset, err := WithDependencies(ReleaseAsset{Ref: ref, SourceVersion: "1", ContractVersion: 1, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, parentAsset, childAsset}); err != nil {
 		t.Fatal(err)
 	}

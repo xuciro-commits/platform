@@ -13,8 +13,11 @@ import (
 
 func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(f.Definition())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".function-" + strconv.Itoa(f.Version), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: f.Object}}, Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, ContractVersion: 1,
+		SourceVersion: sourceVersion + ".function-" + strconv.Itoa(f.Version), Body: body})
 }
 
 // FunctionReleaseAsset resolves only a retained version from this owner.
@@ -29,8 +32,11 @@ func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platfor
 		return platform.ReleaseAsset{}, fmt.Errorf("function %s version %d is not retained", name, version)
 	}
 	body, err := json.Marshal(f)
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: name}, ContractVersion: 1,
-		SourceVersion: b.Manifest().Version + ".function-" + strconv.Itoa(version), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: f.Object}}, Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: name}, ContractVersion: 1,
+		SourceVersion: b.Manifest().Version + ".function-" + strconv.Itoa(version), Body: body})
 }
 
 func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
@@ -59,7 +65,7 @@ func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
 	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal ||
 		asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFunction ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.Definition().Check() != nil || len(asset.Requires) != 1 || asset.Requires[0] != (platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Object}) {
+		f.Definition().Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid builder function asset %s", asset.Ref)
 	}
 	if _, exists := b.functions[f.Name]; exists {
@@ -142,8 +148,7 @@ func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsse
 		if version != record.Version+1 || buildapi.ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
 			return nil, fmt.Errorf("function version requires its retained predecessors and matching target definition")
 		}
-		expected, err := functionReleaseAsset(Function{Name: frozen.Name, Object: frozen.Object, Version: version}, b.Manifest().Version)
-		if err != nil || asset.ContractVersion != 1 || !slices.Equal(expected.Requires, asset.Requires) {
+		if asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
 			return nil, fmt.Errorf("function candidate dependencies differ")
 		}
 		frozen.Record, frozen.Version, frozen.State = record.Record, version, "published"

@@ -1,13 +1,13 @@
-import {useHost} from '@platform/app';
+import {useHost,useProvidedCapabilities} from '@platform/app';
 import {Select,t} from '@platform/ui';
 import type {Api} from '@platform/kernel';
 import {sourceInterfaceObject} from './application';
 import type {ImportBindings,SourceModule} from './compile';
 export function ComputationImportFields({module,original,objects,value,onChange}:{module:SourceModule;original:SourceModule;objects:ImportBindings['objects'];value:ImportBindings['computations'];onChange:(value:NonNullable<ImportBindings['computations']>)=>void}){
- const host=useHost();
+ const host=useHost(),available=useProvidedCapabilities("operation","pure").data??[];
  return <>{module.variables.filter(v=>v.type==='numeric'&&v.definitionKind==='function').map(v=>{
   const b=value?.[v.id],external=sourceInterfaceObject(original,String(v.inputVarId??'')),entity=host.entities.find(e=>e.type===objects[external??'']);
-  const definitions=host.definitions.filter(d=>d.ref.kind==='compute'&&d.operation?.input.type==='object'),selected=definitions.find(d=>d.ref.app===b?.operation.ref.app&&d.ref.name===b?.operation.ref.name&&d.version===b.operation.sourceVersion),op=selected?.operation;
+  const definitions=host.definitions.filter(d=>d.ref.kind==='compute'&&d.operation?.input.type==='object'&&available.some(item=>item.ref.app===d.ref.app&&item.ref.name===d.ref.name&&item.version===d.version)),selected=definitions.find(d=>d.ref.app===b?.operation.ref.app&&d.ref.name===b?.operation.ref.name&&d.version===b.operation.sourceVersion),op=selected?.operation;
   const fields=entity?.fields.map(f=>({object:entity.type,name:f.name,title:f.title,type:f.type}))??[];
   const update=(patch:Partial<NonNullable<ImportBindings['computations']>[string]>)=>onChange({...value,[v.id]:{operation:b?.operation??{ref:{app:'',kind:'compute',name:''},sourceVersion:''},inputs:b?.inputs??{},...patch}});
   

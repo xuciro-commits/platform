@@ -150,9 +150,8 @@ func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.
 			return nil, err
 		}
 		got = slices.IndexFunc(actual.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == ref })
-		before, _ := canonicalDigest(sealed.Assets[want])
-		after, _ := canonicalDigest(actual.Assets[got])
-		if before != after {
+		same, err := immutableCodeAssetMatches(actual.Assets[got], sealed.Assets[want])
+		if err != nil || !same {
 			return nil, fmt.Errorf("extraction declaration differs from its sealed target")
 		}
 	}

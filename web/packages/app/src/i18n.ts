@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Dependency diagram": "依赖关系图",
+  "Asset dependencies could not be loaded.": "无法加载资产依赖。",
+  "Declared dependencies": "声明的依赖",
+  "No definitions available.": "暂无可用定义。",
   "This operation is awaiting confirmation. Retry its original target and inputs.": "本次操作尚待确认。请重试原目标和原输入。",
   "Technical failure": "技术失败",
   "Input refused": "输入拒绝",
@@ -996,4 +1000,7 @@ register("zh-CN", {
   "Back to project": "返回项目",
   "until {date}": "至 {date}",
   "{name} · closed {until}": "{name} · 已于 {until} 关闭",
+  "Declared dependency graph": "声明的依赖图",
+  "Inspect forward dependencies and reverse impact from the original versioned asset description.": "从原始版本化资产描述查看正向依赖和反向影响。",
+  "The host resolves and authorizes the graph; the client only draws the returned descriptors. Runtime observations remain in original diagnostics.": "宿主解析依赖图并检查权限；客户端只绘制返回的描述。运行观测保留在原诊断中。",
 });

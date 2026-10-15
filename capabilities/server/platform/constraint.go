@@ -46,24 +46,6 @@ func ConstraintEntity(info EntityInfo) EntityInfo {
 	return info
 }
 
-// Constraints provide no independently callable capability. Their pure rules
-// and query dependencies are sealed with the existing object asset (ADR-0118).
-func ConstraintDependencies(info EntityInfo) []AssetRef {
-	var refs []AssetRef
-	for _, constraint := range info.Constraints {
-		if constraint.Reads == nil {
-			continue
-		}
-		for _, collection := range constraint.Reads.Collections {
-			refs = append(refs, AssetRef{App: collection.App, Kind: AssetQuery, Name: collection.Query})
-			if collection.Object != info.Type {
-				refs = append(refs, AssetRef{App: collection.App, Kind: AssetObject, Name: collection.Object})
-			}
-		}
-	}
-	return refs
-}
-
 // CheckConstraints is shared by native declarations and builder publication.
 // A host must supply an explicit accepted transaction boundary for txn rules.
 func CheckConstraints(info EntityInfo, lookup func(string) (EntityInfo, bool), transactionBoundary bool) error {

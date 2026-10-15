@@ -1,5 +1,7 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Protocol": "协议",
+  "Interface": "接口",
   "Pinned version: {version}": "已固定版本：{version}",
   "Valid until: {date}": "失效时间：{date}",
   "Expired": "已失效",

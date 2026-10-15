@@ -1,6 +1,6 @@
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceControls as AssetControls } from "../editor/workbench";
-import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
+import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   useReadQuery, type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, PropertyList, RecordList, RelationCanvas, Select, Tag,
   t, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
@@ -80,7 +80,8 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   }, [visible, model]);
   const related = resource ? model.relations.filter((relation) => relation.ref.object.name === current || relation.target.name === current) : [];
   const actions = host.definitions.filter((definition) => definition.ref.kind === "action" && definition.action?.target === current);
-  const used = model.usages.filter((usage) => usage.resource.name === current && usage.resource.kind === "object");
+  const dependencies = useDependencies(resource?.ref, undefined, !!resource?.installed);
+  const used = (dependencies.data?.usedBy ?? []).flatMap(ref => { const owner = host.definitions.find(definition => assetKey(definition.ref) === assetKey(ref)); return owner ? [{ owner }] : []; });
   const property = selection?.kind === "property" ? resource?.fields.find((field) => field.name === selection.ref.field) : undefined;
   const sharedProperties=model.propertyTypes.filter(p=>(origin==="all"||p.definition.source===origin)&&`${p.property.title} ${p.binding.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   const sharedProperty=model.propertyTypes.find(p=>assetBindingKey(p.binding)===shared);
@@ -174,7 +175,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
           {tab === "actions" && <div className="grid gap-2">{actions.map((definition) => <Button key={definition.ref.name} variant="row" onClick={() => select({ kind: "action", definition })}>{definition.action!.title}<span className="ml-auto font-mono text-[10px] text-muted">{definition.ref.name}</span></Button>)}
             {!actions.length && <p className="text-xs text-muted">{t("No action of this object is offered to you.")}</p>}{resource.draft && <div className="flex flex-wrap gap-2">{(resource.draft.actions ?? []).map((a) => <Button key={a.name} size="sm" onClick={() => host.can("build.object.edit") && open({ view: "action-type", params: { id: resource.draft!.id, action: a.name } })}>{a.title || a.name}</Button>)}<Button size="sm" variant="primary" onClick={() => edit(resource, { tab: "lifecycle" })}>{t("Edit the lifecycle")}</Button></div>}</div>}
           {tab === "data" && (resource.installed ? <RecordList source={host.source} type={resource.ref.name} fields={resource.fields.filter((field) => field.type !== "lines" && !("aside" in field && field.aside)).slice(0, 5).map((field) => field.name)} height={420} /> : <Panel>{t("Publish this object before reading its business records.")}</Panel>)}
-          {tab === "usage" && <div className="grid gap-2"><p className="text-xs text-muted">{t("Usage follows declared dependencies visible to the current member.")}</p>{used.map(({ owner }) => <Button key={`${owner.ref.app}/${owner.ref.kind}/${owner.ref.name}`} variant="row" onClick={() => owner.page ? open({ view: "page", params: owner.ref }) : open({ view: "definition", params: owner.ref })}>
+          {tab === "usage" && <div className="grid gap-2"><p className="text-xs text-muted">{t("Usage follows declared dependencies visible to the current member.")}</p>{dependencies.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}{used.map(({ owner }) => <Button key={`${owner.ref.app}/${owner.ref.kind}/${owner.ref.name}`} variant="row" onClick={() => owner.page ? open({ view: "page", params: owner.ref }) : open({ view: "definition", params: owner.ref })}>
             {owner.page?.title ?? owner.action?.title ?? owner.query?.title ?? owner.ref.name}<Tag label={owner.ref.kind} /></Button>)}{!used.length && <p className="text-xs text-muted">{t("No visible declared usage.")}</p>}</div>}
           {tab === "access" && <><p className="text-xs text-muted">{t("Object, field and action access is enforced by the original owner.")}</p><PropertyList items={resource.fields.filter((field) => field.read?.length || field.write?.length).map((field) => [field.title, `${t("Read")}: ${field.read?.join(", ") ?? "—"} · ${t("Write")}: ${field.write?.join(", ") ?? "—"}`])} />
             {resource.draft && <><PropertyList items={(resource.draft.access ?? []).map((access) => [access.role, access.read])} /><Button onClick={() => edit(resource, { access: "true" })}>{t("Edit access")}</Button></>}</>}

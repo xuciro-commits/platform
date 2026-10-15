@@ -688,44 +688,25 @@ var _ platform.AssetLifecycleOwner = (*Build)(nil)
 // Candidate dependencies determine installation order. Object references can
 // be mutually recursive; all other execution/publication cycles are refused.
 func orderOwnerAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
-	byRef := map[platform.AssetRef]platform.ReleaseAsset{}
-	for _, a := range assets {
-		byRef[a.Ref] = a
+	graph, err := platform.NewReleaseDependencyGraph(assets)
+	if err != nil {
+		return nil, err
 	}
-	status := map[platform.AssetRef]int{}
-	var out []platform.ReleaseAsset
-	var visit func(platform.AssetRef) error
-	visit = func(ref platform.AssetRef) error {
-		if status[ref] == 2 {
-			return nil
-		}
-		asset, ok := byRef[ref]
-		if !ok {
-			return nil
-		}
-		if status[ref] == 1 {
-			return fmt.Errorf("release dependency cycle at %s", ref)
-		}
-		status[ref] = 1
-		for _, dependency := range asset.Requires {
-			if ref.Kind == platform.AssetObject && dependency.Kind == platform.AssetObject && status[dependency] == 1 {
-				continue
-			}
-			if err := visit(dependency); err != nil {
-				return err
-			}
-		}
-		status[ref] = 2
-		out = append(out, asset)
-		return nil
+	refs, err := graph.InstallationOrder()
+	if err != nil {
+		return nil, err
 	}
-	for _, a := range assets {
-		if err := visit(a.Ref); err != nil {
-			return nil, err
-		}
+	byRef := make(map[platform.AssetRef]platform.ReleaseAsset, len(assets))
+	for _, asset := range assets {
+		byRef[asset.Ref] = asset
+	}
+	out := make([]platform.ReleaseAsset, 0, len(assets))
+	for _, ref := range refs {
+		out = append(out, byRef[ref])
 	}
 	return out, nil
 }
+
 func orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.AssetInstallation) ([]platform.AssetInstallation, error) {
 	ordered, err := orderOwnerAssets(assets)
 	if err != nil {
@@ -916,6 +897,13 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	for _, asset := range assets {
 		available[asset.Ref] = true
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		code, err := b.retainedCodeObject(asset)
+		if err != nil {
+			return nil, err
+		}
+		if code {
 			continue
 		}
 		var object Object

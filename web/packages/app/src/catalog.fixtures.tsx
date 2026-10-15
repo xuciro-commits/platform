@@ -41,13 +41,13 @@ export const sampleActions: ActionDeclaration[] = [{ schema: "catalog.sample.rev
       { name: "state", type: "string", description: t("State"), choices: ["draft", "ready"] }, { name: "quantity", type: "integer", description: t("Quantity") }] })),
 ];
 export const samplePage: Definition & { page: NonNullable<Definition["page"]> } = {
-  ref: { app: "catalog", kind: "page", name: "samples" }, source: "catalog-fixture", version: "fixture-v1", contractVersion: 1, requires: [],
+  ref: { app: "catalog", kind: "page", name: "samples" }, source: "catalog-fixture", version: "fixture-v1", contractVersion: 1, requires: [], provides: [],
   page: { name: "samples", title: "Sample record workspace", layout: "list-detail", object: { app: "catalog", kind: "object", name: sampleObject.type },
     listFields: ["title", "state", "quantity"], detailFields: ["title", "state", "quantity"], actions: [{ app: "catalog", kind: "action", name: sampleActions[0]!.schema }] },
 };
 export const sampleDefinitions: Definition[] = [
-  { ref: { app: "catalog", kind: "object", name: sampleObject.type }, source: "catalog-fixture", version: "fixture-v1", contractVersion: 1, requires: [], entity: sampleObject },
-  { ref: { app: "catalog", kind: "action", name: sampleActions[0]!.schema }, source: "catalog-fixture", version: "fixture-v1", contractVersion: 1, requires: [], action: sampleActions[0] }, samplePage,
+  { ref: { app: "catalog", kind: "object", name: sampleObject.type }, source: "catalog-fixture", version: "fixture-v1", contractVersion: 1, requires: [], provides: [], entity: sampleObject },
+  { ref: { app: "catalog", kind: "action", name: sampleActions[0]!.schema }, source: "catalog-fixture", version: "fixture-v1", contractVersion: 1, requires: [], provides: [], action: sampleActions[0] }, samplePage,
 ];
 const sampleRun: Api.AgentRunRecord = {
   id: "RUN-SAMPLE", revision: 1, created: stamp, changed: stamp, agent: "catalog.advisor", title: "Sample review", goal: "Review the sample order.",

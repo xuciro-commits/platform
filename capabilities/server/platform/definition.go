@@ -39,6 +39,8 @@ const (
 	AssetMatching   AssetKind = "matching"
 	AssetMigration  AssetKind = "migration"
 	AssetSampleSet  AssetKind = "sample-set"
+	AssetProtocol   AssetKind = "protocol"
+	AssetInterface  AssetKind = "interface"
 )
 
 // NamedQuery reads records of one object: fixed conditions, and optionally
@@ -73,7 +75,7 @@ func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + 
 
 func (r AssetRef) Check() error {
 	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent, AssetEvaluation, AssetSampleSet}, r.Kind) {
+		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent, AssetEvaluation, AssetSampleSet, AssetProtocol, AssetInterface}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -393,7 +395,9 @@ func IconName(s string) bool {
 // Entity and Action reuse the same descriptions as the existing record/action
 // APIs; this registry is an index over those owners, not another executor.
 type Definition struct {
-	SampleSet *SampleSet `json:"sampleSet,omitempty"`
+	SampleSet *SampleSet                 `json:"sampleSet,omitempty"`
+	Interface *Interface                 `json:"interface,omitempty"`
+	Protocol  *ProtocolReleaseDescriptor `json:"protocol,omitempty"`
 	// OwnerRecord is the internal metadata read boundary for assets whose
 	// descriptor is not itself a record type. It never enters discovery JSON.
 	OwnerRecord      string                   `json:"-"`
@@ -407,6 +411,7 @@ type Definition struct {
 	Version          string                   `json:"version"` // installed app manifest version, not a published revision
 	ContractVersion  int                      `json:"contractVersion"`
 	Requires         []AssetRef               `json:"requires"`
+	Provides         []Capability             `json:"provides"`
 	Entity           *EntityInfo              `json:"entity,omitempty"`
 	Action           *Action                  `json:"action,omitempty"`
 	Page             *Page                    `json:"page,omitempty"`

@@ -38,6 +38,7 @@ type BuildHost interface {
 	ValidateInstallPage(p platform.Page) error
 	ValidateInstallPropertyType(p platform.PropertyType) error
 	ValidateInstallQuery(q platform.NamedQuery) error
+	ValidateCodeAsset(platform.ReleaseAsset) error
 }
 
 type RecordSetHost interface {

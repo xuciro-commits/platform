@@ -53,12 +53,3 @@ export function assetRoute(ref: Api.AssetRef, resources: readonly OwnedResource[
   if (ref.kind === "object") return { view: "object-type", params: { object: ref.name, application } };
   return { view: "definition", params: { ...ref, surface: "studio", application } };
 }
-
-/** Relations come solely from the owner's declared dependency graph. */
-export function assetDependencies(ref: Api.AssetRef, definitions: readonly Api.Definition[]) {
-  const key = refKey(ref), definition = definitions.find(item => refKey(item.ref) === key);
-  return {
-    requires: definition?.requires ?? [],
-    usedBy: definitions.filter(item => item.requires?.some(required => refKey(required) === key)).map(item => item.ref),
-  };
-}

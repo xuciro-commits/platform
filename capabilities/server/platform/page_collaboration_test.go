@@ -143,7 +143,8 @@ func TestCollaborationSameProducerAliasesAndRetirement(t *testing.T) {
 		}
 	}
 }
-func collaborationAssets(p Page) []ReleaseAsset {
+func collaborationAssets(t *testing.T, p Page) []ReleaseAsset {
+	t.Helper()
 	assets := []ReleaseAsset{{Ref: p.Object, ContractVersion: 1, SourceVersion: "1", Body: Raw(EntityInfo{App: p.Object.App, Type: p.Object.Name})}}
 	seen := map[AssetRef]bool{}
 	for _, s := range p.Sections {
@@ -156,9 +157,14 @@ func collaborationAssets(p Page) []ReleaseAsset {
 			if ref.Kind == AssetObject {
 				body = map[string]any{"type": ref.Name, "entity": EntityInfo{App: ref.App, Type: ref.Name}}
 			} else {
-				body = Action{Schema: ref.Name, Target: map[string]string{"relations": "platform.comment", "files": "files.file"}[ref.App]}
+				target := map[string]string{"relations": "platform.comment", "files": "files.file"}[ref.App]
+				body = map[string]any{"schema": ref.Name, "target": target, "objectBindings": map[string]AssetRef{target: {App: ref.App, Kind: AssetObject, Name: target}}}
 			}
-			assets = append(assets, ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: "1", Body: Raw(body)})
+			asset, err := WithDependencies(ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: "1", Body: Raw(body)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assets = append(assets, asset)
 		}
 	}
 	return assets
@@ -169,7 +175,7 @@ func TestFrozenCollaborationFixedServiceClosure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	services := collaborationAssets(p)
+	services := collaborationAssets(t, p)
 	assets := append([]ReleaseAsset{page}, services...)
 	if _, err := Candidate([]AssetRef{page.Ref}, assets); err != nil {
 		t.Fatal(err)

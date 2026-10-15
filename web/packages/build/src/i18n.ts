@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Asset dependencies could not be loaded.": "无法加载资产依赖。",
+  "Available capabilities could not be loaded.": "无法加载可用能力。",
+  "Declared dependencies": "声明的依赖",
+  "Published dependencies and reverse impact come from the shared asset description.": "已发布依赖及其反向影响来自同一份资产描述。",
+  "Current source mappings for the published dependencies. Open the original integration to inspect its configuration and recorded outcome.": "已发布依赖的当前来源映射。打开原集成可查看配置和已记录的结果。",
+  "Dependencies and capabilities": "依赖与能力",
+  "Runtime evidence": "运行证据",
+  "Recorded integration outcomes remain separate from declared dependencies.": "集成的已记录结果与声明的依赖分别显示。",
+  "Dataset version": "数据集版本",
+  "Retained binding": "保留的版本绑定",
   "Protocol": "协议",
  "Business refusal exits": "业务拒绝出口",
  "A business rule may block the request, continue with an audited flag, or route to another declared transaction.": "业务规则可以阻止请求、继续并留下审计标记，或改走另一项已声明的事务。",

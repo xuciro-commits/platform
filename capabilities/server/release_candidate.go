@@ -60,6 +60,12 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			continue
 		}
 		switch def.Ref.Kind {
+		case platform.AssetInterface, platform.AssetProtocol:
+			asset, err := t.definitionAsset(def)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, asset)
 		case platform.AssetObject:
 			i := slices.IndexFunc(manifest.Entities, func(e platform.Entity) bool { return e.Type == def.Ref.Name })
 			if i < 0 || def.Entity == nil {
@@ -70,7 +76,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 				return nil, fmt.Errorf("encode code object %s: %w", def.Ref, err)
 			}
 			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+				SourceVersion: manifest.Version, Body: body})
 		case platform.AssetAction:
 			action, ok := manifest.Actions.Action(def.Ref.Name)
 			if !ok {
@@ -81,7 +87,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 				return nil, fmt.Errorf("encode code action %s: %w", def.Ref, err)
 			}
 			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+				SourceVersion: manifest.Version, Body: body})
 		case platform.AssetPropertyType:
 			if def.PropertyType == nil {
 				return nil, fmt.Errorf("property has no descriptor")
@@ -99,7 +105,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			if err != nil {
 				return nil, err
 			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Requires: def.Requires, Body: body})
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
 		case platform.AssetQuery:
 			if def.Query == nil {
 				return nil, fmt.Errorf("code query %s has no owner declaration", def.Ref)
@@ -109,7 +115,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 				return nil, fmt.Errorf("encode code query %s: %w", def.Ref, err)
 			}
 			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+				SourceVersion: manifest.Version, Body: body})
 		case platform.AssetFlow:
 			if def.Flow == nil {
 				return nil, fmt.Errorf("native flow has no owner descriptor")
@@ -129,7 +135,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 				return nil, err
 			}
 			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+				SourceVersion: manifest.Version, Body: body})
 		case platform.AssetAgent:
 			if def.Agent == nil {
 				return nil, fmt.Errorf("code agent has no owner descriptor")
@@ -138,7 +144,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			if err != nil {
 				return nil, err
 			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Body: body})
 		case platform.AssetCompute:
 			if def.Operation == nil {
 				return nil, fmt.Errorf("compute %s has no owner declaration", def.Ref)
@@ -147,7 +153,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			if err != nil {
 				return nil, err
 			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Body: body})
 		case platform.AssetPage:
 			if def.Page == nil {
 				return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
@@ -177,6 +183,13 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 		}
 		available = append(available, asset)
 	}
+	for i := range available {
+		var err error
+		available[i], err = t.describeOwnedAsset(available[i])
+		if err != nil {
+			return nil, err
+		}
+	}
 	return available, nil
 }
 
@@ -184,20 +197,17 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 // those owners in the preview roots so its ID and diff describe the actual
 // impacted closure, not just the object picked in the editor.
 func dependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []platform.AssetRef {
-	roots := []platform.AssetRef{ref}
-	seen := map[platform.AssetRef]bool{ref: true}
-	for changed := true; changed; {
-		changed = false
-		for _, asset := range available {
-			if seen[asset.Ref] {
-				continue
-			}
-			if slices.ContainsFunc(asset.Requires, func(dep platform.AssetRef) bool { return seen[dep] }) {
-				seen[asset.Ref] = true
-				roots = append(roots, asset.Ref)
-				changed = true
-			}
-		}
+	descriptors := make([]platform.Dependencies, 0, len(available))
+	for _, asset := range available {
+		descriptors = append(descriptors, platform.Dependencies{Ref: asset.Ref, Requires: asset.Requires, Provides: asset.Provides, Version: asset.SourceVersion})
+	}
+	graph, err := platform.NewDependencyGraph(descriptors)
+	if err != nil {
+		return []platform.AssetRef{ref}
+	}
+	roots, err := graph.Impact([]platform.AssetRef{ref})
+	if err != nil {
+		return []platform.AssetRef{ref}
 	}
 	return roots
 }

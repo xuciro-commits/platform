@@ -41,17 +41,20 @@ func (t *Tenant) registerDefinitions() error {
 		if seen[def.Ref] {
 			return fmt.Errorf("asset %s is declared twice", def.Ref)
 		}
+		if def.Flow == nil {
+			var err error
+			def, err = t.describeDefinition(def)
+			if err != nil {
+				return err
+			}
+		}
 		seen[def.Ref] = true
 		t.definitions = append(t.definitions, def)
 		return nil
 	}
 	for _, et := range t.records.sortedTypes() {
 		info := et.info
-		requires := append(platform.ConstraintDependencies(info), platform.RecordSetDependencies(info)...)
 		for _, field := range info.Fields {
-			if field.Property != nil {
-				requires = append(requires, field.Property.Ref)
-			}
 			if field.Ref == "" {
 				continue
 			}
@@ -64,14 +67,13 @@ func (t *Tenant) registerDefinitions() error {
 			if field.Ref == "enterprise.element" {
 				continue
 			}
-			dep, ok := objects[field.Ref]
+			_, ok := objects[field.Ref]
 			if !ok {
 				return fmt.Errorf("asset %s field %s requires missing object %s", objects[info.Type], field.Name, field.Ref)
 			}
-			requires = append(requires, dep)
 		}
 		if err := add(platform.Definition{Ref: objects[info.Type], Source: "code", Version: versions[info.App], ContractVersion: 1,
-			Requires: uniqueRefs(requires), Entity: &info}); err != nil {
+			Entity: &info}); err != nil {
 			return err
 		}
 	}
@@ -80,10 +82,7 @@ func (t *Tenant) registerDefinitions() error {
 		manifest := app.Manifest()
 		for _, action := range manifest.Actions.All() {
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetAction, Name: action.Schema}
-			var requires []platform.AssetRef
-			if dep, ok := objects[action.Target]; ok {
-				requires = append(requires, dep)
-			} else if !classes[action.Target] {
+			if _, ok := objects[action.Target]; !ok && !classes[action.Target] {
 				return fmt.Errorf("asset %s targets missing data class %s", ref, action.Target)
 			}
 			for _, field := range action.Payload {
@@ -96,14 +95,13 @@ func (t *Tenant) registerDefinitions() error {
 				if field.Ref == "enterprise.element" {
 					continue
 				}
-				dep, ok := objects[field.Ref]
+				_, ok := objects[field.Ref]
 				if !ok {
 					return fmt.Errorf("asset %s payload %s requires missing object %s", ref, field.Name, field.Ref)
 				}
-				requires = append(requires, dep)
 			}
 			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
-				Requires: uniqueRefs(requires), Action: &action}); err != nil {
+				Action: &action}); err != nil {
 				return err
 			}
 			actionByRef[ref] = action
@@ -150,7 +148,7 @@ func (t *Tenant) registerDefinitions() error {
 					}
 				}
 			}
-			requires := []platform.AssetRef{page.Object}
+			seenActions := map[platform.AssetRef]bool{}
 			for _, actionRef := range page.Actions {
 				action, ok := actionByRef[actionRef]
 				if !ok {
@@ -159,17 +157,13 @@ func (t *Tenant) registerDefinitions() error {
 				if action.Target != page.Object.Name {
 					return fmt.Errorf("asset %s action %s targets %s, not %s", ref, actionRef, action.Target, page.Object.Name)
 				}
-				requires = append(requires, actionRef)
-			}
-			if len(uniqueRefs(requires)) != len(requires) {
-				return fmt.Errorf("asset %s repeats an action", ref)
-			}
-			asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, page)
-			if err != nil {
-				return err
+				if seenActions[actionRef] {
+					return fmt.Errorf("asset %s repeats an action", ref)
+				}
+				seenActions[actionRef] = true
 			}
 			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
-				Requires: asset.Requires, Page: &page}); err != nil {
+				Page: &page}); err != nil {
 				return err
 			}
 		}
@@ -200,7 +194,7 @@ func (t *Tenant) registerDefinitions() error {
 			if err := t.records.installLinkConstraint(l); err != nil {
 				return err
 			}
-			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetLinkType, Name: l.Name}, Source: "code", Version: manifest.Version, ContractVersion: l.Contract(), Requires: uniqueRefs([]platform.AssetRef{l.Parent, l.Child}), LinkType: &l}); err != nil {
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetLinkType, Name: l.Name}, Source: "code", Version: manifest.Version, ContractVersion: l.Contract(), LinkType: &l}); err != nil {
 				return err
 			}
 		}
@@ -213,12 +207,12 @@ func (t *Tenant) registerDefinitions() error {
 					return fmt.Errorf("asset %s: %w", ref, err)
 				}
 				q = bound
-				if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: q.Dependencies(), Query: &q}); err != nil {
+				if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1, Query: &q}); err != nil {
 					return err
 				}
 				continue
 			}
-			object, ok := objects[q.Object]
+			_, ok := objects[q.Object]
 			if !ok {
 				return fmt.Errorf("asset %s reads missing object %s", ref, q.Object)
 			}
@@ -232,7 +226,7 @@ func (t *Tenant) registerDefinitions() error {
 				return fmt.Errorf("asset %s has a domain that is not a list of conditions", ref)
 			}
 			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
-				Requires: []platform.AssetRef{object}, Query: &q}); err != nil {
+				Query: &q}); err != nil {
 				return err
 			}
 		}
@@ -259,7 +253,7 @@ func (t *Tenant) registerDefinitions() error {
 				}
 			}
 			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
-				Requires: []platform.AssetRef{object}, Function: &f}); err != nil {
+				Function: &f}); err != nil {
 				return err
 			}
 		}
@@ -277,7 +271,7 @@ func (t *Tenant) registerDefinitions() error {
 				return err
 			}
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetAgent, Name: agent.Name}
-			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: descriptor.Dependencies(manifest.ID), Agent: &descriptor}); err != nil {
+			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1, Agent: &descriptor}); err != nil {
 				return err
 			}
 		}
@@ -296,13 +290,35 @@ func (t *Tenant) registerDefinitions() error {
 					return fmt.Errorf("operation %s has no native executor", o.Name)
 				}
 			}
-			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetCompute, Name: o.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: []platform.AssetRef{}, Operation: &o}); err != nil {
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetCompute, Name: o.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Operation: &o}); err != nil {
 				return err
 			}
 		}
 	}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
+		for _, shape := range manifest.Interfaces {
+			shape := shape
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetInterface, Name: shape.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Interface: &shape}); err != nil {
+				return err
+			}
+		}
+		for _, provision := range manifest.Provides {
+			protocol := platform.ProtocolReleaseDescriptor{Name: provision.Protocol.Name, Version: provision.Protocol.Version, Actions: slices.Clone(provision.Protocol.Actions), Reads: slices.Clone(provision.Protocol.Reads), ActionBindings: map[string]platform.AssetRef{}, ActionRoles: map[string][]string{}}
+			for i, action := range protocol.Actions {
+				name, ok := provision.Actions[action.Schema]
+				declared, exists := manifest.Actions.Action(name)
+				if !ok || !exists {
+					return fmt.Errorf("protocol %s action %s has no provider declaration", protocol.Name, action.Schema)
+				}
+				protocol.ActionBindings[action.Schema] = platform.AssetRef{App: manifest.ID, Kind: platform.AssetAction, Name: name}
+				protocol.Actions[i].Roles = slices.Clone(declared.Roles)
+				protocol.ActionRoles[action.Schema] = slices.Clone(declared.Roles)
+			}
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetProtocol, Name: protocol.Name}, Source: "code", Version: manifest.Version, ContractVersion: protocol.Version, Protocol: &protocol}); err != nil {
+				return err
+			}
+		}
 		latest := map[string]platform.Flow{}
 		for _, flow := range manifest.Flows {
 			if old, ok := latest[flow.Name]; !ok || old.Version < flow.Version {
@@ -322,7 +338,7 @@ func (t *Tenant) registerDefinitions() error {
 			if json.Unmarshal(descriptor.Definition, &definition) != nil {
 				return fmt.Errorf("native flow definition is invalid")
 			}
-			if err := add(platform.Definition{Ref: asset.Ref, Source: "code", Version: asset.SourceVersion, ContractVersion: 1, Requires: asset.Requires, Flow: &definition}); err != nil {
+			if err := add(platform.Definition{Ref: asset.Ref, Source: "code", Version: asset.SourceVersion, ContractVersion: 1, Requires: asset.Requires, Provides: asset.Provides, Flow: &definition}); err != nil {
 				return err
 			}
 		}
@@ -344,7 +360,7 @@ func (t *Tenant) registerDefinitions() error {
 			continue
 		}
 		declaration := platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)}
-		if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetApp, Name: manifest.ID}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: declaration.Dependencies(manifest.ID), Application: &declaration}); err != nil {
+		if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetApp, Name: manifest.ID}, Source: "code", Version: manifest.Version, ContractVersion: 1, Application: &declaration}); err != nil {
 			return err
 		}
 	}
@@ -408,7 +424,14 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 	if err := json.Unmarshal([]byte(record.Published), &asset); err != nil || asset.Ref != plan.Ref || asset.SourceVersion == "" || asset.ContractVersion < 1 {
 		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
 	}
-	definition := platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), OwnerRecord: plan.Record}
+	definition := platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: plan.Record}
+	if definition.Provides == nil {
+		description, err := platform.DescribeAsset(asset)
+		if err != nil {
+			return definition, false, err
+		}
+		definition.Provides = description.Provides
+	}
 	if plan.Ref.Kind == platform.AssetSampleSet {
 		var samples platform.SampleSet
 		if err := json.Unmarshal(asset.Body, &samples); err != nil {
@@ -448,6 +471,19 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		}
 		for _, asset := range assets {
 			if asset.Ref.Kind != platform.AssetAgent {
+				for i := range base {
+					if base[i].Ref != asset.Ref || base[i].Source == "code" {
+						continue
+					}
+					base[i].Requires, base[i].Provides, base[i].Version = slices.Clone(asset.Requires), slices.Clone(asset.Provides), asset.SourceVersion
+					if base[i].Provides == nil {
+						descriptor, err := platform.DescribeAsset(asset)
+						if err != nil {
+							return nil, err
+						}
+						base[i].Provides = descriptor.Provides
+					}
+				}
 				continue
 			}
 			var descriptor platform.AgentReleaseDescriptor
@@ -465,7 +501,15 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 				}
 			}
 			t.records.mu.Unlock()
-			base = append(base, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Agent: &descriptor, OwnerRecord: ownerRecord})
+			provided := slices.Clone(asset.Provides)
+			if provided == nil {
+				description, err := platform.DescribeAsset(asset)
+				if err != nil {
+					return nil, err
+				}
+				provided = description.Provides
+			}
+			base = append(base, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: provided, Agent: &descriptor, OwnerRecord: ownerRecord})
 		}
 	}
 	type image struct {
@@ -633,14 +677,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				if def.Query == nil && len(def.QueryVersions) == 0 {
 					continue
 				}
-				def.Requires = nil
-				if def.Query != nil {
-					def.Requires = def.Query.Dependencies()
-				}
-				for _, retained := range def.QueryVersions {
-					def.Requires = append(def.Requires, retained.Dependencies()...)
-				}
-				def.Requires = uniqueRefs(def.Requires)
+
 				break
 			}
 			info, ok := entities[def.Query.Object]
@@ -690,7 +727,42 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
 				continue
 			}
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation, platform.AssetSampleSet:
+		case platform.AssetInterface:
+			if def.Interface == nil {
+				continue
+			}
+			if !m.Holds("build", "builder") && !slices.ContainsFunc(slices.Collect(maps.Values(entities)), func(info platform.EntityInfo) bool { return slices.Contains(info.Implements, def.Ref.Name) }) {
+				continue
+			}
+		case platform.AssetProtocol:
+			if def.Protocol == nil || !m.Active() {
+				continue
+			}
+			projected := *def.Protocol
+			projected.ActionBindings = maps.Clone(projected.ActionBindings)
+			projected.ActionRoles = maps.Clone(projected.ActionRoles)
+			projected.Actions = slices.DeleteFunc(slices.Clone(projected.Actions), func(action platform.Action) bool {
+				binding := projected.ActionBindings[action.Schema]
+				_, ok := actions[binding.Name]
+				if !ok {
+					delete(projected.ActionBindings, action.Schema)
+					delete(projected.ActionRoles, action.Schema)
+				}
+				return !ok
+			})
+			projected.Reads = slices.DeleteFunc(slices.Clone(projected.Reads), func(name string) bool {
+				for _, provision := range t.app(def.Ref.App).Manifest().Provides {
+					if provision.Protocol.Name == projected.Name {
+						return !t.authorizeEntry(m, def.Ref.App, provision.Reads[name], "read", Now()).Allow
+					}
+				}
+				return true
+			})
+			if len(projected.Actions) == 0 && len(projected.Reads) == 0 {
+				continue
+			}
+			def.Protocol = &projected
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetSampleSet:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {
@@ -715,12 +787,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	for _, def := range out {
 		visible[def.Ref] = true
 	}
-	for i, def := range out {
-		switch def.Ref.Kind {
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation, platform.AssetSampleSet:
-			out[i].Requires = slices.DeleteFunc(slices.Clone(def.Requires), func(ref platform.AssetRef) bool { return !visible[ref] })
-		}
-	}
+
 	// An application is offered to whoever may open one of its pages (ADR-0036).
 	opens := map[platform.AssetRef]bool{}
 	for _, def := range out {
@@ -739,10 +806,16 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	}
 	out = filterExplorationAssets(out)
 	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	visible = map[platform.AssetRef]bool{}
+	for _, def := range out {
+		visible[def.Ref] = true
+	}
 	for i := range out {
+		out[i].Requires = slices.DeleteFunc(slices.Clone(out[i].Requires), func(ref platform.AssetRef) bool { return !visible[ref] })
 		if out[i].Requires == nil {
 			out[i].Requires = []platform.AssetRef{}
 		}
+		out[i].Provides = t.visibleProvides(out[i], m, entities)
 	}
 	return out
 }
@@ -1146,7 +1219,6 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 			}
 		}
 	}
-	def.Requires = append([]platform.AssetRef{page.Object}, page.Actions...)
 	def.Page = &page
 	return def, true
 }
@@ -1269,7 +1341,6 @@ func (t *Tenant) visibleApplication(registered platform.Definition, m platform.M
 			}
 		}
 	}
-	def.Requires = application.Dependencies(def.Ref.App)
 	def.Application = &application
 	return def, true
 }

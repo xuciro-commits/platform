@@ -23,21 +23,22 @@ type ConnectionDefinition struct {
 }
 
 type SourceDefinition struct {
-	Name       string        `json:"name"`
-	Title      string        `json:"title"`
-	Connection string        `json:"connection"`
-	Profile    string        `json:"profile,omitempty"`
-	URL        string        `json:"url,omitempty"`
-	Entity     string        `json:"entity,omitempty"`
-	Filter     string        `json:"filter,omitempty"`
-	Since      string        `json:"since,omitempty"`
-	Path       string        `json:"path,omitempty"`
-	Dataset    string        `json:"dataset,omitempty"`
-	Object     string        `json:"object,omitempty"`
-	Key        string        `json:"key,omitempty"`
-	Mapping    []SourceField `json:"mapping,omitempty"`
-	Stream     bool          `json:"stream,omitempty"`
-	Every      string        `json:"every,omitempty"`
+	ObjectBindings map[string]platform.AssetRef `json:"objectBindings,omitempty"`
+	Name           string                       `json:"name"`
+	Title          string                       `json:"title"`
+	Connection     string                       `json:"connection"`
+	Profile        string                       `json:"profile,omitempty"`
+	URL            string                       `json:"url,omitempty"`
+	Entity         string                       `json:"entity,omitempty"`
+	Filter         string                       `json:"filter,omitempty"`
+	Since          string                       `json:"since,omitempty"`
+	Path           string                       `json:"path,omitempty"`
+	Dataset        string                       `json:"dataset,omitempty"`
+	Object         string                       `json:"object,omitempty"`
+	Key            string                       `json:"key,omitempty"`
+	Mapping        []SourceField                `json:"mapping,omitempty"`
+	Stream         bool                         `json:"stream,omitempty"`
+	Every          string                       `json:"every,omitempty"`
 }
 
 type DatasetDefinition struct {
@@ -48,36 +49,40 @@ type DatasetDefinition struct {
 }
 
 type PipelineDefinition struct {
-	Name             string            `json:"name"`
-	Title            string            `json:"title"`
-	Input            string            `json:"input"`
-	Steps            []Step            `json:"steps"`
-	Expectations     []Expectation     `json:"expectations,omitempty"`
-	OutputDataset    string            `json:"outputDataset,omitempty"`
-	OutputObject     string            `json:"outputObject,omitempty"`
-	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty"`
-	Key              string            `json:"key,omitempty"`
-	Every            string            `json:"every,omitempty"`
+	ObjectBindings   map[string]platform.AssetRef `json:"objectBindings,omitempty"`
+	Name             string                       `json:"name"`
+	Title            string                       `json:"title"`
+	Input            string                       `json:"input"`
+	Steps            []Step                       `json:"steps"`
+	Expectations     []Expectation                `json:"expectations,omitempty"`
+	OutputDataset    string                       `json:"outputDataset,omitempty"`
+	OutputObject     string                       `json:"outputObject,omitempty"`
+	OutputEnterprise *EnterpriseTarget            `json:"outputEnterprise,omitempty"`
+	Key              string                       `json:"key,omitempty"`
+	Every            string                       `json:"every,omitempty"`
 }
 
 type WritebackDefinition struct {
-	Name       string        `json:"name"`
-	Title      string        `json:"title"`
-	Connection string        `json:"connection"`
-	Object     string        `json:"object"`
-	On         string        `json:"on"`
-	Method     string        `json:"method,omitempty"`
-	Path       string        `json:"path,omitempty"`
-	Mapping    []SourceField `json:"mapping,omitempty"`
-	Result     []SourceField `json:"result,omitempty"`
+	ObjectBindings map[string]platform.AssetRef `json:"objectBindings,omitempty"`
+	Name           string                       `json:"name"`
+	Title          string                       `json:"title"`
+	Connection     string                       `json:"connection"`
+	Object         string                       `json:"object"`
+	On             string                       `json:"on"`
+	Method         string                       `json:"method,omitempty"`
+	Path           string                       `json:"path,omitempty"`
+	Mapping        []SourceField                `json:"mapping,omitempty"`
+	Result         []SourceField                `json:"result,omitempty"`
 }
 
 type MatchingDefinition struct {
-	Name   string       `json:"name"`
-	Title  string       `json:"title"`
-	Object string       `json:"object"`
-	Keys   []MatchKey   `json:"keys"`
-	Prefer []Preference `json:"prefer,omitempty"`
+	ObjectBindings map[string]platform.AssetRef `json:"objectBindings,omitempty"`
+	Name           string                       `json:"name"`
+	Title          string                       `json:"title"`
+	Object         string                       `json:"object"`
+	Keys           []MatchKey                   `json:"keys"`
+	Prefer         []Preference                 `json:"prefer,omitempty"`
+	Producers      map[string]platform.AssetRef `json:"producers,omitempty"`
 }
 
 func ValueIntegrationKind(kind platform.AssetKind) bool {
@@ -125,6 +130,9 @@ func (s Source) ExecutionVersion() string { return ValueIntegrationExecutionVers
 func (p Pipeline) ExecutionVersion() string { return ValueIntegrationExecutionVersion(p.Published) }
 
 func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
+	if asset.Provides != nil {
+		return platform.CheckAssetDependencies(asset)
+	}
 	var expected []platform.AssetRef
 	add := func(kind platform.AssetKind, name string) {
 		if name != "" {

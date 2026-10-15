@@ -92,5 +92,8 @@ func (f *Flows) NativeFlowAsset(manifest platform.Manifest, name string, version
 		descriptor.Subject = platform.AssetRef{App: manifest.ID, Kind: platform.AssetObject, Name: d.Subject}
 	}
 	raw, err = json.Marshal(descriptor)
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetFlow, Name: descriptor.Name}, ContractVersion: 1, SourceVersion: manifest.Version + ".native-flow-" + strconv.Itoa(version), Requires: slices.Clone(requires), Body: raw}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetFlow, Name: descriptor.Name}, ContractVersion: 1, SourceVersion: manifest.Version + ".native-flow-" + strconv.Itoa(version), Body: raw})
 }

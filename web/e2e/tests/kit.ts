@@ -148,11 +148,13 @@ export async function runtime(page: Page, operator: Member, pageName: string, ap
 }
 
 /** Screenshots a locator at desktop and phone widths when PLATFORM_SCREENSHOTS is set. */
-export async function shots(tab: Page, target: ReturnType<Page["getByRole"]>, name: string, info: { outputPath(p: string): string }) {
+export async function shots(tab: Page, target: ReturnType<Page["getByRole"]>, name: string, info: { outputPath(p: string): string }, ready?: () => Promise<unknown>) {
   if (!process.env.PLATFORM_SCREENSHOTS) return;
+  await ready?.();
   await target.screenshot({ path: info.outputPath(`${name}.png`) });
   await tab.setViewportSize({ width: 390, height: 844 });
   await tab.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+  await ready?.();
   await target.screenshot({ path: info.outputPath(`${name}-narrow.png`) });
   await tab.setViewportSize({ width: 1280, height: 720 });
 }

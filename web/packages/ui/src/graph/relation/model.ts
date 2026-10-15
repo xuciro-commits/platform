@@ -63,6 +63,8 @@ export const relationNodeClasses: Record<string, { title: string; icon: string; 
   propertytype: { title: "Shared property", icon: "tag", tone: "neutral" },
   action: { title: "Action", icon: "zap", tone: "neutral" },
   operation: { title: "Operation", icon: "settings-2", tone: "neutral" },
+  protocol: { title: "Protocol", icon: "plug", tone: "neutral" },
+  interface: { title: "Interface", icon: "boxes", tone: "neutral" },
   // Execution plane: what a run caused.
   record: { title: "Record", icon: "table", tone: "neutral" },
   flow: { title: "Flow", icon: "workflow", tone: "neutral" },

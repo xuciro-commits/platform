@@ -332,6 +332,8 @@
 | 每项被接受的顶级输入在向外部应答前，均严格记入日志一次 | 宿主测试与演练（重启与恢复） |
 | 内核词汇始终保持无领域术语 | 验证步骤 `contract-vocabulary` |
 
+资产衔接由 [ADR-0118](ADR/0118-blocks-and-dependencies.md) 的一份描述提供：完整 owner 定义自动生成 `Requires`、`Provides` 与版本，候选集合、血缘、反向影响与能力发现共用 `DependencyGraph`。页面/应用/查询和 Build 发布不再各自维护依赖列表。`pure`、`effect`、`authoritative` 决定调用位置，实际权限继续由原 owner 检查；工作区的图、设计台使用关系与能力选择器读取后端投影。历史发布内容保持原字节，运行证据使用原诊断入口。
+
 ### 2.9 已接受 ADR 的未完成承诺
 
 接受设计不等于实现完成。当前实现/剩余保证只在各 [ADR](ADR/) 的 As built，近期顺序只在 [WorkQueue](WorkQueue.md)；未排期承诺不自动开工。旧限制的修订和取代关系保留于 ADR 的状态/前向说明，不另维护完成状态表。

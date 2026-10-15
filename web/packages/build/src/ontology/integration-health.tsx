@@ -3,7 +3,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, DataTable, PageHeader, Panel, Tag, t, type ColumnDef } from "@platform/ui";
-import { useLineage } from "./lineage";
+import { useIntegrationEvidence } from "./lineage";
 
 // Integration health (ADR-0072 §4 / ADR-0069 Ⅰ-F): one page over every
 // connection, source, pipeline and writeback with its last outcome, read from
@@ -11,7 +11,7 @@ import { useLineage } from "./lineage";
 type Row = { id: string; title: string; view: string; state: string; when?: string; summary: string; tone: "success" | "warning" | "danger" | undefined };
 
 export function IntegrationHealth() {
-  const { role } = useHost(), { open } = useApplicationWorkspace(), l = useLineage();
+  const { role } = useHost(), { open } = useApplicationWorkspace(), l = useIntegrationEvidence();
   const sources = useReadQuery<{ records: (Api.Source & { dataset?: string })[] }>("/v1/records/build.source?limit=200", 15000).data?.records ?? [];
   const pipelines = useReadQuery<{ records: { id: string; title: string; name: string; state: string; last?: { at: string; error?: string; rows: number; written: number; quarantined: number; failed: number } }[] }>("/v1/records/build.pipeline?limit=200", 15000).data?.records ?? [];
   const connections = useReadQuery<{ records: { id: string; title: string; kind: string; state: string; last?: { at: string; ok: boolean; error?: string; detail?: string } }[] }>("/v1/records/build.connection?limit=200", 15000).data?.records ?? [];

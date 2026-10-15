@@ -89,14 +89,17 @@ func (b *Build) checkSampleSet(m SampleSetRecord) error {
 
 func sampleSetAsset(m SampleSetRecord, version int) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(m.descriptor())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}, SourceVersion: definitionVersion + ".samples-" + strconv.Itoa(version), ContractVersion: 1, Requires: m.descriptor().Dependencies(), Body: body}, err
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}, SourceVersion: definitionVersion + ".samples-" + strconv.Itoa(version), ContractVersion: 1, Body: body})
 }
 
 func decodeSampleAsset(asset platform.ReleaseAsset) (platform.SampleSet, int, error) {
 	var d platform.SampleSet
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, definitionVersion+".samples-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || !slices.Equal(asset.Requires, d.Dependencies()) {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return d, 0, fmt.Errorf("Invalid sample asset")
 	}
 	return d, version, nil

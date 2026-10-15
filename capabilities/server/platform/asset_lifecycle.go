@@ -204,7 +204,7 @@ func (r *AssetRegistry) freezeAsset(asset ReleaseAsset) (ReleaseAsset, error) {
 	}
 	slices.SortFunc(asset.Requires, compareRef)
 	asset.Requires = slices.Compact(asset.Requires)
-	if err := checkReleaseBindings(asset.Ref, body, asset.Requires); err != nil {
+	if err := checkAssetDescription(asset); err != nil {
 		return ReleaseAsset{}, err
 	}
 	return asset, nil

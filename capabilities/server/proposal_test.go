@@ -195,7 +195,7 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	trial := CandidateSimulationRequest{ApplicationID: "APP", As: "operator", At: at, Model: "local/probe", Samples: samples, Steps: []SimulationStep{{Type: build.FunctionCallType, ID: "TRIAL", Action: build.SchemaFunctionCall, Payload: platform.Raw(map[string]any{"name": "inspect", "source": "I1"}), Expect: "accepted", Function: &build.FunctionFixture{Output: `{"verdict":"pass","confidence":0.9}`, ExpectState: "ready"}}, {Type: "build.inspection", ID: "I1", Action: "build.inspection.adopt", Payload: platform.Raw(map[string]any{"proposal": "TRIAL", "verdict": "pass"}), Expect: "refused"}}}
 	out, problem := tn.SimulateCandidate(memberOf(t, tn, "builder"), trial)
 	if problem != nil || !out.Recovered || out.Passed == nil || !*out.Passed {
-		t.Fatalf("proposal trial: %+v %+v", out, problem)
+		t.Fatalf("proposal trial: %+v %+v message=%s", out, problem, problem.Message)
 	}
 	usage, problem := tn.Read(memberOf(t, tn, "builder"), "ai-usage")
 	if problem != nil {

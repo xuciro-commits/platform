@@ -99,6 +99,27 @@ func (h *Host) routesDiscovery(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(definitions, t.Language(m, r)))
 	})
+	rt.metadata(Route{Pattern: "GET /v1/dependencies", Summary: "Authorized declarations with forward dependencies and reverse impact from the same frozen description (ADR-0118)", Query: []Param{{"app", "Asset owner; used alone to select an application"}, {"kind", "Focused asset kind"}, {"name", "Focused asset name"}}, Answer: DependencyView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		query := r.URL.Query()
+		var focus platform.AssetRef
+		if query.Get("kind") != "" || query.Get("name") != "" {
+			focus = platform.AssetRef{App: query.Get("app"), Kind: platform.AssetKind(query.Get("kind")), Name: query.Get("name")}
+		}
+		answer, err := t.DependencyView(m, focus, query.Get("app"))
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
+	})
+	rt.metadata(Route{Pattern: "GET /v1/provides", Summary: "Capabilities offered by the same authorized asset descriptions, optionally selected by kind and side (ADR-0118)", Query: []Param{{"kind", "action, query, function, operation, protocol or interface"}, {"side", "pure, effect or authoritative"}}, Answer: []ProvidedCapability{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.ProvidedCapabilities(m, r.URL.Query().Get("kind"), r.URL.Query().Get("side"))
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
+	})
 	rt.metadata(Route{Pattern: "GET /v1/pages/{app}/{name}/{contentVersion}", Summary: "Read exact published page content through current member discovery permissions (ADR-0046)", Answer: platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.PageContentDefinition(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetPage, Name: r.PathValue("name")}, r.PathValue("contentVersion"))
 		if err != nil {

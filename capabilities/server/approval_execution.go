@@ -26,7 +26,7 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 		// An application need not separately list each contained action.
 		root = platform.AssetRef{App: a.App, Kind: platform.AssetObject, Name: typ}
 	}
-	closed, err := platform.Candidate([]platform.AssetRef{root}, sealed.Assets)
+	closed, err := sealed.Closure([]platform.AssetRef{root})
 	if err != nil {
 		return nil, migrationRefusal(err)
 	}
