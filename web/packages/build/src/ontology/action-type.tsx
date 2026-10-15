@@ -1,3 +1,4 @@
+import {ConfirmationEditor} from "./ConfirmationEditor";
 import {assignmentSugar,conditionSugar} from "../editor/rule-text";
 import {ExpressionEditor} from '../editor/ExpressionEditor';
 // The action type workbench (ADR-0053 §6, built under ADR-0054): an action is a
@@ -174,6 +175,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
 
       <p className="text-sm text-muted">{t("One operation commits all steps together. Iteration uses an ordered record set; a failed step leaves every record unchanged.")}</p>
       {action?.transaction ? <>
+        <ConfirmationEditor value={action.transaction.confirmation} onChange={confirmation=>patch({transaction:{...action.transaction!,confirmation}})} actions={(object.actions??[]).filter(a=>a.name!==action.name).map(a=>a.name)} roles={["builder",...new Set((object.access??[]).map(a=>a.role))]}/>
         <label className="grid gap-1 text-xs">{t("Transaction definition")}<Textarea aria-label={t("Transaction definition")} parse="json" rows={22} value={JSON.stringify(action.transaction, null, 2)} onChange={event => patch({transaction: event.target.value.trim()?JSON.parse(event.target.value):undefined})} /></label>
         <Button size="sm" variant="ghost" onClick={() => patch({transaction:undefined})}>{t("Remove transaction")}</Button>
       </> : <Button disabled={!!sets.length || !!conditions.length || !!creates.length || !!posts.length || !!action?.journal || !!action?.approval || !!action?.to || !!action?.toInput} onClick={() => patch({transaction:{subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}]}})}>{t("Define transaction")}</Button>}

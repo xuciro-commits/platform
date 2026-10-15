@@ -145,6 +145,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	s.of(reflect.TypeFor[build.Source]())
 	s.of(reflect.TypeFor[build.Connection]())
 	s.of(reflect.TypeFor[platform.BusinessTxn]())
+	s.of(reflect.TypeFor[platform.ConfirmationRun]())
 	paths := map[string]any{}
 	for _, r := range h.routes {
 		method, path, _ := strings.Cut(r.Pattern, " ")

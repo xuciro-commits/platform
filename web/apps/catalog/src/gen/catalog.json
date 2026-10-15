@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:f662312eb3d8e41a",
+  "revision": "sha256:d5bb0a234535206a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1058,7 +1058,8 @@
         "useNewRecord",
         "RecordActions",
         "PayloadFields",
-        "InlineActionForm"
+        "InlineActionForm",
+        "DeclaredActionForm"
       ],
       "example": "ActionsExample",
       "constraints": [
@@ -12269,6 +12270,7 @@
       "web/packages/app/src/widgets/Button.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
       "web/packages/app/src/widgets/CompositeViews.tsx",
+      "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
@@ -12290,6 +12292,7 @@
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/model-editor/ModelFieldPicker.tsx",
+      "web/packages/build/src/ontology/ConfirmationEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -12432,6 +12435,7 @@
       "web/packages/app/src/semantic/References.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
+      "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/Input.tsx",
@@ -12450,6 +12454,7 @@
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/model-editor/ModelFieldPicker.tsx",
+      "web/packages/build/src/ontology/ConfirmationEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -12606,6 +12611,7 @@
       "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/ontology/ConfirmationEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -12677,6 +12683,7 @@
       "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
+      "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/ContextViews.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/app/src/widgets/EmbeddedPage.tsx",
@@ -12723,6 +12730,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/ontology/ConfirmationEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -12849,6 +12857,7 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/composites/catalog-examples.tsx",
+      "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
@@ -12865,6 +12874,7 @@
     "ui/status": [
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
@@ -12978,6 +12988,7 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages/pages.tsx",
+      "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx",
       "web/packages/app/src/widgets/listing-plugins.ts",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -12987,7 +12998,8 @@
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/projects/studio-guide.tsx",
       "web/packages/build/src/releases/simulate.tsx",
-      "web/packages/build/src/workshop/ModuleWorkbench.tsx"
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/platform/src/operations.tsx"
     ],
     "ui/data-table": [
       "web/packages/app/src/automation/application-runs.tsx",

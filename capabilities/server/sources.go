@@ -44,6 +44,7 @@ func (t *Tenant) PullSources(now time.Time) {
 			t.pullSource(s, now)
 		}
 	}
+	t.ReconcileConfirmations(now)
 }
 
 func (t *Tenant) pullSource(s build.Source, now time.Time) {
@@ -205,6 +206,10 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 			}
 		}
 	}
+	return t.readSourceWithConnection(s, conn)
+}
+
+func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection) ([]map[string]any, error) {
 	switch s.Profile {
 	case "odata":
 		return t.readOData(s, *conn)

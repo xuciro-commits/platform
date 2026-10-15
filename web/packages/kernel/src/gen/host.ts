@@ -655,6 +655,7 @@ export type BusinessTxn = {
   guard?: Expr;
   message?: string;
   reads?: RuleReadSpec;
+  confirmation?: Confirmation;
 };
 
 export type Calendar = {
@@ -831,6 +832,88 @@ export type ComputeSDKRequest = {
   abi?: string;
   input: ValueSchema;
   output: ValueSchema;
+};
+
+export type Confirmation = {
+  parties: ConfirmationParty[];
+  deadlineSeconds: number;
+  onPartial: string;
+  onExpire: string;
+  onComplete: string;
+  onPartialAction?: string;
+  reviewerRole: string;
+};
+
+export type ConfirmationDifference = {
+  at: string;
+  matched: boolean;
+  observed?: unknown;
+  error?: string;
+};
+
+export type ConfirmationParty = {
+  name: string;
+  title: string;
+  writeback?: string;
+  protocol?: string;
+  action?: string;
+  target?: string;
+  compensateWriteback?: string;
+  compensateAction?: string;
+  reconcile?: ConfirmationRead;
+};
+
+export type ConfirmationProgress = {
+  name: string;
+  title: string;
+  state: string;
+  intent: string;
+  key: string;
+  at?: string;
+  answer?: unknown;
+  reason?: string;
+  request?: unknown;
+  requestVersion?: number;
+  source?: unknown;
+  connection?: unknown;
+  sourceVersion?: string;
+  compensationRequest?: unknown;
+  compensation?: string;
+  compensationState?: string;
+  reconcileDue?: string;
+  differences?: ConfirmationDifference[];
+};
+
+export type ConfirmationRead = {
+  source: string;
+  keyField: string;
+  resultField: string;
+  expected: unknown;
+  everySeconds: number;
+};
+
+export type ConfirmationRun = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  subject: string;
+  action: string;
+  member: string;
+  state: "pending" | "partial" | "confirmed" | "expired" | "rejected" | "compensating" | "compensated";
+  deadline: string;
+  partial: boolean;
+  definition: Confirmation;
+  release?: string;
+  assets: ReleaseAsset[];
+  input: unknown;
+  parties: ConfirmationProgress[];
+  reviewers: string[];
+  completion?: string;
+  completionError?: string;
+  withheld?: boolean;
 };
 
 export type Connection = {
@@ -1055,6 +1138,7 @@ export type Edge = {
 };
 
 export type Effect = {
+  compensates?: string;
   applications?: AssetBinding[];
   id: string;
   endpoint: string;

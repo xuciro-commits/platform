@@ -1,0 +1,32 @@
+import type {Api} from "@platform/kernel";
+import {useRecordInventory} from "@platform/app";
+import {Button,Checkbox,Input,Panel,Select,Textarea,t} from "@platform/ui";
+
+type Named={id:string;name:string;title:string;state?:string};
+export function ConfirmationEditor({value,onChange,actions,roles}:{value?:Api.Confirmation;onChange:(value?:Api.Confirmation)=>void;actions:string[];roles:string[]}){
+ const writes=useRecordInventory<Named>("build.writeback"),sources=useRecordInventory<Named>("build.source");
+ const patch=(next:Partial<Api.Confirmation>)=>value&&onChange({...value,...next});
+ const party=(at:number,next:Partial<Api.ConfirmationParty>)=>value&&patch({parties:value.parties.map((p,i)=>i===at?{...p,...next}:p)});
+ return <Panel title={t("Cross-system confirmation")} className="grid gap-3">
+ <Checkbox checked={!!value} onChange={on=>onChange(on?{parties:[],deadlineSeconds:3600,onPartial:"hold",onExpire:"hold",onComplete:"",reviewerRole:roles[0]??"builder"}:undefined)}>{t("Wait for declared parties")}</Checkbox>
+ {value&&<>
+ <div className="grid gap-2 sm:grid-cols-2">
+ <label className="grid gap-1 text-xs">{t("Business deadline (seconds)")}<Input type="number" min={1} max={604800} value={value.deadlineSeconds} onChange={e=>patch({deadlineSeconds:Number(e.target.value)})}/></label>
+ <label className="grid gap-1 text-xs">{t("Confirmation reviewer role")}<Select value={value.reviewerRole} onChange={e=>patch({reviewerRole:e.target.value})}>{roles.map(role=><option key={role}>{role}</option>)}</Select></label>
+ <label className="grid gap-1 text-xs">{t("When all parties confirm")}<Select value={value.onComplete} onChange={e=>patch({onComplete:e.target.value})}><option value="">{t("Choose an action")}</option>{actions.map(action=><option key={action}>{action}</option>)}</Select></label>
+ <label className="grid gap-1 text-xs">{t("Partial confirmation policy")}<Select value={value.onPartial} onChange={e=>patch({onPartial:e.target.value})}>{["hold","proceed-with-flag","reject"].map(policy=><option key={policy} value={policy}>{t(policy)}</option>)}</Select></label>
+ {value.onPartial!=="hold"&&<label className="grid gap-1 text-xs">{t("Partial outcome action")}<Select value={value.onPartialAction??""} onChange={e=>patch({onPartialAction:e.target.value})}><option value="">{t("Choose an action")}</option>{actions.map(action=><option key={action}>{action}</option>)}</Select></label>}
+ <label className="grid gap-1 text-xs">{t("Expiry policy")}<Select value={value.onExpire} onChange={e=>patch({onExpire:e.target.value})}>{["hold","escalate","compensate"].map(policy=><option key={policy} value={policy}>{t(policy)}</option>)}</Select></label>
+ </div>
+ {value.parties.map((p,i)=><Panel key={i} className="grid gap-2">
+ <div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Party name")}<Input value={p.name} onChange={e=>party(i,{name:e.target.value})}/></label><label className="grid gap-1 text-xs">{t("Party title")}<Input value={p.title} onChange={e=>party(i,{title:e.target.value})}/></label></div>
+ <label className="grid gap-1 text-xs">{t("Party transport")}<Select value={p.protocol!==undefined?"protocol":"writeback"} onChange={e=>party(i,e.target.value==="protocol"?{writeback:undefined,protocol:"",action:""}:{protocol:undefined,action:undefined,writeback:""})}><option value="writeback">{t("Writeback")}</option><option value="protocol">{t("Protocol")}</option></Select></label>
+ {p.protocol!==undefined?<div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Protocol")}<Input value={p.protocol} onChange={e=>party(i,{protocol:e.target.value})}/></label><label className="grid gap-1 text-xs">{t("Protocol action")}<Input value={p.action??""} onChange={e=>party(i,{action:e.target.value})}/></label><label className="grid gap-1 text-xs">{t("Provider target (empty: subject)")}<Input value={p.target??""} onChange={e=>party(i,{target:e.target.value})}/></label><label className="grid gap-1 text-xs">{t("Compensation action")}<Input value={p.compensateAction??""} onChange={e=>party(i,{compensateAction:e.target.value})}/></label></div>:<div className="grid gap-2 sm:grid-cols-2">{(["writeback","compensateWriteback"] as const).map(field=><label key={field} className="grid gap-1 text-xs">{t(field==="writeback"?"Confirmation writeback":"Compensation writeback")}<Select value={p[field]??""} onChange={e=>party(i,{[field]:e.target.value})}><option value="">{t("Choose a writeback")}</option>{writes.data?.records.filter(w=>w.state==="published").map(w=><option key={w.id} value={w.id}>{w.title}</option>)}</Select></label>)}</div>}
+ <Checkbox checked={!!p.reconcile} onChange={on=>party(i,{reconcile:on?{source:"",keyField:"id",resultField:"state",expected:"confirmed",everySeconds:60}:undefined})}>{t("Reconcile by reading the source")}</Checkbox>
+ {p.reconcile&&<div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Reconciliation source")}<Select value={p.reconcile.source} onChange={e=>party(i,{reconcile:{...p.reconcile!,source:e.target.value}})}><option value="">{t("Choose a source")}</option>{sources.data?.records.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</Select></label><label className="grid gap-1 text-xs">{t("Source key field")}<Input value={p.reconcile.keyField} onChange={e=>party(i,{reconcile:{...p.reconcile!,keyField:e.target.value}})}/></label><label className="grid gap-1 text-xs">{t("Source result field")}<Input value={p.reconcile.resultField} onChange={e=>party(i,{reconcile:{...p.reconcile!,resultField:e.target.value}})}/></label><label className="grid gap-1 text-xs">{t("Reconciliation period (seconds)")}<Input type="number" min={1} value={p.reconcile.everySeconds} onChange={e=>party(i,{reconcile:{...p.reconcile!,everySeconds:Number(e.target.value)}})}/></label><label className="grid gap-1 text-xs">{t("Expected source value (JSON)")}<Textarea parse="json" value={JSON.stringify(p.reconcile.expected)} onChange={e=>party(i,{reconcile:{...p.reconcile!,expected:JSON.parse(e.target.value)}})}/></label></div>}
+ <Button size="sm" onClick={()=>patch({parties:value.parties.filter((_,at)=>at!==i)})}>{t("Remove party")}</Button>
+ </Panel>)}
+ <Button disabled={value.parties.length>=8} onClick={()=>patch({parties:[...value.parties,{name:`party${value.parties.length+1}`,title:"",writeback:""}]})}>{t("Add confirmation party")}</Button>
+ </>}
+ </Panel>;
+}

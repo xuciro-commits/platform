@@ -309,5 +309,8 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 	if err := run(txn.Steps, spec, values, "", ""); err != nil {
 		return err
 	}
-	return b.finishProposal(c, receipt, proposal, now)
+	if err := b.finishProposal(c, receipt, proposal, now); err != nil {
+		return err
+	}
+	return b.openConfirmation(c, receipt, txn, now)
 }

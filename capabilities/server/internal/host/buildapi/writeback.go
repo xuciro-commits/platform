@@ -47,6 +47,7 @@ type Writeback struct {
 	Sent      int            `json:"sent,omitempty" field:"readonly" title:"Delivered"`
 	Rejected  int            `json:"rejected,omitempty" field:"readonly"`
 	Failed    int            `json:"failed,omitempty" field:"readonly"`
+	Unknown   int            `json:"unknown,omitempty" field:"readonly"`
 	Answers   []WritebackAns `json:"answers,omitempty" field:"readonly" type:"json" title:"Recent answers"`
 	// Definition publication is independent of data/runtime versions.
 	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
@@ -70,6 +71,10 @@ func (w Writeback) Schema() string { return w.Object + "." + w.On }
 // WritebackRequest is the frozen request an effect carries: everything the
 // dispatcher needs without reading records, the secret only by name.
 type WritebackRequest struct {
+	Connection        string         `json:"connection,omitempty"`
+	Confirmation      string         `json:"confirmation,omitempty"`
+	Party             string         `json:"party,omitempty"`
+	Compensates       string         `json:"compensates,omitempty"`
 	Version           int            `json:"version,omitempty"`
 	Object            string         `json:"object,omitempty"`
 	DefinitionVersion int            `json:"definitionVersion,omitempty"`
@@ -134,7 +139,7 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 	if method == "" {
 		method = "POST"
 	}
-	return WritebackRequest{Version: 1, Object: w.Object, DefinitionVersion: ValueDefinitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}, nil
+	return WritebackRequest{Connection: conn.ID, Version: 1, Object: w.Object, DefinitionVersion: ValueDefinitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}, nil
 }
 
 // Fields are what the answer writes onto the record, by the Result mapping.

@@ -21,6 +21,7 @@ type EffectKind struct {
 
 // Effect is one intent for one endpoint and what became of it.
 type Effect struct {
+	Compensates  string          `json:"compensates,omitempty" source:"record"`
 	Applications []AssetBinding  `json:"applications,omitempty" field:"readonly" type:"json"`
 	ID           string          `json:"id" source:"record"` // the idempotency key: <tenant>:<app>:<change id or key>:<endpoint>
 	Endpoint     string          `json:"endpoint" source:"record"`
@@ -29,7 +30,7 @@ type Effect struct {
 	Key          string          `json:"key,omitempty" source:"record"` // the app's key for it
 	Target       string          `json:"target" source:"record"`
 	At           time.Time       `json:"at"`
-	State        string          `json:"state" source:"record"`           // held, pending, retrying, delivered, rejected, failed, discarded
+	State        string          `json:"state" source:"record"`           // held, pending, retrying, unknown, delivered, rejected, failed, discarded
 	Agent        string          `json:"agent,omitempty" source:"record"` // the AI agent that caused a held effect
 	Run          string          `json:"run,omitempty" source:"record"`   // and its run
 	Attempts     int             `json:"attempts"`

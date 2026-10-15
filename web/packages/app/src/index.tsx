@@ -1,3 +1,4 @@
+import {ConfirmationProgress} from "./widgets/ConfirmationProgress";
 import {ProposalReview} from "./widgets/ProposalReview";
 import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
 export { ApplicationRuns, ApplicationRuntimePanel, OperationRunView } from "./automation/application-runs";
@@ -431,7 +432,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   return (
     <>
       <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
-        work={type==="build.function-call"?(view)=><ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={()=>void refresh?.()}/>:advice ? (view) => <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} /> : undefined} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+        work={type==="build.confirmation"?(view)=><ConfirmationProgress type={type} id={view.record.id}/>:type.startsWith("build.")&&type!=="build.function-call"?(view)=><><ConfirmationProgress type={type} id={view.record.id}/>{advice&&<RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields}/>}</>:type==="build.function-call"?(view)=><ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={()=>void refresh?.()}/>:advice ? (view) => <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} /> : undefined} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}
@@ -476,7 +477,7 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 
 export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./automation/agents";
 
-export { NewActions, PayloadFields, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
+export { NewActions, PayloadFields, DeclaredActionForm, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages/pages";
 export { ComposedPage, SectionView, isComposed } from "./pages/sections";
 export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";

@@ -125,6 +125,8 @@ func (b *Build) submitWritebackAnswered(c platform.Caller, s *pb.Submission, now
 				w.Sent++
 			case "rejected":
 				w.Rejected++
+			case "unknown":
+				w.Unknown++
 			default:
 				w.Failed++
 			}
@@ -146,6 +148,15 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 	if json.Unmarshal([]byte(effect.Body), &req) != nil || req.Writeback == "" {
 		return nil
 	}
+	if req.Confirmation != "" {
+		outcome := map[string]string{"delivered": "accepted", "rejected": "refused", "unknown": "unknown", "failed": "refused", "discarded": "refused"}[out.Result]
+		tag := req.Party
+		if req.Compensates != "" {
+			tag += ":compensate"
+		}
+		_, err := platform.Decide(c, b, confirmationSubmission(c, req.Confirmation, confirmationAnswer, effect.ID+":"+out.Result, map[string]any{"tag": tag, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
+		return err
+	}
 	w, ok := platform.Get[Writeback](c, req.Writeback)
 	if !ok {
 		return nil
@@ -161,11 +172,11 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Historical writeback request requires its original unversioned definition")
 	}
 	ans := WritebackAns{Effect: effect.ID, Target: effect.Target, Result: out.Result, Detail: out.Detail, Answer: clipAnswer(out.Answer)}
-	if out.Result != "delivered" && out.Result != "rejected" {
+	if out.Result != "delivered" && out.Result != "rejected" && out.Result != "unknown" {
 		ans.Result = "failed"
 	}
 	payload, _ := json.Marshal(map[string]any{"answer": ans})
-	if _, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "answered:" + effect.ID,
+	if _, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "answered:" + effect.ID + map[bool]string{true: ":unknown"}[out.Result == "unknown"],
 		Target: &pb.EntityRef{Type: WritebackType, Id: w.ID}, Schema: &pb.SchemaRef{Name: SchemaWritebackAnswered, Version: 1}, Payload: payload}, now); err != nil {
 		return err
 	}

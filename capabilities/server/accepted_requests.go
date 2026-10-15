@@ -40,7 +40,7 @@ func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kerne
 	}()
 	s := q.record.GetSubmission()
 	key := fmt.Sprintf("%s:%s#%d", q.caller.App, s.GetIdempotencyKey(), q.n)
-	answer := platform.Answer{Call: q.Target, Action: q.Action, Outcome: "accepted"}
+	answer := platform.Answer{Tag: q.Tag, Call: q.Target, Action: q.Action, Outcome: "accepted"}
 	var ref *pb.EntityRef
 	_, err := d.Attempt(func() (*pb.ChangeRecord, *kernel.Error) {
 		var record *pb.ChangeRecord

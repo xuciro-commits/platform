@@ -160,7 +160,7 @@ func (t *Tenant) sendWriteback(x platform.Effect) platform.Outcome {
 	case err != nil && strings.Contains(err.Error(), errPrivate.Error()):
 		out.Result, out.Detail = "rejected", errPrivate.Error()
 	case err != nil:
-		out.Result, out.Detail = "retry", "no answer (unknown; resent with the same key): "+err.Error()
+		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
 	default:
 		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		resp.Body.Close()

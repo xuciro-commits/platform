@@ -78,6 +78,7 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 // the decision, outside its lock and as the app, within the app's limits, and
 // submits the Answer — its Text the model's — to Reply; a replay asks nothing.
 type Request struct {
+	Tag                string
 	Protocol, Action   string
 	Model              string
 	Target             string // the provider's record the action is about
@@ -98,6 +99,7 @@ type Prompt struct {
 // Answer is how the provider answered a Request: the payload of the Reply action.
 // A member who records an answer themselves gives the same fields.
 type Answer struct {
+	Tag     string `json:"tag,omitempty"`
 	Call    string `json:"call"`             // the request's target at the provider
 	Action  string `json:"action,omitempty"` // the protocol action
 	Outcome string `json:"outcome"`          // accepted or refused; a protocol's events may add their own, e.g. released

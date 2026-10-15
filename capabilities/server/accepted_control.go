@@ -244,7 +244,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		ids := map[string]bool{}
 		effects := make([]*effect, 0, len(states))
 		for _, state := range states {
-			if state.ID == "" || ids[state.ID] || !slices.Contains([]string{"held", "pending", "retrying", "delivered", "failed", "rejected", "discarded"}, state.State) {
+			if state.ID == "" || ids[state.ID] || !slices.Contains([]string{"held", "pending", "retrying", "unknown", "compensated", "delivered", "failed", "rejected", "discarded"}, state.State) {
 				return fmt.Errorf("control effect identity or state differs")
 			}
 			ids[state.ID] = true

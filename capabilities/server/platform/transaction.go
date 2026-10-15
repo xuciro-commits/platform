@@ -19,11 +19,12 @@ const TxnMaxIterations = 1000
 // BusinessTxn is a bounded, single-authority decision. Guards, assignments and
 // iteration predicates all use the original ADR-0101 evaluator.
 type BusinessTxn struct {
-	Subject string        `json:"subject"`
-	Steps   []TxnStep     `json:"steps"`
-	Guard   *Expr         `json:"guard,omitempty"`
-	Message string        `json:"message,omitempty"`
-	Reads   *RuleReadSpec `json:"reads,omitempty"`
+	Subject      string        `json:"subject"`
+	Steps        []TxnStep     `json:"steps"`
+	Guard        *Expr         `json:"guard,omitempty"`
+	Message      string        `json:"message,omitempty"`
+	Reads        *RuleReadSpec `json:"reads,omitempty"`
+	Confirmation *Confirmation `json:"confirmation,omitempty"`
 }
 
 type TxnStep struct {

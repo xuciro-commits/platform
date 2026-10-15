@@ -340,7 +340,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			Body: after.Error + ". Retry it in Settings → Automation once the cause is fixed.",
 			Key:  "failed:" + after.ID}, at, platform.Recipient{AppRole: Admin})
 	}
-	if settled(after.State) && before.State != "discarded" {
+	if (settled(after.State) || after.State == "unknown") && before.State != "discarded" {
 		if err := t.stageEffectAnswer(draft, after.Effect, out, usage, at); err != nil {
 			if t.quarantined() {
 				return

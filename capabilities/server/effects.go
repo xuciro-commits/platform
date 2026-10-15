@@ -86,7 +86,7 @@ func effectBackoff(id string, attempts int) time.Duration {
 }
 
 func settled(state string) bool {
-	return state == "delivered" || state == "rejected" || state == "failed" || state == "discarded"
+	return state == "delivered" || state == "rejected" || state == "failed" || state == "discarded" || state == "compensated"
 }
 
 // emit turns an accepted decision into effects for every endpoint subscribed to
@@ -217,7 +217,7 @@ func (t *Tenant) Effects(now time.Time) []platform.Effect {
 	out := []platform.Effect{}
 	for i := len(t.outbound) - 1; i >= 0; i-- {
 		x := t.outbound[i].Effect
-		if now.Sub(x.At) > bodyKept {
+		if now.Sub(x.At) > bodyKept && x.State != "unknown" {
 			x.Body = ""
 		}
 		out = append(out, x)
@@ -302,7 +302,11 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		}
 		// A held effect waits for its approval outside the endpoint's order.
 		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && !settled(x.State) && x.State != "held" })
-		if i < 0 || t.outbound[i].sending || t.outbound[i].Due.After(now) {
+		if i >= 0 && t.outbound[i].State == "unknown" {
+			blocked := t.outbound[i].ID
+			i = slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && x.Compensates == blocked && x.State == "pending" })
+		}
+		if i < 0 || t.outbound[i].State == "unknown" || t.outbound[i].sending || t.outbound[i].Due.After(now) {
 			continue
 		}
 		t.outbound[i].sending = true
@@ -388,7 +392,7 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 	case err != nil && strings.Contains(err.Error(), errPrivate.Error()):
 		out.Result, out.Detail = "rejected", errPrivate.Error()
 	case err != nil:
-		out.Result, out.Detail = "retry", "no answer (unknown; resent with the same key): "+err.Error()
+		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
 	default:
 		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		resp.Body.Close()
@@ -532,6 +536,8 @@ func markEffect(x *effect, o platform.Outcome, at time.Time) {
 		x.State = "delivered"
 	case o.Result == "rejected":
 		x.State = "rejected"
+	case o.Result == "unknown":
+		x.State = "unknown"
 	case x.Attempts-x.since >= effectRetry.Attempts:
 		x.State = "failed"
 	default:
@@ -548,6 +554,7 @@ const (
 	SchemaEffectRetry    = "platform.effect.retry"
 	SchemaEffectDiscard  = "platform.effect.discard"
 	SchemaEffectApprove  = "platform.effect.approve"
+	SchemaEffectResolve  = "platform.effect.resolve"
 )
 
 func effectActions() []platform.Action {
@@ -568,6 +575,9 @@ func effectActions() []platform.Action {
 			Description: "Stop sending to the endpoint; what it has not received is discarded.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectRetry, Target: EffectType, Capability: "integrations", Title: "Retry effect",
 			Description: "Send a failed or rejected effect again, with the same key.", Payload: []platform.Field{}, Roles: admin},
+		{Schema: SchemaEffectResolve, Target: EffectType, Capability: "integrations", Title: "Resolve unknown delivery",
+			Description: "Record checked external evidence before resolving an unknown outcome; the original effect is not sent again.", Roles: admin,
+			Payload: []platform.Field{{Name: "outcome", Type: "string", Required: true, Choices: []string{"delivered", "rejected"}, Description: "Confirmed external result"}, {Name: "reason", Type: "string", Required: true, Description: "Evidence supporting the decision"}, {Name: "answer", Type: "json", Description: "Confirmed external answer"}}},
 		{Schema: SchemaEffectDiscard, Target: EffectType, Capability: "integrations", Title: "Discard effect",
 			Description: "Give up on an effect not yet delivered.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectApprove, Target: EffectType, Capability: "integrations", Title: "Approve effect",
@@ -585,6 +595,12 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 	if s.GetSchema().GetName() == SchemaEndpointRemove {
 		if !known {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		t.opsMu.Lock()
+		unknown := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.Endpoint == id && x.State == "unknown" })
+		t.opsMu.Unlock()
+		if unknown {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Resolve unknown deliveries before removing their endpoint")
 		}
 		return func(*pb.ChangeRecord) {
 			t.opsMu.Lock()
@@ -677,6 +693,9 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 		}, nil
 	}
 	if s.GetSchema().GetName() == SchemaEffectDiscard {
+		if x != nil && x.State == "unknown" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
+		}
 		if x == nil || settled(x.State) {
 			return nil, notFound
 		}
@@ -692,6 +711,21 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 				t.agents.AgentEffectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
 			}
 			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "discarded by " + c.ID}, now, c.Replaying)
+		}, nil
+	}
+	if s.GetSchema().GetName() == SchemaEffectResolve {
+		var input struct {
+			Outcome, Reason string
+			Answer          json.RawMessage
+		}
+		if x == nil || x.State != "unknown" || x.sending || c.Agent || json.Unmarshal(s.GetPayload(), &input) != nil || !slices.Contains([]string{"delivered", "rejected"}, input.Outcome) || strings.TrimSpace(input.Reason) == "" || len(input.Reason) > 4096 || len(input.Answer) > 64<<10 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An unknown delivery needs a human result and bounded evidence")
+		}
+		return func(*pb.ChangeRecord) {
+			t.opsMu.Lock()
+			x.State, x.Error, x.Last = input.Outcome, "Resolved by "+c.ID+": "+input.Reason, now
+			t.opsMu.Unlock()
+			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: input.Outcome, Detail: x.Error, Answer: input.Answer}, now, c.Replaying)
 		}, nil
 	}
 	if x == nil || (x.State != "failed" && x.State != "rejected") {

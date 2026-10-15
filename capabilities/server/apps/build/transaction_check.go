@@ -188,6 +188,9 @@ func (b *Build) checkTransactions(object Object) error {
 		if txn == nil {
 			continue
 		}
+		if err := b.checkConfirmation(txn.Confirmation, object); err != nil {
+			return err
+		}
 		if object.Numbering != nil {
 			return fmt.Errorf("transaction sequence steps replace legacy record-count numbering")
 		}

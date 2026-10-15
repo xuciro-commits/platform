@@ -1,6 +1,6 @@
 // Settings: owned work, integrations, app settings and the audit trail (ADR-0013, ADR-0014).
 import type { Api } from "@platform/kernel";
-import { useHost, useReadQuery as useRead } from "@platform/app";
+import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Dialog, Input, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { useAdmin, when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
@@ -108,6 +108,7 @@ export function Integrations() {
 // Webhook endpoints and their effects (ADR-0014): events go out signed, at least
 // once with a stable key; outcomes are journaled, a replay never sends.
 function Webhooks() {
+	const host=useHost(),[resolving,setResolving]=useState<string>();
   const endpoints = useRead<EndpointView[]>("/v1/endpoints");
   const effects = useRead<Effect[]>("/v1/effects");
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
@@ -121,7 +122,7 @@ function Webhooks() {
   const kinds = apps.flatMap((a) => (a.emits ?? []).map((e) => ({ id: `${a.id}/${e.name}`, title: e.title })));
   const events = [...apps.flatMap((a) => a.capabilities.flatMap((c) => c.actions)).filter((x) => !x.startsWith("platform.")),
     ...protocols.flatMap((p) => (p.events ?? []).map((e) => `${p.id}#${e.name}`))];
-  const tone = (s: string) => (({ delivered: "success", retrying: "warning", pending: "info", held: "warning", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
+  const tone = (s: string) => (({ delivered: "success", compensated:"success", unknown:"warning", retrying: "warning", pending: "info", held: "warning", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
   const effectColumns: ColumnDef<Effect, any>[] = [
     { accessorKey: "at", header: t("Event at"), meta: { width: 160 }, cell: (c) => when(c.getValue()) },
     { accessorKey: "endpoint", header: t("Endpoint"), meta: { width: 110 } },
@@ -133,6 +134,7 @@ function Webhooks() {
     { accessorKey: "due", header: t("Next"), meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
     { accessorKey: "error", header: t("Last answer"), meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
     { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
+      {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
       {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decideOn("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
       {x.state === "held" && <Button size="sm" variant="primary" onClick={() => void decideOn("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
       {(x.state === "held" || x.state === "pending" || x.state === "retrying") &&
@@ -141,6 +143,7 @@ function Webhooks() {
   ];
   return (
     <>
+      {resolving&&host.action("platform.effect.resolve")&&<Panel title={t("Resolve unknown delivery")}><DeclaredActionForm declared={host.action("platform.effect.resolve")!} target={{type:"platform.effect",id:resolving}} revision={0} initial={{outcome:"delivered"}} onCancel={()=>setResolving(undefined)} onCompleted={()=>{setResolving(undefined);void effects.refetch();}} enabled/></Panel>}
       <div className="mb-1 mt-5 flex items-center gap-2">
         <h2 className="text-sm font-semibold">{t("Endpoints")}</h2>
         <span className="text-xs text-muted">{t("Webhooks send events and effects signed (Standard Webhooks); email endpoints mail members their notifications. At least once, with a key receivers deduplicate by.")}</span>
