@@ -17,7 +17,7 @@ func TestRuleSugarMigrationPreservesFrozenBytes(t *testing.T) {
 	if err := b.normalizeObjectRules(&o); err != nil {
 		t.Fatal(err)
 	}
-	if o.Published != raw || o.Fields[1].FormulaExpr == nil || o.Fields[1].Formula != "" || o.Actions[0].Conditions[0].Expr == nil {
+	if o.Published != raw || o.Fields[1].FormulaExpr == nil || o.Fields[1].Formula != "" || len(o.Actions[0].Conditions) > 0 || o.Actions[0].Transaction == nil || o.Actions[0].Transaction.Guard == nil {
 		t.Fatal("migration rewrote frozen bytes or retained old writer")
 	}
 	var table Table

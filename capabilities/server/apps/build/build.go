@@ -1228,6 +1228,11 @@ func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
 func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b, b.conditionLookup) }
 
 func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
+	creation := o.CreateTransaction
+	var creationError error
+	if creation == nil && o.Numbering != nil {
+		creation, creationError = compileLegacyNumbering(o)
+	}
 	// StructOf interns identical shapes. The entity identity keeps two named
 	// objects distinct, just as two named Go record types are distinct; this
 	// tag adds no JSON field and stays stable across draft/publication/restore.
@@ -1326,8 +1331,35 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		}
 	}
 	std, scope, roles := access(o)
-	return platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
+	entity := platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
 		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model, lookup), ValidateAt: numberingOf(o, model)}
+	entity.CreateTxn = creation
+	if creationError != nil {
+		legacy := entity.ValidateAt
+		entity.ValidateAt = func(c platform.Caller, record any, now time.Time) *kernel.Error {
+			if c.Replaying && legacy != nil {
+				return legacy(c, record, now)
+			}
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", creationError.Error())
+		}
+	}
+	if creation != nil {
+		if legacy := entity.ValidateAt; legacy != nil {
+			entity.ValidateAt = func(c platform.Caller, record any, now time.Time) *kernel.Error {
+				if c.Replaying {
+					return legacy(c, record, now)
+				}
+				return nil
+			}
+		}
+		entity.ApplyCreateTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error {
+			if creates == nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions need their original owner")
+			}
+			return creates.transact(c, r, creation, now)
+		}
+	}
+	return entity
 }
 
 // page is the list and detail page a defined object comes with: the same

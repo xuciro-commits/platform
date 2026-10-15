@@ -243,6 +243,7 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 
 func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
 	bindings := map[string]dispatchBindings{}
+	effects := map[string]map[string]platform.AssetRef{}
 	for i, asset := range assets {
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
@@ -252,6 +253,15 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			return nil, err
 		}
 		for _, action := range object.Actions {
+			if action.Transaction != nil {
+				refs, err := b.txnEffectBindings(action.Transaction)
+				if err != nil {
+					return nil, err
+				}
+				if len(refs) > 0 {
+					effects[asset.Ref.Name+"."+action.Name] = refs
+				}
+			}
 			if action.Transaction == nil || action.Transaction.Dispatch == nil {
 				continue
 			}
@@ -261,7 +271,16 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			}
 			bindings[asset.Ref.Name+"."+action.Name] = binding
 		}
-		if len(object.DispatchCommands) > 0 {
+		if object.CreateTransaction != nil {
+			refs, err := b.txnEffectBindings(object.CreateTransaction)
+			if err != nil {
+				return nil, err
+			}
+			if len(refs) > 0 {
+				effects[asset.Ref.Name+".create"] = refs
+			}
+		}
+		if objectHasIntegrations(object) {
 			if err := mapDispatchIntegrations(&object, b.integrationName); err != nil {
 				return nil, err
 			}
@@ -278,14 +297,20 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 	}
 	for i, asset := range assets {
 		binding, known := bindings[asset.Ref.Name]
-		if asset.Ref.Kind != platform.AssetAction || !known {
+		refs := effects[asset.Ref.Name]
+		if asset.Ref.Kind != platform.AssetAction || !known && len(refs) == 0 {
 			continue
 		}
 		var body map[string]json.RawMessage
 		if err := json.Unmarshal(asset.Body, &body); err != nil {
 			return nil, err
 		}
-		body["dispatchBindings"] = platform.Raw(binding)
+		if known {
+			body["dispatchBindings"] = platform.Raw(binding)
+		}
+		if len(refs) > 0 {
+			body["transactionBindings"] = platform.Raw(refs)
+		}
 		asset.Body = platform.Raw(body)
 		var err error
 		assets[i], err = platform.WithDependencies(asset)
@@ -300,6 +325,18 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 // execution resolve those names through the same target inventory as sources
 // and writebacks, without changing the candidate's frozen bytes.
 func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, string) (string, error)) error {
+	var failure error
+	mapTxn := func(txn *platform.BusinessTxn) {
+		if txn == nil {
+			return
+		}
+		walkBusinessTxn(txn, func(step platform.TxnStep) {
+			if failure == nil && step.Effect != nil {
+				step.Effect.Writeback, failure = resolve(platform.AssetWriteback, step.Effect.Writeback)
+			}
+		})
+	}
+	mapTxn(object.CreateTransaction)
 	for i := range object.DispatchCommands {
 		name, err := resolve(platform.AssetWriteback, object.DispatchCommands[i].Writeback)
 		if err != nil {
@@ -308,6 +345,7 @@ func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, st
 		object.DispatchCommands[i].Writeback = name
 	}
 	for _, action := range object.Actions {
+		mapTxn(action.Transaction)
 		if action.Transaction == nil || action.Transaction.Dispatch == nil {
 			continue
 		}
@@ -330,11 +368,42 @@ func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, st
 			*item.value = value
 		}
 	}
-	return nil
+	return failure
+}
+
+func objectHasIntegrations(object Object) bool {
+	found := len(object.DispatchCommands) > 0
+	visit := func(txn *platform.BusinessTxn) {
+		if txn != nil {
+			walkBusinessTxn(txn, func(step platform.TxnStep) { found = found || step.Effect != nil })
+		}
+	}
+	visit(object.CreateTransaction)
+	for _, action := range object.Actions {
+		visit(action.Transaction)
+	}
+	return found
+}
+
+func (b *Build) txnEffectBindings(txn *platform.BusinessTxn) (map[string]platform.AssetRef, error) {
+	refs := map[string]platform.AssetRef{}
+	var failure error
+	walkBusinessTxn(txn, func(step platform.TxnStep) {
+		if failure != nil || step.Effect == nil {
+			return
+		}
+		name, err := b.integrationName(platform.AssetWriteback, step.Effect.Writeback)
+		if err != nil {
+			failure = err
+			return
+		}
+		refs[step.Name] = platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: name}
+	})
+	return refs, failure
 }
 
 func (b *Build) dispatchSchemaObject(object Object) (Object, error) {
-	if len(object.DispatchCommands) == 0 {
+	if !objectHasIntegrations(object) {
 		return object, nil
 	}
 	var portable Object

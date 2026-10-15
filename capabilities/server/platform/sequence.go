@@ -21,15 +21,27 @@ type Sequence struct {
 	// {year} the year of the document's date. Default "{n}".
 	Pattern string
 	Yearly  bool // the counter starts again at 1 in each year of the document's date
+	// SeedRecord and SeedField retain the old document-number waterline only
+	// when migrating a record-count range to this named sequence. The original
+	// sequence owner reads it once, before the counter's first accepted take.
+	SeedRecord string `json:",omitempty"`
+	SeedField  string `json:",omitempty"`
 }
 
-var sequencePattern = regexp.MustCompile(`\{(n|n:[1-9]|year)\}`)
+var sequencePattern = regexp.MustCompile(`\{(n|n:[1-9][0-9]*|year)\}`)
 
 // Check tells whether the sequence is well declared.
 func (s Sequence) Check() error {
 	rest := sequencePattern.ReplaceAllString(s.Pattern, "")
-	if s.Name == "" || strings.ContainsAny(rest, "{}") || s.Pattern != "" && !strings.Contains(s.Pattern, "{n") {
+	if s.Name == "" || strings.ContainsAny(rest, "{}") || s.Pattern != "" && !strings.Contains(s.Pattern, "{n") || (s.SeedRecord == "") != (s.SeedField == "") || s.SeedRecord != "" && strings.Count(s.Pattern, "{n") != 1 {
 		return fmt.Errorf("sequence %q: a name, and a pattern with {n} and no unknown placeholder", s.Name)
+	}
+	for _, part := range sequencePattern.FindAllString(s.Pattern, -1) {
+		if strings.HasPrefix(part, "{n:") {
+			if _, err := strconv.Atoi(part[3 : len(part)-1]); err != nil {
+				return fmt.Errorf("sequence %q: invalid number width", s.Name)
+			}
+		}
 	}
 	return nil
 }
@@ -47,7 +59,8 @@ func (s Sequence) Format(year, n int) string {
 		case p == "{n}":
 			return strconv.Itoa(n)
 		}
-		return fmt.Sprintf("%0*d", int(p[3]-'0'), n)
+		width, _ := strconv.Atoi(p[3 : len(p)-1])
+		return fmt.Sprintf("%0*d", width, n)
 	})
 }
 

@@ -294,6 +294,23 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 			}
 		}
 	}
+	if err := b.migrateObjectTransactions(o); err != nil {
+		return err
+	}
+	for i := range o.Actions {
+		if err := b.normalizeTransaction(*o, &o.Actions[i], lookup); err != nil {
+			return err
+		}
+	}
+	if o.CreateTransaction != nil {
+		action := Action{Name: "creation", Transaction: o.CreateTransaction}
+		for _, field := range o.Fields {
+			action.Inputs = append(action.Inputs, Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
+		}
+		if err := b.normalizeTransaction(*o, &action, lookup); err != nil {
+			return err
+		}
+	}
 	return b.checkObjectRules(*o)
 }
 func (b *Build) checkObjectRules(o Object) error {

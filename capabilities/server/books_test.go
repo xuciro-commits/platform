@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -132,7 +133,10 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 		// Lose the effect answer after core commits the reversal, then recover.
 		var queued platform.Effect
 		for _, effect := range tn.Effects(at) {
-			if effect.Event == "journal/goodsreceipt.cancel" {
+			var reversal struct {
+				ID string `json:"reverse"`
+			}
+			if effect.Target == "build.goodsreceipt/gr1" && json.Unmarshal([]byte(effect.Body), &reversal) == nil && reversal.ID != "" {
 				queued = effect
 			}
 		}
@@ -204,5 +208,24 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 	}
 
 	CheckReplay(t, tn, journal, compose)
-
+	if !durable {
+		// An old immutable Journal now executes through the transaction owner;
+		// the historical event planner must not enqueue a second entry for it.
+		restored := compose()
+		if err := restored.Replay(journal); err != nil {
+			t.Fatal(err)
+		}
+		tn = restored
+		capture(tn)
+		submit("post-restored", build.ID, "build.goodsreceipt.post", "build.goodsreceipt", "next", `{}`, at.AddDate(1, 0, 0))
+		count := 0
+		for _, effect := range tn.Effects(at) {
+			if effect.Endpoint == build.BooksEndpoint && effect.Target == "build.goodsreceipt/next" {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("restored action produced %d journal intents", count)
+		}
+	}
 }

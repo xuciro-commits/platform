@@ -311,6 +311,9 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 		}
 		if i := slices.IndexFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Name == verb }); i >= 0 {
 			tr := e.Lifecycle.Transitions[i]
+			if c.Replaying && tr.LegacyReplay != nil {
+				tr = *tr.LegacyReplay
+			}
 			var failure *kernel.Error
 			if tr.Txn != nil {
 				if !c.Staging() || c.Replaying || tr.ApplyTxn == nil || tr.After != nil {
@@ -393,7 +396,10 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 			return nil, err
 		}
 	}
-	if to := status.String(); to == from && !slices.Contains(t.To, from) {
+	if to := status.String(); t.Txn != nil {
+		// The transaction owns its subject's state assignment. Approval-only
+		// moves retain their original transition path above.
+	} else if to == from && !slices.Contains(t.To, from) {
 		status.SetString(t.To[0])
 	} else if !slices.Contains(t.To, to) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // Do chose a status the transition does not reach
@@ -510,10 +516,25 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 		}
 	}
 	value := v.Elem().Interface()
-	if err := c.rt.Check(c, value); err != nil {
-		return nil, err
+	if verb != "create" || e.CreateTxn == nil || c.Replaying {
+		if err := c.rt.Check(c, value); err != nil {
+			return nil, err
+		}
 	}
-	return func(r *pb.ChangeRecord) { c.rt.Put(c, r, value) }, nil
+	return func(r *pb.ChangeRecord) {
+		c.rt.Put(c, r, value)
+		if verb == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying {
+			if err := e.ApplyCreateTxn(c, r, now); err != nil {
+				c.FailDecision(err)
+				return
+			}
+			if final, exists := c.rt.Get(c, t, id); exists {
+				if err := c.rt.Check(c, final); err != nil {
+					c.FailDecision(err)
+				}
+			}
+		}
+	}, nil
 }
 
 // inScope says whether the caller may act on a record: only one they may read

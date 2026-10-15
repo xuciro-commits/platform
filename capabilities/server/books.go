@@ -19,8 +19,9 @@ import (
 // no period is open for it, delivered once per decision - so the general
 // ledger lags the business by a tick and never disagrees with it.
 
-// journalEffects plans the entry of one accepted decision.
-func (t *Tenant) journalEffects(e platform.Event) []platform.Effect {
+// legacyJournalEffects retains the original intent identity for historical
+// raw-input recovery. Current transactions save their own frozen journal intent.
+func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
 	if e.App != build.ID || t.app(platform.BooksApp) == nil {
 		return nil
 	}
@@ -156,18 +157,43 @@ func (t *Tenant) bookBody(entry map[string]any, typ, id, reverses string) string
 	if reverses == "" {
 		return build.EntryBody(entry)
 	}
+	change := ""
 	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
 	if et := t.records.types[typ]; et != nil {
 		if row := et.rows.get(id); row != nil {
 			for i := len(row.history) - 1; i >= 0; i-- {
 				h := row.history[i]
 				if h.Schema == typ+"."+reverses {
-					raw, _ := json.Marshal(map[string]any{"reverse": "jnl-" + h.Change, "date": entry["date"]})
-					return string(raw)
+					change = h.Change
+					break
 				}
 			}
 		}
 	}
-	return `{}`
+	t.records.mu.Unlock()
+	if change == "" {
+		return `{}`
+	}
+	original := ""
+	t.opsMu.Lock()
+	for _, intent := range t.outbound {
+		if intent.Endpoint != build.BooksEndpoint || intent.Target != typ+"/"+id || intent.Key != change && !strings.HasPrefix(intent.Key, change+":") {
+			continue
+		}
+		var journal platform.Journal
+		if json.Unmarshal([]byte(intent.Body), &journal) != nil || journal.ID == "" || len(journal.Lines) == 0 {
+			continue
+		}
+		if original != "" {
+			t.opsMu.Unlock()
+			return `{"error":"The original action produced multiple journal entries; its reversal is ambiguous"}`
+		}
+		original = journal.ID
+	}
+	t.opsMu.Unlock()
+	if original == "" {
+		original = "jnl-" + change
+	}
+	raw, _ := json.Marshal(map[string]any{"reverse": original, "date": entry["date"]})
+	return string(raw)
 }

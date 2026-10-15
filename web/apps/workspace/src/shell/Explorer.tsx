@@ -2,7 +2,7 @@
 // read, and its records with the host's search, sort and pages. One place to
 // browse the Ontology as data; the definition itself opens in the Ontology app.
 import { useHost, useOpenRecord, OpenIn } from "@platform/app";
-import { Button, Input, PageHeader, RecordList, cn, t } from "@platform/ui";
+import { Button, Input, PageHeader, RecordList, Select, cn, t } from "@platform/ui";
 import { Compass } from "lucide-react";
 import { useState } from "react";
 
@@ -21,8 +21,8 @@ export function ObjectExplorer({ type: requested }: { type?: string }) {
     <PageHeader title={t("Object Explorer")} />
     <p className="text-sm text-muted">{t("No entity types in apps you hold a role in.")}</p>
   </>;
-  return <div className="grid h-[calc(100dvh-120px)] grid-cols-[260px_minmax(0,1fr)] gap-4">
-    <aside className="grid content-start gap-2 overflow-hidden border-r border-border pr-3">
+  return <div className="grid h-[calc(100dvh-120px)] grid-cols-1 gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
+    <aside className="hidden content-start gap-2 overflow-hidden border-r border-border pr-3 md:grid">
       <div className="flex items-center gap-2 text-sm font-semibold"><Compass className="size-4" />{t("Object types")}<span className="ml-auto text-xs font-normal text-muted">{entities.length}</span></div>
       <Input type="search" aria-label={t("Filter object types")} placeholder={t("Filter…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
       <nav aria-label={t("Object types")} className="grid gap-2 overflow-auto">
@@ -36,6 +36,11 @@ export function ObjectExplorer({ type: requested }: { type?: string }) {
       </nav>
     </aside>
     <div className="min-w-0">
+      <label className="mb-3 grid gap-1 text-xs md:hidden">{t("Object type")}
+        <Select value={chosen} onChange={event => setPicked(event.target.value)}>
+          {[...groups.entries()].map(([app, list]) => <optgroup key={app} label={app}>{list.map(entity => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</optgroup>)}
+        </Select>
+      </label>
       <PageHeader title={entity?.title ?? chosen} description={entity?.description || chosen}
         actions={<OpenIn type={chosen} exclude={["explorer"]} />} />
       <RecordList source={source} type={chosen} height="calc(100dvh - 250px)" onOpen={(r) => openRecord({ type: chosen, id: r.id })} />

@@ -29,11 +29,11 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 - `web/packages/build/src/ontology/data-source.tsx` 中数据源的 `object/key/mapping` 直写分支在数据集目标普及后可收（ADR-0071 §减法）：等探针三源都改为 dataset 目标后，删掉"直接写对象"的 profile 分支与 `Source.MapRows` 的对象路径；`applyRows` 只剩管道一个入口（匹配规则随之只有一个调用点）。
 - `enterprise.slice.import`（ADR-0068 跨租户联邦）与 `enterprise.slice.sync`（ADR-0073）并列保留；两者形状一致，若联邦场景一年内未启用，收掉 import。
 
-## 4. 构建器旧动作表达（ADR-0100，已冻结，尚未删除）
+## 4. 构建器旧动作表达（ADR-0100，已替换）
 
-`buildapi.Action` 的 `Sets`、`Creates`、`Posts`、`Journal`、`Reverses` 及 `Object.Numbering` 的记录计数编号冻结为既有能力，不再承载新能力。新增多对象变更只用 `Action.Transaction`；编译拒绝将事务与旧变更字段或旧计数编号混用。最小切片接管 create/update/sequence，复用原生成记录动作的授权、字段与记录校验及宿主命名序列；它不走 `stored` 的相关记录复算，也不走 `numberingOf` 的记录计数。
+新保存和供编辑的对象将 `Sets`、`Creates`、`Posts`、`Journal`、`Reverses`、`Conditions`、`Reads` 与 `To/ToInput` 转为 `Action.Transaction` 后移除原字段。`Object.Numbering` 转为 `CreateTransaction` 与命名序列，首次取号读取已有最大号码，接受后只用序列 owner。旧的分散动作编辑器及编号编辑器已删除，状态图也只读写事务。
 
-退出路径：旧定义逐一迁移到事务步骤后，删除对应 `actions.go:stored`、`creates.go`、`posts.go` 和旧编号表达；post/journal 迁移仍需各自 owner 的后续步骤支持，本块不实现。旧 `Published`、日志与定义字节保持原样，既有动作继续读取、运行与历史恢复；迁移完成前保留这些义务，不建立新旧双写路径。新赋值源由 ADR-0101 的 Expr 接管，`setSource` 仅保留冻结旧相关创建的输入适配；事务中的旧赋值输入先降低为 Expr，再走同一求值器；逐步骤写入沿 `Ledger.ApplyTxnRecord` 调用原 `standard`，不另造授权或记录校验实现。
+旧 `Published`、日志与定义字节保持原样，旧发布当前执行在内存编译成同一个事务。原 `take/stored/create/post/numberingOf` 仅保留为历史 raw-input 日志的 `LegacyReplay` 输入适配，入口拒绝普通调用；不能删除它们而破坏已有日志恢复，退出条件是这些旧输入不再有恢复义务。已保存的接受结果只应用原映像。post 与新赋值复用唯一 Expr 引擎；逐步骤写入沿 `Ledger.ApplyTxnRecord` 调用原 `standard`，不另造授权、记录校验或出站队列。
 
 ## 5. 四套规则求值（ADR-0101，已替换）
 

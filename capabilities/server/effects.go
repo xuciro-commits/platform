@@ -90,10 +90,10 @@ func settled(state string) bool {
 	return state == "delivered" || state == "rejected" || state == "failed" || state == "discarded" || state == "compensated"
 }
 
-// emit turns an accepted decision into effects for every endpoint subscribed to
-// one of its names. It runs inside the input and inside replay.
+// emit reconstructs effects for a historical input without a saved event plan.
+// New decisions save their transaction intents and subscription plan privately.
 func (t *Tenant) emit(e platform.Event, names []string) {
-	planned := t.eventEffects(e, names)
+	planned := append(t.eventEffects(e, names), t.legacyJournalEffects(e)...)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, x := range planned {
@@ -106,7 +106,7 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 // them. A staged result saves these bytes before the journal commit.
 func (t *Tenant) eventEffects(e platform.Event, names []string) []platform.Effect {
 	s := e.Record.GetSubmission()
-	planned := append(t.writebackEffects(e), t.journalEffects(e)...)
+	planned := t.writebackEffects(e)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, ep := range t.endpoints {

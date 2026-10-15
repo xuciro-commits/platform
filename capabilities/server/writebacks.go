@@ -40,10 +40,11 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	out := []IntegrationEffect{}
 	for _, effect := range t.Effects(now) {
 		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		books := strings.HasPrefix(effect.Event, "journal/") && effect.Endpoint == build.BooksEndpoint
+		books := (strings.HasPrefix(effect.Event, "journal/") || effect.Event == build.ID+"/journal") && effect.Endpoint == build.BooksEndpoint
 		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
 		dispatch := effect.Event == build.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		if effect.App != build.ID || !writeback && !books && !confirmation && !dispatch {
+		transaction := effect.Event == build.ID+"/transaction" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		if effect.App != build.ID || !writeback && !books && !confirmation && !dispatch && !transaction {
 			continue
 		}
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
@@ -85,7 +86,7 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 		if err != nil {
 			continue
 		}
-		if w.On == "confirmation" || w.On == "dispatch" || w.Schema() != schema {
+		if w.On == "confirmation" || w.On == "dispatch" || w.On == "transaction" || w.Schema() != schema {
 			continue
 		}
 		conn, ok := platform.Get[build.Connection](c, w.Connection)

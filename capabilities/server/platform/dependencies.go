@@ -217,6 +217,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			add(info.ExtensionSource.Base.Ref)
 		}
 		var declaration struct {
+			Creation    *BusinessTxn  `json:"createTransaction"`
 			Reads       *RuleReadSpec `json:"reads"`
 			Constraints []Constraint  `json:"constraints"`
 			Sets        []RecordSet   `json:"sets"`
@@ -237,6 +238,28 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		readSpec(declaration.Reads)
+		if declaration.Creation != nil {
+			var visit func(TxnStep)
+			visit = func(step TxnStep) {
+				if step.Target.Type != "" {
+					addObject(step.Target.Type)
+				}
+				if step.Call != nil {
+					add(step.Call.Ref)
+				}
+				if step.Link != nil {
+					add(step.Link.Binding.Ref)
+				}
+				if step.ForEach != nil {
+					for _, nested := range step.ForEach.Steps {
+						visit(nested)
+					}
+				}
+			}
+			for _, step := range declaration.Creation.Steps {
+				visit(step)
+			}
+		}
 		constraints := append(slices.Clone(info.Constraints), declaration.Constraints...)
 		for _, constraint := range constraints {
 			readSpec(constraint.Reads)
@@ -279,6 +302,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 					}
 				}
 				step = func(s TxnStep) {
+					if s.Call != nil {
+						add(s.Call.Ref)
+					}
 					if s.Target.Type != "" && s.Target.Type != asset.Ref.Name {
 						addObject(s.Target.Type)
 					}
@@ -380,6 +406,15 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 					add(*ref)
 				}
 			}
+		}
+		var transaction struct {
+			Bindings map[string]AssetRef `json:"transactionBindings"`
+		}
+		if err := json.Unmarshal(asset.Body, &transaction); err != nil {
+			return out, err
+		}
+		for _, ref := range transaction.Bindings {
+			add(ref)
 		}
 		capability("action", action.Schema, CapabilityAuthoritative, action.Roles, CapabilityFieldsSchema(action.Payload), ValueSchema{}, action.Payload)
 	case AssetObservation:
@@ -648,7 +683,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 				add(AssetRef{App: asset.Ref.App, Kind: AssetDataset, Name: step.Dataset})
 			}
 		}
-		if asset.Ref.Kind == AssetWriteback && !slices.Contains([]string{"", "confirmation", "dispatch"}, integration.On) {
+		if asset.Ref.Kind == AssetWriteback && !slices.Contains([]string{"", "confirmation", "dispatch", "transaction"}, integration.On) {
 			ref := object(integration.Object)
 			ref.Kind = AssetAction
 			ref.Name = integration.Object + "." + integration.On

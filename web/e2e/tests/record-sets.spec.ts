@@ -25,6 +25,7 @@ test("builder publishes an ordered set and an operator splits its records atomic
   ]};
   await builder.open(page,`/action-type?id=${batch.id}&action=split`);
   await page.getByRole("button",{name:"Transaction",exact:true}).click();
+  await page.getByRole("button",{name:"Transaction source",exact:true}).click();
   const input=page.getByRole("textbox",{name:"Transaction definition",exact:true});
   await input.fill("{");
   await expect(page.getByText("Enter valid JSON. The original draft is retained.",{exact:true})).toBeVisible();

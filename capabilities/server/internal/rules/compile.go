@@ -263,6 +263,20 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		good = arity(2, 32) && all("boolean") && e.Kind == "boolean"
 	case "not":
 		good = arity(1, 1) && all("boolean") && e.Kind == "boolean"
+	case "coalesce":
+		good = arity(2, 32) && all(e.Kind) && e.Kind != "set"
+		object := ""
+		for _, arg := range args {
+			if arg.Object != "" {
+				if object != "" && object != arg.Object {
+					return Type{}, fail("reference", at, "declared reference objects differ")
+				}
+				object = arg.Object
+			}
+		}
+		if good {
+			return Type{Kind: e.Kind, Object: object, Currency: currency}, nil
+		}
 	case "empty", "not-empty", "is-null", "is-not-null":
 		good = arity(1, 1) && e.Kind == "boolean"
 	case "=", "!=", "<", "<=", ">", ">=":

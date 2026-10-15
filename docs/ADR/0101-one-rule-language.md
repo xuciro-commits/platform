@@ -41,6 +41,7 @@ type Expr struct {
 | **比较** | `= != < <= > >=` | 同类型（或唯一声明的提升） | boolean |
 | **逻辑** | `and or not` | boolean；`and`/`or` 短路 | boolean |
 | **空值** | `empty` `not-empty` `is-null` `is-not-null` | 任意 | boolean |
+| **缺省值** | `coalesce` | 同类型，按顺序读取；缺失或 null 才读取下一项，被遮蔽或错误仍拒绝 | 首个非缺失、非 null 的值；规范主人本 ADR |
 | **算术** | `+ - * /` `negate` `abs` `round` `min` `max` | integer/decimal/money | 同类型 |
 | **文本** | `concat` `lower` `upper` `trim` `contains` `starts-with` `ends-with` `length` `replace` `matches` | text；`matches` 的模式是至多 256 字节的 RE2 字面量，整串匹配，发布期拒绝非法模式（规范主人 ADR-0102） | text/boolean/integer |
 | **显式转换** | `parse-decimal` `parse-number` | text；无效、空白、超预算或非有限值明确拒绝 | decimal/number |
@@ -81,6 +82,7 @@ type Expr struct {
 - 类型必须**显式**且可静态推导：比较两侧类型必须一致或存在唯一声明的提升（integer→decimal→money）；不存在则发布期拒绝。
 - 今天的隐式行为**取消**：缺失操作数记 0（`apps/build/formula.go:159-162`）、除零得 0、NaN/Inf 归 0（`:102-104`）。新规则：缺失操作数在**比较**中使条件不成立（并给出可读原因），在**算术**中拒绝事务并说明缺哪个字段；除零拒绝。静默的 0 会把"数据缺失"变成"余额为零"，在单据上不可接受。
 - 未初始化、被遮蔽（`Withheld`，ADR-0033）、被权限裁剪的字段**不参与求值**，与"值为空"区分开，拒绝原因里说清是哪种。
+- `coalesce` 显式声明缺省值，只处理缺失与 null；空串、0 和 false 仍是值。它短路求值，不计算未选择的分支，不用缺省值遮住权限或类型错误。
 
 ### D4 发布期可检查
 
@@ -130,4 +132,4 @@ type Expr struct {
 
 兼容边界按负责人确认：只有既有不可变发布中的公式串使用同一引擎的冻结公式模式，保留旧浮点、缺值/除零得 0 和整数舍入。新保存的公式树严格；旧隐式 money→数值公式升级时须改成显式的币种规则，不能继续静默按金额部分计算。旧 Published、页面/查询/表格版本和日志字节不改；恢复只应用已接受映像，不执行规则。
 
-证据：`TestOneRuleAcrossBusinessFaces`、`TestDeclaredRuleCollectionsRespectCallerScope`、`TestStrictRuleFailureLeavesBusinessStateUntouched`、`TestRuleMigrationRetainsFrozenPublicationBytes`；各 owner 的迁移/类型反例及 Go 与浏览器共享 `conformance.json`。`rule-language` 浏览器路线观察到已发布 Expr 控制显示/隐藏以及实际 Go/Wasm 模块。通用规则设计器归 ADR-0109；既有数字公式、条件/赋值、表格单元格与页面算子控件保留为语法糖，复杂树由现有定义 API 配置。
+证据：`TestOneRuleAcrossBusinessFaces`、`TestDeclaredRuleCollectionsRespectCallerScope`、`TestStrictRuleFailureLeavesBusinessStateUntouched`、`TestRuleMigrationRetainsFrozenPublicationBytes`；各 owner 的迁移/类型反例及 Go 与浏览器共享 `conformance.json`。`rule-language` 浏览器路线观察到已发布 Expr 控制显示/隐藏以及实际 Go/Wasm 模块。通用 Expr 编辑器已由 ADR-0109 接入；事务 Guard/When、赋值、页面过滤/显示标签与专业组件共用 `ExpressionEditor`，类型检查复用同一 Go/Wasm 实现。原公式与表格输入控件只作表达式输入适配；定义 API 与折叠源码编辑同一份 Expr。

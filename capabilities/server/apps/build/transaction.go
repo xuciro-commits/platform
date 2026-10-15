@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"reflect"
 	"strconv"
@@ -122,13 +123,52 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 		return refusal
 	}
 	original := platform.Raw(subject)
+	var calls platform.TxnCalls
+	usesCalls := false
+	walkBusinessTxn(txn, func(step platform.TxnStep) { usesCalls = usesCalls || step.Call != nil })
+	if usesCalls {
+		transport := c.TxnTransport()
+		if transport == nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction calls require their original owner")
+		}
+		var problem *kernel.Error
+		calls, problem = transport.BeginTxnCalls(c, now)
+		if problem != nil {
+			return problem
+		}
+	}
 	spec := platform.RuleReadSpec{Object: txn.Subject, Inputs: map[string]platform.ExprType{"$subject": {Kind: "reference", Object: txn.Subject}}}
 	values["$subject"] = subjectID
 	if txn.Reads != nil {
 		spec.Collections = txn.Reads.Collections
 	}
-	for _, transition := range b.installed[txn.Subject].Lifecycle.Transitions {
+	var transitions []platform.Transition
+	if life := b.installed[txn.Subject].Lifecycle; life != nil {
+		transitions = life.Transitions
+	}
+	for _, transition := range transitions {
 		if transition.Txn != nil && transition.Name == strings.TrimPrefix(action, txn.Subject+".") {
+			var submitted map[string]any
+			if json.Unmarshal(receipt.GetSubmission().GetPayload(), &submitted) != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
+			}
+			if issues := platform.InputIssues(transition.Payload, submitted); len(issues) > 0 {
+				refusal := c.RefuseFields(issues)
+				for _, issue := range issues {
+					if issue.Code == "required" && len(issue.Path) > 0 {
+						label := issue.Path[0]
+						for _, field := range transition.Payload {
+							if field.Name == label && field.Description != "" {
+								label = field.Description
+								break
+							}
+						}
+						refusal.Message = fmt.Sprintf("%s needs %s", transition.Title, label)
+						break
+					}
+				}
+				return refusal
+			}
 			for _, in := range transition.Payload {
 				kind := platform.RuleFieldKind(in.Type)
 				if in.Ref != "" {
@@ -141,6 +181,12 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				}
 				spec.Inputs[in.Name] = platform.ExprType{Kind: kind, Object: in.Ref}
 			}
+		}
+	}
+	if receipt.GetSubmission().GetSchema().GetName() == txn.Subject+".create" {
+		info, _ := platform.Describe(ID, b.installed[txn.Subject], func(reflect.Type) string { return "" })
+		for _, field := range info.Fields {
+			spec.Inputs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 		}
 	}
 	if txn.Guard != nil {
@@ -361,6 +407,131 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 					if err := b.ledger.ApplyTxnRecord(c, receipt, b.installed[request.Child.Type], "edit", request.Child.ID, platform.Raw(map[string]string{link.Via: value}), now); err != nil {
 						return err
 					}
+				}
+				continue
+			}
+			stepKey := strings.TrimPrefix(frame+"/"+step.Name, "/")
+			if step.Post != nil {
+				if _, err := b.txnPost(c, receipt, step, scope, subject, facts, now, reserve); err != nil {
+					return err
+				}
+				continue
+			}
+			if step.Call != nil {
+				inputs, err := b.txnParameters(c, step.Call.Inputs, scope, subject, facts, now)
+				if err != nil {
+					return err
+				}
+				result, err := calls.Call(*step.Call, inputs, now)
+				if err != nil {
+					return err
+				}
+				value, err := txnCallValue(*step.Call, result)
+				if err != nil {
+					return err
+				}
+				captured, conversionErr := platform.ExprGoValue(value)
+				if conversionErr != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", conversionErr.Error())
+				}
+				facts["step."+step.Name] = captured
+				txnResult(&scope, step)
+				continue
+			}
+			if step.Journal != nil {
+				if c.TxnTransport() == nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction journal transport is unavailable")
+				}
+				if err := b.txnJournal(c, receipt, stepKey, *step.Journal, scope, subject, facts, now); err != nil {
+					return err
+				}
+				continue
+			}
+			if step.Effect != nil {
+				w, found := platform.Get[Writeback](c, step.Effect.Writeback)
+				if !found {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction writeback is unavailable")
+				}
+				w, err := b.ExecutionWriteback(w)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+				}
+				conn, found := platform.Get[Connection](c, w.Connection)
+				if !found {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction effect connection is unavailable")
+				}
+				conn, err = b.ExecutionConnection(conn)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+				}
+				payload, problem := b.txnParameters(c, step.Effect.Payload, scope, subject, facts, now)
+				if problem != nil {
+					return problem
+				}
+				target := step.Target
+				if target.Type == "" {
+					target = platform.TxnRef{Type: txn.Subject, ID: subjectID}
+				} else {
+					target, problem = resolve(target, facts, rowID)
+					if problem != nil {
+						return problem
+					}
+				}
+				request, err := w.Request(conn, target.ID, payload)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+				}
+				if c.TxnTransport() == nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction effect transport is unavailable")
+				}
+				if problem := c.TxnTransport().QueueTxnEffect(c, receipt, stepKey, target, platform.Raw(request), now); problem != nil {
+					return problem
+				}
+				continue
+			}
+			if step.Work != nil {
+				w := step.Work
+				assignment := platform.Assignment{Title: w.Title, Ref: txn.Subject + "/" + subjectID, Key: txn.Subject + "/" + subjectID + ":" + stepKey, Close: w.Close, Answers: w.Answers}
+				if step.Target.Type != "" {
+					target, err := resolve(step.Target, facts, rowID)
+					if err != nil {
+						return err
+					}
+					assignment.Ref = target.Type + "/" + target.ID
+				}
+				if w.Role != "" {
+					assignment.To = []platform.Recipient{{AppRole: w.Role}}
+				}
+				for _, item := range []struct {
+					expr   *platform.Expr
+					target *string
+				}{{w.Body, &assignment.Body}, {w.Key, &assignment.Key}} {
+					if item.expr != nil {
+						value, err := ruleAssignment(*item.expr, scope, c, subject, facts, now, b.conditionLookup)
+						if err != nil {
+							return err
+						}
+						*item.target = buildapiText(value)
+					}
+				}
+				if w.Member != nil {
+					value, err := ruleAssignment(*w.Member, scope, c, subject, facts, now, b.conditionLookup)
+					if err != nil {
+						return err
+					}
+					assignment.To = []platform.Recipient{{Member: buildapiText(value)}}
+				}
+				if w.Due != nil {
+					value, err := ruleAssignment(*w.Due, scope, c, subject, facts, now, b.conditionLookup)
+					if err != nil {
+						return err
+					}
+					if err := json.Unmarshal(platform.Raw(value), &assignment.Due); err != nil {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid work due time")
+					}
+				}
+				if err := c.Assign(receipt, assignment); err != nil {
+					return err
 				}
 				continue
 			}

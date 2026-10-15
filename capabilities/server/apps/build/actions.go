@@ -390,9 +390,30 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)
 			}, After: stored(o, action, creates)})
-		if a.Transaction != nil {
+		if a.Transaction == nil {
+			compiled, err := compileLegacyTransaction(o, a, lookup)
+			if err == nil {
+				action.Transaction = compiled
+			} else {
+				t := &l.Transitions[len(l.Transitions)-1]
+				legacy := *t
+				t.LegacyReplay = &legacy
+				t.After = nil
+				t.Do = func(platform.Caller, any, json.RawMessage, time.Time) *kernel.Error {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+				}
+			}
+		}
+		if action.Transaction != nil {
 			t := &l.Transitions[len(l.Transitions)-1]
-			t.Txn, t.After = a.Transaction, nil
+			if t.Description == "" {
+				t.Description = "Apply this business transaction."
+			}
+			if a.Transaction == nil {
+				legacy := *t
+				t.LegacyReplay = &legacy
+			}
+			t.Txn, t.After, t.Do = action.Transaction, nil, nil
 			t.ApplyTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error {
 				if creates == nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions need their original owner")
@@ -411,6 +432,10 @@ func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.Chang
 		return nil
 	}
 	return func(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
+		if !c.Replaying {
+			c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Legacy action storage is reserved for historical inputs"))
+			return
+		}
 		var inputs map[string]any
 		_ = json.Unmarshal(r.GetSubmission().GetPayload(), &inputs)
 		rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
@@ -430,6 +455,9 @@ func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.Chang
 // take is one action on a record: its required inputs, its conditions, then
 // the fields it sets. A refusal says what the builder wrote.
 func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator, lookup func(string) (platform.EntityInfo, bool)) *kernel.Error {
+	if !c.Replaying {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Legacy action execution is reserved for historical inputs")
+	}
 	var inputs map[string]any
 	if len(raw) > 0 && json.Unmarshal(raw, &inputs) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} takes an object of inputs", a.Title)

@@ -465,6 +465,13 @@ func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name stri
 	if _, taken := d.allocated[key]; !taken {
 		d.sequenceBases[key] = d.sequences[key]
 	}
+	if _, started := d.sequences[key]; !started && s.SeedRecord != "" {
+		waterline, problem := d.sequenceWaterline(c.App, s, date.Year())
+		if problem != nil {
+			return "", problem
+		}
+		d.sequences[key] = waterline
+	}
 	d.sequences[key]++
 	d.allocated[key] = d.sequences[key]
 	return s.Format(date.Year(), d.sequences[key]), nil

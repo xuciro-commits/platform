@@ -1,6 +1,7 @@
 package build
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"reflect"
@@ -37,6 +38,13 @@ func walkBusinessTxn(txn *platform.BusinessTxn, visit func(platform.TxnStep)) {
 func (b *Build) transactionSequences() []platform.Sequence {
 	byName := map[string]platform.Sequence{}
 	for _, typ := range sortedTypes(b.installed) {
+		if txn := b.installed[typ].CreateTxn; txn != nil {
+			walkBusinessTxn(txn, func(step platform.TxnStep) {
+				if step.Sequence != nil {
+					byName[step.Sequence.Name] = *step.Sequence
+				}
+			})
+		}
 		if life := b.installed[typ].Lifecycle; life != nil {
 			for _, transition := range life.Transitions {
 				if transition.Txn != nil {
@@ -66,6 +74,9 @@ func withTxnRow(spec platform.RuleReadSpec, info platform.EntityInfo) platform.R
 }
 
 func txnResult(spec *platform.RuleReadSpec, step platform.TxnStep) {
+	if step.Call != nil {
+		spec.Inputs["step."+step.Name] = step.Call.ResultType
+	}
 	if step.Kind == "sequence" {
 		spec.Inputs["step."+step.Name] = platform.ExprType{Kind: "text"}
 	}
@@ -80,6 +91,47 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 		scope.Inputs = maps.Clone(scope.Inputs)
 		for i := range steps {
 			step := &steps[i]
+			if step.Call != nil && step.Call.View == "" {
+				step.Call.View = "snapshot"
+			}
+			if step.Post != nil {
+				info, ok := lookup(step.Target.Type)
+				if !ok {
+					return fmt.Errorf("Transaction balance object is unavailable")
+				}
+				for j, match := range step.Post.Match {
+					field, ok := info.Field(match.Field)
+					if !ok {
+						return fmt.Errorf("Post match field is unavailable")
+					}
+					expr, err := assignmentExpr(field.Type, match, scope)
+					if err != nil {
+						return err
+					}
+					step.Post.Match[j] = platform.TxnSet{Field: match.Field, Expr: &expr}
+				}
+			}
+			for _, parameters := range []*[]platform.TxnSet{func() *[]platform.TxnSet {
+				if step.Effect != nil {
+					return &step.Effect.Payload
+				}
+				return nil
+			}(), func() *[]platform.TxnSet {
+				if step.Call != nil {
+					return &step.Call.Inputs
+				}
+				return nil
+			}()} {
+				if parameters != nil {
+					for j, parameter := range *parameters {
+						expr, err := dispatchParameter(parameter, scope)
+						if err != nil {
+							return err
+						}
+						(*parameters)[j] = platform.TxnSet{Field: parameter.Field, Expr: &expr}
+					}
+				}
+			}
 			for j := range step.Refusals {
 				if record := step.Refusals[j].Record; record != nil {
 					if err := lower([]platform.TxnStep{*record}, scope); err != nil {
@@ -222,6 +274,20 @@ func complementaryTxnWhen(a, b *platform.Expr) bool {
 }
 
 func (b *Build) checkTransactions(object Object) error {
+	if object.CreateTransaction != nil {
+		clone := object
+		clone.Actions = slices.Clone(object.Actions)
+		action := Action{Name: "creation", Transaction: object.CreateTransaction}
+		if len(object.States) > 0 {
+			action.From = []string{object.States[0].Name}
+		}
+		for _, field := range object.Fields {
+			action.Inputs = append(action.Inputs, Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
+		}
+		clone.Actions = append(clone.Actions, action)
+		clone.CreateTransaction = nil
+		return b.checkTransactions(clone)
+	}
 	commands := map[string]bool{}
 	for _, command := range object.DispatchCommands {
 		if err := command.Check(); err != nil {
@@ -254,7 +320,7 @@ func (b *Build) checkTransactions(object Object) error {
 		if txn.Subject != subject || len(txn.Steps) == 0 {
 			return fmt.Errorf("transaction needs its subject and steps")
 		}
-		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Journal != nil || action.Reverses != "" || len(action.Conditions) > 0 || action.Approval != nil && action.Approval.Pending != "" || action.To != "" || action.ToInput != "" {
+		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Journal != nil || action.Reverses != "" || len(action.Conditions) > 0 || action.To != "" || action.ToInput != "" {
 			return fmt.Errorf("transaction replaces legacy mutations and state routing")
 		}
 		ownInfo, _ := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
@@ -354,6 +420,35 @@ func (b *Build) checkTransactions(object Object) error {
 				if step.ForEach != nil {
 					return fmt.Errorf("%s has unexpected iteration fields", where)
 				}
+				typed := map[string]bool{"post": step.Post != nil, "journal": step.Journal != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil}
+				count := 0
+				for _, present := range typed {
+					if present {
+						count++
+					}
+				}
+				if count > 0 || slices.Contains([]string{"post", "journal", "effect", "work", "call"}, step.Kind) {
+					if count != 1 || !typed[step.Kind] || step.Link != nil || step.Sequence != nil || len(step.Changes) > 0 {
+						return fmt.Errorf("%s needs exactly its typed payload", where)
+					}
+					if err := b.checkTypedTxnStep(step, scope, lookup); err != nil {
+						return fmt.Errorf("%s: %w", where, err)
+					}
+					if step.Post != nil {
+						if err := reserve(platform.TxnRef{Type: step.Target.Type, ID: "post:" + string(platform.Raw(step.Post.Match))}, loop, step.When); err != nil {
+							return err
+						}
+					} else if step.Target.Type != "" {
+						if step.Kind != "effect" && step.Kind != "work" {
+							return fmt.Errorf("%s cannot change a target", where)
+						}
+						if err := checkTxnRef(step.Target, subject, row, scope, lookup); err != nil {
+							return err
+						}
+					}
+					txnResult(&scope, step)
+					continue
+				}
 				if step.Kind == "sequence" {
 					if step.Sequence == nil || step.Sequence.Check() != nil || step.Link != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 {
 						return fmt.Errorf("%s needs only a named sequence", where)
@@ -440,13 +535,19 @@ func (b *Build) checkTransactions(object Object) error {
 				used := map[string]bool{}
 				for _, assignment := range step.Changes {
 					field, found := info.Field(assignment.Field)
-					if !found || field.ReadOnly || used[field.Name] || assignment.Expr == nil && assignment.From == "" {
+					if !found || field.ReadOnly && !(field.Name == "state" && step.Target.Type == subject) || used[field.Name] || assignment.Expr == nil && assignment.From == "" {
 						return fmt.Errorf("%s needs distinct writable Expr assignments", where)
 					}
 					used[field.Name] = true
 					expr, err := assignmentExpr(field.Type, assignment, scope)
 					if err != nil {
 						return fmt.Errorf("%s: %w", where, err)
+					}
+					if field.Name == "state" && step.Target.Type == subject && expr.Lit != nil {
+						var state string
+						if json.Unmarshal(expr.Lit.Value, &state) != nil || !slices.ContainsFunc(object.States, func(s State) bool { return s.Name == state }) {
+							return fmt.Errorf("the action %q leaves records in %q, which is not a state of the object", action.Name, state)
+						}
 					}
 					if !ruleAssignmentFits(field.Type, expr.Kind) {
 						return fmt.Errorf("%s assignment type differs", where)

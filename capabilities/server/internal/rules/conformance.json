@@ -1,5 +1,61 @@
 [
   {
+    "name": "coalesce missing and null",
+    "request": {
+      "expr": {
+        "op": "coalesce",
+        "kind": "text",
+        "args": [
+          { "kind": "text", "ref": "optional" },
+          { "kind": "text", "lit": { "value": null } },
+          { "kind": "text", "lit": { "value": "fallback" } }
+        ]
+      },
+      "schema": { "refs": { "optional": { "kind": "text" } } },
+      "context": { "refs": {} }
+    },
+    "value": "fallback"
+  },
+  {
+    "name": "coalesce preserves withheld",
+    "request": {
+      "expr": {
+        "op": "coalesce",
+        "kind": "text",
+        "args": [
+          { "kind": "text", "ref": "private" },
+          { "kind": "text", "lit": { "value": "fallback" } }
+        ]
+      },
+      "schema": { "refs": { "private": { "kind": "text" } } },
+      "context": { "refs": { "private": { "kind": "text", "status": "withheld" } } }
+    },
+    "error": "withheld"
+  },
+  {
+    "name": "coalesce short circuit",
+    "request": {
+      "expr": {
+        "op": "coalesce",
+        "kind": "decimal",
+        "args": [
+          { "kind": "decimal", "lit": { "value": "1" } },
+          {
+            "op": "/",
+            "kind": "decimal",
+            "args": [
+              { "kind": "decimal", "lit": { "value": "1" } },
+              { "kind": "decimal", "lit": { "value": "0" } }
+            ]
+          }
+        ]
+      },
+      "schema": { "refs": {} },
+      "context": { "refs": {} }
+    },
+    "value": "1"
+  },
+  {
     "name": "exact decimal",
     "request": {
       "expr": {

@@ -180,7 +180,7 @@ func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
 		add(platform.AssetConnection, d.Connection)
 		object(d.Object)
 		legacy := platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: d.Object + ".confirmation"}
-		if !slices.Contains([]string{"confirmation", "dispatch"}, d.On) || d.On == "confirmation" && slices.Contains(asset.Requires, legacy) {
+		if !slices.Contains([]string{"confirmation", "dispatch", "transaction"}, d.On) || d.On == "confirmation" && slices.Contains(asset.Requires, legacy) {
 			// Retain exact historical virtual edges when reading old images.
 			// Explicit confirmation/dispatch requests depend on their object/connection.
 			add(platform.AssetAction, d.Object+"."+d.On)

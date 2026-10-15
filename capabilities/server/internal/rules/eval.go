@@ -124,6 +124,23 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		}
 		return Missing(e.Kind), nil
 	}
+	if e.Op == "coalesce" {
+		for i, arg := range e.Args {
+			v, err := p.eval(arg, c, fmt.Sprintf("%s.args[%d]", at, i), reasons)
+			if err != nil {
+				return Value{}, err
+			}
+			x, err := validateValue(v, at)
+			if err != nil {
+				return Value{}, err
+			}
+			if v.Status != "missing" && x != nil {
+				v.Kind = e.Kind
+				return v, nil
+			}
+		}
+		return Value{Kind: e.Kind, Status: "null"}, nil
+	}
 	values := make([]any, 0, len(e.Args))
 	states := make([]Value, 0, len(e.Args))
 	for i, arg := range e.Args {

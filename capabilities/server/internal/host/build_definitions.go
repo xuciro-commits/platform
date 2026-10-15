@@ -19,6 +19,12 @@ type ConstructionDrafts interface {
 	CheckProcess(build.Process) *kernel.Error
 }
 
+// ConstructionDraftReader converts a copied, already authorized object draft
+// to the owner's current expression without changing retained publications.
+type ConstructionDraftReader interface {
+	CanonicalObject(build.Object) (build.Object, error)
+}
+
 // IntegrationDefinitions resolves accepted typed configuration. It owns no
 // transport or host lock; consumers capture values before outside I/O.
 type IntegrationDefinitions interface {

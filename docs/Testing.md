@@ -87,11 +87,11 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 
 `make test-go PKG='. ./platform' RUN=TestMigration` 检查迁移声明的封闭步骤、原求值器转换、默认值/原值保留、来源/目标形状、引用映射与失败，以及封存版本审阅不改业务记录。迁移资产、分批执行、退役/在途兼容与客户扩展路线见上方检查表；文件日志的关闭重开、全日志/快照恢复已有自动证据。`make test-go PKG=. RUN=TestCustomerExtension` 覆盖基础包升级保留、同名冲突暂停与显式迁移解决。手测在发布工作台核对“Customer extensions / 客户扩展”的来源/目标包版本、保留字段与冲突，再沿 Apps 的迁移操作走到激活。schema family 与两行业持久演练仍未完成，不能用单元或浏览器路线代替 `make rehearse`。
 
-### 业务事务最小切片（ADR-0100）
+### 业务事务（ADR-0100）
 
-`make test-go PKG=. RUN=TestBusinessTxnMinimalSlice` 在一个宿主场景验证构建器定义 → 发布编译 → 私有步骤 → 一次接受 → 纯应用 → 重开恢复：头、两行、输入主体与命名序列同批；步骤/授权/追加失败不改变业务状态；接受和拒绝均按原键重试，异内容冲突；实际子进程在 fsync 后、应用前退出，文件日志重开后结果与记录字节一致；跨应用类型发布拒绝。用 `GOFLAGS=-v` 查看真实结果占用与超限拒绝数字；没有配置数据库也会运行真实文件日志，不把内存回放算成进程重开。编译反例用 `make test-go PKG=./apps/build RUN=TestBusinessTxnPublicationBoundaries`。
+`make test-go PKG=. RUN=TestBusinessTxn` 在原单据场景验证构建器定义、发布、一次接受与重开恢复：头、两行、输入主体、余额、状态与命名序列同批，出站、账簿和任务意图一起保存；初始快照与前序结果查询分别得到声明的值，十进制过账保持精度。步骤/授权/追加失败不改变业务状态；接受和拒绝均按原键重试，异内容冲突；实际子进程在 fsync 后、应用前退出，文件日志重开后结果与记录字节一致，不重新执行规则或外部请求。旧编号迁移只在首次取号时读取已有最大号码，拒绝不占号。用 `GOFLAGS=-v` 查看结果占用与超限拒绝数字；没有配置数据库也会运行真实文件日志。编译反例用 `make test-go PKG=./apps/build RUN=TestBusinessTxnPublicationBoundaries`。
 
-手工核对仍沿现有构建器定义 API：对象动作配置 `transaction`，只声明 create/update/sequence；发布后以有权成员提交该动作，确认一个接受答复和一个编号、关联头/两行。故意留空必填字段或撤去行 create 角色，确认头/行、输入消费标志与编号不变；同键改内容应冲突。没有新增事务编辑界面，本块不声明浏览器或完整单据过账验收。
+`PLATFORM_SCREENSHOTS=1 make e2e SPEC=business-transaction` 走 Action types 的类型化步骤编辑、保存候选、激活、操作员填写输入、审批放行，再检查编号、状态、余额、显式外部请求和收件箱任务。查看桌面与窄屏截图；本地 HTTP 接收方不代表真实外部系统交付。手工还可留空必填字段或撤去行 create 角色，确认头/行、输入消费标志与编号不变；同键改内容应冲突。
 
 ### 业务规则语言（ADR-0101）
 

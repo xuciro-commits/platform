@@ -54,6 +54,8 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
+	CreateTxn        *BusinessTxn
+	ApplyCreateTxn   func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
 	Versioning       *Versioning
 	VersionPins      []VersionPinBinding
 	Sets             []RecordSet
@@ -159,7 +161,8 @@ type State struct {
 // status among To (the first is the default). It runs inside the decision, so
 // replay runs it again; an error refuses the transition.
 type Transition struct {
-	Adoption *ProposalAdoption `json:"-"`
+	LegacyReplay *Transition       `json:"-"`
+	Adoption     *ProposalAdoption `json:"-"`
 	// Criteria is the owner's pure rule plan, shared with model-bound reads.
 	// It is not serialized into legacy action descriptors or accepted images.
 	Criteria    *RuleCriteria `json:"-"`
@@ -605,6 +608,19 @@ func EntityActions(e Entity) []Action {
 		capability = e.Type
 	}
 	if e.Standard.Create {
+		if e.CreateTxn != nil {
+			for _, step := range e.CreateTxn.Steps {
+				if step.Kind == "update" && step.Target.Type == e.Type && step.Target.ID == "$subject" && step.When == nil {
+					for _, assignment := range step.Changes {
+						for i := range fields {
+							if fields[i].Name == assignment.Field {
+								fields[i].Required = false
+							}
+						}
+					}
+				}
+			}
+		}
 		out = append(out, Action{Schema: e.Type + ".create", Target: e.Type, New: true, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
 			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: e.Standard.roles("create")})
 	}

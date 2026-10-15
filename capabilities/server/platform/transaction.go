@@ -38,8 +38,87 @@ type TxnStep struct {
 	Sequence *Sequence   `json:"sequence,omitempty"`
 	When     *Expr       `json:"when,omitempty"`
 	Link     *TxnLink    `json:"link,omitempty"`
+	Post     *TxnPost    `json:"post,omitempty"`
+	Journal  *TxnJournal `json:"journal,omitempty"`
+	Effect   *TxnEffect  `json:"effect,omitempty"`
+	Work     *TxnWork    `json:"work,omitempty"`
+	Call     *TxnCall    `json:"call,omitempty"`
 	ForEach  *TxnForEach `json:"forEach,omitempty"`
 	Refusals []Refusal   `json:"refusals,omitempty"`
+}
+
+type TxnPost struct {
+	Match    []TxnSet `json:"match"`
+	Field    string   `json:"field"`
+	Amount   Expr     `json:"amount"`
+	Subtract bool     `json:"subtract,omitempty"`
+	Floor    bool     `json:"floor,omitempty"`
+}
+
+// Journal records the intent inside Build's accepted result. Core keeps its
+// independent authority and decides whether the balanced entry can be posted.
+type TxnJournal struct {
+	Reverses string           `json:"reverses,omitempty"`
+	Date     *Expr            `json:"date,omitempty"`
+	Text     *Expr            `json:"text,omitempty"`
+	Currency *Expr            `json:"currency,omitempty"`
+	Lines    []TxnJournalLine `json:"lines"`
+}
+
+type TxnJournalLine struct {
+	Account Expr  `json:"account"`
+	Debit   *Expr `json:"debit,omitempty"`
+	Credit  *Expr `json:"credit,omitempty"`
+	Text    *Expr `json:"text,omitempty"`
+	Object  *Expr `json:"object,omitempty"`
+	Partner *Expr `json:"partner,omitempty"`
+}
+
+type TxnEffect struct {
+	Writeback string   `json:"writeback"`
+	Payload   []TxnSet `json:"payload,omitempty"`
+}
+
+type TxnWork struct {
+	Title   string   `json:"title"`
+	Body    *Expr    `json:"body,omitempty"`
+	Role    string   `json:"role,omitempty"`
+	Member  *Expr    `json:"member,omitempty"`
+	Due     *Expr    `json:"due,omitempty"`
+	Answers []string `json:"answers,omitempty"`
+	Key     *Expr    `json:"key,omitempty"`
+	Close   bool     `json:"close,omitempty"`
+}
+
+// Call selects the existing synchronous pure query owner. Snapshot reads the
+// transaction's initial private record view; current sees preceding steps.
+type TxnCall struct {
+	Ref        AssetRef `json:"ref"`
+	Version    int      `json:"version"`
+	View       string   `json:"view"`
+	Inputs     []TxnSet `json:"inputs,omitempty"`
+	ResultPath []string `json:"resultPath,omitempty"`
+	ResultType ExprType `json:"resultType"`
+}
+
+type TxnCalls interface {
+	Call(TxnCall, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+}
+
+type TxnTransport interface {
+	BeginTxnCalls(Caller, time.Time) (TxnCalls, *kernel.Error)
+	QueueTxnEffect(Caller, *pb.ChangeRecord, string, TxnRef, json.RawMessage, time.Time) *kernel.Error
+	QueueTxnJournal(Caller, *pb.ChangeRecord, string, Journal, string, time.Time) *kernel.Error
+}
+
+type TxnRuntime interface{ TxnTransport() TxnTransport }
+
+func (c Caller) TxnTransport() TxnTransport {
+	rt, ok := c.rt.(TxnRuntime)
+	if !ok || !c.Staging() || c.Replaying {
+		return nil
+	}
+	return rt.TxnTransport()
 }
 
 type TxnForEach struct {
@@ -152,7 +231,18 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 		return Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Transaction step action is unavailable / 事务步骤动作不可用")
 	}
 	c.Automation = false
-	decision := catalog.DecideSubmission(c, s, now)
+	authorization := s
+	if verb == "edit" && e.Type == r.GetSubmission().GetTarget().GetType() && id == r.GetSubmission().GetTarget().GetId() {
+		original := r.GetSubmission().GetSchema().GetName()
+		declared := original == e.Type+".create" && e.CreateTxn != nil
+		if e.Lifecycle != nil {
+			declared = declared || slices.ContainsFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Txn != nil && original == e.Type+"."+t.Name })
+		}
+		if declared {
+			authorization = proto.Clone(r.GetSubmission()).(*pb.Submission)
+		}
+	}
+	decision := catalog.DecideSubmission(c, authorization, now)
 	if !decision.Allow {
 		layer := "verb"
 		if len(decision.Layers) > 0 {
@@ -176,6 +266,22 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 			if ref != "" && !c.rt.Readable(c, f.Ref+"/"+ref) {
 				return notFound()
 			}
+		}
+	}
+	if raw, exists := given["state"]; exists {
+		var state string
+		if e.Type != r.GetSubmission().GetTarget().GetType() || id != r.GetSubmission().GetTarget().GetId() || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s State) bool { return s.Name == state }) {
+			return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction state must be a declared state of its subject")
+		}
+		delete(given, "state")
+		payload = Raw(given)
+		s.Payload = payload
+		compute := e.Compute
+		e.Compute = func(value any) {
+			if compute != nil {
+				compute(value)
+			}
+			reflect.ValueOf(value).Elem().FieldByName("State").SetString(state)
 		}
 	}
 	apply, err := l.checked(c, s, now, catalog, func() (func(*pb.ChangeRecord), *kernel.Error) { return standard(c, e, verb, s, now) })()

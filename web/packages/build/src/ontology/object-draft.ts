@@ -9,13 +9,14 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
 import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
 
-const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], dispatchCommands: record.dispatchCommands ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", numbering: record.numbering, constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [] });
+const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], createTransaction: record.createTransaction, dispatchCommands: record.dispatchCommands ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [] });
 
 export function useObjectDraft(id: string, onReset?: () => void) {
   const { decide, entities, definitions } = useHost();
   const { open } = useApplicationWorkspace();
-  const query = useReadQuery<{ record?: ObjectRecord }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
+  const query = useReadQuery<{ record?: ObjectRecord; valueErrors?: Record<string, string> }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
   const object = query.data?.record;
+  const conversionError = query.data?.valueErrors?.actions;
   const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
   const { draft: process, dirty } = session;
   const baseline = useRef(process);
@@ -36,14 +37,14 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
     && definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type));
   const issuesOf = (name: string) => { const a = process.actions.find((x) => x.name === name); return a ? actionIssues(a, process, parent, targets, entities) : []; };
-  const issues = process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`));
+  const issues = [...conversionError ? [conversionError] : [], ...process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`))];
   const change = (next: Process) => {
-    if(lock.current)return;
+    if(lock.current || conversionError)return;
     // Inspector rows have no serialized UI ids. Move their buffers with the
     // original row when a sibling is removed or reordered; renames keep the slot.
     const indexOf=(before:unknown[],after:unknown[],at:number)=>{const found=after.indexOf(before[at]);return found>=0?found:before.length===after.length?at:-1;};
     const collections={field:"fields",state:"states",action:"actions",access:"access",constraint:"constraints",recordSet:"sets"} as const;
-    const parts={parameter:"inputs",rule:"sets",criterion:"conditions",effect:"creates",posting:"posts"} as const;
+    const parts={parameter:"inputs"} as const;
     const moves=Object.entries(session.inputs.values).flatMap(([key,value])=>{
       const segments=key.split("/");let changed=false,removed=false;
       for(let i=0;i<segments.length;i++){
@@ -72,6 +73,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   };
   const save = async () => {
     setRefused(undefined);
+    if (conversionError) { setRefused(conversionError); return false; }
     if(session.inputs.invalid){setRefused(t("Correct the input drafts before submitting."));return false;}
     const expectedRevision = baseRevision.current;
     const changes = objectChanges(process, baseline.current);
@@ -103,5 +105,5 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   };
   const roles = process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none");
   const approverRoles = ["builder", ...(process.access.length ? process.access.map((a) => a.role) : [])];
-  return { object, failed: query.isError, process, dirty, busy, refused, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
+  return { object, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
 }

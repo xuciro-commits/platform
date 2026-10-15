@@ -108,6 +108,21 @@ func TestRuleMissingWithheldAndShortCircuit(t *testing.T) {
 		t.Fatal("unknown operator hidden in short circuit")
 	}
 }
+
+func TestRuleCoalesceKeepsTypesAndNull(t *testing.T) {
+	if _, err := Compile(op("coalesce", "text", LiteralOf("text", "fallback"), LiteralOf("integer", 1)), Schema{}); err == nil {
+		t.Fatal("coalesce accepted incompatible operands")
+	}
+	r := run(t, op("coalesce", "text", RefOf("text", "optional"), LiteralOf("text", nil)), Schema{Refs: map[string]Type{"optional": {Kind: "text"}}}, Context{})
+	if r.Value.Status != "null" {
+		t.Fatalf("coalesce invented an absent value: %+v", r)
+	}
+	r = run(t, op("coalesce", "text", LiteralOf("text", ""), LiteralOf("text", "fallback")), Schema{}, Context{})
+	if data(t, r) != "" {
+		t.Fatal("coalesce replaced a present empty string")
+	}
+}
+
 func TestPartialCollectionCannotProveAllOrNone(t *testing.T) {
 	schema := Schema{Sets: map[string]SetType{"items": {Element: Type{Kind: "reference", Fields: map[string]Type{"enabled": {Kind: "boolean"}}}, Policy: "visible"}}}
 	context := Context{Sets: map[string]Collection{"items": {Complete: true, Withheld: true, Items: []Item{{ID: "visible", Fields: map[string]Value{"enabled": Present("boolean", true)}}}}}}

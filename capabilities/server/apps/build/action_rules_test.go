@@ -15,6 +15,15 @@ func TestActionRulesChooseOriginalStatesAndGuardConditionsBeforeMutation(t *test
 	if err := checkProcess(o, nil); err != nil {
 		t.Fatal(err)
 	}
+	b := New("rules")
+	canonical, err := b.CanonicalObject(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := canonical.Actions[0]
+	if action.Transaction == nil || len(action.Sets) > 0 || len(action.Conditions) > 0 || action.ToInput != "" {
+		t.Fatal("State action was not replaced by one transaction")
+	}
 	type record struct {
 		platform.Record
 		State    string
@@ -27,9 +36,33 @@ func TestActionRulesChooseOriginalStatesAndGuardConditionsBeforeMutation(t *test
 		ok      bool
 	}{{`{"status":"active","priority":"Low"}`, "active", true}, {`{"status":"offline","priority":"Low"}`, "active", false}, {`{"status":"offline","priority":"High"}`, "offline", true}, {`{"status":"unknown","priority":"High"}`, "active", false}} {
 		r := &record{State: "active", Priority: "Low"}
-		err := take(o, o.Actions[0], platform.Caller{}, r, json.RawMessage(tc.payload), time.Now(), nil, nil)
-		if (err == nil) != tc.ok || r.State != tc.state {
-			t.Fatalf("%s: %+v %v", tc.payload, r, err)
+		var inputs map[string]any
+		if err := json.Unmarshal([]byte(tc.payload), &inputs); err != nil {
+			t.Fatal(err)
+		}
+		fields := []platform.Field{}
+		for _, input := range action.Inputs {
+			fields = append(fields, input.Field())
+		}
+		allowed := len(platform.InputIssues(fields, inputs)) == 0
+		scope := ruleSpec(canonical, action, action.Transaction.Reads)
+		if allowed {
+			result, problem := evalRule(*action.Transaction.Guard, scope, platform.Caller{}, r, inputs, time.Now(), ruleLookup(canonical, nil))
+			allowed = problem == nil && string(result.Value.Data) == "true"
+		}
+		if allowed {
+			for _, set := range action.Transaction.Steps[0].Changes {
+				if set.Field == "state" {
+					value, problem := ruleAssignment(*set.Expr, scope, platform.Caller{}, r, inputs, time.Now(), ruleLookup(canonical, nil))
+					if problem != nil {
+						t.Fatal(problem)
+					}
+					r.State = value.(string)
+				}
+			}
+		}
+		if allowed != tc.ok || r.State != tc.state {
+			t.Fatalf("%s: state=%s allowed=%t", tc.payload, r.State, allowed)
 		}
 	}
 	for _, edit := range []func(*Object){func(o *Object) { o.Actions[0].To = "offline" }, func(o *Object) { o.Actions[0].ToInput = "priority" }, func(o *Object) { o.Actions[0].Inputs[0].Required = false }, func(o *Object) { o.Actions[0].Conditions[0].When.When = &Condition{} }, func(o *Object) { o.Actions[0].Conditions[0].When.Field = "input.missing" }, func(o *Object) { o.Actions[0].Approval = &ActionApproval{} }} {
@@ -61,16 +94,9 @@ func TestOriginalReferenceInputsAndUTF16MinimumHaveBoundedDeclarations(t *testin
 		title string
 		ok    bool
 	}{{"abc", false}, {"abcd", true}, {"", true}, {"\U0001f600\U0001f600", true}} {
-		r := &struct {
-			platform.Record
-			State    string
-			Priority string
-			Operator string
-		}{State: "active"}
-		raw, _ := json.Marshal(map[string]any{"operator": "OP", "title": input.title})
-		err := take(o, o.Actions[0], platform.Caller{}, r, raw, time.Now(), nil, lookup)
-		if (err == nil) != input.ok {
-			t.Fatalf("title %q: %v", input.title, err)
+		issues := platform.InputIssues(descriptor.Transitions[0].Payload, map[string]any{"operator": "OP", "title": input.title})
+		if (len(issues) == 0) != input.ok {
+			t.Fatalf("title %q: %v", input.title, issues)
 		}
 	}
 	for _, edit := range []func(*Object){func(o *Object) { o.Actions[0].Inputs[0].Ref = "build.other" }, func(o *Object) { o.Actions[0].Inputs[0].Type = "text" }, func(o *Object) { o.Actions[0].Inputs[1].Type = "boolean" }, func(o *Object) { bad := 4097; o.Actions[0].Inputs[1].MinLength = &bad }} {

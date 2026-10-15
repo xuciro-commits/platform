@@ -1,8 +1,8 @@
 import {formulaText} from "../editor/rule-text";
 import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
-import {actionDestinations,actionResultEdges} from "./process-rules";
-import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type Numbering_, type ObjectScope, type Process, type State } from "./object-model";
+import {actionDestinations,actionResultEdges,actionStateInput,setActionDestination} from "./process-rules";
+import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
 import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
@@ -12,13 +12,14 @@ import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../edit
 // everything again when the object is published.
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
 import {
-  Button, Card, Checkbox, Input, FlowCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
+  Button, Card, Checkbox, Disclosure, Input, FlowCanvas, Panel, PanelSection, ProblemList, Select, StatusBar, StructureRow, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Shield, Tags, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useObjectDraft } from "./object-draft";
 import { ConstraintsEditor } from "./constraints";
+import { TransactionEditor } from "./TransactionEditor";
 import { RecordSetsEditor } from "./record-sets";
 import { BusinessVersionEditor } from "./business-version";
 
@@ -27,7 +28,7 @@ type Tab = "overview" | "properties" | "links" | "actions" | "constraints" | "se
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const [chosen, setChosen] = useState<Chosen>();
   const draft = useObjectDraft(id, () => setChosen(undefined));
-  const { object, process, dirty, busy, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
+  const { object, process, dirty, busy, blocked, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
   const initiallyChosen = useRef("");
   const [tab, setTab] = useState<Tab>((["overview", "properties", "links", "actions", "constraints", "sets", "versions", "lifecycle", "permissions", "data", "preview"] as Tab[]).includes(initialTab as Tab) ? initialTab as Tab : "overview");
   useEffect(() => {
@@ -47,7 +48,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const addAction = () => {
     const title = t("Step {n}", { n: process.actions.length + 1 });
     const from = process.states[0]?.name;
-    change({ ...process, actions: [...process.actions, { name: nameOf("action", process.actions.map((a) => a.name)), title, from: from ? [from] : [], to: process.states[1]?.name }] });
+    change({ ...process, actions: [...process.actions, { name: nameOf("action", process.actions.map((a) => a.name)), title, from: from ? [from] : [], transaction: {subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}] } }] });
     setChosen({ kind: "action", at: process.actions.length });
   };
   const { save, publish, review, perform } = draft;
@@ -76,7 +77,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       {process.states.map((s, at) => <StructureRow key={`${s.name}:${at}`} depth={1} icon={<span className={cn("size-2 rounded-full", `bg-[var(--tone-${s.tone ?? "info"})]`)} />} label={s.title || s.name} selected={chosen?.kind === "state" && chosen.at === at} onClick={() => choose({ kind: "state", at }, "lifecycle")} />)}
     </PanelSection>
     <PanelSection title={t("Actions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add an action")} title={t("Add an action")} disabled={!process.states.length} onClick={() => { addAction(); setTab("actions"); }}><Plus /></Button>}>
-      {process.actions.map((a, at) => <StructureRow key={`${a.name}:${at}`} depth={1} icon={<Zap />} label={a.title || a.name} meta={a.to ? `→ ${process.states.find((s) => s.name === a.to)?.title ?? a.to}` : undefined} selected={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at }, "actions")} />)}
+      {process.actions.map((a, at) => <StructureRow key={`${a.name}:${at}`} depth={1} icon={<Zap />} label={a.title || a.name} meta={actionResultEdges(a).map(name=>process.states.find(state=>state.name===name)?.title??name).join(", ")} selected={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at }, "actions")} />)}
       {!process.states.length && <p className="px-2 text-[11px] text-muted">{t("Add a lifecycle state first: every action starts from a state.")}</p>}
     </PanelSection>
     <PanelSection title={t("Permissions")} actions={<Button size="sm" variant="ghost" aria-label={t("Add a role")} title={t("Add a role")} onClick={addAccess}><Plus /></Button>}>
@@ -111,7 +112,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
           <td className="px-2 py-1.5">{f.title || f.name}</td><td className="px-2 py-1.5 font-mono text-xs">{f.name}</td><td className="px-2 py-1.5">{t(f.type)}{f.type === "reference" && f.ref ? ` → ${f.ref}` : ""}</td><td className="px-2 py-1.5">{f.required ? "✓" : ""}</td><td className="px-2 py-1.5 text-xs text-muted">{f.property ? assetBindingKey(f.property) : ""}</td>
         </tr>)}</tbody></table>
       {!process.fields.length && <p className="text-sm text-muted">{t("No properties yet. Add one to describe the record.")}</p>}
-      {process.fields.some((f) => f.type === "text") && <NumberingFields process={process} onChange={(numbering) => change({ ...process, numbering })} />}
+      <Disclosure summary={t("Creation transaction")}><div className="grid gap-3 pt-2"><p className="text-xs text-muted">{t("The new subject exists in the private view. Use a sequence step and assign its result to the number field in an update step.")}</p><Checkbox checked={!!process.createTransaction} onChange={enabled => change({...process,createTransaction:enabled?{subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}]}:undefined})}>{t("Apply a transaction when creating records")}</Checkbox>{process.createTransaction&&<TransactionEditor value={process.createTransaction} onChange={createTransaction=>change({...process,createTransaction})} process={process} roles={[...new Set(["builder",...process.access.map(access=>access.role)])]}/>}</div></Disclosure>
     </div>,
     links: <div className="grid content-start gap-4 p-4">
       <div className="grid gap-2"><h2 className="text-sm font-semibold">{t("References from this object")}</h2>
@@ -128,8 +129,8 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{process.actions.map((a, at) => <Button variant="row" key={`${a.name}:${at}`} type="button" aria-pressed={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at })}
         className={cn("grid gap-1 rounded-md border p-3 text-left hover:border-primary", chosen?.kind === "action" && chosen.at === at ? "border-primary bg-row-selected" : "border-border")}>
         <span className="flex items-center gap-2 text-sm font-medium"><Zap className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate">{a.title || a.name}</span></span>
-        <span className="text-[11px] text-muted">{a.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || t("any state")} → {a.to ? process.states.find((s) => s.name === a.to)?.title ?? a.to : a.toInput ? t("chosen by input") : t("same state")}</span>
-        <span className="text-[11px] text-muted">{t("{inputs} parameters · {rules} rules · {conditions} criteria", { inputs: a.inputs?.length ?? 0, rules: (a.sets?.length ?? 0) + (a.creates?.length ?? 0), conditions: a.conditions?.length ?? 0 })}</span>
+        <span className="text-[11px] text-muted">{a.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || t("any state")} → {actionResultEdges(a).map(name=>process.states.find(state=>state.name===name)?.title??name).join(", ") || t("same state")}</span>
+        <span className="text-[11px] text-muted">{t("{inputs} parameters · {steps} transaction steps", {inputs:a.inputs?.length??0,steps:a.transaction?.steps.length??0})}</span>
       </Button>)}</div>
     </div>,
     lifecycle: <div className="min-h-0 flex-1 overflow-auto p-3"><ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} /></div>,
@@ -155,14 +156,14 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
     actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "object-type", params: { id } }} />}
     left={{ label: t("Object structure"), content: structure }}
-    right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: inspector }}
+    right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
     <div role="tablist" aria-label={t("Object sections")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 pt-2">
       {tabs.map((item) => <Button variant="row" key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}
         className={cn("whitespace-nowrap rounded-t border-b-2 px-3 py-1.5 text-sm", tab === item.id ? "border-primary font-semibold" : "border-transparent text-muted hover:text-foreground")}>{item.title}</Button>)}
     </div>
-    <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[tab]}</fieldset>
+    <fieldset disabled={busy || blocked} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[tab]}</fieldset>
   </Workbench>;
 }
 
@@ -183,17 +184,17 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
   const normal=catalog[1]!;const graphCatalog:FlowCatalog=[...catalog,{...normal,id:"action-input",addable:false,outputs:normal.outputs.map(p=>({...p,limit:undefined}))}];
   const edges: FlowEdge[] = process.actions.flatMap((a) => [
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
-    ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!a.toInput,label:a.toInput})),
+    ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!actionStateInput(a),label:actionStateInput(a)})),
   ]);
   // One layout brain decides where a state or an action sits (ADR-0092): the
   // same arrangement the canvas's own tidy-up would choose, sizes included.
   const places = useFlowArrangement([
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, position: { x: 0, y: 0 } })),
-    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind: a.toInput ? "action-input" : "action", label: a.title || a.name, position: { x: 0, y: 0 } })),
+    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind: actionStateInput(a) ? "action-input" : "action", label: a.title || a.name, position: { x: 0, y: 0 } })),
   ], edges, "right", graphCatalog);
   const nodes: FlowNode[] = [
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: places[`state:${s.name}`] ?? { x: 0, y: 0 } })),
-    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind:a.toInput?"action-input":"action", label: a.title || a.name, detail: a.name, position: places[`action:${a.name}`] ?? { x: 0, y: 0 } })),
+    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind:actionStateInput(a)?"action-input":"action", label: a.title || a.name, detail: a.name, position: places[`action:${a.name}`] ?? { x: 0, y: 0 } })),
   ];
   const selected = chosen?.kind === "state" ? `state:${process.states[chosen.at]?.name}` : chosen?.kind === "action" ? `action:${process.actions[chosen.at]?.name}` : undefined;
   return <div className="mb-4 grid gap-2">
@@ -212,25 +213,22 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
           onChange({ ...process, actions: process.actions.map((a) => a.name === name ? { ...a, from: [...a.from, state] } : a) });
         } else if (c.source?.startsWith("action:") && c.target?.startsWith("state:")) {
           const name = c.source.slice(7), state = c.target.slice(6);
-          if(process.actions.find(a=>a.name===name)?.toInput){notify.info(t("Edit the state input choices to change these derived connections."));return;}
-          onChange({ ...process, actions: process.actions.map((a) => a.name === name ? { ...a, to: state } : a) });
+          if(actionStateInput(process.actions.find(a=>a.name===name)!)){notify.info(t("Edit the state input choices to change these derived connections."));return;}
+          onChange({ ...process, actions: process.actions.map((a) => a.name === name ? setActionDestination(a,state,a.transaction!.subject) : a) });
         }
       }}
       onDelete={(removedNodes, removedEdges) => {
-        if(removedEdges.some(e=>process.actions.some(a=>a.toInput&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
+        if(removedEdges.some(e=>process.actions.some(a=>actionStateInput(a)&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
         const states = process.states.filter((state) => !removedNodes.some((n) => n.id === `state:${state.name}`));
-        const actions = process.actions.filter((action) => !removedNodes.some((n) => n.id === `action:${action.name}`)).map((action) => ({
-          ...action, from: action.from.filter((state) => states.some((s) => s.name === state) && !removedEdges.some((e) => e.source === `state:${state}` && e.target === `action:${action.name}`)),
-          to: states.some((state) => state.name === action.to) && !removedEdges.some((e) => e.source === `action:${action.name}` && e.target === `state:${action.to}`) ? action.to : undefined,
-        }));
+        const actions = process.actions.filter(action => !removedNodes.some(node => node.id === `action:${action.name}`)).map(action => {
+          const keep = actionStateInput(action) || actionResultEdges(action).every(name => states.some(state => state.name === name) && !removedEdges.some(edge => edge.source === `action:${action.name}` && edge.target === `state:${name}`));
+          return {...keep?action:setActionDestination(action,undefined,action.transaction!.subject),from:action.from.filter(name=>states.some(state=>state.name===name)&&!removedEdges.some(edge=>edge.source===`state:${name}`&&edge.target===`action:${action.name}`))};
+        });
         onChoose(undefined); onChange({ ...process, states, actions });
       }}
       onDisconnect={(removed) => {
-        if(removed.some(e=>process.actions.some(a=>a.toInput&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
-        onChange({ ...process, actions: process.actions.map((a) => ({ ...a,
-          from: a.from.filter((s) => !removed.some((e) => e.source === `state:${s}` && e.target === `action:${a.name}`)),
-          to: removed.some((e) => e.source === `action:${a.name}` && e.target === `state:${a.to}`) ? undefined : a.to,
-        })) });
+        if(removed.some(e=>process.actions.some(a=>actionStateInput(a)&&e.source===`action:${a.name}`)))notify.info(t("Edit the state input choices to change these derived connections."));
+        onChange({...process,actions:process.actions.map(action=>({...actionStateInput(action)||!removed.some(edge=>edge.source===`action:${action.name}`)?action:setActionDestination(action,undefined,action.transaction!.subject),from:action.from.filter(name=>!removed.some(edge=>edge.source===`state:${name}`&&edge.target===`action:${action.name}`))}))});
       }} />
   </div>;
 }
@@ -301,16 +299,14 @@ function Preview({ object, process, action }: { object: ObjectRecord; process: P
         {action.description && <p className="text-sm text-muted">{action.description}</p>}
         <p className="text-xs text-muted">{t("From {from} to {to}", {
           from: action.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || "—",
-          to: action.toInput? actionDestinations(action).map(s=>process.states.find(x=>x.name===s)?.title??s).join(", "):action.to ? process.states.find((x) => x.name === action.to)?.title ?? action.to : t("where it was"),
+          to: actionResultEdges(action).map(name=>process.states.find(state=>state.name===name)?.title??name).join(", ") || t("where it was"),
         })}</p>
         {action.approval && <p className="text-xs text-muted">{t("Waits in {state} for {levels}", {
           state: process.states.find((s) => s.name === action.approval?.pending)?.title ?? action.approval.pending,
           levels: action.approval.levels.map((level) => `${level.title} (${level.role})`).join(" → "),
         })}</p>}
         <PayloadFields preview values={values} onChange={setValues} fields={actionInputFields(action.inputs ?? [])} />
-        {(action.conditions ?? []).length > 0 && <ul className="grid gap-1 text-xs text-muted">
-          {action.conditions!.map((c, i) => <li key={i}>{t("Needs {field} {operator} {value}; otherwise: “{message}”", { field: c.field, operator: c.operator, value: c.valueField ?? c.value ?? "", message: c.message })}</li>)}
-        </ul>}
+        {action.transaction?.message&&<p className="text-xs text-muted">{action.transaction.message}</p>}
       </Card>}
     </div>
   );
@@ -334,24 +330,6 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
 
 const reads = { all: () => t("Every record"), below: () => t("Those of their units and the units below"), unit: () => t("Those of their own units"), own: () => t("Only their own"), none: () => t("Not at all") };
 const readLevels = ["all", "below", "unit", "own", "none"] as const;
-
-/** Gapless document numbers (ADR-0076): a text field the platform fills on create, counted per object and optionally per year. */
-function NumberingFields({ process, onChange }: { process: Process; onChange: (numbering: Numbering_ | undefined) => void }) {
-  const n = process.numbering;
-  const texts = process.fields.filter((f) => f.type === "text");
-  const sample = n ? `${n.prefix ?? ""}${n.yearly ? `${new Date().getFullYear()}-` : ""}${"1".padStart(n.width || 6, "0")}` : "";
-  return <Card className="grid gap-3 p-3">
-    <div><h3 className="text-sm font-semibold">{t("Document numbering")}</h3><p className="text-xs text-muted">{t("Each new record takes the next number, without gaps: a prefix, the year if yearly, and a zero-padded count. The field is then read-only.")}</p></div>
-    <Checkbox checked={!!n} onChange={(on) => onChange(on ? { field: texts[0]!.name, prefix: "", width: 6 } : undefined)}>{t("Number records automatically")}</Checkbox>
-    {n && <div className="grid gap-3 sm:grid-cols-4">
-      <Label text={t("Number field")}><Select value={n.field} onChange={(e) => onChange({ ...n, field: e.target.value })}>{texts.map((f) => <option key={f.name} value={f.name}>{f.title || f.name}</option>)}</Select></Label>
-      <Label text={t("Prefix")}><Input placeholder="GR" value={n.prefix ?? ""} onChange={(e) => onChange({ ...n, prefix: e.target.value || undefined })} /></Label>
-      <Label text={t("Digits")}><Input type="number" min={1} max={12} value={n.width ?? 6} onChange={(e) => onChange({ ...n, width: Number(e.target.value) || 6 })} /></Label>
-      <Label text={t("Yearly")}><Checkbox checked={!!n.yearly} onChange={(yearly) => onChange({ ...n, yearly: yearly || undefined })}>{t("Restart every year")}</Checkbox></Label>
-      <p className="text-xs text-muted sm:col-span-4">{t("First number: {sample}", { sample })}</p>
-    </div>}
-  </Card>;
-}
 
 /** Which fields place a record for the row scopes above (ADR-0066): owner for "own", unit + structure for "unit" and "below". */
 function ScopeFields({ process, onChange }: { process: Process; onChange: (scope: ObjectScope) => void }) {
@@ -428,8 +406,8 @@ function ActionSummary({ action, states, issues, onOpen, onRemove }: { action: A
     <div className="text-xs font-semibold text-muted">{t("Action type")}</div>
     <div className="font-medium">{action.title || action.name}</div>
     {action.description && <p className="text-xs text-muted">{action.description}</p>}
-    <p className="text-xs text-muted">{action.from.map(named).join(", ") || t("any state")} → {action.to ? named(action.to) : action.toInput ? t("chosen by input") : t("same state")}</p>
-    <p className="text-xs text-muted">{t("{inputs} parameters · {rules} rules · {conditions} criteria", { inputs: action.inputs?.length ?? 0, rules: (action.sets?.length ?? 0) + (action.creates?.length ?? 0), conditions: action.conditions?.length ?? 0 })}</p>
+    <p className="text-xs text-muted">{action.from.map(named).join(", ") || t("any state")} → {actionResultEdges(action).map(named).join(", ") || t("same state")}</p>
+    <p className="text-xs text-muted">{t("{inputs} parameters · {steps} transaction steps", {inputs:action.inputs?.length??0,steps:action.transaction?.steps.length??0})}</p>
     {issues > 0 && <p className="text-xs text-danger">{t("{n} problems", { n: issues })}</p>}
     <div className="flex gap-2"><Button size="sm" variant="primary" onClick={onOpen}><Zap />{t("Open action type")}</Button><Button size="sm" variant="ghost" onClick={onRemove}><Trash2 />{t("Remove")}</Button></div>
   </Card>;

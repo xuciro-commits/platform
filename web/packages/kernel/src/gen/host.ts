@@ -3892,6 +3892,8 @@ export type Sequence = {
   Name: string;
   Pattern: string;
   Yearly: boolean;
+  SeedRecord?: string;
+  SeedField?: string;
 };
 
 export type Session = {
@@ -4346,15 +4348,54 @@ export type TransitionInfo = {
   to: string[];
 };
 
+export type TxnCall = {
+  ref: AssetRef;
+  version: number;
+  view: string;
+  inputs?: TxnSet[];
+  resultPath?: string[];
+  resultType: Type;
+};
+
+export type TxnEffect = {
+  writeback: string;
+  payload?: TxnSet[];
+};
+
 export type TxnForEach = {
   set: string;
   steps: TxnStep[];
+};
+
+export type TxnJournal = {
+  reverses?: string;
+  date?: Expr;
+  text?: Expr;
+  currency?: Expr;
+  lines: TxnJournalLine[];
+};
+
+export type TxnJournalLine = {
+  account: Expr;
+  debit?: Expr;
+  credit?: Expr;
+  text?: Expr;
+  object?: Expr;
+  partner?: Expr;
 };
 
 export type TxnLink = {
   binding: AssetBinding;
   parent: TxnRef;
   child: TxnRef;
+};
+
+export type TxnPost = {
+  match: TxnSet[];
+  field: string;
+  amount: Expr;
+  subtract?: boolean;
+  floor?: boolean;
 };
 
 export type TxnRef = {
@@ -4378,8 +4419,24 @@ export type TxnStep = {
   sequence?: Sequence;
   when?: Expr;
   link?: TxnLink;
+  post?: TxnPost;
+  journal?: TxnJournal;
+  effect?: TxnEffect;
+  work?: TxnWork;
+  call?: TxnCall;
   forEach?: TxnForEach;
   refusals?: Refusal[];
+};
+
+export type TxnWork = {
+  title: string;
+  body?: Expr;
+  role?: string;
+  member?: Expr;
+  due?: Expr;
+  answers?: string[];
+  key?: Expr;
+  close?: boolean;
 };
 
 export type Type = {

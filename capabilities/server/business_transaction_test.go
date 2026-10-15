@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,27 +18,49 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
+	"platformserver/apps/core"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
 var txnAt = time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
 
 func txnTenant(t *testing.T) *Tenant {
-	return composeTenant(t, "business-txn", []Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:operator"), seatOf("limited", "build:limited")}, build.New("business-txn"))
+	return composeTenant(t, "business-txn", []Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:operator"), seatOf("limited", "build:limited")}, core.New("business-txn"), work.New("business-txn"), build.New("business-txn"))
 }
 func txnDefinition() *platform.BusinessTxn {
+	decimal := func(value string) *platform.Expr { x := platform.ExprLiteralValue("decimal", value); return &x }
 	return &platform.BusinessTxn{Subject: "build.request", Steps: []platform.TxnStep{
 		{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "documents", Pattern: "D-{n:5}"}},
 		{Name: "input", Kind: "update", Target: platform.TxnRef{Type: "build.request", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "consumed", From: "=true"}, {Field: "number", From: "step.number"}, {Field: "note", From: "label"}}},
 		{Name: "head", Kind: "create", Target: platform.TxnRef{Type: "build.header"}, Changes: []platform.TxnSet{{Field: "number", From: "step.number"}, {Field: "owner", From: "$me"}, {Field: "label", From: "label"}}},
-		{Name: "first", Kind: "create", Target: platform.TxnRef{Type: "build.detail"}, Changes: []platform.TxnSet{{Field: "header", From: "step.head"}, {Field: "note", From: "label"}}},
+		{Name: "before", Kind: "call", Call: &platform.TxnCall{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetQuery, Name: "headers"}, Version: 1, ResultPath: []string{"total"}, ResultType: platform.ExprType{Kind: "integer"}}},
+		{Name: "after", Kind: "call", Call: &platform.TxnCall{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetQuery, Name: "headers"}, Version: 1, View: "current", ResultPath: []string{"total"}, ResultType: platform.ExprType{Kind: "integer"}}},
+		{Name: "first", Kind: "create", Target: platform.TxnRef{Type: "build.detail"}, Changes: []platform.TxnSet{{Field: "header", From: "step.head"}, {Field: "note", From: "label"}, {Field: "before", From: "step.before"}, {Field: "after", From: "step.after"}}},
 		{Name: "second", Kind: "create", Target: platform.TxnRef{Type: "build.detail"}, Changes: []platform.TxnSet{{Field: "header", From: "step.head"}, {Field: "note", From: "label"}}},
+		{Name: "stock", Kind: "post", Target: platform.TxnRef{Type: "build.balance"}, Post: &platform.TxnPost{Match: []platform.TxnSet{{Field: "item", From: "=goods"}}, Field: "quantity", Amount: platform.Expr{Op: "+", Kind: "decimal", Args: []platform.Expr{*decimal("0.1"), *decimal("0.2")}}}},
+		{Name: "export", Kind: "effect", Target: platform.TxnRef{Type: "build.header", ID: "step.head"}, Effect: &platform.TxnEffect{Writeback: "EXPORT", Payload: []platform.TxnSet{{Field: "number", From: "step.number"}}}},
+		{Name: "books", Kind: "journal", Journal: &platform.TxnJournal{Lines: []platform.TxnJournalLine{{Account: platform.ExprLiteralValue("text", "1403"), Debit: decimal("0.3")}, {Account: platform.ExprLiteralValue("text", "2290"), Credit: decimal("0.3")}}}},
+		{Name: "review", Kind: "work", Target: platform.TxnRef{Type: "build.header", ID: "step.head"}, Work: &platform.TxnWork{Title: "Review received goods", Role: "operator"}},
 	}}
 }
 func txnSetup(t *testing.T, tn *Tenant) {
 	publishObject(t, tn, "builder", "HEADER", map[string]any{"name": "header", "title": "Header", "plural": "Headers", "fields": []build.Field{{Name: "label", Title: "Label", Type: "longtext", Required: true}, {Name: "number", Title: "Number", Type: "text", Required: true}, {Name: "owner", Title: "Owner", Type: "text", Required: true}}, "scope": build.ObjectScope{Owner: "owner"}, "access": []build.Access{{Role: "operator", Read: "own", Create: true}, {Role: "limited", Read: "own", Create: true}}}, txnAt)
-	publishObject(t, tn, "builder", "DETAIL", map[string]any{"name": "detail", "title": "Detail", "plural": "Details", "fields": []build.Field{{Name: "header", Title: "Header", Type: "reference", Ref: "build.header", Required: true}, {Name: "note", Title: "Note", Type: "longtext", Required: true}}, "access": []build.Access{{Role: "operator", Read: "own", Create: true}, {Role: "limited", Read: "own"}}}, txnAt)
-	publishObject(t, tn, "builder", "REQUEST", map[string]any{"name": "request", "title": "Request", "plural": "Requests", "fields": []build.Field{{Name: "consumed", Title: "Consumed", Type: "boolean"}, {Name: "number", Title: "Number", Type: "text"}, {Name: "note", Title: "Note", Type: "longtext"}}, "states": []build.State{{Name: "draft", Title: "Draft"}}, "access": []build.Access{{Role: "operator", Read: "own", Create: true, Edit: true}, {Role: "limited", Read: "own", Create: true, Edit: true}}, "actions": []build.Action{{Name: "apply", Title: "Apply transaction", From: []string{"draft"}, Roles: []string{"operator", "limited"}, Inputs: []build.Input{{Name: "label", Title: "Label", Type: "longtext"}}, Transaction: txnDefinition()}}}, txnAt)
+	publishObject(t, tn, "builder", "DETAIL", map[string]any{"name": "detail", "title": "Detail", "plural": "Details", "fields": []build.Field{{Name: "header", Title: "Header", Type: "reference", Ref: "build.header", Required: true}, {Name: "note", Title: "Note", Type: "longtext", Required: true}, {Name: "before", Title: "Snapshot head count", Type: "integer"}, {Name: "after", Title: "Current head count", Type: "integer"}}, "access": []build.Access{{Role: "operator", Read: "own", Create: true}, {Role: "limited", Read: "own"}}}, txnAt)
+	publishObject(t, tn, "builder", "BALANCE", map[string]any{"name": "balance", "title": "Balance", "fields": []build.Field{{Name: "item", Title: "Item", Type: "text"}, {Name: "quantity", Title: "Quantity", Type: "decimal"}}, "access": []build.Access{{Role: "operator", Read: "all", Create: true, Edit: true}}}, txnAt)
+	decide(t, tn, "builder", build.ID, "build.query.create", build.QueryType, "HEADERS", map[string]any{"name": "headers", "title": "Headers", "description": "Visible receipt headers", "object": "build.header", "limit": 200, "sort": []string{"id"}}, txnAt)
+	decide(t, tn, "builder", build.ID, "build.query.publish", build.QueryType, "HEADERS", map[string]any{}, txnAt)
+	tn.Outbound = func(*http.Request, bool) (*http.Response, error) { return confirmationResponse(200, `{}`) }
+	decide(t, tn, "builder", build.ID, "build.connection.create", build.ConnectionType, "DESTINATION", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "http", "address": "https://warehouse.example"}, txnAt)
+	decide(t, tn, "builder", build.ID, "build.connection.check", build.ConnectionType, "DESTINATION", map[string]any{}, txnAt)
+	tn.CheckConnections(txnAt)
+	decide(t, tn, "builder", build.ID, "build.writeback.create", build.WritebackType, "EXPORT", map[string]any{"name": "receipt", "title": "Receipt export", "connection": "DESTINATION", "object": "build.header", "on": "transaction", "path": "/receipts"}, txnAt)
+	decide(t, tn, "builder", build.ID, "build.writeback.publish", build.WritebackType, "EXPORT", map[string]any{}, txnAt)
+	tn.Outbound = func(*http.Request, bool) (*http.Response, error) {
+		t.Fatal("a transaction or recovery contacted an external service")
+		return nil, io.EOF
+	}
+	publishObject(t, tn, "builder", "REQUEST", map[string]any{"name": "request", "title": "Request", "plural": "Requests", "fields": []build.Field{{Name: "consumed", Title: "Consumed", Type: "boolean"}, {Name: "number", Title: "Number", Type: "text"}, {Name: "note", Title: "Note", Type: "longtext"}}, "states": []build.State{{Name: "draft", Title: "Draft"}, {Name: "posted", Title: "Posted"}}, "access": []build.Access{{Role: "operator", Read: "own", Create: true, Edit: true}, {Role: "limited", Read: "own", Create: true, Edit: true}}, "actions": []build.Action{{Name: "apply", Title: "Apply transaction", From: []string{"draft"}, To: "posted", Roles: []string{"operator", "limited"}, Inputs: []build.Input{{Name: "label", Title: "Label", Type: "longtext"}}, Transaction: txnDefinition()}}}, txnAt)
 	for _, who := range []string{"operator", "limited"} {
 		decide(t, tn, who, build.ID, "build.request.create", "build.request", who, map[string]any{"note": "unconsumed input"}, txnAt)
 	}
@@ -75,11 +99,8 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		tn.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 			raw, err := j.AppendAccepted(context.Background(), tn.ID, e, key, hash)
 			if err == nil {
-				var kind struct {
-					Kind string `json:"kind"`
-				}
-				_ = json.Unmarshal(raw, &kind)
-				if kind.Kind == "record-batch" {
+				batch, answer, batchErr := decodeAcceptedBatch(raw)
+				if batchErr == nil && batch.Kind == "record-batch" && answer.GetSubmission().GetSchema().GetName() == "build.request.apply" {
 					if err := os.WriteFile(filepath.Join(dir, "expected-result"), raw, 0600); err != nil {
 						t.Fatal(err)
 					}
@@ -128,7 +149,10 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	denied := txnRequest(t, tn, "limited", "private parent")
 	_, deny := tn.Submit(memberOf(t, tn, "limited"), denied, txnAt)
 	if deny == nil || deny.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-		t.Fatalf("step authorization not enforced: %v", deny)
+		if deny == nil {
+			t.Fatal("step authorization not enforced: transaction was accepted")
+		}
+		t.Fatalf("step authorization not enforced: %s: %s", deny.Code, deny.Message)
 	}
 	txnUnchanged(t, tn, before)
 	draft := tn.newStagedDecision()
@@ -181,7 +205,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 			t.Fatal("updated subject lost predecessor")
 		}
 	}
-	if len(batch.Rows) != 4 || len(types) != 3 || len(batch.Decisions) != 1 || len(batch.Sequences) != 1 || len(batch.Intents) != 0 || len(batch.Observations) != 0 || !proto.Equal(receipt, answer) {
+	if len(batch.Rows) != 6 || len(types) != 5 || len(batch.Decisions) != 1 || len(batch.Sequences) != 1 || len(batch.Intents) != 2 || len(batch.Observations) != 0 || !proto.Equal(receipt, answer) {
 		t.Fatalf("unexpected batch: rows=%d types=%d decisions=%d sequences=%d", len(batch.Rows), len(types), len(batch.Decisions), len(batch.Sequences))
 	}
 	for _, row := range batch.Rows {
@@ -190,8 +214,31 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		if row.Type == "build.header" && value["number"] != "D-00001" {
 			t.Fatal("failed transaction occupied number")
 		}
+		if row.Type == "build.balance" && string(platform.Raw(value["quantity"])) != `0.3` {
+			t.Fatalf("posting lost exact decimal arithmetic: %s", row.Value)
+		}
+		if row.Type == "build.detail" && strings.HasSuffix(row.ID, "-first") && (value["before"] != float64(0) || value["after"] != float64(1)) {
+			t.Fatalf("pure calls did not distinguish initial and preceding state: %s", row.Value)
+		}
+		if row.Type == "build.request" && (value["state"] != "posted" || value["consumed"] != true) {
+			t.Fatalf("subject state did not join the document acceptance: %s", row.Value)
+		}
+		if row.Type == work.TaskType && (value["title"] != "Review received goods" || len(value["candidates"].([]any)) != 1) {
+			t.Fatalf("owned task intent was not retained: %s", row.Value)
+		}
 	}
-	t.Logf("proof 1 / budget: 3 types, 4 rows, 1 decision, 1 sequence; %d / %d bytes", len(entries[0].Body), maxAcceptedResultBytes)
+	for _, intent := range batch.Intents {
+		if intent.Endpoint == build.BooksEndpoint {
+			var journal platform.Journal
+			if json.Unmarshal([]byte(intent.Body), &journal) != nil || len(journal.Lines) != 2 || journal.Lines[0].Debit != 0.3 || journal.Lines[1].Credit != 0.3 {
+				t.Fatalf("journal intent lost its balanced lines: %s", intent.Body)
+			}
+		}
+	}
+	if entries, _, _ := platform.Find[platform.Journal](tn.automation(core.ID, false), platform.Query{}); len(entries) != 0 {
+		t.Fatal("the business transaction wrote into the books' independent authority")
+	}
+	t.Logf("complete document: header, two lines, subject state, exact balance, sequence, pure reads, effect, work and journal intent; %d / %d bytes", len(entries[0].Body), maxAcceptedResultBytes)
 	retry, retryErr := tn.Submit(memberOf(t, tn, "operator"), success, txnAt.Add(time.Hour))
 	if retryErr != nil || !proto.Equal(retry, receipt) || j.Position(tn.ID) != position+1 {
 		t.Fatal("same input did not return original receipt")
@@ -235,9 +282,20 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		t.Fatalf("cross authority not explicitly refused: %s", result)
 	}
 	t.Log("proof 5: cross-application definition explicitly refused before saving")
+	for _, kind := range []platform.AssetKind{platform.AssetAction, platform.AssetFunction, platform.AssetCompute} {
+		candidate := txnDefinition()
+		candidate.Steps[3].Call.Ref = platform.AssetRef{App: build.ID, Kind: kind, Name: "headers"}
+		definition := map[string]any{"actions": []build.Action{{Name: "apply", Title: "Apply transaction", From: []string{"draft"}, Inputs: []build.Input{{Name: "label", Title: "Label", Type: "longtext"}}, Transaction: candidate}}}
+		decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "REQUEST", definition, txnAt)
+		if result := refuse(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "REQUEST", map[string]any{}, txnAt); result == "ok" {
+			t.Fatalf("an authoritative, effectful or asynchronous %s capability was accepted as a transaction call", kind)
+		}
+	}
 	// ADR-0101 refuses an oversized rule operand before it can inflate the
 	// accepted result. No truncation, number allocation or partial application.
+	decide(t, tn, "operator", build.ID, "build.request.create", "build.request", "large", map[string]any{"note": "unconsumed oversized input"}, txnAt)
 	large := txnRequest(t, tn, "operator", strings.Repeat("x", 200000))
+	large.Target.Id = "large"
 	state := txnState(tn)
 	counters := tn.sequences.clone()
 	_, over := tn.Submit(memberOf(t, tn, "operator"), large, txnAt)
@@ -274,6 +332,10 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		t.Fatal("reopening changed accepted bytes")
 	}
 	restarted := txnTenant(t)
+	restarted.Outbound = func(*http.Request, bool) (*http.Response, error) {
+		t.Fatal("recovery contacted an external service")
+		return nil, io.EOF
+	}
 	if err := restarted.Replay(persisted); err != nil {
 		t.Fatal(err)
 	}
@@ -295,4 +357,62 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		}
 	}
 	t.Logf("proof 4: process exit 86 after durable append; reopened %d bytes identical, all rows restored without rules/reauthorization", len(frozen))
+}
+
+func TestBusinessTxnMigratedNumberRangeContinuesExistingDocuments(t *testing.T) {
+	tn := txnTenant(t)
+	publishObject(t, tn, "builder", "NUMBERED", map[string]any{"name": "numbered", "title": "Numbered document", "fields": []build.Field{{Name: "number", Title: "Number", Type: "text", Required: true}, {Name: "label", Title: "Label", Type: "text", Required: true}}, "access": []build.Access{{Role: "operator", Read: "all", Create: true}}}, txnAt)
+	for id, number := range map[string]string{"earlier": "GR2026-0007", "last": "GR2026-0042", "oldyear": "GR2025-0999"} {
+		decide(t, tn, "operator", build.ID, "build.numbered.create", "build.numbered", id, map[string]any{"number": number, "label": "Existing document"}, txnAt)
+	}
+	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "NUMBERED", map[string]any{"numbering": &build.Numbering{Field: "number", Prefix: "GR", Yearly: true, Width: 4}}, txnAt)
+	decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "NUMBERED", map[string]any{}, txnAt)
+	if refusal := refuse(t, tn, "operator", build.ID, "build.numbered.create", "build.numbered", "invalid", map[string]any{}, txnAt); refusal == "ok" {
+		t.Fatal("a rejected migrated document consumed the next number")
+	}
+	decide(t, tn, "operator", build.ID, "build.numbered.create", "build.numbered", "next", map[string]any{"label": "Next document"}, txnAt)
+	got, refusal := tn.RecordOf(memberOf(t, tn, "operator"), "build.numbered", "next", txnAt)
+	if refusal != nil || !bytes.Contains(platform.Raw(got.Record), []byte(`"number":"GR2026-0043"`)) {
+		t.Fatalf("migrating restarted or reused the existing number range: %s %v", platform.Raw(got.Record), refusal)
+	}
+	decide(t, tn, "operator", build.ID, "build.numbered.create", "build.numbered", "following", map[string]any{"label": "Following document"}, txnAt)
+	got, refusal = tn.RecordOf(memberOf(t, tn, "operator"), "build.numbered", "following", txnAt)
+	if refusal != nil || !bytes.Contains(platform.Raw(got.Record), []byte(`"number":"GR2026-0044"`)) {
+		t.Fatalf("the migrated named sequence did not continue: %s %v", platform.Raw(got.Record), refusal)
+	}
+}
+
+func TestBusinessTxnPostingRefusalsLeaveNoPartialState(t *testing.T) {
+	tn := builderTenant(t, "posting-refusals")
+	for _, item := range []struct{ name, kind string }{{"whole", "integer"}, {"cash", "money"}} {
+		publishObject(t, tn, "builder", strings.ToUpper(item.name), map[string]any{"name": item.name, "title": item.name, "fields": []build.Field{{Name: "item", Title: "Item", Type: "text"}, {Name: "amount", Title: "Amount", Type: item.kind}}, "access": []build.Access{{Role: "user", Read: "all", Create: true, Edit: true}}}, txnAt)
+	}
+	decide(t, tn, "user", build.ID, "build.whole.create", "build.whole", build.BalanceID("build.whole", []string{"goods"}), map[string]any{"item": "goods", "amount": json.Number("9223372036854775807")}, txnAt)
+	decide(t, tn, "user", build.ID, "build.cash.create", "build.cash", build.BalanceID("build.cash", []string{"goods"}), map[string]any{"item": "goods", "amount": platform.Money{Amount: 100, Currency: "USD"}}, txnAt)
+	action := func(name, object string, amount platform.Expr) build.Action {
+		return build.Action{Name: name, Title: name, From: []string{"draft"}, Roles: []string{"user"}, Transaction: &platform.BusinessTxn{Subject: "build.posting", Steps: []platform.TxnStep{
+			{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: "build.posting", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "consumed", From: "=true"}}},
+			{Name: "post", Kind: "post", Target: platform.TxnRef{Type: object}, Post: &platform.TxnPost{Match: []platform.TxnSet{{Field: "item", From: "=goods"}}, Field: "amount", Amount: amount}},
+		}}}
+	}
+	actions := []build.Action{action("overflow", "build.whole", platform.ExprLiteralValue("integer", json.Number("1"))), action("currency", "build.cash", platform.ExprLiteralValue("money", platform.Money{Amount: 1, Currency: "EUR"}))}
+	publishObject(t, tn, "builder", "POSTING", map[string]any{"name": "posting", "title": "Posting", "fields": []build.Field{{Name: "consumed", Title: "Consumed", Type: "boolean"}}, "states": []build.State{{Name: "draft", Title: "Draft"}}, "access": []build.Access{{Role: "user", Read: "all", Create: true, Edit: true}}, "actions": actions}, txnAt)
+	decide(t, tn, "user", build.ID, "build.posting.create", "build.posting", "P1", map[string]any{}, txnAt)
+	for _, name := range []string{"overflow", "currency"} {
+		t.Run(name, func(t *testing.T) {
+			before := txnState(tn)
+			if result := refuse(t, tn, "user", build.ID, "build.posting."+name, "build.posting", "P1", map[string]any{}, txnAt); result == "ok" {
+				t.Fatalf("invalid %s posting was accepted", name)
+			}
+			if txnState(tn) != before {
+				t.Fatal("a failed posting left its earlier subject write or balance change")
+			}
+		})
+	}
+	fraction := action("fraction", "build.whole", platform.ExprLiteralValue("decimal", "0.1"))
+	if result := refuse(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "POSTING", map[string]any{"actions": []build.Action{fraction}}, txnAt); result == "ok" {
+		if published := refuse(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "POSTING", map[string]any{}, txnAt); published == "ok" {
+			t.Fatal("fractional posting into an integer balance was published")
+		}
+	}
 }
