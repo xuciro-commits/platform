@@ -35,9 +35,9 @@ func TestProtocolConnectionLoadsReadOnlyPackages(t *testing.T) {
 		{"protocol.modbus-tcp", modbus.Profile, modbusReadConfiguration},
 	} {
 		t.Run(protocol.id, func(t *testing.T) {
-			descriptor, found := index.find(protocol.id, "0.1.2")
+			descriptor, found := index.find(protocol.id, "0.1.3")
 			if !found || descriptor.Runtime == nil {
-				t.Fatal("make packages must provide", protocol.id+"@0.1.2")
+				t.Fatal("make packages must provide", protocol.id+"@0.1.3")
 			}
 			artifact, err := descriptor.Runtime.Target()
 			if err != nil {
@@ -45,7 +45,7 @@ func TestProtocolConnectionLoadsReadOnlyPackages(t *testing.T) {
 			}
 			configuration, wants := protocol.configure(t)
 
-			tn := composeTenant(t, "protocol-read", []Seat{seatOf("builder", "build:builder", "platform:admin")}, build.New("protocol-read"))
+			tn := composeTenant(t, "protocol-read", []Seat{seatOf("builder", "build:builder", "platform:admin"), seatOf("operator", "build:user"), seatOf("outsider", "build:observer")}, build.New("protocol-read"))
 			console := testConsoleOf(tn)
 			console.index = index
 			at := time.Now().UTC()
@@ -83,6 +83,51 @@ func TestProtocolConnectionLoadsReadOnlyPackages(t *testing.T) {
 			}
 			if len(wants) != 0 {
 				t.Fatal("connection check omitted declared points")
+			}
+
+			// The same read belongs to an authorized business record, without
+			// granting the member access to connection settings or making history.
+			publishObject(t, tn, "builder", "EQUIPMENT", map[string]any{
+				"name": "equipment", "title": "Equipment",
+				"fields": []build.Field{{Name: "device", Title: "Device", Type: "text"}},
+				"access": []build.Access{{Role: "user", Read: "all", Create: true}},
+			}, at)
+			var point platform.DriverPoint
+			for _, candidate := range configuration.Points {
+				if candidate.Type == "decimal" && candidate.Unit != "" {
+					point = candidate
+					break
+				}
+			}
+			decide(t, tn, "operator", build.ID, "build.equipment.create", "build.equipment", "DEVICE", map[string]any{"device": point.Device}, at)
+			decide(t, tn, "builder", build.ID, "build.observation.create", build.ObservationType, "CURRENT", map[string]any{
+				"name": "current", "title": "Current equipment reading", "connection": "PLC", "object": "build.equipment", "deviceField": "device",
+				"signal": point.ID, "unit": point.Unit, "path": "/observation", "windowSeconds": 60,
+				"expectedRetentionSeconds": 3600, "expectedGranularitySeconds": 1, "roles": []string{"user", "builder"},
+			}, at)
+			decide(t, tn, "builder", build.ID, build.SchemaObservation, build.ObservationType, "CURRENT", map[string]any{}, at)
+			member := memberOf(t, tn, "operator")
+			observations, refusal := tn.Observations(member)
+			if refusal != nil || len(observations) != 1 || !observations[0].SupportsLatest {
+				t.Fatalf("current reading was not offered to its business member: %+v %v", observations, refusal)
+			}
+			ref := observations[0].Ref
+			before := snapshot(tn)
+			result, refusal := tn.ReadObservation(context.Background(), member, ref, ObservationRead{Record: "DEVICE", Mode: "latest"}, at)
+			if refusal != nil || result.Latest == nil {
+				t.Fatalf("business member current reading: %+v %v", result, refusal)
+			}
+			if result.Latest.Signal != point.ID || result.Latest.Device != point.Device || result.Latest.Unit != point.Unit || result.Latest.Quality != "good" || result.Latest.Source.Revision != binding.Revision() {
+				t.Fatalf("current reading lost original point or binding: %+v", result.Latest)
+			}
+			if result.Window != (platform.ObservationWindow{}) || len(result.Points) != 0 || snapshot(tn) != before {
+				t.Fatal("current reading synthesized history or wrote tenant state")
+			}
+			if _, refusal := tn.ReadObservation(context.Background(), memberOf(t, tn, "outsider"), ref, ObservationRead{Record: "DEVICE", Mode: "latest"}, at); refusal == nil {
+				t.Fatal("current reading bypassed the original member permissions")
+			}
+			if _, refusal := tn.ReadObservation(context.Background(), member, ref, ObservationRead{Record: "DEVICE", Mode: "summary", Since: at.Add(-time.Minute), Until: at}, at); refusal == nil {
+				t.Fatal("read-only device data replaced durable historical coverage")
 			}
 		})
 	}

@@ -5,7 +5,7 @@
 import type { AppUI } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t, type NavSection, type Route } from "@platform/ui";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, LayoutDashboard } from "lucide-react";
 import { IconGlyph } from "@platform/ui";
 
 type Definition = Api.Definition;
@@ -32,13 +32,22 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
       .filter((g) => g.pages.length > 0);
     const grouped = new Set(groups.flatMap((g) => g.pages));
     const sections = [{ label: application.title, pages: held.filter((name) => !grouped.has(name)) }, ...groups].filter((g) => g.pages.length > 0);
-    const nav = (): NavSection[] => [...sections.map((g) => ({ label: g.label, items: g.pages.map(item) })),{label:t("Run and diagnose"),items:[{label:t("Application runs"),icon:<BarChart3/>,route:{view:"application-runs",params:{app:definition.ref.app,name:application.name,application:id}}}]}];
+    const operations = { app: definition.ref.app, name: application.name, application: id };
+    const overview: Route = { view: "application-overview", params: operations };
+    const nav = (): NavSection[] => [
+      ...sections.map((g) => ({ label: g.label, items: g.pages.map(item) })),
+      { label: t("Run and diagnose"), items: [
+        ...(!held.length ? [{ label: t("Application overview"), icon: <LayoutDashboard />, route: overview }] : []),
+        { label: t("Application runs"), icon: <BarChart3 />, route: { view: "application-runs", params: operations } },
+      ] },
+    ];
     return [{
       id,
       title: application.title,
       description: application.description,
+      category: held.length ? "business" : "operate",
       icon,
-      home: sections.length ? route(sections[0]!.pages[0]!) : {view:"application-runs",params:{app:definition.ref.app,name:application.name,application:id}},
+      home: sections.length ? route(sections[0]!.pages[0]!) : overview,
       views: [], // its pages are the workspace's own page view (ADR-0032)
       nav,
     }];
@@ -50,7 +59,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
  * deep link can still resolve its owner without a second route or asset copy.
  */
 export function pageApplication(route: Route, definitions: Definition[], current?: string): string | undefined {
-  if (route.view === "application-runs") {
+  if (route.view === "application-runs" || route.view === "application-overview") {
     const { app, name, application } = route.params ?? {};
     const definition = definitions.find((item) => item.ref.kind === "app" && item.ref.app === app && item.application?.name === name);
     const id = definition?.application && `${definition.ref.app}:${definition.application.name}`;

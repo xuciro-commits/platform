@@ -5,7 +5,8 @@ export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
 import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
 export { useTransition } from "./actions/actions";
-export { Observations, ObservationRead, ObservationWindowResult } from "./observations/Observations";
+export { Observations, ObservationRead, ObservationWindowResult, RecordObservations } from "./observations/Observations";
+import { RecordObservations } from "./observations/Observations";
 export { ApplicationRuns, ApplicationRuntimePanel, OperationRunView } from "./automation/application-runs";
 export {createRecordExploration,type RecordExplorationReader} from "./exploration/reader";
 import {createRecordCollaboration} from "./collaboration/service";
@@ -464,6 +465,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); }, actions: task => task.ref?.startsWith("build.dispatch/") ? <Button size="sm" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : null } : undefined}
         actions={(r) => <>
           <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" })}>{t("Back to inbox")}</Button>
+          <RecordObservations type={type} id={r.id} />
           {(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string") && <Button size="sm" variant="ghost" onClick={() => openRecord(String(r.target ?? r.ref ?? r.subject))}>{t("Open related record")}</Button>}
           <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
           <OpenInMenu type={type} />

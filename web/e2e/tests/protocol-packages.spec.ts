@@ -5,7 +5,7 @@ import { expect, shots, slug, test } from "./kit";
 test("an installed protocol binary configures devices, previews points and publishes a connection", async ({ page, builder }, info) => {
   // The host's package directory contains binaries built by make packages.
   // Installation and every read below use the real package owner and gateway.
-  const packageID = "protocol.simulator", version = "0.1.2";
+  const packageID = "protocol.simulator", version = "0.1.3";
   const gateway = process.env.PROTOCOL_GATEWAY_URL ?? "http://127.0.0.1:18510";
   await builder.open(page, "/apps?surface=tenant");
   const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
@@ -75,8 +75,9 @@ test("an installed protocol binary configures devices, previews points and publi
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
 });
 
-test("a third protocol imports documented HVAC points through the same connection editor", async ({ page, builder }, info) => {
-  const packageID = "protocol.modbus-tcp", version = "0.1.2";
+test("a third protocol imports documented HVAC points and exposes current readings to a business member", async ({ page, builder, operator }, info) => {
+  test.setTimeout(120_000);
+  const packageID = "protocol.modbus-tcp", version = "0.1.3";
   const configuration: Api.DriverConfiguration = JSON.parse(readFileSync(new URL("../../../deploy/examples/hvac/modbus.json", import.meta.url), "utf8"));
   await builder.open(page, "/apps?surface=tenant");
   const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
@@ -133,4 +134,44 @@ test("a third protocol imports documented HVAC points through the same connectio
   await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await page.getByRole("button", { name: "Activate release", exact: true }).click();
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
+
+  // A source uses the configured point instead of repeating its unit and URL.
+  const equipment = await builder.object({
+    title: "HVAC equipment", fields: [{ name: "device", title: "Device identity", type: "text", required: true }],
+    access: [{ role: "user", read: "all", create: true }],
+  });
+  const [record] = await builder.records(equipment.type, [{ device: "mau-01" }]);
+  const observation = { id: `${saved!.id}-CURRENT`, name: slug("hvaccurrent") };
+  await builder.decide("build.observation.create", { type: "build.observation", id: observation.id }, {
+    name: observation.name, title: "HVAC supply temperature", connection: saved!.id,
+    object: equipment.type, deviceField: "device", signal: "pending", unit: "unit", path: "/observations",
+    windowSeconds: 60, expectedRetentionSeconds: 3600, expectedGranularitySeconds: 1, roles: ["user", "builder"],
+  });
+  await builder.open(page, `/observation-source?id=${observation.id}`);
+  await page.getByRole("combobox", { name: "Protocol point", exact: true }).selectOption("mau-supply-temperature");
+  await expect(page.getByRole("textbox", { name: "Unit", exact: true })).toHaveValue("℃");
+  await expect(page.getByRole("textbox", { name: "Relative adapter path", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(async () => {
+    const saved = await builder.record("build.observation", observation.id);
+    return { signal: saved.signal, unit: saved.unit, path: saved.path };
+  }).toEqual({ signal: "mau-supply-temperature", unit: "℃", path: "/observation" });
+  await builder.activate(await builder.candidate([{ kind: "observation", id: observation.id }]));
+
+  // The member reads one current point, while historical windows stay distinct.
+  await operator.open(page, `/record?type=${equipment.type}&id=${record}&inspect=true`);
+  await page.getByRole("button", { name: "Observations", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Observation read mode", exact: true })).toHaveValue("latest");
+  await expect(page.getByRole("button", { name: "Evaluate declared decision", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Read current value", exact: true }).click();
+  const current = page.getByRole("region", { name: "Current device reading", exact: true });
+  await expect(current.getByText("23.5", { exact: false })).toBeVisible();
+  await expect(current.getByText("Good quality", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "External window summary", exact: true })).toHaveCount(0);
+  await shots(page, page.locator("body"), "modbus-business-current", info);
+  await page.getByRole("combobox", { name: "Observation read mode", exact: true }).selectOption("summary");
+  await expect(current).toHaveCount(0);
+  await page.getByRole("button", { name: "Read observation window", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Observation read is unavailable" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "External window summary", exact: true })).toHaveCount(0);
 });

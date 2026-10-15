@@ -48,9 +48,21 @@ test("a builder edits one transaction and approval commits its records, balance,
     const draft = await builder.record("build.object", object.id);
     draft.actions[0].transaction.steps.push({ name: "send", kind: "effect", effect: { writeback, payload: [{ field: "quantity", expr: { op: "", kind: "decimal", ref: "input.amount" } }] } });
     await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { actions: draft.actions });
+    const related = slug("relateddraft");
+    await builder.decide("build.object.create", { type: "build.object", id: fresh("DRAFT") }, {
+      name: related, title: "Related draft item", fields: [{ name: "quantity", title: "Draft quantity", type: "decimal" }],
+    });
     await builder.open(page, `/action-type?id=${object.id}&action=receive`);
     await page.getByRole("region", { name: "Action structure", exact: true }).getByRole("button", { name: /^Transaction(?: \d+)?$/ }).click();
     await expect(page.getByRole("combobox", { name: "Transaction writeback", exact: true })).toHaveValue(writeback);
+    // Related drafts are editable before any separate publication.
+    await page.getByRole("combobox", { name: "New transaction step kind", exact: true }).selectOption("create");
+    await page.getByRole("button", { name: "Add transaction step", exact: true }).click();
+    const creation = page.getByRole("group", { name: /^Transaction step \d+$/ }).last();
+    await creation.getByRole("combobox", { name: "Step object", exact: true }).selectOption(`build.${related}`);
+    await creation.getByRole("button", { name: "Add field assignment", exact: true }).click();
+    await expect(creation.getByRole("combobox", { name: "Record field", exact: true })).toHaveValue("quantity");
+    await creation.getByRole("button", { name: "Remove transaction step", exact: true }).click();
     // The typed editor below is the same expression used for publication.
     await page.getByRole("textbox", { name: "Step name", exact: true }).last().fill("warehouse");
     await page.getByRole("button", { name: "Save", exact: true }).click();

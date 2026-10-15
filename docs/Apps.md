@@ -328,9 +328,9 @@ WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造�
 
 ## 外部观测与时序
 
-在 Data Connection 打开 **Observation sources / 观测源**，创建逻辑来源：选择已就绪的 HTTP 连接、原设备对象和设备标识字段，填写测点、单位、适配器相对路径、判定窗口及外部保留/粒度期望。连接地址与凭据只在环境配置中。需要预警时启用原业务动作，使用同一表达式编辑器组合阈值、`rate` / `delta`，并把 `over-window` 汇总映射到动作输入，沿原发布审阅保存候选并激活。
+在 Data Connection 打开 **Observation sources / 观测源**，创建逻辑来源：选择已就绪的 HTTP 连接、原设备对象和设备标识字段，普通 HTTP 时序连接填写测点、单位和适配器相对路径；协议连接从原点表选择数值测点，自动沿用单位与路径。再配置判定窗口及外部保留/粒度期望。连接地址与凭据只在环境配置中。需要预警时启用原业务动作，使用同一表达式编辑器组合阈值、`rate` / `delta`，并把 `over-window` 汇总映射到动作输入，沿原发布审阅保存候选并激活。
 
-业务人员打开 **Observations / 观测**，选原记录、时间范围与“External summary / 外部汇总”或“Original points / 原始点”，读取结果。图只负责显示，表保留精确十进制。手动判定使用原动作权限；请求未得到答复时重试保留原键和窗口。可启用“自动判定完成的窗口”，以发布者当前权限按完成窗口执行；记录状态和动作规则控制抑制。停用来源会停止新读取/判定，发布历史保留。
+业务人员从设备记录详情或只读侧栏点击 **Observations / 观测**（多来源时选择测点），协议连接默认进入 **Current device reading / 设备当前读数**：选择原记录并读取/刷新，查看精确值、单位、质量和采样时间，不产生业务记录或历史数据。历史读取另选原记录、时间范围与“External summary / 外部汇总”或“Original points / 原始点”，读取结果。图只负责显示，表保留精确十进制。手动判定使用原动作权限；请求未得到答复时重试保留原键和窗口。可启用“自动判定完成的窗口”，以发布者当前权限按完成窗口执行；记录状态和动作规则控制抑制。停用来源会停止新读取/判定，发布历史保留。
 
 外部适配器接收 POST `{device,signal,since,until,mode,limit}`；窗口为 `[since,until)`。响应 `{window:{since,until,count,firstAt,lastAt,first,last,min,max,sum,mean,unit},points?:[{at,value}]}`，数值用有限十进制字符串；空窗 count=0，不含数值与样本时刻。summary 不返回点，points 至多 5000 个。平台保存判定结果和聚合值，**原始点的保留、降采样与过期恢复由外部存储负责，不承诺与业务记录相同的历史保证**。原记录观测组件用于低频业务记录；高频时序不通过 Source/Dataset 导入。
 
@@ -381,7 +381,7 @@ pump-running,station-01,true,boolean,,1000
 
 S7 profile 使用连接字段 `address`、`rack`、`slot`、`timeoutMs`，点地址例如 `DB1.DBX0.3`、`DB1.DBW2`、`DB1.DBD4`，并声明对应 `dataType`（BOOL/INT/DINT/REAL 等）。仅本地 S7 服务已用于工程检查，具体 CPU、固件、优化 DB 和安全通信不宣称兼容。
 
-新版包使用 `make packages PROTOCOL_VERSION=0.1.2`，版本化描述与旧二进制保留；同版本不同内容拒绝覆盖。网关与包目录属于部署配置，不给行业包增加 Go/React 实现。
+新版包使用 `make packages PROTOCOL_VERSION=0.1.3`，版本化描述与旧二进制保留；同版本不同内容拒绝覆盖。网关与包目录属于部署配置，不给行业包增加 Go/React 实现。
 
 ### Modbus TCP：实际点表格式、本地模拟读数
 
@@ -391,7 +391,7 @@ S7 profile 使用连接字段 `address`、`rack`、`slot`、`timeoutMs`，点地
 .build/protocol/bin/driver-modbus -test-listen 127.0.0.1:18512 -test-data deploy/examples/hvac/modbus-memory.json
 ```
 
-另开终端按上文启动网关，在 Packages 安装 `protocol.modbus-tcp@0.1.2`；创建连接，选择 `modbus-tcp-abcd-read`，设备地址填 `127.0.0.1:18512`。依次添加 `mau-01`、`ddc-01`、`plant-01`，单元编号分别为 1、2、3，再导入 CSV，执行只读预览、保存、检查和原候选发布。不改宿主或前端即可加载这个包；该 profile 不出现设备命令入口。
+另开终端按上文启动网关，在 Packages 安装 `protocol.modbus-tcp@0.1.3`；创建连接，选择 `modbus-tcp-abcd-read`，设备地址填 `127.0.0.1:18512`。依次添加 `mau-01`、`ddc-01`、`plant-01`，单元编号分别为 1、2、3，再导入 CSV，执行只读预览、保存、检查和原候选发布。不改宿主或前端即可加载这个包；该 profile 不出现设备命令入口。
 
 | 源工作簿、页与行 | 配置点 / 地址 | 类型与比例 | 模拟读数 |
 |---|---|---|---|

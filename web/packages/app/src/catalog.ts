@@ -7,8 +7,8 @@ const asset = (id: string, name: string, summary: string, exports: string[], exa
 });
 
 export const entries: CatalogEntry[] = [
-  asset("external-observations", "External observation windows", "Read declared external time-series windows and submit compact business decisions through the original action.", ["Observations", "ObservationRead", "ObservationWindowResult"], "ExternalObservationsExample", {
-    source: "web/packages/app/src/observations/Observations.tsx", tags: ["observation", "timeseries", "external", "summary"], dependencies: ["ui/chart", "ui/data-table", "ui/datetime-input"],
+  asset("external-observations", "External observations", "Read current protocol points with quality and timestamps, or external time-series windows for compact business decisions through the original action.", ["Observations", "ObservationRead", "ObservationWindowResult", "RecordObservations"], "ExternalObservationsExample", {
+    source: "web/packages/app/src/observations/Observations.tsx", tags: ["observation", "timeseries", "external", "current", "summary"], dependencies: ["ui/chart", "ui/data-table", "ui/datetime-input"],
     constraints: ["Raw points are transient display data and never enter business records, journals or snapshots. Retention and granularity belong to the external store.", "Only the source's declared summary rule can submit its original authorized business action. Retrying an unanswered decision retains its request key and time window."],
   }),
   asset("dependency-graph", "Declared dependency graph", "Inspect forward dependencies and reverse impact from the original versioned asset description.", ["DependencyGraph"], "DependencyGraphExample", {

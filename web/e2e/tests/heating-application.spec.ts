@@ -9,7 +9,7 @@ test("a builder creates heating drafts from an installed package and an operator
   const services = "http://127.0.0.1:18511";
   const configuration = JSON.parse(readFileSync(new URL("../../../deploy/examples/heating/harbin.json", import.meta.url), "utf8")) as Api.DriverConfiguration;
   await builder.open(page, "/apps?surface=tenant");
-  for (const [id, version] of [["protocol.simulator", "0.1.2"], ["industry.heating", "0.1.0"]]) {
+  for (const [id, version] of [["protocol.simulator", "0.1.3"], ["industry.heating", "0.1.0"]]) {
     const card = page.getByRole("region", { name: `Package ${id}`, exact: true });
     await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version!);
     await card.getByRole("button", { name: "Install", exact: true }).click();
@@ -27,7 +27,7 @@ test("a builder creates heating drafts from an installed package and an operator
   const propertyFeed = application.drafts.find(draft => draft.ref.kind === "connection" && draft.ref.name === "propertyfeed")!;
   const sample = application.drafts.find(draft => draft.ref.kind === "sample-set" && draft.ref.name === "heatingdemo")!;
   const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");
-  const simulator = kinds.items.find(kind => kind.package === "protocol.simulator" && kind.profile?.id === "simulator" && kind.version === "0.1.2")!;
+  const simulator = kinds.items.find(kind => kind.package === "protocol.simulator" && kind.profile?.id === "simulator" && kind.version === "0.1.3")!;
   expect(simulator.digest).toMatch(/^(sha256:)?[0-9a-f]{64}$/);
 
   await builder.open(page, `/connection?id=${connection.id}`);

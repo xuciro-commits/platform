@@ -59,6 +59,38 @@ type ObservationResult struct {
 	Sources  []string           `json:"sources"`
 	Matched  *bool              `json:"matched,omitempty"`
 	Coverage *DriverCoverage    `json:"coverage,omitempty"`
+	Latest   *DriverSample      `json:"latest,omitempty"`
+}
+
+// A current reading carries its quality and time. It is never a window summary
+// and cannot enter the window decision evaluator.
+func CheckObservationLatest(sample DriverSample, device, signal, unit string) error {
+	if sample.Device != device || sample.Signal != signal || sample.Unit != unit || sample.At.IsZero() || sample.ReceivedAt.IsZero() || !slices.Contains([]string{"good", "bad", "uncertain", "stale"}, sample.Quality) || !slices.Contains([]string{"integer", "decimal", "number"}, sample.Type) {
+		return fmt.Errorf("current observation differs from its declared numeric point, unit or quality")
+	}
+	if sample.Value == nil {
+		if sample.Quality == "good" {
+			return fmt.Errorf("a good current observation needs a value")
+		}
+		return nil
+	}
+	if sample.Quality == "bad" {
+		return fmt.Errorf("a bad current observation cannot carry a valid value")
+	}
+	value, ok := sample.Value.(string)
+	if !ok || len(value) > 256 {
+		return fmt.Errorf("current numeric observations preserve their exact text value")
+	}
+	kind := sample.Type
+	if kind == "number" {
+		kind = "decimal"
+	}
+	program, err := CompileExpr(ExprLiteralValue(kind, value), ExprSchema{})
+	if err != nil {
+		return err
+	}
+	_, err = program.Eval(ExprContext{})
+	return err
 }
 
 // CheckObservationCoverage validates the source's completeness claim without reconstructing limited points.

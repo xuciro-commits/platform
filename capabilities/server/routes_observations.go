@@ -19,7 +19,7 @@ func (h *Host) routesObservations(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
-	rt.handle(Route{Pattern: "POST /v1/observations/{app}/{name}/read", Summary: "Read a bounded external summary or raw point window without storing points in tenant state", Body: ObservationRead{}, Answer: platform.ObservationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "POST /v1/observations/{app}/{name}/read", Summary: "Read a current protocol point or bounded external window without storing points in tenant state", Body: ObservationRead{}, Answer: platform.ObservationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ObservationRead
 		if !readObservationRequest(w, r, &request) {
 			return

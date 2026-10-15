@@ -28,7 +28,7 @@ LITE_HOST ?= 127.0.0.1
 GATEWAY_LISTEN ?= 127.0.0.1:8510
 GATEWAY_PACKAGES ?= $(ROOT)/.build/protocol/packages
 GATEWAY_STATE ?= $(ROOT)/.build/protocol/state
-PROTOCOL_VERSION ?= 0.1.2
+PROTOCOL_VERSION ?= 0.1.3
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
 

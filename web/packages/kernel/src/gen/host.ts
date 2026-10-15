@@ -2401,6 +2401,7 @@ export type ObservationInfo = {
   ref: AssetRef;
   version: string;
   definition: ObservationDefinition;
+  supportsLatest?: boolean;
 };
 
 export type ObservationPoint = {
@@ -2428,6 +2429,7 @@ export type ObservationResult = {
   sources: string[];
   matched?: boolean;
   coverage?: DriverCoverage;
+  latest?: DriverSample;
 };
 
 export type Operation = {

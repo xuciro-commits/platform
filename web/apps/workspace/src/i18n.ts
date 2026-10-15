@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Application overview": "应用概览",
+  "View application runs": "查看应用运行",
+  "This application is unavailable.": "此应用不可用。",
+  "No business pages are available in this application. You can view its activity and diagnose problems from application runs.": "此应用没有可用的业务页面。你可以在应用运行中查看活动和排查问题。",
   "Review dispatch": "处理派发指令",
   "Observations": "观测",
   "Read observations": "读取观测",

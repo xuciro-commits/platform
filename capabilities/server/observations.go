@@ -21,9 +21,10 @@ import (
 const observationResponseBytes = 1 << 20
 
 type ObservationInfo struct {
-	Ref        platform.AssetRef              `json:"ref"`
-	Version    string                         `json:"version"`
-	Definition platform.ObservationDefinition `json:"definition"`
+	Ref            platform.AssetRef              `json:"ref"`
+	Version        string                         `json:"version"`
+	Definition     platform.ObservationDefinition `json:"definition"`
+	SupportsLatest bool                           `json:"supportsLatest,omitempty"`
 }
 
 type ObservationRead struct {
@@ -71,10 +72,24 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 	if err != nil {
 		return nil, observationUnavailable(err)
 	}
+	connections, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
+	if refusal != nil {
+		return nil, refusal
+	}
+	live := map[string]bool{}
+	if owner, ok := t.app(build.ID).(host.IntegrationDefinitions); ok {
+		for _, connection := range connections {
+			if connection.State == "ready" && !connection.Archived {
+				if fixed, err := owner.ExecutionConnection(connection); err == nil && fixed.Protocol != nil {
+					live[fixed.Name] = true
+				}
+			}
+		}
+	}
 	out := []ObservationInfo{}
 	for _, definition := range definitions {
 		if definition.Observation != nil {
-			out = append(out, ObservationInfo{definition.Ref, definition.Version, *definition.Observation})
+			out = append(out, ObservationInfo{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation, SupportsLatest: definition.Observation.Connection.App == build.ID && live[definition.Observation.Connection.Name]})
 		}
 	}
 	return out, nil
@@ -102,7 +117,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 			if definition.OwnerRecord != "" && !t.observationSourceActive(definition.OwnerRecord) {
 				continue
 			}
-			plan.info = ObservationInfo{ref, definition.Version, *definition.Observation}
+			plan.info = ObservationInfo{Ref: ref, Version: definition.Version, Definition: *definition.Observation}
 			break
 		}
 	}
@@ -255,6 +270,12 @@ func observationDecisionFields(decision platform.ObservationDecision) []string {
 }
 
 func checkObservationRead(q *ObservationRead, now time.Time) error {
+	if q.Mode == "latest" {
+		if !q.Since.IsZero() || !q.Until.IsZero() || q.Limit != 0 {
+			return fmt.Errorf("A current observation does not request a time window or point limit")
+		}
+		return nil
+	}
 	if !slices.Contains([]string{"summary", "points"}, q.Mode) || q.Since.IsZero() || q.Until.IsZero() || !q.Since.Before(q.Until) || q.Until.Sub(q.Since) > time.Duration(platform.ObservationMaxWindowSeconds)*time.Second || q.Until.After(now.Add(time.Minute)) {
 		return fmt.Errorf("choose a bounded observation time window and summary or points")
 	}
@@ -272,6 +293,9 @@ func checkObservationRead(q *ObservationRead, now time.Time) error {
 
 func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan, q ObservationRead) (platform.ObservationResult, error) {
 	result := platform.ObservationResult{Ref: plan.info.Ref, Version: plan.info.Version, Object: plan.info.Definition.Object, Record: q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Sources: plan.sources}
+	if q.Mode == "latest" && plan.connection.Protocol == nil {
+		return result, fmt.Errorf("current device reads require a protocol connection")
+	}
 	if err := t.configureProtocol(ctx, plan.connection, plan.retained); err != nil {
 		return result, err
 	}
@@ -315,6 +339,7 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		Window   platform.ObservationWindow  `json:"window"`
 		Points   []platform.ObservationPoint `json:"points,omitempty"`
 		Coverage *platform.DriverCoverage    `json:"coverage,omitempty"`
+		Samples  []platform.DriverSample     `json:"samples,omitempty"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -323,6 +348,23 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, fmt.Errorf("observation storage returned trailing data")
+	}
+	if q.Mode == "latest" {
+		if len(answer.Samples) != 1 || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) != 0 || answer.Coverage != nil {
+			return result, fmt.Errorf("current observation needs exactly its declared point without a window")
+		}
+		sample := answer.Samples[0]
+		if err := platform.CheckObservationLatest(sample, plan.device, plan.info.Definition.Signal, plan.info.Definition.Unit); err != nil {
+			return result, err
+		}
+		if sample.Source.Connection != plan.connection.ID || sample.Source.Revision != plan.connection.Protocol.Revision() || sample.Source.Generation == "" {
+			return result, fmt.Errorf("current observation has another connection or configuration revision")
+		}
+		result.Latest = &sample
+		return result, nil
+	}
+	if len(answer.Samples) != 0 {
+		return result, fmt.Errorf("current device readings cannot replace a historical observation window")
 	}
 	if err := platform.CheckObservationWindowRange(answer.Window, q.Since, q.Until, plan.info.Definition.Unit); err != nil {
 		return result, err

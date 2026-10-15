@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:35ef6d6884eb3d07",
+  "revision": "sha256:95fba2eb5c478933",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -654,8 +654,8 @@
     {
       "id": "app/external-observations",
       "owner": "@platform/app",
-      "name": "External observation windows",
-      "summary": "Read declared external time-series windows and submit compact business decisions through the original action.",
+      "name": "External observations",
+      "summary": "Read current protocol points with quality and timestamps, or external time-series windows for compact business decisions through the original action.",
       "layer": 3,
       "authority": "api",
       "maturity": "recommended",
@@ -667,13 +667,15 @@
         "observation",
         "timeseries",
         "external",
+        "current",
         "summary"
       ],
       "source": "web/packages/app/src/observations/Observations.tsx",
       "exports": [
         "Observations",
         "ObservationRead",
-        "ObservationWindowResult"
+        "ObservationWindowResult",
+        "RecordObservations"
       ],
       "example": "ExternalObservationsExample",
       "constraints": [
@@ -1414,6 +1416,7 @@
         }
       ],
       "composed": [
+        "app/external-observations",
         "app/record-actions",
         "ui/button",
         "ui/disclosure",
@@ -12098,7 +12101,7 @@
       "Explore and arrange things and what holds them together, with zoom, pan, layouts, linking and caller-owned operations.": "通过缩放、平移、排布、连线与调用方管理的操作，探索并安排事物及其关联。",
       "Explore original record coordinates with a bundled world background and stable record selection.": "通过本地世界底图与稳定记录选择探索原记录坐标。",
       "Explore original relationship counts, walk and return along a controlled record path, and independently select output records.": "探索原关系计数，沿受控记录路径前进及返回，并独立选择输出记录。",
-      "External observation windows": "外部观测窗口",
+      "External observations": "外部观测",
       "Facet choices": "分面多选",
       "File picker": "文件选择器",
       "Flow layout and toolbar": "流式布局与工具栏",
@@ -12228,7 +12231,7 @@
       "Read": "已读",
       "Read a record with history, tasks and the actions offered to the current member.": "查看记录、历史、任务和当前成员可执行的动作。",
       "Read a record's declared fields, related work and recorded changes.": "阅读记录的已声明字段、相关工作与变更历史。",
-      "Read declared external time-series windows and submit compact business decisions through the original action.": "读取声明的外部时序窗口，通过原动作提交精简业务判定。",
+      "Read current protocol points with quality and timestamps, or external time-series windows for compact business decisions through the original action.": "读取协议测点当前值及质量、时间，或读取外部时序窗口，通过原动作提交精简业务判定。",
       "Read formatted content or edit its source with a shared preview.": "阅读格式化内容，或通过共享预览编辑源码。",
       "Read only": "只读",
       "Read recent business-time window statistics through the original authorized aggregate owner.": "通过原受权聚合归属方，读取最近业务时间窗口统计。",
@@ -12439,6 +12442,7 @@
   "consumers": {
     "ui/command-menu": [
       "web/packages/app/src/actions/OpenIn.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow.tsx",
       "web/packages/build/src/editor/workbench.tsx",
@@ -12766,6 +12770,7 @@
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/composites/catalog-examples.tsx",
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
@@ -13365,6 +13370,12 @@
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/widgets/Observation.tsx"
     ],
+    "app/external-observations": [
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/widgets/RecordDetails.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
     "app/record-collaboration": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx"
@@ -13743,10 +13754,6 @@
       "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
-    ],
-    "app/external-observations": [
-      "web/packages/build/src/ontology/observation.tsx",
-      "web/apps/workspace/src/chrome.tsx"
     ],
     "app/application-runs": [
       "web/packages/build/src/projects/project.tsx",

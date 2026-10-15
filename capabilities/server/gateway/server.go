@@ -254,17 +254,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if !input.Since.Before(input.Until) || !slices.Contains([]string{"summary", "points"}, input.Mode) || input.Limit < 0 || input.Limit > 10000 {
-			writeError(w, http.StatusBadRequest, "observation needs a bounded time window and summary or points mode")
-			return
-		}
-		if err := s.startSampling(ctx, live); err != nil {
-			writeError(w, http.StatusServiceUnavailable, err.Error())
-			return
+		latest := input.Mode == "latest"
+		if latest {
+			if input.Device == "" || input.Signal == "" || !input.Since.IsZero() || !input.Until.IsZero() || input.Limit != 0 {
+				writeError(w, http.StatusBadRequest, "current observation needs one device and signal without a time window or point limit")
+				return
+			}
+		} else {
+			if !input.Since.Before(input.Until) || !slices.Contains([]string{"summary", "points"}, input.Mode) || input.Limit < 0 || input.Limit > 10000 {
+				writeError(w, http.StatusBadRequest, "observation needs a bounded time window and summary or points mode")
+				return
+			}
+			if err := s.startSampling(ctx, live); err != nil {
+				writeError(w, http.StatusServiceUnavailable, err.Error())
+				return
+			}
 		}
 		result, err := s.read(ctx, live, platform.DriverRead{Session: live.open.Session, Device: input.Device, Signals: []string{input.Signal}, Since: input.Since, Until: input.Until, Mode: input.Mode, Limit: input.Limit})
 		if err != nil {
 			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		if latest {
+			if len(result.Samples) != 1 || result.Samples[0].Device != input.Device || result.Samples[0].Signal != input.Signal {
+				writeError(w, http.StatusServiceUnavailable, "the declared current device point is unavailable")
+				return
+			}
+			writeJSON(w, http.StatusOK, platform.DriverReadResult{Samples: result.Samples})
 			return
 		}
 		if result.Window == nil {

@@ -22,7 +22,7 @@ export function ObservationSources() {
 export function ObservationSourceEditor({ id }: { id: string }) {
   const { decide, can, definitions, source, catalog } = useHost(), { open, close } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: ObservationDraft }>(`/v1/records/build.observation/${encodeURIComponent(id)}`, undefined, id !== "new");
-  const connections = useRecordInventory<{ id: string; name: string; title: string; state: string; kind: string }>("build.connection");
+  const connections = useRecordInventory<Api.Connection>("build.connection");
   const capabilities = useProvidedCapabilities("action", "authoritative");
   const ownerApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   const published = useReadQuery<Api.ObservationInfo[]>("/v1/observations");
@@ -58,6 +58,8 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   const updateDecision = (change: Partial<Api.ObservationDecision>) => { if (draft.decision) patch({ decision: { ...draft.decision, ...change } }); };
   const sourceRoles = ownerApps.data?.find(app => app.id === "build")?.roles ?? [];
   const installed = published.data?.find(item => item.ref.app === "build" && item.ref.name === draft.name);
+  const protocol = connections.data?.records.find(connection => connection.id === draft.connection)?.protocol;
+  const points = protocol?.configuration.points.filter(point => ["decimal", "integer", "number"].includes(point.type) && !!point.unit) ?? [];
   if (id !== "new" && !draft.id) return <PageHeader title={t("Observation source")} description={query.isError ? t("The observation source could not be loaded.") : t("Loading…")} />;
   const editable = can(`build.observation.${draft.id ? "edit" : "create"}`);
   return <div className="grid min-w-0 gap-4">
@@ -73,12 +75,27 @@ export function ObservationSourceEditor({ id }: { id: string }) {
         <label className="grid gap-1 text-xs">{t("Observation name")}<Input value={draft.name} disabled={!!draft.published} onChange={event => patch({ name: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Observation title")}<Input value={draft.title} onChange={event => patch({ title: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Description")}<Textarea value={draft.description ?? ""} onChange={event => patch({ description: event.target.value })} /></label>
-        <label className="grid gap-1 text-xs">{t("Logical connection")}<Select value={draft.connection} onChange={event => patch({ connection: event.target.value })}><option value="">{t("Choose a ready HTTP connection")}</option>{connections.data?.records.filter(connection => connection.kind === "http" && connection.state === "ready").map(connection => <option key={connection.id} value={connection.id}>{connection.title} · {connection.name}</option>)}</Select></label>
+        <label className="grid gap-1 text-xs">{t("Logical connection")}<Select value={draft.connection} onChange={event => {
+          const connection = connections.data?.records.find(connection => connection.id === event.target.value);
+          patch({ connection: event.target.value, signal: "", unit: "", path: connection?.protocol ? "/observation" : "/observations" });
+        }}><option value="">{t("Choose a ready HTTP connection")}</option>{connections.data?.records.filter(connection => connection.kind === "http" && connection.state === "ready" && !connection.archived).map(connection => <option key={connection.id} value={connection.id}>{connection.title} · {connection.name}</option>)}</Select></label>
         <SemanticObjectSelect label={t("Observation object")} value={draft.object} onChange={ref => patch({ object: ref?.name ?? "", deviceField: "", decision: undefined, scheduled: false })} />
         <SemanticPropertySelect label={t("Device identity field")} object={object?.ref ?? { app: "", kind: "object", name: "" }} value={draft.deviceField} filter={field => ["text", "choice", "reference"].includes(field.type)} onChange={ref => patch({ deviceField: ref?.field ?? "" })} />
-        <label className="grid gap-1 text-xs">{t("Signal")}<Input value={draft.signal} onChange={event => patch({ signal: event.target.value })} /></label>
-        <label className="grid gap-1 text-xs">{t("Unit")}<Input value={draft.unit} onChange={event => patch({ unit: event.target.value })} /></label>
-        <label className="grid gap-1 text-xs">{t("Relative adapter path")}<Input value={draft.path} onChange={event => patch({ path: event.target.value })} /></label>
+        {protocol ? <>
+          <label className="grid gap-1 text-xs">{t("Protocol point")}<Select value={draft.signal} onChange={event => {
+            const point = points.find(point => point.id === event.target.value);
+            patch({ signal: point?.id ?? "", unit: point?.unit ?? "", path: "/observation" });
+          }}><option value="">{t("Choose a numeric point with a unit")}</option>
+            {draft.signal && !points.some(point => point.id === draft.signal) && <option value={draft.signal}>{t("Unavailable point: {name}", { name: draft.signal })}</option>}
+            {points.map(point => <option key={point.id} value={point.id}>{protocol.configuration.devices.find(device => device.id === point.device)?.title ?? point.device} · {point.id} · {point.unit}</option>)}
+          </Select></label>
+          <label className="grid gap-1 text-xs">{t("Unit")}<Input value={draft.unit} readOnly /></label>
+          <p className="text-xs text-muted">{t("Point identity, unit and read path come from the connection. Current values do not require historical storage.")}</p>
+        </> : <>
+          <label className="grid gap-1 text-xs">{t("Signal")}<Input value={draft.signal} onChange={event => patch({ signal: event.target.value })} /></label>
+          <label className="grid gap-1 text-xs">{t("Unit")}<Input value={draft.unit} onChange={event => patch({ unit: event.target.value })} /></label>
+          <label className="grid gap-1 text-xs">{t("Relative adapter path")}<Input value={draft.path} onChange={event => patch({ path: event.target.value })} /></label>
+        </>}
         <fieldset className="grid gap-1 text-xs"><legend>{t("Source roles")}</legend><Toggles options={sourceRoles.map(role => ({ value: role, label: role }))} value={draft.roles} onChange={roles => patch({ roles })} /></fieldset>
         {[{ field: "windowSeconds", title: "Decision window (seconds)", min: 1 }, { field: "expectedRetentionSeconds", title: "Expected external retention (seconds)", min: 1 }, { field: "expectedGranularitySeconds", title: "Expected external granularity (seconds)", min: 1 }].map(item => <label key={item.field} className="grid gap-1 text-xs">{t(item.title)}<Input type="number" min={item.min} value={draft[item.field as "windowSeconds"]} onChange={event => patch({ [item.field]: Number(event.target.value) })} /></label>)}
         <Checkbox checked={!!draft.requireComplete} onChange={requireComplete => patch({ requireComplete })}>{t("Require complete, good-quality windows")}</Checkbox>

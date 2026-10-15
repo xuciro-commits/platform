@@ -14,7 +14,11 @@ test("application capacity, original decisions and headless runtime remain visib
   const first = `${application.id}-FIRST`, second = `${application.id}-SECOND`;
   await operator.decide(`${object.type}.create`, { type: object.type, id: first }, { note: "First" });
   await operator.decide(`${object.type}.create`, { type: object.type, id: second }, { note: "Second" });
-  await builder.open(page, `/application-runs?app=build&name=${application.name}&application=build:${application.name}`);
+  await builder.open(page, "/portal");
+  await page.getByRole("button", { name: "Runtime case application", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Application overview", exact: true })).toBeVisible();
+  await expect(page.getByText("No business pages are available in this application. You can view its activity and diagnose problems from application runs.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "View application runs", exact: true }).click();
   await expect(page.getByText("Current content version", { exact: true })).toBeVisible();
   await expect(page.getByRole("alert").filter({ hasText: "scale exceeded: 2 / 1" })).toBeVisible();
   await page.getByText("Diagnose a record", { exact: true }).click();

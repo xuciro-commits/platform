@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, t, type EntityInfo } from "@platform/ui";
 import { useState } from "react";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
-import { nameOf, type Input_, type Process } from "./object-model";
+import { nameOf, type Input_, type ObjectRecord, type Process } from "./object-model";
 import { recordPaths } from "./record-paths";
 
 const fieldClass = "grid min-w-0 gap-1 text-xs";
@@ -22,10 +22,29 @@ type EditorContext = {
 export function TransactionEditor({ value, onChange, process, inputs = [], roles }: { value: Api.BusinessTxn; onChange: (value: Api.BusinessTxn) => void; process: Process; inputs?: Input_[]; roles: string[] }) {
   const host = useHost(), capabilities = useProvidedCapabilities("query", "pure");
   const writes = useRecordInventory<EditorContext["writes"][number]>("build.writeback");
+  const drafts = useRecordInventory<ObjectRecord & { archived?: boolean }>("build.object");
   const subject = value.subject;
-  const lookup = (type: string): EntityInfo | undefined => type === subject ? { ...host.source.entity(type), type, app: subject.split(".")[0]!, title: host.source.entity(type)?.title ?? subject, plural: subject, display: "id", standard: ["create", "edit", "archive"], fields: [...process.fields.map(field => ({ ...field, choices: field.choices?.split(",").map(value => value.trim()).filter(Boolean) })), ...(process.states.length ? [{ name: "state", title: t("State"), type: "choice", choices: process.states.map(state => state.name) }] : [])] } as EntityInfo : host.source.entity(type);
+  const draftEntity = (type: string, title: string, fields: Process["fields"], states: Process["states"]): EntityInfo => ({
+    ...host.source.entity(type), type, app: type.split(".")[0]!, title, plural: title,
+    display: "id", standard: ["create", "edit", "archive"],
+    fields: [
+      ...fields.map((field): Api.FieldInfo => ({
+        name: field.name, title: field.title, type: field.type as Api.FieldInfo["type"], ref: field.ref,
+        required: field.required, readOnly: field.readOnly || !!(field.formula || field.formulaExpr), aliasOf: field.aliasOf,
+        property: field.property, aiInput: field.aiInput, sourceType: field.sourceType as Api.FieldInfo["sourceType"],
+        choices: field.choices?.split(",").map(value => value.trim()).filter(Boolean),
+      })),
+      ...(states.length ? [{ name: "state", title: t("State"), type: "choice" as const, choices: states.map(state => state.name) }] : []),
+    ],
+  });
+  const entities = new Map(host.entities.map(entity => [entity.type, entity]));
+  for (const draft of drafts.data?.records ?? []) {
+    if (!draft.archived) entities.set(`build.${draft.name}`, draftEntity(`build.${draft.name}`, draft.title, draft.fields ?? [], draft.states ?? []));
+  }
+  entities.set(subject, draftEntity(subject, host.source.entity(subject)?.title ?? subject, process.fields, process.states));
+  const lookup = (type: string): EntityInfo | undefined => entities.get(type) ?? host.source.entity(type);
   const choices: ExpressionChoice[] = [{ value: "input.$subject", label: t("Subject record ID"), type: "reference", ref: subject }, { value: "caller.id", label: t("The person taking it"), type: "text" }, ...lookup(subject)!.fields.map(field => ({ value: field.name, label: t("This record: {name}", { name: field.title }), type: expressionKind(field.type), ref: field.ref })), ...inputs.map(input => ({ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: expressionKind(input.type), ref: input.ref }))];
-  const context: EditorContext = { subject, actionName: process.actions.find(action => action.transaction === value)?.name, process, inputs, choices, lookup, roles, objects: [lookup(subject)!, ...host.entities.filter(entity => entity.type !== subject && entity.app === subject.split(".")[0])], definitions: host.definitions, pure: capabilities.data ?? [], writes: writes.data?.records ?? [] };
+  const context: EditorContext = { subject, actionName: process.actions.find(action => action.transaction === value)?.name, process, inputs, choices, lookup, roles, objects: [lookup(subject)!, ...entities.values()].filter((entity, index) => entity.app === subject.split(".")[0] && (index === 0 || entity.type !== subject)), definitions: host.definitions, pure: capabilities.data ?? [], writes: writes.data?.records ?? [] };
   return <Panel title={t("Transaction steps")} className="grid min-w-0 gap-3">
     <p className="text-sm text-muted">{t("Records and numbers are saved together. Journal requests, external writes and tasks run after the transaction is accepted.")}</p>
     <Checkbox checked={!!value.guard} onChange={enabled => onChange({ ...value, guard: enabled ? literalExpression("boolean") : undefined, message: enabled ? value.message : undefined })}>{t("Require a transaction guard")}</Checkbox>

@@ -3,7 +3,7 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, RecordPage, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -33,7 +33,7 @@ function RecordInspection({ type, id }: { type: string; id: string }) {
   const openRecord = useOpenRecord();
   return <RecordPage key={`${source.scope}:${type}/${id}`} source={source} type={type} id={id} recordTabs={["properties", "links", "history"]}
     onOpen={(type, record) => openRecord({ type, id: record.id })}
-    actions={() => <Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button>} />;
+    actions={() => <><Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button><RecordObservations type={type} id={id} /></>} />;
 }
 
 function MyInbox() {
@@ -191,6 +191,21 @@ function PageDefinitionView({ ref, preview, params }: { ref: AssetRef; preview: 
   return <ApplicationPage pageRef={definition.ref} route={{ view: preview ? "page-preview" : "page", params }} preview={preview}>{preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} />}</ApplicationPage>;
 }
 
+function ApplicationOverview({ owner, name }: { owner: string; name: string }) {
+  const { definitions } = useHost();
+  const { open } = useWorkspace();
+  const application = definitions.find((definition) => definition.ref.kind === "app" && definition.ref.app === owner && definition.application?.name === name)?.application;
+  if (!application) return <p role="alert" className="text-sm text-danger">{t("This application is unavailable.")}</p>;
+  return <>
+    <PageHeader title={application.title} description={application.description} />
+    <Panel className="grid max-w-2xl gap-3 text-sm">
+      <h2 className="font-medium">{t("Application overview")}</h2>
+      <p className="text-muted">{t("No business pages are available in this application. You can view its activity and diagnose problems from application runs.")}</p>
+      <div><Button onClick={() => open({ view: "application-runs", params: { app: owner, name, application: `${owner}:${name}` } })}>{t("View application runs")}</Button></div>
+    </Panel>
+  </>;
+}
+
 // A page this member may not open, reached by a link, a remembered place or an
 // application that was withdrawn (ADR-0036 17b). The registry never says which
 // page it was or why: whether it exists is not theirs to learn either.
@@ -232,6 +247,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title || p.name || t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => p.inspect === "true" ? <RecordInspection type={p.type ?? ""} id={p.id ?? ""} /> : <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
+  { id: "application-overview", title: (p) => definitions().find((d) => d.ref.kind === "app" && d.ref.app === p.app && d.application?.name === p.name)?.application?.title ?? t("Application overview"), render: (p) => <ApplicationOverview owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} /> },

@@ -4,6 +4,7 @@ import {NewActions,RecordActions} from '../actions/actions';
 import {useOpenRecord} from '../index';
 import {pageVariableContract} from '../runtime/PageRuntime';
 import {RefusalHistory} from '../actions/RefusalHistory';
+import {RecordObservations} from '../observations/Observations';
 type RecordPorts={source?:RecordSource;object:string;record?:EntityRecord};
 export function DetailRenderer({source,object,record,fields,presentation,model,onOpen}:RecordPorts&{fields?:string[];presentation?:Api.PageDetailPresentation;model?:Api.ModelBinding;onOpen?:(type:string,record:EntityRecord)=>void}){
  if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;
@@ -26,7 +27,7 @@ export function RecordViewRenderer({source,object,record,fields,tabs,allowed,liv
  const open=useOpenRecord();
  if(!record)return <p className="text-sm text-muted">{t('Select a record to see it here.')}</p>;
  if(!source)return <Panel role="alert">{t('No source for records')}</Panel>;
- return <div className="grid min-w-0 gap-3"><RecordPage key={JSON.stringify([source.scope,object,record.id])} source={source} type={object} id={record.id} fields={fields} recordTabs={tabs??pageVariableContract.recordView.tabs} onOpen={live?onOpen??((type,record)=>open({type,id:record.id})):undefined} actions={record=>live?<RecordActions type={object} record={record} allowed={allowed} steps/>:<p className="text-xs text-muted">{t('Actions do not run while you compose.')}</p>}/>{live&&<RefusalHistory key={`${object}/${record.id}`} type={object} id={record.id}/>}</div>;
+ return <div className="grid min-w-0 gap-3"><RecordPage key={JSON.stringify([source.scope,object,record.id])} source={source} type={object} id={record.id} fields={fields} recordTabs={tabs??pageVariableContract.recordView.tabs} onOpen={live?onOpen??((type,record)=>open({type,id:record.id})):undefined} actions={record=>live?<><RecordActions type={object} record={record} allowed={allowed} steps/><RecordObservations type={object} id={record.id}/></>:<p className="text-xs text-muted">{t('Actions do not run while you compose.')}</p>}/>{live&&<RefusalHistory key={`${object}/${record.id}`} type={object} id={record.id}/>}</div>;
 }
 export function ActionsRenderer({object,record,allowed,live}:{object:string;record?:EntityRecord;allowed:string[];live:boolean}){
  if(!live)return <p className="text-sm text-muted">{t('Actions do not run while you compose.')}</p>;
