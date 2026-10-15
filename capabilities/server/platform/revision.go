@@ -161,6 +161,32 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 		if err := checkAssetDescription(asset); err != nil {
 			return empty, err
 		}
+		if ref.Kind == AssetObservation {
+			var observation ObservationDefinition
+			if err := json.Unmarshal(body, &observation); err != nil {
+				return empty, err
+			}
+			if err := CheckObservationDefinition(observation, func(typ string) (EntityInfo, bool) {
+				target, exists := lookup[observation.Object]
+				if typ != observation.Object.Name || !exists {
+					return EntityInfo{}, false
+				}
+				info, err := queryObjectDescriptor(target.Body)
+				return info, err == nil
+			}); err != nil {
+				return empty, fmt.Errorf("observation %s: %w", ref, err)
+			}
+			if observation.Decision != nil {
+				actionAsset, exists := lookup[observation.Decision.Action]
+				action, err := releaseActionDescriptor(actionAsset.Body)
+				if !exists || err != nil {
+					return empty, fmt.Errorf("observation %s action is unavailable", ref)
+				}
+				if err := CheckObservationAction(observation, action); err != nil {
+					return empty, fmt.Errorf("observation %s: %w", ref, err)
+				}
+			}
+		}
 		if ref.Kind == AssetLinkType {
 			var l LinkType
 			if json.Unmarshal(body, &l) != nil || asset.ContractVersion != l.Contract() {

@@ -814,6 +814,12 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if ownedMetadataKind(asset.Ref.Kind) {
 			definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: asset.Requires, Provides: asset.Provides}
 			switch asset.Ref.Kind {
+			case platform.AssetObservation:
+				var observation platform.ObservationDefinition
+				if json.Unmarshal(asset.Body, &observation) != nil || observation.Check() != nil {
+					return nil, fmt.Errorf("invalid observation declaration")
+				}
+				definition.Observation = &observation
 			case platform.AssetSampleSet:
 				var sample platform.SampleSet
 				if json.Unmarshal(asset.Body, &sample) != nil || sample.Check() != nil {

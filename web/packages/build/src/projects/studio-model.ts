@@ -7,7 +7,7 @@ export const studioAreas = [
   { id: "model", title: "Model", description: "Objects, fields, relationships, versions and constraints", kinds: ["object", "link-type", "property-type", "query"] },
   { id: "behavior", title: "Behavior", description: "States, actions, transactions, rules and approvals", kinds: ["object", "action", "compute"] },
   { id: "interface", title: "Interface", description: "Pages, templates, application header and navigation", kinds: ["page"] },
-  { id: "assemble", title: "Assemble", description: "Data connections, flows, AI functions and agents", kinds: ["flow", "function", "agent", "compute", "connection", "source", "dataset", "pipeline", "writeback", "matching"] },
+  { id: "assemble", title: "Assemble", description: "Data connections, flows, AI functions and agents", kinds: ["flow", "function", "agent", "compute", "connection", "source", "dataset", "pipeline", "writeback", "matching", "observation"] },
   { id: "verify", title: "Verify", description: "Samples, roles, candidates, migrations and delivery", kinds: ["sample-set", "evaluation-set"] },
 ] as const;
 export type StudioArea = typeof studioAreas[number]["id"];
@@ -50,6 +50,7 @@ export function assetRoute(ref: Api.AssetRef, resources: readonly OwnedResource[
     const name = object && ref.name.slice(object.ref.name.length + 1);
     if (object?.record?.actions?.some(action => action.name === name)) return { view: "action-type", params: { id: object.record.id, action: name!, application } };
   }
+  if (ref.kind === "observation") return { view: "observations", params: { app: ref.app, name: ref.name, application } };
   if (ref.kind === "object") return { view: "object-type", params: { object: ref.name, application } };
   return { view: "definition", params: { ...ref, surface: "studio", application } };
 }

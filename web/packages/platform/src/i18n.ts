@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Observations": "观测",
+  "Observation sources": "观测源",
   "Resolve unknown delivery": "裁决结果不明的投递",
   "Business confirmation progress": "业务确认进度",
   "Business deadline": "业务截止时间",

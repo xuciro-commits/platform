@@ -87,7 +87,7 @@ type MatchingDefinition struct {
 
 func ValueIntegrationKind(kind platform.AssetKind) bool {
 	switch kind {
-	case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching:
+	case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation:
 		return true
 	}
 	return false
@@ -132,6 +132,9 @@ func (p Pipeline) ExecutionVersion() string { return ValueIntegrationExecutionVe
 func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
 	if asset.Provides != nil {
 		return platform.CheckAssetDependencies(asset)
+	}
+	if asset.Ref.Kind == platform.AssetObservation {
+		return fmt.Errorf("observation source requires its complete dependency description")
 	}
 	var expected []platform.AssetRef
 	add := func(kind platform.AssetKind, name string) {
@@ -228,6 +231,8 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 		record = new(PipelineDefinition)
 	case platform.AssetWriteback:
 		record = new(WritebackDefinition)
+	case platform.AssetObservation:
+		record = new(platform.ObservationDefinition)
 	case platform.AssetMatching:
 		record = new(MatchingDefinition)
 	}
@@ -258,6 +263,10 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 	case *WritebackDefinition:
 		if d.Connection == "" || d.Object == "" || d.On == "" || strings.ContainsAny(d.On, "./ ") || strings.Contains(d.Path, "://") {
 			return fmt.Errorf("invalid portable writeback")
+		}
+	case *platform.ObservationDefinition:
+		if err := d.Check(); err != nil {
+			return err
 		}
 	case *MatchingDefinition:
 		if d.Object == "" || len(d.Keys) == 0 && len(d.Prefer) == 0 {

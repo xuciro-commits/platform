@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -159,9 +160,11 @@ func immutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, e
 			return false, err
 		}
 		// Protocols and interfaces now have their own descriptor. Their new
-		// code resources add no execution semantics to the old application.
+		// code resources, like the observation authoring records added later,
+		// add no execution semantics to the old application.
 		after = slices.DeleteFunc(after, func(ref platform.AssetRef) bool {
-			return (ref.Kind == platform.AssetProtocol || ref.Kind == platform.AssetInterface) && !slices.Contains(before, ref)
+			observation := ref.Kind == platform.AssetObservation || ref.App == "build" && (ref.Name == "build.observation" || strings.HasPrefix(ref.Name, "build.observation."))
+			return (ref.Kind == platform.AssetProtocol || ref.Kind == platform.AssetInterface || observation) && !slices.Contains(before, ref)
 		})
 		if len(after) == 0 && len(original["resources"]) == 0 {
 			delete(selected, "resources")

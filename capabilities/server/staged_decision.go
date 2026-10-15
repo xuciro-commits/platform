@@ -70,6 +70,7 @@ type stagedDecision struct {
 	operationAnswers     map[string]platform.OperationResult
 	operationCancels     map[string]bool
 	operationInputs      map[string][]*preparedOperationInput
+	observationInput     *ObservationDecisionEvidence
 }
 
 // HoldChanges tracks the stack that owns a private ledger receive. Savepoints
@@ -161,6 +162,9 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		return nil, d.failure
 	}
 	if r != nil && definition != nil {
+		if d.observationInput != nil {
+			definition.Observation = d.observationInput
+		}
 		definition.Contract.Family = r.GetSubmission().GetSchema().GetVersion()
 		if d.definitions == nil {
 			d.definitions = map[string]*DecisionDefinition{}

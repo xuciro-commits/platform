@@ -45,6 +45,7 @@ func (t *Tenant) PullSources(now time.Time) {
 		}
 	}
 	t.ReconcileConfirmations(now)
+	t.EvaluateObservations(now)
 }
 
 func (t *Tenant) pullSource(s build.Source, now time.Time) {

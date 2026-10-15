@@ -70,6 +70,8 @@ func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset
 		body = def.Interface
 	case def.Protocol != nil:
 		body = def.Protocol
+	case def.Observation != nil:
+		body = def.Observation
 	default:
 		return platform.ReleaseAsset{}, fmt.Errorf("asset %s has no typed definition body", def.Ref)
 	}
@@ -220,7 +222,7 @@ func (t *Tenant) describeDefinition(def platform.Definition) (platform.Definitio
 // visible. Capability roles only narrow that answer; they never grant access.
 func (t *Tenant) visibleProvides(def platform.Definition, m platform.Member, entities map[string]platform.EntityInfo) []platform.Capability {
 	provided := def.Provides
-	if def.Action != nil || def.Query != nil || def.Function != nil || def.Operation != nil || def.Entity != nil || def.Protocol != nil {
+	if def.Action != nil || def.Query != nil || def.Function != nil || def.Operation != nil || def.Entity != nil || def.Protocol != nil || def.Observation != nil {
 		if projected, err := t.describeDefinition(def); err == nil {
 			provided = projected.Provides
 		} else {

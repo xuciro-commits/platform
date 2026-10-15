@@ -18,7 +18,7 @@ export function useProjectResources(project?: Project) {
     const resolve = (kind: ResourceKindInfo, ref: Api.AssetRef, record: ResourceRecord | undefined, loaded: boolean): OwnedResource => {
       const installed = installedKeys.has(refKey(ref));
       const definition = installed ? definitions.find((d) => refKey(d.ref) === refKey(ref)) : undefined;
-      const title = record?.title ?? definition?.page?.title ?? definition?.entity?.title ?? definition?.query?.title ?? definition?.function?.title ?? ref.name;
+      const title = record?.title ?? definition?.page?.title ?? definition?.entity?.title ?? definition?.query?.title ?? definition?.function?.title ?? definition?.observation?.title ?? ref.name;
       return { kind, record, ref, title, installed, missing: !record && !installed && loaded };
     };
     const pages = inventories.page?.data?.records ?? [];

@@ -67,6 +67,10 @@ func cloneExpr(e Expr) Expr {
 		aggregate.Field = append([]string(nil), aggregate.Field...)
 		e.Agg = &aggregate
 	}
+	if e.Window != nil {
+		value := *e.Window
+		e.Window = &value
+	}
 	if e.In != nil {
 		child := cloneExpr(*e.In)
 		e.In = &child
@@ -88,6 +92,9 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 	valid := map[string]bool{"text": true, "string": true, "integer": true, "number": true, "decimal": true, "money": true, "boolean": true, "date": true, "datetime": true, "choice": true, "reference": true, "set": true}
 	if !valid[e.Kind] {
 		return Type{}, fail("type", at+".kind", "explicit supported result type required")
+	}
+	if e.Window != nil {
+		return checkWindow(e, s, at)
 	}
 	if e.Lit != nil || e.Ref != "" {
 		if e.Op != "" || len(e.Args) > 0 || e.Agg != nil || e.In != nil || len(e.Path) > 0 || (e.Lit != nil) == (e.Ref != "") {

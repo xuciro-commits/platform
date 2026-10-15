@@ -324,6 +324,14 @@ WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造�
 
 在 Builder 的 Applications 中创建应用，复用 `core.material`、`core.location` 等共享主数据，配置对象、动作、页面与流程。通过发布工作台审阅并保存封存候选，再激活或经 Host Console 晋级到同一宿主的另一租户。改存储的版本先不激活地晋级，到目标环境审阅升级计划后激活。执行步骤与证据范围见 [Testing](Testing.md) 和 [部署说明](../deploy/local/README.md#wms-与应用工作台的部署关系)。
 
+## 外部观测与时序
+
+在 Data Connection 打开 **Observation sources / 观测源**，创建逻辑来源：选择已就绪的 HTTP 连接、原设备对象和设备标识字段，填写测点、单位、适配器相对路径、判定窗口及外部保留/粒度期望。连接地址与凭据只在环境配置中。需要预警时启用原业务动作，使用同一表达式编辑器组合阈值、`rate` / `delta`，并把 `over-window` 汇总映射到动作输入，沿原发布审阅保存候选并激活。
+
+业务人员打开 **Observations / 观测**，选原记录、时间范围与“External summary / 外部汇总”或“Original points / 原始点”，读取结果。图只负责显示，表保留精确十进制。手动判定使用原动作权限；请求未得到答复时重试保留原键和窗口。可启用“自动判定完成的窗口”，以发布者当前权限按完成窗口执行；记录状态和动作规则控制抑制。停用来源会停止新读取/判定，发布历史保留。
+
+外部适配器接收 POST `{device,signal,since,until,mode,limit}`；窗口为 `[since,until)`。响应 `{window:{since,until,count,firstAt,lastAt,first,last,min,max,sum,mean,unit},points?:[{at,value}]}`，数值用有限十进制字符串；空窗 count=0，不含数值与样本时刻。summary 不返回点，points 至多 5000 个。平台保存判定结果和聚合值，**原始点的保留、降采样与过期恢复由外部存储负责，不承诺与业务记录相同的历史保证**。原记录观测组件用于低频业务记录；高频时序不通过 Source/Dataset 导入。
+
 ## 依赖与可用能力
 
 在工作区打开 **Lineage / 血缘**，选择应用和资产，查看“Declared dependencies / 声明的依赖”与“Uses / 使用”“Used by / 被使用”。点击资产可进入原定义。下方“Available capabilities / 可用能力”按类型与调用方式筛选，选择一行查看原 owner、版本和输入/输出。构建者与业务人员共用此入口，候选由宿主按当前权限返回。

@@ -71,3 +71,9 @@ type OperationCompletion interface {
 type NativeFlowAssets interface {
 	NativeFlowAsset(platform.Manifest, string, int, []platform.AssetRef) (platform.ReleaseAsset, error)
 }
+
+// ObservationDefinitions retains only the source declaration. External points
+// and summaries are read transiently by the host transport.
+type ObservationDefinitions interface {
+	ExecutionObservation(build.Observation) (platform.ObservationDefinition, error)
+}

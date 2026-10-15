@@ -21,6 +21,7 @@ export function Lineage({ ref: requested }: { ref?: string }) {
   const apps = [...new Set(descriptors.map(d => d.ref.app))].sort();
   const scopeApp = ref?.app ?? app ?? apps[0] ?? "";
   const openAsset = (ref: AssetRef) => {
+    if (ref.kind === "observation") return open({ view: "observations", params: { app: ref.app, name: ref.name } });
     if (ref.kind === "page") return open({ view: "page", params: { ...ref } });
     open({ view: "definition", params: { ...ref } });
   };

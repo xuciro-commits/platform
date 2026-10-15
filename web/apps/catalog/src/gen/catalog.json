@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9a30dc0c619adf27",
+  "revision": "sha256:608b790f96560fa3",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -649,6 +649,70 @@
       ],
       "composed": [
         "ui/relation-canvas"
+      ]
+    },
+    {
+      "id": "app/external-observations",
+      "owner": "@platform/app",
+      "name": "External observation windows",
+      "summary": "Read declared external time-series windows and submit compact business decisions through the original action.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "observation",
+        "timeseries",
+        "external",
+        "summary"
+      ],
+      "source": "web/packages/app/src/observations/Observations.tsx",
+      "exports": [
+        "Observations",
+        "ObservationRead",
+        "ObservationWindowResult"
+      ],
+      "example": "ExternalObservationsExample",
+      "constraints": [
+        "Raw points are transient display data and never enter business records, journals or snapshots. Retention and granularity belong to the external store.",
+        "Only the source's declared summary rule can submit its original authorized business action. Retrying an unanswered decision retains its request key and time window."
+      ],
+      "dependencies": [
+        "ui/chart",
+        "ui/data-table",
+        "ui/datetime-input"
+      ],
+      "props": [
+        {
+          "name": "app",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "record",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        }
+      ],
+      "composed": [
+        "ui/button",
+        "ui/input",
+        "ui/notice",
+        "ui/page-header"
       ]
     },
     {
@@ -12023,6 +12087,7 @@
       "Explore and arrange things and what holds them together, with zoom, pan, layouts, linking and caller-owned operations.": "通过缩放、平移、排布、连线与调用方管理的操作，探索并安排事物及其关联。",
       "Explore original record coordinates with a bundled world background and stable record selection.": "通过本地世界底图与稳定记录选择探索原记录坐标。",
       "Explore original relationship counts, walk and return along a controlled record path, and independently select output records.": "探索原关系计数，沿受控记录路径前进及返回，并独立选择输出记录。",
+      "External observation windows": "外部观测窗口",
       "Facet choices": "分面多选",
       "File picker": "文件选择器",
       "Flow layout and toolbar": "流式布局与工具栏",
@@ -12085,6 +12150,7 @@
       "One action control with primary, quiet, destructive, link and row variants.": "一种动作控件，提供主要、弱化、危险、链接和列表行形态。",
       "One field type owns display, editing, validation, sorting and filtering.": "一种字段类型统一负责展示、编辑、校验、排序与筛选。",
       "Only the canonical action owner may authorize and apply a transition.": "只有规范动作的归属方可以授权并应用状态跃迁。",
+      "Only the source's declared summary rule can submit its original authorized business action. Retrying an unanswered decision retains its request key and time window.": "只有来源声明的汇总规则可以提交原受权业务动作。重试未答复判定时保留请求标识和时间窗口。",
       "Open": "打开",
       "Open this full-window preview separately; its shell owns routes and saved layout.": "单独打开全窗口预览；外壳负责路由与保存的布局。",
       "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
@@ -12147,9 +12213,11 @@
       "Process steps, read only": "流程步骤（只读）",
       "Published code function call": "已发布代码函数调用",
       "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it.": "查询使用原记录读取与成员权限；页面明确选择保留的来源版本，后续草稿与发布不会替换它。",
+      "Raw points are transient display data and never enter business records, journals or snapshots. Retention and granularity belong to the external store.": "原始点只作临时显示，不进入业务记录、日志或快照。保留和粒度由外部存储管理。",
       "Read": "已读",
       "Read a record with history, tasks and the actions offered to the current member.": "查看记录、历史、任务和当前成员可执行的动作。",
       "Read a record's declared fields, related work and recorded changes.": "阅读记录的已声明字段、相关工作与变更历史。",
+      "Read declared external time-series windows and submit compact business decisions through the original action.": "读取声明的外部时序窗口，通过原动作提交精简业务判定。",
       "Read formatted content or edit its source with a shared preview.": "阅读格式化内容，或通过共享预览编辑源码。",
       "Read only": "只读",
       "Read recent business-time window statistics through the original authorized aggregate owner.": "通过原受权聚合归属方，读取最近业务时间窗口统计。",
@@ -12376,6 +12444,7 @@
       "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/automation/flows.tsx",
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/pages/sections.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
@@ -12417,6 +12486,7 @@
       "web/packages/build/src/ontology/lineage.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/match.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
@@ -12549,6 +12619,7 @@
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/catalog.fixtures.tsx",
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/pages/sections.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
@@ -12621,6 +12692,7 @@
       "web/packages/build/src/ontology/lineage.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/match.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
@@ -12740,6 +12812,7 @@
     "ui/datetime-input": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/exploration/observation-reader.ts",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/platform/src/enterprise/properties.tsx",
@@ -12756,6 +12829,7 @@
       "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/composites/catalog-examples.tsx",
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/semantic/References.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
@@ -12791,6 +12865,7 @@
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/marking.tsx",
       "web/packages/build/src/ontology/match.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
@@ -12946,6 +13021,7 @@
       "web/packages/build/src/ontology/connection.tsx",
       "web/packages/build/src/ontology/data-source.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/query.tsx",
@@ -13037,6 +13113,7 @@
     ],
     "ui/record-lookup": [
       "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
       "web/packages/build/src/ontology/query.tsx",
@@ -13058,6 +13135,7 @@
     ],
     "ui/notice": [
       "web/packages/app/src/actions/refusal.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/Alert.tsx",
       "web/packages/app/src/widgets/Notice.tsx",
       "web/packages/build/src/projects/project.tsx"
@@ -13066,6 +13144,7 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/widgets/Content.tsx",
       "web/packages/build/src/automate/automation.tsx",
@@ -13083,6 +13162,7 @@
       "web/packages/build/src/ontology/integration-health.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/match.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/property-type.tsx",
       "web/packages/build/src/ontology/query.tsx",
@@ -13145,6 +13225,7 @@
     ],
     "ui/data-table": [
       "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/CompositeViews.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -13256,6 +13337,7 @@
     ],
     "ui/entity-card": [
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/CreateForm.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -13288,6 +13370,7 @@
     ],
     "ui/chart": [
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/Chart.tsx",
       "web/packages/ui/src/records/RecordChart.tsx",
       "web/packages/ui/src/records/Records.tsx"
@@ -13578,6 +13661,7 @@
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/constraints.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/module-import/BuilderImportFields.tsx",
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
@@ -13605,6 +13689,7 @@
     ],
     "app/semantic-selection": [
       "web/packages/build/src/ontology/link-type.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/workshop/editor.tsx",
@@ -13614,6 +13699,10 @@
       "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
+    ],
+    "app/external-observations": [
+      "web/packages/build/src/ontology/observation.tsx",
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "app/application-runs": [
       "web/packages/build/src/projects/project.tsx",
@@ -13969,6 +14058,7 @@
         "useRecordArchive",
         "useRecordInventory",
         "useTenantApps",
+        "useTransition",
         "widgetContract",
         "widgetContracts"
       ],

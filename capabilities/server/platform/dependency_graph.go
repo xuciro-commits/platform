@@ -272,9 +272,9 @@ func (g *DependencyGraph) CheckExecutionBindings(asset ReleaseAsset, assets map[
 		if dependency.Kind != AssetAction || dependency.App == asset.Ref.App {
 			continue
 		}
-		if asset.Ref.Kind == AssetPage {
+		if asset.Ref.Kind == AssetPage || asset.Ref.Kind == AssetObservation {
 			continue
-		} // explicit page actions are independent authorized user submissions
+		} // explicit page/observation actions are independent authorized user submissions
 		bound := false
 		for _, protocolRef := range asset.Requires {
 			if protocolRef.Kind != AssetProtocol || protocolRef.App != dependency.App {
@@ -352,7 +352,16 @@ func (g *DependencyGraph) CheckReadBindings(asset ReleaseAsset) error {
 		if ref.Kind == AssetAction || ref.Kind == AssetFlow || ref.Kind == AssetFunction || ref.Kind == AssetWriteback || ref.Kind == AssetSource || ref.Kind == AssetPipeline {
 			return fmt.Errorf("%s read binding %s is not pure", asset.Ref, ref)
 		}
-		for _, capability := range g.nodes[ref].Provides {
+		capabilities := g.nodes[ref].Provides
+		if ref.Kind == AssetObservation {
+			if !slices.ContainsFunc(capabilities, func(capability Capability) bool {
+				return capability.Kind == "query" && capability.Name == ref.Name && capability.Side == CapabilityPure
+			}) {
+				return fmt.Errorf("%s read binding %s has no pure observation query", asset.Ref, ref)
+			}
+			continue
+		}
+		for _, capability := range capabilities {
 			if capability.Side != CapabilityPure {
 				return fmt.Errorf("%s read binding %s provides %s capability %s", asset.Ref, ref, capability.Side, capability.Name)
 			}

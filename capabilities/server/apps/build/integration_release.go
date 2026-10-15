@@ -26,13 +26,15 @@ func integrationType(kind platform.AssetKind) string {
 		return PipelineType
 	case platform.AssetWriteback:
 		return WritebackType
+	case platform.AssetObservation:
+		return ObservationType
 	case platform.AssetMatching:
 		return MatchType
 	}
 	return ""
 }
 func integrationKindOf(typ string) platform.AssetKind {
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching} {
+	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
 		if integrationType(kind) == typ {
 			return kind
 		}
@@ -55,6 +57,8 @@ func integrationMetadata(record any) (name string, version int, published string
 	case Pipeline:
 		return r.Name, r.DefinitionVersion, r.Published, r.Versions
 	case Writeback:
+		return r.Name, r.DefinitionVersion, r.Published, r.Versions
+	case Observation:
 		return r.Name, r.DefinitionVersion, r.Published, r.Versions
 	case Match:
 		return r.Name, r.DefinitionVersion, r.Published, r.Versions
@@ -113,6 +117,9 @@ saved:
 		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
 		return r, nil
 	case Writeback:
+		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
+		return r, nil
+	case Observation:
 		r.DefinitionVersion, r.Published, r.Versions = version, string(raw), versions
 		return r, nil
 	case Match:
@@ -176,6 +183,16 @@ func (b *Build) integrationInventory(kind platform.AssetKind) ([]any, error) {
 				out = append(out, r)
 			}
 		}
+	case platform.AssetObservation:
+		list, err := readDefinitionInventory[Observation](c)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range list {
+			if !r.Archived {
+				out = append(out, r)
+			}
+		}
 	case platform.AssetMatching:
 		list, err := readDefinitionInventory[Match](c)
 		if err != nil {
@@ -200,6 +217,8 @@ func integrationRecord(record any) platform.Record {
 	case Pipeline:
 		return r.Record
 	case Writeback:
+		return r.Record
+	case Observation:
 		return r.Record
 	case Match:
 		return r.Record
@@ -309,6 +328,26 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 			return asset, err
 		}
 		body = WritebackDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Object: r.Object, On: r.On, Method: r.Method, Path: r.Path, Mapping: r.Mapping, Result: r.Result}
+	case Observation:
+		d, err := b.observationDefinition(r)
+		if err != nil {
+			return asset, err
+		}
+		if err := platform.CheckObservationDefinition(d, b.lookupEntity); err != nil {
+			return asset, err
+		}
+		if d.Decision != nil {
+			owner, action, ok := b.observationAction(d)
+			if !ok || owner != d.Decision.Action.App || action.Target != d.Object.Name {
+				return asset, fmt.Errorf("The observation decision must use an action on its declared object")
+			}
+			if ok {
+				if err := platform.CheckObservationAction(d, action); err != nil {
+					return asset, err
+				}
+			}
+		}
+		body = d
 	case Match:
 		producers := map[string]platform.AssetRef{}
 		for _, preference := range r.Prefer {
@@ -439,7 +478,7 @@ func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAss
 
 func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 	var out []platform.ReleaseAsset
-	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching} {
+	for _, kind := range []platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetObservation} {
 		rows, err := b.integrationInventory(kind)
 		if err != nil {
 			return nil, err
@@ -625,6 +664,19 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 			return nil, err
 		}
 		record = Writeback{Name: d.Name, Title: d.Title, Connection: conn, Object: d.Object, On: d.On, Method: d.Method, Path: d.Path, Mapping: d.Mapping, Result: d.Result}
+	case platform.AssetObservation:
+		var d platform.ObservationDefinition
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
+			return nil, err
+		}
+		if d.Check() != nil || d.Name != asset.Ref.Name || d.Connection.App != ID {
+			return nil, fmt.Errorf("invalid observation source definition")
+		}
+		conn, err := b.integrationID(platform.AssetConnection, d.Connection.Name)
+		if err != nil {
+			return nil, err
+		}
+		record = Observation{Name: d.Name, Title: d.Title, Description: d.Description, Connection: conn, Object: d.Object.Name, DeviceField: d.DeviceField, Signal: d.Signal, Unit: d.Unit, Path: d.Path, WindowSeconds: d.WindowSeconds, ExpectedRetentionSeconds: d.ExpectedRetentionSeconds, ExpectedGranularitySeconds: d.ExpectedGranularitySeconds, Roles: slices.Clone(d.Roles), Scheduled: d.Scheduled, Decision: d.Decision}
 	case platform.AssetMatching:
 		var d MatchingDefinition
 		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -797,7 +849,7 @@ func (b *Build) freezeDirectIntegration(kind platform.AssetKind, record any) (an
 	_, ordinal, raw, _ := integrationMetadata(record)
 	asset, err := b.integrationAsset(kind, record, ordinal+1)
 	if err != nil {
-		if ordinal == 0 && raw == "" {
+		if ordinal == 0 && raw == "" && kind != platform.AssetObservation {
 			return record, nil
 		}
 		return nil, err

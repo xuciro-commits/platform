@@ -7,6 +7,10 @@ const asset = (id: string, name: string, summary: string, exports: string[], exa
 });
 
 export const entries: CatalogEntry[] = [
+  asset("external-observations", "External observation windows", "Read declared external time-series windows and submit compact business decisions through the original action.", ["Observations", "ObservationRead", "ObservationWindowResult"], "ExternalObservationsExample", {
+    source: "web/packages/app/src/observations/Observations.tsx", tags: ["observation", "timeseries", "external", "summary"], dependencies: ["ui/chart", "ui/data-table", "ui/datetime-input"],
+    constraints: ["Raw points are transient display data and never enter business records, journals or snapshots. Retention and granularity belong to the external store.", "Only the source's declared summary rule can submit its original authorized business action. Retrying an unanswered decision retains its request key and time window."],
+  }),
   asset("dependency-graph", "Declared dependency graph", "Inspect forward dependencies and reverse impact from the original versioned asset description.", ["DependencyGraph"], "DependencyGraphExample", {
     source: "web/packages/app/src/semantic/DependencyGraph.tsx", tags: ["dependency", "lineage", "impact"], dependencies: ["ui/relation-canvas"],
     constraints: ["The host resolves and authorizes the graph; the client only draws the returned descriptors. Runtime observations remain in original diagnostics."],
@@ -96,6 +100,6 @@ export const entries: CatalogEntry[] = [
 ];
 
 /** Nonvisual public API, attached to the existing public owner rather than visual cards. */
-export const api = ["boundQueryDefinition", "interfaceQueryForSection", "useTenantApps", "AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useReadQuery", "useRead", "useRecordInventory",
+export const api = ["boundQueryDefinition", "interfaceQueryForSection", "useTenantApps", "AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useTransition", "useReadQuery", "useRead", "useRecordInventory",
   "useDefinitions", "useCapabilities", "useDependencies", "useProvidedCapabilities", "DependencyDescriptor", "DependencyRead", "ProvidedCapability", "useInvokeCapability", "assetKey", "findDefinition", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "PlatformAppCategory", "categoryOf", "SavedView", "newId",
   "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed", "pageDocumentFromSections", "createWidgetRegistry", "createWidgetDefinitions", "WidgetRegistry", "widgetContracts", "widgetContract", "pageUIProfile", "supportsPageUIProfile", "searchInputObjects", "parsePageDecimal", "isPageDecimal", "isPageDecimalDraft", "PageDecimalValue", "pageVariableContract", "pageVariableValues", "pageVariableDiagnostics", "pageLayoutDiagnostics", "PageVariableValue", "WidgetImplementation", "WidgetContract", "WidgetID", "semanticModelView", "semanticPropertyTypes", "assetBindingKey", "SemanticPropertyType", "propertyKey", "relationKey", "PropertyRef", "ReferenceRelationRef", "SemanticRelation", "SemanticModelView"];

@@ -1,8 +1,8 @@
 import type {Api} from "@platform/kernel";
 
-export type RuleSchema={refs:Record<string,Api.Type>;sets?:Record<string,{element:Api.Type;policy:string}>};
+export type RuleSchema={refs:Record<string,Api.Type>;sets?:Record<string,{element:Api.Type;policy:string}>;windows?:Record<string,{unit:string}>};
 export type RuleValue={kind:string;status:string;value?:unknown};
-export type RuleContext={refs:Record<string,RuleValue>;sets?:Record<string,{items:{id:string;fields:Record<string,RuleValue>}[];complete:boolean;status?:string;withheld?:boolean}>;me?:string;now?:string;today?:string};
+export type RuleContext={refs:Record<string,RuleValue>;sets?:Record<string,{items:{id:string;fields:Record<string,RuleValue>}[];complete:boolean;status?:string;withheld?:boolean}>;me?:string;now?:string;today?:string;windows?:Record<string,Api.WindowSummary>};
 export type RuleIssue={code:string;at:string;message:string};
 type RuleGlobal=typeof globalThis&{Go?:new()=>{importObject:WebAssembly.Imports;run:(instance:WebAssembly.Instance)=>Promise<void>};platformRuleEval?:(raw:string)=>string;platformRuleCompile?:(raw:string)=>string;platformRulePage?:(raw:string)=>string;platformRuleVersion?:string};
 const runtime=globalThis as RuleGlobal;
@@ -41,6 +41,6 @@ export function pageRuleSchema(variables:Record<string,Api.PageVariable>):RuleSc
  for(const [id,v] of Object.entries(variables)){refs[id]={kind:v.rule?.kind??(v.mode==="property"&&v.ruleType?v.ruleType.kind:pageRuleKind(v.type)),...(["record","filter","object-set","record-set"].includes(v.type)?{resource:v.type}:{}),...(v.type==="string-set"?{element:{kind:"text"}}:{}),...(v.ruleType?.fields?{fields:v.ruleType.fields}:{})};if(v.type==="object-set"&&v.ruleType)sets[id]={element:v.ruleType,policy:"visible"};}
  return {refs,sets};
 }
-export function ruleDependencies(expr:Api.Expr):string[]{return [...new Set([...(expr.ref&&!expr.ref.startsWith("item.")?[expr.ref]:[]),...(expr.agg?[expr.agg.source]:[]),...(expr.args??[]).flatMap(ruleDependencies),...(expr.in?ruleDependencies(expr.in):[])])];}
+export function ruleDependencies(expr:Api.Expr):string[]{return [...new Set([...(expr.ref&&!expr.ref.startsWith("item.")?[expr.ref]:[]),...(expr.agg?[expr.agg.source]:[]),...(expr.window?[expr.window.source]:[]),...(expr.args??[]).flatMap(ruleDependencies),...(expr.in?ruleDependencies(expr.in):[])])];}
 
 export function pageRuleFits(carrier:string,kind:string):boolean{return pageRuleKind(carrier)===kind||carrier==="decimal"&&kind==="integer"||carrier==="string"&&["date","datetime","choice","reference"].includes(kind);}

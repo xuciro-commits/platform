@@ -64,6 +64,9 @@ func (p *Program) Eval(c Context) (Result, error) {
 	return Result{Value: v, Reasons: reasons}, err
 }
 func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, error) {
+	if e.Window != nil {
+		return p.window(e, c, at)
+	}
 	if e.Lit != nil {
 		if p.frozenFormula {
 			return frozenNumeric(PresentRaw(e.Kind, e.Lit.Value), at)

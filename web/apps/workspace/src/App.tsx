@@ -263,6 +263,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           { id: "requests", label: t("My requests"), group: t("My work"), run: () => { location.hash = "#/requests"; } },
           { id: "active-release", label: t("Last activated release"), run: () => setReleaseOpen(true) },
           { id: "search", label: t("Search"), run: () => { location.hash = "#/search"; } },
+          { id: "observations", label: t("Read observations"), group: t("Ontology"), run: () => { location.hash = "#/observations"; } },
           { id: "explorer", label: t("Object Explorer"), group: t("Ontology"), run: () => { location.hash = "#/explorer"; } },
           ...(host.role("build") === "builder" ? [
             { id: "lineage", label: t("Lineage"), group: t("Ontology"), run: () => { location.hash = "#/lineage"; } },

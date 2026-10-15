@@ -10,6 +10,9 @@ import (
 type Expr = rules.Expr
 type ExprLiteral = rules.Literal
 type ExprAggregate = rules.Aggregate
+type ExprWindowReference = rules.WindowReference
+type ExprWindowType = rules.WindowType
+type ExprWindowSummary = rules.WindowSummary
 type ExprType = rules.Type
 type ExprSetType = rules.SetType
 type ExprSchema = rules.Schema
@@ -36,6 +39,8 @@ func CompileExpr(expr Expr, schema ExprSchema) (*ExprProgram, error) {
 func ExprLiteralValue(kind string, value any) Expr { return rules.LiteralOf(kind, value) }
 func ExprReference(kind, name string) Expr         { return rules.RefOf(kind, name) }
 func ExprPresent(kind string, value any) ExprValue { return rules.Present(kind, value) }
+
+func CheckObservationDecimal(value string) error { return rules.CheckWindowDecimal(value) }
 
 func CompareExprValues(a, b ExprValue) (int, error) { return rules.CompareValues(a, b) }
 

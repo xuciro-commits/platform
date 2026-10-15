@@ -3,7 +3,7 @@
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "sample-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching";
+export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "sample-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -23,6 +23,7 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "agent", type: "build.agent", view: "agent", label: "Agent", plural: "Agents", ref: "agent" },
   { kind: "compute", type: "build.code", view: "code", label: "Code function", plural: "Code functions", ref: "compute" },
   { kind: "connection", type: "build.connection", view: "connection", label: "Connection", plural: "Connections" },
+  { kind: "observation", type: "build.observation", view: "observation-source", label: "Observation source", plural: "Observation sources" },
   { kind: "source", type: "build.source", view: "data-source", label: "Data source", plural: "Data sources" },
   { kind: "dataset", type: "build.dataset", view: "dataset", label: "Dataset", plural: "Datasets" },
   { kind: "pipeline", type: "build.pipeline", view: "pipeline", label: "Pipeline", plural: "Pipelines" },

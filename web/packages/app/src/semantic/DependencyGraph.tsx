@@ -3,7 +3,7 @@ import { RelationCanvas, relationNodeClasses, t, type RelationEdge, type Relatio
 import { assetKey, useHost, type AssetRef, type Definition } from "../index";
 import { useDependencies } from "./dependencies";
 
-const dependencyTitle = (definition?: Definition) => definition?.entity?.title ?? definition?.action?.title ?? definition?.page?.title ?? definition?.application?.title ?? definition?.ref.name;
+const dependencyTitle = (definition?: Definition) => definition?.entity?.title ?? definition?.action?.title ?? definition?.page?.title ?? definition?.application?.title ?? definition?.observation?.title ?? definition?.ref.name;
 
 /** Draw the host's authorized forward/reverse result; never resolve a second graph. */
 export function DependencyGraph({ asset, app, height = 360, labels, onSelect, onOpen }: { asset?: AssetRef; app?: string; height?: number; labels?: Record<string, string>; onSelect?: (ref: AssetRef) => void; onOpen?: (ref: AssetRef) => void }) {

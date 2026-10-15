@@ -12,13 +12,14 @@ import (
 // its execution contract and resource memberships, never an inferred time
 // interval or a second application/decision state.
 type DecisionDefinition struct {
-	Definition        platform.AssetBinding   `json:"definition"`
-	Contract          platform.SchemaVersion  `json:"contract"`
-	Closure           string                  `json:"closure,omitempty"`
-	DependenciesState string                  `json:"dependenciesState"`
-	Release           string                  `json:"release,omitempty"`
-	Dependencies      []platform.AssetBinding `json:"dependencies"`
-	Applications      []platform.AssetBinding `json:"applications"`
+	Observation       *ObservationDecisionEvidence `json:"observation,omitempty"`
+	Definition        platform.AssetBinding        `json:"definition"`
+	Contract          platform.SchemaVersion       `json:"contract"`
+	Closure           string                       `json:"closure,omitempty"`
+	DependenciesState string                       `json:"dependenciesState"`
+	Release           string                       `json:"release,omitempty"`
+	Dependencies      []platform.AssetBinding      `json:"dependencies"`
+	Applications      []platform.AssetBinding      `json:"applications"`
 }
 
 func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*DecisionDefinition, error) {
@@ -100,6 +101,11 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 }
 
 func (b DecisionDefinition) check(app, schema string) error {
+	if b.Observation != nil {
+		if err := b.Observation.Check(); err != nil {
+			return err
+		}
+	}
 	if b.Definition.Ref != (platform.AssetRef{App: app, Kind: platform.AssetAction, Name: schema}) || b.Definition.SourceVersion == "" || b.Contract.Check() != nil || len(b.Dependencies) > 1000 || len(b.Applications) > 1000 || slices.ContainsFunc(b.Applications, func(binding platform.AssetBinding) bool { return binding.Ref.Kind != platform.AssetApp }) {
 		return fmt.Errorf("decision definition differs from its receipt")
 	}

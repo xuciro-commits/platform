@@ -48,6 +48,7 @@ export const relationNodeSize = { width: 180, height: 56 };
 export const relationNodeClasses: Record<string, { title: string; icon: string; tone?: string }> = {
   // Data plane: what feeds what.
   connection: { title: "Connection", icon: "server", tone: "neutral" },
+  observation: { title: "Observation source", icon: "activity", tone: "info" },
   source: { title: "Source", icon: "database", tone: "info" },
   dataset: { title: "Dataset", icon: "table", tone: "success" },
   pipeline: { title: "Pipeline", icon: "workflow", tone: "warning" },

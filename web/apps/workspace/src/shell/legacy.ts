@@ -4,7 +4,7 @@ import type { Route } from "@platform/ui";
 import type { Projection } from "./registry";
 
 /** The views the shell owns; opening one keeps the current application. */
-export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage"];
+export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage", "observations"];
 
 type Params = Record<string, string>;
 const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));

@@ -297,6 +297,15 @@ func (t *Tenant) registerDefinitions() error {
 	}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
+		for _, observation := range manifest.Observations {
+			if err := platform.CheckObservationDefinition(observation, t.entity); err != nil {
+				return err
+			}
+			observation := observation
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetObservation, Name: observation.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Observation: &observation}); err != nil {
+				return err
+			}
+		}
 		for _, shape := range manifest.Interfaces {
 			shape := shape
 			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetInterface, Name: shape.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Interface: &shape}); err != nil {
@@ -404,7 +413,7 @@ func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error
 }
 
 func ownedMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetSampleSet}, kind)
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetSampleSet, platform.AssetObservation}, kind)
 }
 
 // ownedAssetDefinition indexes only an owner's accepted descriptor identity.
@@ -425,6 +434,16 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
 	}
 	definition := platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: plan.Record}
+	if plan.Ref.Kind == platform.AssetObservation {
+		var observation platform.ObservationDefinition
+		if err := json.Unmarshal(asset.Body, &observation); err != nil {
+			return definition, false, err
+		}
+		if err := observation.Check(); err != nil {
+			return definition, false, err
+		}
+		definition.Observation = &observation
+	}
 	if definition.Provides == nil {
 		description, err := platform.DescribeAsset(asset)
 		if err != nil {
@@ -727,6 +746,38 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
 				continue
 			}
+		case platform.AssetObservation:
+			if def.Observation == nil {
+				continue
+			}
+			if def.OwnerRecord != "" && !t.observationSourceActive(def.OwnerRecord) {
+				continue
+			}
+			declaration := def.Observation
+			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
+			if !t.authorizeNative(caller, def.Ref.Name, "read", declaration.Roles, true).Allow {
+				continue
+			}
+			info, found := entities[declaration.Object.Name]
+			if !found {
+				continue
+			}
+			if _, found := info.Field(declaration.DeviceField); !found {
+				continue
+			}
+			visible := *declaration
+			if visible.Decision != nil {
+				readable := true
+				for _, name := range observationDecisionFields(*visible.Decision) {
+					if _, found := info.Field(name); !found {
+						readable = false
+					}
+				}
+				if _, found := actions[visible.Decision.Action.Name]; !found || !readable {
+					visible.Decision = nil
+				}
+			}
+			def.Observation = &visible
 		case platform.AssetInterface:
 			if def.Interface == nil {
 				continue

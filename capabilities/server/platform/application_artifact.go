@@ -140,7 +140,7 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 			artifact.Flows = append(artifact.Flows, binding)
 		case AssetFunction, AssetAgent, AssetEvaluation:
 			artifact.AI = append(artifact.AI, binding)
-		case AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching:
+		case AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetObservation:
 			artifact.Integrations = append(artifact.Integrations, binding)
 		case AssetSampleSet:
 			artifact.Samples = append(artifact.Samples, binding)
@@ -197,7 +197,7 @@ func applicationAssetRoles(asset ReleaseAsset) ([]ApplicationRole, error) {
 		Action    Action                                           `json:"action"`
 		Lifecycle struct{ Transitions []struct{ Roles []string } } `json:"lifecycle"`
 	}
-	if !slices.Contains([]AssetKind{AssetObject, AssetAction, AssetFunction, AssetCompute, AssetFlow, AssetAgent}, asset.Ref.Kind) {
+	if !slices.Contains([]AssetKind{AssetObject, AssetAction, AssetFunction, AssetCompute, AssetFlow, AssetAgent, AssetObservation}, asset.Ref.Kind) {
 		return nil, nil
 	}
 	if err := json.Unmarshal(asset.Body, &descriptor); err != nil {

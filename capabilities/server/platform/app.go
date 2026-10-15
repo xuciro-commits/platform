@@ -436,13 +436,14 @@ type Manifest struct {
 	Pages         []Page        // bounded code page descriptors over those records/actions (ADR-0032 13b)
 	LinkTypes     []LinkType
 	PropertyTypes []PropertyType
-	Interfaces    []Interface  // shapes several entity types share (ADR-0058 A2)
-	Queries       []NamedQuery // named pure queries pages and agents share (ADR-0040 21c)
-	Functions     []AIFunction // typed, bounded inference through existing model effects (ADR-0043)
-	Operations    []Operation  // typed native or controlled Wasm computation (ADR-0044)
-	Flows         []Flow       // long-running processes the host runs for the app (ADR-0020)
-	Agents        []Agent      // AI agents the host runs for the app (ADR-0021)
-	Sequences     []Sequence   // numbers of its documents, without gaps (ADR-0024)
+	Interfaces    []Interface             // shapes several entity types share (ADR-0058 A2)
+	Queries       []NamedQuery            // named pure queries pages and agents share (ADR-0040 21c)
+	Functions     []AIFunction            // typed, bounded inference through existing model effects (ADR-0043)
+	Operations    []Operation             // typed native or controlled Wasm computation (ADR-0044)
+	Observations  []ObservationDefinition // external summaries and result-only business decisions (ADR-0120)
+	Flows         []Flow                  // long-running processes the host runs for the app (ADR-0020)
+	Agents        []Agent                 // AI agents the host runs for the app (ADR-0021)
+	Sequences     []Sequence              // numbers of its documents, without gaps (ADR-0024)
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0015); the roles its actions grant need not be listed.
 	Roles []string

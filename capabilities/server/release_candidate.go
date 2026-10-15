@@ -60,7 +60,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			continue
 		}
 		switch def.Ref.Kind {
-		case platform.AssetInterface, platform.AssetProtocol:
+		case platform.AssetInterface, platform.AssetProtocol, platform.AssetObservation:
 			asset, err := t.definitionAsset(def)
 			if err != nil {
 				return nil, err

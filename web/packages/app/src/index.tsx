@@ -3,6 +3,8 @@ import {RefusalHistory} from "./actions/RefusalHistory";
 export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
 import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
+export { useTransition } from "./actions/actions";
+export { Observations, ObservationRead, ObservationWindowResult } from "./observations/Observations";
 export { ApplicationRuns, ApplicationRuntimePanel, OperationRunView } from "./automation/application-runs";
 export {createRecordExploration,type RecordExplorationReader} from "./exploration/reader";
 import {createRecordCollaboration} from "./collaboration/service";

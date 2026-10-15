@@ -13,6 +13,7 @@ import (
 
 // routesIntegration serves connectors, protocols, typed capability calls, A2A, MCP and writebacks.
 func (h *Host) routesIntegration(rt *routes) {
+	h.routesObservations(rt)
 	rt.handle(Route{Pattern: "POST /v1/connectors/{input}", Summary: "Deliver a connector's batch or page as the connector's member (K8)", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
 		out, err := t.Input(m, r.PathValue("input"), body, h.Now())

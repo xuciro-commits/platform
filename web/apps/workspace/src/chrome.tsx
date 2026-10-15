@@ -3,7 +3,7 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -126,7 +126,7 @@ function DefinitionsCatalog() {
   const { data, isPending, error } = useDefinitions();
   const { open } = useWorkspace();
   const columns: ColumnDef<Definition, any>[] = [
-    { id: "title", header: t("Asset"), accessorFn: (d) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.ref.name },
+    { id: "title", header: t("Asset"), accessorFn: (d) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.observation?.title ?? d.ref.name },
     { id: "ref", header: t("Reference"), accessorFn: (d) => assetKey(d.ref), meta: { width: 320 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "version", header: t("App version"), accessorKey: "version", meta: { width: 110 } },
     { id: "dependencies", header: t("Depends on"), accessorFn: (d) => (d.requires ?? []).map(assetKey).join(", "), meta: { width: 320 },
@@ -154,6 +154,7 @@ function DefinitionView({ ref }: { ref: AssetRef }) {
         <Button variant="primary" onClick={() => open({ view: "page-preview", params: ref })}>{t("Preview page")}</Button></>} />
     <p className="font-mono text-xs text-muted">{assetKey(ref)} · {assetKey(definition.page.object)}</p>
   </>;
+  if (definition.observation) return <Observations app={ref.app} name={ref.name} />;
   if (definition.entity) return <>
     <p className="mb-2 font-mono text-xs text-muted">{assetKey(definition.ref)}</p>
     <Records type={definition.entity.type} description={definition.entity.description} />
@@ -215,6 +216,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
   { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
   { id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> },
+  { id: "observations", title: () => t("Observations"), render: p => <Observations app={p.app} name={p.name} record={p.record} /> },
   { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },

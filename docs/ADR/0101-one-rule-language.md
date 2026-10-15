@@ -46,6 +46,7 @@ type Expr struct {
 | **显式转换** | `parse-decimal` `parse-number` | text；无效、空白、超预算或非有限值明确拒绝 | decimal/number |
 | **时间** | `add-days` `add-months` `diff-days` `date-part`（year/month/day/weekday）`before` `after` `within-period` | date/datetime | date/integer/boolean |
 | **集合** | `count` `sum` `min` `max` `avg` | 集合（见下） | integer/decimal/money |
+| **观测窗口** | `delta` `rate` `over-window`（count/first/last/min/max/sum/mean） | 声明来源的一份固定大小汇总；不接受原始点；规范主人 ADR-0120 | decimal（count 为 integer）；空窗 count=0，其余为缺失 |
 | **量词** | `any` `all` `none` | 集合 + 谓词 | boolean |
 | **成员** | `in` `range`（`a..b` 的编译形态） | 标量与集合 | boolean |
 | **引用** | `path`（沿声明引用取值） | 记录 | 目标字段类型 |

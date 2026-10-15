@@ -11,6 +11,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "app/dashboard": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.DashboardExample })),
   "app/decision-confirmation": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.RecordDetailExample })),
   "app/dependency-graph": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.DependencyGraphExample })),
+  "app/external-observations": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ExternalObservationsExample })),
   "app/flow-instance": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.FlowInstanceExample })),
   "app/generated-form": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.GeneratedFormExample })),
   "app/knowledge-search": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.SearchExample })),

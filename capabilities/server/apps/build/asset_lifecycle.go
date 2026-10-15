@@ -16,7 +16,7 @@ import (
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
 		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation, platform.AssetSampleSet,
+		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation, platform.AssetSampleSet, platform.AssetObservation,
 	}
 }
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {
@@ -141,6 +141,15 @@ func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]pla
 			return nil, fmt.Errorf("source has no environment connection")
 		}
 		req = platform.AssetEnvironmentRequirement{Ref: platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: d.Connection}, Profile: kind}
+	case platform.AssetObservation:
+		var d platform.ObservationDefinition
+		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
+			return nil, err
+		}
+		if d.Connection.Kind != platform.AssetConnection || d.Connection.Name == "" {
+			return nil, fmt.Errorf("observation source has no environment connection")
+		}
+		req = platform.AssetEnvironmentRequirement{Ref: d.Connection, Profile: "http"}
 	case platform.AssetWriteback:
 		var d WritebackDefinition
 		if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -356,6 +365,16 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		case Writeback:
 			r.State, r.Publisher = "published", ctx.Member.ID
 			record = r
+		case Observation:
+			configuration, err := b.integrationConfiguration(asset)
+			if err != nil {
+				return nil, err
+			}
+			fixed := configuration.(Observation)
+			fixed.Record, fixed.State, fixed.Publisher = r.Record, "published", ctx.Member.ID
+			fixed.PublisherScopes = string(platform.Raw(ctx.Member.Scopes))
+			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
+			record = fixed
 		case Match:
 			r.State, r.Publisher = "published", ctx.Member.ID
 			record = r
@@ -395,6 +414,8 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 			record = new(Pipeline)
 		case platform.AssetWriteback:
 			record = new(Writeback)
+		case platform.AssetObservation:
+			record = new(Observation)
 		case platform.AssetMatching:
 			record = new(Match)
 		}
@@ -411,6 +432,8 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		case *Pipeline:
 			record = *r
 		case *Writeback:
+			record = *r
+		case *Observation:
 			record = *r
 		case *Match:
 			record = *r
@@ -515,6 +538,8 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 		actor = r.Runner
 	case Writeback:
 		actor = r.Publisher
+	case Observation:
+		actor = r.Publisher
 	case Match:
 		actor = r.Publisher
 	}
@@ -579,6 +604,19 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 				return fmt.Errorf("writeback execution member cannot apply answer fields")
 			}
 		}
+	case Observation:
+		if _, e := b.ExecutionObservation(r); e != nil {
+			return e
+		}
+		configuration, e := b.acceptedIntegration(r, platform.AssetObservation)
+		if e != nil {
+			return e
+		}
+		fixed := configuration.(Observation)
+		fixed.Record, fixed.State, fixed.Publisher = r.Record, r.State, r.Publisher
+		fixed.PublisherScopes = r.PublisherScopes
+		fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
+		err = b.checkObservation(c, fixed)
 	case Match:
 		fixed, e := b.ExecutionMatching(r)
 		if e != nil {
@@ -603,6 +641,8 @@ func integrationInstallationRecord(kind platform.AssetKind, raw []byte) (any, er
 		ptr = new(Pipeline)
 	case platform.AssetWriteback:
 		ptr = new(Writeback)
+	case platform.AssetObservation:
+		ptr = new(Observation)
 	case platform.AssetMatching:
 		ptr = new(Match)
 	default:
@@ -801,6 +841,23 @@ func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member pla
 			if len(d.Result) > 0 {
 				if err := writes(d.Object, "edit"); err != nil {
 					return err
+				}
+			}
+		case platform.AssetObservation:
+			var d platform.ObservationDefinition
+			if err := buildapi.ValueDecodeIntegration(asset.Body, &d); err != nil {
+				return err
+			}
+			if err := permission(SchemaObservation); err != nil {
+				return err
+			}
+			if d.Decision != nil {
+				if err := permission(d.Decision.Action.Name); err != nil {
+					return err
+				}
+				owner, action, ok := b.observationAction(d)
+				if !ok || owner != d.Decision.Action.App || !member.May(owner, action.Schema, action.Roles).Allow {
+					return fmt.Errorf("release execution member cannot invoke the declared observation decision")
 				}
 			}
 		case platform.AssetMatching:

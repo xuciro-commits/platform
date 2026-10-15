@@ -116,6 +116,8 @@ export const dataConnection = defineApp({
   nav: () => [{ label: t("Data Connection"), items: [
     { label: t("Connectors and webhooks"), icon: <PlugZap />, route: { view: "integrations" } },
     { label: t("Lineage"), icon: <Network />, route: { view: "lineage" } },
+    { label: t("Observations"), icon: <BarChart3 />, route: { view: "observations" } },
+    { label: t("Observation sources"), icon: <Database />, route: { view: "observation-source" } },
   ] }],
 });
 

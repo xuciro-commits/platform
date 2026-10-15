@@ -478,6 +478,9 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 		trace := ApplicationDecisionTrace{Change: change.Change, Schema: change.Schema, At: change.At, Versions: []ApplicationVersion{}}
 		if definition := t.committed.decisionDefinitions[owner+"/"+change.Change]; definition != nil && definition.Definition.Ref.Name == change.Schema {
 			projection := *definition
+			if projection.Observation != nil {
+				projection.Observation = t.visibleObservationEvidence(m, projection.Observation, now)
+			}
 			projection.Dependencies = slices.DeleteFunc(slices.Clone(definition.Dependencies), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
 			projection.Applications = slices.DeleteFunc(slices.Clone(definition.Applications), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
 			trace.Definition, trace.Content = &projection, &projection.Contract

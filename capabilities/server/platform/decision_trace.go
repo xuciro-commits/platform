@@ -45,6 +45,12 @@ func ruleTraceContext(expr Expr, context ExprContext) ExprContext {
 				out.Refs[e.Ref] = v
 			}
 		}
+		if e.Window != nil {
+			if out.Windows == nil {
+				out.Windows = map[string]ExprWindowSummary{}
+			}
+			out.Windows[e.Window.Source] = context.Windows[e.Window.Source]
+		}
 		if e.Agg != nil {
 			out.Sets[e.Agg.Source] = context.Sets[e.Agg.Source]
 		}

@@ -39,8 +39,9 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
-	simulation      bool                         // isolated builder execution, never authoritative state
-	simulationTrace func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
+	observationWindows map[string]observationWindowAttempt
+	simulation         bool                         // isolated builder execution, never authoritative state
+	simulationTrace    func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
 	// Private control views route callbacks back into their owning decision.
 	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity      host.IdentityDirectory
@@ -386,7 +387,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
-	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal)
+	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal, nil)
 	if report != nil && err != nil {
 		if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
 			hash, _ := submissionHash(s, binding)
@@ -416,10 +417,10 @@ func acceptsPureTransition(a platform.App, schema string) bool {
 }
 
 func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
-	return t.submitAcceptedVersion(a, m, t.currentSubmissionSchema(a, s), now, automation, nil, nil, input...)
+	return t.submitAcceptedVersion(a, m, t.currentSubmissionSchema(a, s), now, automation, nil, nil, nil, input...)
 }
 
-func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *ObservationDecisionEvidence, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// A malformed transport identity cannot reserve a durable key for another
 	// tenant, authority or member. The kernel still supplies its ordinary
 	// refusal, but no result under this tenant can represent that submission.
@@ -469,6 +470,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
 	draft := t.newStagedDecision()
+	draft.observationInput = observation
 	draft.schemaVersion = binding
 	if len(input) > 0 {
 		draft.operationInputs = make(map[string][]*preparedOperationInput, len(input))

@@ -1051,6 +1051,7 @@ export type Constraint = {
 
 export type Context = {
   sources?: string[];
+  windows?: Record<string, WindowSummary>;
   refs: Record<string, Value>;
   sets?: Record<string, Collection>;
   me: string;
@@ -1131,6 +1132,7 @@ export type DateRange = {
 };
 
 export type DecisionDefinition = {
+  observation?: ObservationDecisionEvidence;
   definition: AssetBinding;
   contract: SchemaVersion;
   closure?: string;
@@ -1157,6 +1159,7 @@ export type DecisionTrace = {
 };
 
 export type Definition = {
+  observation?: ObservationDefinition;
   sampleSet?: SampleSet;
   interface?: Interface;
   protocol?: ProtocolReleaseDescriptor;
@@ -1414,6 +1417,7 @@ export type Expr = {
   path?: string[];
   agg?: Aggregate;
   in?: Expr;
+  window?: WindowReference;
 };
 
 export type Field = {
@@ -2127,6 +2131,84 @@ export type Notification = {
   at: string;
   read: boolean;
   withheld?: boolean;
+};
+
+export type ObservationDecision = {
+  when: Expr;
+  action: AssetRef;
+  inputs: Record<string, Expr>;
+};
+
+export type ObservationDecisionEvidence = {
+  key: string;
+  definition: AssetBinding;
+  record: string;
+  device: string;
+  signal: string;
+  window: WindowSummary;
+};
+
+export type ObservationDefinition = {
+  name: string;
+  title: string;
+  description?: string;
+  connection: AssetRef;
+  object: AssetRef;
+  deviceField: string;
+  signal: string;
+  unit: string;
+  path: string;
+  windowSeconds: number;
+  expectedRetentionSeconds: number;
+  expectedGranularitySeconds: number;
+  roles: string[];
+  scheduled?: boolean;
+  decision?: ObservationDecision;
+};
+
+export type ObservationEvaluate = {
+  record: string;
+  until: string;
+  key: string;
+};
+
+export type ObservationEvaluation = {
+  observation?: ObservationResult;
+  matched: boolean;
+  receipt?: SubmissionAnswer;
+  reused?: boolean;
+};
+
+export type ObservationInfo = {
+  ref: AssetRef;
+  version: string;
+  definition: ObservationDefinition;
+};
+
+export type ObservationPoint = {
+  at: string;
+  value: string;
+};
+
+export type ObservationRead = {
+  record: string;
+  since: string;
+  until: string;
+  mode: string;
+  limit?: number;
+};
+
+export type ObservationResult = {
+  ref: AssetRef;
+  version: string;
+  object: AssetRef;
+  record: string;
+  device: string;
+  signal: string;
+  window: WindowSummary;
+  points?: ObservationPoint[];
+  sources: string[];
+  matched?: boolean;
 };
 
 export type Operation = {
@@ -4317,6 +4399,26 @@ export type Viewpoint = {
   elements: string[];
   context?: string[];
   relationships: string[];
+};
+
+export type WindowReference = {
+  source: string;
+  aggregate?: string;
+};
+
+export type WindowSummary = {
+  since: string;
+  until: string;
+  count: number;
+  firstAt?: string;
+  lastAt?: string;
+  first?: string;
+  last?: string;
+  min?: string;
+  max?: string;
+  sum?: string;
+  mean?: string;
+  unit: string;
 };
 
 export type Word = {

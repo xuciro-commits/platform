@@ -18,7 +18,7 @@ export function TenantReferencesExample() {
     <MemberSelect value={member} onChange={setMember} />
   </div></CatalogFixture>;
 }
-import { DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
+import { ObservationWindowResult, DependencyGraph, ApplicationRuns, OperationRunView, ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 import {ObservationStatistics,type EntityInfo} from "@platform/ui";
@@ -33,6 +33,13 @@ export function ObservationStatisticsReaderExample(){
  const request=useMemo(()=>({object:info.type,query:{},window:{timeField:"at",field:params.signal,rows:params.windowRows,threshold:String(params.threshold)}}),[info,params]),scope=reader.scope(request);
  useEffect(()=>{let current=true;void reader.read(request).then(result=>{if(current)setState({scope,result});},()=>{if(current)setState({scope,error:t("The original observation statistics answer is invalid.")});});return()=>{current=false;};},[reader,request,scope]);
  return <div className="grid min-w-0 grid-cols-1 gap-2"><p className="break-words text-xs text-muted">{t("The window reader example uses a fixed local answer and performs no tenant query.")}</p><ObservationStatistics scope={scope} info={info} signals={[{field:"value",unit:""}]} timeField="at" {...params} windowOptions={[1000,10000,100000]} value={state?.scope===scope?state.result?.statistics:undefined} error={state?.scope===scope?state.error:undefined} onChange={setParams}/></div>;
+}
+
+export function ExternalObservationsExample() {
+  return <ObservationWindowResult result={{ ref: { app: "catalog", kind: "observation", name: "temperature" }, version: "example-1", object: { app: "catalog", kind: "object", name: "catalog.equipment" }, record: "EQUIPMENT-1", device: "device-1", signal: "temperature", sources: ["catalog.equipment/EQUIPMENT-1"],
+    window: { since: "2026-10-14T10:00:00Z", until: "2026-10-14T10:05:00Z", count: 3, firstAt: "2026-10-14T10:00:00Z", lastAt: "2026-10-14T10:04:00Z", first: "20.125", last: "23.125", min: "20.125", max: "23.125", sum: "65.375", mean: "21.791666666666666667", unit: "C" },
+    points: [{ at: "2026-10-14T10:00:00Z", value: "20.125" }, { at: "2026-10-14T10:02:00Z", value: "22.125" }, { at: "2026-10-14T10:04:00Z", value: "23.125" }],
+  }} />;
 }
 
 export function DependencyGraphExample() {

@@ -11,6 +11,7 @@ import { AutomationEditor, Automations } from "./automate/automation";
 import { WorkflowRuns } from "./automate/workflow-runs";
 import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
 import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
+import { ObservationSourceEditor, ObservationSources } from "./ontology/observation";
 import { DataSourceEditor, DataSources } from "./ontology/data-source";
 import { ConnectionEditor, Connections } from "./ontology/connection";
 import { DatasetEditor, Datasets } from "./ontology/dataset";
@@ -40,6 +41,7 @@ const builder = (host: Host) => host.role("build") === "builder";
 const integrator = (host: Host) => host.role("build") === "integrator";
 const integration = (): NavSection => ({ label: t("Integration"), items: [
   { label: t("Connections"), icon: <Plug />, route: { view: "connection" } },
+  { label: t("Observation sources"), icon: <Activity />, route: { view: "observation-source" } },
   { label: t("Data sources"), icon: <Database />, route: { view: "data-source" } },
   { label: t("Datasets"), icon: <Layers />, route: { view: "dataset" } },
   { label: t("Pipelines"), icon: <GitMerge />, route: { view: "pipeline" } },
@@ -62,6 +64,7 @@ const editorViews: View[] = [
   { id: "flow", title: () => t("Flows"), render: p => p.id ? <FlowEditor key={p.id} id={p.id} /> : <Flows /> },
   { id: "runs", title: () => t("Runs"), render: p => <WorkflowRuns name={p.name ?? ""} onStepSelect={() => {}} /> },
   { id: "connection", title: () => t("Connections"), render: p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections /> },
+  { id: "observation-source", title: () => t("Observation sources"), render: p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources /> },
   { id: "data-source", title: () => t("Data sources"), render: p => p.id ? <DataSourceEditor key={p.id} id={p.id} /> : <DataSources /> },
   { id: "dataset", title: () => t("Datasets"), render: p => p.id ? <DatasetEditor key={p.id} id={p.id} /> : <Datasets /> },
   { id: "pipeline", title: () => t("Pipelines"), render: p => p.id ? <PipelineEditor key={p.id} id={p.id} /> : <Pipelines /> },
@@ -93,7 +96,7 @@ export default defineApp({
   id: "build", surface: "studio", category: "build", title: t("Builder"),
   description: t("Build, verify and deliver one business application."), icon: <Hammer />,
   home: { view: "projects" }, views,
-  opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.agent": "agent", "build.alertrule": "alert" },
+  opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.agent": "agent", "build.alertrule": "alert", "build.observation": "observation-source" },
   navigation: route => <StudioNavigation route={route} />,
   nav: (host, route): NavSection[] => {
     if (integrator(host)) return [integration()];

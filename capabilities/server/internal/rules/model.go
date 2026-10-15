@@ -20,14 +20,15 @@ const MaxContextBytes = 8 << 20
 const MaxText = 4096
 
 type Expr struct {
-	Op   string     `json:"op"`
-	Kind string     `json:"kind"`
-	Args []Expr     `json:"args,omitempty"`
-	Lit  *Literal   `json:"lit,omitempty"`
-	Ref  string     `json:"ref,omitempty"`
-	Path []string   `json:"path,omitempty"`
-	Agg  *Aggregate `json:"agg,omitempty"`
-	In   *Expr      `json:"in,omitempty"`
+	Op     string           `json:"op"`
+	Kind   string           `json:"kind"`
+	Args   []Expr           `json:"args,omitempty"`
+	Lit    *Literal         `json:"lit,omitempty"`
+	Ref    string           `json:"ref,omitempty"`
+	Path   []string         `json:"path,omitempty"`
+	Agg    *Aggregate       `json:"agg,omitempty"`
+	In     *Expr            `json:"in,omitempty"`
+	Window *WindowReference `json:"window,omitempty"`
 }
 type Literal struct {
 	Value   json.RawMessage `json:"value"`
@@ -50,8 +51,9 @@ type SetType struct {
 	Policy  string `json:"policy"`
 }
 type Schema struct {
-	Refs map[string]Type    `json:"refs"`
-	Sets map[string]SetType `json:"sets,omitempty"`
+	Refs    map[string]Type       `json:"refs"`
+	Sets    map[string]SetType    `json:"sets,omitempty"`
+	Windows map[string]WindowType `json:"windows,omitempty"`
 }
 
 // Status distinguishes data that is absent, explicitly null, or withheld.
@@ -72,12 +74,13 @@ type Collection struct {
 	Withheld bool   `json:"withheld,omitempty"`
 }
 type Context struct {
-	Sources []string              `json:"sources,omitempty"`
-	Refs    map[string]Value      `json:"refs"`
-	Sets    map[string]Collection `json:"sets,omitempty"`
-	Me      string                `json:"me"`
-	Now     time.Time             `json:"now"`
-	Today   string                `json:"today"`
+	Sources []string                 `json:"sources,omitempty"`
+	Windows map[string]WindowSummary `json:"windows,omitempty"`
+	Refs    map[string]Value         `json:"refs"`
+	Sets    map[string]Collection    `json:"sets,omitempty"`
+	Me      string                   `json:"me"`
+	Now     time.Time                `json:"now"`
+	Today   string                   `json:"today"`
 }
 type Issue struct {
 	Code    string `json:"code"`
