@@ -9,6 +9,23 @@ const {overlaySessionScopes,selectionSlot,recordSlot,resourceVariables,recordOut
 const page={object:{app:"sample",kind:"object",name:"sample.note"},sections:[{id:"main",widget:"table"},{id:"local",widget:"table",collectionVariable:"window"},{id:"detail",widget:"detail"},{id:"other",widget:"table"}],document:{uiProfile:"platform.page.v2.11",root:"root",nodes:{root:{kind:"rows",children:["main"]},main:{kind:"widget",section:"main"},panel:{kind:"rows",children:["local","detail","cards"]},local:{kind:"widget",section:"local"},detail:{kind:"widget",section:"detail"},cards:{kind:"loop",children:[]},otherPanel:{kind:"rows",children:["other"]},other:{kind:"widget",section:"other"}},overlays:{picker:{root:"panel"},other:{root:"otherPanel"}},queries:{read:{owner:"picker"}},variables:{selected:{scope:"overlay",owner:"picker",type:"record",mode:"resource",source:{kind:"record",section:"local"}},window:{scope:"overlay",owner:"picker",type:"object-set",mode:"resource",source:{kind:"plan",query:"read"}}}}};
 const tick=()=>new Promise((resolve)=>setImmediate(resolve));
 const deferred=()=>{let resolve;const promise=new Promise((r)=>resolve=r);return {promise,resolve};};
+test("a model selection survives a refresh of the same query and leaves when the row disappears",async()=>{
+ const slot='object/sample.note',key='model/list';
+ const source={scope:'member',revision:1,entity:()=>({fields:[]}),get:async(_,id)=>({record:{id,revision:1}})};
+ const session=new PageSessionStore(source,{objects:new Map([[slot,'sample.note']]),children:new Map(),queryParents:new Map(),querySelections:new Map([[key,new Set([slot])]])});
+ const window={object:'sample.note',query:{},records:[{id:'A',revision:1}],total:1};
+ session.adoptModelWindow(key,'same-query',window);
+ await session.confirmSelection(slot,{id:'A',revision:1},key);
+ const lease=session.captureRecordLease(slot);
+ session.updateSource({...source,revision:2});
+ session.adoptModelWindow(key,'same-query');
+ await tick();
+ session.adoptModelWindow(key,'same-query',window);
+ assert.equal(session.confirmedSelected(slot).id,'A');assert.equal(lease(),true);
+ session.adoptModelWindow(key,'same-query',{...window,records:[],total:0});
+ assert.equal(session.confirmedSelected(slot),undefined);assert.equal(lease(),false);
+ session.dispose();
+});
 test("composite windows share the original selection lifecycle and close with their overlay",async()=>{
  const {materializeModelSection,modelWindowKey}=await import('./model-bindings.ts');
  const section=materializeModelSection({id:'graph',widget:'layered-graph',composite:{bindings:{nodes:{model:{type:'sample.node'}},edges:{model:{type:'sample.edge'}}}}},()=>undefined);

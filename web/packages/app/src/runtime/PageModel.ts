@@ -25,21 +25,22 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
  const active=!!model&&modelWindowWidget(bound.section)&&!!session&&!!source&&!bound.modelInterface&&bound.contextReadCurrent!==false;
 	const producer=!['detail','record-card'].includes(bound.section.widget);
 	if(bound.section.collectionVariable&&!model?.set&&!model?.options?.set&&(!bound.window||!bound.window.page||bound.window.error))ready=false;
- const base=JSON.stringify([source?.scope,source?.revision,bound.aggregateScope,model,records,values,bound.modelDraft?canonicalPage:definition?.contentVersion,bound.window?.query,bound.narrowed,ready]);
+ const base=JSON.stringify([source?.scope,bound.aggregateScope,model,records,values,bound.modelDraft?canonicalPage:definition?.contentVersion,bound.window?.query,bound.narrowed,ready]);
  const query:RecordQuery={...bound.window?.query,...(view.base===base?view.query:{}),offset:bound.section.widget==='record-picker'?0:view.base===base?view.query.offset??0:0,limit:bound.section.widget==='record-picker'?20:bound.window?.query.limit??25,sort:bound.section.widget==='record-picker'?['id']:view.base===base?view.query.sort??['id']:['id']};
- const identity=JSON.stringify([base,query,round]),current=useRef(identity);current.current=identity;
+ const signature=JSON.stringify([base,query]);
+ const identity=JSON.stringify([signature,source?.revision,round]),current=useRef(identity);current.current=identity;
  const key=modelWindowKey(bound.section);
  useEffect(()=>{
   if(!active||!ready||!model){if(active&&producer)session?.adoptModelWindow(key,'');return;}
   let mounted=true;const valid=()=>mounted&&current.current===identity&&source?.scope===session?.snapshotScope();
-  if(producer)session?.adoptModelWindow(key,identity);
+  if(producer)session?.adoptModelWindow(key,signature);
   const request:Api.PageModelRead={page:definition?.ref??{app:'build',kind:'page',name:bound.page.name},...bound.modelDraft||!definition?{draft:canonicalPage}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,values,offset:query.offset,limit:query.limit,search:query.search,sort:query.sort,query:bound.window?.query??{domain:Object.entries(bound.narrowed[model.type]??{}).filter(([,v])=>v!==undefined&&v!=='').map(([name,value])=>[name,'=',value])}};
   void client.get<Api.PageModelResult>(`/v1/page-model/read\n${JSON.stringify(request)}`,true).then(async data=>{
    if(!valid())return;
    const paths=(model.fields??[]).filter(f=>(f.path?.length??0)>1&&data.fields.some(visible=>visible.name===modelFieldKey(f)));
    if(paths.length&&!data.hidden){data={...data,records:await Promise.all(data.records.map(async raw=>{const record={...raw} as EntityRecord;for(const field of paths){delete record[modelFieldKey(field)];record[modelFieldKey(field)]=await readModelPath(source!,model.type,record,field.path!,valid);}return record;}))};}
-   if(!valid())return;if(producer)session?.adoptModelWindow(key,identity,{object:model.type,query,records:data.records as EntityRecord[],total:data.total,partial:data.partial});setState({identity,data});
-  }).catch(()=>{if(valid()){if(producer)session?.adoptModelWindow(key,identity,undefined,'Model binding could not be read. Check its declared source and permissions.');setState({identity,error:'Model binding could not be read. Check its declared source and permissions.'});}});
+   if(!valid())return;if(producer)session?.adoptModelWindow(key,signature,{object:model.type,query,records:data.records as EntityRecord[],total:data.total,partial:data.partial});setState({identity,data});
+  }).catch(()=>{if(valid()){if(producer)session?.adoptModelWindow(key,'',undefined,'Model binding could not be read. Check its declared source and permissions.');setState({identity,error:'Model binding could not be read. Check its declared source and permissions.'});}});
   return()=>{mounted=false;};
  },[active,ready,identity,client,session]);
  useEffect(()=>active&&model?source?.watchList?.(model.type,{},()=>refresh(n=>n+1)):undefined,[active,model?.type,source?.scope]);
@@ -54,7 +55,7 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
   if(data?.labelField){if(section.widget==='record-picker')section={...section,recordPicker:{...section.recordPicker!,labelField:data.labelField}};if(section.widget==='record-list')section={...section,cardLabel:data.labelField};if(section.widget==='record-card')section={...section,recordCard:{...section.recordCard!,labelField:data.labelField}};}
   const info=modelEntity(source.entity(model.type),model,source.entity),fields=[...info?.fields??[]];for(const field of data?.fields??[]){const i=fields.findIndex(f=>f.name===field.name);if(i<0)fields.push(field);else fields[i]=field;}
   const original=source;
-  recordSource={...source,scope:JSON.stringify([source.scope,identity]),entity:type=>type===model.type&&info?{...info,fields}:original.entity(type),get:async(type,id)=>{const value=await original.get(type,id),row=type===model.type?data?.records.find(r=>r.id===id):undefined;return row?{...value,record:{...value.record,...row} as EntityRecord}:value;}};
+  recordSource={...source,scope:JSON.stringify([source.scope,signature]),entity:type=>type===model.type&&info?{...info,fields}:original.entity(type),get:async(type,id)=>{const value=await original.get(type,id),row=type===model.type?data?.records.find(r=>r.id===id):undefined;return row?{...value,record:{...value.record,...row} as EntityRecord}:value;}};
  }
  return {active,ready,data,error:matching?.error,source:recordSource,bound:{...bound,section,...active?{window,collection:status,modelAccess:data?.access,recordSource,readSource:recordSource}:{}} as WidgetBindingContext,status};
 }

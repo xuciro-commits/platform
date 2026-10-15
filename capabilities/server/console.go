@@ -574,6 +574,9 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name == "account" {
 		return d.Account(c.ID), nil
 	}
+	if name == "packages" && !c.Holds(PlatformApp, Admin) && !c.Holds(PlatformApp, Auditor) && c.Member.InScope("build.app.create") && c.May("build", "build.app.create", []string{"builder"}).Allow {
+		return d.blueprintViews(), nil
+	}
 	if h == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, Auditor) || !auditorMayRead(name)) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}

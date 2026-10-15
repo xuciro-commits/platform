@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -48,28 +47,8 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A test plan needs 1–20 typed steps")
 		}
 		for _, step := range steps {
-			var payload map[string]json.RawMessage
-			if !strings.HasPrefix(step.Type, ID+".") || step.Type == ObjectType || step.Type == PageType || step.Type == AppType || step.Type == TestPlanType || step.Type == SampleSetType || step.Type == ProcessType && step.Action != SchemaProcessRun && step.AdvanceSeconds == 0 || step.Type == FunctionType ||
-				strings.TrimSpace(step.ID) == "" || step.AdvanceSeconds < 0 || step.AdvanceSeconds > 86400 ||
-				(step.Expect != "accepted" && step.Expect != "refused") || json.Unmarshal([]byte(step.Payload), &payload) != nil || payload == nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Every test step needs a candidate action or answer, record ID, JSON object, bounded time and expected outcome")
-			}
-			if step.Compute != nil && !step.Compute.Check() {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded compute fixture with a completed or failed outcome")
-			}
-			if step.Function != nil && !step.Function.Check() {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")
-			}
-			if step.Read {
-				if step.Action != "" || step.Answer != "" || step.Flow != "" || step.Step != "" || step.AdvanceSeconds != 0 {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A read step needs only an object and record ID")
-				}
-			} else if step.Answer == "" {
-				if (step.Action == "" && step.AdvanceSeconds == 0 || step.Action != "" && !strings.HasPrefix(step.Action, step.Type+".")) || step.Flow != "" || step.Step != "" {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one candidate action or workflow answer per test step")
-				}
-			} else if step.Action != "" || !strings.HasPrefix(step.Flow, ID+".") || !named(step.Step) {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one candidate action or workflow answer per test step")
+			if err := step.Check(); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 		}
 	}
@@ -98,6 +77,9 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 	if previous.Published != "" && plan.Name != previous.Name {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be renamed; create another definition")
 	}
+	if previous.Published != "" && testPlanKind(previous) != testPlanKind(plan) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published test plan keeps its kind; create another plan")
+	}
 	if plan.Name != "" {
 		rows, err := readDefinitionInventory[TestPlan](b.host.Automation(c, ID))
 		if err != nil {
@@ -114,6 +96,15 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 		if root != "" {
 			roots++
 		}
+	}
+	if len(plan.Roots) > 0 {
+		if roots != 0 || plan.CandidateID != "" || len(plan.Actors) > 0 || plan.As != "" || plan.Sample != "" || plan.Model != "" || len(plan.Evaluation) > 0 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Portable test roots cannot include local draft, member or model bindings")
+		}
+		if err := (platform.TestPlanDescriptor{Name: plan.Name, Title: plan.Title, Roots: plan.Roots, At: plan.At, Samples: plan.Samples, Steps: plan.Steps}).Check(); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		return nil
 	}
 	if (roots != 1 && !(roots == 0 && plan.CandidateID != "")) || plan.CandidateID != "" && (plan.Object != "" || plan.Process != "" || plan.Function != "") || len(plan.Actors) > 3 || len(plan.Sample) > 64 || len(plan.Actors) > 0 && plan.As != "" || len(plan.Model) > 256 || plan.FunctionVersion < 0 || plan.FunctionVersion > 64 || plan.Name != "" && !named(plan.Name) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose exactly one saved object, workflow or function draft for the test plan")

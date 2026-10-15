@@ -35,7 +35,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
       ...(admin(host) || host.role("enterprise") ? [item(t("Enterprise"), <Network />, "enterprise")] : []),
     ] },
     { label: t("Packages and capabilities"), items: [
-      ...(admin(host) || auditor(host) ? [item(t("Packages"), <Blocks />, "apps")] : []),
+      ...(admin(host) || auditor(host) || host.can("build.app.create") ? [item(t("Packages"), <Blocks />, "apps")] : []),
       ...(admin(host) ? [item(t("Capability matrix"), <Grid3x3 />, "matrix"), item(t("Protocols"), <Cable />, "protocols"), item(t("App settings"), <SlidersHorizontal />, "app-settings")] : []),
     ] },
     { label: t("Language"), items: [...(admin(host) ? [item(t("Languages and words"), <Languages />, "words")] : [])] },

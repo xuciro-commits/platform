@@ -19,15 +19,15 @@ import (
 func TestProtocolConnectionLoadsS7Package(t *testing.T) {
 	directory := os.Getenv("PLATFORM_PROTOCOL_PACKAGES")
 	if directory == "" {
-		t.Skip("set PLATFORM_PROTOCOL_PACKAGES to the real output of make protocol-packages")
+		t.Skip("set PLATFORM_PROTOCOL_PACKAGES to the real output of make packages")
 	}
 	index, err := LoadPackageIndex(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	descriptor, found := index.find("protocol.s7-1200", "0.1.0")
+	descriptor, found := index.find("protocol.s7-1200", "0.1.2")
 	if !found || descriptor.Runtime == nil {
-		t.Fatal("make protocol-packages must provide protocol.s7-1200@0.1.0")
+		t.Fatal("make packages must provide protocol.s7-1200@0.1.2")
 	}
 	artifact, err := descriptor.Runtime.Target()
 	if err != nil {

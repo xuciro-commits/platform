@@ -16,7 +16,7 @@ import (
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
 		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation, platform.AssetSampleSet, platform.AssetObservation,
+		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation,
 	}
 }
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {
@@ -75,8 +75,8 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	if ref.Kind == platform.AssetFunction {
 		return b.FunctionReleaseAsset(ref.Name, version)
 	}
-	if ref.Kind == platform.AssetEvaluation {
-		return b.evaluationSetPinned(ref, version)
+	if ref.Kind == platform.AssetEvaluation || ref.Kind == platform.AssetTestPlan {
+		return b.testPlanPinned(ref, version)
 	}
 	if ref.Kind == platform.AssetAgent {
 		for _, record := range b.agents {
@@ -172,6 +172,10 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 		b.releaseDraftIDs = map[platform.AssetRef]string{}
 	}
 	restore := func() { b.releaseDraftIDs = saved }
+	if ctx.DraftsOnly {
+		b.draftIntegrationTargets(assets)
+		return restore, nil
+	}
 	for _, asset := range assets {
 		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
 			continue
@@ -247,7 +251,18 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 		out = append(out, platform.AssetDraft{Ref: ref, Type: draft.Type, Name: draft.Name, Schema: draft.Type + ".create", Image: draft.Image})
 	}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) || asset.Ref.Kind == platform.AssetConnection {
+		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
+			continue
+		}
+		if asset.Ref.Kind == platform.AssetConnection {
+			if !ctx.DraftsOnly {
+				continue
+			}
+			connection, err := portableConnectionDraft(asset)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, platform.AssetDraft{Ref: asset.Ref, Type: ConnectionType, Name: connection.Name, Schema: ConnectionType + ".create", Image: platform.Raw(connection)})
 			continue
 		}
 		record, err := b.integrationConfiguration(asset)
@@ -295,7 +310,7 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 	return out, nil
 }
 func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetInstallation, error) {
-	if err := b.validateReleaseMember(assets, ctx.Member); err != nil {
+	if err := b.validateReleaseMember(assets, ctx.Member); err != nil && !ctx.DraftsOnly {
 		return nil, err
 	}
 	restore, err := b.integrationTargets(assets, ctx)
@@ -500,7 +515,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		_ = json.Unmarshal(image, &r)
 		ref = platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: r.Name}
 	case SchemaEvaluationSetPublish:
-		r, asset, err := b.evaluationSetImage(image)
+		r, asset, err := b.testPlanImage(image)
 		if err != nil {
 			return platform.AssetInstallation{}, err
 		}
@@ -676,8 +691,12 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 		return err
 	}
 	if ctx.Private {
+		// Keep the private catalog's earlier object declarations visible to
+		// later pages/functions/flows in the same installation. The live ledger
+		// remains untouched; this owner belongs to the installation view.
 		saved := b.ledger
-		b.ledger = platform.NewLedger("private-release", ID, platform.NewCatalog(saved.Catalog.All()...))
+		b.installationCatalog = platform.NewCatalog(b.Manifest().Actions.All()...)
+		b.ledger = platform.NewLedger("private-release", ID, b.installationCatalog)
 		defer func() { b.ledger = saved }()
 	}
 	return b.ApplyAcceptedPublication(plan.Schema, plan.Image)
@@ -925,8 +944,8 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 			return "", nil, err
 		}
 		return FunctionType, d, nil
-	case platform.AssetEvaluation:
-		d, err := b.evaluationSetDraft(asset)
+	case platform.AssetEvaluation, platform.AssetTestPlan:
+		d, err := b.testPlanDraft(asset)
 		return TestPlanType, d, err
 	case platform.AssetAgent:
 		d, err := decodeAgentAsset(asset)
@@ -956,6 +975,8 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), error) {
 	saved, savedMode := b.jointEntities, b.jointMode
 	savedAssets := b.jointAssets
+	savedDeclarations := b.jointDeclarations
+	savedIDs := b.releaseDraftIDs
 	available := map[platform.AssetRef]bool{}
 	shapes := maps.Clone(saved)
 	if shapes == nil {
@@ -985,5 +1006,16 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	}
 	b.jointEntities, b.jointMode = shapes, true
 	b.jointAssets = available
-	return func() { b.jointEntities, b.jointMode, b.jointAssets = saved, savedMode, savedAssets }, nil
+	b.jointDeclarations = map[platform.AssetRef]platform.ReleaseAsset{}
+	for _, asset := range assets {
+		b.jointDeclarations[asset.Ref] = asset
+	}
+	b.releaseDraftIDs = maps.Clone(savedIDs)
+	if b.releaseDraftIDs == nil {
+		b.releaseDraftIDs = map[platform.AssetRef]string{}
+	}
+	b.draftIntegrationTargets(assets)
+	return func() {
+		b.jointEntities, b.jointMode, b.jointAssets, b.releaseDraftIDs, b.jointDeclarations = saved, savedMode, savedAssets, savedIDs, savedDeclarations
+	}, nil
 }

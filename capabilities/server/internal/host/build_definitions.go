@@ -12,6 +12,8 @@ import (
 // Candidate bytes and lifecycle acceptance still belong to AssetRegistry.
 type ConstructionDrafts interface {
 	platform.App
+	CompleteBlueprintAssets([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
+	RootDrafts([]platform.AssetRef) ([]build.JointDraftRef, error)
 	ApplicationDrafts(string) ([]build.JointDraftRef, error)
 	ReferencedDrafts(platform.AssetKind, string) ([]build.JointDraftRef, error)
 	DraftReleaseAssetsMulti([]build.JointDraftRef, platform.Member) (build.JointDraftAssets, error)

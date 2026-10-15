@@ -334,12 +334,24 @@ WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造�
 
 外部适配器接收 POST `{device,signal,since,until,mode,limit}`；窗口为 `[since,until)`。响应 `{window:{since,until,count,firstAt,lastAt,first,last,min,max,sum,mean,unit},points?:[{at,value}]}`，数值用有限十进制字符串；空窗 count=0，不含数值与样本时刻。summary 不返回点，points 至多 5000 个。平台保存判定结果和聚合值，**原始点的保留、降采样与过期恢复由外部存储负责，不承诺与业务记录相同的历史保证**。原记录观测组件用于低频业务记录；高频时序不通过 Source/Dataset 导入。
 
+## 从行业包构建供暖应用
+
+`deploy/packages/heating.json` 是供暖的受控定义包，`make packages` 将它和协议包放入同一个可信目录。它提供模型、五个页面、观测规则、维修流程、业务测试计划及合成样本，不包含行业 Go/React 实现。示例城市与阈值用于模拟，现场参数须按实际要求确认。
+
+1. 在 Packages 明确选择并安装协议包与 `industry.heating`；构建者选择 **Create application drafts**，进入原 Application Studio。安装包不会发布应用、授权成员或导入业务记录。
+2. 在应用的 Integrations 配置 `heatingfield`：选择已安装的模拟 profile，填写网关地址、密钥引用和设备/点表，再 Check。两城市的环境配置在 `deploy/examples/heating/harbin.json` 与 `jinan.json`，逻辑点名与应用定义相同；只替换配置和实际地址。
+3. 配置 `propertyfeed` 的 HTTP 地址与密钥引用并 Check；它接收已接受的温度告警摘要，路径为 `alarms`。AI 函数 `heatingadvice` 使用环境中的 `heating/health` 模型；先配置提供方、启用模型，沿原发布审阅运行 `heatingadvicequality` 的实测评估，再激活。AI 页面只显示分析，不自行改变设备或通行权限。
+4. 在 Verify 查看 `heatingdemo` 与业务计划：异常重复抑制、通行证有效期、阀位范围。试跑从合成样本开始，不复制现场数据，也不写入业务库。正式业务记录始终经原对象动作建立。
+5. 普通成员从应用门户进入楼宇总览、设备详情、告警处理、门禁和健康页。异常产生告警与维修单；维修流程等待人员确认。阀位申请先审批，发送答复不代表完成，匹配的新鲜 Observation 或授权人工证据才确认结果。通行证独立于平台角色，设备 profile 未开放的开门操作不会出现。
+
+数据分发的当前模拟选择是向独立 HTTP 接收方发送紧凑业务告警；真实客户需要推送、导出还是看板，仍待确认。模型提供方与设备兼容性都须在目标环境重新检查，合成评测通过不等于真实诊断品质。
+
 ## 协议包与模拟采集
 
 [ADR-0123](ADR/0123-pluggable-protocol-packages.md) 的首轮实现提供两个独立 Go 驱动：`protocol.simulator` 和只读 `protocol.s7-1200`。先构建本机包：
 
 ```sh
-make protocol-packages
+make packages
 ```
 
 从本地受保护配置加载 `GATEWAY_TOKEN` 后，执行 `make gateway`；默认网关为 `127.0.0.1:8510`，技术配置与命令收据保存在忽略的 `.build/protocol/state`。原始采样以 NDJSON 输出，供外部采集/存储接收，不进入业务宿主。另一个终端从同一配置加载令牌，启动带包目录的业务宿主：
@@ -369,7 +381,7 @@ pump-running,station-01,true,boolean,,1000
 
 S7 profile 使用连接字段 `address`、`rack`、`slot`、`timeoutMs`，点地址例如 `DB1.DBX0.3`、`DB1.DBW2`、`DB1.DBD4`，并声明对应 `dataType`（BOOL/INT/DINT/REAL 等）。仅本地 S7 服务已用于工程检查，具体 CPU、固件、优化 DB 和安全通信不宣称兼容。
 
-新版包使用 `make protocol-packages PROTOCOL_VERSION=0.1.1`，版本化描述与旧二进制保留；同版本不同内容拒绝覆盖。网关与包目录属于部署配置，不给行业包增加 Go/React 实现。
+新版包使用 `make packages PROTOCOL_VERSION=0.1.2`，版本化描述与旧二进制保留；同版本不同内容拒绝覆盖。网关与包目录属于部署配置，不给行业包增加 Go/React 实现。
 
 ## 设备派发与状态回读
 

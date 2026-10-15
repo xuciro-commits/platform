@@ -289,11 +289,20 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{build.Builder}, true)); err != nil {
 		return ReleaseDraftClosure{}, err
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
 	if !ok {
 		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
-	drafts, err := owner.ReferencedDrafts(kind, id)
+	var drafts []build.JointDraftRef
+	var err error
+	if kind == platform.AssetApp {
+		drafts, err = owner.ApplicationDrafts(id)
+		drafts = slices.DeleteFunc(drafts, func(draft build.JointDraftRef) bool { return draft.Kind == kind && draft.ID == id })
+	} else {
+		drafts, err = owner.ReferencedDrafts(kind, id)
+	}
 	if err != nil {
 		return ReleaseDraftClosure{}, err
 	}

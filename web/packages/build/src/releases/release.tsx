@@ -4,9 +4,9 @@ import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, Disclosure, PageHeader, Panel, Select, StatusTag, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { refKey, resourceKinds, resourceRef, type ResourceKind } from "../projects/resources";
+import { matchesResourceKind, refKey, resourceKinds, resourceRef, type ResourceKind } from "../projects/resources";
 import { diagnose } from "./diagnostics";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MigrationWorkbench } from "./migration";
 
 // One selected saved draft in a joint candidate (ADR-0048 D1). The selection is
@@ -59,7 +59,7 @@ type ReleaseRequest = { kind: "save"; body: Api.ReleaseSaveRequest }
   | { kind: "evaluate"; body: Api.ReleaseEvaluationRequest }
   | { kind: "activate"; body: Api.ReleaseActivateRequest };
 
-type Record = { id: string; title: string; name: string; state: string };
+type Record = { id: string; title: string; name: string; state: string; evaluation?: unknown[]; roots?: Api.AssetRef[] };
 type EvaluationPlan = { id: string; name?: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
 const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
@@ -95,6 +95,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [confirmedUpgrade, setConfirmedUpgrade] = useState("");
   const [planID, setPlanID] = useState("");
   const [reportID, setReportID] = useState("");
+  const reviewedEvaluation = useRef("");
   const [error, setError] = useState(selectionError ? t(selectionError) : "");
   const [busy, setBusy] = useState(false);
   const [migrationLocked, setMigrationLocked] = useState(false);
@@ -128,7 +129,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
   const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
-  const records = (query.isError ? [] : query.data?.records ?? []).filter(record => !scope || (kind === "app" ? record.id === scope : !!scopedApplication && held.has(refKey(resourceRef(resourceKinds.find(item => item.kind === kind)!, record.name)))));
+  const records = (query.isError ? [] : query.data?.records ?? []).filter(record => (kind === "app" || matchesResourceKind(resourceKinds.find(item => item.kind === kind)!, record)) && (!scope || (kind === "app" ? record.id === scope : !!scopedApplication && held.has(refKey(resourceRef(resourceKinds.find(item => item.kind === kind)!, record.name))))));
   const functionNames = (review?.included ?? []).filter((ref) => ref.app === "build" && ref.kind === "function").map((ref) => ref.name);
   const localPlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
   const eligiblePlans = [...localPlans, ...assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "evaluation-set" && !localPlans.some(plan => plan.name === asset.ref.name)).map(asset => ({id:asset.ref.name,title:asset.ref.name}))];
@@ -138,6 +139,12 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const passedFunctions = (reports.isError ? [] : reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
   const agentNames = (review?.included ?? []).filter(ref => ref.app === "build" && ref.kind === "agent").map(ref => ref.name);
   const evaluated = functionNames.every((name) => passedFunctions.includes(name)) && agentNames.every(name => candidateAI.some(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name && item.evaluations.some(report => report.candidate === savedID && report.state === "passed")));
+  useEffect(() => {
+    const key = `${savedID}/${report?.id}`;
+    if (!savedID || report?.state !== "passed" || locked || reviewedEvaluation.current === key) return;
+    reviewedEvaluation.current = key;
+    void perform(() => readSaved(savedID, true));
+  }, [savedID, report?.id, report?.state, locked]);
   if (!mayRelease) {
     return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
   }
@@ -146,8 +153,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     setCanActivate(false); setActivationDiagnostic(""); setUpgradePlan(undefined); setExtensions([]); setOrigin(undefined); setPromotedTo([]);
     setPlanID(""); setReportID("");
   };
-  const readSaved = async (candidateID: string) => {
-    clearReview(); setSavedID(candidateID);
+  const readSaved = async (candidateID: string, keepEvaluation = false) => {
+    if (!keepEvaluation) clearReview();
+    setSavedID(candidateID);
     try {
       const result = await client.call<Api.SavedReleaseReview>("GET", `/v1/releases/candidates/${encodeURIComponent(candidateID)}`);
       if (!result.ok || result.body.preview?.candidateId !== candidateID) {
@@ -412,7 +420,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           </label>
           <div className="flex flex-wrap gap-2">
             <Button disabled={!planID || locked} onClick={evaluate}>{busy ? t("Starting evaluation…") : t("Run measured evaluation")}</Button>
-            <Button disabled={locked} onClick={() => { void reports.refetch(); }}>{t("Refresh evaluation reports")}</Button>
+            <Button disabled={locked} onClick={() => { void perform(() => readSaved(savedID, true)); }}>{t("Refresh evaluation reports")}</Button>
           </div>
           {reports.isError && <p role="alert" className="text-xs text-warning">{t("Evaluation reports are unavailable. Cached results do not grant activation.")}</p>}
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: <code>{reportID}</code></p>}

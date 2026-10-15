@@ -3,6 +3,7 @@ import {useInputDrafts} from "@platform/ui";
 import type { Project } from "../projects/project";
 import { ApplicationSamples } from "./samples";
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { refKey, resourceKinds, resourceRef } from "../projects/resources";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { AppSelect, PayloadFields, useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, Disclosure, FlowRun, Input, PageHeader, Select, Textarea, t, useUnsavedChanges } from "@platform/ui";
@@ -16,7 +17,7 @@ type FunctionDraft = { id: string; revision: number; name: string; title: string
 type Step = Omit<Api.SimulationStep, "payload" | "expect"> & { payload: string; expect: "accepted" | "refused" };
 type EvaluationCase = { name: string; input: string; expected: string };
 type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
-type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; application?:string;candidateId?:string;actors?:string[];sample?:string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
+type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; roots?:Api.AssetRef[];application?:string;candidateId?:string;actors?:string[];sample?:string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
 export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
@@ -42,6 +43,8 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
  const inputDrafts=useInputDrafts(),dirty=edited||!!inputDrafts?.dirty;
   const [saved, setSaved] = useState(false);
   const [id, setID] = useState(applicationId || functionId || processId || objectId);
+  const [roots, setRoots] = useState<Api.AssetRef[]>([]);
+  const [includeInReleases, setIncludeInReleases] = useState(!!applicationId);
   const [member, setMember] = useState("");
   const [at, setAt] = useState("2026-01-01T09:00:00Z");
   const [steps, setSteps] = useState<Step[]>([]);
@@ -50,6 +53,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
  const [members,setMembers]=useState("");
  const [candidateID,setCandidateID]=useState("");
  const application=kind==="app"?applications.data?.records.find(record=>record.id===id):undefined;
+  const planRoots = kind === "app" && includeInReleases ? roots.length ? roots : (application?.resources ?? []).filter(ref => ref.app === "build" && (ref.kind === "object" || ref.kind === "flow")) : [];
   const [evaluationEnabled, setEvaluationEnabled] = useState(false);
   const [minQuality, setMinQuality] = useState(1);
   const [maxCostUsd, setMaxCostUsd] = useState(0.1);
@@ -104,11 +108,11 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const actions = [{ name: "create", title: t("Create records") }, { name: "edit", title: t("Edit records") },
     { name: "archive", title: t("Archive records") }, ...(object?.actions ?? [])];
   const clear = () => { setResult(undefined); setError(""); setSaved(false); setDirty(true); };
-  const matchesAsset = (plan: TestPlan) => kind==="app"?plan.application===id:kind === "function" ? plan.function === id
+  const matchesAsset = (plan: TestPlan) => kind==="app"?plan.application===id || !!application && !!plan.roots?.length && plan.roots.every(ref => ref.app === "build" && ref.kind === "app" && ref.name === application.name || application.resources?.some(resource => refKey(resource) === refKey(ref))):kind === "function" ? plan.function === id
     : kind === "flow" ? !plan.function && plan.process === id : !plan.function && !plan.process && plan.object === id;
   const ownPlans = (plans.data?.records ?? []).filter(matchesAsset);
   const switchAsset = (nextKind: typeof kind, nextID: string) => {
-    clear(); setKind(nextKind); setID(nextID); setSteps([]);
+    clear(); setKind(nextKind); setID(nextID); setSteps([]); setRoots([]); setIncludeInReleases(nextKind === "app");
     // A new root gets a new plan identity; Save must never move the previous
     // asset's plan simply because the user selected a different draft.
     setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");setSample("");setMembers("");setCandidateID("");
@@ -123,7 +127,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const load = (plan: TestPlan, initial = false) => {
     if (!initial && !matchesAsset(plan)) return;
     clear(); setPlanID(plan.id); setRevision(plan.revision);
-    setTitle(plan.title);setSetName(plan.name??""); setKind(plan.application ? "app" : plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.application || plan.function || plan.process || plan.object || ""); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
+    setTitle(plan.title);setSetName(plan.name??""); setRoots(plan.roots ?? []); setIncludeInReleases(!!plan.roots?.length); setKind(plan.roots?.length || plan.application ? "app" : plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.application || plan.function || plan.process || plan.object || (plan.roots?.length ? applicationId : "")); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
     setSample(plan.sample??"");setMembers((plan.actors??[]).join(", "));setCandidateID(plan.candidateId??"");
     setSteps(plan.steps); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setDirty(false);
     const policy = plan.evaluation?.[0];
@@ -152,12 +156,13 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     else { switchAsset(kind, id); setDirty(false); }
   }, busy);
   const inputs = (): Api.CandidateSimulationRequest => ({
-    ...(kind==="app" ? candidateID?{candidateId:candidateID}:{applicationId:id}:kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
+    ...(planRoots.length ? {roots:planRoots}:kind==="app" ? candidateID?{candidateId:candidateID}:{applicationId:id}:kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
       ...step, payload: JSON.parse(step.payload),
-    })),...(kind==="app"?{actors:members.split(",").map(id=>id.trim()).filter(Boolean),sample}:{}), samples: JSON.parse(samples) as Api.SimulationSample[],
+    })),...(kind==="app"?{actors:members.split(",").map(id=>id.trim()).filter(Boolean),sample:planRoots.length?undefined:sample}:{}), samples: JSON.parse(samples) as Api.SimulationSample[],
   });
   const save = async () => {
     setError(""); setSaved(false);
+    if (kind === "app" && includeInReleases && (!setName.trim() || !planRoots.length)) { setError(t("Give the test plan a definition name and add an object or workflow to this application.")); return; }
     try { inputs(); } catch { setError(t("Use a valid fixed time and JSON inputs for every step.")); return; }
     let evaluation: EvaluationPolicy[] | null = null;
     if (kind === "function" && evaluationEnabled) {
@@ -174,11 +179,21 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
-        { name:setName||undefined,title, application:kind==="app"?id:"",candidateId:kind==="app"?candidateID:"",actors:kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:kind==="app"?sample:"", object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, samples: JSON.parse(samples), evaluation },
+        { name:setName.trim()||undefined,title, roots:planRoots, application:!planRoots.length&&kind==="app"?id:"",candidateId:!planRoots.length&&kind==="app"?candidateID:"",actors:!planRoots.length&&kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:!planRoots.length&&kind==="app"?sample:"", object: !planRoots.length&&kind === "object" ? id : "", process: !planRoots.length&&kind === "flow" ? id : "", function: !planRoots.length&&kind === "function" ? id : "", model: !planRoots.length&&kind !== "object" ? model : "", as: planRoots.length?"":member, at: new Date(at).toISOString(), steps:planRoots.length?steps.map(step=>({...step,as:undefined})):steps, samples: JSON.parse(samples), evaluation },
         { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) {
         const refreshed = await plans.refetch();
         const record = refreshed.data?.records.find((plan) => plan.id === target);
-        if (record) { setPlanID(target); setRevision(record.revision); markSaved(); setDirty(false); setSaved(true); }
+        if (record) {
+          setPlanID(target); setRevision(record.revision); setRoots(record.roots ?? []);
+          if (planRoots.length && application) {
+            const ref = resourceRef(resourceKinds.find(kind => kind.kind === "test-plan")!, record.name!);
+            if (!application.resources?.some(resource => refKey(resource) === refKey(ref))) {
+              if (!await decide("build.app.edit", { type: "build.app", id: application.id }, { resources: [...(application.resources ?? []), ref] }, { expectedRevision: application.revision, quiet: true, onRefused: setError })) return;
+              await applications.refetch();
+            }
+          }
+          markSaved(); setDirty(false); setSaved(true);
+        }
         else setError(t("Reload the saved plans before editing again."));
       }
     } catch { setError(t("The test plan could not be saved.")); }
@@ -206,6 +221,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     {!embedded && <PageHeader title={t("Test a candidate")} description={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
       actions={<Button disabled={!id || busy} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}
     {kind==="app" && <PageHeader title={t("Draft trial")} description={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
+    {!!planRoots.length && <p className="text-xs text-muted">{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</p>}
  <Card className="p-3">
       <fieldset disabled={busy} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -214,7 +230,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
               const plan = ownPlans.find((record) => record.id === event.target.value);
               clear();setCreateID(crypto.randomUUID());inputDrafts?.clear(); setPlanID(plan?.id ?? ""); setRevision(plan?.revision ?? 0);
               if (plan) load(plan);
-              else { setTitle(""); setSetName(""); }
+              else { setTitle(""); setSetName(""); setRoots([]); setIncludeInReleases(kind === "app"); }
             }}>
               <option value="">{t("New test plan")}</option>
               {ownPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}
@@ -225,6 +241,10 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           </label>
         </div>
         {kind==="function"&&<label className="grid gap-1 text-xs">{t("Evaluation set name")}<Input value={setName} onChange={event=>{setSetName(event.target.value);clear();}}/></label>}
+        {kind === "app" && <div className="grid gap-2">
+          <Checkbox checked={includeInReleases} onChange={checked => { setIncludeInReleases(checked); clear(); }}>{t("Include in application releases")}</Checkbox>
+          {includeInReleases && <label className="grid gap-1 text-xs">{t("Test plan definition name")}<Input value={setName} onChange={event => { setSetName(event.target.value); clear(); }} /></label>}
+        </div>}
         {kind === "flow" && <Disclosure summary={<span className="text-xs font-medium">{t("Synthetic query samples")}</span>}><div className="mt-2 grid gap-2">
           <p className="text-[11px] leading-5 text-muted">{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</p>
           <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); clear(); }} />
@@ -239,7 +259,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
  <label className="grid gap-1 text-xs">{t("Saved application draft")}<Select value={id} disabled={embedded} onChange={event=>switchAsset("app",event.target.value)}><option value="">{t("Choose a saved draft")}</option>{applications.data?.records.map(app=><option key={app.id} value={app.id}>{app.title}</option>)}</Select></label>
  {application && <ApplicationSamples application={application} selected={sample} samples={samples} onChange={(name,rows)=>{setSample(name);setSamples(rows);clear();}} />}
  <label className="grid gap-1 text-xs">{t("Comparison members (up to three, comma separated)")}<Input value={members} onChange={event=>{setMembers(event.target.value);setMember("");clear();}}/></label>
- <label className="grid gap-1 text-xs">{t("Fixed candidate version (optional)")}<Input value={candidateID} onChange={event=>{setCandidateID(event.target.value);clear();}}/></label>
+ <label className="grid gap-1 text-xs">{t("Fixed candidate version (optional)")}<Input disabled={includeInReleases} value={candidateID} onChange={event=>{setCandidateID(event.target.value);clear();}}/></label>
  </div> : kind === "function" ? <>
           <label className="grid gap-1 text-xs">{t("Saved function draft")}
             <Select value={id} onChange={(e) => { switchAsset(kind, e.target.value); const chosen = functions.data?.records.find((f) => f.id === e.target.value); setSteps(chosen ? functionSteps(chosen) : []); }}>
@@ -370,10 +390,10 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
             ? { type: "build.process", id: "sample", action: "", payload: "{}", expect: "accepted", advanceSeconds: 2 }
             : { type: `build.${object?.name}`, id: "TEST-1", action: `build.${object?.name}.${object?.actions?.[0]?.name ?? "edit"}`, payload: "{}", expect: "accepted" }]); }}>{t("Add a test step")}</Button>
           <AssetControls type="build.testplan" record={planID ? { id: planID, revision } : undefined} dirty={dirty} busy={busy} onCancel={discardChanges} />
-          <Button disabled={(kind!=="app" && !object && !process?.manual) || !steps.length || !title.trim()} onClick={save}>{t("Save test plan")}</Button>
+          <Button disabled={(kind!=="app" && !object && !process?.manual) || !steps.length || !title.trim() || kind === "app" && includeInReleases && (!setName.trim() || !planRoots.length)} onClick={save}>{t("Save test plan")}</Button>
           {kind==="function"&&evaluationEnabled&&<Button disabled={!planID||dirty||busy||!setName.trim()} onClick={()=>void open({view:"release-review",params:{kind:"evaluation-set",id:planID}})}>{t("Publish evaluation set")}</Button>}
           <Button disabled={!planID} onClick={reload}>{t("Reload saved plan")}</Button>
-          <Button onClick={() => { clear(); setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); }}>{t("New test plan")}</Button>
+          <Button onClick={() => { clear(); setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setRoots([]); setIncludeInReleases(kind === "app"); }}>{t("New test plan")}</Button>
           <Button variant="primary" disabled={(kind!=="app" && !object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
         </div>
       </fieldset>

@@ -32,10 +32,11 @@ type AssetEnvironmentRequirement struct {
 // are rebound to this target member and frozen in the accepted installation;
 // the candidate never acquires this principal or the target binding records.
 type AssetReleaseContext struct {
-	Member   Member
-	At       time.Time
-	Upgrade  bool
-	Bindings []AssetEnvironmentBinding
+	DraftsOnly bool
+	Member     Member
+	At         time.Time
+	Upgrade    bool
+	Bindings   []AssetEnvironmentBinding
 }
 
 // AssetApplyContext separates private compatibility trials from pure recovery.
@@ -349,7 +350,7 @@ func (r *AssetRegistry) validateBindings(assets []ReleaseAsset, context AssetRel
 		return err
 	}
 	for _, requirement := range required {
-		if provided[requirement.Ref] == "" {
+		if provided[requirement.Ref] == "" && !context.DraftsOnly {
 			return fmt.Errorf("release needs a target environment binding for %s", requirement.Ref)
 		}
 	}

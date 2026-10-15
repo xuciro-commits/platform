@@ -14,6 +14,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/driver"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -45,6 +46,7 @@ type PackageContribution struct {
 
 // PackageDescriptor is one installable package, as the index declares it.
 type PackageDescriptor struct {
+	Blueprint      *PackageBlueprint       `json:"blueprint,omitempty"`
 	Runtime        *platform.DriverRuntime `json:"runtime,omitempty"`
 	ID             string                  `json:"id"`
 	Version        string                  `json:"version"`
@@ -55,6 +57,14 @@ type PackageDescriptor struct {
 	Contributions  []PackageContribution   `json:"contributions,omitempty"`
 	ArtifactDigest string                  `json:"artifactDigest,omitempty"` // sha256 over the descriptor
 	Description    string                  `json:"description,omitempty"`
+}
+
+// PackageBlueprint contains the original owners' portable definitions. It
+// creates drafts only; publication and environment credentials stay separate.
+type PackageBlueprint struct {
+	Roots  []platform.AssetRef     `json:"roots"`
+	Assets []platform.ReleaseAsset `json:"assets"`
+	Guide  string                  `json:"guide,omitempty"`
 }
 
 // InstalledPackage is the tenant's state for one installed package.
@@ -207,9 +217,54 @@ func (p PackageDescriptor) validate() error {
 		}
 	}
 	if p.Runtime != nil {
-		return p.Runtime.Check()
+		if err := p.Runtime.Check(); err != nil {
+			return err
+		}
+	}
+	if p.Blueprint != nil {
+		return p.Blueprint.check()
 	}
 	return nil
+}
+
+func (b PackageBlueprint) check() error {
+	if len(b.Roots) == 0 || len(b.Assets) == 0 || len(b.Assets) > 1000 {
+		return fmt.Errorf("a blueprint needs roots and at most 1000 owner definitions")
+	}
+	for _, root := range b.Roots {
+		if root.Check() != nil || root.App != "build" {
+			return fmt.Errorf("a package blueprint has only Build-owned roots")
+		}
+	}
+	seen := map[platform.AssetRef]bool{}
+	for _, asset := range b.Assets {
+		if seen[asset.Ref] || asset.Ref.App != "build" || asset.ContractVersion < 1 || asset.SourceVersion == "" {
+			return fmt.Errorf("blueprint owner definitions need unique pinned identities")
+		}
+		seen[asset.Ref] = true
+		if _, err := platform.WithDependencies(asset); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b PackageBlueprint) candidate(owner host.ConstructionDrafts) (platform.ReleaseCandidate, error) {
+	assets, err := owner.CompleteBlueprintAssets(b.Assets)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	for i, asset := range assets {
+		if asset.Ref.App != "build" {
+			return platform.ReleaseCandidate{}, fmt.Errorf("a package blueprint contains only Build-owned definitions")
+		}
+		var err error
+		assets[i], err = platform.WithDependencies(asset)
+		if err != nil {
+			return platform.ReleaseCandidate{}, err
+		}
+	}
+	return platform.Candidate(b.Roots, assets)
 }
 
 // latest picks the newest version of a package by version string order.
@@ -314,7 +369,7 @@ func (d *Console) ProtocolPackages() []platform.DriverPackage {
 	return out
 }
 
-func (d *Console) driverDescriptor(id, version, artifact string) (PackageDescriptor, error) {
+func (d *Console) sealedPackageDescriptor(id, version, artifact string) (PackageDescriptor, error) {
 	raw, err := d.host.GetPackageArtifact(packageArtifactKey(d.tenant, id, version))
 	if err != nil {
 		return PackageDescriptor{}, err
@@ -324,10 +379,43 @@ func (d *Console) driverDescriptor(id, version, artifact string) (PackageDescrip
 		return PackageDescriptor{}, fmt.Errorf("the retained protocol descriptor content differs")
 	}
 	var descriptor PackageDescriptor
-	if json.Unmarshal(raw, &descriptor) != nil || descriptor.ID != id || descriptor.Version != version || descriptor.Runtime == nil {
+	if json.Unmarshal(raw, &descriptor) != nil || descriptor.ID != id || descriptor.Version != version {
 		return PackageDescriptor{}, fmt.Errorf("the retained protocol descriptor is unavailable")
 	}
 	return descriptor, nil
+}
+
+func (d *Console) driverDescriptor(id, version, artifact string) (PackageDescriptor, error) {
+	descriptor, err := d.sealedPackageDescriptor(id, version, artifact)
+	if err != nil {
+		return descriptor, err
+	}
+	if descriptor.Runtime == nil {
+		return descriptor, fmt.Errorf("the package has no protocol runtime")
+	}
+	return descriptor, nil
+}
+
+func (d *Console) blueprintViews() []PackageView {
+	d.mu.Lock()
+	var installed []InstalledPackage
+	for _, p := range d.packages {
+		if p.State == "active" {
+			installed = append(installed, *p)
+		}
+	}
+	d.mu.Unlock()
+	out := []PackageView{}
+	for _, p := range installed {
+		descriptor, err := d.sealedPackageDescriptor(p.ID, p.Version, p.Artifact)
+		if err != nil || descriptor.Blueprint == nil {
+			continue
+		}
+		copy := p
+		out = append(out, PackageView{Descriptor: descriptor, Installed: &copy, Precheck: Precheck{ID: p.ID, Version: p.Version, OK: true}})
+	}
+	slices.SortFunc(out, func(a, b PackageView) int { return strings.Compare(a.Descriptor.ID, b.Descriptor.ID) })
+	return out
 }
 
 // Retained versions remain resolvable for the original in-flight binding.
@@ -409,6 +497,20 @@ func (d *Console) packageIndex() (*PackageIndex, error) {
 
 func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 	out := Precheck{ID: p.ID, Version: p.Version, OK: true}
+	if p.Blueprint != nil {
+		var owner host.ConstructionDrafts
+		for _, app := range d.host.Apps() {
+			if app.Manifest().ID == "build" {
+				owner, _ = app.(host.ConstructionDrafts)
+				break
+			}
+		}
+		if owner == nil {
+			out.Problems = append(out.Problems, "application blueprints need the Build owner")
+		} else if _, err := p.Blueprint.candidate(owner); err != nil {
+			out.Problems = append(out.Problems, err.Error())
+		}
+	}
 	if p.Runtime != nil {
 		if err := p.Runtime.Check(); err != nil {
 			out.Problems = append(out.Problems, err.Error())
@@ -554,8 +656,8 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 	if !ok {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if descriptor.Runtime != nil && p.Version == "" {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A protocol package requires its exact version")
+	if (descriptor.Runtime != nil || descriptor.Blueprint != nil) && p.Version == "" {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A versioned package requires its exact version")
 	}
 	pre := d.precheck(descriptor, index)
 	if len(pre.Missing) > 0 {
@@ -566,8 +668,8 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 	}
 	upgrade := schema == SchemaPackageUpgrade
 	prior := d.packagesOf()[p.ID]
-	if descriptor.Runtime != nil && prior != nil && (prior.Version == descriptor.Version || slices.ContainsFunc(prior.Retained, func(r RetainedArtifact) bool { return r.Version == descriptor.Version })) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A protocol package version cannot be replaced; publish a new version")
+	if (descriptor.Runtime != nil || descriptor.Blueprint != nil) && prior != nil && (prior.Version == descriptor.Version || slices.ContainsFunc(prior.Retained, func(r RetainedArtifact) bool { return r.Version == descriptor.Version })) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A package version cannot be replaced; publish a new version")
 	}
 	if upgrade {
 		if prior == nil || prior.State == "retired" {

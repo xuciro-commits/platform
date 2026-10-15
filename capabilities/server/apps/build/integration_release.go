@@ -268,6 +268,19 @@ func (b *Build) integrationID(kind platform.AssetKind, name string) (string, err
 	}
 	return id, nil
 }
+
+func (b *Build) prospectiveIntegration(kind platform.AssetKind, id string) (any, bool, error) {
+	name, err := b.integrationName(kind, id)
+	if err != nil {
+		return nil, false, nil
+	}
+	asset, found := b.jointDeclarations[platform.AssetRef{App: ID, Kind: kind, Name: name}]
+	if !found {
+		return nil, false, nil
+	}
+	configuration, err := b.integrationConfiguration(asset)
+	return configuration, true, err
+}
 func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal int) (platform.ReleaseAsset, error) {
 	asset := platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: kind}, ContractVersion: 1, SourceVersion: integrationVersion(ordinal, kind)}
 	name, _, _, _ := integrationMetadata(record)

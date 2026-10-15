@@ -177,6 +177,8 @@ type TxnStep struct {
 
 post 的十进制、整数与金额运算复用原精确表达式引擎，币种、整数范围和非负余额要求沿同一实现判定。journal 只原子保存凭证意图，实际入账继续由 Core 独立决定；借贷平衡不代表目标账簿已接受。effect 只选择 `On=transaction` 的已发布 Writeback，保存原连接、映射与载荷，普通动作订阅跳过它；逻辑名称沿既有集成交付机制在目标环境绑定本地连接。work 保存原工作 owner 的任务意图。call 只允许原同步纯查询，固定保留版本和标量结果；默认使用事务开始的记录快照，`current` 明确读取前序步骤产生的私有状态，异步任务不伪装为纯查询。
 
+当前发布检查仍要求事务恰有一次无条件主体写入，并对同类型的动态目标使用静态互斥限制；运行时还会检查实际记录的重复写入。这些是表达范围的现有限制，不是跨权威原子性要求。外部审计提出的合法条件主体写入与不同动态目标，按 [ADR-0098 §13](0098-build-the-capability-to-build.md#13-外部审计的采纳边界) 的具体场景继续处理，不能以已有步骤种类齐全宣称所有合法业务均能表达。
+
 **旧表达替换**：新保存与读取供编辑的定义由 Build 的 `CanonicalObject` / `migrateObjectTransactions` 将 Sets、Creates、Posts、Journal、Reverses、Conditions、Reads、To/ToInput 转为事务并移除原字段；旧编号转为创建事务中的命名序列。旧不可变发布字节不改，当前执行时在内存编译为同一事务。旧 take/stored/create/post/numberingOf 仅供历史 raw-input 日志的 `LegacyReplay` 恢复，入口拒绝普通调用；已接受结果的恢复不经过它们。旧编号首次取号按原字段与格式读取已有最大值，接受时才保存起点，后续不再计数记录。退出登记见 [Subtraction §4](../Subtraction.md#4-构建器旧动作表达adr-0100已替换)。
 
 构建者的 Action types → Transaction 和 Creation transaction 复用同一个类型化步骤编辑器，可配置 Guard/When、字段与前序结果、状态、关系、迭代、过账、出站、任务及纯查询。旧的 Rules、赋值、关联创建、过账、账簿和记录计数编号编辑器已删除，状态图读写事务中的状态赋值；复杂定义仍可在折叠的 Transaction source 编辑同一份事务，非法 JSON 保留在输入控件中。

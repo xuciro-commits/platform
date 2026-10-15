@@ -3,7 +3,7 @@
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "sample-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation";
+export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -20,6 +20,7 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "flow", type: "build.process", view: "flow", label: "Logic flow", plural: "Logic flows", ref: "flow" },
   { kind: "function", type: "build.function", view: "function", label: "AI function", plural: "AI functions", ref: "function" },
   { kind:"evaluation-set",type:"build.testplan",view:"evaluation-set",label:"Evaluation set",plural:"Evaluation sets",ref:"evaluation-set" },
+  { kind: "test-plan", type: "build.testplan", view: "test-plan", label: "Business test plan", plural: "Business test plans", ref: "test-plan" },
   { kind: "agent", type: "build.agent", view: "agent", label: "Agent", plural: "Agents", ref: "agent" },
   { kind: "compute", type: "build.code", view: "code", label: "Code function", plural: "Code functions", ref: "compute" },
   { kind: "connection", type: "build.connection", view: "connection", label: "Connection", plural: "Connections" },
@@ -42,7 +43,11 @@ export const refKey = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}
 /** The route that edits a resource record inside a project. */
 export function resourceRoute(kind: ResourceKindInfo, id: string, project?: string): Route {
   if (kind.kind === "page") return { view: "module", params: { ...(project ? { id: project, application: project } : {}), page: id } };
+  if (kind.kind === "test-plan" && project) return { view: "project", params: { id: project, area: "verify", plan: id } };
   return { view: kind.view, params: { id, ...(project ? { application: project } : {}) } };
 }
 
-export type ResourceRecord = { id: string; name: string; title: string; state?: string; version?: number; archived?: boolean; object?: string; actions?: { name: string; title?: string }[]; when?: string; manual?: boolean; changed?: { at?: string; by?: string } | string };
+export type ResourceRecord = { id: string; name: string; title: string; state?: string; version?: number; archived?: boolean; object?: string; actions?: { name: string; title?: string }[]; when?: string; manual?: boolean; evaluation?: unknown[]; roots?: Api.AssetRef[]; changed?: { at?: string; by?: string } | string };
+
+/** Ordinary plans and measured AI evaluations share their original record owner. */
+export const matchesResourceKind = (kind: ResourceKindInfo, record: { evaluation?: unknown[]; roots?: Api.AssetRef[] }) => kind.kind === "evaluation-set" ? !!record.evaluation?.length : kind.kind !== "test-plan" || !record.evaluation?.length && !!record.roots?.length;

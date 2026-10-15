@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 
@@ -99,7 +100,15 @@ func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 					return nil, err
 				}
 				if !head.Archived && head.Name != "" {
-					add(kind, head.ID, head.Name)
+					rowKind := kind
+					if entity.Type == TestPlanType {
+						var plan TestPlan
+						if json.Unmarshal(platform.Raw(row), &plan) != nil {
+							return nil, fmt.Errorf("test plan draft is invalid")
+						}
+						rowKind = testPlanKind(plan)
+					}
+					add(rowKind, head.ID, head.Name)
 				}
 			}
 			offset += len(rows)
@@ -165,9 +174,32 @@ func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 				p := processes[i]
 				p.Version++
 				p.Published = published(p)
+				p.Versions = append(slices.Clone(p.Versions), p.Published)
+				p.State = "published"
 				assets, err = releaseAssets(nil, nil, nil, []Process{p}, b.Manifest().Version)
 			default:
+				declarations := b.jointDeclarations
+				if draft.Kind == platform.AssetEvaluation {
+					plan, found := platform.Get[TestPlan](caller, draft.ID)
+					if !found || plan.Archived {
+						return nil, fmt.Errorf("saved evaluation plan is unavailable")
+					}
+					_, functions, _, functionRef, _, problem := b.functionDraftAssets(string(plan.Function))
+					if problem != nil {
+						return nil, problem
+					}
+					function, found := findReleaseAsset(functions, functionRef)
+					if !found {
+						return nil, fmt.Errorf("Draft asset is unavailable")
+					}
+					b.jointDeclarations = maps.Clone(declarations)
+					if b.jointDeclarations == nil {
+						b.jointDeclarations = map[platform.AssetRef]platform.ReleaseAsset{}
+					}
+					b.jointDeclarations[functionRef] = function
+				}
 				_, after, _, next, _, e := b.singleDraftAssets(draft.Kind, draft.ID)
+				b.jointDeclarations = declarations
 				err = e
 				if err == nil {
 					asset, ok := findReleaseAsset(after, next)

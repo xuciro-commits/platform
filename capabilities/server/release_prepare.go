@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,6 +60,28 @@ func (t *Tenant) assetReleaseContextLocked(registry *platform.AssetRegistry, ass
 // Missing drafts are real owner create decisions, but remain private until
 // their enclosing release and definition images have all been accepted.
 func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly ...bool) (*stagedDecision, json.RawMessage, error) {
+	return t.bootstrapOwnerDraftsLocked(candidate, context, len(definitionOnly) > 0 && definitionOnly[0], nil)
+}
+
+type ownerDraftRequest struct {
+	Key string
+}
+
+func assetDraftPayload(info platform.EntityInfo, image json.RawMessage) (json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(image, &fields); err != nil {
+		return nil, err
+	}
+	payload := map[string]json.RawMessage{}
+	for _, field := range info.Fields {
+		if value, ok := fields[field.Name]; ok && !field.ReadOnly && string(value) != "null" {
+			payload[field.Name] = value
+		}
+	}
+	return json.Marshal(payload)
+}
+
+func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *ownerDraftRequest) (*stagedDecision, json.RawMessage, error) {
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -72,7 +95,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(definitionOnly) > 0 && definitionOnly[0] {
+	if definitionOnly {
 		shapes, err := t.releaseAssetShapes(candidate.Assets)
 		if err != nil {
 			return nil, nil, err
@@ -109,6 +132,9 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 	defer endBootstrap()
 	decision.attachPrivateHosts()
 	declare := func(asset platform.ReleaseAsset) error {
+		if context.DraftsOnly {
+			return nil
+		}
 		plans, err := registry.PrepareReleaseAssets([]platform.ReleaseAsset{asset}, context)
 		if err != nil {
 			return err
@@ -137,7 +163,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 		}
 	}
 	var receipt *pb.ChangeRecord
-	for _, draft := range drafts {
+	for ordinal, draft := range drafts {
 		et := decision.records.types[draft.Type]
 		if et == nil {
 			return nil, nil, fmt.Errorf("%s does not host %s", t.ID, draft.Type)
@@ -155,32 +181,34 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 		if matches > 1 {
 			return nil, nil, fmt.Errorf("asset draft %s/%s is ambiguous", draft.Type, draft.Name)
 		}
+		if request != nil && (matches > 0 || et.rows.get(draft.Name) != nil) {
+			return nil, nil, fmt.Errorf("asset %s already has a draft; open that draft instead", draft.Ref)
+		}
 		app := view.app(et.info.App)
 		if matches == 0 {
-			var image map[string]json.RawMessage
-			if err := json.Unmarshal(draft.Image, &image); err != nil {
-				return nil, nil, err
-			}
-			payload := map[string]json.RawMessage{}
-			for _, field := range et.info.Fields {
-				if value, ok := image[field.Name]; ok && !field.ReadOnly && string(value) != "null" {
-					payload[field.Name] = value
-				}
-			}
-			raw, err := json.Marshal(payload)
+			raw, err := assetDraftPayload(et.info, draft.Image)
 			if err != nil {
 				return nil, nil, err
 			}
+			key := "release-bootstrap:" + candidate.ID + ":" + context.Member.ID + ":" + draft.Type + "/" + draft.Name
+			if request != nil {
+				key = request.Key + "#" + strconv.Itoa(ordinal)
+			}
 			submission := &pb.Submission{TenantId: t.ID, PrincipalId: context.Member.ID, Authority: et.info.App,
-				IdempotencyKey: "release-bootstrap:" + candidate.ID + ":" + context.Member.ID + ":" + draft.Type + "/" + draft.Name,
+				IdempotencyKey: key,
 				Target:         &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Schema, Version: 1}, Payload: raw}
+			if request != nil {
+				if refusal := t.delegatedBound(context.Member, submission); refusal != nil {
+					return nil, nil, refusal
+				}
+			}
 			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, et.info.App, false, false), app, submission, context.At)
 			if rejected != nil {
 				if rejected.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 					action, _ := app.Manifest().Actions.Action(draft.Schema)
 					return nil, nil, fmt.Errorf("create target draft %s/%s needs the %s role and matching token scope: %w", draft.Type, draft.Name, strings.Join(action.Roles, " role or "), rejected)
 				}
-				return nil, nil, fmt.Errorf("create target draft %s/%s: %w", draft.Type, draft.Name, rejected)
+				return nil, nil, fmt.Errorf("create target draft %s/%s: %s: %w", draft.Type, draft.Name, rejected.Message, rejected)
 			}
 			receipt = answer
 		}

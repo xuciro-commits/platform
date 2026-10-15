@@ -588,6 +588,14 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		add(evaluation.Function.Ref)
+	case AssetTestPlan:
+		plan, err := ReadTestPlan(asset.Body)
+		if err != nil {
+			return out, err
+		}
+		for _, root := range plan.Dependencies() {
+			add(root)
+		}
 	case AssetSampleSet:
 		var samples SampleSet
 		if err := json.Unmarshal(asset.Body, &samples); err != nil {

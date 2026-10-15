@@ -45,7 +45,10 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 	} else {
 		available, err = t.releaseAssetsLocked(nil, false)
 		if err != nil {
-			return nil, err
+			// Diagnostics must not block business work or repairing an unready
+			// connection. Execution still uses the installed owner and its own
+			// dependency checks; an unavailable closure is recorded as such.
+			return out, nil
 		}
 	}
 	if i := slices.IndexFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }); i >= 0 {

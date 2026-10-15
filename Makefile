@@ -28,7 +28,7 @@ LITE_HOST ?= 127.0.0.1
 GATEWAY_LISTEN ?= 127.0.0.1:8510
 GATEWAY_PACKAGES ?= $(ROOT)/.build/protocol/packages
 GATEWAY_STATE ?= $(ROOT)/.build/protocol/state
-PROTOCOL_VERSION ?= 0.1.0
+PROTOCOL_VERSION ?= 0.1.2
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
 
@@ -78,12 +78,12 @@ dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依
 web: ## 在 Vite 下热重载运行工作区（HMR），将 /v1 反向代理到对应解决方案宿主
 	cd web && PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
 
-.PHONY: protocol-packages
-protocol-packages: ## 构建独立网关、模拟与 S7 只读驱动，生成 .build/protocol/packages 中的本机协议包
-	GO="$(GO)" PROTOCOL_VERSION="$(PROTOCOL_VERSION)" python3 scripts/protocol-packages.py
+.PHONY: packages
+packages: ## 构建独立网关与本机协议包，并加入受控行业定义包
+	GO="$(GO)" PROTOCOL_VERSION="$(PROTOCOL_VERSION)" GATEWAY_PACKAGES="$(GATEWAY_PACKAGES)" python3 scripts/package-artifacts.py
 
 .PHONY: gateway
-gateway: protocol-packages ## 启动本地协议网关（默认 8510；需环境变量 GATEWAY_TOKEN，技术收据保留在 .build/protocol/state）
+gateway: packages ## 启动本地协议网关（默认 8510；需环境变量 GATEWAY_TOKEN，技术收据保留在 .build/protocol/state）
 	@test -n "$$GATEWAY_TOKEN" || { echo 'Set GATEWAY_TOKEN in the environment before running make gateway'; exit 1; }
 	@.build/protocol/bin/gateway -listen "$(GATEWAY_LISTEN)" -packages "$(GATEWAY_PACKAGES)" -state "$(GATEWAY_STATE)" -token-env GATEWAY_TOKEN
 
@@ -118,6 +118,10 @@ test-go: ## 仅运行宿主测试；可用 PKG=./platform 或 RUN=TestName 缩�
 	cd capabilities/server && $(GO) test -count=1 $(if $(RUN),-run '$(RUN)') $(or $(PKG),./...)
 
 .PHONY: e2e
+ifneq ($(if $(strip $(SPEC)),$(filter heating-application protocol-packages,$(SPEC)),all),)
+e2e: packages
+e2e: export PLATFORM_PACKAGES_DIR ?= $(GATEWAY_PACKAGES)
+endif
 e2e: ## 在开发宿主上运行 docs/Testing.md 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build
 	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts)
@@ -145,8 +149,13 @@ images: ## 构建解决方案 Docker 镜像并打上 VERSION 标签（需先构�
 	docker tag platform-manufacturing-server platform/manufacturing-server:$(VERSION)
 
 .PHONY: rehearse
-rehearse: ## 一次性交付演练（默认临时容器；PROFILE=migration 复用本地基础设施，不重建镜像）
+rehearse: ## 交付检查（默认临时容器；PROFILE=migration 检查演进；PROFILE=heating 检查模拟行业包）
+ifeq ($(PROFILE),heating)
+	$(MAKE) packages
+	PLATFORM_PROTOCOL_PACKAGES="$(GATEWAY_PACKAGES)" $(MAKE) test-go PKG=. RUN=TestHeatingIndustryPackageTwoCitiesAndRetainedRepair
+else
 	$(if $(filter migration,$(PROFILE)),python3 deploy/local/migration_rehearsal.py,scripts/verify.sh deploy)
+endif
 
 .PHONY: tag
 tag: ## 标记正式版本：make tag VERSION=v0.12.0（推送标签将触发发布流水线）

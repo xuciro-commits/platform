@@ -729,6 +729,7 @@ export type CandidateSimulation = {
 };
 
 export type CandidateSimulationRequest = {
+  roots?: AssetRef[];
   applicationId?: string;
   candidateId?: string;
   actors?: string[];
@@ -1202,6 +1203,7 @@ export type Definition = {
   flow?: FlowDefinition;
   function?: AIFunction;
   evaluation?: EvaluationSetDescriptor;
+  testPlan?: TestPlanDescriptor;
   agent?: AgentReleaseDescriptor;
   operation?: Operation;
 };
@@ -2490,6 +2492,12 @@ export type OrgSeed = {
   memberships: Membership[];
 };
 
+export type PackageBlueprint = {
+  roots: AssetRef[];
+  assets: ReleaseAsset[];
+  guide?: string;
+};
+
 export type PackageContribution = {
   view: string;
   surface?: string;
@@ -2499,6 +2507,7 @@ export type PackageContribution = {
 };
 
 export type PackageDescriptor = {
+  blueprint?: PackageBlueprint;
   runtime?: DriverRuntime;
   id: string;
   version: string;
@@ -2509,6 +2518,26 @@ export type PackageDescriptor = {
   contributions?: PackageContribution[];
   artifactDigest?: string;
   description?: string;
+};
+
+export type PackageDraft = {
+  ref: AssetRef;
+  type: string;
+  id: string;
+};
+
+export type PackageDraftRequest = {
+  version: string;
+  key: string;
+};
+
+export type PackageDraftResult = {
+  package: string;
+  version: string;
+  key: string;
+  application: string;
+  applicationID: string;
+  drafts: PackageDraft[];
 };
 
 export type PackageView = {
@@ -4381,6 +4410,31 @@ export type TenantTemplate = {
   description?: string;
   settings?: Record<string, string>;
   adminRoles?: Record<string, string>;
+};
+
+export type TestPlanDescriptor = {
+  name: string;
+  title: string;
+  roots: AssetRef[];
+  at: string;
+  samples?: SampleRecords[];
+  steps: TestStep[];
+};
+
+export type TestStep = {
+  read?: boolean;
+  type: string;
+  id: string;
+  action: string;
+  payload: string;
+  expect: string;
+  as?: string;
+  advanceSeconds?: number;
+  flow?: string;
+  step?: string;
+  answer?: string;
+  function?: FunctionFixture;
+  compute?: ComputeFixture;
 };
 
 export type Token = {

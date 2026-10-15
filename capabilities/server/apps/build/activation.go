@@ -138,7 +138,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 		}
 	}
 
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]ReleasePublication, error){b.prepareQueryReleasePublications, b.preparePropertyTypeReleasePublications, b.prepareLinkTypeReleasePublications, b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareEvaluationPublications, b.PrepareCodeReleasePublications} {
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]ReleasePublication, error){b.prepareQueryReleasePublications, b.preparePropertyTypeReleasePublications, b.prepareLinkTypeReleasePublications, b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, err

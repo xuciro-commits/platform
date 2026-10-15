@@ -26,13 +26,22 @@ func (b *Build) checkFunction(f Function) error {
 	if !named(f.Name) {
 		return fmt.Errorf("The function name %s must be lower-case letters and digits", f.Name)
 	}
-	if _, ok := b.installed[f.Object]; !ok {
+	_, installed := b.installed[f.Object]
+	shape, selected := b.jointEntities[f.Object]
+	if !installed && (!selected || shape.App != ID) {
 		return fmt.Errorf("Function %s needs a published object of this builder", f.Name)
 	}
 	if f.Proposal != nil && f.Proposal.HandoffRole != "" && !slices.Contains(b.Manifest().AllRoles(), f.Proposal.HandoffRole) {
 		return fmt.Errorf("The proposal reviewer must hold a declared role")
 	}
-	if err := b.host.ValidateInstallFunction(f.Definition()); err != nil {
+	// The complete candidate installs and checks its source object before the
+	// original host validates this function. Draft review must not require an
+	// independent live publication of that same selected object.
+	validate := f.Definition().Check
+	if !selected {
+		validate = func() error { return b.host.ValidateInstallFunction(f.Definition()) }
+	}
+	if err := validate(); err != nil {
 		return err
 	}
 	list, err := b.functionInventory()

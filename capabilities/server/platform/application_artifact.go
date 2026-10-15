@@ -142,7 +142,7 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 			artifact.AI = append(artifact.AI, binding)
 		case AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetObservation:
 			artifact.Integrations = append(artifact.Integrations, binding)
-		case AssetSampleSet:
+		case AssetSampleSet, AssetTestPlan:
 			artifact.Samples = append(artifact.Samples, binding)
 		case AssetCompute, AssetMigration:
 			artifact.Rules = append(artifact.Rules, binding)

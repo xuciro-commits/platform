@@ -34,7 +34,7 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This tenant runs no processes")
 	}
 	if !c.Replaying {
-		if err := b.checkFlow(*p); err != nil {
+		if err := b.checkFlow(*p, b.installed[p.Object]); err != nil {
 			return err
 		}
 		if p.Continuous != nil && p.Continuous.Intake != nil {
@@ -109,7 +109,7 @@ func (b *Build) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	return start.StartManual(c, ID, installed.Name, installed.Version, request.Key, input, now)
 }
 
-func (b *Build) checkFlow(p Process) *kernel.Error {
+func (b *Build) checkFlow(p Process, entity platform.Entity) *kernel.Error {
 	plans, err := b.processInventory()
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
@@ -120,12 +120,12 @@ func (b *Build) checkFlow(p Process) *kernel.Error {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process name {name} is already used", p.Name)
 		}
 	}
-	return b.checkFlowOn(p, b.installed[p.Object])
+	return b.checkFlowOn(p, entity)
 }
 
 // CheckProcess exposes the exact publication compiler to edit/test feedback.
 // It returns node-qualified errors instead of trusting frontend edge rules.
-func (b *Build) CheckProcess(p Process) *kernel.Error { return b.checkFlow(p) }
+func (b *Build) CheckProcess(p Process) *kernel.Error { return b.checkFlow(p, b.installed[p.Object]) }
 
 func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {

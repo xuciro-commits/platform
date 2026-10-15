@@ -2315,8 +2315,8 @@
   "Observation": "观测",
   "completed": "已完成",
   "Only the current dispatch reviewer may choose an external target": "只有当前设备派发复核者可以选择外部目标",
-  "A protocol package requires its exact version": "协议包需要明确指定版本",
-  "A protocol package version cannot be replaced; publish a new version": "不能替换同一版本的协议包，请发布新版本",
+  "A versioned package requires its exact version": "版本化包需要明确指定版本",
+  "A package version cannot be replaced; publish a new version": "不能替换包的同一版本，请发布新版本",
   "A protocol package uses an HTTP gateway connection": "协议包通过 HTTP 网关连接使用",
   "Protocol configuration is invalid: {reason}": "协议配置无效：{reason}",
   "Protocol packages are unavailable on this host": "此宿主尚无可用的协议包",
@@ -2339,5 +2339,12 @@
   "Rack (default 0)": "机架号（默认 0）",
   "Slot (default 1)": "插槽号（默认 1）",
   "Read timeout in milliseconds (default 5000)": "读取超时时间，单位毫秒（默认 5000）",
-  "The package index cannot be read: {reason}": "无法读取包目录：{reason}"
+  "The package index cannot be read: {reason}": "无法读取包目录：{reason}",
+  "Portable definition roots": "可移交的定义根",
+  "Publish test plan": "发布测试计划",
+  "Freeze a portable business scenario or the evaluation cases for one function version.": "保存可移交业务场景或指定函数版本的不可变评测用例。",
+  "Portable test roots cannot include local draft, member or model bindings": "可移交测试不能包含本地草稿、成员或模型绑定",
+  "A published test plan keeps its kind; create another plan": "已发布的测试计划不能更改类型，请创建另一份计划",
+  "Configure the connection address before checking it": "请先配置连接地址，再检查连接",
+  "Test roots must be distinct objects or workflows": "测试根必须是互不重复的对象或流程"
 }

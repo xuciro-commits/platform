@@ -28,6 +28,7 @@ const (
 	AssetFunction   AssetKind = "function"
 	AssetAgent      AssetKind = "agent"
 	AssetEvaluation AssetKind = "evaluation-set"
+	AssetTestPlan   AssetKind = "test-plan"
 	AssetCompute    AssetKind = "compute"
 	// Integration assets describe existing owner configuration. They never
 	// include target credentials, cursors, data or running-work state.
@@ -76,7 +77,7 @@ func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + 
 
 func (r AssetRef) Check() error {
 	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent, AssetEvaluation, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation}, r.Kind) {
+		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -423,6 +424,7 @@ type Definition struct {
 	Flow             *FlowDefinition          `json:"flow,omitempty"`
 	Function         *AIFunction              `json:"function,omitempty"`
 	Evaluation       *EvaluationSetDescriptor `json:"evaluation,omitempty"`
+	TestPlan         *TestPlanDescriptor      `json:"testPlan,omitempty"`
 	Agent            *AgentReleaseDescriptor  `json:"agent,omitempty"`
 	Operation        *Operation               `json:"operation,omitempty"`
 }

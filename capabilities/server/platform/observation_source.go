@@ -149,7 +149,7 @@ func CheckObservationDefinition(def ObservationDefinition, lookup func(string) (
 }
 
 func ObservationRuleSchema(def ObservationDefinition, entity EntityInfo) (ExprSchema, error) {
-	schema := ExprSchema{Refs: map[string]ExprType{"record.id": {Kind: "text"}, "observation.latest": {Kind: "decimal"}}, Windows: map[string]ExprWindowType{"observation": {Unit: def.Unit}}}
+	schema := ExprSchema{Refs: map[string]ExprType{"record.id": {Kind: "text"}, "observation.latest": {Kind: "decimal"}, "observation.lastat": {Kind: "datetime"}}, Windows: map[string]ExprWindowType{"observation": {Unit: def.Unit}}}
 	if entity.Type != def.Object.Name || entity.App != def.Object.App {
 		return schema, fmt.Errorf("observation rule object differs from its declaration")
 	}
@@ -206,8 +206,10 @@ func ObservationRuleContext(def ObservationDefinition, record json.RawMessage, w
 	}
 	if window.Count == 0 {
 		context.Refs["observation.latest"] = ExprValue{Kind: "decimal", Status: "missing"}
+		context.Refs["observation.lastat"] = ExprValue{Kind: "datetime", Status: "missing"}
 	} else {
 		context.Refs["observation.latest"] = ExprPresent("decimal", window.Last)
+		context.Refs["observation.lastat"] = ExprPresent("datetime", window.LastAt.UTC().Format(time.RFC3339Nano))
 	}
 	return context, nil
 }

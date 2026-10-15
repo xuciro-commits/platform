@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Build the local protocol artifacts behind `make protocol-packages`."""
+"""Build the trusted local package directory behind `make packages`."""
 
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -21,13 +22,13 @@ def run(arguments, **options):
 
 def main():
     go = os.environ.get("GO", "go")
-    version = os.environ.get("PROTOCOL_VERSION", "0.1.0")
+    version = os.environ.get("PROTOCOL_VERSION", "0.1.2")
     if not version or any(character not in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-+" for character in version):
         raise ValueError("PROTOCOL_VERSION must be a plain package version")
     target = json.loads(run([go, "env", "-json", "GOOS", "GOARCH"], capture_output=True, text=True).stdout)
     suffix = ".exe" if target["GOOS"] == "windows" else ""
     binaries = OUTPUT / "bin"
-    packages = OUTPUT / "packages"
+    packages = Path(os.environ.get("GATEWAY_PACKAGES", str(OUTPUT / "packages"))).resolve()
     artifacts = packages / "artifacts"
     binaries.mkdir(parents=True, exist_ok=True)
     artifacts.mkdir(parents=True, exist_ok=True)
@@ -69,18 +70,25 @@ def main():
             "runtime": runtime,
         }))
 
+    for source in sorted((ROOT / "deploy" / "packages").glob("*.json")):
+        manifest = json.loads(source.read_text(encoding="utf-8"))
+        manifests.append((manifest["id"], manifest))
+
     for identity, manifest in manifests:
-        path = packages / (identity + "-" + version + ".json")
+        package_version = manifest["version"]
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", identity) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+-]*", package_version):
+            raise ValueError("Package ID and version must be plain names")
+        path = packages / (identity + "-" + package_version + ".json")
         if path.exists() and json.loads(path.read_text()) != manifest:
-            raise ValueError(identity + "@" + version + " already has different contents; increase PROTOCOL_VERSION")
+            raise ValueError(identity + "@" + package_version + " already has different contents; increase its package version")
         path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print("Built " + identity + "@" + version + " (" + target["GOOS"] + "/" + target["GOARCH"] + ")")
-    print("Protocol packages: " + str(packages.relative_to(ROOT)))
+        print("Packaged " + identity + "@" + package_version)
+    print("Packages: " + str(packages))
 
 
 if __name__ == "__main__":
     try:
         main()
     except (OSError, ValueError, subprocess.SubprocessError) as error:
-        print("Protocol package build failed: " + str(error), file=sys.stderr)
+        print("Package build failed: " + str(error), file=sys.stderr)
         sys.exit(1)

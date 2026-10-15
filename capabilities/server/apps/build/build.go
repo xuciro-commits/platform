@@ -24,17 +24,19 @@ import (
 
 // Build is the builder app of one tenant.
 type Build struct {
-	releaseDraftIDs map[platform.AssetRef]string
-	host            host.BuildHost
-	ledger          *platform.Ledger
+	installationCatalog *platform.Catalog // private installation declarations; never authoritative ledger state
+	releaseDraftIDs     map[platform.AssetRef]string
+	host                host.BuildHost
+	ledger              *platform.Ledger
 	// installed are the objects published in this tenant, by entity type: their
 	// declarations, so generated actions of a defined object reach the record store.
 	installed map[string]platform.Entity
 	// jointEntities are the object drafts of the candidate being built, so the
 	// same validation answers entity lookups as the candidate would install
 	// them (ADR-0048). Empty outside a joint build.
-	jointEntities map[string]platform.EntityInfo
-	jointAssets   map[platform.AssetRef]bool
+	jointEntities     map[string]platform.EntityInfo
+	jointAssets       map[platform.AssetRef]bool
+	jointDeclarations map[platform.AssetRef]platform.ReleaseAsset
 	// jointMode is set while a candidate holds more than one draft: the host's
 	// installed-state install checks then move to the candidate's own install
 	// dry run, because no single draft's image is installed yet (ADR-0048 D2).
@@ -88,7 +90,7 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.observationEntity())...)
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
-	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish evaluation set", Description: "Freeze the synthetic cases and thresholds against one published function version.", Capability: "functions", Roles: []string{Builder}, Payload: []platform.Field{}})
+	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, platform.MigrationRunType, MigrationPlanType, SampleSetType, ObservationType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
 	return b
 }
@@ -153,6 +155,10 @@ func (b *Build) settings() []platform.Setting {
 }
 
 func (b *Build) Manifest() platform.Manifest {
+	catalog := b.ledger.Catalog
+	if b.installationCatalog != nil {
+		catalog = b.installationCatalog
+	}
 	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.migrationPlanEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	entities = append(entities, migrationEntity())
 	for _, typ := range sortedTypes(b.installed) {
@@ -170,7 +176,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Sequences: b.transactionSequences(), Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Consumes: b.confirmationProtocols(), Reads: []string{ReadReleaseProfile}, ReadSources: map[string]string{ReadReleaseProfile: "record"}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Consumes: b.confirmationProtocols(), Reads: []string{ReadReleaseProfile}, ReadSources: map[string]string{ReadReleaseProfile: "record"}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -249,7 +255,7 @@ func (*Build) AcceptedPublicationSchemas() []string {
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
 	switch schema {
 	case SchemaEvaluationSetPublish:
-		_, _, err := b.evaluationSetImage(image)
+		_, _, err := b.testPlanImage(image)
 		return b.testPlanEntity(), nil, nil, nil, err
 	case SchemaAgentPublish:
 		var record Agent
@@ -314,7 +320,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	if schema == SchemaEvaluationSetPublish {
-		_, _, err := b.evaluationSetImage(image)
+		_, _, err := b.testPlanImage(image)
 		return err
 	}
 	if schema == SchemaTablePublish {
@@ -408,7 +414,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if schema == SchemaEvaluationSetPublish {
-		_, _, err := b.evaluationSetImage(image)
+		_, _, err := b.testPlanImage(image)
 		return err
 	}
 	if schema == SchemaTablePublish {
@@ -680,7 +686,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		return b.submitFunctionCall(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
-		return b.submitEvaluationSet(c, s, now)
+		return b.submitTestPlan(c, s, now)
 	}
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
@@ -1414,8 +1420,13 @@ func goName(name string) string {
 // entries after acceptance. A private builder owns registry maps and its joint
 // validation context, while retaining declarations and the ledger identity.
 func (b *Build) ForkDecision() (platform.App, error) {
+	catalog := b.installationCatalog
+	if catalog != nil {
+		catalog = platform.NewCatalog(catalog.All()...)
+	}
 	return &Build{host: b.host, ledger: b.ledger,
-		releaseDraftIDs: maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointAssets: maps.Clone(b.jointAssets), jointMode: b.jointMode,
+		installationCatalog: catalog,
+		releaseDraftIDs:     maps.Clone(b.releaseDraftIDs), installed: maps.Clone(b.installed), jointEntities: maps.Clone(b.jointEntities), jointAssets: maps.Clone(b.jointAssets), jointDeclarations: maps.Clone(b.jointDeclarations), jointMode: b.jointMode,
 		linkTypes: maps.Clone(b.linkTypes), propertyTypes: maps.Clone(b.propertyTypes),
 		queries: maps.Clone(b.queries), functions: maps.Clone(b.functions), agents: maps.Clone(b.agents),
 		codes: maps.Clone(b.codes), tables: maps.Clone(b.tables)}, nil

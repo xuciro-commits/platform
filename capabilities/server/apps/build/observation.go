@@ -34,7 +34,7 @@ func (b *Build) observationEntity() platform.Entity {
 				}
 				return nil
 			}
-			if err := b.checkObservation(c, *record); err != nil {
+			if err := b.checkObservationDefinition(c, *record, record.State == "published"); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 			}
 			return nil
@@ -80,6 +80,10 @@ func (b *Build) observationDefinition(record Observation) (platform.ObservationD
 }
 
 func (b *Build) checkObservation(c platform.Caller, record Observation) error {
+	return b.checkObservationDefinition(c, record, true)
+}
+
+func (b *Build) checkObservationDefinition(c platform.Caller, record Observation, ready bool) error {
 	if err := b.checkName(record.Name, record.ID); err != nil {
 		return err
 	}
@@ -116,7 +120,7 @@ func (b *Build) checkObservation(c platform.Caller, record Observation) error {
 		if !ok || owner != definition.Decision.Action.App || action.Target != definition.Object.Name {
 			return fmt.Errorf("The observation decision must use an action on its declared object")
 		}
-		if c.ID != "" && (!c.Member.InScope(action.Schema) || !c.May(owner, action.Schema, action.Roles).Allow) {
+		if ready && c.ID != "" && (!c.Member.InScope(action.Schema) || !c.May(owner, action.Schema, action.Roles).Allow) {
 			return fmt.Errorf("The publisher cannot invoke the declared observation decision")
 		}
 		if err := platform.CheckObservationAction(definition, action); err != nil {
@@ -124,7 +128,7 @@ func (b *Build) checkObservation(c platform.Caller, record Observation) error {
 		}
 	}
 	connection, ok := platform.Get[Connection](b.host.Automation(platform.Caller{}, ID), record.Connection)
-	if !ok || connection.Archived || connection.State != "ready" || connection.Kind != "http" {
+	if !ok || connection.Archived || ready && connection.State != "ready" || connection.Kind != "http" {
 		return fmt.Errorf("The observation connection must be a ready HTTP connection")
 	}
 	return nil

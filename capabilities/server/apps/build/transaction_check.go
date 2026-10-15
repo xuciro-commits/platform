@@ -157,12 +157,18 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 				if !strings.HasPrefix(step.Target.Type, ID+".") {
 					return fmt.Errorf("transaction cannot change another application")
 				}
-				info, ok := lookup(step.Target.Type)
-				if !ok {
-					return fmt.Errorf("transaction object is unavailable")
-				}
 				for i := range step.Changes {
 					assignment := &step.Changes[i]
+					// Typed draft assignments already carry their result type.
+					// Resolve target fields at publication against the whole
+					// candidate, which may add that field in another draft.
+					if assignment.Expr != nil && assignment.From == "" {
+						continue
+					}
+					info, ok := lookup(step.Target.Type)
+					if !ok {
+						return fmt.Errorf("transaction object is unavailable")
+					}
 					field, ok := info.Field(assignment.Field)
 					if !ok {
 						return fmt.Errorf("transaction field is unavailable")

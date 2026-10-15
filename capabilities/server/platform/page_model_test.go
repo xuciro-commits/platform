@@ -11,9 +11,14 @@ func TestModelBindingDefaultsMigrationAndDeclaredPaths(t *testing.T) {
 	info := EntityInfo{Type: "sample.item", App: "sample", Display: "name", Fields: []FieldInfo{{Name: "name", Type: "text"}, {Name: "parent", Type: "reference", Ref: "sample.item", Inverse: "children"}, {Name: "state", Type: "choice", ReadOnly: true}}, Lifecycle: &LifecycleInfo{Field: "state", States: []State{{Name: "ready", Title: "Ready"}, {Name: "done", Title: "Done"}}}}
 	lookup := func(typ string) (EntityInfo, bool) { return info, typ == info.Type }
 	p := Page{Name: "model", Object: ModelObject(info.Type), Document: &PageDocument{UIProfile: PageModelProfile}, Sections: []Section{{ID: "list", Widget: "table", Model: &ModelBinding{Type: info.Type}}, {ID: "status", Widget: "status-tracker", Model: &ModelBinding{Type: info.Type}}}}
+	original := Raw(p)
 	effective := p.EffectiveModelPage(lookup)
 	if !slices.Equal(effective.Sections[0].Fields, []string{"name", "parent", "state"}) || effective.Sections[1].StatusTracker.Field != "state" || !slices.Equal(effective.Sections[1].StatusTracker.Stages, []string{"ready", "done"}) {
 		t.Fatal("model defaults do not follow the original object and lifecycle")
+	}
+	effective.Sections[0].Model.Fields = []FieldRef{{Name: "private"}}
+	if !bytes.Equal(original, Raw(p)) {
+		t.Fatal("member projection shares mutable model data with the installed page")
 	}
 	legacy := p
 	_ = json.Unmarshal(Raw(p), &legacy)

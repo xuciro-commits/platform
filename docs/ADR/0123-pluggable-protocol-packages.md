@@ -262,7 +262,7 @@ flowchart LR
 
 ## 11. As built
 
-原 `Package` 已支持 `driver/v1`、目标系统/架构、profiles、类型化字段和可信原生制品。安装必须指定确切版本并封存所有声明目标的二进制，保留版本可用于原连接回读；同版本内容变化被拒绝。部署目录增加版本后原 Console 即时发现，不替换租户或重启业务宿主。构建入口为 `make protocol-packages`，使用方法见 [Apps](../Apps.md#协议包与模拟采集)。
+原 `Package` 已支持 `driver/v1`、目标系统/架构、profiles、类型化字段和可信原生制品。安装必须指定确切版本并封存所有声明目标的二进制，保留版本可用于原连接回读；同版本内容变化被拒绝。部署目录增加版本后原 Console 即时发现，不替换租户或重启业务宿主。构建入口为 `make packages`，使用方法见 [Apps](../Apps.md#协议包与模拟采集)。
 
 [`driver/`](../../capabilities/server/driver/) 提供有界 stdio 调用与加载；[`gateway/`](../../capabilities/server/gateway/) 按包版本启动进程、按连接修订管理会话，在独立进程执行唯一采样循环。网关保存技术配置、当前修订与命令收据，原始采样输出为 NDJSON，仅保留有界最近值；它没有时序数据库、业务规则或第二业务队列。预览使用隔离只读会话，不启用采样，样本不写入 Connection 或业务日志。恢复技术配置不访问设备或重放命令。
 

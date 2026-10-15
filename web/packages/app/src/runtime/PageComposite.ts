@@ -23,13 +23,14 @@ export function usePageComposite(bound:WidgetBindingContext,source:RecordSource|
  const page={...bound.page,sections:bound.page.sections?.map(canonicalModelSection)},definition=definitions.find(d=>d.page?.name===page.name&&d.page.object.name===page.object.name);
  const key=modelWindowKey(bound.section);
  const active=!!config&&!!source&&!!session&&bound.contextReadCurrent!==false;
- const identity=JSON.stringify([source?.scope,source?.revision,bound.aggregateScope,config,records,bound.modelDraft?page:definition?.contentVersion,ready,round]),current=useRef(identity);current.current=identity;
+ const signature=JSON.stringify([source?.scope,bound.aggregateScope,config,records,bound.modelDraft?page:definition?.contentVersion,ready]);
+ const identity=JSON.stringify([signature,source?.revision,round]),current=useRef(identity);current.current=identity;
  useEffect(()=>{
   if(!active||!ready){if(config)session?.adoptModelWindow(key,'');return;}
   let mounted=true;const valid=()=>mounted&&current.current===identity&&source?.scope===session?.snapshotScope();
-  session?.adoptModelWindow(key,identity);
+  session?.adoptModelWindow(key,signature);
   const request:Api.PageModelRead={page:definition?.ref??{app:'build',kind:'page',name:page.name},...bound.modelDraft||!definition?{draft:page}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,offset:0,limit:pageUIManifest.runtime.composite.maxRecords};
-  void client.get<Api.PageModelResult>(`/v1/page-model/read\n${JSON.stringify(request)}`,true).then(data=>{if(!valid())return;const primary=data.composite?.sources[bound.section.widget==='model-matrix'?'rows':'nodes'];session?.adoptModelWindow(key,identity,{object:primary?.object??primaryModel(bound.section)!.type,query:{},records:(primary?.records??[]) as import('@platform/ui').EntityRecord[],total:primary?.records.length??0,partial:data.partial});setState({identity,data});},()=>{if(valid()){const error='Composite model bindings could not be read. Check their collections and permissions.';session?.adoptModelWindow(key,identity,undefined,error);setState({identity,error});}});
+  void client.get<Api.PageModelResult>(`/v1/page-model/read\n${JSON.stringify(request)}`,true).then(data=>{if(!valid())return;const primary=data.composite?.sources[bound.section.widget==='model-matrix'?'rows':'nodes'];session?.adoptModelWindow(key,signature,{object:primary?.object??primaryModel(bound.section)!.type,query:{},records:(primary?.records??[]) as import('@platform/ui').EntityRecord[],total:primary?.records.length??0,partial:data.partial});setState({identity,data});},()=>{if(valid()){const error='Composite model bindings could not be read. Check their collections and permissions.';session?.adoptModelWindow(key,'',undefined,error);setState({identity,error});}});
   return()=>{mounted=false;};
  },[active,ready,identity,client,session]);
  useEffect(()=>()=>{if(config)session?.adoptModelWindow(key,'')},[session,key,!!config]);

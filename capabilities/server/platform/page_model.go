@@ -197,8 +197,9 @@ func (p Page) EffectiveModelSection(s Section, lookup func(string) (EntityInfo, 
 			}
 		}
 	}
-	_ = json.Unmarshal(Raw(values), &copy)
-	return copy
+	var projected Section
+	_ = json.Unmarshal(Raw(values), &projected)
+	return projected
 }
 
 // NormalizeModelBindings replaces authoring fields, while legacy immutable

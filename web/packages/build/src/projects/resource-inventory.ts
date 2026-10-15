@@ -2,7 +2,7 @@ import { useHost, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { useMemo } from "react";
 import type { Project } from "./project";
-import { kindOfType, refKey, resourceKinds, resourceRef, type ResourceKindInfo, type ResourceRecord } from "./resources";
+import { kindOfType, matchesResourceKind, refKey, resourceKinds, resourceRef, type ResourceKindInfo, type ResourceRecord } from "./resources";
 
 export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; installed: boolean; missing: boolean };
 
@@ -28,7 +28,7 @@ export function useProjectResources(project?: Project) {
     for (const ref of project.resources ?? []) {
       const kind = resourceKinds.find((item) => (item.ref ?? item.kind) === ref.kind);
       if (!kind) continue;
-      const record = (inventories[kind.kind]?.data?.records ?? []).find((item) => !item.archived && refKey(resourceRef(kind, item.name)) === refKey(ref));
+      const record = (inventories[kind.kind]?.data?.records ?? []).find((item) => !item.archived && matchesResourceKind(kind, item) && refKey(resourceRef(kind, item.name)) === refKey(ref));
       items.push(resolve(kind, ref, record, inventories[kind.kind]?.isSuccess === true));
     }
     return items;
@@ -36,7 +36,7 @@ export function useProjectResources(project?: Project) {
   /** Records of every kind that exist but are not in the project yet: what "Add existing" offers. */
   const available = useMemo(() => {
     const held = new Set(owned.map((item) => refKey(item.ref)));
-    return resourceKinds.flatMap((kind) => (inventories[kind.kind]?.data?.records ?? []).filter((record) => !record.archived && record.name && !held.has(refKey(kind.kind === "page" ? { app: "build", kind: "page", name: record.name } : resourceRef(kind, record.name)))).map((record) => ({ kind, record })));
+    return resourceKinds.flatMap((kind) => (inventories[kind.kind]?.data?.records ?? []).filter((record) => !record.archived && record.name && matchesResourceKind(kind, record) && !held.has(refKey(kind.kind === "page" ? { app: "build", kind: "page", name: record.name } : resourceRef(kind, record.name)))).map((record) => ({ kind, record })));
   }, [owned, ...resourceKinds.map((kind) => inventories[kind.kind]?.data)]);
   /** Object types other apps installed (the shared master data of `core`, HR's employees…): a project
    * references them instead of defining its own (ADR-0058 A1). */

@@ -413,7 +413,7 @@ func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error
 }
 
 func ownedMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetSampleSet, platform.AssetObservation}, kind)
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation}, kind)
 }
 
 // ownedAssetDefinition indexes only an owner's accepted descriptor identity.
@@ -467,6 +467,13 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 			return definition, false, err
 		}
 		definition.Evaluation = &descriptor
+	}
+	if plan.Ref.Kind == platform.AssetTestPlan {
+		descriptor, err := platform.ReadTestPlan(asset.Body)
+		if err != nil {
+			return definition, false, err
+		}
+		definition.TestPlan = &descriptor
 	}
 	return definition, true, nil
 }
@@ -813,7 +820,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 			def.Protocol = &projected
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetSampleSet:
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {

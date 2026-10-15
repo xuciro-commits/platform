@@ -40,6 +40,7 @@ type Delivery struct {
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
 	observationWindows map[string]observationWindowAttempt
+	confirmationReads  map[string]confirmationReadAttempt
 	simulation         bool                         // isolated builder execution, never authoritative state
 	simulationTrace    func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
 	// Private control views route callbacks back into their owning decision.
@@ -731,7 +732,15 @@ func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if refusal := authorizationRefusal(t.authorizeEntry(m, a.Manifest().ID, name, "read", Now())); refusal != nil {
+	entry := t.authorizeEntry(m, a.Manifest().ID, name, "read", Now())
+	if name == "packages" && !m.Holds(PlatformApp, Admin) && !m.Holds(PlatformApp, Auditor) {
+		caller := t.caller(m, a, false)
+		entry = caller.May("build", "build.app.create", []string{"builder"})
+		if !m.InScope("build.app.create") {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+	}
+	if refusal := authorizationRefusal(entry); refusal != nil {
 		return nil, refusal
 	}
 	out, err := a.Read(t.caller(m, a, false), name)

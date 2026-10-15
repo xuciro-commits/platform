@@ -341,7 +341,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	if verb == "create" && prior != nil || verb != "create" && prior == nil ||
 		prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
 		prior == nil && before != 0 || prior != nil && (len(prior.history) != before ||
-		!reflect.DeepEqual(prior.history, result.Row.History[:before]) ||
+		before > 0 && !reflect.DeepEqual(prior.history, result.Row.History[:before]) ||
 		!reflect.DeepEqual(recordOf(prior.value).Created, rec.Created)) {
 		draft.mu.Unlock()
 		return false, fmt.Errorf("accepted record is missing its predecessor")

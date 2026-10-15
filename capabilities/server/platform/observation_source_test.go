@@ -61,6 +61,9 @@ func TestObservationNoDataDoesNotInventValues(t *testing.T) {
 	}
 	schema, _ := ObservationRuleSchema(definition, entity)
 	context, _ := ObservationRuleContext(definition, Raw(map[string]any{"id": "DEVICE"}), window)
+	if context.Refs["observation.lastat"].Status != "missing" {
+		t.Fatal("an empty window invented a sample time")
+	}
 	for _, op := range []string{"delta", "rate"} {
 		program, err := CompileExpr(Expr{Op: op, Kind: "decimal", Window: &ExprWindowReference{Source: "observation"}}, schema)
 		if err != nil {
@@ -78,6 +81,19 @@ func TestObservationNoDataDoesNotInventValues(t *testing.T) {
 	result, err := program.Eval(context)
 	if err != nil || string(result.Value.Data) != `"0"` {
 		t.Fatalf("empty count was not zero: %+v %v", result, err)
+	}
+}
+
+func TestObservationUsesSampleTimeForFreshEvidence(t *testing.T) {
+	definition, entity := observationDefinitionForTest()
+	entity.Fields = append(entity.Fields, FieldInfo{Name: "requestedat", Type: "datetime"})
+	definition.Decision.When = Expr{Op: ">", Kind: "boolean", Args: []Expr{ExprReference("datetime", "observation.lastat"), ExprReference("datetime", "record.requestedat")}}
+	window := observationWindowForTest()
+	for _, offset := range []time.Duration{time.Second, 0, -time.Second} {
+		matched, _, err := EvaluateObservation(definition, entity, Raw(map[string]any{"id": "DEVICE", "requestedat": window.LastAt.Add(offset)}), window, window.Until)
+		if err != nil || matched != (offset < 0) {
+			t.Fatalf("sample time %s vs request %s: matched=%v err=%v", window.LastAt, window.LastAt.Add(offset), matched, err)
+		}
 	}
 }
 

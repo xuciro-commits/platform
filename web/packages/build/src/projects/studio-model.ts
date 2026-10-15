@@ -8,7 +8,7 @@ export const studioAreas = [
   { id: "behavior", title: "Behavior", description: "States, actions, transactions, rules and approvals", kinds: ["object", "action", "compute"] },
   { id: "interface", title: "Interface", description: "Pages, templates, application header and navigation", kinds: ["page"] },
   { id: "assemble", title: "Assemble", description: "Data connections, flows, AI functions and agents", kinds: ["flow", "function", "agent", "compute", "connection", "source", "dataset", "pipeline", "writeback", "matching", "observation"] },
-  { id: "verify", title: "Verify", description: "Samples, roles, candidates, migrations and delivery", kinds: ["sample-set", "evaluation-set"] },
+  { id: "verify", title: "Verify", description: "Samples, roles, candidates, migrations and delivery", kinds: ["sample-set", "test-plan", "evaluation-set"] },
 ] as const;
 export type StudioArea = typeof studioAreas[number]["id"];
 export const studioArea = (value?: string): StudioArea => studioAreas.find(area => area.id === value)?.id ?? "model";

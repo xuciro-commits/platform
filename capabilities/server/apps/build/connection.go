@@ -48,6 +48,9 @@ func (b *Build) checkConnection(_ platform.Caller, record any, _ json.RawMessage
 	if err := b.validConnection(*c); err != nil {
 		return err
 	}
+	if c.Address == "" {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Configure the connection address before checking it")
+	}
 	c.Requested = true
 	return nil
 }
@@ -61,6 +64,9 @@ func (b *Build) validConnection(c Connection) *kernel.Error {
 	}
 	if !slices.Contains(ConnectionKinds, c.Kind) {
 		return refuse("A connection is one of http, odata, postgres")
+	}
+	if c.Address == "" && c.State != "ready" && !c.Requested && c.Protocol == nil {
+		return nil
 	}
 	if c.Protocol != nil {
 		if c.Kind != "http" {

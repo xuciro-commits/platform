@@ -146,16 +146,25 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		return out, fmt.Errorf("Dispatch command is not declared")
 	}
 	writeback := func(id string) (platform.AssetRef, error) {
-		record, known := b.host.Record(WritebackType + "/" + id)
-		w, valid := record.(Writeback)
-		if !known || !valid {
-			return platform.AssetRef{}, fmt.Errorf("Dispatch writeback is unavailable")
-		}
-		fixed, err := b.ExecutionWriteback(w)
+		prospective, selected, err := b.prospectiveIntegration(platform.AssetWriteback, id)
 		if err != nil {
 			return platform.AssetRef{}, err
 		}
-		if fixed.State != "published" || fixed.On != "dispatch" || fixed.Object != "build."+object.Name || len(fixed.Result) != 0 {
+		var fixed Writeback
+		if selected {
+			fixed = prospective.(Writeback)
+		} else {
+			record, known := b.host.Record(WritebackType + "/" + id)
+			w, valid := record.(Writeback)
+			if !known || !valid {
+				return platform.AssetRef{}, fmt.Errorf("Dispatch writeback is unavailable")
+			}
+			fixed, err = b.ExecutionWriteback(w)
+			if err != nil {
+				return platform.AssetRef{}, err
+			}
+		}
+		if !selected && fixed.State != "published" || fixed.On != "dispatch" || fixed.Object != "build."+object.Name || len(fixed.Result) != 0 {
 			return platform.AssetRef{}, fmt.Errorf("Dispatch needs a published dispatch-only writeback without answer field mutations")
 		}
 		path, err := url.Parse(fixed.Path)
@@ -201,16 +210,26 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 	}
 	out.Target = platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: connection.Name}
 	if spec.Readback.Source != "" {
-		record, known := b.host.Record(SourceType + "/" + spec.Readback.Source)
-		source, valid := record.(Source)
-		if !known || !valid {
-			return out, fmt.Errorf("Dispatch status source is unavailable")
-		}
-		source, err = b.ExecutionSource(source)
+		prospective, selected, err := b.prospectiveIntegration(platform.AssetSource, spec.Readback.Source)
 		if err != nil {
 			return out, err
 		}
-		if source.State != "published" || source.Connection == "" || source.Header != "" {
+		var source Source
+		if selected {
+			source = prospective.(Source)
+		} else {
+			record, known := b.host.Record(SourceType + "/" + spec.Readback.Source)
+			var valid bool
+			source, valid = record.(Source)
+			if !known || !valid {
+				return out, fmt.Errorf("Dispatch status source is unavailable")
+			}
+			source, err = b.ExecutionSource(source)
+			if err != nil {
+				return out, err
+			}
+		}
+		if !selected && source.State != "published" || source.Connection == "" || source.Header != "" {
 			return out, fmt.Errorf("Dispatch status source must be published and use a controlled connection")
 		}
 		path, err := url.Parse(source.URL)
@@ -220,12 +239,21 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		out.Source = &platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: source.Name}
 	}
 	if spec.Readback.Observation != "" {
-		record, known := b.host.Record(ObservationType + "/" + spec.Readback.Observation)
-		observation, valid := record.(Observation)
-		if !known || !valid {
-			return out, fmt.Errorf("Dispatch observation is unavailable")
+		prospective, selected, err := b.prospectiveIntegration(platform.AssetObservation, spec.Readback.Observation)
+		if err != nil {
+			return out, err
 		}
-		definition, err := b.ExecutionObservation(observation)
+		var definition platform.ObservationDefinition
+		if selected {
+			definition, err = b.observationDefinition(prospective.(Observation))
+		} else {
+			record, known := b.host.Record(ObservationType + "/" + spec.Readback.Observation)
+			observation, valid := record.(Observation)
+			if !known || !valid {
+				return out, fmt.Errorf("Dispatch observation is unavailable")
+			}
+			definition, err = b.ExecutionObservation(observation)
+		}
 		if err != nil {
 			return out, err
 		}

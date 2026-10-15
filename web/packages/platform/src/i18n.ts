@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Application blueprint": "应用蓝图",
+  "Build guide": "构建说明",
+  "Application drafts could not be created.": "无法创建应用草稿。",
+  "The draft request is unconfirmed. Retry to check the same request.": "草稿请求尚未确认。重试会查询同一请求的结果。",
+  "Install this version, then create editable application drafts from its blueprint. Review and publish those drafts in Application Studio. Creating drafts does not create business records or grant access.": "安装此版本后，可从蓝图创建可编辑的应用草稿，再进入应用工坊审查和发布。创建草稿不会生成业务记录，也不会授予访问权限。",
+  "{count} definitions in the blueprint": "蓝图包含 {count} 项定义",
+  "Create application drafts": "创建应用草稿",
   "Simulated device points": "模拟设备点位",
   "sample": "采样",
   "execute": "执行",

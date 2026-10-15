@@ -30,7 +30,7 @@ type Connection struct {
 	// Protocol pins a trusted native driver; its local settings stay in this environment.
 	Protocol *platform.DriverBinding `json:"protocol,omitempty" type:"json" title:"Protocol binding"`
 	// Address is the service root URL, or for postgres a DSN without a password.
-	Address string `json:"address" field:"required" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
+	Address string `json:"address" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
 	// Secret names the credential in the host's secret store: the Authorization header's value for http/odata, the password for postgres.
 	Secret       string `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential" source:"record"`
 	AllowPrivate bool   `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`

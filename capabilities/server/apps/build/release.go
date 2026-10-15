@@ -66,7 +66,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	if err != nil {
 		return nil, err
 	}
-	evaluations, err := b.evaluationAssets()
+	evaluations, err := b.testPlanAssets()
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +233,9 @@ func (b *Build) validateObjectInstallation(record Object) error {
 	pages, generated, err := b.objectInstallationPages(record)
 	if err != nil {
 		return err
+	}
+	if b.jointMode {
+		return nil // The complete private installation checks replaced and retained dependents together.
 	}
 	return b.host.ValidateInstallDependents(entity, objectActions(record, entity), generated, pages...)
 }

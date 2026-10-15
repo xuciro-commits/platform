@@ -25,15 +25,15 @@ func (f protocolSampleSink) Write(raw []byte) (int, error) { return f(raw) }
 func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 	directory := os.Getenv("PLATFORM_PROTOCOL_PACKAGES")
 	if directory == "" {
-		t.Skip("set PLATFORM_PROTOCOL_PACKAGES to the real output of make protocol-packages")
+		t.Skip("set PLATFORM_PROTOCOL_PACKAGES to the real output of make packages")
 	}
 	index, err := LoadPackageIndex(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	descriptor, found := index.find("protocol.simulator", "0.1.0")
+	descriptor, found := index.find("protocol.simulator", "0.1.2")
 	if !found || descriptor.Runtime == nil {
-		t.Fatal("make protocol-packages must provide protocol.simulator@0.1.0")
+		t.Fatal("make packages must provide protocol.simulator@0.1.2")
 	}
 	binary, err := descriptor.Runtime.Target()
 	if err != nil {
@@ -52,7 +52,7 @@ func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "artifacts", strings.TrimPrefix(binary.Artifact, "sha256:")), executable, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(directory, "simulator-0.1.0.json"), platform.Raw(descriptor), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "simulator-0.1.2.json"), platform.Raw(descriptor), 0600); err != nil {
 		t.Fatal(err)
 	}
 	index, err = LoadPackageIndex(directory)

@@ -75,7 +75,7 @@ function NewResourceMenu({ onCreated, children, disabled, area }: { area?: strin
 }
 
 /** The project home: resource tree, what changed, settings. */
-export function ProjectHome({ id, area, initialSelected, initialSection }: { id: string; area?: string; initialSelected?: string; initialSection?: string }) {
+export function ProjectHome({ id, area, initialSelected, initialSection, initialPlan }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string }) {
   const activeArea = studioArea(area);
   const { client, decide, role, definitions, me } = useHost();
   const { open } = useWorkspace();
@@ -349,7 +349,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection }: { id:
         {visited.includes("guide") && <div hidden={tab !== "guide"}><ViewVisibilityContext.Provider value={visibleView && tab === "guide"}><StudioGuide project={project} owned={owned} disabled={saving || !!pendingPatch || !!createdResource} intent={settings?.description ?? project.description ?? ""} onIntent={description => settings && editSettings({ ...settings, description })} onCreated={(kind, target) => void addCreated(kind, target)} /></ViewVisibilityContext.Provider></div>}
         {visited.includes("templates") && <div hidden={tab !== "templates"} className="p-4"><ViewVisibilityContext.Provider value={visibleView && tab === "templates"}><StudioTemplates onCreated={target => void addCreated(resourceKinds.find(kind => kind.kind === "page")!, target)} /></ViewVisibilityContext.Provider></div>}
         {visited.includes("release") && <div hidden={tab !== "release"}><ViewVisibilityContext.Provider value={visibleView && tab === "release"}><div className="grid gap-4 p-4" role="region" aria-label={t("Verification and delivery")}>
-          <CandidateTest applicationId={id} embedded />
+          <CandidateTest applicationId={id} planId={initialPlan} embedded />
  {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
           <ReleaseReview initialKind="app" initialID={id} initialDrafts={importedDependencies} embedded />
         </div></ViewVisibilityContext.Provider></div>}

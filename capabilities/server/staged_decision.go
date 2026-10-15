@@ -125,6 +125,11 @@ func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submi
 }
 
 func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if d.simulation {
+		if candidate, err := d.tenant.releases.candidate(d.tenant.releases.active); err == nil {
+			return d.decideAppFrom(c, app, s, at, d.routingTenant(), candidate.ID, candidate.Assets)
+		}
+	}
 	return d.decideAppFrom(c, app, s, at, d.routingTenant(), d.tenant.releases.active)
 }
 

@@ -54,7 +54,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   const allowed = capabilities.data ?? [];
   const actions = catalog.filter(action => action.target === draft.object && !action.new && allowed.some(item => item.capability.name === action.schema));
   const selectedAction = catalog.find(action => action.schema === draft.decision?.action.name);
-  const choices: ExpressionChoice[] = [{ value: "record.id", label: t("Record ID"), type: "text" }, { value: "observation.latest", label: t("Latest observation"), type: "decimal" }, ...fields.filter(field => ["text", "longtext", "choice", "reference", "integer", "decimal", "boolean", "date", "datetime"].includes(field.type)).map(field => ({ value: `record.${field.name}`, label: `${t("Record")}: ${field.title}`, type: field.type, ref: field.ref }))];
+  const choices: ExpressionChoice[] = [{ value: "record.id", label: t("Record ID"), type: "text" }, { value: "observation.latest", label: t("Latest observation"), type: "decimal" }, { value: "observation.lastat", label: t("Latest sample time"), type: "datetime" }, ...fields.filter(field => ["text", "longtext", "choice", "reference", "integer", "decimal", "boolean", "date", "datetime"].includes(field.type)).map(field => ({ value: `record.${field.name}`, label: `${t("Record")}: ${field.title}`, type: field.type, ref: field.ref }))];
   const updateDecision = (change: Partial<Api.ObservationDecision>) => { if (draft.decision) patch({ decision: { ...draft.decision, ...change } }); };
   const sourceRoles = ownerApps.data?.find(app => app.id === "build")?.roles ?? [];
   const installed = published.data?.find(item => item.ref.app === "build" && item.ref.name === draft.name);

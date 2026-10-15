@@ -84,6 +84,21 @@ func compositeDigest(saved acceptedComposite) (string, error) {
 	return canonicalDigest(saved)
 }
 
+// PostgreSQL JSONB can reorder an edit's object keys while the sealed
+// protobuf payload keeps its original bytes. Compare the same canonical JSON
+// used by the enclosing request/result digest, without rounding numbers.
+func sameCompositePayload(a, b []byte) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == len(b)
+	}
+	left, err := canonicalDigest(json.RawMessage(a))
+	if err != nil {
+		return false
+	}
+	right, err := canonicalDigest(json.RawMessage(b))
+	return err == nil && left == right
+}
+
 func decodeAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	var saved acceptedComposite
 	if len(raw) == 0 || len(raw) > 4<<20 {
@@ -128,7 +143,7 @@ func decodeAcceptedComposite(raw []byte) (acceptedComposite, error) {
 					return saved, fmt.Errorf("invalid composite receipt")
 				}
 				x := r.GetSubmission()
-				if x.GetAuthority() == build.ID && x.GetPrincipalId() == saved.Member && x.GetIdempotencyKey() == strings.TrimPrefix(saved.Key, "composite:")+"#"+strconv.Itoa(i) && x.GetSchema().GetName() == edit.Schema && proto.Equal(x.GetTarget(), edit.Target) && bytes.Equal(x.GetPayload(), edit.Payload) {
+				if x.GetAuthority() == build.ID && x.GetPrincipalId() == saved.Member && x.GetIdempotencyKey() == strings.TrimPrefix(saved.Key, "composite:")+"#"+strconv.Itoa(i) && x.GetSchema().GetName() == edit.Schema && proto.Equal(x.GetTarget(), edit.Target) && sameCompositePayload(x.GetPayload(), edit.Payload) {
 					found = true
 				}
 			}
@@ -176,7 +191,7 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []CompositeEdit,
 		for i, edit := range edits {
 			r := t.app(build.ID).AcceptedLedger().AcceptedFor(t.ID, key+"#"+strconv.Itoa(i))
 			x := r.GetSubmission()
-			if x.GetPrincipalId() != m.ID || x.GetSchema().GetName() != edit.Schema || !proto.Equal(x.GetTarget(), edit.Target) || !bytes.Equal(x.GetPayload(), edit.Payload) {
+			if x.GetPrincipalId() != m.ID || x.GetSchema().GetName() != edit.Schema || !proto.Equal(x.GetTarget(), edit.Target) || !sameCompositePayload(x.GetPayload(), edit.Payload) {
 				return CompositeAnswer{}, fmt.Errorf("historical composite key belongs to another request")
 			}
 		}

@@ -2,10 +2,10 @@ import type * as Api from "../../packages/kernel/src/gen/host";
 import { expect, shots, slug, test } from "./kit";
 
 test("an installed protocol binary configures devices, previews points and publishes a connection", async ({ page, builder }, info) => {
-  // The host's package directory contains binaries built by make protocol-packages.
+  // The host's package directory contains binaries built by make packages.
   // Installation and every read below use the real package owner and gateway.
-  const packageID = "protocol.simulator", version = "0.1.0";
-  const gateway = process.env.PROTOCOL_GATEWAY_URL ?? "http://127.0.0.1:8510";
+  const packageID = "protocol.simulator", version = "0.1.2";
+  const gateway = process.env.PROTOCOL_GATEWAY_URL ?? "http://127.0.0.1:18510";
   await builder.open(page, "/apps?surface=tenant");
   const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
   await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);

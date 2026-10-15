@@ -33,6 +33,7 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 // routesBuild serves the builder: composites, code SDK, process checks, releases, queries and simulation.
 func (h *Host) routesBuild(rt *routes) {
 	h.routesProtocolConnections(rt)
+	h.routesPackageDrafts(rt)
 	rt.handle(Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none (ADR-0047 §11)", Body: struct {
 		Key   string          `json:"key"`
 		Edits []CompositeEdit `json:"edits"`

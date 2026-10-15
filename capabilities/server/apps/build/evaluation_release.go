@@ -16,6 +16,46 @@ import (
 
 const SchemaEvaluationSetPublish = TestPlanType + ".publish"
 
+func (b *Build) testPlanAsset(plan TestPlan, version int) (platform.ReleaseAsset, error) {
+	if len(plan.Evaluation) > 0 {
+		return b.evaluationSetAsset(plan, version)
+	}
+	descriptor := platform.TestPlanDescriptor{Name: plan.Name, Title: plan.Title, Roots: plan.Roots, At: plan.At, Samples: plan.Samples, Steps: plan.Steps}
+	if err := descriptor.Check(); err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	body, err := json.Marshal(descriptor)
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetTestPlan, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".tests-" + strconv.Itoa(version), Body: body})
+}
+
+func testPlanKind(plan TestPlan) platform.AssetKind {
+	if len(plan.Evaluation) > 0 {
+		return platform.AssetEvaluation
+	}
+	return platform.AssetTestPlan
+}
+func testPlanVersionPrefix(kind platform.AssetKind) string {
+	if kind == platform.AssetEvaluation {
+		return ".evaluation-"
+	}
+	return ".tests-"
+}
+
+func (b *Build) testPlanAssetName(asset platform.ReleaseAsset) (string, error) {
+	if asset.Ref.Kind == platform.AssetTestPlan {
+		descriptor, err := platform.ReadTestPlan(asset.Body)
+		return descriptor.Name, err
+	}
+	if asset.Ref.Kind == platform.AssetEvaluation {
+		descriptor, err := platform.ReadEvaluationSet(asset.Body)
+		return descriptor.Name, err
+	}
+	return "", fmt.Errorf("unsupported test plan asset kind")
+}
+
 func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.ReleaseAsset, error) {
 	c := b.host.Automation(platform.Caller{}, ID)
 	function, ok := platform.Get[Function](c, string(plan.Function))
@@ -23,6 +63,14 @@ func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.Release
 		return platform.ReleaseAsset{}, fmt.Errorf("evaluation set needs its function and one saved policy")
 	}
 	definition, ordinal, ok := b.FunctionDefinition(function.Name, plan.FunctionVersion)
+	if selected, found := b.jointDeclarations[platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: function.Name}]; found {
+		var frozen Function
+		text, valid := strings.CutPrefix(selected.SourceVersion, b.Manifest().Version+".function-")
+		version, err := strconv.Atoi(text)
+		if valid && err == nil && version > 0 && (plan.FunctionVersion == 0 || plan.FunctionVersion == version) && buildapi.ValueDecodeIntegration(selected.Body, &frozen) == nil {
+			definition, ordinal, ok = frozen.Definition(), version, true
+		}
+	}
 	if !ok || ordinal < 1 {
 		return platform.ReleaseAsset{}, fmt.Errorf("evaluation function version is not published")
 	}
@@ -42,7 +90,7 @@ func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.Release
 	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".evaluation-" + strconv.Itoa(version), Body: body})
 }
 
-func (b *Build) evaluationSetImage(raw []byte) (TestPlan, platform.ReleaseAsset, error) {
+func (b *Build) testPlanImage(raw []byte) (TestPlan, platform.ReleaseAsset, error) {
 	var plan TestPlan
 	if buildapi.ValueDecodeIntegration(raw, &plan) != nil || plan.ID == "" || plan.DefinitionVersion < 1 || plan.DefinitionVersion > 64 || len(plan.Versions) != plan.DefinitionVersion {
 		return plan, platform.ReleaseAsset{}, fmt.Errorf("invalid evaluation set publication")
@@ -53,25 +101,28 @@ func (b *Build) evaluationSetImage(raw []byte) (TestPlan, platform.ReleaseAsset,
 	}
 	for i, raw := range plan.Versions {
 		var retained platform.ReleaseAsset
-		if buildapi.ValueDecodeIntegration([]byte(raw), &retained) != nil || b.checkEvaluationAsset(retained, plan.Name, i+1) != nil {
+		if buildapi.ValueDecodeIntegration([]byte(raw), &retained) != nil || b.checkTestPlanAsset(retained, plan.Name, i+1) != nil || retained.Ref.Kind != asset.Ref.Kind {
 			return plan, asset, fmt.Errorf("evaluation set retained family differs")
 		}
 	}
-	if b.checkEvaluationAsset(asset, plan.Name, plan.DefinitionVersion) != nil || plan.Versions[len(plan.Versions)-1] != plan.Published {
+	if b.checkTestPlanAsset(asset, plan.Name, plan.DefinitionVersion) != nil || plan.Versions[len(plan.Versions)-1] != plan.Published {
 		return plan, asset, fmt.Errorf("evaluation set published pointer differs")
+	}
+	if asset.Ref.Kind != testPlanKind(plan) {
+		return plan, asset, fmt.Errorf("test plan publication kind differs")
 	}
 	return plan, asset, nil
 }
 
-func (b *Build) checkEvaluationAsset(asset platform.ReleaseAsset, name string, version int) error {
-	descriptor, err := platform.ReadEvaluationSet(asset.Body)
-	if err != nil || descriptor.Name != name || asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: name}) || asset.ContractVersion != 1 || asset.SourceVersion != b.Manifest().Version+".evaluation-"+strconv.Itoa(version) || platform.CheckAssetDependencies(asset) != nil {
+func (b *Build) checkTestPlanAsset(asset platform.ReleaseAsset, name string, version int) error {
+	actual, err := b.testPlanAssetName(asset)
+	if err != nil || actual != name || asset.Ref.App != ID || asset.Ref.Name != name || asset.ContractVersion != 1 || asset.SourceVersion != b.Manifest().Version+testPlanVersionPrefix(asset.Ref.Kind)+strconv.Itoa(version) || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("evaluation set publication differs from its descriptor")
 	}
 	return nil
 }
 
-func (b *Build) submitEvaluationSet(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (b *Build) submitTestPlan(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		if !c.Holds(ID, Builder) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -81,11 +132,11 @@ func (b *Build) submitEvaluationSet(c platform.Caller, s *pb.Submission, at time
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a saved evaluation plan with an available version")
 		}
 		if plan.Published != "" {
-			if _, _, err := b.evaluationSetImage(platform.Raw(plan)); err != nil {
+			if _, _, err := b.testPlanImage(platform.Raw(plan)); err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Evaluation set could not be published: {why}", err.Error())
 			}
 		}
-		asset, err := b.evaluationSetAsset(plan, plan.DefinitionVersion+1)
+		asset, err := b.testPlanAsset(plan, plan.DefinitionVersion+1)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Evaluation set could not be published: {why}", err.Error())
 		}
@@ -98,7 +149,7 @@ func (b *Build) submitEvaluationSet(c platform.Caller, s *pb.Submission, at time
 	})
 }
 
-func (b *Build) evaluationAssets() ([]platform.ReleaseAsset, error) {
+func (b *Build) testPlanAssets() ([]platform.ReleaseAsset, error) {
 	rows, err := readDefinitionInventory[TestPlan](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return nil, err
@@ -108,7 +159,7 @@ func (b *Build) evaluationAssets() ([]platform.ReleaseAsset, error) {
 		if plan.Published == "" || plan.Archived {
 			continue
 		}
-		_, asset, err := b.evaluationSetImage(platform.Raw(plan))
+		_, asset, err := b.testPlanImage(platform.Raw(plan))
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +168,7 @@ func (b *Build) evaluationAssets() ([]platform.ReleaseAsset, error) {
 	return out, nil
 }
 
-func (b *Build) evaluationSetPinned(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
+func (b *Build) testPlanPinned(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
 	rows, err := readDefinitionInventory[TestPlan](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return platform.ReleaseAsset{}, err
@@ -126,7 +177,7 @@ func (b *Build) evaluationSetPinned(ref platform.AssetRef, source string) (platf
 		if plan.Published == "" {
 			continue
 		}
-		if _, _, err := b.evaluationSetImage(platform.Raw(plan)); err != nil {
+		if _, _, err := b.testPlanImage(platform.Raw(plan)); err != nil {
 			return platform.ReleaseAsset{}, err
 		}
 		for _, raw := range plan.Versions {
@@ -139,7 +190,7 @@ func (b *Build) evaluationSetPinned(ref platform.AssetRef, source string) (platf
 	return platform.ReleaseAsset{}, fmt.Errorf("evaluation set version is not retained")
 }
 
-func (b *Build) evaluationDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+func (b *Build) testPlanDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
 	before, err = b.ReleaseAssets()
 	if err != nil {
 		return
@@ -150,14 +201,14 @@ func (b *Build) evaluationDraftAssets(id string) (before, after []platform.Relea
 		return
 	}
 	if plan.Published != "" {
-		_, old, problem := b.evaluationSetImage(platform.Raw(plan))
+		_, old, problem := b.testPlanImage(platform.Raw(plan))
 		if problem != nil {
 			err = problem
 			return
 		}
 		prior, hadPrior = old.Ref, true
 	}
-	asset, problem := b.evaluationSetAsset(plan, plan.DefinitionVersion+1)
+	asset, problem := b.testPlanAsset(plan, plan.DefinitionVersion+1)
 	if problem != nil {
 		err = problem
 		return
@@ -168,35 +219,35 @@ func (b *Build) evaluationDraftAssets(id string) (before, after []platform.Relea
 	return
 }
 
-func (b *Build) prepareEvaluationPublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
+func (b *Build) prepareTestPlanPublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
 	rows, err := readDefinitionInventory[TestPlan](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return nil, err
 	}
 	out := []ReleasePublication{}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetEvaluation {
+		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetEvaluation && asset.Ref.Kind != platform.AssetTestPlan {
 			continue
 		}
-		descriptor, err := platform.ReadEvaluationSet(asset.Body)
+		name, err := b.testPlanAssetName(asset)
 		if err != nil {
 			return nil, err
 		}
-		ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".evaluation-")
+		ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+testPlanVersionPrefix(asset.Ref.Kind))
 		version, err := strconv.Atoi(ordinal)
 		if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal {
 			return nil, fmt.Errorf("invalid evaluation set version")
 		}
-		if err := b.checkEvaluationAsset(asset, descriptor.Name, version); err != nil {
+		if err := b.checkTestPlanAsset(asset, name, version); err != nil {
 			return nil, err
 		}
-		i := slices.IndexFunc(rows, func(plan TestPlan) bool { return !plan.Archived && plan.Name == descriptor.Name })
+		i := slices.IndexFunc(rows, func(plan TestPlan) bool { return !plan.Archived && plan.Name == name })
 		if i < 0 {
 			return nil, fmt.Errorf("evaluation set has no target plan")
 		}
 		plan := rows[i]
 		if version <= plan.DefinitionVersion {
-			prior, err := b.evaluationSetPinned(asset.Ref, asset.SourceVersion)
+			prior, err := b.testPlanPinned(asset.Ref, asset.SourceVersion)
 			if err != nil || !equalIntegrationAsset(prior, asset) {
 				return nil, fmt.Errorf("evaluation set retained bytes differ")
 			}
@@ -205,12 +256,16 @@ func (b *Build) prepareEvaluationPublications(assets []platform.ReleaseAsset) ([
 		if version != plan.DefinitionVersion+1 {
 			return nil, fmt.Errorf("evaluation set needs its retained predecessor")
 		}
-		frozen, err := b.evaluationSetDraft(asset)
+		frozen, err := b.testPlanDraft(asset)
 		if err != nil {
 			return nil, err
 		}
 		plan.Title, plan.Model, plan.Evaluation, plan.Function, plan.FunctionVersion = frozen.Title, frozen.Model, frozen.Evaluation, frozen.Function, frozen.FunctionVersion
-		if _, err := b.evaluationSetPinned(asset.Ref, asset.SourceVersion); err == nil {
+		if asset.Ref.Kind == platform.AssetTestPlan {
+			plan.Roots, plan.At, plan.Samples, plan.Steps = frozen.Roots, frozen.At, frozen.Samples, frozen.Steps
+			plan.Application, plan.CandidateID, plan.Object, plan.Process, plan.As, plan.Actors, plan.Sample = "", "", "", "", "", nil, ""
+		}
+		if _, err := b.testPlanPinned(asset.Ref, asset.SourceVersion); err == nil {
 			return nil, fmt.Errorf("evaluation set version already exists")
 		}
 		plan.DefinitionVersion, plan.Published = version, string(platform.Raw(asset))
@@ -220,7 +275,14 @@ func (b *Build) prepareEvaluationPublications(assets []platform.ReleaseAsset) ([
 	return out, nil
 }
 
-func (b *Build) evaluationSetDraft(asset platform.ReleaseAsset) (TestPlan, error) {
+func (b *Build) testPlanDraft(asset platform.ReleaseAsset) (TestPlan, error) {
+	if asset.Ref.Kind == platform.AssetTestPlan {
+		descriptor, err := platform.ReadTestPlan(asset.Body)
+		if err != nil {
+			return TestPlan{}, err
+		}
+		return TestPlan{Name: descriptor.Name, Title: descriptor.Title, Roots: descriptor.Roots, At: descriptor.At, Samples: descriptor.Samples, Steps: descriptor.Steps}, nil
+	}
 	descriptor, err := platform.ReadEvaluationSet(asset.Body)
 	if err != nil {
 		return TestPlan{}, err

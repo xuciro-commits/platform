@@ -296,6 +296,110 @@ func TestBusinessConfirmationRevalidationRejectsStaleSourceEvidence(t *testing.T
 	}
 }
 
+func TestBusinessConfirmationReconciliationWritesOnlyChanges(t *testing.T) {
+	at := time.Date(2026, 10, 15, 19, 0, 0, 0, time.UTC)
+	compose := func() *Tenant { return confirmationTenant(t, "reconciliation-changes") }
+	tn := compose()
+	var entries []Entry
+	persist := func(entry Entry, _, _ string) ([]byte, error) {
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
+	tn.AcceptResult = persist
+	sourceState := "pending"
+	var sourceError error
+	var duringRead func()
+	reads, posts := 0, 0
+	outbound := func(req *http.Request, _ bool) (*http.Response, error) {
+		if req.Method == http.MethodPost {
+			posts++
+			if req.URL.Host == "wms.example" {
+				return nil, io.ErrUnexpectedEOF
+			}
+			return confirmationResponse(200, `{}`)
+		}
+		if req.URL.Path == "/rows" {
+			reads++
+			if duringRead != nil {
+				duringRead()
+			}
+			if sourceError != nil {
+				return nil, sourceError
+			}
+		}
+		return confirmationResponse(200, `[{"id":"R1","state":"`+sourceState+`"}]`)
+	}
+	tn.Outbound = outbound
+	spec := businessConfirmationSpec("hold", "hold")
+	spec.DeadlineSeconds = 3600
+	spec.Parties[1].Reconcile.EverySeconds = 2
+	prepareBusinessConfirmation(t, tn, at, spec)
+	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	decide(t, tn, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
+	tn.Dispatch(at)
+	written := len(entries)
+	tn.ReconcileConfirmations(at.Add(time.Second))
+	run := currentConfirmation(t, tn)
+	if len(entries) != written+1 || reads != 1 || len(run.Parties[1].Differences) != 1 || run.Parties[1].State != "unknown" {
+		t.Fatalf("first difference was not saved: reads=%d differences=%+v", reads, run.Parties[1].Differences)
+	}
+	first := run.Parties[1].Differences[0]
+	revision, written := run.Revision, len(entries)
+	for _, seconds := range []int{2, 3, 4} {
+		tn.ReconcileConfirmations(at.Add(time.Duration(seconds) * time.Second))
+	}
+	run = currentConfirmation(t, tn)
+	if reads != 2 || len(entries) != written || run.Revision != revision || len(run.Parties[1].Differences) != 1 || !run.Parties[1].Differences[0].At.Equal(first.At) {
+		t.Fatalf("identical polls wrote results or ignored the interval: reads=%d revision=%d differences=%+v", reads, run.Revision, run.Parties[1].Differences)
+	}
+	sourceState = "processing"
+	tn.ReconcileConfirmations(at.Add(5 * time.Second))
+	run = currentConfirmation(t, tn)
+	if len(entries) != written+1 || len(run.Parties[1].Differences) != 2 || string(run.Parties[1].Differences[1].Observed) != `"processing"` {
+		t.Fatalf("changed evidence was lost: %+v", run.Parties[1].Differences)
+	}
+	sourceError = errors.New("source temporarily unavailable")
+	tn.ReconcileConfirmations(at.Add(7 * time.Second))
+	run = currentConfirmation(t, tn)
+	if len(entries) != written+2 || len(run.Parties[1].Differences) != 3 || !strings.Contains(run.Parties[1].Differences[2].Error, sourceError.Error()) {
+		t.Fatalf("changed error was lost: %+v", run.Parties[1].Differences)
+	}
+	written = len(entries)
+	tn.ReconcileConfirmations(at.Add(9 * time.Second))
+	if len(entries) != written || reads != 5 {
+		t.Fatalf("identical source errors were saved again: writes=%d reads=%d", len(entries)-written, reads)
+	}
+
+	// Only accepted results survive the restart, never the polling cache.
+	recovered := compose()
+	if err := recovered.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	tn = recovered
+	tn.AcceptResult, tn.Outbound = persist, outbound
+	tn.ReconcileConfirmations(at.Add(11 * time.Second))
+	tn.ReconcileConfirmations(at.Add(12 * time.Second))
+	if reads != 6 || len(entries) != written || len(currentConfirmation(t, tn).Parties[1].Differences) != 3 {
+		t.Fatalf("restart stopped reads or repeated evidence: reads=%d writes=%d", reads, len(entries)-written)
+	}
+	sourceState, sourceError = "confirmed", nil
+	duringRead = func() {
+		duringRead = nil
+		decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "refused", "reason": "Checked external refusal during source read"}, at.Add(13*time.Second))
+	}
+	tn.ReconcileConfirmations(at.Add(13 * time.Second))
+	run = currentConfirmation(t, tn)
+	if run.Parties[1].State != "rejected" || len(run.Parties[1].Differences) != 3 || len(entries) != written+1 {
+		t.Fatalf("a stale source read replaced manual review: %+v", run.Parties[1])
+	}
+	decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "retry", "reason": "Receiver is ready for another checked attempt"}, at.Add(14*time.Second))
+	tn.ReconcileConfirmations(at.Add(15 * time.Second))
+	run = currentConfirmation(t, tn)
+	if run.State != "confirmed" || len(run.Parties[1].Differences) != 4 || !run.Parties[1].Differences[3].Matched || reads != 8 || posts != 2 {
+		t.Fatalf("matching evidence did not resolve the original request: state=%s reads=%d posts=%d differences=%+v", run.State, reads, posts, run.Parties[1].Differences)
+	}
+}
+
 func TestBusinessConfirmationRetainsDefinitionAcrossUpgrade(t *testing.T) {
 	at := time.Date(2026, 10, 14, 20, 0, 0, 0, time.UTC)
 	tn := confirmationTenant(t, "confirmation-version")

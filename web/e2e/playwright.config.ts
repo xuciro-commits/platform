@@ -6,6 +6,7 @@ import { defineConfig } from "@playwright/test";
 
 const port = 18496;
 const protocolPackages = process.env.PLATFORM_PACKAGES_DIR ? ' -packages "$PLATFORM_PACKAGES_DIR"' : "";
+const protocolServices = process.argv.some(argument => argument.includes("heating-application") || argument.includes("protocol-packages")) || !process.argv.some(argument => argument.includes(".spec."));
 
 export default defineConfig({
   testDir: "tests",
@@ -20,11 +21,22 @@ export default defineConfig({
     url: `http://127.0.0.1:${port}/healthz`,
     timeout: 180_000,
     reuseExistingServer: false,
+    env: protocolServices ? {
+      PLATFORM_SECRET_HEATING_GATEWAY: process.env.PLATFORM_SECRET_HEATING_GATEWAY ?? "Bearer heating-browser-only",
+      PLATFORM_SECRET_HEATING_PROPERTY: process.env.PLATFORM_SECRET_HEATING_PROPERTY ?? "Bearer heating-property-browser-only",
+      PLATFORM_SECRET_PROTOCOL_GATEWAY: process.env.PLATFORM_SECRET_PROTOCOL_GATEWAY ?? "Bearer heating-browser-only",
+    } : undefined,
   }, {
     command: `go run ./cmd/manufacturing-server -addr 127.0.0.1:18497 -web ../../web/apps/workspace/dist${protocolPackages}`,
     cwd: "../../solutions/manufacturing",
     url: "http://127.0.0.1:18497/healthz",
     timeout: 180_000,
     reuseExistingServer: false,
-  }],
+  }, ...(protocolServices ? [{
+    command: "node heating-services.mjs",
+    cwd: ".",
+    url: "http://127.0.0.1:18511/healthz",
+    timeout: 30_000,
+    reuseExistingServer: false,
+  }] : [])],
 });

@@ -22,18 +22,19 @@ import (
 // CandidateSimulationRequest fixes all business inputs of an isolated run.
 // Create actions establish its sample data; nothing is copied from live rows.
 type CandidateSimulationRequest struct {
-	ApplicationID string             `json:"applicationId,omitempty"`
-	CandidateID   string             `json:"candidateId,omitempty"`
-	Actors        []string           `json:"actors,omitempty"`
-	Sample        string             `json:"sample,omitempty"`
-	ObjectID      string             `json:"objectId,omitempty"`
-	ProcessID     string             `json:"processId,omitempty"`
-	FunctionID    string             `json:"functionId,omitempty"`
-	Model         string             `json:"model,omitempty"`
-	As            string             `json:"as,omitempty"`
-	At            time.Time          `json:"at"`
-	Steps         []SimulationStep   `json:"steps"`
-	Samples       []SimulationSample `json:"samples,omitempty"`
+	Roots         []platform.AssetRef `json:"roots,omitempty"`
+	ApplicationID string              `json:"applicationId,omitempty"`
+	CandidateID   string              `json:"candidateId,omitempty"`
+	Actors        []string            `json:"actors,omitempty"`
+	Sample        string              `json:"sample,omitempty"`
+	ObjectID      string              `json:"objectId,omitempty"`
+	ProcessID     string              `json:"processId,omitempty"`
+	FunctionID    string              `json:"functionId,omitempty"`
+	Model         string              `json:"model,omitempty"`
+	As            string              `json:"as,omitempty"`
+	At            time.Time           `json:"at"`
+	Steps         []SimulationStep    `json:"steps"`
+	Samples       []SimulationSample  `json:"samples,omitempty"`
 }
 
 type SimulationStep struct {
@@ -89,6 +90,19 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	for _, root := range []string{request.ObjectID, request.ProcessID, request.FunctionID, request.ApplicationID, request.CandidateID} {
 		if root != "" {
 			roots++
+		}
+	}
+	if len(request.Roots) > 0 {
+		roots++
+		seen := map[platform.AssetRef]bool{}
+		for _, root := range request.Roots {
+			if root.Check() != nil || root.App != build.ID || root.Kind != platform.AssetObject && root.Kind != platform.AssetFlow || seen[root] {
+				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test roots must be distinct objects or workflows")
+			}
+			seen[root] = true
+		}
+		if len(request.Roots) > 16 {
+			return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 	}
 	if roots != 1 || len(request.Model) > 256 || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 || len(request.Actors) > 3 || len(request.Sample) > 64 || len(request.Actors) > 0 && request.As != "" {
@@ -173,6 +187,14 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if request.CandidateID != "" {
 		candidate, err = t.releases.candidate(request.CandidateID)
 	} else {
+		if len(request.Roots) > 0 {
+			owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+			if !ok {
+				err = fmt.Errorf("Construction draft owner is unavailable")
+			} else {
+				drafts, err = owner.RootDrafts(request.Roots)
+			}
+		}
 		if request.ApplicationID != "" {
 			owner, ok := t.app(build.ID).(host.ConstructionDrafts)
 			if !ok {
@@ -361,7 +383,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		actor, _ = r.sandbox.Member(step.As)
 	}
 	before := map[string]SimulatedChange{}
-	if r.request.ApplicationID != "" || r.request.CandidateID != "" {
+	if r.request.ApplicationID != "" || r.request.CandidateID != "" || len(r.request.Roots) > 0 {
 		for _, change := range r.visibleChanges(actor) {
 			before[change.Type+"/"+change.ID] = change
 		}
@@ -539,7 +561,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	} else {
 		for _, change := range r.visibleChanges(actor) {
 			prior, exists := before[change.Type+"/"+change.ID]
-			if r.request.ApplicationID != "" || r.request.CandidateID != "" {
+			if r.request.ApplicationID != "" || r.request.CandidateID != "" || len(r.request.Roots) > 0 {
 				if exists && bytes.Equal(prior.Record, change.Record) {
 					continue
 				}
@@ -639,7 +661,14 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		var definition platform.AIFunction
 		return json.Unmarshal(a.Body, &definition) == nil && definition.Proposal != nil
 	})
-	if hasProposal && !hasFlow {
+	hasApproval := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
+		if a.Ref.Kind != platform.AssetObject || a.Ref.App != build.ID {
+			return false
+		}
+		var object build.Object
+		return json.Unmarshal(a.Body, &object) == nil && slices.ContainsFunc(object.Actions, func(action build.Action) bool { return action.Approval != nil })
+	})
+	if (hasProposal || hasApproval) && !hasFlow {
 		app, err := fresh(platform.WorkApp)
 		if err != nil {
 			return nil, err
@@ -678,6 +707,12 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		return nil, err
 	}
 	sandbox.simulation = true
+	// Trials execute these exact frozen definitions. Passive integrations have
+	// no live connections to reconstruct their release descriptors from.
+	if err := sandbox.releases.put(candidate.ID, candidate.Bytes); err != nil {
+		return nil, err
+	}
+	sandbox.releases.active = candidate.ID
 	sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 	for digest, raw := range environment.Modules {
 		if err := sandbox.files().Put(context.Background(), artifactKey(sandbox.ID, digest), raw, "application/wasm"); err != nil {
@@ -727,11 +762,6 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		var object build.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return nil, err
-		}
-		for _, action := range object.Actions {
-			if action.Approval != nil && action.Adoption == nil {
-				return nil, fmt.Errorf("%s needs an approval test environment", asset.Ref)
-			}
 		}
 		object.ID, object.State, object.Installed = asset.Ref.Name, "published", asset.Ref.Name
 		published, err := json.Marshal(object)

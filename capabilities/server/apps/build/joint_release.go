@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
@@ -91,17 +92,33 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	}
 	// The joint candidate's own object drafts answer entity lookups, so a page,
 	// flow or reference may name an object that is not installed yet.
-	restore, restoreMode := b.jointEntities, b.jointMode
+	restore, restoreMode, restoreDeclarations := b.jointEntities, b.jointMode, b.jointDeclarations
 	if len(drafts) > 1 {
 		b.jointMode = true
 	}
 	b.jointEntities = b.jointObjectEntities(objects, drafts)
-	defer func() { b.jointEntities, b.jointMode = restore, restoreMode }()
+	b.jointDeclarations = maps.Clone(b.jointDeclarations)
+	if b.jointDeclarations == nil {
+		b.jointDeclarations = map[platform.AssetRef]platform.ReleaseAsset{}
+	}
+	defer func() { b.jointEntities, b.jointMode, b.jointDeclarations = restore, restoreMode, restoreDeclarations }()
 
 	inv := draftInventories{objects: objects, pages: pages, apps: apps, processes: processes}
 	overrides := map[platform.AssetRef]platform.ReleaseAsset{}
 	removed := map[platform.AssetRef]bool{}
-	for _, draft := range drafts {
+	// Evaluation plans pin a selected function's candidate version, so produce
+	// those declarations before freezing the dependent plans.
+	declarations := slices.Clone(drafts)
+	slices.SortStableFunc(declarations, func(a, b JointDraftRef) int {
+		if (a.Kind == platform.AssetEvaluation) == (b.Kind == platform.AssetEvaluation) {
+			return 0
+		}
+		if a.Kind == platform.AssetEvaluation {
+			return 1
+		}
+		return -1
+	})
+	for _, draft := range declarations {
 		if !recordKind(draft.Kind) {
 			// The owner's own single-draft path validates and substitutes it.
 			_, after, prior, next, hadPrior, err := b.singleDraftAssets(draft.Kind, draft.ID)
@@ -113,6 +130,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 				return result, fmt.Errorf("draft %s did not produce %s", draft.ID, next)
 			}
 			overrides[next] = asset
+			b.jointDeclarations[next] = asset
 			if hadPrior && prior != next {
 				removed[prior] = true
 			}
@@ -120,6 +138,13 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 				result.Priors = append(result.Priors, prior)
 			}
 			result.Nexts = append(result.Nexts, next)
+			continue
+		}
+	}
+	// Resolve the selected immutable integration declarations before checking
+	// objects that refer back to them. Nothing is installed or marked published.
+	for _, draft := range drafts {
+		if !recordKind(draft.Kind) {
 			continue
 		}
 		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draft.Kind, draft.ID, member)
@@ -220,7 +245,16 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			hadPrior = true
 		}
 		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
-		if problem := b.checkFlow(record); problem != nil {
+		source := b.installed[record.Object]
+		if _, selected := b.jointEntities[record.Object]; selected {
+			for _, object := range inv.objects {
+				if buildapi.TypeOf(object.Name) == record.Object {
+					source = Entity(object)
+					break
+				}
+			}
+		}
+		if problem := b.checkFlow(record, source); problem != nil {
 			err = fmt.Errorf("%s", problem.Message)
 		} else if record.Version >= 64 {
 			err = fmt.Errorf("a process may retain at most 64 published versions")
@@ -233,7 +267,9 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			} else {
 				record.Scheduler = ""
 			}
-			err = b.host.BuildProcesses().Validate(b, b.flowOf(record))
+			if !joint {
+				err = b.host.BuildProcesses().Validate(b, b.flowOf(record))
+			}
 			if err == nil {
 				record.Published = published(record)
 				record.Versions = append(slices.Clone(record.Versions), record.Published)
@@ -311,8 +347,8 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if buildapi.ValueIntegrationKind(kind) {
 		return b.integrationDraftAssets(kind, id)
 	}
-	if kind == platform.AssetEvaluation {
-		return b.evaluationDraftAssets(id)
+	if kind == platform.AssetEvaluation || kind == platform.AssetTestPlan {
+		return b.testPlanDraftAssets(id)
 	}
 	if kind == platform.AssetSampleSet {
 		return b.sampleSetDraftAssets(id)
