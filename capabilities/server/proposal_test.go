@@ -171,6 +171,14 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	if !bytes.Equal(before, business()) {
 		t.Fatal("proposal rejection changed source")
 	}
+	rejected, _ := platform.Get[build.FunctionRun](tn.automation(build.ID, false), "REJECT")
+	if rejected.Decision != "rejected" || rejected.DecidedBy != "reviewer" {
+		t.Fatalf("proposal rejection lost its lifecycle: %+v", rejected)
+	}
+	rejection, _, decodeErr := decodeAcceptedBatch(entries[len(entries)-1].Body)
+	if decodeErr != nil || len(rejection.Business) != 1 || rejection.Business[0].Code != "AI_PROPOSAL_REJECTED" || rejection.Business[0].Record != build.FunctionCallType+"/REJECT" {
+		t.Fatalf("proposal rejection did not enter business refusal history: %+v %v", rejection.Business, decodeErr)
+	}
 	call("EXPIRE", 0.9)
 	if got := refuse(t, tn, "operator", build.ID, build.SchemaProposalReview, build.FunctionCallType, "EXPIRE", map[string]any{"decision": "expired"}, at.Add(2*time.Second)); got == "ok" {
 		t.Fatal("early expiry accepted")

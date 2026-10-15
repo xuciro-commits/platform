@@ -27,7 +27,7 @@ export const entries: CatalogEntry[] = [
     dependencies: ["ui/record-list", "app/record-actions"], states: ["loading", "empty", "error"],
     snippet: 'import { Records } from "@platform/app";\n<Records type="your.object" />',
   }),
-  asset("record-detail", "Authorized record detail", "Read a record with history, tasks and the actions offered to the current member.", ["RecordDetail", "OpenIn"], "RecordDetailExample", {
+  asset("record-detail", "Authorized record detail", "Read a record with history, tasks and the actions offered to the current member.", ["RecordDetail", "OpenIn", "RefusalHistory"], "RecordDetailExample", {
     dependencies: ["ui/record-page", "app/record-actions"], uses: ["code", "widget"], widgets: ["detail", "timeline", "tasks"],
     states: ["loading", "error", "pending", "conflict"], snippet: 'import { RecordDetail } from "@platform/app";\n<RecordDetail type="your.object" id={selectedID} />',
   }),
@@ -48,7 +48,7 @@ export const entries: CatalogEntry[] = [
     tags: ["aggregate", "chart", "metric"], uses: ["code", "widget"], widgets: ["chart", "metric"], source: "web/packages/app/src/index.tsx",
     snippet: 'import { DashboardView } from "@platform/app";\n<DashboardView dashboard={dashboard} />',
   }),
-  asset("record-actions", "Declared action controls", "Render original action payloads and offered transitions without duplicating role rules.", ["NewActions", "useNewRecord", "RecordActions", "PayloadFields", "InlineActionForm", "DeclaredActionForm"], "ActionsExample", {
+  asset("record-actions", "Declared action controls", "Render original action payloads and offered transitions without duplicating role rules.", ["NewActions", "useNewRecord", "RecordActions", "PayloadFields", "InlineActionForm", "DeclaredActionForm", "DeclaredActionDialog"], "ActionsExample", {
     uses: ["code", "widget"], widgets: ["actions", "inline-action"], dependencies: ["ui/button", "app/generated-form"], source: "web/packages/app/src/actions/actions.tsx",
     states: ["pending", "refused", "conflict"], snippet: 'import { RecordActions } from "@platform/app";\n<RecordActions type="your.object" record={record} steps />',
   }),

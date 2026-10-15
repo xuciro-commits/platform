@@ -39,6 +39,8 @@ type ApplicationRecovery struct {
 	FailedRuns     int    `json:"failedRuns"`
 }
 type ApplicationMonitoring struct {
+	BusinessRefusals   int                      `json:"businessRefusals"`
+	RefusalCodes       []RefusalCodeCount       `json:"refusalCodes"`
 	Accepted           int                      `json:"accepted"`
 	Refused            int                      `json:"refused"`
 	ConstraintFailures int                      `json:"constraintFailures"`
@@ -260,16 +262,57 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		}
 	}
 	out.Monitoring.Accepted = len(accepted)
+	codeCounts := map[string]RefusalCodeCount{}
 	for _, refusal := range t.committed.refusals {
 		var sub pb.Submission
 		if protojson.Unmarshal(refusal.Submission, &sub) != nil || !model[sub.GetTarget().GetType()] || sub.GetPrincipalId() != m.ID && !t.Readable(m, target(&sub), now) {
 			continue
 		}
 		out.Monitoring.Refused++
+		category, code := refusalCategory(refusal)
+		if category == "business" {
+			out.Monitoring.BusinessRefusals++
+		}
+		codeKey := category + "/" + sub.GetTarget().GetType() + "/" + code
+		count := codeCounts[codeKey]
+		count.Category, count.Code, count.Type = category, code, sub.GetTarget().GetType()
+		count.Count++
+		codeCounts[codeKey] = count
 		if slices.ContainsFunc(refusal.Issues, func(issue platform.FieldIssue) bool { return issue.Constraint != "" }) {
 			out.Monitoring.ConstraintFailures++
 		}
 	}
+	for _, raw := range t.committed.answers {
+		var header struct{ Kind string }
+		if json.Unmarshal(raw, &header) != nil || header.Kind != "record-batch" {
+			continue
+		}
+		result, _, err := decodeAcceptedBatch(raw)
+		if err != nil {
+			continue
+		}
+		for _, fact := range result.Business {
+			typ, _, _ := strings.Cut(fact.Subject, "/")
+			if !model[typ] || fact.Member != m.ID && !t.Readable(m, fact.Subject, now) {
+				continue
+			}
+			out.Monitoring.BusinessRefusals++
+			key := "business/" + typ + "/" + fact.Code
+			count := codeCounts[key]
+			count.Category, count.Code, count.Type = "business", fact.Code, typ
+			count.Count++
+			codeCounts[key] = count
+		}
+	}
+	for _, count := range codeCounts {
+		out.Monitoring.RefusalCodes = append(out.Monitoring.RefusalCodes, count)
+	}
+	slices.SortFunc(out.Monitoring.RefusalCodes, func(a, b RefusalCodeCount) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.Category+"/"+a.Type+"/"+a.Code, b.Category+"/"+b.Type+"/"+b.Code)
+	})
 	if count := out.Monitoring.Accepted + out.Monitoring.Refused; count > 0 {
 		out.Monitoring.RefusalRate = float64(out.Monitoring.Refused) / float64(count)
 	}

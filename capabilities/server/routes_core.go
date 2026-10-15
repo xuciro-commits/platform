@@ -3,6 +3,7 @@ package platformserver
 import (
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,16 @@ import (
 // routesCore serves the submit pipeline, live changes, recovery, authz, sessions and named reads.
 func (h *Host) routesCore(rt *routes) {
 	mux := rt.mux
+	rt.handle(Route{Pattern: "GET /v1/business-refusals", Summary: "Read the original record's durable refusal and correction evidence", Answer: BusinessRefusalPage{}, Query: []Param{{"type", "original record type"}, {"id", "original record ID"}, {"key", "optional original request key"}, {"offset", "first result"}, {"limit", "at most 200 results"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		page, err := t.BusinessRefusals(m, r.URL.Query().Get("type"), r.URL.Query().Get("id"), offset, limit, h.Now(), r.URL.Query().Get("key"))
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, page)
+	})
 	rt.handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: changed for data changes, operations for queue-only progress (F-32)", Answer: LiveQueryFrame{}},
 		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
 			if r.URL.Query().Has("watch") {
@@ -48,6 +59,14 @@ func (h *Host) routesCore(rt *routes) {
 		if protojson.Unmarshal(body, sub) != nil {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
+		}
+		if original := r.Header.Get("Platform-Correction-Of"); original != "" {
+			correlation := "correction:" + original
+			if sub.CorrelationId != "" && sub.CorrelationId != correlation {
+				Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The correction source differs from the submitted identity"))
+				return
+			}
+			sub.CorrelationId = correlation
 		}
 		record, err, issues := t.submitSchemaDiagnosed(m, sub, r.Header.Get(SchemaVersionHeader), h.Now())
 		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))

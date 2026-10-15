@@ -26,6 +26,14 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 	defer t.records.mu.Unlock()
 	for i, issue := range issues {
 		issues[i].Values = maps.Clone(issue.Values)
+		if issue.Code == "business_refusal" {
+			if !t.readableIn(t.records, member, issue.Record, at) {
+				issues[i].Values = nil
+				issues[i].Translations = nil
+				issues[i].Message = "The business record is no longer readable"
+			}
+			continue
+		}
 		if issue.Constraint == "" {
 			continue
 		}

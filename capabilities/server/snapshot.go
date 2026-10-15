@@ -427,7 +427,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		result, receipt, err := decodeAcceptedBatch(raw)
 		sub, subErr := batchSubmission(result, receipt)
 		if err != nil || subErr != nil || result.Tenant != t.ID ||
-			len(result.Submission) == 0 || key != result.App+"/"+sub.GetIdempotencyKey() {
+			(len(result.Submission) == 0 && len(result.Business) == 0 && !strings.HasPrefix(sub.GetCorrelationId(), "correction:")) || key != result.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
 		}
 		owner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.App)

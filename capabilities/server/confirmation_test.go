@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -174,12 +175,15 @@ func TestBusinessConfirmationDeadlineCompensatesEveryPartyAndAllowsEvidence(t *t
 	var entries []Entry
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	reverseKeys := map[string][]string{}
+	var reverseMu sync.Mutex
 	refuseReverse := true
 	tn.Outbound = func(req *http.Request, _ bool) (*http.Response, error) {
 		if req.Method != http.MethodPost {
 			return confirmationResponse(200, `[{"id":"R1","state":"pending"}]`)
 		}
 		if strings.HasSuffix(req.URL.Path, "/reverse") {
+			reverseMu.Lock()
+			defer reverseMu.Unlock()
 			reverseKeys[req.URL.Host] = append(reverseKeys[req.URL.Host], req.Header.Get("Idempotency-Key"))
 			if req.URL.Host == "wms.example" {
 				return nil, io.ErrUnexpectedEOF

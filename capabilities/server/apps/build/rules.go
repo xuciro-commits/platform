@@ -36,6 +36,9 @@ func ruleLookup(o Object, lookup func(string) (platform.EntityInfo, bool)) func(
 }
 func ruleSpec(o Object, a Action, read *platform.RuleReadSpec) platform.RuleReadSpec {
 	s := platform.RuleReadSpec{Object: buildapi.TypeOf(o.Name), Inputs: map[string]platform.ExprType{}}
+	if a.Transaction != nil {
+		s.Inputs["$subject"] = platform.ExprType{Kind: "reference", Object: s.Object}
+	}
 	if read != nil {
 		s.Collections = read.Collections
 	}
@@ -112,6 +115,8 @@ func assignmentExpr(kind string, set Set, spec platform.RuleReadSpec) (platform.
 	switch {
 	case set.From == "$me":
 		return platform.ExprReference("text", "caller.id"), nil
+	case set.From == "$subject":
+		return platform.ExprReference("reference", "input.$subject"), nil
 	case set.From == "$now":
 		op := "$now"
 		if kind == "date" {

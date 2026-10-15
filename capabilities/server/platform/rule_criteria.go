@@ -94,7 +94,7 @@ func (plan RuleCriteria) Check(c Caller, record any, inputs map[string]any, at t
 		return err
 	}
 	if !matched {
-		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", reason)
+		return c.RefuseBusinessCondition("CRITERIA_NOT_SATISFIED", reason, record, inputs, at)
 	}
 	return nil
 }

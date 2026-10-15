@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "The original request does not match these inputs. Submit changed inputs as a correction.": "原请求与这些输入不符。请将修改后的输入作为纠正提交。",
+ "The original answer could not be refreshed. Its saved result and inputs are retained.": "无法重新确认原答复。已保存的结果和输入仍然保留。",
  "An earlier request is awaiting confirmation. Retry it before submitting changes.": "此前的请求尚待确认。请先重试确认，再提交修改。",
  "Awaiting confirmation. Retry sends the same request.": "请求尚待确认。重试会发送同一请求。",
  "Home": "首页",

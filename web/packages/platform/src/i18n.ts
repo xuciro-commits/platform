@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Resolve unknown delivery": "裁决结果不明的投递",
   "Business confirmation progress": "业务确认进度",
   "Business deadline": "业务截止时间",
   "This confirmation has a visible partial outcome.": "本次确认保留了可见的部分结果。",

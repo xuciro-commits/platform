@@ -63,18 +63,34 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     if (!client.authorities.authorityOf(client.connection.tenant, target.type)) {
       await client.refreshDeclarations().catch(() => undefined);
     }
+    const original = options.originalKey ? client.authorities.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.principalId === client.connection.principal
+      && entry.submission.idempotencyKey === options.originalKey && entry.submission.schema?.name === schema && entry.submission.target?.type === target.type && entry.submission.target.id === target.id) : undefined;
+    const sameInput = (entry: Entry) => entry.submission.payload === btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))))
+      && entry.submission.expectedRevision === options.expectedRevision && JSON.stringify(entry.submission.evidenceFactIds ?? []) === JSON.stringify(options.evidence ?? []);
+    if (options.originalKey && (!original || !sameInput(original))) {
+      const reason = t("The original request does not match these inputs. Submit changed inputs as a correction.");
+      if (options.onRefused) options.onRefused(reason); else notify.error(reason);
+      return false;
+    }
     const pending = client.authorities.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.principalId === client.connection.principal
       && entry.submission.schema?.name === schema && entry.submission.target?.type === target.type && entry.submission.target?.id === target.id
       && (entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN"));
-    if (pending && (pending.submission.payload !== btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))))
-      || pending.submission.expectedRevision !== options.expectedRevision || JSON.stringify(pending.submission.evidenceFactIds ?? []) !== JSON.stringify(options.evidence ?? []))) {
+    if (pending && (!sameInput(pending) || original && original !== pending)) {
       options.onOutcome?.(pending);
       const reason = t("An earlier request is awaiting confirmation. Retry it before submitting changes.");
       if (options.onRefused) options.onRefused(reason); else notify.error(reason);
       return false;
     }
-    const key = pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision, actions?.find(action => action.schema === schema)?.schemaVersion);
-    const answered = await client.send();
+    const key = original?.submission.idempotencyKey ?? pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision, actions?.find(action => action.schema === schema)?.schemaVersion, options.correctionOf);
+    let answered: Entry[];
+    try {
+      answered = original && ["SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_REJECTED", "SUBMISSION_STATE_CONFLICT"].includes(original.state) ? [await client.repeat(key!)] : await client.send();
+    } catch {
+      if (original) options.onOutcome?.(original);
+      const reason = t("The original answer could not be refreshed. Its saved result and inputs are retained.");
+      if (options.onRefused) options.onRefused(reason); else notify.error(reason);
+      return false;
+    }
     for (const entry of answered) {
       const ok = entry.state === "SUBMISSION_STATE_CONFIRMED", own = entry.submission.tenantId === client.connection.tenant && entry.submission.idempotencyKey === key;
       const declared = actions?.find((a) => a.schema === entry.submission.schema?.name);

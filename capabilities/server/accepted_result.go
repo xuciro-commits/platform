@@ -76,7 +76,7 @@ func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt 
 	if !declared || action.Target != request.GetTarget().GetType() {
 		return nil, fmt.Errorf("submission target differs from its declared action")
 	}
-	if proto.Equal(request, receipt.GetSubmission()) {
+	if len(d.businessFacts) == 0 && !strings.HasPrefix(request.GetCorrelationId(), "correction:") && proto.Equal(request, receipt.GetSubmission()) {
 		if raw, err := d.result(app, receipt, at); err == nil {
 			return raw, nil
 		}

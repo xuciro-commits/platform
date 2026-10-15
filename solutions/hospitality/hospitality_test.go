@@ -258,7 +258,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		}
 		return out
 	}
-	if got := catalog("sales"); !slices.Equal(got, []string{build.SchemaFunctionCall, build.SchemaProposalReview, pms.SchemaCreate, pms.SchemaModify, pms.SchemaHold, pms.SchemaConfirm, pms.SchemaRelease, crm.SchemaAccount, "crm.account.edit", "crm.account.archive", crm.SchemaAdvice, crm.SchemaOpen, crm.SchemaClose, crm.SchemaPlan, crm.SchemaBook, crm.SchemaAnswer}) {
+	if got := catalog("sales"); !slices.Equal(got, []string{build.SchemaFunctionCall, build.SchemaProposalReview, platform.ConfirmationType + ".review", pms.SchemaCreate, pms.SchemaModify, pms.SchemaHold, pms.SchemaConfirm, pms.SchemaRelease, crm.SchemaAccount, "crm.account.edit", "crm.account.archive", crm.SchemaAdvice, crm.SchemaOpen, crm.SchemaClose, crm.SchemaPlan, crm.SchemaBook, crm.SchemaAnswer}) {
 		t.Fatalf("sales catalog %v", got)
 	}
 	if slices.Contains(catalog("sales-only"), crm.SchemaBook) {

@@ -316,6 +316,8 @@ Guided start 可从任何一步进入或跳过：描述业务意图、审阅原�
 
 构建跨系统确认：先发布业务对象与原完成动作，再在 Data Connection 建立并检查 Connection，发布 After action = Only explicit business confirmations 的 Writeback；需要对账时发布受控 Connection 下的 Source。回到 Action types 的 Transaction，开启 Wait for declared parties，选择完成动作、复核角色、部分策略与截止策略，并逐方选择 Writeback 或 Protocol；反向请求与回读字段/周期由构建者明确声明。保存并沿原候选/激活发布；业务人员在原记录页看 Business confirmation progress，复核者凭证据裁决或重试已拒绝的请求。未知结果不重发，补偿使用独立身份；原版本映射不可用时的拒绝可在记录或 Integrations 中查看。支持边界见 [ADR-0112 As built](ADR/0112-cross-system-coordination.md#5-as-built)。
 
+拒绝与纠正：在 Action types 的 Transaction 中打开 Business refusal exits，选择事务或步骤位置，填写稳定码、英中原因与原 Expr 条件。Block 拒绝全事务；Continue with an audited flag 必须声明引用原记录的处置创建步骤；Route to a correction transaction 选择同主体的另一普通事务。先发布关联处置对象及目标动作，再审查原候选闭包。业务人员被拒后可原样重试，改输入则提交关联纠正；原值继续作为参考。记录页 Refusals and corrections 查看拒绝/让步/改路/纠正关系，应用运行面展开 Refusal codes by object type 查看码分布。重复拒绝可勾选 Escalate repeated business refusals 并配置次数、时段和复核角色。暂停使用对象状态与 Process：进入 hold 后等待声明时长，再调用带审批的裁决动作；审批完成后对象记录更新。AI 提议驳回仍在原提议复核页操作。实现 profile 和边界见 [ADR-0117 As built](ADR/0117-refusal-and-correction.md#5-as-built)。
+
 ## 工作台中的 WMS
 
 WMS 是工作台中创建并发布的受控应用，复用所属酒店或制造宿主的域名、端口和平台 App Shell。仓库中的旧装配脚本、定义样本和托盘算法已清理；已有租户应用、草稿及数据保留。

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { FlowInstanceView } from "./flows";
 import { RunView } from "./agents";
 import { ChainGraph, useHost, useReadQuery, useRecordInventory } from "../index";
+import {refusalCategoryName} from "../actions/refusal";
 
 type Run = Api.ApplicationRun;
 const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation", function: "AI function", effect: "External effect", job: "Scheduled job" } as Record<string, string>)[kind] ?? kind);
@@ -70,10 +71,18 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
  const query=useReadQuery<Api.ApplicationRuntime>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/runtime`),runtime=query.isError?undefined:query.data;
  if(query.isError)return <Panel role="alert">{t("Application runtime is unavailable. Refresh after publishing the application.")}</Panel>;
  if(!runtime)return <p role="status">{t("Loading…")}</p>;
+ const refusalColumns:ColumnDef<Api.RefusalCodeCount,any>[]=[
+  {accessorKey:"category",header:t("Result category"),cell:cell=>refusalCategoryName(cell.getValue())},
+  {accessorKey:"type",header:t("Object type")},
+  {accessorKey:"code",header:t("Refusal code"),cell:cell=><span className="break-all font-mono">{cell.getValue()}</span>},
+  {accessorKey:"count",header:t("Count"),meta:{align:"right",width:80}},
+ ];
  return <Panel className="grid min-w-0 gap-3" aria-label={t("Application artifact")}>
   <div className="flex flex-wrap gap-2"><strong>{t("Application artifact")}</strong><Tag label={t(runtime.state)} tone={runtime.state==="isolated"?"danger":runtime.state==="degraded"?"warning":"success"}/><span className="text-xs text-muted">{t("Counts and diagnostics follow your authorized scope.")}</span></div>
   <dl className="grid gap-2 text-xs"><div><dt>{t("Current content version")}</dt><dd className="break-all font-mono">{runtime.artifact.version}</dd></div>{runtime.previous&&<div><dt>{t("Previous content version")}</dt><dd className="break-all font-mono">{runtime.previous}</dd></div>}<div><dt>{t("Recovery")}</dt><dd>{t(runtime.recovery.state)} · {t("Predecessors")}: {t(runtime.recovery.predecessors)} · {t("{pending} pending effects · {failed} failed runs",{pending:runtime.recovery.pendingEffects,failed:runtime.recovery.failedRuns})}</dd></div></dl>
   <p className="text-xs">{t("{accepted} accepted · {refused} refused · {constraints} constraint failures",{accepted:runtime.monitoring.accepted,refused:runtime.monitoring.refused,constraints:runtime.monitoring.constraintFailures})} · {t("{tokens} AI tokens · {pending} pending effects · {waiting} waiting workflows",{tokens:runtime.monitoring.runs.aiTokens,pending:runtime.monitoring.runs.pendingEffects,waiting:runtime.monitoring.runs.waitingFlows})}</p>
+  <p className="text-xs">{t("{count} business refusals · {rate}% refusal rate",{count:runtime.monitoring.businessRefusals,rate:(runtime.monitoring.refusalRate*100).toFixed(1)})}</p>
+  <Disclosure summary={t("Refusal codes by object type")}><DataTable data={runtime.monitoring.refusalCodes??[]} columns={refusalColumns} getRowId={entry=>`${entry.category}/${entry.type}/${entry.code}`} height={180} searchable={false} empty={t("No recorded refusals in this application.")}/></Disclosure>
   <p className="text-xs text-muted">{t("Reported AI cost: ${cost}; {unknown} runs lack complete cost reporting.",{cost:runtime.monitoring.runs.aiUsd.toFixed(4),unknown:runtime.monitoring.runs.unmeteredAI})}</p>
   {runtime.monitoring.memberQuota&&<p className="text-xs">{t("Your shared AI quota: {tokens} / {daily} tokens today; {calls} / {minute} calls this minute.",{tokens:runtime.monitoring.memberQuota.usedTokens,daily:runtime.monitoring.memberQuota.dailyTokens||t("No limit"),calls:runtime.monitoring.memberQuota.usedCalls,minute:runtime.monitoring.memberQuota.perMinute||t("No limit")})}</p>}
   {!!runtime.monitoring.agentBudgets?.length&&<Disclosure summary={t("Agent budgets per run")}><ul className="grid gap-1 text-xs">{runtime.monitoring.agentBudgets.map(item=><li key={item.resource.ref.name}>{item.resource.ref.name} · {t("{steps} steps · {tokens} tokens · {actions} actions · ${cost}",{steps:item.budget.Steps||t("Owner default"),tokens:item.budget.Tokens||t("Owner default"),actions:item.budget.Actions||t("Owner default"),cost:item.budget.Cost||t("No limit")})}</li>)}</ul></Disclosure>}

@@ -108,6 +108,7 @@ func New(tenant string) *Work {
 	var actions []platform.Action
 	actions = append(actions, retirementAction())
 	actions = append(actions, redirectAction())
+	actions = append(actions, refusalEscalationAction())
 	for _, e := range w.entities() {
 		actions = append(actions, platform.EntityActions(e)...)
 	}
@@ -190,7 +191,7 @@ func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw)
 func (w *Work) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Work", Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
 		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},
-		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "redirects", Title: "Start redirected approvals after release activation", Every: time.Second}}}
+		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "redirects", Title: "Start redirected approvals after release activation", Every: time.Second}, {Name: "refusals", Title: "Escalate repeated business refusals", Every: time.Second}}}
 }
 
 func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Declarations() }
@@ -209,6 +210,8 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 	}
 	return w.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		switch s.GetSchema().GetName() {
+		case schemaRefusalEscalation:
+			return w.escalateRefusal(c, s, now)
 		case schemaRetireApproval:
 			return w.retireApproval(c, s, now)
 		case schemaRedirectApproval:
@@ -566,6 +569,9 @@ func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
 func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error {
 	if name == "redirects" {
 		return w.runRedirects(c, now)
+	}
+	if name == "refusals" {
+		return w.runRefusalEscalations(c, now)
 	}
 	open, _ := json.Marshal([]any{[]any{"state", "=", "open"}})
 	tasks, _, _ := platform.Find[WorkTask](c, platform.Query{Domain: open})

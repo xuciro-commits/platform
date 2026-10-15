@@ -194,3 +194,12 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=business-confirmation` 走原动作 Transaction 编辑器：显式两方与 Source 配置 → 操作员创建/启动业务记录 → ERP 确认/WMS unknown → 源回读差异/匹配 → 原完成动作，核对未盲目重发并保存桌面/窄屏截图。HTTP 接收方是受控本地替身；不算真实外部系统交付或负责人手感认可。
 
 手测：在业务记录的 Business confirmation progress 看等谁、等待时长、截止、拒绝原因、部分标记与差异。选择 hold / proceed-with-flag / reject 检查对应动作；选择 escalate 核对原收件箱与通知。对一方的 unknown 保存可读证据，撤去复核角色应拒绝；未知补偿不允许直接重试，被拒补偿可原键重试，确认补偿后原未知意图收敛。升级对象/回写后到达的原回执仍按原映像处理；缺原映射在 Integrations 的 Receipt refusal 明确显示。重启保留确认与差异，继续运行时接收方按原键幂等；未发生的现实故障与专有连接器仍须另验。
+
+
+### 拒绝、异常与纠正（ADR-0117）
+
+`make test-go PKG='. ./apps/build/... ./apps/work/... ./platform/...' RUN='TestBusinessRefusal|TestBusinessCorrection|TestAcceptedRefusal|TestBusinessTxn|TestLanguages|TestAPIContract'` 覆盖三级处置、无编号/无效果、目标权限/输入、原值关联、审批、同键和修改新键、保存点以及完整日志/快照回放。`TestBusinessRefusalPersistenceReopensWithoutExecutingRules` 在文件日志与配置的真实 `PLATFORM_TEST_DATABASE` 上运行追加后/应用前故障、关闭重开、原键答复与后继纠正；数据库未配置不得报为 PostgreSQL 通过。
+
+`PLATFORM_SCREENSHOTS=1 make e2e SPEC=business-refusal` 从原动作编辑器读取并修改稳定拒绝码，操作员 block 保留输入 → 原样重试同键 → 修改输入新键纠正 → 记录历史；另走 flag 的关联记录、route 的原分支回收与返工记录、应用运行面的码分布。桌面/窄屏截图靠实际查看，不写像素断言。
+
+手测：撤去目标动作/字段/派生来源权限后，不能由改路、审批或历史原值恢复越权数据。记录暂停后到期进入原工作收件箱，再通过普通业务动作留下裁决结果；重复拒绝按声明阈值升级，同键重试不能增加计数，工作完成后不能反复重开。AI 驳回更新提议状态和拒绝历史，不修改业务源；让步与返工保留申请/批准身份和原值。业务码由构建者定义，平台不能识别任意行业措辞是否被误放进约束，不能宣称静态推断出全部业务分类错误。

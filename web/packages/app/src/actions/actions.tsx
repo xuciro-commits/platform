@@ -6,10 +6,12 @@ import {queryElements,resolveElements,type Api,type EnterpriseStereotype} from "
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Checkbox, DateRangeInput, DateTimeInput, Dialog, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
+import { Button, Checkbox, DateRangeInput, DateTimeInput, Dialog, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
+import {actionEntryInputs, actionInputSignature, ActionRefusal} from "./refusal";
+import type {Entry} from "@platform/kernel";
 
 type Field = ActionDeclaration["payload"][number];
 
@@ -129,44 +131,55 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** The original action submission form, shared by dialogs and inline hosts. */
-export function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string}) {
+export function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry}) {
  const {decide}=useHost(),lock=useRef(false);
- const [values,setValues]=useState<Record<string,unknown>>({...initial,...fixed}),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(false),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>([]);
- const submit=async()=>{if(!enabled||preview||lock.current||!target.id)return;setSubmitted(true);if(!payloadSchema(declared.payload).safeParse(values).success||inputIssues(declared.payload,values).length>0)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);}}))onCompleted();}catch{setPending(true);onPending?.(true);setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
+ const [values,setValues]=useState<Record<string,unknown>>({...initial,...fixed}),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN"),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>(originalOutcome?.issues??[]);
+ const [attempt,setAttempt]=useState<{entry:Entry;values:Record<string,unknown>}|undefined>(()=>originalOutcome?{entry:originalOutcome,values:actionEntryInputs(originalOutcome,{...initial,...fixed})}:undefined);
+ const changed=!!attempt&&actionInputSignature(values)!==actionInputSignature(attempt.values);
+ const submit=async(original=false)=>{if(!enabled||preview||lock.current||!target.id)return;let inputs=structuredClone(original&&attempt?attempt.values:values);setSubmitted(true);if(!original&&(!payloadSchema(declared.payload).safeParse(inputs).success||inputIssues(declared.payload,inputs).length>0))return;const same=!!attempt&&actionInputSignature(inputs)===actionInputSignature(attempt.values);if(same)inputs=structuredClone(attempt!.values);lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,inputs,{expectedRevision:same?attempt!.entry.submission.expectedRevision:revision,quiet:true,originalKey:same?attempt?.entry.submission.idempotencyKey:undefined,correctionOf:!same?attempt?.entry.submission.idempotencyKey:undefined,onRefused:setRefusal,onOutcome:entry=>{setOwnerIssues(entry.issues??[]);setAttempt({entry,values:actionEntryInputs(entry,inputs)});const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);}}))onCompleted();}catch{setPending(true);onPending?.(true);setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
- {refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}
+ {refusal&&<ActionRefusal entry={attempt?.entry} message={refusal} original={!pending?attempt?.values:undefined}/>}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
  <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name))} values={values} onChange={next=>{setOwnerIssues(old=>old.filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>next[name]===values[name])));setValues({...next,...fixed});}} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
- <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button><Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting}>{submitting?t("Executing…"):pending?t("Retry confirmation"):submitLabel??declared.title}</Button></div>
+ <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button>{attempt&&!pending&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(true)}>{t("Retry original inputs")}</Button>}<Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting||!!attempt&&!pending&&!changed}>{submitting?t("Executing…"):pending?t("Retry confirmation"):attempt?t("Submit corrected inputs"):submitLabel??declared.title}</Button></div>
  </Form>;
 }
 
 /** One action taken through the existing modal entry point. */
-function ActionDialog({ declared, type, record, onClose, onCompleted, initial={} }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown> }) {
+function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry }) {
  const {decide,source}=useHost(),info=source.entity(type);
  const [baseline]=useState(record);
  const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[pending,setPending]=useState(false),[issues,setIssues]=useState<Api.FieldIssue[]>([]);
- const request=useRef<{target:{type:string;id:string};values:object;revision:number}|undefined>(undefined);
- const target={type,id:baseline?.id??id},options={expectedRevision:baseline?.revision??0,quiet:true,onOutcome:(entry:{issues?:Api.FieldIssue[];state:string})=>{
+ const [outcome,setOutcome]=useState<Entry>(),[refusal,setRefusal]=useState(""),[draft,setDraft]=useState<Record<string,unknown>>(initial);
+ const request=useRef<{target:{type:string;id:string};values:Record<string,unknown>;revision:number}|undefined>(undefined),createLock=useRef(false);
+ const target={type,id:baseline?.id??id},options={expectedRevision:baseline?.revision??0,quiet:true,onOutcome:(entry:Entry)=>{
+   setOutcome(entry);
    setIssues(entry.issues??[]);setPending(entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN");
-   if(entry.state==="SUBMISSION_STATE_REJECTED"||entry.state==="SUBMISSION_STATE_CONFLICT")request.current=undefined;
  }};
- const done=(ok:boolean,confirmedTarget=target)=>{if(ok){onClose();onCompleted?.(confirmedTarget);}return ok;},generated=declared.schema===`${type}.create`&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
+ const done=(ok:boolean,confirmedTarget=target)=>{if(ok){onClose();onCompleted?.(confirmedTarget);}return ok;},generated=[`${type}.create`,`${type}.edit`].includes(declared.schema)&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
+ const changed=!!request.current&&(target.id!==request.current.target.id||actionInputSignature(draft)!==actionInputSignature(request.current.values));
+ const correctionMode=!!outcome&&request.current?.target.id===target.id;
+ const create=async(values:Record<string,unknown>,original=false)=>{
+   if(createLock.current)return;createLock.current=true;setSubmitting(true);setRefusal("");
+   const previous=request.current,sameTarget=previous?.target.id===target.id,same=!!previous&&(original||sameTarget&&actionInputSignature(values)===actionInputSignature(previous.values));
+   const submitted=same?previous!:{target:{...target},values:structuredClone(values),revision:options.expectedRevision};
+   request.current=submitted;setPending(true);
+   try{
+     const ok=!!submitted.target.id&&await decide(declared.schema,submitted.target,submitted.values,{...options,expectedRevision:submitted.revision,originalKey:same?outcome?.submission.idempotencyKey:undefined,correctionOf:!same&&sameTarget?outcome?.submission.idempotencyKey:undefined,onRefused:setRefusal});
+     if(ok){request.current=undefined;setPending(false);done(true,submitted.target);return true;}
+   }catch{setRefusal(t("The action could not be completed. Try again."));}
+   finally{createLock.current=false;setSubmitting(false);}
+ };
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
- {pending&&<p role="status" className="text-xs text-warning">{t("Creation is awaiting confirmation. Retry the original target and values; editing the ID could create another record.")}</p>}
+ {pending&&<p role="status" className="text-xs text-warning">{t("This operation is awaiting confirmation. Retry its original target and inputs.")}</p>}
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
- {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}<GeneratedForm type={type} initial={initial} submitLabel={pending?t("Retry confirmation"):t("Create")} locked={pending} onCancel={onClose} onBusy={setSubmitting} issues={issues} onSubmit={async values=>{
-   request.current??={target:{...target},values:structuredClone(values),revision:options.expectedRevision};
-   const submitted=request.current;let reason="";setPending(true);
-   const ok=!!submitted.target.id&&await decide(declared.schema,submitted.target,submitted.values,{...options,expectedRevision:submitted.revision,onRefused:message=>{reason=message;}});
-   if(!ok)throw new Error(reason||t("The request was not confirmed. Your input is retained."));
-   request.current=undefined;setPending(false);return done(ok,submitted.target);
- }}/></>:<DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} onPending={setPending} initial={initial}/>}
+ {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusal&&<ActionRefusal entry={outcome} message={refusal} original={!pending?request.current?.values:undefined}/>}<GeneratedForm type={type} actionSchema={declared.schema} initial={initial} submitLabel={pending?t("Retry confirmation"):correctionMode?t("Submit corrected inputs"):record?t("Save"):t("Create")} submitDisabled={!!outcome&&!pending&&!changed} locked={pending} onCancel={onClose} onBusy={setSubmitting} issues={issues} onValuesChange={setDraft} onSubmit={values=>create(values as Record<string,unknown>)}/>{outcome&&!pending&&<Button disabled={submitting} onClick={()=>void create(request.current!.values,true)}>{t("Retry original inputs")}</Button>}</>:<DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting} onPending={setPending} initial={initial} originalOutcome={originalOutcome}/>}
  </div></Dialog>;
 }
+export {ActionDialog as DeclaredActionDialog};
 
 /** One explicit record action. Ordinary revisions retain the opened form's
  * baseline; identity, declaration and caller scope replace it completely. */
@@ -239,14 +252,14 @@ export function RecordActions({ type, record, allowed, steps: withSteps = false 
 /** A lifecycle transition taken from a record's page: at once, or through a form when it takes input (F-27). */
 export function useTransition(type: string) {
   const { action, decide } = useHost();
-  const [taking, setTaking] = useState<{ declared: ActionDeclaration; record: EntityRecord; initial?:Record<string,unknown> }>();
+  const [taking, setTaking] = useState<{ declared: ActionDeclaration; record: EntityRecord; initial?:Record<string,unknown>;originalOutcome?:Entry }>();
   const take = (schema: string, record: EntityRecord, destination?:{parameter:string;value:string}) => {
     const declared = action(schema);
     if(destination&&!declared?.payload.some(f=>f.name===destination.parameter&&f.type==="string"&&f.choices?.includes(destination.value)))return;
     if (declared?.payload.length) setTaking({ declared, record,initial:destination?{[destination.parameter]:destination.value}:undefined });
-    else void decide(schema, { type, id: record.id }, {}, { expectedRevision: record.revision });
+    else if(declared)void (async()=>{let originalOutcome:Entry|undefined,reason="";const ok=await decide(schema,{type,id:record.id},{},{expectedRevision:record.revision,onOutcome:entry=>{originalOutcome=entry;},onRefused:message=>{reason=message;}});if(!ok&&originalOutcome)setTaking({declared,record,originalOutcome});else if(!ok&&reason)notify.error(reason);})();
   };
-  const dialog = taking && <ActionDialog declared={taking.declared} type={type} record={taking.record} initial={taking.initial} onClose={() => setTaking(undefined)} />;
+  const dialog = taking && <ActionDialog declared={taking.declared} type={type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => setTaking(undefined)} />;
   return { take, dialog };
 }
 
@@ -255,15 +268,15 @@ export function useTransition(type: string) {
  * host accepted it, false when the person cancelled, so the chain can stop. */
 export function useActionEffect() {
   const { action, decide } = useHost();
-  const [taking, setTaking] = useState<{ declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; initial: Record<string, unknown>; settle: (ok: boolean) => void }>();
+  const [taking, setTaking] = useState<{ declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; initial: Record<string, unknown>; settle: (ok: boolean) => void;originalOutcome?:Entry }>();
   const take = (schema: string, record?: Pick<EntityRecord, "id" | "revision">, initial: Record<string, unknown> = {}): Promise<boolean> => {
     const declared = action(schema);
     if (!declared || (declared.new ? !!record : !record)) return Promise.resolve(false);
-    if (!declared.payload.length && record) return decide(schema, { type: declared.target, id: record.id }, {}, { expectedRevision: record.revision, quiet: true });
+    if (!declared.payload.length && record) {let originalOutcome:Entry|undefined,reason="";return decide(schema,{type:declared.target,id:record.id},{},{expectedRevision:record.revision,quiet:true,onRefused:message=>{reason=message;},onOutcome:entry=>{originalOutcome=entry;}}).then(ok=>{if(!ok&&!originalOutcome&&reason)notify.error(reason);return ok||!originalOutcome?ok:new Promise<boolean>(settle=>setTaking({declared,type:declared.target,record,initial:{},settle,originalOutcome}));});}
     return new Promise((settle) => setTaking({ declared, type: declared.target, record, initial, settle }));
   };
   const close = (ok: boolean) => { taking?.settle(ok); setTaking(undefined); };
-  const dialog = taking && <ActionDialog declared={taking.declared} type={taking.type} record={taking.record} initial={taking.initial} onClose={() => close(false)} onCompleted={() => close(true)} />;
+  const dialog = taking && <ActionDialog declared={taking.declared} type={taking.type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => close(false)} onCompleted={() => close(true)} />;
   return { take, dialog };
 }
 

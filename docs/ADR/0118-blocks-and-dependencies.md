@@ -139,6 +139,8 @@ ADR-0111 的 `sample-set` 归 Build：有稳定名称、保留版本和合成记
 
 ## As built
 
+ADR-0117 复用 `action` 与 `object`，没有新增拒绝资产 kind。事务/步骤的 Refusals 依赖由原声明解析：处置记录目标是 object 边，route 是原 action 边，与所属对象和正常步骤共同进入候选闭包；拒绝记录的字段/引用仍由原模型 owner 校验。读取事实/纠正历史为 pure；block 是原权威的 effect-free 持久答复，flag/route 是原 authoritative 接受批次；阈值升级为 Work 的后继受权决定，不改变拒绝事务的原子边界。通用 Provides/Side、反向图与发现仍归本 ADR 剩余验收。
+
 ADR-0112 登记确认能力，复用 `action`、`object`、`writeback`、`source`、`connection` 与提供方协议动作，没有新增资产 kind。启动动作的 Requires 由 Confirmation 引用产生，含传输、源回读与完成动作，进入原候选和联合候选；确认专用 Writeback 依赖对象/连接，不产生虚构动作边或对象循环。确认/差异读取为 pure；确认答复、人工裁决、截止与完成为 Build 的 authoritative 接受结果；外部派发仍为 effect，协议调用仍是提供方的独立授权决策。运行记录保存原闭包、请求映射与版本。本登记不代替本 ADR 的通用 Provides/Side、反向图和发现剩余验收。
 
 ADR-0116 扩展现有 `function`、`action`、`agent` 和 work 能力，没有新增资产 kind。函数的 Proposal 策略仍为 effect（产生原模型意图），输出/提议读取为 pure；采纳动作是 authoritative，复用原对象事务，依赖声明的函数 `AssetRef` 和提议记录引用。对象/函数闭包必须同时包含匹配版本，激活验证映射；没有第二份 AI 工具授权。原动作 Approval 与智能体 Checkpoints/HandoffRole 仍由 work/agent 执行；候选智能体的报告固定完整资产与模型配置，不成为业务权限。应用用量、位置与评测是原账目/声明的 pure 投影，通用 Provides/Side 发现仍归本文剩余验收。

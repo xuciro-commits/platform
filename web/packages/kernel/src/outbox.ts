@@ -8,7 +8,7 @@ export type State = Exclude<SubmissionStateJson, "SUBMISSION_STATE_UNSPECIFIED">
 /** `reason` is a refusal's message for people (F-23), never contract: the state and the code are. */
 import type {FieldIssue,SchemaVersion} from "./gen/host";
 
-export type Entry = { submission: SubmissionJson; schemaVersion?: SchemaVersion; state: State; outcome?: string; reason?: string; issues?: FieldIssue[] };
+export type Entry = { submission: SubmissionJson; schemaVersion?: SchemaVersion; correctionOf?: string; state: State; outcome?: string; reason?: string; issues?: FieldIssue[] };
 export type Event = "send" | "confirm" | "conflict" | "reject" | "timeout" | "retry" | "undelivered";
 
 export class KernelError extends Error {

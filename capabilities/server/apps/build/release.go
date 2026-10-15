@@ -303,7 +303,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 			requires = append(requires, ruleRequirements(action.Reads)...)
 			if action.Transaction != nil {
 				requires = append(requires, ruleRequirements(action.Transaction.Reads)...)
-				walkTxnSteps(action.Transaction.Steps, func(step platform.TxnStep) {
+				walkBusinessTxn(action.Transaction, func(step platform.TxnStep) {
 					if step.Target.Type != "" && step.Target.Type != ref.Name {
 						requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: step.Target.Type})
 					}

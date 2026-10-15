@@ -24,6 +24,7 @@ import (
 // One top-level input, not one row or one nested decision. Before validates
 // the predecessor image/history before any authoritative ledger is advanced.
 type acceptedBatch struct {
+	Business       []platform.BusinessRefusalFact  `json:"business,omitempty"`
 	SchemaVersion  *platform.SchemaVersion         `json:"schemaVersion,omitempty"`
 	Authorizations []authorizationEvidence         `json:"authorizations,omitempty"`
 	Version        int                             `json:"version"`
@@ -199,6 +200,10 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		result.Definitions = slices.Clone(d.migrationDefinitions)
 		result.Version = 6
 	}
+	if len(d.businessFacts) > 0 {
+		result.Business = slices.Clone(d.businessFacts)
+		result.Version = 7
+	}
 	d.records.mu.Lock()
 	defer d.records.mu.Unlock()
 	d.records.parent.mu.Lock()
@@ -280,7 +285,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version < 1 || result.Version > 6 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > 7 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
@@ -288,8 +293,20 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 		len(result.Decisions) == 0 {
 		return result, nil, fmt.Errorf("record batch has inconsistent identity or effects")
 	}
-	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || (result.Version == 6) != (len(result.Definitions) > 0) {
+	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || result.Version < 7 && (result.Version == 6) != (len(result.Definitions) > 0) || (result.Version == 7) != (len(result.Business) > 0) {
 		return result, nil, fmt.Errorf("record batch control format differs")
+	}
+	if len(result.Business) > 64 {
+		return result, nil, fmt.Errorf("business result exceeds its evidence bound")
+	}
+	for _, f := range result.Business {
+		if f.Level == "block" || !f.At.Equal(result.At) {
+			return result, nil, fmt.Errorf("accepted business evidence is not a successful branch")
+		}
+		owner, _, _ := strings.Cut(f.Action, ".")
+		if err := validateBusinessFact(owner, f); err != nil {
+			return result, nil, err
+		}
 	}
 	if err := validateTxnIterations(result.App, result.Iterations); err != nil {
 		return result, nil, err
@@ -346,6 +363,19 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 			if effect.ID == "" || effect.Endpoint == "" || effect.Event == "" {
 				return result, nil, fmt.Errorf("record batch has incomplete effect intent")
 			}
+		}
+	}
+	for _, fact := range result.Business {
+		matched := false
+		for _, decision := range result.Decisions {
+			r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
+			if r != nil && fact.Member == r.GetSubmission().GetPrincipalId() && fact.Action == r.GetSubmission().GetSchema().GetName() && fact.Subject == target(r.GetSubmission()) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return result, nil, fmt.Errorf("business evidence has no matching accepted decision")
 		}
 	}
 	if !top || len(written) != len(result.Rows) {
@@ -617,7 +647,10 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 		_, request, _ := strings.Cut(key, "/")
 		t.committed.saveSchemaVersion(result.App, request, result.SchemaVersion)
 	}
-	if len(result.Submission) > 0 {
+	answer := new(pb.ChangeRecord)
+	_ = protojson.Unmarshal(result.Receipt, answer)
+	input, _ := batchSubmission(result, answer)
+	if len(result.Submission) > 0 || len(result.Business) > 0 || strings.HasPrefix(input.GetCorrelationId(), "correction:") {
 		t.committed.saveAnswer(key, raw)
 	}
 	return true, nil

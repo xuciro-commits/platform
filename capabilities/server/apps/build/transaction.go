@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -45,11 +47,61 @@ func decodeTxnValues(raw json.RawMessage) (map[string]any, error) {
 }
 
 func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) *kernel.Error {
+	return b.transactDepth(c, receipt, txn, now, 0, receipt.GetSubmission().GetSchema().GetName())
+}
+
+func (b *Build) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, depth int, action string) *kernel.Error {
+	if depth > 16 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal routes exceed their limit / 拒绝改路超出上限")
+	}
+	var result *txnRefusalResult
+	var failure *kernel.Error
+	_, rollback := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+		failure = b.transactAttempt(c, receipt, txn, now, &result, action)
+		if result != nil && result.fact.Level == "route" {
+			return receipt, failure
+		}
+		// Other refusals reach the original top-level owner, which discards
+		// business state while retaining that decision's field diagnostics.
+		return receipt, nil
+	})
+	if result == nil {
+		if failure != nil {
+			return failure
+		}
+		return rollback
+	}
+	if result.fact.Level == "block" {
+		return c.RefuseBusiness(result.fact)
+	}
+	// The refused branch's private rows, numbers and intents have been discarded
+	// by the original savepoint owner. Only the chosen branch can be accepted.
+	if result.declaration.Record != nil {
+		if failure := b.refusalRecord(c, receipt, *result.declaration.Record, result.scope, result.subject, result.inputs, now, result.fact.Record); failure != nil {
+			return failure
+		}
+	}
+	if failure := c.CaptureBusinessRefusal(receipt, result.fact); failure != nil {
+		return failure
+	}
+	target := *result.fact.Route
+	entity, ok := b.installed[target.Type]
+	if !ok {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route object is unavailable / 拒绝改路目标对象不可用")
+	}
+	return b.ledger.ApplyTxnRoute(c, receipt, entity, target, now, func(c platform.Caller, routed *pb.ChangeRecord, alternative *platform.BusinessTxn, at time.Time) *kernel.Error {
+		return b.transactDepth(c, routed, alternative, at, depth+1, target.Type+"."+target.Action)
+	})
+}
+
+func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, refused **txnRefusalResult, action string) *kernel.Error {
 	values, err := decodeTxnValues(receipt.GetSubmission().GetPayload())
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
 	}
-	proposal, refusal := b.prepareProposal(c, receipt, txn, now)
+	contextReceipt := proto.Clone(receipt).(*pb.ChangeRecord)
+	contextReceipt.Submission.Schema.Name = action
+	proposal, refusal := b.prepareProposal(c, contextReceipt, txn, now)
 	if refusal != nil {
 		return refusal
 	}
@@ -69,12 +121,14 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 	if refusal != nil {
 		return refusal
 	}
-	spec := platform.RuleReadSpec{Object: txn.Subject, Inputs: map[string]platform.ExprType{}}
+	original := platform.Raw(subject)
+	spec := platform.RuleReadSpec{Object: txn.Subject, Inputs: map[string]platform.ExprType{"$subject": {Kind: "reference", Object: txn.Subject}}}
+	values["$subject"] = subjectID
 	if txn.Reads != nil {
 		spec.Collections = txn.Reads.Collections
 	}
 	for _, transition := range b.installed[txn.Subject].Lifecycle.Transitions {
-		if transition.Txn != nil && transition.Name == strings.TrimPrefix(receipt.GetSubmission().GetSchema().GetName(), txn.Subject+".") {
+		if transition.Txn != nil && transition.Name == strings.TrimPrefix(action, txn.Subject+".") {
 			for _, in := range transition.Payload {
 				kind := platform.RuleFieldKind(in.Type)
 				if in.Ref != "" {
@@ -95,9 +149,13 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 			return err
 		}
 		if string(result.Value.Data) != "true" {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", txn.Message)
+			return c.RefuseBusinessCondition("GUARD_NOT_SATISFIED", txn.Message, subject, values, now)
 		}
 	}
+	originalSubject := maps.Clone(subject)
+	originalInputs := maps.Clone(values)
+	originalScope := spec
+	originalScope.Inputs = maps.Clone(spec.Inputs)
 	written := map[string]bool{}
 	iterations := 0
 	resolve := func(ref platform.TxnRef, facts map[string]any, rowID string) (platform.TxnRef, *kernel.Error) {
@@ -125,13 +183,65 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 		if id == "" {
 			return ref, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE, "Transaction target is unavailable / 事务目标不可用")
 		}
-		return platform.TxnRef{Type: ref.Type, ID: id}, nil
+		return platform.TxnRef{Type: ref.Type, ID: id, Action: ref.Action}, nil
 	}
 	reserve := func(ref string) *kernel.Error {
 		if written[ref] {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction wrote {record} more than once / 事务重复写入 {record}", ref, ref)
 		}
 		written[ref] = true
+		return nil
+	}
+	refusals := func(declarations []platform.Refusal, scope platform.RuleReadSpec, facts map[string]any, rowID, frame string) *kernel.Error {
+		for _, declaration := range declarations {
+			if declaration.When == nil || declaration.Level != "block" && declaration.Level != "flag" && declaration.Level != "route" || declaration.Level == "route" && declaration.Route == nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Business refusal declaration is incomplete / 业务拒绝声明不完整")
+			}
+			result, err := evalRule(*declaration.When, scope, c, subject, facts, now, b.conditionLookup)
+			if err != nil {
+				return err
+			}
+			if string(result.Value.Data) != "true" {
+				continue
+			}
+			fact := platform.BusinessRefusalFact{Level: declaration.Level, Code: declaration.Code, Message: declaration.Message, Translations: maps.Clone(declaration.Translations), Step: frame, Subject: txn.Subject + "/" + subjectID, Action: receipt.GetSubmission().GetSchema().GetName(), Member: c.ID, At: now.UTC(), Original: original}
+			if declaration.Escalation != nil {
+				escalation := *declaration.Escalation
+				fact.Escalation = &escalation
+			}
+			_ = json.Unmarshal(receipt.GetSubmission().GetPayload(), &fact.Inputs)
+			if declaration.Record != nil {
+				fact.Record = declaration.Record.Target.Type + "/" + receipt.GetChangeId() + "-refusal-" + strings.TrimPrefix(action, txn.Subject+".") + "-" + declaration.Code
+				if frame != "" {
+					fact.Record += "-" + strings.ReplaceAll(frame, "/", "-")
+				}
+			}
+			if declaration.Route != nil {
+				target, err := resolve(*declaration.Route, facts, rowID)
+				if err != nil {
+					return err
+				}
+				fact.Route = &target
+			}
+			if declaration.Level != "flag" {
+				*refused = &txnRefusalResult{fact: fact, declaration: declaration, scope: scope, subject: subject, inputs: maps.Clone(facts)}
+				if declaration.Level == "route" {
+					(*refused).scope = originalScope
+					(*refused).subject = originalSubject
+					(*refused).inputs = originalInputs
+				}
+				return txnRefusalSignal
+			}
+			if declaration.Record == nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A flagged refusal must leave a business record / 标记拒绝须留下业务记录")
+			}
+			if err := b.refusalRecord(c, receipt, *declaration.Record, scope, subject, facts, now, fact.Record); err != nil {
+				return err
+			}
+			if err := c.CaptureBusinessRefusal(receipt, fact); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 	var run func([]platform.TxnStep, platform.RuleReadSpec, map[string]any, string, string) *kernel.Error
@@ -146,6 +256,9 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 				if string(result.Value.Data) != "true" {
 					continue
 				}
+			}
+			if err := refusals(step.Refusals, scope, facts, rowID, strings.TrimPrefix(frame+"/"+step.Name, "/")); err != nil {
+				return err
 			}
 			if step.ForEach != nil {
 				set, err := c.ReadRecordSet(txn.Subject, subjectID, step.ForEach.Set, now)
@@ -305,6 +418,9 @@ func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platf
 			}
 		}
 		return nil
+	}
+	if err := refusals(txn.Refusals, spec, values, "", ""); err != nil {
+		return err
 	}
 	if err := run(txn.Steps, spec, values, "", ""); err != nil {
 		return err

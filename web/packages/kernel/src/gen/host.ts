@@ -405,6 +405,8 @@ export type ApplicationMigration = {
 };
 
 export type ApplicationMonitoring = {
+  businessRefusals: number;
+  refusalCodes: RefusalCodeCount[];
   accepted: number;
   refused: number;
   constraintFailures: number;
@@ -644,6 +646,53 @@ export type BuildProject = {
   assets?: ProjectAsset[];
 };
 
+export type BusinessInputChange = {
+  field: string;
+  before?: unknown;
+  after?: unknown;
+};
+
+export type BusinessRefusalEntry = {
+  key: string;
+  app: string;
+  type: string;
+  id: string;
+  action: string;
+  member: string;
+  at: string;
+  category: string;
+  code: string;
+  message: string;
+  state: string;
+  inputs?: unknown;
+  issues?: FieldIssue[];
+  facts?: BusinessRefusalFact[];
+  correctionOf?: string;
+  changes?: BusinessInputChange[];
+};
+
+export type BusinessRefusalFact = {
+  level: string;
+  code: string;
+  message: string;
+  translations?: Record<string, string>;
+  step?: string;
+  subject: string;
+  action: string;
+  member: string;
+  at: string;
+  original: unknown;
+  inputs?: Record<string, unknown>;
+  record?: string;
+  route?: TxnRef;
+  escalation?: RefusalEscalation;
+};
+
+export type BusinessRefusalPage = {
+  records: BusinessRefusalEntry[];
+  total: number;
+};
+
 export type BusinessTime = {
   at?: string;
   all?: boolean;
@@ -656,6 +705,7 @@ export type BusinessTxn = {
   message?: string;
   reads?: RuleReadSpec;
   confirmation?: Confirmation;
+  refusals?: Refusal[];
 };
 
 export type Calendar = {
@@ -1398,6 +1448,7 @@ export type FieldInfo = {
 };
 
 export type FieldIssue = {
+  businessCode?: string;
   record?: string;
   constraint?: string;
   translations?: Record<string, string>;
@@ -3198,6 +3249,30 @@ export type RecordView = {
   activity: unknown[];
 };
 
+export type Refusal = {
+  when: Expr;
+  level: string;
+  code: string;
+  message: string;
+  translations?: Record<string, string>;
+  route?: TxnRef;
+  record?: TxnStep;
+  escalation?: RefusalEscalation;
+};
+
+export type RefusalCodeCount = {
+  category: string;
+  code: string;
+  type: string;
+  count: number;
+};
+
+export type RefusalEscalation = {
+  count: number;
+  windowSeconds: number;
+  reviewerRole: string;
+};
+
 export type Related = {
   type: string;
   field: string;
@@ -4057,6 +4132,7 @@ export type TxnLink = {
 
 export type TxnRef = {
   type: string;
+  action?: string;
   id?: string;
   via?: string;
 };
@@ -4076,6 +4152,7 @@ export type TxnStep = {
   when?: Expr;
   link?: TxnLink;
   forEach?: TxnForEach;
+  refusals?: Refusal[];
 };
 
 export type Type = {

@@ -133,6 +133,7 @@ type DateRange struct {
 }
 
 type FieldIssue struct {
+	BusinessCode string                     `json:"businessCode,omitempty"`
 	Record       string                     `json:"record,omitempty"`
 	Constraint   string                     `json:"constraint,omitempty"`
 	Translations map[string]string          `json:"translations,omitempty"`

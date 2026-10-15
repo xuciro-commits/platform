@@ -55,21 +55,25 @@ export function EntityForm<S extends z.ZodType<FieldValues, FieldValues>>({ sche
 }
 
 /** A form for an entity's editable fields, validated by their field types. */
-export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues, locked }: {
+export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues, locked, onValuesChange, submitDisabled }: {
   issues?:Api.FieldIssue[]; entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
   onBusy?: (busy: boolean) => void;
+  onValuesChange?: (values: Partial<R>) => void;
+  submitDisabled?: boolean;
   locked?: boolean;
   submitLabel?: string; onCancel?: () => void;
 }) {
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
   // A conditional field (#138) that does not apply is kept in the form's state but not sent.
   return <InputDraftProvider isolated scope="record-form"><FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
-    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
+    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} onValuesChange={onValuesChange ? v => onValuesChange(activeValues(entity, v) as Partial<R>) : undefined} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
 }
 
-function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked }: {
+function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked, onValuesChange, submitDisabled }: {
   issues?:Api.FieldIssue[]; schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
   onSubmit: (values: any, event?: unknown) => void | boolean | Promise<void | boolean>; submitLabel?: string; onCancel?: () => void; onBusy?: (busy: boolean) => void; locked?: boolean;
+  onValuesChange?: (values: Record<string, unknown>) => void;
+  submitDisabled?: boolean;
 }) {
   const inputs=useInputDrafts();
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
@@ -83,9 +87,12 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
   const conditions = [...new Set(fields.flatMap(({name,type}) => [name,...(type.when ? [type.when.field] : [])]))];
   const watched = useWatch({ control, name: conditions });
   const current = Object.fromEntries(conditions.map((name, i) => [name, watched[i]]));
+  const valuesChanged = useRef(onValuesChange); valuesChanged.current = onValuesChange;
+  const valueSignature = JSON.stringify(current);
+  useEffect(() => { valuesChanged.current?.(JSON.parse(valueSignature)); }, [valueSignature]);
   return (
     <form onSubmit={handleSubmit(async (values, event) => {
-      if (lock.current||inputs?.invalid) return; lock.current = true; setFailure("");inputs?.reject();inputs?.pending(1); onBusy?.(true);
+      if (lock.current||inputs?.invalid||submitDisabled) return; lock.current = true; setFailure("");inputs?.reject();inputs?.pending(1); onBusy?.(true);
       try {
         const confirmed = await onSubmit(values, event);
         if (confirmed === false) setFailure(t("The request was not confirmed. Your input is retained."));
@@ -138,7 +145,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
       </fieldset>
       <div className="mt-1 flex justify-end gap-2">
         {onCancel && <Button onClick={() => confirmOwnDiscard(onCancel)} disabled={isSubmitting}>{t("Cancel")}</Button>}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>{isSubmitting ? t("Saving…") : submitLabel}</Button>
+        <Button type="submit" variant="primary" disabled={isSubmitting||submitDisabled}>{isSubmitting ? t("Saving…") : submitLabel}</Button>
       </div>
     </form>
   );

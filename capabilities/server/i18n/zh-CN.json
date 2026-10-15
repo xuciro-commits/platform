@@ -2110,5 +2110,16 @@
   "The confirmation protocol has no declared provider mapping": "确认协议缺少已声明的提供方映射",
   "External confirmation does not execute in isolated trials": "隔离试跑不执行外部确认",
   "The confirmation inventory changed while being read": "读取期间确认清单已变化",
-  "The delivery answer is incomplete or exceeds its retained evidence budget": "投递答复不完整或超过保留证据预算"
+  "The delivery answer is incomplete or exceeds its retained evidence budget": "投递答复不完整或超过保留证据预算",
+  "Escalate repeated business refusal": "升级重复业务拒绝",
+  "Escalate repeated business refusals": "升级重复业务拒绝",
+  "Open a normal review task from distinct durable business refusals.": "根据不同的持久业务拒绝创建普通复核任务。",
+  "Review repeated business refusal": "复核重复业务拒绝",
+  "Business refusal escalation requires the private Work owner": "业务拒绝升级须经私有工作归属方",
+  "The accepted refusal history cannot be read": "无法读取已接受的拒绝历史",
+  "The refusal escalation identity cannot be frozen": "无法固定拒绝升级标识",
+  "A refusal escalation needs its original durable business facts": "拒绝升级需要原有持久业务事实",
+  "The business refusals have no pending declared escalation": "业务拒绝没有待处理的已声明升级",
+  "Refusal escalation needs 2–100 distinct requests, a bounded window and a reviewer role": "拒绝升级需要 2–100 个不同请求、有界统计时段及复核角色",
+  "Refusal escalation reviewer role must be declared on the original object": "拒绝升级的复核角色须在原业务对象上声明"
 }

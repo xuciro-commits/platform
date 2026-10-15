@@ -20,6 +20,9 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
+	currentSubmission    *pb.Submission
+	businessRefusals     map[*kernel.Error]platform.BusinessRefusalFact
+	businessFacts        []platform.BusinessRefusalFact
 	simulation           bool
 	definitions          map[string]*DecisionDefinition
 	schemaVersion        *platform.SchemaVersion
@@ -136,7 +139,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		unsupportedStagedEffect()
 	}
 	d.active[id] = true
-	defer delete(d.active, id)
+	defer func() { delete(d.active, id) }()
 	if d.at.IsZero() {
 		d.at = at
 	}
@@ -147,6 +150,9 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 	}
 	// Callers may reuse/edit their request object for a later nested action.
 	// Receipts and their staged idempotency entries must own the input bytes.
+	previous := d.currentSubmission
+	d.currentSubmission = proto.Clone(s).(*pb.Submission)
+	defer func() { d.currentSubmission = previous }()
 	r, err := app.Submit(c, proto.Clone(s).(*pb.Submission), at)
 	if err != nil && d.failure == nil {
 		d.failure = err

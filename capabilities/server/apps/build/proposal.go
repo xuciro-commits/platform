@@ -201,6 +201,13 @@ func (b *Build) submitProposalReview(c platform.Caller, s *pb.Submission, now ti
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose rejection, or expiry after the proposal deadline")
 		}
 		return func(r *pb.ChangeRecord) {
+			if input.Decision == "rejected" {
+				fact := platform.BusinessRefusalFact{Level: "rejected", Code: "AI_PROPOSAL_REJECTED", Message: "The reviewer rejected the AI proposal", Translations: map[string]string{"zh-CN": "审核人驳回了 AI 提议"}, Subject: FunctionCallType + "/" + run.ID, Action: s.GetSchema().GetName(), Member: c.ID, At: now.UTC(), Original: raw, Inputs: map[string]json.RawMessage{"decision": platform.Raw(input.Decision)}, Record: FunctionCallType + "/" + run.ID}
+				if err := c.CaptureBusinessRefusal(r, fact); err != nil {
+					c.FailDecision(err)
+					return
+				}
+			}
 			run.Decision = input.Decision
 			run.DecidedBy = c.ID
 			run.DecidedAt = now
@@ -246,7 +253,7 @@ func checkAdoptionSources(o Object, a Action, lookup func(string) (platform.Enti
 		return e.In != nil && consumes(*e.In)
 	}
 	var problem error
-	walkTxnSteps(a.Transaction.Steps, func(step platform.TxnStep) {
+	walkBusinessTxn(a.Transaction, func(step platform.TxnStep) {
 		for _, change := range step.Changes {
 			if !consumesRef(change.From) && (change.Expr == nil || !consumes(*change.Expr)) {
 				continue

@@ -462,6 +462,9 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		answer := prior.Error
 		return nil, &answer
 	}
+	if err := t.checkBusinessCorrection(m, s); err != nil {
+		return nil, err
+	}
 	if m.Agent && t.suspended(m.ID) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
@@ -480,6 +483,10 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 	} else {
 		record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
 	}
+	if draft.failure != nil {
+		refusal = draft.failure
+		record = nil
+	}
 	if refusal == nil && pendingOperationInputs(draft.operationInputs) > 0 {
 		record = nil
 		refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A prepared Compute input was not consumed by this accepted Flow decision")
@@ -487,7 +494,12 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 	var raw []byte
 	if refusal != nil {
 		refusal = explained(refusal, a, s.GetSchema().GetName(), target(s))
-		raw, err = encodeSchemaRefusedResult(s, now, refusal, binding, draft.inputIssues[refusal]...)
+		fact, business := draft.businessRefusals[refusal]
+		var businessFact *platform.BusinessRefusalFact
+		if business {
+			businessFact = &fact
+		}
+		raw, err = encodeBusinessRefusedResult(s, now, refusal, binding, businessFact, draft.inputIssues[refusal]...)
 	} else {
 		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
 		if err != nil {
@@ -542,6 +554,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		t.committed.refusals[saved.App+"/"+sub.GetIdempotencyKey()] = saved
+		t.changedOwner(saved.App)
 		answer := saved.Error
 		return nil, &answer
 	}

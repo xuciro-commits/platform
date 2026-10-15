@@ -1,4 +1,6 @@
 import {ConfirmationProgress} from "./widgets/ConfirmationProgress";
+import {RefusalHistory} from "./actions/RefusalHistory";
+export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
 import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
 export { ApplicationRuns, ApplicationRuntimePanel, OperationRunView } from "./automation/application-runs";
@@ -23,7 +25,7 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 export {boundQueryDefinition} from "./runtime/query-plans";
 export {interfaceQueryForSection} from "./runtime/ontology-interface";
 import { readPlaceholder } from "./runtime/read-placeholder";
-import { NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
+import { DeclaredActionDialog, NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./automation/capability";
 export { FlowInstanceView } from "./automation/flows";
@@ -43,6 +45,10 @@ export type Me = Api.MeView;
 /** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
 export type Decision = {
   evidence?: string[]; expectedRevision?: number; quiet?: boolean;
+  /** Repeat this exact saved intent, retaining its original idempotency key and answer. */
+  originalKey?: string;
+  /** A changed intent names the refused request whose inputs it corrects. */
+  correctionOf?: string;
   /** Told why the host refused, for a screen that keeps the reason in front of
    *  the person instead of letting a notice pass by. */
   onRefused?: (reason: string) => void;
@@ -83,7 +89,7 @@ export const HostContext = createContext<Host | null>(null);
 export function useHost(): Host {
   const host = useContext(HostContext),inputs=useInputDrafts();
   if (!host) throw new Error("useHost outside the workspace");
-  return useMemo(()=>({...host,decide:async(schema,target,payload,options)=>{if(inputs?.invalid){const message=t("Correct the input drafts before submitting.");options?.onRefused?.(message);if(!options?.onRefused)notify.error(message);return false;}inputs?.reject();inputs?.pending(1);try{return await host.decide(schema,target,payload,inputs&&!options?.onRefused?{...options,onRefused:inputs.reject}:options);}finally{inputs?.pending(-1);}}}),[host,inputs?.invalid,inputs?.pending]);
+  return useMemo(()=>({...host,decide:async(schema,target,payload,options)=>{if(inputs?.invalid&&!options?.originalKey){const message=t("Correct the input drafts before submitting.");options?.onRefused?.(message);if(!options?.onRefused)notify.error(message);return false;}inputs?.reject();inputs?.pending(1);try{return await host.decide(schema,target,payload,inputs&&!options?.onRefused?{...options,onRefused:inputs.reject}:options);}finally{inputs?.pending(-1);}}}),[host,inputs?.invalid,inputs?.pending]);
 }
 
 /** A read of the host (`/v1/...`) for the signed-in member, refreshed while shown. */
@@ -236,20 +242,24 @@ export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(vie
 // Generated pages (ADR-0016), for any app's entity types.
 
 /** A form generated from an entity's declaration; submits only editable fields. */
-export function GeneratedForm({ type, record, initial, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked }: {
+export function GeneratedForm({ type, record, initial, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema }: {
   initial?: Record<string, unknown>;
   issues?:Api.FieldIssue[]; type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void; locked?: boolean;
+  onValuesChange?: (values: Record<string, unknown>) => void;
+  submitDisabled?: boolean;
+  actionSchema?: string;
   /** Presentation subset, in this order: a composed page's form asks for these (ADR-0035 16b). */
   fields?: string[];
 }) {
   const { source, catalog } = useHost();
   const info = source.entity(type);
-  const action = catalog.find((action) => action.schema === `${type}.${record ? "edit" : "create"}`);
+  const action = catalog.find((action) => action.schema === (actionSchema??`${type}.${record ? "edit" : "create"}`));
   if (!info || !action) return null;
   // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0035).
   const inputs = new Set(action.payload.map((field) => field.name));
   const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
-  return <RecordForm entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record ?? initial} submitLabel={submitLabel} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
+  return <RecordForm entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record ?? initial} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
+    onValuesChange={onValuesChange ? v => onValuesChange(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k)))) : undefined}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 
@@ -404,7 +414,6 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
-  const editingBusy = useRef(false);
   const archive = useRecordArchive(type);
   const transition = useTransition(type);
   // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
@@ -424,15 +433,10 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
     upload:async(file:File)=>{await collaboration.upload(file);},
     download:collaboration.download.bind(collaboration),
   };
-  const act = async (schema: string, r: EntityRecord, payload: object) => {
-    const confirmed = await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision });
-    if (confirmed) setEditing(undefined);
-    return confirmed;
-  };
   return (
     <>
       <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
-        work={type==="build.confirmation"?(view)=><ConfirmationProgress type={type} id={view.record.id}/>:type.startsWith("build.")&&type!=="build.function-call"?(view)=><><ConfirmationProgress type={type} id={view.record.id}/>{advice&&<RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields}/>}</>:type==="build.function-call"?(view)=><ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={()=>void refresh?.()}/>:advice ? (view) => <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} /> : undefined} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+        work={view=><><RefusalHistory key={`${type}/${view.record.id}`} type={type} id={view.record.id}/>{type==="build.confirmation"?<ConfirmationProgress type={type} id={view.record.id}/>:type.startsWith("build.")&&type!=="build.function-call"?<><ConfirmationProgress type={type} id={view.record.id}/>{advice&&<RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields}/>}</>:type==="build.function-call"?<ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={()=>void refresh?.()}/>:advice ? <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields}/> : null}</>} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}
@@ -447,10 +451,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         </>} />
       {archive.dialog}
       {transition.dialog}
-      <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && !editingBusy.current && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
-        {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onBusy={(busy) => { editingBusy.current = busy; }} onCancel={() => setEditing(undefined)}
-          onSubmit={(v) => act(`${type}.edit`, editing, v)} />}
-      </Dialog>
+      {editing&&catalog.find(action=>action.schema===`${type}.edit`)&&<DeclaredActionDialog declared={catalog.find(action=>action.schema===`${type}.edit`)!} type={type} record={editing} initial={editing} onClose={()=>setEditing(undefined)} onCompleted={()=>setEditing(undefined)}/>}
     </>
   );
 }
@@ -477,7 +478,7 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 
 export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./automation/agents";
 
-export { NewActions, PayloadFields, DeclaredActionForm, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
+export { NewActions, PayloadFields, DeclaredActionForm, DeclaredActionDialog, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages/pages";
 export { ComposedPage, SectionView, isComposed } from "./pages/sections";
 export { createWidgetDefinitions, createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetImplementation, type WidgetContract, type WidgetID } from "./widgets/registry";

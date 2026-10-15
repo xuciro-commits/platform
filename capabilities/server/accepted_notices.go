@@ -194,6 +194,14 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 
 func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
+	fork.businessFacts = slices.Clone(d.businessFacts)
+	for i := range fork.businessFacts {
+		fork.businessFacts[i] = cloneBusinessFact(fork.businessFacts[i])
+	}
+	fork.businessRefusals = maps.Clone(d.businessRefusals)
+	for key, fact := range fork.businessRefusals {
+		fork.businessRefusals[key] = cloneBusinessFact(fact)
+	}
 	fork.migrationDefinitions = slices.Clone(d.migrationDefinitions)
 	fork.callbackWrites = maps.Clone(d.callbackWrites)
 	if d.callbackOrigin != nil {
@@ -222,6 +230,11 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for refusal, issues := range fork.inputIssues {
 		issues = slices.Clone(issues)
 		for i := range issues {
+			issues[i].Translations = maps.Clone(issues[i].Translations)
+			issues[i].Values = maps.Clone(issues[i].Values)
+			for name, raw := range issues[i].Values {
+				issues[i].Values[name] = slices.Clone(raw)
+			}
 			issues[i].Path = slices.Clone(issues[i].Path)
 			issues[i].RelatedPaths = slices.Clone(issues[i].RelatedPaths)
 			for j := range issues[i].RelatedPaths {
@@ -322,7 +335,18 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 }
 
 func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
-	return d.privateFork().runProbe(c, decide)
+	probe := d.privateFork()
+	err := probe.runProbe(c, decide)
+	if err != nil {
+		// Carry only the refused answer's diagnostics across a read-only probe.
+		// No private rows, intents, numbers or successful branch facts escape.
+		if fact, ok := probe.businessRefusals[err]; ok {
+			d.BusinessRefused(err, fact)
+		} else if issues := probe.inputIssues[err]; len(issues) > 0 {
+			d.InputRefused(err, issues)
+		}
+	}
+	return err
 }
 
 // runProbe owns its mode and all host-managed writes. No live tenant or

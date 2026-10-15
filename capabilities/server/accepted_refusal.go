@@ -23,17 +23,18 @@ import (
 // cannot be mistaken for a kernel change receipt or applied to the record
 // store. The bounded envelope carries the original submission and answer.
 type refusedResult struct {
-	SchemaVersion *platform.SchemaVersion `json:"schemaVersion,omitempty"`
-	Version       int                     `json:"version"`
-	Kind          string                  `json:"kind"`
-	Tenant        string                  `json:"tenant"`
-	App           string                  `json:"app"`
-	At            time.Time               `json:"at"`
-	RequestHash   string                  `json:"requestHash"`
-	Digest        string                  `json:"digest"`
-	Submission    json.RawMessage         `json:"submission"`
-	Issues        []platform.FieldIssue   `json:"issues,omitempty"`
-	Error         kernel.Error            `json:"error"`
+	Business      *platform.BusinessRefusalFact `json:"business,omitempty"`
+	SchemaVersion *platform.SchemaVersion       `json:"schemaVersion,omitempty"`
+	Version       int                           `json:"version"`
+	Kind          string                        `json:"kind"`
+	Tenant        string                        `json:"tenant"`
+	App           string                        `json:"app"`
+	At            time.Time                     `json:"at"`
+	RequestHash   string                        `json:"requestHash"`
+	Digest        string                        `json:"digest"`
+	Submission    json.RawMessage               `json:"submission"`
+	Issues        []platform.FieldIssue         `json:"issues,omitempty"`
+	Error         kernel.Error                  `json:"error"`
 }
 
 func submissionHash(s *pb.Submission, versions ...*platform.SchemaVersion) (string, error) {
@@ -57,6 +58,10 @@ func encodeRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, 
 }
 
 func encodeSchemaRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, binding *platform.SchemaVersion, issues ...platform.FieldIssue) ([]byte, error) {
+	return encodeBusinessRefusedResult(s, at, refusal, binding, nil, issues...)
+}
+
+func encodeBusinessRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.Error, binding *platform.SchemaVersion, business *platform.BusinessRefusalFact, issues ...platform.FieldIssue) ([]byte, error) {
 	if s == nil || refusal == nil {
 		return nil, fmt.Errorf("refused result needs a submission and answer")
 	}
@@ -76,6 +81,11 @@ func encodeSchemaRefusedResult(s *pb.Submission, at time.Time, refusal *kernel.E
 		if slices.ContainsFunc(issues, func(issue platform.FieldIssue) bool { return issue.Constraint != "" }) {
 			result.Version = 3
 		}
+	}
+	if business != nil {
+		fact := cloneBusinessFact(*business)
+		result.Business = &fact
+		result.Version = 4
 	}
 	result.Digest, err = digestRefusedResult(result)
 	if err != nil {
@@ -119,11 +129,20 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if (result.Version < 1 || result.Version > 3) || result.Version == 1 && len(result.Issues) > 0 || len(result.Issues) > 64 || result.Kind != "refusal" || result.Tenant == "" || result.App == "" ||
+	if (result.Version < 1 || result.Version > 4) || result.Version == 1 && len(result.Issues) > 0 || (result.Version == 4) != (result.Business != nil) || len(result.Issues) > 64 || result.Kind != "refusal" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || result.RequestHash != hash || result.Tenant != sub.GetTenantId() ||
 		result.App != sub.GetAuthority() || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || result.Error.Code == pb.ErrorCode_ERROR_CODE_UNSPECIFIED {
 		return result, nil, fmt.Errorf("refused result has inconsistent identity or answer")
+	}
+	if result.Business != nil {
+		f := result.Business
+		if result.Version != 4 || f.Level != "block" || f.Member != sub.GetPrincipalId() || f.Subject != target(&sub) || f.Action != sub.GetSchema().GetName() || !f.At.Equal(result.At) {
+			return result, nil, fmt.Errorf("business refusal evidence differs from its request")
+		}
+		if err := validateBusinessFact(result.App, *f); err != nil {
+			return result, nil, err
+		}
 	}
 	for _, issue := range result.Issues {
 		if issue.Code == "" || len(issue.Code) > 64 || len(issue.Message) > 1024 || len(issue.Path) != 1 || len(issue.Path[0]) > 128 || len(issue.RelatedPaths) > 15 {
@@ -146,7 +165,11 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 					return result, nil, fmt.Errorf("refused constraint translation exceeds its bounds")
 				}
 			}
-		} else if issue.Record != "" || len(issue.Values) > 0 || issue.Reason != "" || len(issue.Translations) > 0 {
+		} else if issue.Code == "business_refusal" {
+			if result.Business == nil || issue.BusinessCode != result.Business.Code || issue.Record != result.Business.Subject || len(issue.Values) > 0 || len(issue.Translations) > 1 {
+				return result, nil, fmt.Errorf("business diagnostic differs from its evidence")
+			}
+		} else if issue.BusinessCode != "" || issue.Record != "" || len(issue.Values) > 0 || issue.Reason != "" || len(issue.Translations) > 0 {
 			return result, nil, fmt.Errorf("constraint facts need a named constraint")
 		}
 		for _, path := range issue.RelatedPaths {

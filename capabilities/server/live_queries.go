@@ -235,7 +235,7 @@ func (t *Tenant) liveVersion(query string) string {
 		t.records.mu.Unlock()
 		return fmt.Sprintf("%d/%d/%d/%d/%d", global, meta, a, b, operationVersion)
 	}
-	if liveOperationRead(p) || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
+	if liveOperationRead(p) || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
 		return fmt.Sprint(seq)
 	}
 	for _, prefix := range []string{"/v1/records/", "/v1/aggregates/"} {

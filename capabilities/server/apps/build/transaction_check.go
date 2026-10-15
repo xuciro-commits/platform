@@ -17,6 +17,20 @@ func walkTxnSteps(steps []platform.TxnStep, visit func(platform.TxnStep)) {
 		if step.ForEach != nil {
 			walkTxnSteps(step.ForEach.Steps, visit)
 		}
+		for _, refusal := range step.Refusals {
+			if refusal.Record != nil {
+				walkTxnSteps([]platform.TxnStep{*refusal.Record}, visit)
+			}
+		}
+	}
+}
+
+func walkBusinessTxn(txn *platform.BusinessTxn, visit func(platform.TxnStep)) {
+	walkTxnSteps(txn.Steps, visit)
+	for _, refusal := range txn.Refusals {
+		if refusal.Record != nil {
+			walkTxnSteps([]platform.TxnStep{*refusal.Record}, visit)
+		}
 	}
 }
 
@@ -26,7 +40,7 @@ func (b *Build) transactionSequences() []platform.Sequence {
 		if life := b.installed[typ].Lifecycle; life != nil {
 			for _, transition := range life.Transitions {
 				if transition.Txn != nil {
-					walkTxnSteps(transition.Txn.Steps, func(step platform.TxnStep) {
+					walkBusinessTxn(transition.Txn, func(step platform.TxnStep) {
 						if step.Sequence != nil {
 							byName[step.Sequence.Name] = *step.Sequence
 						}
@@ -66,6 +80,13 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 		scope.Inputs = maps.Clone(scope.Inputs)
 		for i := range steps {
 			step := &steps[i]
+			for j := range step.Refusals {
+				if record := step.Refusals[j].Record; record != nil {
+					if err := lower([]platform.TxnStep{*record}, scope); err != nil {
+						return err
+					}
+				}
+			}
 			if step.ForEach != nil {
 				index := slices.IndexFunc(object.Sets, func(set platform.RecordSet) bool { return set.Name == step.ForEach.Set })
 				if index < 0 {
@@ -105,7 +126,15 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 		}
 		return nil
 	}
-	return lower(action.Transaction.Steps, ruleSpec(object, *action, action.Transaction.Reads))
+	scope := ruleSpec(object, *action, action.Transaction.Reads)
+	for i := range action.Transaction.Refusals {
+		if record := action.Transaction.Refusals[i].Record; record != nil {
+			if err := lower([]platform.TxnStep{*record}, scope); err != nil {
+				return err
+			}
+		}
+	}
+	return lower(action.Transaction.Steps, scope)
 }
 
 func (b *Build) transactionLink(binding platform.AssetBinding) (platform.LinkType, error) {
@@ -121,6 +150,9 @@ func (b *Build) transactionLink(binding platform.AssetBinding) (platform.LinkTyp
 }
 
 func checkTxnRef(ref platform.TxnRef, subject, row string, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool)) error {
+	if ref.Action != "" {
+		return fmt.Errorf("record references cannot name a transaction action")
+	}
 	info, ok := lookup(ref.Type)
 	if !ok || info.App != ID || !strings.HasPrefix(ref.Type, ID+".") {
 		return fmt.Errorf("transaction target must belong to its authority")
@@ -181,6 +213,9 @@ func complementaryTxnWhen(a, b *platform.Expr) bool {
 }
 
 func (b *Build) checkTransactions(object Object) error {
+	if err := checkRefusalCycles(object); err != nil {
+		return err
+	}
 	subject := "build." + object.Name
 	sequences := map[string]platform.Sequence{}
 	for _, action := range object.Actions {
@@ -208,6 +243,9 @@ func (b *Build) checkTransactions(object Object) error {
 			return b.conditionLookup(typ)
 		}
 		spec := ruleSpec(object, action, txn.Reads)
+		if err := b.checkRefusalDeclarations(object, action, txn.Refusals, spec, "", lookup); err != nil {
+			return err
+		}
 		if err := b.checkRuleCollections(spec, "transaction "+action.Name, lookup); err != nil {
 			return err
 		}
@@ -266,6 +304,9 @@ func (b *Build) checkTransactions(object Object) error {
 					if _, err := platform.RuleSchema(*step.When, scope, lookup); err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
+				}
+				if err := b.checkRefusalDeclarations(object, action, step.Refusals, scope, row, lookup); err != nil {
+					return fmt.Errorf("%s: %w", where, err)
 				}
 				if step.Kind == "for-each" {
 					if row != "" || step.ForEach == nil || len(step.ForEach.Steps) == 0 || step.Link != nil || step.Sequence != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 {
