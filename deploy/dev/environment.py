@@ -88,7 +88,7 @@ def serve():
                 with (LOGS / f'{solution}-{kind}.log').open('w') as log:
                     children.append(subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                                                      start_new_session=True))
-        deadline = time.monotonic() + 90
+        deadline = time.monotonic() + 180
         while not interrupted:
             for child in children:
                 if child.poll() is not None:
@@ -133,7 +133,7 @@ def local():
     with (LOGS / 'environment.log').open('w') as log:
         supervisor = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'serve'], cwd=ROOT,
                                       stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-    deadline = time.monotonic() + 100
+    deadline = time.monotonic() + 190
     try:
         while time.monotonic() < deadline:
             if supervisor.poll() is not None:
