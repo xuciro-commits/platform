@@ -263,22 +263,6 @@ type txnWrite struct {
 	when           *platform.Expr
 }
 
-// A pair of exact complements proves that only one branch can write an item.
-// This uses the closed language's comparison semantics, not a new evaluator.
-func complementaryTxnWhen(a, b *platform.Expr) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	if a.Op == "not" && len(a.Args) == 1 && string(platform.Raw(a.Args[0])) == string(platform.Raw(b)) {
-		return true
-	}
-	if b.Op == "not" && len(b.Args) == 1 && string(platform.Raw(b.Args[0])) == string(platform.Raw(a)) {
-		return true
-	}
-	opposite := map[string]string{"=": "!=", "!=": "=", "<": ">=", ">=": "<", "<=": ">", ">": "<="}
-	return opposite[a.Op] == b.Op && len(a.Args) == 2 && string(platform.Raw(a.Args)) == string(platform.Raw(b.Args))
-}
-
 func (b *Build) checkTransactions(object Object) error {
 	if object.CreateTransaction != nil {
 		clone := object
@@ -351,7 +335,7 @@ func (b *Build) checkTransactions(object Object) error {
 				return err
 			}
 		}
-		names, writes, total, subjectWrite := map[string]bool{}, []txnWrite{}, 0, false
+		names, writes, total := map[string]bool{}, []txnWrite{}, 0
 		reserve := func(ref platform.TxnRef, loop string, when *platform.Expr) error {
 			key := ref.ID
 			if ref.Via != "" {
@@ -360,20 +344,13 @@ func (b *Build) checkTransactions(object Object) error {
 			if strings.HasPrefix(key, "step.") {
 				return fmt.Errorf("an earlier create cannot be written again")
 			}
-			fixed := func(key string) bool {
-				return !strings.HasPrefix(key, "$") && !strings.Contains(key, ":") && !strings.HasPrefix(key, "input.")
-			}
 			for _, prior := range writes {
-				if prior.typ != ref.Type {
-					continue
+				// Reject a duplicate already known here. Dynamic identities and
+				// conditional steps are resolved by the original private runner,
+				// which refuses the whole decision if actual writes collide.
+				if prior.typ == ref.Type && prior.key == key && prior.loop == loop && when == nil && prior.when == nil {
+					return fmt.Errorf("transaction writes %s more than once", ref.Type)
 				}
-				if loop == "" && prior.loop == "" && fixed(key) && fixed(prior.key) && key != prior.key {
-					continue
-				}
-				if loop != "" && loop == prior.loop && key == "$item" && prior.key == key && complementaryTxnWhen(when, prior.when) {
-					continue
-				}
-				return fmt.Errorf("transaction writes of %s must be statically disjoint", ref.Type)
 			}
 			writes = append(writes, txnWrite{ref.Type, key, loop, when})
 			return nil
@@ -528,12 +505,6 @@ func (b *Build) checkTransactions(object Object) error {
 					if err := reserve(step.Target, loop, step.When); err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
-					if step.Target.ID == "$subject" {
-						if step.When != nil || row != "" {
-							return fmt.Errorf("subject write cannot be skipped or iterated")
-						}
-						subjectWrite = true
-					}
 				}
 				if step.Kind == "archive" && len(step.Changes) > 0 {
 					return fmt.Errorf("%s archive has no assignments", where)
@@ -568,9 +539,6 @@ func (b *Build) checkTransactions(object Object) error {
 		}
 		if err := check(txn.Steps, spec, "", ""); err != nil {
 			return err
-		}
-		if !subjectWrite {
-			return fmt.Errorf("transaction must write its subject exactly once")
 		}
 	}
 	return nil

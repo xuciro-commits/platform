@@ -596,6 +596,15 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 	if err := run(txn.Steps, spec, values, "", ""); err != nil {
 		return err
 	}
+	// The subject carries this accepted command's revision and history even
+	// when every business-field update to it was skipped. Use the original
+	// action's permissions and validation without inventing an assignment.
+	// Creation already saved that subject through its original create action.
+	if action != txn.Subject+".create" && !written[txn.Subject+"/"+subjectID] {
+		if err := b.ledger.ApplyTxnRecord(c, receipt, b.installed[txn.Subject], "edit", subjectID, platform.Raw(map[string]any{}), now); err != nil {
+			return err
+		}
+	}
 	if err := b.finishProposal(c, receipt, proposal, now); err != nil {
 		return err
 	}

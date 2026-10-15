@@ -85,6 +85,136 @@ func txnUnchanged(t *testing.T, tn *Tenant, before string) {
 	}
 }
 
+func TestBusinessTxnConditionalSubjectAndDynamicTargets(t *testing.T) {
+	tn := txnTenant(t)
+	directory := t.TempDir()
+	journal, err := OpenFileJournal(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { journal.Close() }()
+	if _, err := journal.Entries(context.Background(), tn.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	var entries []Entry
+	tn.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
+		raw, err := journal.AppendAccepted(context.Background(), tn.ID, entry, key, hash)
+		if err == nil {
+			entries = append(entries, entry)
+		}
+		return raw, err
+	}
+	access := []build.Access{{Role: "operator", Read: "all", Create: true, Edit: true}, {Role: "limited", Read: "all"}}
+	skip := platform.ExprLiteralValue("boolean", false)
+	publishObject(t, tn, "builder", "BUCKET", map[string]any{
+		"name": "bucket", "title": "Bucket", "plural": "Buckets",
+		"fields": []build.Field{{Name: "assigned", Title: "Assigned", Type: "boolean"}}, "access": access,
+		"createTransaction": &platform.BusinessTxn{Subject: "build.bucket", Steps: []platform.TxnStep{{Name: "optional", Kind: "sequence", When: &skip, Sequence: &platform.Sequence{Name: "unused", Pattern: "{n}"}}}},
+	}, txnAt)
+	apply := platform.ExprReference("boolean", "input.apply")
+	move := &platform.BusinessTxn{Subject: "build.resource", Steps: []platform.TxnStep{
+		{Name: "ticket", Kind: "sequence", When: &apply, Sequence: &platform.Sequence{Name: "moves", Pattern: "M-{n}"}},
+		{Name: "release", Kind: "update", When: &apply, Target: platform.TxnRef{Type: "build.bucket", Via: "bucket"}, Changes: []platform.TxnSet{{Field: "assigned", From: "=false"}}},
+		{Name: "claim", Kind: "update", When: &apply, Target: platform.TxnRef{Type: "build.bucket", ID: "input.next"}, Changes: []platform.TxnSet{{Field: "assigned", From: "=true"}}},
+		{Name: "subject", Kind: "update", When: &apply, Target: platform.TxnRef{Type: "build.resource", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "bucket", From: "next"}, {Field: "ticket", From: "step.ticket"}}},
+	}}
+	first, second := platform.ExprReference("boolean", "input.first"), platform.ExprReference("boolean", "input.second")
+	rename := &platform.BusinessTxn{Subject: "build.resource", Steps: []platform.TxnStep{
+		{Name: "first", Kind: "update", When: &first, Target: platform.TxnRef{Type: "build.resource", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "label", From: "=First"}}},
+		{Name: "second", Kind: "update", When: &second, Target: platform.TxnRef{Type: "build.resource", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "label", From: "=Second"}}},
+	}}
+	access[1].Create, access[1].Edit = true, true
+	publishObject(t, tn, "builder", "RESOURCE", map[string]any{
+		"name": "resource", "title": "Resource", "plural": "Resources",
+		"fields": []build.Field{{Name: "bucket", Title: "Bucket", Type: "reference", Ref: "build.bucket", Required: true}, {Name: "ticket", Title: "Ticket", Type: "text"}, {Name: "label", Title: "Label", Type: "text"}},
+		"states": []build.State{{Name: "ready", Title: "Ready"}}, "access": access,
+		"actions": []build.Action{
+			{Name: "move", Title: "Move", From: []string{"ready"}, Roles: []string{"operator", "limited"}, Inputs: []build.Input{{Name: "next", Title: "Next bucket", Type: "reference", Ref: "build.bucket"}, {Name: "apply", Title: "Apply", Type: "boolean"}}, Transaction: move},
+			{Name: "rename", Title: "Rename", From: []string{"ready"}, Roles: []string{"operator"}, Inputs: []build.Input{{Name: "first", Title: "First", Type: "boolean"}, {Name: "second", Title: "Second", Type: "boolean"}}, Transaction: rename},
+		},
+	}, txnAt)
+	for _, id := range []string{"A", "B"} {
+		decide(t, tn, "operator", build.ID, "build.bucket.create", "build.bucket", id, map[string]any{"assigned": id == "A"}, txnAt)
+	}
+	decide(t, tn, "operator", build.ID, "build.resource.create", "build.resource", "resource", map[string]any{"bucket": "A", "label": "Original"}, txnAt)
+	read := func(typ, id string) map[string]any {
+		t.Helper()
+		view, err := tn.RecordOf(memberOf(t, tn, "operator"), typ, id, txnAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var values map[string]any
+		if err := json.Unmarshal(platform.Raw(view.Record), &values); err != nil {
+			t.Fatal(err)
+		}
+		return values
+	}
+	beforeSubject, beforeA, beforeB := read("build.resource", "resource"), read("build.bucket", "A"), read("build.bucket", "B")
+	if beforeA["revision"] != float64(1) || beforeB["revision"] != float64(1) {
+		t.Fatal("a creation without a subject field step lost its original revision")
+	}
+	noop := decide(t, tn, "operator", build.ID, "build.resource.move", "build.resource", "resource", map[string]any{"next": "B", "apply": false}, txnAt)
+	current := read("build.resource", "resource")
+	if current["bucket"] != "A" || current["label"] != "Original" || current["revision"] != beforeSubject["revision"].(float64)+1 || uint32(current["revision"].(float64)) != noop.GetRevision() {
+		t.Fatalf("skipped subject fields lost their values or accepted revision: %v", current)
+	}
+	if !reflect.DeepEqual(beforeA, read("build.bucket", "A")) || !reflect.DeepEqual(beforeB, read("build.bucket", "B")) || len(tn.sequences.last) != 0 {
+		t.Fatal("a false condition changed a target or allocated a number")
+	}
+	request := submission(tn, memberOf(t, tn, "operator"), build.ID, "build.resource.move", "build.resource", "resource", map[string]any{"next": "B", "apply": true})
+	accepted, failure := tn.Submit(memberOf(t, tn, "operator"), request, txnAt)
+	if failure != nil {
+		t.Fatalf("distinct dynamic targets were refused: %v", failure)
+	}
+	if read("build.bucket", "A")["assigned"] != false || read("build.bucket", "B")["assigned"] != true || read("build.resource", "resource")["bucket"] != "B" || read("build.resource", "resource")["ticket"] != "M-1" {
+		t.Fatal("the move did not update its two original targets and subject together")
+	}
+	state, counters := txnState(tn), tn.sequences.clone()
+	if reason := refuse(t, tn, "operator", build.ID, "build.resource.move", "build.resource", "resource", map[string]any{"next": "B", "apply": true}, txnAt); !strings.Contains(reason, "more than once") {
+		t.Fatalf("aliased dynamic targets were not refused: %s", reason)
+	}
+	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.last) {
+		t.Fatal("a target collision left its earlier row change or allocated a number")
+	}
+	if reason := refuse(t, tn, "limited", build.ID, "build.resource.move", "build.resource", "resource", map[string]any{"next": "A", "apply": true}, txnAt); !strings.Contains(reason, "POLICY_DENIED") {
+		t.Fatalf("the original target permission was bypassed: %s", reason)
+	}
+	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.last) {
+		t.Fatal("a denied step left business changes or allocated a number")
+	}
+	decide(t, tn, "operator", build.ID, "build.resource.rename", "build.resource", "resource", map[string]any{"first": true, "second": false}, txnAt)
+	if read("build.resource", "resource")["label"] != "First" {
+		t.Fatal("a conditional subject branch did not apply")
+	}
+	state = txnState(tn)
+	if reason := refuse(t, tn, "operator", build.ID, "build.resource.rename", "build.resource", "resource", map[string]any{"first": true, "second": true}, txnAt); !strings.Contains(reason, "more than once") {
+		t.Fatalf("overlapping subject writes were not refused: %s", reason)
+	}
+	if txnState(tn) != state {
+		t.Fatal("overlapping branches retained their first subject write")
+	}
+	journal.Close()
+	journal, err = OpenFileJournal(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := journal.Entries(context.Background(), tn.ID, 0)
+	if err != nil || len(persisted) != len(entries) || !bytes.Equal(persisted[len(persisted)-1].Body, entries[len(entries)-1].Body) {
+		t.Fatalf("reopening changed the accepted records: %v", err)
+	}
+	tn = txnTenant(t)
+	if err := tn.Replay(persisted); err != nil {
+		t.Fatal(err)
+	}
+	if txnState(tn) != state {
+		t.Fatal("conditional decisions did not recover their accepted business state")
+	}
+	repeated, failure := tn.Submit(memberOf(t, tn, "operator"), request, txnAt)
+	if failure != nil || !proto.Equal(accepted, repeated) || txnState(tn) != state {
+		t.Fatal("retry after recovery executed a move again or changed its answer")
+	}
+}
+
 // All five proofs and three assumptions belong to this one host scenario.
 func TestBusinessTxnMinimalSlice(t *testing.T) {
 	if dir := os.Getenv("PLATFORM_TXN_CRASH_DIR"); dir != "" {

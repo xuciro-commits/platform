@@ -28,6 +28,20 @@ func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 	if err := b.checkTransactions(root); err != nil {
 		t.Fatal(err)
 	}
+	for _, conditional := range []bool{false, true} {
+		var candidate Object
+		_ = json.Unmarshal(platform.Raw(root), &candidate)
+		steps := candidate.Actions[0].Transaction.Steps
+		if conditional {
+			when := platform.ExprLiteralValue("boolean", false)
+			steps[1].When = &when
+		} else {
+			candidate.Actions[0].Transaction.Steps = append(steps[:1], steps[2:]...)
+		}
+		if err := b.checkTransactions(candidate); err != nil {
+			t.Fatalf("a subject without an unconditional field write was rejected: %v", err)
+		}
+	}
 	root.Sets = []platform.RecordSet{{Name: "lines", From: "lines", Direction: "inverse", Object: "build.detail", Order: []platform.RecordSetSort{{Expr: platform.ExprReference("text", "id")}}, Limit: 10000}}
 	for _, which := range []string{"nested iteration", "undeclared set", "missing order", "step limit", "duplicate item writes"} {
 		t.Run(which, func(t *testing.T) {
