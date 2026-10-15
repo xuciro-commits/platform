@@ -36,6 +36,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     return [{
       id,
       title: application.title,
+      description: application.description,
       icon,
       home: sections.length ? route(sections[0]!.pages[0]!) : {view:"application-runs",params:{app:definition.ref.app,name:application.name,application:id}},
       views: [], // its pages are the workspace's own page view (ADR-0032)

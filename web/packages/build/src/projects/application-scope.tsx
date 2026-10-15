@@ -7,7 +7,7 @@ import { useDependencies, useHost, useReadQuery } from "@platform/app";
 import type { Project } from "./project";
 import { useProjectResources } from "./resource-inventory";
 import { refKey } from "./resources";
-import { assetRoute, studioAreas, studioRoute } from "./studio-model";
+import { assetRoute } from "./studio-model";
 
 const Scope = createContext<string | undefined>(undefined);
 const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "agent", "code", "link-type", "property-type", "decision-table", "alert", "connection", "data-source", "dataset", "pipeline", "writeback", "match", "integration-health", "observation-source", "observations", "studio-templates", "evaluation-set", "test-plan", "sample-set", "release-review", "changes", "release-history"]);
@@ -23,7 +23,8 @@ function ApplicationContextBar({ application, route }: { application: string; ro
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(application)}`);
   const project = query.data?.record;
   const { owned } = useProjectResources(project);
-  const selected = owned.find(item => item.record?.id === route.params?.page || item.record?.id === route.params?.id || item.ref.name === route.params?.object);
+  const recordID = route.view === "module" ? route.params?.page : route.params?.id;
+  const selected = owned.find(item => !!recordID && item.record?.id === recordID || !!route.params?.object && item.ref.name === route.params.object);
   const ref = route.view === "action-type" && selected && route.params?.action
     ? { app: selected.ref.app, kind: "action", name: `${selected.ref.name}.${route.params.action}` } : selected?.ref;
   const dependencies = useDependencies(ref, undefined, !!ref);
@@ -31,7 +32,6 @@ function ApplicationContextBar({ application, route }: { application: string; ro
   const related = links ? [...links.requires, ...links.usedBy] : [];
   return <div role="navigation" aria-label={t("Application context")} className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border bg-surface px-2 py-1">
     <Button size="sm" variant="ghost" onClick={() => open({ view: "project", params: { id: application } })}>{project?.title || t("Application")}</Button>
-    {studioAreas.map(area => <Button size="sm" variant="ghost" key={area.id} onClick={() => open(studioRoute(application, area.id, selected ? refKey(selected.ref) : undefined))}>{t(area.title)}</Button>)}
     {related.length > 0 && <Select aria-label={t("Related assets")} value="" className="ml-auto h-7 max-w-64 text-xs" onChange={event => { const ref = related.find(ref => refKey(ref) === event.target.value); if (ref) open(assetRoute(ref, owned, host.definitions, application)); }}>
       <option value="">{t("Related assets")}</option>
       {links && [["Uses", links.requires], ["Used by", links.usedBy]].map(([label, refs]) => <optgroup key={String(label)} label={t(String(label))}>{(refs as typeof related).map(ref => <option key={refKey(ref)} value={refKey(ref)}>{ref.name}</option>)}</optgroup>)}

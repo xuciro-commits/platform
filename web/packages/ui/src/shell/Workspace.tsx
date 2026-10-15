@@ -10,6 +10,7 @@ import { cn } from "../lib/cn";
 import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
 import { language, languages, setLanguage, t } from "../i18n";
 import { Dialog } from "../primitives/dialog";
+import { Sheet } from "../primitives/sheet";
 import { Button } from "../primitives/button";
 import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
@@ -21,6 +22,8 @@ export type View = {
   title: (params: Record<string, string>) => string;
   icon?: ReactNode;
   render: (params: Record<string, string>) => ReactNode;
+  /** Navigation within one document can change without opening another tab. */
+  documentKey?: (params: Record<string, string>) => string;
 };
 export type NavSection = { label: string; items: { label: string; icon?: ReactNode; route: Route; badge?: ReactNode }[] };
 export type MenuItem = { label: string; shortcut?: string; onSelect: () => void; disabled?: boolean };
@@ -39,15 +42,13 @@ export type Session = {
 export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
 /** The portal: every application this member may open, its categories in display order, and the one in front. */
 export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
-/** The workspace projections a member may switch between (Operations / Build / Admin); projection never grants permissions. */
-export type Workspaces = { options: { id: string; title: string; icon?: ReactNode }[]; current: string; onSelect: (id: string) => void };
 /** The constant left rail (ADR-0052 §3.1): where Home, the portal, notifications and the assistant live. */
 export type Rail = { home: Route; applications: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
 /** A route the member opened, remembered by the shell for the Recent list and Home. */
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
-/** Where a route opens: the current group, a group beside it (split right, like an IDE's "open to the side"), or a separate window. */
-type OpenOptions = { window?: "tab" | "beside" | "popout" };
+/** Inspect keeps the current task; tab, beside and popout open working documents. */
+type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect" };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void, busy?: boolean) => void;
   ask: (panels: string[], run: () => void, owner?: symbol) => void;
@@ -63,7 +64,7 @@ type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close
   /** Platform application ids the member starred, and the switch. */
   favorites: string[]; toggleFavorite: (app: string) => void;
   /** The portal and rail this shell was given, for views that list applications (Home). */
-  applications?: Applications; rail?: Rail; workspaces?: Workspaces; };
+  applications?: Applications; rail?: Rail; };
 const PanelContext = createContext<string | undefined>(undefined);
 const ViewCallContext = createContext<{ input?: unknown; expired?: boolean; returnValue?: (value: unknown) => void } | undefined>(undefined);
 export const useViewCall = () => useContext(ViewCallContext);
@@ -135,14 +136,14 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
 
 /**
  * The platform shell (ADR-0052): a constant rail (Home, search, notifications,
- * applications, recent, favorites, assistant, workspaces, account), a header
+ * applications, recent, favorites, assistant, account), a header
  * with the current application and its menus, a context pane with that
  * application's navigation, and a docking workspace whose tabs are routes
  * (one per entity) with a command palette (⌘K).
  * Tabs are grouped by application (ADR-0054 D1): each `layoutScope` has its own
  * remembered layout, swapped in when the scope changes; the recent/favorites memory is per `storageKey`; the active tab is in the URL.
  */
-export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, menus = [], commands = [], session, status, applications: appEntries, workspaces, rail, onActiveRoute, onEmpty, onLanguage, search }: {
+export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, menus = [], commands = [], session, status, applications: appEntries, rail, onActiveRoute, onEmpty, onLanguage, search }: {
   product: string; productIcon?: ReactNode; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   navigation?: ReactNode;
   /** The application whose tabs are shown; its layout is remembered apart from the others'. */
@@ -152,7 +153,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   /** Decode incoming hashes and saved tabs before mounting a view. Apps produce canonical routes. */
   resolveRoute?: (route: Route, layout?: string) => Route | Promise<Route>;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
-  applications?: Applications; workspaces?: Workspaces; rail?: Rail; onActiveRoute?: (route: Route) => void;
+  applications?: Applications; rail?: Rail; onActiveRoute?: (route: Route) => void;
   /** Reports an empty workspace without passing undefined to existing route listeners. */
   onEmpty?: () => void;
   /** Records matching what is typed in the palette (⌘K), opened on choice: the palette searches data, not only commands. */
@@ -193,6 +194,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const routeScope = useRef(scopeOf); routeScope.current = scopeOf;
   const routeReader = useRef(resolveRoute); routeReader.current = resolveRoute;
   const viewRegistry = useRef(byId); viewRegistry.current = byId;
+  const keyOf = useCallback((route: Route) => {
+    const key = viewRegistry.current.get(route.view)?.documentKey;
+    return key ? JSON.stringify([route.view, key(route.params ?? {}), route.params?.call]) : routeKey(route);
+  }, []);
   const applicationEntries = useRef(appEntries); applicationEntries.current = appEntries;
   const switching = useRef(false);
   const layoutRevision = useRef(0), incomingRevision = useRef(0);
@@ -208,17 +213,17 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const saveLayout = useCallback((id: string | undefined) => {
     try {
       const api = dock.current; if (!api) return;
-      const layout = routeScope.current ? rewriteLayout(api.toJSON(), (route) => routeScope.current!(route) === id ? route : undefined) : api.toJSON();
+      const layout = routeScope.current ? rewriteLayout(api.toJSON(), (route) => routeScope.current!(route) === id ? route : undefined, keyOf) : api.toJSON();
       localStorage.setItem(layoutKey(id), JSON.stringify(layout));
     } catch { /* storage unavailable */ }
-  }, [storageKey]);
+  }, [storageKey, keyOf]);
   const loadLayout = useCallback(async (id: string | undefined) => {
     const api = dock.current, revision = ++layoutRevision.current;
     if (!api) return false;
     try {
       const saved = localStorage.getItem(layoutKey(id));
       const layout = saved && await resolveLayout(JSON.parse(saved) as SerializedDockview,
-        (route) => routeReader.current?.(route, id) ?? route, (view) => viewRegistry.current.has(view));
+        (route) => routeReader.current?.(route, id) ?? route, (view) => viewRegistry.current.has(view), keyOf);
       if (revision !== layoutRevision.current || dock.current !== api) return false;
       if (layout) api.fromJSON(layout); else api.clear();
     } catch {
@@ -290,10 +295,18 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const currentApp = useRef(applications?.current); currentApp.current = applications?.current;
   const visited = useCallback((route: Route, title: string) => {
     if (rail && [routeKey(rail.home), routeKey(rail.applications)].includes(routeKey(route))) return; // the rail's own places are not "recent"
-    const key = routeKey(route);
-    remember((m) => ({ ...m, recent: [{ route, title, app: currentApp.current, at: Date.now() }, ...m.recent.filter((r) => routeKey(r.route) !== key)].slice(0, 20) }));
-  }, [rail, remember]);
+    const key = keyOf(route);
+    remember((m) => ({ ...m, recent: [{ route, title, app: currentApp.current, at: Date.now() }, ...m.recent.filter((r) => keyOf(r.route) !== key)].slice(0, 20) }));
+  }, [rail, remember, keyOf]);
   const [navOpen, setNavOpen] = useState(nav.length > 0);
+  const navPreferences = useRef(new Map<string, boolean>());
+  const navScope = applications?.current ?? layoutScope ?? "";
+  const hasNavigation = nav.length > 0 || !!navigation;
+  useEffect(() => {
+    if (hasNavigation) setNavOpen(navPreferences.current.get(navScope) ?? true);
+  }, [navScope, hasNavigation]);
+  const [inspection, setInspection] = useState<{ route: Route; focus: HTMLElement | null }>();
+  useEffect(() => setInspection(undefined), [active, layoutScope]);
   const [compact, setCompact] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 639px)").matches);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const compactGroup = useRef(false);
@@ -317,7 +330,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     }
   }, [compact, active]);
   const navigationVisible = compact ? mobileNavOpen : navOpen;
-  const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => !open);
+  const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => {
+    navPreferences.current.set(navScope, !open);
+    return !open;
+  });
 
   const followed = useRef(onActiveRoute);
   followed.current = onActiveRoute;
@@ -342,9 +358,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const api = dock.current, view = byId.get(route.view);
     if (!api || !view) return;
     const reference = api.activePanel?.id;
-    const key = routeKey(route), title = view.title(route.params ?? {});
+    const key = keyOf(route), title = view.title(route.params ?? {});
     let panel = api.getPanel(key);
     if (panel) {
+      if (view.documentKey) panel.api.updateParameters({ route });
       if (options.window === "beside" && reference) placeBeside(panel.id, reference);
     } else if (options.window === "beside" && !compact && api.activePanel?.group.api.location.type === "grid") {
       const current = api.activePanel.group;
@@ -354,11 +371,17 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     }
     panel ??= api.addPanel({ id: key, component: "view", title, params: { route } });
     panel.api.setActive();
+    syncLayout.current();
     if (options.window === "popout") popout(panel.id);
-  }, [byId, compact, popout, placeBeside]);
+  }, [byId, compact, popout, placeBeside, keyOf]);
   const open = useCallback((route: Route, options: OpenOptions = {}) => {
     const api = dock.current;
     if (!api || !viewRegistry.current.has(route.view)) return;
+    if (options.window === "inspect") {
+      setInspection(previous => ({ route, focus: previous?.focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null) }));
+      return;
+    }
+    setInspection(undefined);
     const revision = ++incomingRevision.current;
     if (switching.current) { queuedOpen.current = { route, options }; return; }
     const target = routeScope.current?.(route);
@@ -417,7 +440,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       if (!api.panels.length && !incoming) show(targetHome);
       const fallback = api.activePanel?.id;
       for (const route of carried) show(route);
-      api.getPanel(incoming ? routeKey(incoming) : restored ?? fallback ?? "")?.api.setActive();
+      api.getPanel(incoming ? keyOf(incoming) : restored ?? fallback ?? "")?.api.setActive();
       const queued = queuedOpen.current; queuedOpen.current = undefined;
       switching.current = false;
       syncLayout.current();
@@ -427,11 +450,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   useEffect(() => () => { ++layoutRevision.current; ++incomingRevision.current; }, []);
 
   const workspace = useMemo<WorkspaceApi>(() => ({
-    open, notify: toast, close: (route) => closePanel(routeKey(route)), closeAll, unsaved,
+    open, notify: toast, close: (route) => closePanel(keyOf(route)), closeAll, unsaved,
     transfer: (from, route, input, result) => {
       if (!dock.current?.getPanel(from)) return;
       const id = transfers.current.start(from, input, result), called = { ...route, params: { ...route.params, call: id } };
-      transfers.current.bind(id, routeKey(called)); open(called);
+      transfers.current.bind(id, keyOf(called)); open(called);
     },
     palette: () => setPaletteOpen(true),
     retitle: (id, name) => {
@@ -441,8 +464,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       const title = category && category !== name ? `${category} · ${name}` : name;
       if (panel && panel.api.title !== title) panel.setTitle(title);
     },
-    recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail, workspaces,
-  }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, workspaces, byId]);
+    recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail,
+  }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, byId]);
 
   const tab = useCallback((props: IDockviewPanelHeaderProps) => {
     const id = props.api.id;
@@ -602,7 +625,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               items={favoriteApps.map((a) => ({ id: a.id, label: a.title, icon: a.icon, run: () => applications!.onSelect(a.id) }))} />
             <div className="mt-auto flex flex-col items-center gap-1">
               {rail.assist && railButton({ id: "assist", label: t("Assistant"), icon: <Sparkles />, active: active === routeKey(rail.assist), run: () => open(rail.assist!) })}
-              {workspaces && workspaces.options.length > 1 && <WorkspaceMenu workspaces={workspaces} />}
               {sessionMenu}
             </div>
           </aside>
@@ -651,6 +673,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           {(nav.length > 0 || navigation) && (!compact && navOpen || compact && mobileNavOpen) && (
             <nav aria-label={t("Main")} className={cn("overflow-auto border-r border-border bg-surface p-2",
               compact && "fixed inset-y-9 left-0 z-30 w-[min(19rem,85vw)] shadow-lg")}>
+              {navigation}
               {nav.map((section) => (
                 <div key={section.label} className="mb-3">
                   <div className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted">{section.label}</div>
@@ -666,17 +689,20 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
                   })}
                 </div>
               ))}
-              {navigation}
             </nav>
           )}
           <div className="platform-dock min-h-0 min-w-0 overflow-hidden">
             <DockviewReact defaultRenderer="always" defaultTabComponent={tab} watermarkComponent={watermark} components={components} onReady={onReady} theme={appearance.theme==="dark"?themeDark:themeLight} />
           </div>
         </div>
+        {inspection && <Sheet open onOpenChange={open => { if (!open) setInspection(undefined); }} title={byId.get(inspection.route.view)?.title(inspection.route.params ?? {}) ?? t("Record")} width={560} returnFocus={inspection.focus}>
+          <ViewBoundary onClose={() => setInspection(undefined)}>
+            {byId.get(inspection.route.view)?.render(inspection.route.params ?? {})}
+          </ViewBoundary>
+        </Sheet>}
         {rail && compact && (
           <nav aria-label={t("Platform")} data-ui="chrome" className="flex items-center justify-around border-t border-border bg-surface px-2">
             {railItems.map(railButton)}
-            {workspaces && workspaces.options.length > 1 && <WorkspaceMenu workspaces={workspaces} />}
           </nav>
         )}
       </div>
@@ -703,12 +729,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               ))}
             </Command.Group>
           )}
-          {workspaces && workspaces.options.length > 1 && (
-            <Command.Group heading={t("Workspaces")} className={paletteGroup}>
-              {workspaces.options.map((entry) => <Command.Item key={entry.id} value={`workspace ${entry.title}`} className={paletteItem}
-                onSelect={() => { workspaces.onSelect(entry.id); setPaletteOpen(false); }}>{entry.icon}{entry.title}</Command.Item>)}
-            </Command.Group>
-          )}
+
           {nav.map((section) => (
             <Command.Group key={section.label} heading={section.label} className={paletteGroup}>
               {section.items.map((item) => (
@@ -808,31 +829,6 @@ function RailList({ label, icon, items, empty }: { label: string; icon: ReactNod
               {item.icon}<span className="truncate">{item.label}</span>{item.detail && <span className="ml-auto truncate pl-3 text-xs text-muted">{item.detail}</span>}
             </DropdownMenu.Item>
           ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-/** The projection switch at the bottom of the rail: Operations, Build, Admin. */
-function WorkspaceMenu({ workspaces }: { workspaces: Workspaces }) {
-  const current = workspaces.options.find((o) => o.id === workspaces.current);
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger title={t("Workspaces")} aria-label={`${t("Workspaces")}: ${current?.title ?? ""}`}
-        className="grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover [&_svg]:size-4">
-        {current?.icon ?? <LayoutGrid />}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content side="right" align="end" sideOffset={6} className={menuPanel}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Workspaces")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={workspaces.current} onValueChange={workspaces.onSelect}>
-            {workspaces.options.map((o) => (
-              <DropdownMenu.RadioItem key={o.id} value={o.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
-                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{o.icon}{o.title}
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

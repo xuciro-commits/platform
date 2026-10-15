@@ -176,15 +176,17 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
 
 /**
  * Opens a record by reference — `"pms.reservation/R-1"` or `{ type, id }` —
- * in the view the owning app registers for its type, else the generic record
- * page. Apps link to each other's records without knowing each other (D5).
+ * in a read-only detail sheet. Explicit tab/beside/popout requests use the
+ * owning app's view. Apps link to each other's records without knowing each other (D5).
  */
-export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "beside" | "popout" }) => void {
+export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "beside" | "popout" | "inspect" }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
   return (ref, options) => {
     const { type, id } = typeof ref === "string" ? { type: ref.split("/")[0]!, id: ref.split("/").slice(1).join("/") } : ref;
-    open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options ?? { window: "beside" });
+    if (!options || options.window === "inspect") {
+      open({ view: "record", params: { type, id, inspect: "true" } }, { window: "inspect" });
+    } else open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options);
   };
 }
 
@@ -459,9 +461,9 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         }} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
-        tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); }, actions: task => task.ref?.startsWith("build.dispatch/") ? <Button size="sm" onClick={() => openRecord(task.ref!)}>{t("Review dispatch")}</Button> : null } : undefined}
+        tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); }, actions: task => task.ref?.startsWith("build.dispatch/") ? <Button size="sm" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : null } : undefined}
         actions={(r) => <>
-          <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" }, { window: "beside" })}>{t("Back to inbox")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" })}>{t("Back to inbox")}</Button>
           {(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string") && <Button size="sm" variant="ghost" onClick={() => openRecord(String(r.target ?? r.ref ?? r.subject))}>{t("Open related record")}</Button>}
           <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
           <OpenInMenu type={type} />

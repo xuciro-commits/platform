@@ -246,10 +246,10 @@ FDE 不应是一个集中管理各类编辑器的工具箱，而应是能从零�
 | 采纳：重复对账不应无限形成相同业务事实 | 当前 `confirmation_reconcile.go` 只提交首次差异、观测/错误变化和状态变化；相同结果只推进临时读取间隔，保留第一次差异、人工裁定及重启后的继续读取。原时间戳键不再令相同轮询重复入账；检查与边界归 [ADR-0112 As built](0112-cross-system-coordination.md#5-as-built)。 |
 | 采纳但不泛化：事务表达限制 | `transaction_check.go` 仍要求无条件主体写入，并保守拒绝不能静态区分的同类型目标；运行时另有重复写入检查。按设备切换等具体合法案例放宽，保留逐步骤授权与一次接受；不取消跨权威、重复写入或接受结果大小限制。 |
 | 采纳但限定：构建器表达与可读性 | 事务已有 `TransactionEditor`，并非只能写 JSON。原 ExpressionEditor 已补齐 `round` 等现有编译算子，保留同一 Expr；合成样本仍主要用 JSON。修改相关组件时正常排版；不新建可视化编程框架，不全仓重排。 |
-| 采纳：重复导航与首访菜单 | 当前 Studio 的应用导航、五工作区和 ProjectHome 内重复目录承担重叠任务；Workspace 的 `navOpen` 只在首次挂载读取异步菜单。合并工作区入口与资产树，保留应用上下文和原编辑器；异步菜单首次就绪时打开，尊重成员手动折叠与手机抽屉。实现与检查归 ADR-0108。 |
-| 采纳：查看详情、编辑和比较的打开语义 | `useOpenRecord` 默认 `beside` 确会产生分栏。普通查看沿现有 Sheet/RecordPage 检查面板，正式工作沿页签，比较显式分栏；不把全部页面塞入 Inspector，也不只改默认值为 `tab`。读取权限继续由原记录 owner 检查。 |
-| 采纳但分类：已有功能缺少自然入口 | Automation 是 `build.process` 的一种编辑形态；Decision table 是原 `build.table` 操作；Alert 是对象的通知配置，不能一律添加虚构 AssetKind。按原 owner 提供创建/编辑入口，补 Builder 可达的 Integration health 与 Release history，并保留应用范围。 |
-| 采纳但限定：角色意图与构建应用的体验 | 现有 Operations/Build/Admin 只改变门户分组优先级，不能继续称为独立工作环境；减少这一重复切换。构建应用的 description 应进入原门户。保留统一 Shell、权限与发布工件，不照搬原生行业界面，也不凭一个供暖场景宣称所有角色体验已通过。 |
+| 采纳：重复导航与首访菜单 | Studio 已统一工作区入口和主资产树，删除 ProjectHome/上下文条重复导航；Workspace 在异步菜单首次就绪时显示，保留手动折叠与手机抽屉。应用上下文、原编辑器与输入继续保留，实现与检查归 ADR-0108。 |
+| 采纳：查看详情、编辑和比较的打开语义 | 原 `useOpenRecord` 默认 `beside` 已替换为现有 Sheet/获权 RecordPage 的只读详情。正式工作沿原页签，比较显式分栏；不把全部页面塞入 Inspector，也不只改默认值为 `tab`。读取权限继续由原记录 owner 检查。 |
+| 采纳但分类：已有功能缺少自然入口 | 已补 Builder 的规则、Integration health 与 Release history 入口。Automation 是同一 `flow` 的编辑形态，可创建并加入应用；Decision table / Alert 仍由原共享操作/通知配置持有，不虚构 AssetKind，也不宣称已成为应用包的独立版本成员。 |
+| 采纳但限定：角色意图与构建应用的体验 | 只改变类别顺序的 Rail 工作区切换器已删除，Operations/Build/Admin 作为门户类别筛选；构建应用 description 已进入原门户。保留统一 Shell、权限与发布工件，不照搬原生行业界面，也不凭一个供暖场景宣称所有角色体验已通过。 |
 | 仍需测量：数据规模 | 唯一约束遍历同类型行、版本固定检查、关系扫描/解码及运行/拒绝历史遍历确实存在（`business_constraints.go`、`business_version.go`、`owned_relations.go`、`application_runtime.go`、`business_refusals.go`）。这证明复杂度随数据增长，不能据此宣称已发生生产性能故障。真实点表确定目标密度后测量最常用的提交与读取，只优化实际主要耗时；不更换存储或全量建立索引。 |
 | 否决为当前缺陷：post/journal 未接入、设备派发未落地 | `transaction_steps.go` / `transaction.go` 已执行 post/journal；旧动作新保存转成同一事务，见 [ADR-0100 As built](0100-business-transaction.md#6-as-built--完整业务事务)。Dispatch、Source/Observation 回读和人工处置已有实现与受控环境证据，见 [ADR-0121 As built](0121-device-dispatch.md#as-built)。现场协议/真实设备仍未验证，不能把工程实现等同于客户上线。 |
 | 否决：为统一概念而拆账本、清除所有 JSON、按代码量删除旧功能 | 都缺少当前收益，且可能违反 §9。旧日志读取、原在途实例及尚未被配置应用取代的原生业务继续保留；新业务的旧动作入口已经由同一事务替换，兼容读取不算永久双写。退出仍按 [ADR-0114](0114-retiring-native-apps.md) 和 [Subtraction](../Subtraction.md) 的依赖与历史责任进行。 |

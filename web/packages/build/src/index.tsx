@@ -33,7 +33,7 @@ import { StudioTemplates } from "./workshop/template-ui";
 import { t, type NavSection, type View } from "@platform/ui";
 import { ApplicationScope } from "./projects/application-scope";
 import { StudioNavigation } from "./projects/studio-navigation";
-import { studioApplicationID, studioAreas, studioRoute } from "./projects/studio-model";
+import { studioApplicationID } from "./projects/studio-model";
 import { Activity, BookOpen, Database, Fingerprint, FolderKanban, GitMerge, Hammer, Layers, Plug, Send } from "lucide-react";
 
 const builder = (host: Host) => host.role("build") === "builder";
@@ -52,7 +52,7 @@ const integration = (): NavSection => ({ label: t("Integration"), items: [
 
 const editorViews: View[] = [
   { id: "projects", title: () => t("Applications"), render: () => <ProjectsList /> },
-  { id: "project", title: () => t("Application Studio"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} /> },
+  { id: "project", documentKey: p => p.id ?? "", title: () => t("Application Studio"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} /> },
   { id: "object-type", title: p => p.id ? t("Object type") : t("Model"), render: p => p.id ? <ObjectTypeEditor key={p.id} id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} initialTab={p.tab} /> : <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /> },
   { id: "action-type", title: () => t("Action type"), render: p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} /> : <ActionTypes /> },
   { id: "link-type", title: () => t("Relationships"), render: p => p.id ? <LinkTypeEditor key={p.id} id={p.id} parent={p.parent} child={p.child} via={p.via} /> : <LinkTypes /> },
@@ -106,10 +106,17 @@ export default defineApp({
       { label: t("Release history"), route: { view: "release-history" } },
     ] }];
     const application = studioApplicationID(route);
-    const selected = route?.params?.asset ?? route?.params?.page ?? (route?.view !== "project" ? route?.params?.id ?? route?.params?.object : undefined);
     return [
       { label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] },
-      ...(application ? [{ label: t("Application Studio"), items: studioAreas.map(area => ({ label: t(area.title), icon: <Layers />, route: studioRoute(application, area.id, selected) })) }] : []),
+      { label: t("Shared rules"), items: [
+        { label: t("Decision tables"), route: { view: "decision-table" } },
+        { label: t("Automations"), route: { view: "automation" } },
+        { label: t("Alert rules"), route: { view: "alert" } },
+      ] },
+      { label: t("Delivery"), items: [
+        { label: t("Integration health"), route: { view: "integration-health", params: application ? { application } : undefined } },
+        { label: t("Release history"), route: { view: "release-history", params: application ? { application } : undefined } },
+      ] },
       { label: t("Explore"), items: [{ label: t("Asset Library"), icon: <BookOpen />, route: { view: "catalog" } }] },
     ];
   },

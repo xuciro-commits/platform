@@ -576,7 +576,7 @@ flowchart TD
 
 #### B. 前端与构建器产品体验
 
-一个 Shell、三种权限派生的工作区投影（**Operations / Build / Admin**）与一个按类别组织的 Applications 门户（ADR-0052）。构建者在 Builder 中选择当前应用，在 Model / Behavior / Interface / Assemble 工作区复用原编辑器，在 Verify 中审阅候选、迁移与激活；打开任一资产时保持选中与未保存状态。平台统一规定导航、信息层级、密度、状态色、字体、间距、键盘焦点、浮层与过渡反馈。生成的记录页面是默认入口，不是唯一操作界面。
+一个 Shell 与一个按类别筛选的 Applications 门户（ADR-0052、ADR-0108）。Operations / Build / Admin 是门户筛选，不再另设 Rail 工作区切换器。构建者选择当前应用后，由同一导航切换 Model / Behavior / Interface / Assemble / Verify，并按业务概念选择资产；原编辑器继续保留页签与未保存输入。普通记录查看使用只读详情侧栏，正式处理打开原应用页签，比较由成员显式分栏。平台统一规定导航、信息层级、密度、状态色、字体、间距、键盘焦点、浮层与过渡反馈。生成的记录页面是默认入口，不是唯一操作界面。
 
 页面编辑器（Workshop 应用）的布局文档、页面变量、组件契约与迁移边界见 [ADR-0046 §5–§6](ADR/0046-application-studio-fusion.md)；其 §3 的"Application Studio"顶层结构已被 ADR-0052 取代。
 

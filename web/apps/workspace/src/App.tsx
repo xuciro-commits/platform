@@ -5,20 +5,20 @@
 // through defineApp. This file is the composition root: the session (who), the
 // host (what they may read and decide) and the shell (where it is shown).
 import "./i18n";
-import { ApplicationSessionsProvider, categoryOf, HostContext, type AppUI, type Me } from "@platform/app";
+import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Bookmark, Gauge, Hammer, LayoutGrid, SlidersHorizontal, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Bookmark, Gauge, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chromeViews } from "./chrome";
 import { availablePackages, packages, type Package } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
 import { HostOnly, type HostAdmin } from "./HostOnly";
 import { Recovery, ReleaseInformation, SignInProblem } from "./session/Problems";
-import { legacyProjection, resolveLegacyRoute, shellViews } from "./shell/legacy";
-import { availableProjections, categories, portalEntry, projections, type Projection } from "./shell/registry";
+import { resolveLegacyRoute, shellViews } from "./shell/legacy";
+import { categories, portalEntry } from "./shell/registry";
 import { pageApplication, tenantApps } from "./tenantApps";
 import { routeApplication } from "./shell/navigation";
 
@@ -199,12 +199,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // category; and the projections they may switch between. Both only group
   // what the host already allowed.
   const portal = all.map(portalEntry);
-  const held = availableProjections(all);
-  const projectionKey = selectionScope ? `${selectionScope}:projection` : undefined;
-  const requestedProjection = legacyProjection(activeRoute) ?? (activeRoute?.params?.workspace as Projection | undefined);
-  const projection: Projection = (requestedProjection && held.includes(requestedProjection) ? requestedProjection : undefined)
-    ?? (projectionKey && held.includes(remembered(projectionKey) as Projection) ? remembered(projectionKey) as Projection : undefined)
-    ?? (app && held.find((id) => projections.find((p) => p.id === id)!.categories.includes(categoryOf(app)))) ?? "operations";
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);
     if (!target) return;
@@ -212,12 +206,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     select(id);
     // Workspace restores the target's active tab, or its home when no layout exists.
   };
-  const chooseProjection = (id: string) => {
-    if (projectionKey) remember(projectionKey, id);
-    location.hash = routeToHash({ view: "portal", params: { workspace: id } });
-  };
-  const projectionIcon: Record<Projection, ReactNode> = { operations: <LayoutGrid />, build: <Hammer />, admin: <SlidersHorizontal /> };
-
   const sessionOptions = [
     ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: `${t("Tenant")} ${tenant}` })) : []),
     ...(signedIn ? [{ id: "sign-out", label: t("Sign out {email}", { email: signedIn.session.email }) }]
@@ -247,7 +235,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         rail={{ home: { view: "home" }, applications: { view: "portal" }, notifications: { route: { view: "notifications" }, unread },
           ...(host.can("agent.run.start") ? { assist: { view: "assistant" } } : {}) }}
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
-        workspaces={{ options: held.map((id) => ({ id, title: projections.find((p) => p.id === id)!.title(), icon: projectionIcon[id] })), current: projection, onSelect: chooseProjection }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute} onEmpty={() => setActiveRoute(undefined)}
         navigation={app?.navigation?.(activeRoute)}

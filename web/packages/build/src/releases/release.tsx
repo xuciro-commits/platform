@@ -129,7 +129,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
   const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
-  const records = (query.isError ? [] : query.data?.records ?? []).filter(record => (kind === "app" || matchesResourceKind(resourceKinds.find(item => item.kind === kind)!, record)) && (!scope || (kind === "app" ? record.id === scope : !!scopedApplication && held.has(refKey(resourceRef(resourceKinds.find(item => item.kind === kind)!, record.name))))));
+  const records = (query.isError ? [] : query.data?.records ?? []).filter(record => (kind === "app" || kind === "flow" || matchesResourceKind(resourceKinds.find(item => item.kind === kind)!, record)) && (!scope || (kind === "app" ? record.id === scope : !!scopedApplication && held.has(refKey(resourceRef(resourceKinds.find(item => item.kind === kind)!, record.name))))));
   const functionNames = (review?.included ?? []).filter((ref) => ref.app === "build" && ref.kind === "function").map((ref) => ref.name);
   const localPlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
   const eligiblePlans = [...localPlans, ...assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "evaluation-set" && !localPlans.some(plan => plan.name === asset.ref.name)).map(asset => ({id:asset.ref.name,title:asset.ref.name}))];

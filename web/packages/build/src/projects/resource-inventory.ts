@@ -26,7 +26,9 @@ export function useProjectResources(project?: Project) {
       items.push(resolve(kindOfType("build.page")!, { app: "build", kind: "page", name }, pages.find((page) => page.name === name && !page.archived), inventories.page?.isSuccess === true));
     }
     for (const ref of project.resources ?? []) {
-      const kind = resourceKinds.find((item) => (item.ref ?? item.kind) === ref.kind);
+      const candidates = resourceKinds.filter((item) => (item.ref ?? item.kind) === ref.kind);
+      const kind = candidates.find(kind => (inventories[kind.kind]?.data?.records ?? []).some(record =>
+        !record.archived && matchesResourceKind(kind, record) && refKey(resourceRef(kind, record.name)) === refKey(ref))) ?? candidates[0];
       if (!kind) continue;
       const record = (inventories[kind.kind]?.data?.records ?? []).find((item) => !item.archived && matchesResourceKind(kind, item) && refKey(resourceRef(kind, item.name)) === refKey(ref));
       items.push(resolve(kind, ref, record, inventories[kind.kind]?.isSuccess === true));

@@ -22,12 +22,6 @@ export const projections: { id: Projection; title: () => string; categories: Pla
   { id: "admin", title: () => t("Admin"), categories: ["govern", "operate"] },
 ];
 
-/** The projections this member can use: Operations always; Build and Admin when they hold an application in those categories. */
-export function availableProjections(apps: AppUI[]): Projection[] {
-  const held = new Set(apps.map(categoryOf));
-  return projections.filter((p) => p.id === "operations" || p.categories.some((c) => c !== "ontology" && held.has(c))).map((p) => p.id);
-}
-
 /** The portal entry of an app the workspace loaded. */
 export const portalEntry = (app: AppUI): PlatformApplication =>
   ({ id: app.id, title: app.title, icon: app.icon, description: app.description, category: categoryOf(app), home: app.home });

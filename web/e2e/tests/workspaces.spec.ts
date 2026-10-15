@@ -100,6 +100,19 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
     await business.reload();
     await expect(business.getByRole("heading", { name: "Receiving workspace", exact: true })).toBeVisible();
     await expect(operator.decide("build.object.edit", { type: "build.object", id: object.id }, { title: "Unauthorized" })).rejects.toThrow(/POLICY_DENIED/);
+    await operator.open(business, "/records");
+    await business.getByRole("combobox", { name: "Entity type", exact: true }).selectOption(object.type);
+    const beforeInspection = business.url();
+    await business.getByRole("row").filter({ hasText: "IN-M1" }).click();
+    const inspection = business.getByRole("dialog", { name: recordID, exact: true });
+    await expect(inspection.getByRole("heading", { name: "IN-M1", exact: true })).toBeVisible();
+    expect(business.url()).toBe(beforeInspection);
+    await expect(business.getByRole("tab", { name: recordID, exact: true })).toHaveCount(0);
+    await inspection.getByRole("button", { name: "Open record", exact: true }).click();
+    await expect(inspection).not.toBeVisible();
+    await expect.poll(() => new URL(business.url()).hash.startsWith("#/record?")).toBe(true);
+    await expect(business.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+    await operator.open(business, `/page?app=build&kind=page&name=${pageName}&application=build:${appName}`);
     if (process.env.PLATFORM_SCREENSHOTS) {
       await business.screenshot({ path: testInfo.outputPath("business-receiving.png"), fullPage: true });
       await business.setViewportSize({ width: 390, height: 844 });

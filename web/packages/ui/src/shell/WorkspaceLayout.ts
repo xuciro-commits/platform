@@ -7,14 +7,14 @@ type Group = Exclude<Node["data"], Node[]>;
 /** Rewrite route identities and their group references together. Used for
  * incoming aliases and for app-only persistence; never mutate Dockview's live
  * layout or keep a second editor/draft store. */
-export function rewriteLayout(layout: SerializedDockview, map: (route: Route, panel: string) => Route | undefined): SerializedDockview {
+export function rewriteLayout(layout: SerializedDockview, map: (route: Route, panel: string) => Route | undefined, keyOf: (route: Route) => string = routeKey): SerializedDockview {
   const panels: SerializedDockview["panels"] = Object.create(null);
   const keys = new Map<string, string>();
   for (const [id, panel] of Object.entries(layout.panels)) {
     const original = panel.params?.route as Route | undefined;
     const route = original && map(original, id);
     if (!route) continue;
-    const key = routeKey(route);
+    const key = keyOf(route);
     keys.set(id, key);
     panels[key] ??= { ...panel, id: key, params: { ...panel.params, route } };
   }
@@ -59,7 +59,7 @@ export function rewriteLayout(layout: SerializedDockview, map: (route: Route, pa
 
 /** Resolve only saved/incoming routes, not the canonical routes apps produce.
  * A failed compatibility read leaves the old tab and its refusal intact. */
-export async function resolveLayout(layout: SerializedDockview, resolve: (route: Route) => Route | Promise<Route>, exists: (view: string) => boolean): Promise<SerializedDockview> {
+export async function resolveLayout(layout: SerializedDockview, resolve: (route: Route) => Route | Promise<Route>, exists: (view: string) => boolean, keyOf: (route: Route) => string = routeKey): Promise<SerializedDockview> {
   const routes = new Map<string, Route>();
   await Promise.all(Object.entries(layout.panels).map(async ([id, panel]) => {
     const original = panel.params?.route as Route | undefined;
@@ -68,5 +68,5 @@ export async function resolveLayout(layout: SerializedDockview, resolve: (route:
     try { route = await resolve(original); } catch { /* preserve an unavailable original route */ }
     if (exists(route.view)) routes.set(id, route);
   }));
-  return rewriteLayout(layout, (_route, id) => routes.get(id));
+  return rewriteLayout(layout, (_route, id) => routes.get(id), keyOf);
 }

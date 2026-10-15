@@ -67,7 +67,7 @@ function NewResourceMenu({ onCreated, children, disabled, area }: { area?: strin
   if (role("build") !== "builder") return null;
   const sections = area ? studioAreas.filter(section => section.id === area) : studioAreas;
   const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && creators[kind.kind]?.available)
-    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => creators[kind.kind]!.take() })));
+    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) })));
   return <>
     <ActionMenu label={t("New resource")} variant="primary" icon={<Plus />} commands={commands}>{children ?? t("New")}</ActionMenu>
     {Object.values(creators).map((creator, index) => <span key={index}>{creator.dialog}</span>)}
@@ -91,6 +91,10 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   const [visited, setVisited] = useState<Section[]>([initialTab]);
   const visibleView = useViewVisible();
   const setTab = (tab: Section) => { selectTab(tab); setVisited(old => old.includes(tab) ? old : [...old, tab]); };
+  useEffect(() => {
+    setTab(initialTab);
+    if (initialSelected !== undefined) setSelected(initialSelected);
+  }, [activeArea, initialSection, initialSelected, initialPlan]);
   const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
@@ -212,7 +216,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   const installed = definitions.find((d) => d.ref.app === "build" && d.ref.kind === "app" && d.ref.name === project?.name);
   const areaKinds = studioAreas.find(area => area.id === activeArea)!.kinds as readonly string[];
   const visible = owned.filter(item => (tab === "concepts" || areaKinds.includes(item.ref.kind)) && `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
-  const current = owned.find(item => refKey(item.ref) === selected || item.record?.id === selected || item.ref.name === selected);
+  const current = selected ? owned.find(item => refKey(item.ref) === selected || item.record?.id === selected || item.ref.name === selected) : undefined;
   const selectedKey = current ? refKey(current.ref) : selected;
   const dependencyQuery = useDependencies(current?.ref, undefined, !!current?.installed);
   if (!project) return <WorkbenchFrame title={t("Project")}>{query.isError ? t("The project could not be loaded.") : t("Loading…")}</WorkbenchFrame>;
@@ -262,9 +266,6 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
         {createdResource && !pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("The resource was created but is not confirmed in this project. Retry adding the same record; do not create another.")} />
           <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
             <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>}
-        <div role="tablist" aria-label={t("Application workspaces")} className="flex flex-wrap gap-1 border-b border-border px-3 py-2">
-          {studioAreas.map(item => <Button variant={activeArea === item.id ? "primary" : "ghost"} key={item.id} role="tab" aria-selected={activeArea === item.id} onClick={() => open(studioRoute(id, item.id, selected))}>{t(item.title)}</Button>)}
-        </div>
         <div role="tablist" aria-label={t("Project sections")} className="flex flex-wrap gap-1 border-b border-border px-3 py-1">
           {(["resources", ...(activeArea === "verify" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => <Button variant="ghost" size="sm" key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
         </div>
@@ -275,7 +276,6 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
         </div>}
         {tab === "resources" && <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="grid content-start gap-4">
-            <div role="region" aria-label={t("Workspace assets")} className="rounded-md border border-border">{tree}</div>
             {current ? <div className="rounded-md border border-border p-4">
               <div className="flex items-center gap-2">{kindIcon[current.kind.kind]}<h2 className="min-w-0 flex-1 truncate font-semibold">{current.title}</h2><DraftStatus state={current.record?.state} /></div>
               <p className="mt-1 text-xs text-muted">{t(current.kind.label)} · {current.ref.name}</p>

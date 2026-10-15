@@ -6,7 +6,7 @@ import "./i18n";
 import { Observations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
-  Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
+  Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, RecordPage, Select, StatusTag, defineStatuses, submissionStatuses,
   useWorkspace, type ColumnDef, type InboxTask, type View,
  t } from "@platform/ui";
 import { useState, type ReactNode } from "react";
@@ -28,6 +28,14 @@ function StudioReference({ application, children }: { application?: string; chil
 const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "warning" }, approved: { label: t("Approved"), tone: "success" },
   rejected: { label: t("Rejected"), tone: "danger" }, refused: { label: t("Refused when run"), tone: "danger" }, withdrawn: { label: t("Withdrawn"), tone: "neutral" } });
 
+function RecordInspection({ type, id }: { type: string; id: string }) {
+  const { source } = useHost();
+  const openRecord = useOpenRecord();
+  return <RecordPage key={`${source.scope}:${type}/${id}`} source={source} type={type} id={id} recordTabs={["properties", "links", "history"]}
+    onOpen={(type, record) => openRecord({ type, id: record.id })}
+    actions={() => <Button onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open record")}</Button>} />;
+}
+
 function MyInbox() {
   const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
   const { decide } = useHost();
@@ -36,11 +44,11 @@ function MyInbox() {
   return (
     <>
       <PageHeader title={t("Inbox")} description={t("Approvals waiting for you and tasks offered to you, from every app.")} />
-      <Inbox tasks={tasks} onOpen={(task) => task.ref && openRecord(task.ref)}
+      <Inbox tasks={tasks} onOpen={(task) => task.ref && openRecord(task.ref, { window: "tab" })}
         actions={(task) => approval(task) ? <>
           <Button size="sm" variant="primary" onClick={() => void decide("work.approval.approve", { type: "work.approval", id: approval(task)! }, {})}>{t("Approve")}</Button>
           <Button size="sm" variant="danger" onClick={() => void decide("work.approval.reject", { type: "work.approval", id: approval(task)! }, {})}>{t("Reject")}</Button>
-        </> : task.ref?.startsWith("build.dispatch/") ? <Button size="sm" variant="primary" onClick={() => openRecord(task.ref!)}>{t("Review dispatch")}</Button> : <>
+        </> : task.ref?.startsWith("build.dispatch/") ? <Button size="sm" variant="primary" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : <>
           {!task.assignee && <Button size="sm" onClick={() => void decide("work.task.claim", { type: "work.task", id: task.id }, {})}>{t("Take")}</Button>}
           {task.answers?.length // a flow's question: each answer takes its own path (ADR-0020)
             ? task.answers.map((a, i) => <Button key={a} size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: task.id }, { answer: a })}>{task.answerTitles?.[i] ?? a}</Button>)
@@ -223,7 +231,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title || p.name || t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
-  { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
+  { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => p.inspect === "true" ? <RecordInspection type={p.type ?? ""} id={p.id ?? ""} /> : <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "operation-run", title: (p) => p.id ?? t("Run"), render: (p) => <OperationRunView id={p.id ?? ""} application={p.application} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} application={p.application} /> },

@@ -18,6 +18,7 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "query", type: "build.query", view: "query", label: "Query", plural: "Queries", ref: "query" },
   { kind: "page", type: "build.page", view: "module", label: "Page", plural: "Pages", ref: "page" },
   { kind: "flow", type: "build.process", view: "flow", label: "Logic flow", plural: "Logic flows", ref: "flow" },
+  { kind: "automation", type: "build.process", view: "automation", label: "Automation", plural: "Automations", ref: "flow" },
   { kind: "function", type: "build.function", view: "function", label: "AI function", plural: "AI functions", ref: "function" },
   { kind:"evaluation-set",type:"build.testplan",view:"evaluation-set",label:"Evaluation set",plural:"Evaluation sets",ref:"evaluation-set" },
   { kind: "test-plan", type: "build.testplan", view: "test-plan", label: "Business test plan", plural: "Business test plans", ref: "test-plan" },
@@ -36,7 +37,7 @@ export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.ty
 
 /** Object and Flow identities include their authority prefix; the other Build names are local to their owner. */
 export function resourceRef(kind: ResourceKindInfo, name: string): Api.AssetRef {
-  return { app: "build", kind: kind.ref ?? kind.kind, name: kind.kind === "object" || kind.kind === "flow" ? `build.${name}` : name };
+  return { app: "build", kind: kind.ref ?? kind.kind, name: ["object", "flow", "automation"].includes(kind.kind) ? `build.${name}` : name };
 }
 export const refKey = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
 
@@ -47,7 +48,11 @@ export function resourceRoute(kind: ResourceKindInfo, id: string, project?: stri
   return { view: kind.view, params: { id, ...(project ? { application: project } : {}) } };
 }
 
-export type ResourceRecord = { id: string; name: string; title: string; state?: string; version?: number; archived?: boolean; object?: string; actions?: { name: string; title?: string }[]; when?: string; manual?: boolean; evaluation?: unknown[]; roots?: Api.AssetRef[]; changed?: { at?: string; by?: string } | string };
+export type ResourceRecord = { id: string; name: string; title: string; state?: string; version?: number; archived?: boolean; object?: string; kind?: string; actions?: { name: string; title?: string }[]; when?: string; manual?: boolean; evaluation?: unknown[]; roots?: Api.AssetRef[]; changed?: { at?: string; by?: string } | string };
 
 /** Ordinary plans and measured AI evaluations share their original record owner. */
-export const matchesResourceKind = (kind: ResourceKindInfo, record: { evaluation?: unknown[]; roots?: Api.AssetRef[] }) => kind.kind === "evaluation-set" ? !!record.evaluation?.length : kind.kind !== "test-plan" || !record.evaluation?.length && !!record.roots?.length;
+export const matchesResourceKind = (kind: ResourceKindInfo, record: { kind?: string; evaluation?: unknown[]; roots?: Api.AssetRef[] }) => {
+  if (kind.kind === "automation") return record.kind === "automation";
+  if (kind.kind === "flow") return record.kind !== "automation";
+  return kind.kind === "evaluation-set" ? !!record.evaluation?.length : kind.kind !== "test-plan" || !record.evaluation?.length && !!record.roots?.length;
+};

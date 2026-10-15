@@ -35,12 +35,13 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
   const { me } = useHost();
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState<string>(projection ?? "all");
-  const lead = projections.find((p) => p.id === only)?.categories;
+  const lead: readonly string[] | undefined = projections.find((p) => p.id === only)?.categories;
   const apps = useMemo(() => {
     const text = query.trim().toLowerCase();
-    return (applications?.apps ?? []).filter((a) => !text || `${a.title} ${a.description ?? ""} ${a.id}`.toLowerCase().includes(text));
-  }, [applications?.apps, query]);
-  const ordered = [...categories].sort((a, b) => (lead ? Number(lead.includes(b.id)) - Number(lead.includes(a.id)) : 0));
+    return (applications?.apps ?? []).filter(a => (!lead || lead.includes(a.category)) && (!text || `${a.title} ${a.description ?? ""} ${a.id}`.toLowerCase().includes(text)));
+  }, [applications?.apps, query, only]);
+  const ordered = categories.filter(category => !lead || lead.includes(category.id));
+  const starred = apps.filter(app => favorites.includes(app.id));
   const role = (id: string) => me.apps.find((e) => e.id === id)?.role;
   return (
     <>
@@ -53,11 +54,11 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
           ))}
         </div>
       </div>
-      {favorites.length > 0 && !query && (
+      {starred.length > 0 && !query && (
         <div className="mb-5">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("Favorites")}</h2>
           <div className="grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
-            {apps.filter((a) => favorites.includes(a.id)).map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}
+            {starred.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}
           </div>
         </div>
       )}

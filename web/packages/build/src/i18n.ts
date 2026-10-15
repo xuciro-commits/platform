@@ -2403,6 +2403,7 @@ register("zh-CN", {
   "Ungroup": "取消分组",
   "Use layout groups to arrange this widget in rows or columns.": "通过布局组将此组件纵向排列或横向分栏。",
   "Delivery": "交付",
+  "Shared rules": "共享规则",
   "Open records": "打开业务记录",
   "Open published page": "打开已发布页面",
   "Create application": "创建应用",

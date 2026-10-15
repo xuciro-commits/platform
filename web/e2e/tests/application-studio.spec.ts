@@ -41,7 +41,8 @@ test("one application retains drafts across five workspaces and delivers grouped
   const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
   if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
   await navigation.getByRole("button", { name: "Interface", exact: true }).click();
-  await expect(page.getByRole("tab", { name: "Interface", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(navigation.getByRole("button", { name: "Interface", exact: true })).toHaveAttribute("aria-current", "page");
+  await navigation.getByRole("button", { name: "Model", exact: true }).click();
   await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: /^Service case/ }).click();
   await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
@@ -54,7 +55,7 @@ test("one application retains drafts across five workspaces and delivers grouped
 
   const pageDraft = await builder.page({ title: "Service desk", object: `build.${objectName}`, sections: [{ id: "initial", widget: "text", configVersion: 1, text: "Service desk" }] });
   // Add existing uses the same membership decision as creating a page here.
-  await context.getByRole("button", { name: "Interface", exact: true }).click();
+  await navigation.getByRole("button", { name: "Interface", exact: true }).click();
   await page.getByRole("combobox", { name: "Add existing resource", exact: true }).selectOption(JSON.stringify({ kind: "page", id: pageDraft.id }));
   await expect.poll(async () => (await builder.record("build.app", application.id)).pages).toContain(pageDraft.name);
   await sections.getByRole("tab", { name: "Business concepts", exact: true }).click();
@@ -72,17 +73,19 @@ test("one application retains drafts across five workspaces and delivers grouped
   expect(await builder.record("build.object", objectID)).toEqual(beforeMove);
 
   await navigation.getByRole("button", { name: "Verify", exact: true }).click();
+  await expect(page.getByRole("tab", { name: /^Application Studio/ })).toHaveCount(1);
   const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await verify.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
   await verify.getByRole("button", { name: "Check joint candidate", exact: true }).click();
   await verify.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await verify.getByRole("button", { name: "Activate release", exact: true }).click();
-  await expect(verify.getByText("Current content version", { exact: true })).toBeVisible();
+  await expect(verify.getByText("Release active for operators.", { exact: false })).toBeVisible();
   const delivered = await operator.definitions<any>();
   const root = delivered.find(definition => definition.ref.kind === "app" && definition.ref.name === application.name);
   expect(root.application.concepts[0].title).toBe("Customer service");
   expect(delivered.some(definition => definition.ref.name === `build.${objectName}.${beforeMove.actions[0].name}`)).toBe(true);
 
+  await navigation.getByRole("button", { name: "Model", exact: true }).click();
   await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: /^Service case/ }).click();
   await page.getByRole("combobox", { name: "Related assets", exact: true }).selectOption(`build/action/build.${objectName}.${beforeMove.actions[0].name}`);
   await expect(page.getByRole("heading", { name: beforeMove.actions[0].title, exact: true })).toBeVisible();

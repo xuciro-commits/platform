@@ -35,6 +35,7 @@ const views: View[] = [
   { id: "flow", title: (params) => `Flow ${params.id ?? "list"}`, render: (params) => <InputDraftProvider isolated scope={params.id}><Draft id={params.id ?? "list"} /></InputDraftProvider> },
   { id: "knowledge", title: () => "Documents", render: () => <Entry title="Documents" /> },
   { id: "home", title: () => "Home", render: () => <Entry title="Home" /> },
+  { id: "project", documentKey: p => p.id ?? "", title: () => "Application Studio", render: p => <Entry title={`Project ${p.id} ${p.area}`} /> },
 ];
 const scopeOf = (route: Route) => route.view === "flow" ? "build" : route.view === "knowledge" ? "knowledge" : undefined;
 const apps = [
@@ -64,6 +65,53 @@ const start = async (props: Parameters<typeof Shell>[0] = {}) => {
   return await screen.findByRole("textbox", { name: "Draft A" });
 };
 const choose = (id: string) => act(() => api.applications!.onSelect(id));
+
+test("inspection preserves the active task and explicit comparison creates a split", async () => {
+  const input = await start();
+  fireEvent.change(input, { target: { value: "keep A" } });
+  input.focus();
+  act(() => api.open({ view: "knowledge" }, { window: "inspect" }));
+  const details = await screen.findByRole("dialog", { name: "Documents" });
+  expect(observed.dock!.panels).toHaveLength(1);
+  expect(observed.dock!.groups).toHaveLength(1);
+  expect(api.applications!.current).toBe("build");
+  expect(location.hash).toBe("#/flow?id=A");
+  fireEvent.click(within(details).getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Documents" })).toBeNull());
+  expect((input as HTMLInputElement).value).toBe("keep A");
+  act(() => api.open({ view: "flow", params: { id: "B" } }, { window: "beside" }));
+  await screen.findByLabelText("Draft B");
+  expect(observed.dock!.groups).toHaveLength(2);
+  expect((input as HTMLInputElement).value).toBe("keep A");
+});
+
+test("the first asynchronous navigation opens and later refreshes preserve manual collapse", async () => {
+  const props = { product: "Navigation", storageKey: "workspace:async-nav", views, home: { view: "home" } };
+  const result = render(<Workspace {...props} nav={[]} />);
+  await screen.findByLabelText("Draft A");
+  const navigation = [{ label: "Cases", items: [{ label: "Documents", route: { view: "knowledge" } }] }];
+  result.rerender(<Workspace {...props} nav={navigation} />);
+  expect(screen.getByRole("navigation", { name: "Main" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Toggle navigation" }));
+  result.rerender(<Workspace {...props} nav={[...navigation]} />);
+  expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Toggle navigation" }).getAttribute("aria-expanded")).toBe("false");
+});
+
+test("application navigation reuses its document while different applications keep separate tabs", async () => {
+  await start();
+  act(() => api.open({ view: "project", params: { id: "one", area: "model" } }));
+  await screen.findByRole("heading", { name: "Project one model" });
+  act(() => api.open({ view: "project", params: { id: "one", area: "verify" } }));
+  await screen.findByRole("heading", { name: "Project one verify" });
+  expect(observed.dock!.panels).toHaveLength(2);
+  expect(location.hash).toBe("#/project?area=verify&id=one");
+  act(() => api.open({ view: "project", params: { id: "two", area: "model" } }));
+  await screen.findByRole("heading", { name: "Project two model" });
+  expect(observed.dock!.panels).toHaveLength(3);
+  act(() => api.close({ view: "project", params: { id: "one", area: "model" } }));
+  expect(observed.dock!.panels).toHaveLength(2);
+});
 
 test("switching applications asks once for all local drafts; cancellation keeps raw input, selection and URL", async () => {
   const selected = vi.fn();

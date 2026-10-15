@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:53c28055fe1a46c3",
+  "revision": "sha256:9704414bddcfa86e",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2070,13 +2070,6 @@
           "isSlot": false
         },
         {
-          "name": "workspaces",
-          "type": "Workspaces",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
           "name": "rail",
           "type": "Rail",
           "optional": true,
@@ -2131,13 +2124,14 @@
       ],
       "composed": [
         "ui/button",
-        "ui/dialog"
+        "ui/dialog",
+        "ui/sheet"
       ],
       "relatedTypes": [
         {
           "name": "View",
           "kind": "type",
-          "signature": "export type View = {\n  id: string;\n  /** Tab title for a route of this view, e.g. the entity's code. */\n  title: (params: Record<string, string>) => string;\n  icon?: ReactNode;\n  render: (params: Record<string, string>) => ReactNode;\n};"
+          "signature": "export type View = {\n  id: string;\n  /** Tab title for a route of this view, e.g. the entity's code. */\n  title: (params: Record<string, string>) => string;\n  icon?: ReactNode;\n  render: (params: Record<string, string>) => ReactNode;\n  /** Navigation within one document can change without opening another tab. */\n  documentKey?: (params: Record<string, string>) => string;\n};"
         },
         {
           "name": "NavSection",
@@ -2163,11 +2157,6 @@
           "name": "Applications",
           "kind": "type",
           "signature": "export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };"
-        },
-        {
-          "name": "Workspaces",
-          "kind": "type",
-          "signature": "export type Workspaces = { options: { id: string; title: string; icon?: ReactNode }[]; current: string; onSelect: (id: string) => void };"
         },
         {
           "name": "Rail",
@@ -13410,7 +13399,8 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
-      "web/packages/app/src/widgets/RecordDetails.tsx"
+      "web/packages/app/src/widgets/RecordDetails.tsx",
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "ui/chart": [
       "web/packages/app/src/index.tsx",
@@ -13445,6 +13435,7 @@
     ],
     "ui/sheet": [
       "web/packages/app/src/pages/sections.tsx",
+      "web/packages/ui/src/shell/Workspace.tsx",
       "web/apps/pms-desk/src/App.tsx"
     ],
     "ui/application-header": [
@@ -14054,8 +14045,7 @@
         "WorkbenchPanel",
         "WorkbenchProblem",
         "WorkbenchSaving",
-        "WorkbenchTab",
-        "Workspaces"
+        "WorkbenchTab"
       ]
     },
     "@platform/app": {
