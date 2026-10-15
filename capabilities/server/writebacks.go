@@ -42,7 +42,8 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
 		books := strings.HasPrefix(effect.Event, "journal/") && effect.Endpoint == build.BooksEndpoint
 		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		if effect.App != build.ID || !writeback && !books && !confirmation {
+		dispatch := effect.Event == build.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
+		if effect.App != build.ID || !writeback && !books && !confirmation && !dispatch {
 			continue
 		}
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
@@ -84,7 +85,7 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 		if err != nil {
 			continue
 		}
-		if w.On == "confirmation" || w.Schema() != schema {
+		if w.On == "confirmation" || w.On == "dispatch" || w.Schema() != schema {
 			continue
 		}
 		conn, ok := platform.Get[build.Connection](c, w.Connection)
@@ -126,24 +127,36 @@ func (t *Tenant) connectionEndpoints() []*Endpoint {
 
 // sendWriteback makes one attempt with the frozen request: the connection's
 // secret as Authorization, the effect id as Idempotency-Key.
-func (t *Tenant) sendWriteback(x platform.Effect) platform.Outcome {
+func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 	sum := sha256.Sum256([]byte(x.Body))
-	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
+	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
 	var req build.WritebackRequest
 	if json.Unmarshal([]byte(x.Body), &req) != nil {
 		out.Result, out.Detail = "rejected", "the request is unreadable"
 		return out
 	}
+	defer func() {
+		if req.Dispatch != "" && !req.SafeRetry && out.Result == "retry" {
+			out.Result, out.Detail = "unknown", "This command cannot be resent automatically: "+out.Detail
+		}
+	}()
 	u, err := url.Parse(req.URL)
 	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && req.AllowPrivate) {
 		out.Result, out.Detail = "rejected", "only https addresses (http when private addresses are allowed)"
 		return out
 	}
 	body, _ := json.Marshal(req.Body)
-	r, _ := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
+	r, err := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
+	if err != nil {
+		out.Result, out.Detail = "rejected", "the request method or address is invalid"
+		return out
+	}
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Accept", "application/json")
 	r.Header.Set("Idempotency-Key", x.ID)
+	if req.Dispatch != "" {
+		r.Header.Set("Idempotency-Key", req.DispatchKey)
+	}
 	if req.Secret != "" {
 		v, ok := t.secret(req.Secret)
 		if !ok {

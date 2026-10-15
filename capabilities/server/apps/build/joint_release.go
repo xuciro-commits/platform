@@ -142,6 +142,9 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	if err == nil {
 		recordAssets, err = b.bindConfirmationAssets(recordAssets)
 	}
+	if err == nil {
+		recordAssets, err = b.bindDispatchAssets(recordAssets)
+	}
 	if err != nil {
 		return result, err
 	}

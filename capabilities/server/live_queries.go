@@ -35,6 +35,9 @@ func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
 		return true
 	}
+	if strings.HasPrefix(p, "/v1/dispatches/") && strings.HasSuffix(p, "/targets") {
+		return true
+	}
 	if strings.HasPrefix(p, "/v1/capabilities/") || strings.HasPrefix(p, "/v1/releases/candidates/") {
 		return true
 	}
@@ -51,7 +54,7 @@ func liveReadAllowed(p string) bool {
 	return slices.Contains([]string{"/v1/authz/explain", "/v1/ai/vendors", "/v1/releases/active", "/v1/releases/candidates", "/v1/page-model/rules"}, p)
 }
 func liveOperationRead(p string) bool {
-	return strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage"}, p)
+	return strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) || strings.HasPrefix(p, "/v1/dispatches/") && strings.HasSuffix(p, "/targets") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage"}, p)
 }
 
 type liveCapture struct {

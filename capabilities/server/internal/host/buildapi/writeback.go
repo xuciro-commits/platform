@@ -73,6 +73,9 @@ func (w Writeback) Schema() string { return w.Object + "." + w.On }
 type WritebackRequest struct {
 	Connection        string         `json:"connection,omitempty"`
 	Confirmation      string         `json:"confirmation,omitempty"`
+	Dispatch          string         `json:"dispatch,omitempty"`
+	DispatchKey       string         `json:"dispatchKey,omitempty"`
+	SafeRetry         bool           `json:"safeRetry,omitempty"`
 	Party             string         `json:"party,omitempty"`
 	Compensates       string         `json:"compensates,omitempty"`
 	Version           int            `json:"version,omitempty"`
@@ -81,6 +84,7 @@ type WritebackRequest struct {
 	Result            []SourceField  `json:"result,omitempty"`
 	Writeback         string         `json:"writeback"`
 	Method            string         `json:"method"`
+	Path              string         `json:"path,omitempty"`
 	URL               string         `json:"url"`
 	Secret            string         `json:"secret,omitempty"`
 	AllowPrivate      bool           `json:"allowPrivate,omitempty"`
@@ -139,7 +143,7 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 	if method == "" {
 		method = "POST"
 	}
-	return WritebackRequest{Connection: conn.ID, Version: 1, Object: w.Object, DefinitionVersion: ValueDefinitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}, nil
+	return WritebackRequest{Connection: conn.ID, Version: 1, Object: w.Object, DefinitionVersion: ValueDefinitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, Path: path, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}, nil
 }
 
 // Fields are what the answer writes onto the record, by the Result mapping.

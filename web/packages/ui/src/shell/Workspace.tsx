@@ -296,12 +296,26 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const [navOpen, setNavOpen] = useState(nav.length > 0);
   const [compact, setCompact] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 639px)").matches);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const compactGroup = useRef(false);
   useEffect(() => {
     const media = matchMedia("(max-width: 639px)");
     const changed = () => { setCompact(media.matches); setMobileNavOpen(false); };
     media.addEventListener("change", changed);
     return () => media.removeEventListener("change", changed);
   }, []);
+  // Keep desktop splits intact while showing one full-width group on a phone.
+  useEffect(() => {
+    const api = dock.current, panel = api?.activePanel;
+    if (compact && panel?.group.api.location.type === "grid") {
+      if (!panel.api.isMaximized()) {
+        panel.api.maximize();
+        compactGroup.current = true;
+      }
+    } else if (!compact && compactGroup.current) {
+      api?.exitMaximizedGroup();
+      compactGroup.current = false;
+    }
+  }, [compact, active]);
   const navigationVisible = compact ? mobileNavOpen : navOpen;
   const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => !open);
 

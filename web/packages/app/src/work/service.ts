@@ -58,7 +58,7 @@ export function createWorkViews(host:WorkViewsHost,active:()=>boolean) {
  };
  return {
   async controlRun(schema:string,target:{type:string;id:string},payload:Record<string,unknown>={}){
-   const offered=target.type==="flow.instance"?["flow.instance.retry","flow.instance.move","flow.instance.cancel","flow.instance.skip","flow.instance.resume","flow.instance.retire"]:target.type==="agent.run"?["agent.run.cancel"]:target.type==="platform.effect"?["platform.effect.retry"]:[];
+   const offered=target.type==="flow.instance"?["flow.instance.retry","flow.instance.move","flow.instance.cancel","flow.instance.skip","flow.instance.resume","flow.instance.retire"]:target.type==="agent.run"?["agent.run.cancel"]:target.type==="platform.effect"?["platform.effect.retry"]:target.type==="build.dispatch"?["build.dispatch.review"]:[];
    if(!validID(target.id)||!offered.includes(schema))throw Error("This runtime control is unavailable for the original target.",{cause:"rejected"});
    return answer(schema,target.type,target.id,undefined,payload);
   },

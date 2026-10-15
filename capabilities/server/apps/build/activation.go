@@ -49,6 +49,9 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			if err := json.Unmarshal(asset.Body, &frozen); err != nil || buildapi.TypeOf(frozen.Name) != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid saved object %s", asset.Ref)
 			}
+			if err := mapDispatchIntegrations(&frozen, b.integrationID); err != nil {
+				return nil, err
+			}
 			i := slices.IndexFunc(objects, func(o Object) bool { return !o.Archived && o.Name == frozen.Name })
 			if i < 0 {
 				return nil, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
@@ -241,6 +244,9 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			var o Object
 			if err := json.Unmarshal(asset.Body, &o); err != nil || o.Name == "" {
 				continue // code-owned metadata is not a draft
+			}
+			if err := mapDispatchIntegrations(&o, b.integrationID); err != nil {
+				return nil, err
 			}
 			if err := add(ObjectType, o.Name, o); err != nil {
 				return nil, err

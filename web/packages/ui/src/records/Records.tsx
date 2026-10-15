@@ -486,7 +486,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   /** App API composes declared record-specific work without another read path. */
   work?: (view: RecordView) => ReactNode;
   /** Answering the open tasks about the record from its page; without it they are listed only. */
-  tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> };
+  tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode };
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
   /** Presentation subset. No field omitted by source.entity can be restored here. */
   fields?: string[];
@@ -727,7 +727,7 @@ function Approvals({ source, approvals, onOpen }: { source: RecordSource; approv
 }
 
 /** The open tasks about a record: what is asked, by when, and its answers as buttons. */
-export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> } }) {
+export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode } }) {
   const [busy, setBusy] = useState<string>();
   const answer = async (task: Api.InboxTask, a?: string) => { setBusy(task.id); try { await tasks?.answer(task, a); } finally { setBusy(undefined); } };
   return (
@@ -739,7 +739,7 @@ export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer
             <span className="font-medium">{task.title}</span>
             {task.body && <span className="whitespace-pre-wrap text-xs text-muted">{task.body}</span>}
             {tasks && <span className="flex flex-wrap gap-1.5">
-              {(task.answers?.length ? task.answers : [undefined]).map((a, i) =>
+              {tasks.actions?.(task) ?? (task.answers?.length ? task.answers : [undefined]).map((a, i) =>
                 <Button key={a ?? "done"} size="sm" variant={a === task.answers?.[0] ? "primary" : undefined} disabled={busy === task.id} onClick={() => void answer(task, a)}>{task.answerTitles?.[i] ?? a ?? t("Done")}</Button>)}
             </span>}
           </li>

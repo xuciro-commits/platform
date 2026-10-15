@@ -548,6 +548,9 @@ func confirmationAssignment(run platform.ConfirmationRun) platform.Assignment {
 }
 
 func (b *Build) Run(c platform.Caller, job string, at time.Time) *kernel.Error {
+	if job == "dispatches" {
+		return b.runDispatches(c, at)
+	}
 	if job != "confirmations" {
 		return nil
 	}

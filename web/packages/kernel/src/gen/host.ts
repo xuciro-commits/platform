@@ -706,6 +706,7 @@ export type BusinessTxn = {
   message?: string;
   reads?: RuleReadSpec;
   confirmation?: Confirmation;
+  dispatch?: Dispatch;
   refusals?: Refusal[];
 };
 
@@ -1208,6 +1209,105 @@ export type DependencyView = {
   descriptors: Dependencies[];
   requires: AssetRef[];
   usedBy: AssetRef[];
+};
+
+export type Dispatch = {
+  command: string;
+  target: string;
+  payload?: TxnSet[];
+  key: string;
+  deadlineSeconds: number;
+  readback: DispatchRead;
+  onStuck: string;
+  onFail: string;
+  reviewerRole: string;
+};
+
+export type DispatchAttempt = {
+  number: number;
+  intent: string;
+  target: string;
+  state: string;
+  at: string;
+  reason?: string;
+  answer?: unknown;
+  compensation?: boolean;
+};
+
+export type DispatchCommand = {
+  name: string;
+  title: string;
+  endpointKind: string;
+  writeback: string;
+  idempotent: boolean;
+  receiverDeduplicates?: boolean;
+  compensate?: string;
+};
+
+export type DispatchRead = {
+  name: string;
+  source?: string;
+  observation?: string;
+  record?: string;
+  keyField?: string;
+  resultField?: string;
+  reasonField?: string;
+  states: Record<string, string>;
+  everySeconds: number;
+};
+
+export type DispatchReading = {
+  at: string;
+  state: string;
+  value?: string;
+  reason?: string;
+  observed?: unknown;
+};
+
+export type DispatchRun = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  versionPins?: RecordVersionPin[];
+  subject: string;
+  action: string;
+  member: string;
+  command: DispatchCommand;
+  definition: Dispatch;
+  target: string;
+  key: string;
+  state: "pending" | "accepted" | "running" | "completed" | "stuck" | "failed" | "unknown" | "cancelled" | "compensating" | "compensated";
+  reason?: string;
+  startedAt: string;
+  stateAt: string;
+  deadline: string;
+  readDue: string;
+  readback: DispatchReading[];
+  attempts: DispatchAttempt[];
+  attempt: number;
+  intent: string;
+  request: unknown;
+  source?: unknown;
+  connection?: unknown;
+  observation?: unknown;
+  device?: string;
+  compensationCommand?: DispatchCommand;
+  compensationRequest?: unknown;
+  compensating?: boolean;
+  release?: string;
+  assets: ReleaseAsset[];
+  input: unknown;
+  reviewers: string[];
+  escalated?: boolean;
+  policyApplied?: boolean;
+  withheld?: boolean;
+};
+
+export type DispatchTarget = {
+  id: string;
+  title: string;
 };
 
 export type Draft = {

@@ -7,10 +7,8 @@ import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
 
-// Writebacks (ADR-0072): an accepted action on an object sent to an external
-// system through a connection. The sending is an outbound effect - queued in
-// the connection's order, retried with the same idempotency key, delivered
-// with receiver deduplication - and the answer can write fields back onto the record.
+// Writebacks retain the connection and request mapping. Explicit business
+// confirmations and device dispatches decide when to send and whether to retry.
 type Field = { from: string; to: string; convert?: string };
 type Answer = { at: string; effect: string; target: string; result: string; detail?: string; answer?: string };
 type Draft = { id: string; revision: number; name: string; title: string; connection: string; object: string; on: string; method?: string; path?: string; mapping: Field[]; result: Field[]; state: string; sent?: number; rejected?: number; failed?: number; answers?: Answer[] };
@@ -23,7 +21,7 @@ export function Writebacks() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Writebacks")} description={t("Send an object's accepted actions to an external system. Each decision becomes one request, queued in the connection's order and retried with the same key so the receiver can deduplicate retries.")}
+    <PageHeader title={t("Writebacks")} description={t("Declare the connection and request mapping for external writes. Accepted actions, business confirmations and device dispatches keep their own sending and retry rules.")}
       actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
     <ResourceList source={source} type="build.writeback" fields={["title", "object", "on", "connection", "sent", "failed", "state"]} onOpen={(record) => open({ view: "writeback", params: { id: record.id } })} />
   </div>;
@@ -63,7 +61,7 @@ export function WritebackEditor({ id }: { id: string }) {
   if (id !== "new" && !draft.id) return <PageHeader title={t("Writebacks")} description={query.isError ? t("The writeback could not be loaded.") : t("Loading…")} />;
   const target = entities.find((entity) => entity.type === draft.object);
   const fields = target?.fields ?? [], writable = fields.filter((f) => !f.readOnly);
-  const verbs = ["confirmation", "create", "edit", ...(target?.lifecycle?.transitions ?? []).map((a) => a.name)];
+  const verbs = ["confirmation", "dispatch", "create", "edit", ...(target?.lifecycle?.transitions ?? []).map((a) => a.name)];
   const queue = effects.filter((x) => x.event === `writeback/${draft.name}` && (x.state === "pending" || x.state === "retrying" || x.state === "held"));
   const rows = (key: "mapping" | "result", list: Field[], fromOptions: string[] | undefined, toOptions: string[] | undefined, fromLabel: string, toLabel: string) => <div className="grid gap-2">
     <div className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2 text-[11px] font-medium text-muted"><span>{fromLabel}</span><span>{toLabel}</span><span>{t("Convert")}</span><span /></div>
@@ -76,7 +74,7 @@ export function WritebackEditor({ id }: { id: string }) {
     <div><Button size="sm" disabled={!draft.object} onClick={() => patch({ [key]: [...list, { from: "", to: "", convert: "" }] })}>{key === "mapping" ? t("Add body field") : t("Add answer field")}</Button></div>
   </div>;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New writeback")} description={t("Object and action → connection, path and body → what the answer writes back. Publish sends every matching decision from then on.")}
+    <PageHeader title={draft.title || t("New writeback")} description={t("Choose the original object, trigger, connection and request fields. Explicit confirmations and dispatches send only when their declared business operation runs.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "writeback" })}>{t("Writebacks")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
@@ -90,7 +88,7 @@ export function WritebackEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Writeback name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="grtosap" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Writeback title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, on: "create", mapping: [], result: [] })}><option value="">{t("Choose an object type")}</option>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
-        <label className={fieldClass}>{t("After action")}<Select value={draft.on} onChange={(e) => patch({ on: e.target.value })}>{verbs.map((v) => <option key={v} value={v}>{v==="confirmation"?t("Only explicit business confirmations"):v}</option>)}</Select>
+        <label className={fieldClass}>{t("After action")}<Select value={draft.on} onChange={(e) => patch({ on: e.target.value })}>{verbs.map((v) => <option key={v} value={v}>{v==="confirmation"?t("Only explicit business confirmations"):v==="dispatch"?t("Only declared device dispatches"):v}</option>)}</Select>
           <span className="text-[11px] text-muted">{t("The decision's payload is what gets sent; create and edit carry the fields, a declared action carries its own payload.")}</span></label>
       </Panel>
       <Panel title={t("Request")} className="grid min-w-0 content-start gap-3">

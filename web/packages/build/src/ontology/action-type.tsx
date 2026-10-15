@@ -1,4 +1,5 @@
 import {ConfirmationEditor} from "./ConfirmationEditor";
+import { DispatchEditor } from "./DispatchEditor";
 import {RefusalEditor} from "./RefusalEditor";
 import {assignmentSugar,conditionSugar} from "../editor/rule-text";
 import {ExpressionEditor} from '../editor/ExpressionEditor';
@@ -177,6 +178,9 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
       <p className="text-sm text-muted">{t("One operation commits all steps together. Iteration uses an ordered record set; a failed step leaves every record unchanged.")}</p>
       {action?.transaction ? <>
         <ConfirmationEditor value={action.transaction.confirmation} onChange={confirmation=>patch({transaction:{...action.transaction!,confirmation}})} actions={(object.actions??[]).filter(a=>a.name!==action.name).map(a=>a.name)} roles={["builder",...new Set((object.access??[]).map(a=>a.role))]}/>
+        <DispatchEditor value={action.transaction.dispatch} onChange={dispatch => patch({ transaction: { ...action.transaction!, dispatch } })}
+          commands={process.dispatchCommands ?? []} onCommandsChange={(dispatchCommands, rename) => change({ ...process, dispatchCommands: dispatchCommands.map(command => rename && command.compensate === rename.before ? { ...command, compensate: rename.after } : command), actions: rename ? process.actions.map(candidate => candidate.transaction?.dispatch?.command === rename.before ? { ...candidate, transaction: { ...candidate.transaction, dispatch: { ...candidate.transaction.dispatch, command: rename.after } } } : candidate) : process.actions })}
+          object={parent} fields={process.fields} choices={[{ value: "input.$subject", label: t("Subject record ID"), type: "reference", ref: parent }, { value: "record.id", label: t("Record ID"), type: "text" }, ...subjects.map(subject => ({ ...subject, value: subject.value.startsWith("input.") ? subject.value : `record.${subject.value}` }))]} roles={[...new Set(["builder", ...process.access.map(access => access.role)])]} />
         <RefusalEditor value={action.transaction} onChange={transaction=>patch({transaction})} choices={subjects} actions={process.actions.filter(candidate=>candidate.name!==action.name&&candidate.transaction&&!candidate.approval&&!candidate.adoption).map(candidate=>candidate.name)} entities={entities} roles={["builder",...new Set((object.access??[]).map(access=>access.role))]}/>
         <label className="grid gap-1 text-xs">{t("Transaction definition")}<Textarea aria-label={t("Transaction definition")} parse="json" rows={22} value={JSON.stringify(action.transaction, null, 2)} onChange={event => patch({transaction: event.target.value.trim()?JSON.parse(event.target.value):undefined})} /></label>
         <Button size="sm" variant="ghost" onClick={() => patch({transaction:undefined})}>{t("Remove transaction")}</Button>

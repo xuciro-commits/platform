@@ -26,6 +26,7 @@ type BusinessTxn struct {
 	Message      string        `json:"message,omitempty"`
 	Reads        *RuleReadSpec `json:"reads,omitempty"`
 	Confirmation *Confirmation `json:"confirmation,omitempty"`
+	Dispatch     *Dispatch     `json:"dispatch,omitempty"`
 	Refusals     []Refusal     `json:"refusals,omitempty"`
 }
 

@@ -4,17 +4,18 @@ import { Card, Button, DataTable, Disclosure, PageHeader, Panel, Input, Select, 
 import { useState } from "react";
 import { FlowInstanceView } from "./flows";
 import { RunView } from "./agents";
-import { ChainGraph, useHost, useReadQuery, useRecordInventory } from "../index";
+import { ChainGraph, useHost, useOpenRecord, useReadQuery, useRecordInventory } from "../index";
 import {refusalCategoryName} from "../actions/refusal";
+import { DispatchProgress } from "../widgets/DispatchProgress";
 
 type Run = Api.ApplicationRun;
-const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation", function: "AI function", effect: "External effect", job: "Scheduled job" } as Record<string, string>)[kind] ?? kind);
-const stateName = (state: string) => t(({ running: "Working", waiting: "Waiting", done: "Done", stopped: "Stopped", stuck: "Stuck", completed: "Completed", pending: "Pending", failed: "Failed", canceled: "Canceled", cancelled: "Canceled" } as Record<string,string>)[state] ?? state);
+const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation", function: "AI function", effect: "External effect", job: "Scheduled job", dispatch: "Device dispatch" } as Record<string, string>)[kind] ?? kind);
+const stateName = (state: string) => t(({ running: "Working", waiting: "Waiting", done: "Done", stopped: "Stopped", stuck: "Stuck", completed: "Completed", pending: "Pending", failed: "Failed", canceled: "Canceled", cancelled: "Canceled", accepted: "Accepted by target", unknown: "Outcome unknown", compensating: "Compensating", compensated: "Compensated" } as Record<string,string>)[state] ?? state);
 const placementName = (placement: string) => t(({assist:"Read-only assistance",propose:"Business proposal",act:"Authorized actions",autonomous:"Autonomous within granted scope"} as Record<string,string>)[placement] ?? placement);
 
 /** One application projection, preserving original run readers and controls. */
 export function ApplicationRuns({ owner, name }: { owner: string; name: string }) {
- const { role } = useHost(), { open } = useWorkspace();
+ const { role } = useHost(), { open } = useWorkspace(), openRecord = useOpenRecord();
  const [offset,setOffset]=useState(0),[chosen,setChosen]=useState<string>();
  const [kind,setKind]=useState(""),[state,setState]=useState("");
  const [since,setSince]=useState(""),[until,setUntil]=useState("");
@@ -30,7 +31,7 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
   {accessorKey:"kind",header:t("Kind"),cell:c=>kindName(c.row.original.kind)},
   {accessorKey:"title",header:t("Run"),cell:c=><Button variant="link" onClick={()=>setChosen(`${c.row.original.kind}/${c.row.original.id}`)}>{c.row.original.title||c.row.original.id}</Button>},
   {accessorKey:"resourceName",header:t("Resource")},
-  {accessorKey:"state",header:t("State"),cell:c=><Tag label={stateName(c.row.original.state)} tone={["failed","stuck","stopped"].includes(c.row.original.state)?"danger":"neutral"}/>},
+  {accessorKey:"state",header:t("State"),cell:c=><Tag label={c.row.original.kind === "dispatch" && c.row.original.state === "running" ? t("In transit") : stateName(c.row.original.state)} tone={["failed","stuck","stopped"].includes(c.row.original.state)?"danger":"neutral"}/>},
   {accessorKey:"version",header:t("Startup version"),cell:c=><span className="font-mono text-xs">{c.row.original.version||t("Not recorded")}</span>},
   {accessorKey:"node",header:t("Failed node")},
   {accessorKey:"association",header:t("Relationship"),cell:c=>t(({application:"Recorded application binding",resource:"Referenced resource",flow:"Started by a related workflow",subject:"Record type used by the application"} as Record<string,string>)[c.row.original.association]??c.row.original.association)},
@@ -41,8 +42,8 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
   <PageHeader title={query.data?.title ?? name} description={t("Runs related to this application's referenced resources. Shared use does not establish which application started a run.")} />
   <ApplicationRuntimePanel owner={owner} name={name}/>
   <div className="flex flex-wrap gap-2">
-   <Select aria-label={t("Run kind")} value={kind} onChange={event=>{setKind(event.target.value);setOffset(0);setChosen(undefined);}}><option value="">{t("All run kinds")}</option>{["flow","agent","function","compute","effect","job"].map(value=><option key={value} value={value}>{kindName(value)}</option>)}</Select>
-   <Select aria-label={t("Run state")} value={state} onChange={event=>{setState(event.target.value);setOffset(0);setChosen(undefined);}}><option value="">{t("All run states")}</option>{["running","waiting","pending","ready","done","completed","failed","stuck","rejected","delivered","scheduled"].map(value=><option key={value} value={value}>{stateName(value)}</option>)}</Select>
+   <Select aria-label={t("Run kind")} value={kind} onChange={event=>{setKind(event.target.value);setOffset(0);setChosen(undefined);}}><option value="">{t("All run kinds")}</option>{["flow","agent","function","compute","effect","job","dispatch"].map(value=><option key={value} value={value}>{kindName(value)}</option>)}</Select>
+   <Select aria-label={t("Run state")} value={state} onChange={event=>{setState(event.target.value);setOffset(0);setChosen(undefined);}}><option value="">{t("All run states")}</option>{["running","waiting","pending","ready","done","completed","failed","stuck","unknown","accepted","compensating","compensated","cancelled","rejected","delivered","scheduled"].map(value=><option key={value} value={value}>{stateName(value)}</option>)}</Select>
    <label className="text-xs">{t("Started after")}<Input type="datetime-local" value={since} onChange={event=>{setSince(event.target.value);setOffset(0);setChosen(undefined);}}/></label>
    <label className="text-xs">{t("Started before")}<Input type="datetime-local" value={until} onChange={event=>{setUntil(event.target.value);setOffset(0);setChosen(undefined);}}/></label>
   </div>
@@ -54,6 +55,7 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
   </>}
   {selected&&<Panel className="grid min-w-0 gap-3">
    <div className="flex flex-wrap gap-2">{["flow","agent","compute"].includes(selected.kind)&&<Button onClick={()=>open({view:selected.kind==="flow"?"flow-instance":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,application}}, {window:"beside"})}>{t("Open run")}</Button>}
+    {selected.kind === "dispatch" && <Button onClick={() => openRecord({ type: "build.dispatch", id: selected.id })}>{t("Open dispatch record")}</Button>}
     {source&&<Button onClick={()=>open({view:selected.kind==="flow"?"flow":"code",params:{id:source.id,...(draft?{application:draft.id}:{})}})}>{t("Open current source editor")}</Button>}
     {selected.kind==="agent"&&<Button onClick={()=>open({view:"agents",params:{surface:"tenant"}})}>{t("Current agent registry")}</Button>}
    </div>
@@ -62,7 +64,7 @@ export function ApplicationRuns({ owner, name }: { owner: string; name: string }
    {!!selected.applications?.length&&<ul className="grid gap-1 text-xs">{selected.applications.map(binding=><li key={`${binding.ref.app}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.app} · {binding.ref.name} @ {binding.sourceVersion}</li>)}</ul>}
    {selected.error&&<p role="alert">{selected.node?`${t("Failed node")}: ${selected.node} · `:""}{selected.error}</p>}
    {!!selected.shared.length&&<p role="status" className="text-xs text-muted">{t("Also referenced by: {applications}",{applications:selected.shared.join(", ")})}</p>}
-   {selected.kind==="flow"?<FlowInstanceView key={selected.id} id={selected.id} application={application}/>:selected.kind==="agent"?<RunView key={selected.id} id={selected.id} application={application}/>:selected.kind==="compute"?<OperationRunView key={selected.id} id={selected.id} application={application}/>:selected.kind==="function"?<ChainGraph of={`build.function-call/${selected.id}`}/>:selected.kind==="effect"?<ChainGraph of={`platform.effect/${selected.id}`}/>:<p className="text-xs text-muted">{t("Shared scheduler work remains with its original owner.")}</p>}
+   {selected.kind==="flow"?<FlowInstanceView key={selected.id} id={selected.id} application={application}/>:selected.kind==="agent"?<RunView key={selected.id} id={selected.id} application={application}/>:selected.kind==="compute"?<OperationRunView key={selected.id} id={selected.id} application={application}/>:selected.kind==="function"?<ChainGraph of={`build.function-call/${selected.id}`}/>:selected.kind==="effect"?<ChainGraph of={`platform.effect/${selected.id}`}/>:selected.kind==="dispatch"?<DispatchProgress type="build.dispatch" id={selected.id}/>:<p className="text-xs text-muted">{t("Shared scheduler work remains with its original owner.")}</p>}
   </Panel>}
  </div>;
 }

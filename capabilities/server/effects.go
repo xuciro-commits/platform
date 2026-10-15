@@ -26,6 +26,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -319,6 +320,9 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	for _, j := range jobs {
 		sends = append(sends, func() {
 			if t.quarantined() {
+				return
+			}
+			if !t.beginDispatchAttempt(j.effect, now) {
 				return
 			}
 			span := outside(j.span, "send "+j.effect.Event+" to "+j.endpoint.ID, attribute.String("platform.tenant", t.ID),
@@ -678,6 +682,9 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 		x = t.outbound[i]
 	}
 	t.opsMu.Unlock()
+	if x != nil && x.App == build.ID && x.Event == build.ID+"/dispatch" {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Manage this command through its dispatch review and declared reviewer role")
+	}
 	if s.GetSchema().GetName() == SchemaEffectApprove {
 		if x == nil || x.State != "held" {
 			return nil, notFound

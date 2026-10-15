@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -54,6 +56,14 @@ func (h *Host) routesDiscovery(rt *routes) {
 	})
 	rt.metadata(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Entities(m), t.Language(m, r)))
+	})
+	rt.handle(Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []DispatchTarget{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, refusal := t.DispatchTargets(m, r.PathValue("id"), h.Now())
+		if refusal != nil {
+			Reply(w, nil, t.i18n.said(refusal, t.Language(m, r)))
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.handle(Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: ApplicationRunPage{}, Query: []Param{{"offset", "Nonnegative run offset"}, {"limit", "1–100, default 50"}, {"kind", "Run kind"}, {"state", "Original owner state"}, {"subject", "Exact type/id"}, {"since", "Inclusive RFC3339 startup time"}, {"until", "Inclusive RFC3339 startup time"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 50)
@@ -148,4 +158,38 @@ func (h *Host) routesDiscovery(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
+}
+
+type DispatchTarget struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]DispatchTarget, *kernel.Error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if refusal := t.admits(member); refusal != nil {
+		return nil, refusal
+	}
+	caller := platform.NewCaller(runtime{t}, member, build.ID, false, false)
+	run, found := platform.Get[platform.DispatchRun](caller, id)
+	if !found || member.Agent || !member.Holds(build.ID, run.Definition.ReviewerRole) || !(hostView{t: t}).Readable(member, run.Subject, at) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the current dispatch reviewer may choose an external target")
+	}
+	out := []DispatchTarget{}
+	for offset := 0; ; {
+		connections, total, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","ready"]]`), Sort: []string{"title", "id"}, Limit: 500, Offset: offset})
+		if refusal != nil {
+			return nil, refusal
+		}
+		for _, connection := range connections {
+			if slices.Contains([]string{"http", "odata"}, connection.Kind) {
+				out = append(out, DispatchTarget{ID: connection.ID, Title: connection.Title})
+			}
+		}
+		offset += len(connections)
+		if offset >= total {
+			return out, nil
+		}
+	}
 }

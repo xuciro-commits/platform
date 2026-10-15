@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Review dispatch": "处理派发指令",
   "Observations": "观测",
   "Read observations": "读取观测",
   "Declared dependencies, reverse impact and available capabilities share one versioned description. Select an asset to see what it uses and what a change reaches.": "声明的依赖、反向影响和可用能力共用同一份带版本的描述。选择资产可查看它使用什么，以及改动会影响谁。",

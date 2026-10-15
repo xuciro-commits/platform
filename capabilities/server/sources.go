@@ -45,6 +45,7 @@ func (t *Tenant) PullSources(now time.Time) {
 		}
 	}
 	t.ReconcileConfirmations(now)
+	t.ReadDispatches(now)
 	t.EvaluateObservations(now)
 }
 

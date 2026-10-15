@@ -100,6 +100,9 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return nil, err
 			}
+			if err := mapDispatchIntegrations(&object, b.integrationID); err != nil {
+				return nil, err
+			}
 			entity := bound.entity(object)
 			bound.installed[entity.Type] = entity
 			actions = append(actions, objectActions(object, entity)...)

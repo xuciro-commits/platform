@@ -198,6 +198,14 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 手测：在业务记录的 Business confirmation progress 看等谁、等待时长、截止、拒绝原因、部分标记与差异。选择 hold / proceed-with-flag / reject 检查对应动作；选择 escalate 核对原收件箱与通知。对一方的 unknown 保存可读证据，撤去复核角色应拒绝；未知补偿不允许直接重试，被拒补偿可原键重试，确认补偿后原未知意图收敛。升级对象/回写后到达的原回执仍按原映像处理；缺原映射在 Integrations 的 Receipt refusal 明确显示。重启保留确认与差异，继续运行时接收方按原键幂等；未发生的现实故障与专有连接器仍须另验。
 
 
+### 设备派发与状态回读（ADR-0121）
+
+`make test-go PKG='. ./apps/build/... ./platform/...' RUN='TestDeviceDispatch|TestDispatch|TestBusinessConfirmation|TestWriteback|TestAcceptedEffect|TestLanguages|TestAPIContract|TestTenantComposition'` 检查发布期拒绝不安全自动重试、稳定业务身份、发送与完成分开、三种回读及补偿证据区分、当前权限、人工裁定和恢复。发送前记录开始尝试，未被接受的开始不能发网络；文件日志关闭重开后，发送中断的非幂等指令不得被自动重发，效果控制台也不能绕过业务裁定。换环境时使用不同连接 ID 和地址，检查封存定义只保留逻辑名称，目标激活后向目标环境发送并回读。
+
+`PLATFORM_SCREENSHOTS=1 make e2e SPEC=device-dispatch` 从原 Transaction 编辑器创建具名命令、选择专用 Writeback 和状态 Source，保存候选并激活。操作员发送后经历 unknown、执行中、回读完成；第二条指令卡住，由复核者从原收件箱打开、填写证据并标记完成。检查请求没有盲目重复、业务记录与应用运行投影一致，并查看桌面/窄屏截图。
+
+手测：分别选择 Source、Observation 或受权记录读取状态；缺失、歧义和未映射状态保留 unknown，业务截止后卡住可见。配置手工/通知/安全重试/已声明反向指令，检查当前复核角色，撤去角色后拒绝裁定。改目标和重发必须说明原因；取消不等于设备停止。构建器与使用说明须明确安全联锁、急停及实时控制留在设备/网关/PLC。本地 HTTP 适配器验证不代表真实控制器、现场安全或客户上线已经验证。
+
 ### 拒绝、异常与纠正（ADR-0117）
 
 `make test-go PKG='. ./apps/build/... ./apps/work/... ./platform/...' RUN='TestBusinessRefusal|TestBusinessCorrection|TestAcceptedRefusal|TestBusinessTxn|TestLanguages|TestAPIContract'` 覆盖三级处置、无编号/无效果、目标权限/输入、原值关联、审批、同键和修改新键、保存点以及完整日志/快照回放。`TestBusinessRefusalPersistenceReopensWithoutExecutingRules` 在文件日志与配置的真实 `PLATFORM_TEST_DATABASE` 上运行追加后/应用前故障、关闭重开、原键答复与后继纠正；数据库未配置不得报为 PostgreSQL 通过。

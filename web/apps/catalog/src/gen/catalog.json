@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:608b790f96560fa3",
+  "revision": "sha256:9ed44036b939ae3d",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1416,6 +1416,8 @@
       "composed": [
         "app/record-actions",
         "ui/button",
+        "ui/disclosure",
+        "ui/page-header",
         "ui/record-page"
       ]
     },
@@ -9655,10 +9657,10 @@
         },
         {
           "name": "tasks",
-          "type": "{ answer: (task: Api.InboxTask, answer?: string) => Promise<void> }",
+          "type": "{ answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode }",
           "optional": true,
           "isCallback": false,
-          "isSlot": false
+          "isSlot": true
         },
         {
           "name": "source",
@@ -9751,6 +9753,11 @@
         {
           "name": "work",
           "type": "(view: RecordView) => ReactNode",
+          "optional": true
+        },
+        {
+          "name": "tasks",
+          "type": "{ answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode }",
           "optional": true
         },
         {
@@ -11485,10 +11492,17 @@
         },
         {
           "name": "tasks",
-          "type": "{ answer: (task: Api.InboxTask, answer?: string) => Promise<void> }",
+          "type": "{ answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode }",
           "optional": true,
           "isCallback": false,
-          "isSlot": false
+          "isSlot": true
+        }
+      ],
+      "slots": [
+        {
+          "name": "tasks",
+          "type": "{ answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode }",
+          "optional": true
         }
       ],
       "composed": [
@@ -12452,10 +12466,12 @@
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
       "web/packages/app/src/widgets/CompositeViews.tsx",
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
+      "web/packages/app/src/widgets/RecordActivity.tsx",
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
       "web/packages/app/src/widgets/ScanInput.tsx",
@@ -12474,6 +12490,7 @@
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/model-editor/ModelFieldPicker.tsx",
       "web/packages/build/src/ontology/ConfirmationEditor.tsx",
+      "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/RefusalEditor.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
@@ -12635,6 +12652,7 @@
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/ContextViews.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/EmbeddedPage.tsx",
       "web/packages/app/src/widgets/Exploration.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
@@ -12680,6 +12698,7 @@
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ConfirmationEditor.tsx",
+      "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/RefusalEditor.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
@@ -12745,12 +12764,15 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/composites/catalog-examples.tsx",
+      "web/packages/app/src/index.tsx",
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
@@ -12765,12 +12787,14 @@
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
+      "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/connection.tsx",
       "web/packages/build/src/ontology/data-source.tsx",
@@ -12835,6 +12859,7 @@
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
       "web/packages/app/src/widgets/Input.tsx",
@@ -12854,6 +12879,7 @@
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/model-editor/ModelFieldPicker.tsx",
       "web/packages/build/src/ontology/ConfirmationEditor.tsx",
+      "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/RefusalEditor.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
@@ -13014,6 +13040,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/function.tsx",
       "web/packages/build/src/ontology/ConfirmationEditor.tsx",
+      "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/RefusalEditor.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
@@ -13227,6 +13254,7 @@
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/CompositeViews.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/dataset.tsx",

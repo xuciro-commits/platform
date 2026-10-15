@@ -69,7 +69,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 	if len(filters) > 0 {
 		filter = filters[0]
 	}
-	if filter.Kind != "" && !slices.Contains([]string{"flow", "agent", "compute", "function", "effect", "job"}, filter.Kind) {
+	if filter.Kind != "" && !slices.Contains([]string{"flow", "agent", "compute", "function", "effect", "job", "dispatch"}, filter.Kind) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run kind")
 	}
 	if len(filter.State) > 64 || len(filter.Subject) > 512 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Since.After(filter.Until) {
@@ -339,6 +339,29 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 			if !call.Withheld {
 				run.Error = call.Reason
 				run.AITokens, run.AIUSD, run.CostReported = call.InputTokens+call.OutputTokens, call.CostUSD, call.CostReported
+			}
+			appendRun(run)
+		}
+	}
+	if rows, err := records(platform.DispatchType, nil); err != nil {
+		return out, err
+	} else {
+		for _, row := range rows {
+			var dispatch platform.DispatchRun
+			if json.Unmarshal(platform.Raw(row), &dispatch) != nil {
+				continue
+			}
+			resource := platform.AssetRef{App: buildapi.ID, Kind: platform.AssetAction, Name: dispatch.Action}
+			if !graphFor(dispatch.Release)[resource] {
+				typ, _, _ := strings.Cut(dispatch.Subject, "/")
+				resource = platform.AssetRef{App: buildapi.ID, Kind: platform.AssetObject, Name: typ}
+				if !graphFor(dispatch.Release)[resource] {
+					continue
+				}
+			}
+			run := ApplicationRun{ID: dispatch.ID, Kind: "dispatch", Title: dispatch.Command.Title, Subject: dispatch.Subject, Resource: &resource, ResourceName: resource.Name, State: dispatch.State, Release: dispatch.Release, Association: "subject", Created: dispatch.StartedAt}
+			if !dispatch.Withheld && slices.Contains([]string{"unknown", "stuck", "failed"}, dispatch.State) {
+				run.Error = dispatch.Reason
 			}
 			appendRun(run)
 		}

@@ -14,7 +14,11 @@ import (
 // definition is rewritten; old publications without this metadata contribute
 // their original version-1 identity when their next version is published.
 func (b *Build) captureObjectSchema(object *Object) error {
-	body, err := objectSchemaBody(*object)
+	portable, err := b.dispatchSchemaObject(*object)
+	if err != nil {
+		return err
+	}
+	body, err := objectSchemaBody(portable)
 	if err != nil {
 		return err
 	}
@@ -27,7 +31,11 @@ func (b *Build) captureObjectSchema(object *Object) error {
 	if previous, exists := wasPublished[Object](object.Published); exists {
 		versions = slices.Clone(previous.SchemaVersions)
 		if len(versions) == 0 {
-			old, err := objectSchemaBody(previous)
+			portable, err := b.dispatchSchemaObject(previous)
+			if err != nil {
+				return err
+			}
+			old, err := objectSchemaBody(portable)
 			if err != nil {
 				return err
 			}

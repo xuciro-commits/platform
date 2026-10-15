@@ -23,16 +23,17 @@ const (
 // which fields it holds. Publishing it installs it (ADR-0034 D2).
 type Object struct {
 	platform.Record
-	Name        string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
-	Title       string                       `json:"title" field:"required,search" title:"What people call it" example:"Visit"`
-	Plural      string                       `json:"plural,omitempty" title:"What people call several" example:"Visits"`
-	Description string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
-	Fields      []Field                      `json:"fields" title:"Fields"`
-	Reads       *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
-	Constraints []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
-	Sets        []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Declared record sets"`
-	Versioning  *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
-	VersionPins []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
+	Name             string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
+	Title            string                       `json:"title" field:"required,search" title:"What people call it" example:"Visit"`
+	Plural           string                       `json:"plural,omitempty" title:"What people call several" example:"Visits"`
+	Description      string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
+	Fields           []Field                      `json:"fields" title:"Fields"`
+	Reads            *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
+	Constraints      []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
+	Sets             []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Declared record sets"`
+	DispatchCommands []platform.DispatchCommand   `json:"dispatchCommands,omitempty" type:"json" field:"aside" title:"Device commands"`
+	Versioning       *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
+	VersionPins      []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
 	// States and Actions make its records a small process (ADR-0037): the
 	// object editor owns them, so generated forms do not ask for them.
 	States  []State  `json:"states,omitempty" field:"aside" title:"States"`

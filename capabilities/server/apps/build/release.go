@@ -75,7 +75,11 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	assets = append(append(append(append(assets, integrations...), plans...), evaluations...), samples...)
-	return b.bindConfirmationAssets(assets)
+	assets, err = b.bindConfirmationAssets(assets)
+	if err != nil {
+		return nil, err
+	}
+	return b.bindDispatchAssets(assets)
 }
 
 // FlowReleaseAsset reads a retained native version, not the current draft or

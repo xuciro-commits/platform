@@ -149,6 +149,18 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 	if json.Unmarshal([]byte(effect.Body), &req) != nil || req.Writeback == "" {
 		return nil
 	}
+	if req.Dispatch != "" {
+		outcome := map[string]string{"delivered": "accepted", "rejected": "failed", "unknown": "unknown", "discarded": "unknown"}[out.Result]
+		if effect.State == "failed" {
+			outcome = "failed"
+		}
+		if outcome == "" {
+			return nil
+		}
+		key := fmt.Sprintf("%s:%d:%s", effect.ID, effect.Attempts, out.Result)
+		_, err := platform.Decide(c, b, dispatchSubmission(c, req.Dispatch, platform.DispatchAnswerSchema, key, map[string]any{"intent": effect.ID, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
+		return err
+	}
 	if req.Confirmation != "" {
 		outcome := map[string]string{"delivered": "accepted", "rejected": "refused", "unknown": "unknown", "discarded": "refused"}[out.Result]
 		if effect.State == "failed" {

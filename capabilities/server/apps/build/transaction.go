@@ -428,5 +428,8 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 	if err := b.finishProposal(c, receipt, proposal, now); err != nil {
 		return err
 	}
+	if err := b.openDispatch(c, receipt, txn, spec, subject, values, now); err != nil {
+		return err
+	}
 	return b.openConfirmation(c, receipt, txn, now)
 }

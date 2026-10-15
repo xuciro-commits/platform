@@ -355,6 +355,32 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 				}
 			}
 		}
+		var dispatch struct {
+			Bindings *struct {
+				Commands            map[string]AssetRef `json:"commands"`
+				Writeback           AssetRef            `json:"writeback"`
+				Target              AssetRef            `json:"target"`
+				CompensateWriteback *AssetRef           `json:"compensateWriteback"`
+				Source              *AssetRef           `json:"source"`
+				Observation         *AssetRef           `json:"observation"`
+				Record              *AssetRef           `json:"record"`
+			} `json:"dispatchBindings"`
+		}
+		if err := json.Unmarshal(asset.Body, &dispatch); err != nil {
+			return out, err
+		}
+		if binding := dispatch.Bindings; binding != nil {
+			for _, command := range binding.Commands {
+				add(command)
+			}
+			add(binding.Writeback)
+			add(binding.Target)
+			for _, ref := range []*AssetRef{binding.CompensateWriteback, binding.Source, binding.Observation, binding.Record} {
+				if ref != nil {
+					add(*ref)
+				}
+			}
+		}
 		capability("action", action.Schema, CapabilityAuthoritative, action.Roles, CapabilityFieldsSchema(action.Payload), ValueSchema{}, action.Payload)
 	case AssetObservation:
 		var observation ObservationDefinition
@@ -622,7 +648,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 				add(AssetRef{App: asset.Ref.App, Kind: AssetDataset, Name: step.Dataset})
 			}
 		}
-		if asset.Ref.Kind == AssetWriteback && integration.On != "confirmation" && integration.On != "" {
+		if asset.Ref.Kind == AssetWriteback && !slices.Contains([]string{"", "confirmation", "dispatch"}, integration.On) {
 			ref := object(integration.Object)
 			ref.Kind = AssetAction
 			ref.Name = integration.Object + "." + integration.On

@@ -1,4 +1,5 @@
 import {ConfirmationProgress} from "./widgets/ConfirmationProgress";
+import { DispatchProgress } from "./widgets/DispatchProgress";
 import {RefusalHistory} from "./actions/RefusalHistory";
 export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
@@ -20,7 +21,7 @@ export {searchInputObjects} from "./widgets/search-input";
 import "./i18n";
 import { apiErrorMessage, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
-  Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
+  Button, Chart, Dialog, Disclosure, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type KanbanMove, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
@@ -437,13 +438,28 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
     upload:async(file:File)=>{await collaboration.upload(file);},
     download:collaboration.download.bind(collaboration),
   };
+  if (type === "build.dispatch") return <div className="grid min-w-0 max-w-5xl gap-3">
+    <PageHeader title={t("Device dispatch")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" })}>{t("Back to inbox")}</Button>} />
+    <DispatchProgress type={type} id={id} />
+    <Disclosure summary={t("Technical details")}>
+      <RecordPage source={source} type={type} id={id} fields={fields} recordTabs={["properties", "history"]} onOpen={(target, record) => openRecord({ type: target, id: record.id })} />
+    </Disclosure>
+  </div>;
   return (
     <>
       <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
-        work={view=><><RefusalHistory key={`${type}/${view.record.id}`} type={type} id={view.record.id}/>{type==="build.confirmation"?<ConfirmationProgress type={type} id={view.record.id}/>:type.startsWith("build.")&&type!=="build.function-call"?<><ConfirmationProgress type={type} id={view.record.id}/>{advice&&<RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields}/>}</>:type==="build.function-call"?<ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={()=>void refresh?.()}/>:advice ? <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields}/> : null}</>} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+        work={view => {
+          const dispatchTask = type === "work.task" && typeof view.record.ref === "string" && view.record.ref.startsWith("build.dispatch/") ? view.record.ref.slice("build.dispatch/".length) : undefined;
+          return <>
+            <RefusalHistory key={`${type}/${view.record.id}`} type={type} id={view.record.id} />
+            {dispatchTask ? <DispatchProgress type="build.dispatch" id={dispatchTask} /> : type.startsWith("build.") && <DispatchProgress type={type} id={view.record.id} />}
+            {type.startsWith("build.") && type !== "build.function-call" && <ConfirmationProgress type={type} id={view.record.id} />}
+            {type === "build.function-call" ? <ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={() => void refresh?.()} /> : advice && <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} />}
+          </>;
+        }} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
-        tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}
+        tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); }, actions: task => task.ref?.startsWith("build.dispatch/") ? <Button size="sm" onClick={() => openRecord(task.ref!)}>{t("Review dispatch")}</Button> : null } : undefined}
         actions={(r) => <>
           <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" }, { window: "beside" })}>{t("Back to inbox")}</Button>
           {(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string") && <Button size="sm" variant="ghost" onClick={() => openRecord(String(r.target ?? r.ref ?? r.subject))}>{t("Open related record")}</Button>}

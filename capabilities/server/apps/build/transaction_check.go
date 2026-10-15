@@ -134,6 +134,15 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 			}
 		}
 	}
+	if dispatch := action.Transaction.Dispatch; dispatch != nil {
+		for i, parameter := range dispatch.Payload {
+			expr, err := dispatchParameter(parameter, scope)
+			if err != nil {
+				return err
+			}
+			dispatch.Payload[i] = platform.TxnSet{Field: parameter.Field, Expr: &expr}
+		}
+	}
 	return lower(action.Transaction.Steps, scope)
 }
 
@@ -213,6 +222,16 @@ func complementaryTxnWhen(a, b *platform.Expr) bool {
 }
 
 func (b *Build) checkTransactions(object Object) error {
+	commands := map[string]bool{}
+	for _, command := range object.DispatchCommands {
+		if err := command.Check(); err != nil {
+			return err
+		}
+		if commands[command.Name] {
+			return fmt.Errorf("Dispatch command names must be unique")
+		}
+		commands[command.Name] = true
+	}
 	if err := checkRefusalCycles(object); err != nil {
 		return err
 	}
@@ -224,6 +243,9 @@ func (b *Build) checkTransactions(object Object) error {
 			continue
 		}
 		if err := b.checkConfirmation(txn.Confirmation, object); err != nil {
+			return err
+		}
+		if err := b.checkDispatch(txn.Dispatch, object, action); err != nil {
 			return err
 		}
 		if object.Numbering != nil {
