@@ -21,7 +21,14 @@ func (b *Build) sourceEntity() platform.Entity {
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			s := record.(*Source)
 			if s.State == "published" {
-				return b.checkSource(c, *s)
+				fixed, err := b.ExecutionSource(*s)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+				if err := b.checkSourceConnection(c, *s); err != nil {
+					return err
+				}
+				return b.checkSource(c, fixed)
 			}
 			return nil
 		},
@@ -96,39 +103,8 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 	if !slices.Contains([]string{"", "json", "csv", "odata", "table"}, s.Profile) {
 		return refuse("A source profile is one of json, csv, odata, table")
 	}
-	if s.Connection == "" {
-		if s.Profile == "odata" || s.Profile == "table" {
-			return refuse("An {profile} source reads through a connection", s.Profile)
-		}
-		u, err := url.Parse(s.URL)
-		if err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && s.AllowPrivate) {
-			return refuse("A data source answers over https; http only to a private address when allowed")
-		}
-		if s.Header != "" && !strings.Contains(s.Header, ":") {
-			return refuse("A request header reads Name: value")
-		}
-	} else {
-		conn, ok := platform.Get[Connection](c, s.Connection)
-		if ok {
-			fixed, err := b.ExecutionConnection(conn)
-			if err != nil {
-				return refuse(err.Error())
-			}
-			conn = fixed
-		}
-		if !ok || conn.State != "ready" {
-			return refuse("The connection is not ready; check it first")
-		}
-		switch {
-		case (s.Profile == "odata") != (conn.Kind == "odata"), (s.Profile == "table") != (conn.Kind == "postgres"):
-			return refuse("A {profile} source needs a matching connection kind", s.Profile)
-		case s.Profile == "odata" && s.Entity == "":
-			return refuse("An OData source names its entity set")
-		case s.Profile == "table" && !tableName(s.Entity):
-			return refuse("A table source names schema.table")
-		case s.Profile == "table" && !simpleWhere(s.Filter):
-			return refuse("A table filter is a simple comparison such as plant = '1000' and active = true")
-		}
+	if err := b.checkSourceConnection(c, s); err != nil {
+		return err
 	}
 	if s.Since != "" && !identifier(s.Since) {
 		return refuse("The incremental column is a plain identifier")
@@ -178,6 +154,47 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 		seen[m.To] = true
 	}
 	return checkEvery(s.Every)
+}
+
+func (b *Build) checkSourceConnection(c platform.Caller, s Source) *kernel.Error {
+	refuse := func(message string, args ...any) *kernel.Error {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
+	}
+	if s.Connection == "" {
+		if s.Profile == "odata" || s.Profile == "table" {
+			return refuse("An {profile} source reads through a connection", s.Profile)
+		}
+		u, err := url.Parse(s.URL)
+		if err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && s.AllowPrivate) {
+			return refuse("A data source answers over https; http only to a private address when allowed")
+		}
+		if s.Header != "" && !strings.Contains(s.Header, ":") {
+			return refuse("A request header reads Name: value")
+		}
+		return nil
+	}
+	conn, ok := platform.Get[Connection](c, s.Connection)
+	if ok {
+		fixed, err := b.ExecutionConnection(conn)
+		if err != nil {
+			return refuse(err.Error())
+		}
+		conn = fixed
+	}
+	if !ok || conn.State != "ready" {
+		return refuse("The connection is not ready; check it first")
+	}
+	switch {
+	case (s.Profile == "odata") != (conn.Kind == "odata"), (s.Profile == "table") != (conn.Kind == "postgres"):
+		return refuse("A {profile} source needs a matching connection kind", s.Profile)
+	case s.Profile == "odata" && s.Entity == "":
+		return refuse("An OData source names its entity set")
+	case s.Profile == "table" && !tableName(s.Entity):
+		return refuse("A table source names schema.table")
+	case s.Profile == "table" && !simpleWhere(s.Filter):
+		return refuse("A table filter is a simple comparison such as plant = '1000' and active = true")
+	}
+	return nil
 }
 
 func checkEvery(every string) *kernel.Error {

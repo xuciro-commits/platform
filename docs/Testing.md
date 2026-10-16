@@ -16,6 +16,8 @@
 
 应用 AI 配置（ADR-0124 / ADR-0116）：`make e2e SPEC=ai-authoring` 从应用新建入口配置未发布模型上的函数、智能体及函数评测集，检查排除字段不可选、成员更新失败后重试同一保存、切换文档后迟到保存不抢焦点，以及原定义不变。`TestAIAuthoringUsesSavedModelsOnlyForExplicitJointDelivery` 检查草稿动作、查询与角色可保存、单独发布拒绝、明确选择模型与 AI 声明后可共同候选、无评测不能激活；未知查询字段仍由原私有安装检查拒绝。实际提议、采纳、审批、模型评估与运行继续用 `proposal-adoption` 和原 `TestApplicationProposalAdoption|TestApplicationAgentCandidateEvaluationGate`，合成模型不代表真实模型质量。
 
+应用集成配置（ADR-0124 / ADR-0070–0074）：`make e2e SPEC=integration-authoring` 从应用新建入口配置连接、数据集、数据源、管道、回写和匹配规则，使用尚未发布的模型；检查成员写入失败重试、未就绪连接拒绝后保留原页与同一资源，再经原共同候选激活，实际拉取并回填外部答复。`TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels` 检查已发布配置改用新字段/对象时可保存、运行定义不变、单独发布与无效字段拒绝、明确选定后共同激活，以及匹配规则唯一性按实际发布定义判断。`TestDependencyDiscoveryIncludesOriginalDatasetConfigurations` 检查原创建/装载的数据集与已发布管道沿同一描述双向发现，普通成员与未发布管道拒绝，运行行不进入元数据。原跨环境、投递失败/重试和恢复继续使用 `integration-fabric` 与本表的集成交付检查；本地 HTTP 不代替客户外部系统或真实设备。
+
 自动测试集中在契约、业务行为、权限、数据一致性和恢复；浏览器只保留规范入口与关键构建/操作路线。外观、布局、画布拖动、一般交互和体验由截图检查及负责人走查。不为颜色、面板宽高、拖动距离或每种设备/语言复制自动路线。
 
 | 变更 | 适用检查 |

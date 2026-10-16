@@ -1,5 +1,6 @@
 import {useInputDrafts} from "@platform/ui";
-import { useApplicationWorkspace } from "../projects/application-scope";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
+import { joinProjectResource } from "../projects/membership";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useId, useRef, useState } from "react";
 import { apiErrorMessage, type Api } from "@platform/kernel";
@@ -26,7 +27,8 @@ export function Connections() {
 }
 
 export function ConnectionEditor({ id }: { id: string }) {
-  const { client, decide, role } = useHost(), { open, close } = useApplicationWorkspace();
+  const host = useHost(), { client, decide, role } = host, { open, close } = useApplicationWorkspace();
+  const application = useApplicationScope();
   const fieldID = useId();
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.connection/${encodeURIComponent(id)}`, 5000);
   const kinds = useReadQuery<{ items: Api.ConnectionKind[] }>("/v1/connection-kinds");
@@ -43,21 +45,39 @@ export function ConnectionEditor({ id }: { id: string }) {
   useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
   const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (error) { setError(apiErrorMessage(error) ?? t("The connection could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
-  const save = async (): Promise<{ id: string; revision: number } | undefined> => {
+  const save = async (deferNavigation = false): Promise<{ id: string; revision: number } | undefined> => {
+    if (inputs?.invalid) return;
     const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, kind, address, secret, allowPrivate, marking, protocol } = draft;
-    const payload = { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "", protocol: protocol ?? null };
-    if (!await decide(`build.connection.${draft.id ? "edit" : "create"}`, { type: "build.connection", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
-    baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
-    setDraft((d) => ({ ...d, id: target, revision: expected + 1 })); markSaved(); setDirty(false);
-    if (!draft.id) { open({ view: "connection", params: { id: target } }); close({ view: "connection", params: { id } }); }
-    else await query.refetch();
-    return { id: target, revision: expected + 1 };
+    let revision = expected;
+    if (dirty || !draft.id) {
+      const payload = { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "", protocol: protocol ?? null };
+      if (!await decide(`build.connection.${draft.id ? "edit" : "create"}`, { type: "build.connection", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
+      revision = expected + 1;
+      baseRevision.current = revision; loaded.current = `${target}:${revision}`;
+      setDraft((d) => ({ ...d, id: target, revision })); inputs?.clear(); markSaved(); setDirty(false);
+    }
+    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "connection", name });
+    markSaved();
+    if (id === "new") {
+      if (!deferNavigation) { open({ view: "connection", params: { id: target } }, { ifCurrent: { view: "connection", params: { id } } }); close({ view: "connection", params: { id } }); }
+    } else await query.refetch();
+    return { id: target, revision };
   };
   const transition = async (name: "check" | "retire") => {
-    const saved = dirty ? await save() : { id: draft.id, revision: baseRevision.current };
+    if (inputs?.invalid) return;
+    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: baseRevision.current };
     if (!saved) return;
-    if (await decide(`build.connection.${name}`, { type: "build.connection", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
+    if (!await decide(`build.connection.${name}`, { type: "build.connection", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) return;
+    if (id === "new") {
+      markSaved();
+      open({ view: "connection", params: { id: saved.id } }, { ifCurrent: { view: "connection", params: { id } } }); close({ view: "connection", params: { id } });
+    } else { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
+  };
+  const review = async () => {
+    if (inputs?.invalid) return;
+    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: baseRevision.current };
+    if (saved) open({ view: "release-review", params: { kind: "connection", id: saved.id } }, { ifCurrent: { view: "connection", params: { id: saved.id } } });
   };
   const previewRead = async () => {
     const { kind, address, secret, allowPrivate, protocol } = draft;
@@ -82,10 +102,10 @@ export function ConnectionEditor({ id }: { id: string }) {
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "connection" })}>{t("Connections")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button disabled={busy || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save connection")}</Button>
+        <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save connection")}</Button>
         {draft.protocol && <Button disabled={busy || !selected} onClick={() => void perform(previewRead)}>{t("Read-only preview")}</Button>}
-        <Button variant="primary" disabled={busy || !!draft.requested} onClick={() => void perform(() => transition("check"))}>{draft.requested ? t("Checking…") : t("Check")}</Button>
-        <Button disabled={busy || dirty || draft.state !== "ready"} onClick={() => open({ view: "release-review", params: { kind: "connection", id: draft.id } })}>{t("Publish")}</Button>
+        <Button variant="primary" disabled={busy || !!inputs?.invalid || !!draft.requested} onClick={() => void perform(() => transition("check"))}>{draft.requested ? t("Checking…") : t("Check")}</Button>
+        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         {draft.state === "ready" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("retire"))}>{t("Retire")}</Button>}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

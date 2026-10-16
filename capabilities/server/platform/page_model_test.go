@@ -66,3 +66,62 @@ func TestModelComputeResourceFollowsOriginalReferences(t *testing.T) {
 		t.Fatal("computation accepted an undeclared final field")
 	}
 }
+
+func TestModelBindingsFollowOriginalInterfaceQueryAfterEditing(t *testing.T) {
+	root := ModelObject("sample.note")
+	info := EntityInfo{App: root.App, Type: root.Name, Fields: []FieldInfo{{Name: "name", Type: "text"}, {Name: "secret", Type: "text"}}}
+	lookup := func(typ string) (EntityInfo, bool) { return info, typ == info.Type }
+	binding := AssetBinding{Ref: AssetRef{App: root.App, Kind: AssetQuery, Name: "coded"}, SourceVersion: "query-1"}
+	shape := Interface{Name: "sample.coded", Title: "Coded", Description: "Common names", Fields: []InterfaceField{{Name: "name", Type: "text", Title: "Name"}}}
+	named := NamedQuery{Name: "coded", Title: "Coded", Interface: shape.Name, InterfaceShape: &shape, Implementations: []string{root.Name}, Sort: []string{"id"}, Limit: 20}
+	definition := Definition{Ref: binding.Ref, Version: binding.SourceVersion, Query: &named}
+	p := Page{Name: "picker", Object: root, Layout: "composed", Sections: []Section{
+		{ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", Model: &ModelBinding{Type: root.Name, Fields: []FieldRef{{Name: "name", Slot: "recordPicker.labelField"}}}},
+		{ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", RecordCard: &PageRecordCard{Tone: "neutral"}, Model: &ModelBinding{Type: root.Name, Fields: []FieldRef{{Name: "name"}, {Name: "name", Slot: "recordCard.labelField"}}}},
+	}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"picker", "card"}}, "picker": {Kind: "widget", Section: "picker"}, "card": {Kind: "widget", Section: "card"}}, Queries: map[string]PageQuery{"coded": {Object: root, Sort: []string{"id"}, Limit: 20}}, Variables: map[string]PageVariable{
+		"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "coded"}},
+		"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "picker"}},
+	}}}
+	beforeFields := [][]byte{Raw(p.Sections[0].Model.Fields), Raw(p.Sections[1].Model.Fields)}
+	// Choosing the original typed query changes the document source, not the
+	// existing normalized field ports submitted by the widget editors.
+	p.Document.Queries["coded"] = PageQuery{Interface: shape.Name, Query: &binding, Sort: []string{"id"}, Limit: 20}
+	beforeQuery := Raw(p.Document.Queries["coded"])
+	if err := p.NormalizeModelBindings(lookup); err != nil {
+		t.Fatal(err)
+	}
+	for i, section := range p.Sections {
+		if section.Model.Type != shape.Name || !bytes.Equal(beforeFields[i], Raw(section.Model.Fields)) {
+			t.Fatalf("section %s did not follow its original interface producer", section.ID)
+		}
+		if err := p.CheckInterfaceSection(p.EffectiveModelSection(section, lookup), &definition); err != nil {
+			t.Fatalf("section %s lost its retained typed query: %v", section.ID, err)
+		}
+	}
+	if !bytes.Equal(beforeQuery, Raw(p.Document.Queries["coded"])) {
+		t.Fatal("normalizing model types changed the original query binding or version")
+	}
+	if err := p.CheckModelBindings(lookup, nil); err != nil {
+		t.Fatal(err)
+	}
+	canonical := Raw(p)
+	if err := p.NormalizeModelBindings(lookup); err != nil || !bytes.Equal(canonical, Raw(p)) {
+		t.Fatal("interface model normalization is not idempotent")
+	}
+	card := p.Sections[1]
+	model := *card.Model
+	model.Fields = append(slices.Clone(model.Fields), FieldRef{Name: "secret"})
+	card.Model = &model
+	if p.CheckInterfaceSection(p.EffectiveModelSection(card, lookup), &definition) == nil {
+		t.Fatal("interface card accepted a subtype-only field after normalization")
+	}
+	for _, change := range []func(*AssetBinding){func(b *AssetBinding) { b.Ref.Name = "other" }, func(b *AssetBinding) { b.SourceVersion = "query-2" }} {
+		query := p.Document.Queries["coded"]
+		changed := *query.Query
+		change(&changed)
+		query.Query = &changed
+		if p.CheckInterfaceQuery(query, &definition) == nil {
+			t.Fatal("normalized model accepted a different query source or version")
+		}
+	}
+}

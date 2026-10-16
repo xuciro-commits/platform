@@ -52,10 +52,14 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
  let recordSource=source,section=bound.section;
  if(model&&source){
   section=materializeModelSection(section,source.entity);
-  if(data?.labelField){if(section.widget==='record-picker')section={...section,recordPicker:{...section.recordPicker!,labelField:data.labelField}};if(section.widget==='record-list')section={...section,cardLabel:data.labelField};if(section.widget==='record-card')section={...section,recordCard:{...section.recordCard!,labelField:data.labelField}};}
-  const info=modelEntity(source.entity(model.type),model,source.entity),fields=[...info?.fields??[]];for(const field of data?.fields??[]){const i=fields.findIndex(f=>f.name===field.name);if(i<0)fields.push(field);else fields[i]=field;}
-  const original=source;
-  recordSource={...source,scope:JSON.stringify([source.scope,signature]),entity:type=>type===model.type&&info?{...info,fields}:original.entity(type),get:async(type,id)=>{const value=await original.get(type,id),row=type===model.type?data?.records.find(r=>r.id===id):undefined;return row?{...value,record:{...value.record,...row} as EntityRecord}:value;}};
+  // Interface plans keep their original source and permission scope, even
+  // when their window search changes. Only active object-model reads adapt it.
+  if(active){
+   if(data?.labelField){if(section.widget==='record-picker')section={...section,recordPicker:{...section.recordPicker!,labelField:data.labelField}};if(section.widget==='record-list')section={...section,cardLabel:data.labelField};if(section.widget==='record-card')section={...section,recordCard:{...section.recordCard!,labelField:data.labelField}};}
+   const info=modelEntity(source.entity(model.type),model,source.entity),fields=[...info?.fields??[]];for(const field of data?.fields??[]){const i=fields.findIndex(f=>f.name===field.name);if(i<0)fields.push(field);else fields[i]=field;}
+   const original=source;
+   recordSource={...source,scope:JSON.stringify([source.scope,signature]),entity:type=>type===model.type&&info?{...info,fields}:original.entity(type),get:async(type,id)=>{const value=await original.get(type,id),row=type===model.type?data?.records.find(r=>r.id===id):undefined;return row?{...value,record:{...value.record,...row} as EntityRecord}:value;}};
+  }
  }
  return {active,ready,data,error:matching?.error,source:recordSource,bound:{...bound,section,...active?{window,collection:status,modelAccess:data?.access,recordSource,readSource:recordSource}:{}} as WidgetBindingContext,status};
 }

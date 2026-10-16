@@ -51,6 +51,7 @@ for (const fixture of [
         await page.getByRole("combobox", { name: /^Target dataset/ }).selectOption(raw);
         await page.getByRole("button", { name: "Publish", exact: true }).click();
         await expect.poll(async () => (await record("build.dataset", raw))?.version, { timeout: 15_000 }).toBe(1);
+        await expect(page.getByRole("tab", { name: /^Data sources(?: ·|$)/ })).toHaveCount(1);
         await builder.open(page, "/pipeline?id=new");
         await page.getByLabel("Pipeline name", { exact: true }).fill(`${name}pipe`);
         await page.getByLabel("Pipeline title", { exact: true }).fill("Clean external rows");
@@ -70,15 +71,17 @@ for (const fixture of [
         await page.getByPlaceholder("0..100", { exact: true }).fill("0..10");
         await page.getByRole("button", { name: "Publish", exact: true }).click();
         await expect.poll(async () => (await record("build.dataset", clean))?.version, { timeout: 15_000 }).toBe(1);
+        await expect(page.getByRole("tab", { name: /^Pipelines(?: ·|$)/ })).toHaveCount(1);
         const pipe = new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("id")!;
-        expect((await record("build.pipeline", pipe)).last).toMatchObject({ rows: 3, written: 1, quarantined: 2 });
+        await expect.poll(async () => (await record("build.pipeline", pipe)).last).toMatchObject({ rows: 3, written: 1, quarantined: 2 });
         expect((await record("build.datasetversion", `${clean}@1`)).data).toEqual([{ id: "IN-A", sku: "A", qty: 3 }]);
         await expect(page.getByText(/3 rows · 1 written · 2 quarantined/)).toBeVisible();
         if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("pipeline.png"), fullPage: true });
         await builder.open(page, `/dataset?id=${clean}`);
         await expect(page.getByText("A", { exact: true }).last()).toBeVisible();
+        await expect(page.getByRole("group", { name: "Dependency diagram", exact: true })).toHaveAttribute("aria-busy", "false");
         await page.getByRole("region",{name:"Declared dependencies",exact:true}).getByText("Clean external rows",{exact:true}).dblclick();
-        await expect(page.getByLabel("Pipeline name", { exact: true })).toHaveValue(`${name}pipe`);
+        await expect(page.getByRole("textbox", { name: "Pipeline name", exact: true })).toHaveValue(`${name}pipe`);
 
         // The object is the integration pipeline's target. The whole delivery
         // is frozen after its complete integration closure exists.
@@ -238,8 +241,9 @@ for (const fixture of [
           await expect(pickerRuntime.getByRole("definition").filter({ hasText: /^Duplicate identity$/ })).toBeVisible();
           await pickerRuntime.getByRole("button", { name: "Open selected record", exact: true }).click();
           await expect(pickerRuntime.getByRole("heading", { name: "REF", exact: true })).toBeVisible();
+          await pickerRuntime.getByRole("button", { name: "Open record", exact: true }).click();
           await pickerRuntime.getByRole("button", { name: "Edit", exact: true }).click();
-          const editRecord = pickerRuntime.getByRole("dialog", { name: `Edit ${receipt}`, exact: true });
+          const editRecord = pickerRuntime.getByRole("dialog", { name: new RegExp(`^Edit .*${receipt}$`) });
           await editRecord.getByRole("textbox", { name: "Name", exact: true }).fill("Confirmed concrete target");
           await editRecord.getByRole("button", { name: "Save", exact: true }).click();
           await expect.poll(async () => (await operator.record(reference.type, receipt)).name).toBe("Confirmed concrete target");
@@ -254,7 +258,7 @@ for (const fixture of [
           if (!await integration.getByRole("button", { name: "Connections", exact: true }).isVisible()) await integration.getByRole("button", { name: "Toggle navigation", exact: true }).click();
           await expect(integration.getByRole("button", { name: "Connections", exact: true })).toBeVisible();
           await expect(integration.getByRole("button", { name: "Object types", exact: true })).toHaveCount(0);
-          await expect(integration.getByRole("button", { name: "All projects", exact: true })).toHaveCount(0);
+          await expect(integration.getByRole("button", { name: "All applications", exact: true })).toHaveCount(0);
           const delivery = await (await request.get("/v1/integration-effects", { headers: operator.headers })).json();
           expect(delivery.find((e: { event: string }) => e.event === `writeback/${name}wb`)).toMatchObject({ state: "delivered" });
           expect(delivery.some((e: object) => "body" in e || "target" in e || "answer" in e)).toBe(false);

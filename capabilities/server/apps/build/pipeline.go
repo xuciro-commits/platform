@@ -29,7 +29,11 @@ func (b *Build) pipelineEntity() platform.Entity {
 				}
 			}
 			if p.State == "published" {
-				return b.checkPipeline(c, *p)
+				fixed, err := b.ExecutionPipeline(*p)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+				return b.checkPipeline(c, fixed)
 			}
 			return nil
 		},

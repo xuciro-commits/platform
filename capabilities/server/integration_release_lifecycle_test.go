@@ -48,6 +48,128 @@ func TestJournalIntegrationReleaseAcrossEnvironments(t *testing.T) {
 	}
 }
 
+func TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels(t *testing.T) {
+	const id = "integration-authoring"
+	at := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	tn := builderTenant(t, id, work.New(id))
+	member := memberOf(t, tn, "builder")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+	decide(t, tn, "builder", build.ID, build.ConnectionType+".create", build.ConnectionType, "CONNECTION", map[string]any{"name": "authoringconnection", "title": "Authoring connection", "kind": "http", "address": server.URL + "/", "allowPrivate": true}, at)
+	decide(t, tn, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, "CONNECTION", map[string]any{}, at)
+	tn.CheckConnections(at)
+	connection, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "CONNECTION")
+	if connection.State != "ready" {
+		t.Fatalf("connection did not become ready: %+v", connection.Last)
+	}
+	decide(t, tn, "builder", build.ID, build.ConnectionType+".create", build.ConnectionType, "UNCHECKED", map[string]any{"name": "uncheckedauthoring", "title": "Unchecked authoring connection", "kind": "http", "address": server.URL + "/", "allowPrivate": true}, at)
+	decide(t, tn, "builder", build.ID, build.DatasetType+".create", build.DatasetType, "DATASET", map[string]any{"name": "authoringrows", "title": "Authoring rows"}, at)
+	object := publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "integrationauthoring", "title": "Integration authoring", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	const nextObject = "build.integrationnext"
+	integrations := []struct {
+		typ, id string
+		kind    platform.AssetKind
+		payload map[string]any
+		edit    map[string]any
+	}{
+		{build.SourceType, "SOURCE", platform.AssetSource,
+			map[string]any{"name": "authoringfeed", "title": "Authoring feed", "connection": "CONNECTION", "url": "rows", "object": object, "key": "id", "mapping": []build.SourceField{{From: "note", To: "note"}}},
+			map[string]any{"mapping": []build.SourceField{{From: "note", To: "extra"}}}},
+		{build.PipelineType, "PIPELINE", platform.AssetPipeline,
+			map[string]any{"name": "authoringpipeline", "title": "Authoring pipeline", "input": "DATASET", "outputObject": object, "key": "id"},
+			map[string]any{"outputObject": nextObject}},
+		{build.WritebackType, "WRITEBACK", platform.AssetWriteback,
+			map[string]any{"name": "authoringdelivery", "title": "Authoring delivery", "connection": "CONNECTION", "object": object, "on": "edit", "path": "receipts", "result": []build.SourceField{{From: "document", To: "note"}}},
+			map[string]any{"result": []build.SourceField{{From: "document", To: "extra"}}}},
+		{build.MatchType, "MATCH", platform.AssetMatching,
+			map[string]any{"name": "authoringidentity", "title": "Authoring identity", "object": object, "keys": []build.MatchKey{{Fields: []string{"note"}}}},
+			map[string]any{"keys": []build.MatchKey{{Fields: []string{"extra"}}}}},
+	}
+	for _, integration := range integrations {
+		decide(t, tn, "builder", build.ID, integration.typ+".create", integration.typ, integration.id, integration.payload, at)
+		decide(t, tn, "builder", build.ID, integration.typ+".publish", integration.typ, integration.id, map[string]any{}, at)
+	}
+	if why := refuse(t, tn, "builder", build.ID, build.SourceType+".edit", build.SourceType, "SOURCE", map[string]any{"connection": "UNCHECKED"}, at); !strings.Contains(why, "not ready") {
+		t.Fatalf("published source bypassed the declared connection check: %s", why)
+	}
+	before := platform.Raw(tn.Definitions(member))
+	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "OBJECT", map[string]any{"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "extra", Title: "Extra", Type: "text"}}}, at)
+	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "NEXT", map[string]any{"name": "integrationnext", "title": "Next integration target", "fields": []build.Field{{Name: "extra", Title: "Extra", Type: "text"}}}, at)
+	for _, integration := range integrations {
+		decide(t, tn, "builder", build.ID, integration.typ+".edit", integration.typ, integration.id, integration.edit, at)
+		if why := refuse(t, tn, "builder", build.ID, integration.typ+".publish", integration.typ, integration.id, map[string]any{}, at); why == "ok" {
+			t.Fatalf("direct %s publication used an unselected saved model", integration.typ)
+		}
+		if preview, err := tn.PreviewReleaseDrafts(member, []build.JointDraftRef{{Kind: integration.kind, ID: integration.id}}); err == nil && preview.Diagnostic == "" {
+			t.Fatalf("%s-only candidate used an unselected saved model", integration.typ)
+		}
+	}
+	// A saved change of matching target cannot make its still-running rule
+	// disappear and allow a second published rule on the original object.
+	decide(t, tn, "builder", build.ID, build.MatchType+".edit", build.MatchType, "MATCH", map[string]any{"object": nextObject}, at)
+	decide(t, tn, "builder", build.ID, build.MatchType+".create", build.MatchType, "DUPLICATE", map[string]any{"name": "duplicateidentity", "title": "Duplicate identity", "object": object, "keys": []build.MatchKey{{Fields: []string{"note"}}}}, at)
+	if why := refuse(t, tn, "builder", build.ID, build.MatchType+".publish", build.MatchType, "DUPLICATE", map[string]any{}, at); !strings.Contains(why, "already has") {
+		t.Fatalf("matching draft hid the still-published rule: %s", why)
+	}
+	decide(t, tn, "builder", build.ID, build.MatchType+".edit", build.MatchType, "MATCH", map[string]any{"object": object}, at)
+	owner := tn.app(build.ID).(*build.Build)
+	checkInstalled := func() {
+		t.Helper()
+		caller := tn.automation(build.ID, false)
+		source, _ := platform.Get[build.Source](caller, "SOURCE")
+		pipeline, _ := platform.Get[build.Pipeline](caller, "PIPELINE")
+		writeback, _ := platform.Get[build.Writeback](caller, "WRITEBACK")
+		matching, _ := platform.Get[build.Match](caller, "MATCH")
+		fixedSource, sourceErr := owner.ExecutionSource(source)
+		fixedPipeline, pipelineErr := owner.ExecutionPipeline(pipeline)
+		fixedWriteback, writebackErr := owner.ExecutionWriteback(writeback)
+		fixedMatching, matchErr := owner.ExecutionMatching(matching)
+		if sourceErr != nil || pipelineErr != nil || writebackErr != nil || matchErr != nil || fixedSource.Mapping[0].To != "note" || fixedPipeline.OutputObject != object || fixedWriteback.Result[0].To != "note" || fixedMatching.Keys[0].Fields[0] != "note" {
+			t.Fatalf("saving integration drafts changed execution: %v %v %v %v", sourceErr, pipelineErr, writebackErr, matchErr)
+		}
+		if !bytes.Equal(before, platform.Raw(tn.Definitions(member))) {
+			t.Fatal("integration authoring changed installed definitions before activation")
+		}
+	}
+	checkInstalled()
+	selection := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetObject, ID: "NEXT"}, {Kind: platform.AssetConnection, ID: "CONNECTION"}, {Kind: platform.AssetDataset, ID: "DATASET"}}
+	for _, integration := range integrations {
+		selection = append(selection, build.JointDraftRef{Kind: integration.kind, ID: integration.id})
+	}
+	decide(t, tn, "builder", build.ID, build.SourceType+".edit", build.SourceType, "SOURCE", map[string]any{"mapping": []build.SourceField{{From: "note", To: "missing"}}}, at)
+	if preview, err := tn.PreviewReleaseDrafts(member, selection); err == nil && preview.Diagnostic == "" {
+		t.Fatal("joint integration candidate skipped the selected model's field checks")
+	}
+	decide(t, tn, "builder", build.ID, build.SourceType+".edit", build.SourceType, "SOURCE", integrations[0].edit, at)
+	preview, err := tn.PreviewReleaseDrafts(member, selection)
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
+		t.Fatalf("explicit integration/model selection could not form a candidate: %+v %v", preview, err)
+	}
+	candidate, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "save-integration-authoring", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkInstalled()
+	if _, err := tn.ActivateRelease(member, candidate, "activate-integration-authoring", at); err != nil {
+		t.Fatal(err)
+	}
+	caller := tn.automation(build.ID, false)
+	source, _ := platform.Get[build.Source](caller, "SOURCE")
+	pipeline, _ := platform.Get[build.Pipeline](caller, "PIPELINE")
+	writeback, _ := platform.Get[build.Writeback](caller, "WRITEBACK")
+	matching, _ := platform.Get[build.Match](caller, "MATCH")
+	fixedSource, sourceErr := owner.ExecutionSource(source)
+	fixedPipeline, pipelineErr := owner.ExecutionPipeline(pipeline)
+	fixedWriteback, writebackErr := owner.ExecutionWriteback(writeback)
+	fixedMatching, matchErr := owner.ExecutionMatching(matching)
+	if sourceErr != nil || pipelineErr != nil || writebackErr != nil || matchErr != nil || fixedSource.Mapping[0].To != "extra" || fixedPipeline.OutputObject != nextObject || fixedWriteback.Result[0].To != "extra" || fixedMatching.Keys[0].Fields[0] != "extra" {
+		t.Fatalf("activation did not install the exact selected integration drafts: %v %v %v %v", sourceErr, pipelineErr, writebackErr, matchErr)
+	}
+}
+
 func releaseFabricBuilder(id string) string {
 	if strings.HasSuffix(id, "-dev") {
 		return "dev-builder"

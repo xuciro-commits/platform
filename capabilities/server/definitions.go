@@ -493,6 +493,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 	base = slices.DeleteFunc(base, func(definition platform.Definition) bool {
 		return definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
 	})
+	datasets := map[platform.AssetRef]platform.ReleaseAsset{}
 	for _, owner := range t.apps {
 		provider, ok := owner.(platform.AssetLifecycleOwner)
 		if !ok {
@@ -503,6 +504,9 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 			return nil, err
 		}
 		for _, asset := range assets {
+			if asset.Ref.Kind == platform.AssetDataset {
+				datasets[asset.Ref] = asset
+			}
 			if asset.Ref.Kind != platform.AssetAgent {
 				for i := range base {
 					if base[i].Ref != asset.Ref || base[i].Source == "code" {
@@ -550,6 +554,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		raw                 json.RawMessage
 	}
 	var images []image
+	var datasetDefinitions []platform.Definition
 	t.records.mu.Lock()
 	for typ, et := range t.records.types {
 		published, hasPublished := et.info.Go.FieldByName("Published")
@@ -567,6 +572,15 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 			ordinal := row.value.FieldByIndex(version.Index).Int()
 			raw := row.value.FieldByIndex(published.Index).String()
 			if ordinal == 0 && raw == "" {
+				// A dataset is usable from its original create/load path, without
+				// a publish action. Project only the descriptor its owner already
+				// offers; runtime rows and other unsealed drafts stay out.
+				if typ == et.info.App+".dataset" {
+					ref := platform.AssetRef{App: et.info.App, Kind: platform.AssetDataset, Name: businessField(et.info, row.value, "name")}
+					if asset, exists := datasets[ref]; exists {
+						datasetDefinitions = append(datasetDefinitions, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: typ + "/" + id})
+					}
+				}
 				continue // an unpublished legacy/development configuration
 			}
 			if ordinal < 1 || raw == "" {
@@ -583,6 +597,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 	}
 	t.records.mu.Unlock()
 	out := slices.DeleteFunc(slices.Clone(base), func(def platform.Definition) bool { return ownedMetadataKind(def.Ref.Kind) })
+	out = append(out, datasetDefinitions...)
 	if len(images) == 0 {
 		slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 		return out, nil

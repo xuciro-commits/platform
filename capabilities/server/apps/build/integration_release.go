@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -562,6 +563,22 @@ func (b *Build) integrationDraftAssets(kind platform.AssetKind, id string) (befo
 	}
 	if record == nil {
 		err = fmt.Errorf("integration draft %s/%s is missing", kind, id)
+		return
+	}
+	c := b.host.Automation(platform.Caller{}, ID)
+	var problem *kernel.Error
+	switch r := record.(type) {
+	case Source:
+		problem = b.checkSource(c, r)
+	case Pipeline:
+		problem = b.checkPipeline(c, r)
+	case Writeback:
+		problem = b.checkWriteback(c, r)
+	case Match:
+		problem = b.checkMatch(c, r)
+	}
+	if problem != nil {
+		err = fmt.Errorf("%s", problem.Message)
 		return
 	}
 	_, version, published, _ := integrationMetadata(record)

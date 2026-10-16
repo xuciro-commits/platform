@@ -14,7 +14,7 @@
 - `allowPrivate`：允许 http 与私网地址（本地系统）；
 - 生命周期 `draft → ready`：`check` 让宿主在外循环上实际连一次（http/odata：GET 服务根或 `$metadata`；postgres：`select 1`），结果记在 `last`（`build.connection.checked`），不是裁决。
 
-Connection 的凭据引用与记录分离，但 Connection/Source/Dataset/Pipeline 当前不在封存候选中，不能随环境晋级自动复制（ADR-0071）。目标环境须独立配置连接与同名密钥。
+Connection/Source/Dataset/Pipeline 的定义已由 ADR-0097/0107 纳入原封存候选与环境交付（ADR-0071）。凭据值不随制品复制；目标环境独立绑定连接地址、凭据引用和协议配置，并检查连接就绪。Dataset 版本行仍属于运行数据，不随定义晋级复制。
 
 ### 2. Source 的四个 profile
 

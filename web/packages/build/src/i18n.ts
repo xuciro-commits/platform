@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The connections could not be loaded.": "无法加载连接。",
+  "The datasets could not be loaded.": "无法加载数据集。",
+  "The saved object definitions could not be loaded.": "无法加载已保存的对象定义。",
+  "The pipelines or data sources could not be loaded.": "无法加载管道或数据源。",
+  "This saved connection is not ready. Check the connection before publishing or running this integration.": "此连接已保存但尚未就绪。发布或运行此集成前，请先检查连接。",
+  "Saved connections can be configured here; publishing still requires a ready connection. Credentials stay with the connection.": "可在此配置已保存的连接；发布仍要求连接就绪。凭据由连接管理。",
+  "Saved http or OData connections can be configured here; publishing still requires a ready connection. Credentials stay with the connection.": "可在此配置已保存的 HTTP 或 OData 连接；发布仍要求连接就绪。凭据由连接管理。",
   "Published resource": "已发布资源",
   "Published resources": "已发布资源",
   "Published resources (all owners)": "已发布资源（所有所属应用）",

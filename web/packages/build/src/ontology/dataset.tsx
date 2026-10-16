@@ -1,8 +1,10 @@
 import {useInputDrafts} from "@platform/ui";
-import { useApplicationWorkspace } from "../projects/application-scope";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
+import { joinProjectResource } from "../projects/membership";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useRef, useState } from "react";
 import { RecordActions, useHost, useReadQuery } from "@platform/app";
+import { apiErrorMessage } from "@platform/kernel";
 import { MarkingField, integrates } from "./marking";
 import { Button, DataTable, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, type ColumnDef, type EntityRecord } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
@@ -29,33 +31,50 @@ export function Datasets() {
 }
 
 export function DatasetEditor({ id }: { id: string }) {
-  const { decide, role } = useHost(), { open, close } = useApplicationWorkspace();
+  const host = useHost(), { decide, role } = host, { open, close } = useApplicationWorkspace();
+  const application = useApplicationScope();
   const query = useReadQuery<{ record?: Draft & EntityRecord }>(`/v1/records/build.dataset/${encodeURIComponent(id)}`, 5000);
   const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
  const [createID]=useState(()=>crypto.randomUUID()),[objectID]=useState(()=>crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
   const [shown, setShown] = useState(0);
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
+  const draftedObject = useRef<{ id: string; name: string } | undefined>(undefined);
   const load = (record: Draft) => { setDraft({ ...empty(), ...record }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
   useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
   const version = shown || draft.version || 0;
   const versionQuery = useReadQuery<{ record?: Version }>(`/v1/records/build.datasetversion/${encodeURIComponent(`${draft.id}@${version}`)}`, 15000, version > 0);
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
-  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The dataset could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
+  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (error) { setError(apiErrorMessage(error) ?? t("The dataset could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async () => {
+    if (inputs?.invalid) return;
     const target = draft.id || createID, expected = baseRevision.current;
-    const payload = { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "" };
-    if (!await decide(`build.dataset.${draft.id ? "edit" : "create"}`, { type: "build.dataset", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
-    baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
-    setDraft((d) => ({ ...d, id: target, revision: expected + 1 })); markSaved(); setDirty(false);
-    if (!draft.id) { open({ view: "dataset", params: { id: target } }); close({ view: "dataset", params: { id } }); }
-    else await query.refetch();
+    let revision = expected;
+    if (dirty || !draft.id) {
+      const payload = { name: draft.name, title: draft.title, keep: Number(draft.keep) || 0, marking: draft.marking ?? "" };
+      if (!await decide(`build.dataset.${draft.id ? "edit" : "create"}`, { type: "build.dataset", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
+      revision = expected + 1;
+      baseRevision.current = revision; loaded.current = `${target}:${revision}`;
+      setDraft((d) => ({ ...d, id: target, revision })); inputs?.clear(); markSaved(); setDirty(false);
+    }
+    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "dataset", name: draft.name });
+    markSaved();
+    if (id === "new") {
+      open({ view: "dataset", params: { id: target } }, { ifCurrent: { view: "dataset", params: { id } } }); close({ view: "dataset", params: { id } });
+    } else await query.refetch();
+    return { id: target, revision };
+  };
+  const review = async () => {
+    if (inputs?.invalid) return;
+    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: baseRevision.current };
+    if (saved) open({ view: "release-review", params: { kind: "dataset", id: saved.id } }, { ifCurrent: { view: "dataset", params: { id: saved.id } } });
   };
   // Builder Assist without a model (ADR-0077): the dataset's inferred schema
   // becomes an object draft - one property per column, typed - that the
   // builder then names, shapes and publishes as any other.
   const draftObject = async () => {
+    if (inputs?.invalid || dirty) return;
     const name = (draft.name || "imported").replace(/[^a-z0-9]/g, "").slice(0, 24) || "imported";
     const typeOf: Record<string, string> = { string: "text", number: "decimal", boolean: "boolean", date: "date", json: "longtext" };
     const seen = new Set<string>();
@@ -68,7 +87,12 @@ export function DatasetEditor({ id }: { id: string }) {
     const target = objectID;
     const payload = { name, title: draft.title || name, description: t("Drafted from the dataset {name}", { name: draft.name }), fields,
       states: [{ name: "active", title: t("Active"), tone: "success" }], actions: [] };
-    if (await decide("build.object.create", { type: "build.object", id: target }, payload, { expectedRevision: 0, quiet: true, onRefused: setError })) open({ view: "object-type", params: { id: target } });
+    if (!draftedObject.current) {
+      if (!await decide("build.object.create", { type: "build.object", id: target }, payload, { expectedRevision: 0, quiet: true, onRefused: setError })) return;
+      draftedObject.current = { id: target, name };
+    }
+    if (application) await joinProjectResource(host, application, { app: "build", kind: "object", name: `build.${draftedObject.current.name}` });
+    open({ view: "object-type", params: { id: draftedObject.current.id } }, { ifCurrent: { view: "dataset", params: { id } } });
   };
   if (!integrates(role("build"))) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Datasets")} description={query.isError ? t("The dataset could not be loaded.") : t("Loading…")} />;
@@ -79,9 +103,10 @@ export function DatasetEditor({ id }: { id: string }) {
     <PageHeader title={draft.title || t("New dataset")} description={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "dataset" })}>{t("Datasets")}</Button>
-        {role("build") === "builder" && !!draft.schema?.length && <Button disabled={busy || dirty || !!error} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
+        {role("build") === "builder" && !!draft.schema?.length && <Button disabled={busy || dirty || !!inputs?.invalid} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button variant="primary" disabled={busy || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save dataset")}</Button>
+        <Button variant="primary" disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save dataset")}</Button>
+        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

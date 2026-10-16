@@ -24,7 +24,11 @@ func (b *Build) matchEntity() platform.Entity {
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			m := record.(*Match)
 			if m.State == "published" {
-				return b.checkMatch(c, *m)
+				fixed, err := b.ExecutionMatching(*m)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+				return b.checkMatch(c, fixed)
 			}
 			return nil
 		},
@@ -92,7 +96,14 @@ func (b *Build) checkMatch(c platform.Caller, m Match) *kernel.Error {
 	}
 	others, _, _ := platform.Find[Match](c, platform.Query{Limit: 500})
 	for _, other := range others {
-		if other.ID != m.ID && other.Object == m.Object && other.State == "published" {
+		if other.ID == m.ID || other.State != "published" {
+			continue
+		}
+		fixed, err := b.ExecutionMatching(other)
+		if err != nil {
+			return refuse(err.Error())
+		}
+		if fixed.Object == m.Object {
 			return refuse("{object} already has the published rule {rule}; edit that one", m.Object, other.Title)
 		}
 	}

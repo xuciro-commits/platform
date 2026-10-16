@@ -19,7 +19,14 @@ func (b *Build) writebackEntity() platform.Entity {
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			w := record.(*Writeback)
 			if w.State == "published" {
-				return b.checkWriteback(c, *w)
+				fixed, err := b.ExecutionWriteback(*w)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+				}
+				if err := b.checkWritebackConnection(c, *w); err != nil {
+					return err
+				}
+				return b.checkWriteback(c, fixed)
 			}
 			return nil
 		},
@@ -62,22 +69,8 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 	if err := b.checkName(w.Name, w.ID); err != nil {
 		return refuse(err.Error())
 	}
-	conn, ok := platform.Get[Connection](c, w.Connection)
-	if ok {
-		fixed, err := b.ExecutionConnection(conn)
-		if err != nil {
-			return refuse(err.Error())
-		}
-		conn = fixed
-	}
-	if !ok || conn.State != "ready" {
-		return refuse("The connection is not ready; check it first")
-	}
-	if conn.Kind != "http" && conn.Kind != "odata" {
-		return refuse("A writeback goes through an http or OData connection")
-	}
-	if conn.Protocol != nil && (w.On != "dispatch" || w.Method != "" && w.Method != "POST" || strings.Trim(w.Path, "/") != "execute") {
-		return refuse("Protocol commands use a dispatch-only POST execute writeback")
+	if err := b.checkWritebackConnection(c, w); err != nil {
+		return err
 	}
 	info, ok := b.lookupEntity(w.Object)
 	if !ok {
@@ -107,6 +100,30 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 		if f, ok := info.Field(m.To); !ok || f.ReadOnly {
 			return refuse("The answer field {field} is not a writable field of the object", m.To)
 		}
+	}
+	return nil
+}
+
+func (b *Build) checkWritebackConnection(c platform.Caller, w Writeback) *kernel.Error {
+	refuse := func(message string, args ...any) *kernel.Error {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
+	}
+	conn, ok := platform.Get[Connection](c, w.Connection)
+	if ok {
+		fixed, err := b.ExecutionConnection(conn)
+		if err != nil {
+			return refuse(err.Error())
+		}
+		conn = fixed
+	}
+	if !ok || conn.State != "ready" {
+		return refuse("The connection is not ready; check it first")
+	}
+	if conn.Kind != "http" && conn.Kind != "odata" {
+		return refuse("A writeback goes through an http or OData connection")
+	}
+	if conn.Protocol != nil && (w.On != "dispatch" || w.Method != "" && w.Method != "POST" || strings.Trim(w.Path, "/") != "execute") {
+		return refuse("Protocol commands use a dispatch-only POST execute writeback")
 	}
 	return nil
 }

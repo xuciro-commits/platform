@@ -224,6 +224,7 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 		if !modelWidget && s.Model == nil {
 			continue
 		}
+		interfaceName := p.SectionInterface(s)
 		if s.Model != nil {
 			// The original widget editors can submit their port projection. It
 			// is folded into the same binding before the accepted image is built.
@@ -235,7 +236,7 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 					ports = true
 				}
 			}
-			if !ports {
+			if !ports && (interfaceName == "" || interfaceName == s.Model.Type) {
 				continue
 			}
 		}
@@ -243,8 +244,8 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 		if s.Object.Name != "" {
 			ref = s.Object
 		}
-		if name := p.SectionInterface(s); name != "" {
-			ref.Name = name
+		if interfaceName != "" {
+			ref.Name = interfaceName
 		}
 		if ref.Name == "" {
 			continue
@@ -254,9 +255,7 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 			clone := *s.Model
 			clone.Fields = slices.Clone(s.Model.Fields)
 			model = &clone
-			if s.Object.Name != "" {
-				model.Type = s.Object.Name
-			}
+			model.Type = ref.Name
 			if s.Fields != nil {
 				model.Fields = slices.DeleteFunc(model.Fields, func(f FieldRef) bool { return f.Slot == "" || f.Slot == "fields" })
 			}
