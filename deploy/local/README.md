@@ -280,3 +280,5 @@ sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://
 OIDC delivery 使用 `PLATFORM_PERSONAL_TOKEN_KEY`（至少 32 字节）签发个人令牌，未配置时拒绝启动；该密钥独立于 OIDC 公钥，重启时必须保留，轮换会使已签发的个人令牌失效。开发令牌宿主只用于开发；lightweight 使用其已有的私有签名密钥。
 
 种子席位的角色只用于新租户。已有日志的租户以已接受的成员状态为准；若管理员尚无 `core:steward`，在 Control Panel → Members 正式授予该角色，重启不会替代授权决定。
+
+运行模式保存在 `.build/dev/environment.json`，与监督进程是否存活分开。普通更新沿用上次选择，停止或异常退出不会自动切换到 Docker；`make local` / `make docker` 显式切换。Docker 更新先启动既有基础服务，全部路径保留原数据卷。

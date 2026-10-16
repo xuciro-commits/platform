@@ -48,10 +48,13 @@ function controlPanelNavigation(host: Host): NavSection[] {
 function ControlPanelOverview() {
   const host = useHost();
   const { open } = useWorkspace();
+  const sections = controlPanelNavigation(host)
+    .map((section) => ({ ...section, items: section.items.filter((item) => item.route.view !== "control-panel") }))
+    .filter((section) => section.items.length > 0);
   return <>
     <PageHeader title={t("Control Panel")} description={t("Members, organisation, installed packages, settings and the audit trail of {tenant}.", { tenant: host.me.tenantId })} />
     <div className="grid max-w-5xl gap-4 md:grid-cols-2">
-      {controlPanelNavigation(host).slice(1).map((section) => <Card key={section.label} className="grid content-start gap-3 p-4">
+      {sections.map((section) => <Card key={section.label} className="grid content-start gap-3 p-4">
         <h2 className="text-sm font-semibold">{section.label}</h2>
         <div className="grid gap-1">{section.items.map((item) => <Button key={item.route.view} variant="row" onClick={() => open(item.route)}>{item.icon}{item.label}</Button>)}</div>
       </Card>)}

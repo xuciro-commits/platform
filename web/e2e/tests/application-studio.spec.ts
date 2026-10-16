@@ -79,6 +79,19 @@ test("one application retains drafts across five workspaces and delivers grouped
   await concepts.getByRole("combobox", { name: "Business concept for selected asset", exact: true }).selectOption(savedApp.concepts[0].id);
   await expect.poll(async () => (await builder.record("build.app", application.id)).concepts?.[0]?.assets.length).toBe(1);
   expect(await builder.record("build.object", objectID)).toEqual(beforeMove);
+  await concepts.getByRole("button", { name: /^Service desk/ }).click();
+  await concepts.getByRole("combobox", { name: "Business concept for selected asset", exact: true }).selectOption(savedApp.concepts[0].id);
+  await expect.poll(async () => (await builder.record("build.app", application.id)).concepts?.[0]?.assets.length).toBe(2);
+
+  // Workspaces offer tasks; the business tree keeps the whole concept together.
+  const assets = navigation.getByRole("region", { name: "Application assets", exact: true });
+  await navigation.getByRole("button", { name: "Model", exact: true }).click();
+  await expect(assets.getByRole("button", { name: /^Service case/ })).toBeVisible();
+  await expect(assets.getByRole("button", { name: /^Service desk/ })).toBeVisible();
+  await assets.getByRole("button", { name: /^Service desk/ }).click();
+  await expect(navigation.getByRole("button", { name: "Interface", exact: true })).toHaveAttribute("aria-current", "page");
+  await context.getByRole("button", { name: "Service application", exact: true }).click();
+  await expect(assets.getByRole("button", { name: /^Service desk/ })).toHaveAttribute("aria-pressed", "true");
 
   await navigation.getByRole("button", { name: "Verify", exact: true }).click();
   await expect(page.getByRole("tab", { name: /^Application Studio/ })).toHaveCount(1);
@@ -106,4 +119,59 @@ test("one application retains drafts across five workspaces and delivers grouped
   await expect(page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Service application", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Service desk", exact: true }).first()).toBeVisible();
   await shots(page, page.locator("body"), "application-studio", testInfo);
+});
+
+test("decision tables and alerts remain application members through editing and release", async ({ page, builder }) => {
+  const object = await builder.object({ title: "Heating zone", fields: [{ name: "temperature", title: "Temperature", type: "decimal" }] });
+  const tableID = slug("table"), tableName = slug("heatdecision");
+  await builder.decide("build.table.create", { type: "build.table", id: tableID }, {
+    name: tableName, title: "Heating decision",
+    inputs: [{ name: "temperature", title: "Temperature", type: "number" }],
+    outputs: [{ name: "heat", title: "Heat", type: "boolean" }],
+    rows: [{ when: ["< 20"], then: ["true"] }], default: ["false"],
+  });
+  const alertName = slug("lowtemperature");
+  const application = await builder.application({ title: "Heating control", resources: [{ app: "build", kind: "object", name: object.type }] });
+  await builder.open(page, `/project?id=${application.id}&area=behavior`);
+  const add = page.getByRole("combobox", { name: "Add existing resource", exact: true });
+  await add.selectOption(JSON.stringify({ kind: "table", id: tableID }));
+  await expect.poll(async () => (await builder.record("build.app", application.id)).resources?.length).toBe(2);
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
+  await page.getByRole("textbox", { name: "Rule name", exact: true }).fill(alertName);
+  await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Low temperature");
+  await page.getByRole("combobox", { name: "Object", exact: true }).selectOption(object.type);
+  await page.getByRole("combobox", { name: "Field", exact: true }).selectOption("temperature");
+  await page.getByRole("combobox", { name: "Operator", exact: true }).selectOption("<");
+  await page.getByRole("textbox", { name: "Value", exact: true }).fill("15");
+  await page.getByRole("textbox", { name: "Message", exact: true }).fill("The zone needs attention.");
+  await page.getByRole("button", { name: "Save alert rule", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.app", application.id)).resources?.length).toBe(3);
+  const rules = await builder.read<{ records: { id: string; name: string }[] }>("records/build.alertrule?limit=1000");
+  const alertID = rules.records.find(rule => rule.name === alertName)!.id;
+
+  const navigation = page.getByRole("navigation", { name: "Main", exact: true });
+  const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
+  if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+  const assets = navigation.getByRole("region", { name: "Application assets", exact: true });
+  await assets.getByRole("button", { name: /^Heating decision/ }).click();
+  await expect(page.getByRole("heading", { name: "Heating decision", exact: true }).first()).toBeVisible();
+  await expect(navigation.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
+  await assets.getByRole("button", { name: /^Low temperature/ }).click();
+  await expect(page.getByRole("heading", { name: "Low temperature", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Heating control", exact: true })).toBeVisible();
+
+  await navigation.getByRole("button", { name: "Verify", exact: true }).click();
+  const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
+  await verify.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
+  await verify.getByRole("button", { name: "Check joint candidate", exact: true }).click();
+  await verify.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
+  await verify.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(verify.getByText("Release active for operators.", { exact: false })).toBeVisible();
+  const delivered = (await builder.definitions<any>()).find(definition => definition.ref.kind === "app" && definition.ref.name === application.name);
+  expect(delivered.application.resources).toEqual(expect.arrayContaining([
+    { app: "build", kind: "compute", name: tableName }, { app: "build", kind: "alert", name: alertName },
+  ]));
+  expect((await builder.record("build.table", tableID)).state).toBe("published");
+  expect((await builder.record("build.alertrule", alertID)).state).toBe("published");
 });

@@ -1,15 +1,17 @@
-import {cellRuleText} from "../editor/rule-text";
-import {useInputDrafts} from "@platform/ui";
-import { useApplicationWorkspace } from "../projects/application-scope";
+import { cellRuleText } from "../editor/rule-text";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
+import { joinProjectResource } from "../projects/membership";
+import { kindOfType, resourceRef } from "../projects/resources";
 import { ResourceList } from "../editor/ResourceList";
+import { DraftStatus, PublishMenu, ResourceControls } from "../editor/workbench";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Input, PageHeader, Panel, Select, Tag, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 
 // Decision tables (ADR-0062): condition columns → result columns, first match
-// wins. The grid is the editor; publishing installs the table as a native
-// operation that processes, pages and the API call like any other.
+// wins. A saved draft joins the same release review as its application;
+// activation installs the native operation used by processes, pages and API callers.
 type Draft = Omit<Api.Table,"rows">&{rows:(Omit<Api.TableRow,"when">&{when:string[]})[]};
 const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", description: "", inputs: [{ name: "input", type: "text" }], outputs: [{ name: "result", type: "text" }], rows: [{ when: [""], then: [""] }], default: [], state: "draft" });
 const types = ["text", "number", "boolean"];
@@ -27,32 +29,39 @@ export function DecisionTables() {
 }
 
 export function DecisionTableEditor({ id }: { id: string }) {
-  const { decide, role } = useHost(), { open, close } = useApplicationWorkspace();
+  const host = useHost(), { decide, role } = host, { open, close } = useApplicationWorkspace();
+  const application = useApplicationScope(), joining = useRef(false);
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.table/${encodeURIComponent(id)}`);
   const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
+  const [createID] = useState(() => crypto.randomUUID());
+  const inputDrafts = useInputDrafts(), dirty = edited || !!inputDrafts?.dirty || joining.current;
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const load = (record: Api.Table) => { setDraft({ ...empty(), ...record, rows:record.rows.map(r=>({...r,when:r.when??r.expressions?.map(cellRuleText)??[]})), default: record.default ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { joining.current = false; if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
   useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
   const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
-  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch { setError(t("The decision table could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
+  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (problem) { setError(problem instanceof Error ? problem.message : t("The decision table could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
+    if (inputDrafts?.invalid) return;
     const target = draft.id || createID, expected = baseRevision.current;
     const { name, title, description, inputs, outputs, rows } = draft;
     const payload = { name, title, rows:rows.map(r=>r.expressions?.length?{expressions:r.expressions,then:r.then}:{when:r.when,then:r.then}), description: description ?? "", inputs, outputs, default: draft.default?.some((c) => c.trim() !== "") ? draft.default : [] };
-    if (!await decide(`build.table.${draft.id ? "edit" : "create"}`, { type: "build.table", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
-    baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
-    setDraft((d) => ({ ...d, id: target, revision: expected + 1 })); markSaved(); setDirty(false);
-    if (!draft.id) { open({ view: "decision-table", params: { id: target } }); close({ view: "decision-table", params: { id } }); }
+    if (!joining.current) {
+      if (!await decide(`build.table.${draft.id ? "edit" : "create"}`, { type: "build.table", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
+      joining.current = !!application && !draft.id;
+      baseRevision.current = expected + 1; loaded.current = `${target}:${expected + 1}`;
+      setDraft((d) => ({ ...d, id: target, revision: expected + 1, state: "draft" }));
+    }
+    if (joining.current && application) await joinProjectResource(host, application, resourceRef(kindOfType("build.table")!, draft.name));
+    joining.current = false; markSaved(); setDirty(false);
+    if (id === "new") { open({ view: "decision-table", params: { id: target } }); close({ view: "decision-table", params: { id } }); }
     else await query.refetch();
-    return { id: target, revision: expected + 1 };
+    return { id: target, revision: baseRevision.current };
   };
-  const publish = async () => {
-    const saved = dirty ? await save() : { id: draft.id, revision: baseRevision.current };
+  const review = async () => {
+    const saved = dirty || !draft.id ? await save() : { id: draft.id, revision: baseRevision.current };
     if (!saved) return;
-    if (await decide("build.table.publish", { type: "build.table", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
+    open({ view: "release-review", params: { kind: "table", id: saved.id } });
   };
   // Column edits keep every row the same width.
   const setColumn = (side: "inputs" | "outputs", i: number, change: Partial<Api.TableColumn>) => patch({ ...(side==="inputs"?{rows:draft.rows.map(r=>({...r,expressions:undefined}))}:{}),[side]: draft[side].map((c, j) => j === i ? { ...c, ...change } : c) } as Partial<Draft>);
@@ -74,13 +83,14 @@ export function DecisionTableEditor({ id }: { id: string }) {
     <PageHeader title={draft.title || t("New decision table")} description={t("A condition cell is empty for any value, or = v, != v, < v, <= v, > v, >= v, a..b, a|b|c. The first row whose conditions all hold decides.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "decision-table" })}>{t("Decision tables")}</Button>
-        <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-        <Button disabled={busy || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save decision table")}</Button>
-        <Button variant="primary" disabled={busy} onClick={() => void perform(publish)}>{t("Publish")}</Button>
-        {draft.version ? <Tag label={t("Version {n}", { n: draft.version })} tone={draft.state === "published" ? "success" : "warning"} /> : null}
+        <Button disabled={busy || !!inputDrafts?.invalid || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save decision table")}</Button>
+        <PublishMenu type="build.table" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onDiscard={discardChanges} route={{ view: "decision-table", params: { id } }} />
+        <ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />
+        <DraftStatus state={dirty ? "draft" : draft.state} />
       </div>} />
+    <p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p>
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 gap-3">
+    <fieldset disabled={busy || joining.current} className="grid min-w-0 gap-3">
       <Panel title={t("Table")} className="grid min-w-0 gap-3 lg:grid-cols-3">
         <label className={fieldClass}>{t("Table name")}<Input disabled={!!draft.version} value={draft.name} placeholder="discount" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Table title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>

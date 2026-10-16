@@ -175,9 +175,16 @@ export class EdgeClient {
   }
 
   /** The records a list shows the member, as CSV (ADR-0028). */
-  async exportCSV(type: string, query: string): Promise<Blob> {
-    const response = await fetch(`${this.connection.server}/v1/export/${encodeURIComponent(type)}${query}`, { headers: this.headers() });
-    if (!response.ok) throw new Error(`export failed: ${response.status}`);
+  async exportCSV(type: string, query: Omit<Query, "domain"> & {domain?:unknown[]}): Promise<Blob> {
+    const response = await fetch(`${this.connection.server}/v1/export/${encodeURIComponent(type)}`, {
+      method: "POST", headers: { ...this.headers(), "Content-Type": "application/json" }, body: JSON.stringify(query),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let reason: unknown;
+      try { reason = JSON.parse(text); } catch { reason = undefined; }
+      throw new Error(apiErrorMessage(reason) ?? (text || `export failed: ${response.status}`));
+    }
     return response.blob();
   }
 

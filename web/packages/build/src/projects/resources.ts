@@ -3,7 +3,7 @@
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation";
+export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -24,6 +24,8 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "test-plan", type: "build.testplan", view: "test-plan", label: "Business test plan", plural: "Business test plans", ref: "test-plan" },
   { kind: "agent", type: "build.agent", view: "agent", label: "Agent", plural: "Agents", ref: "agent" },
   { kind: "compute", type: "build.code", view: "code", label: "Code function", plural: "Code functions", ref: "compute" },
+  { kind: "table", type: "build.table", view: "decision-table", label: "Decision table", plural: "Decision tables", ref: "compute" },
+  { kind: "alert", type: "build.alertrule", view: "alert", label: "Alert rule", plural: "Alert rules", ref: "alert" },
   { kind: "connection", type: "build.connection", view: "connection", label: "Connection", plural: "Connections" },
   { kind: "observation", type: "build.observation", view: "observation-source", label: "Observation source", plural: "Observation sources" },
   { kind: "source", type: "build.source", view: "data-source", label: "Data source", plural: "Data sources" },

@@ -77,6 +77,7 @@ export type RecordSource = {
   ruleIdentity?: {me:string;timezone:string};
   entity: (type: string) => EntityInfo | undefined;
   list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
+  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;
   get: (type: string, id: string) => Promise<RecordView>;
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
   interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;
@@ -331,19 +332,46 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   // scope, metadata, query and revision determine when a read is necessary.
   const sourceIdentity = source.scope ?? source;
   const visible = useViewVisible();
+  const sortField = sort.replace(/^-/, "");
+  const knownSort = ["id", "created", "changed"].includes(sortField) || info?.fields.some((f) => f.name === sortField);
+  const recordQuery: RecordQuery = window?.query ?? { domain, search, sort: knownSort ? [sort] : ["id"], offset, limit: pageSize, archived };
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string>();
+  const exportIdentity = JSON.stringify([source.scope, type, recordQuery]);
+  const exportCurrent = useRef({ identity: exportIdentity, source: sourceIdentity, active: true });
+  exportCurrent.current.identity = exportIdentity;
+  exportCurrent.current.source = sourceIdentity;
+  useEffect(() => {
+    exportCurrent.current.active = true;
+    return () => { exportCurrent.current.active = false; };
+  }, []);
+  const exportCSV = async () => {
+    if (!source.exportCSV) return;
+    const current = () => exportCurrent.current.active && exportCurrent.current.identity === exportIdentity && exportCurrent.current.source === sourceIdentity;
+    setExporting(true);
+    setExportError(undefined);
+    try {
+      const file = await source.exportCSV(type, recordQuery);
+      if (!current()) return;
+      const url = URL.createObjectURL(file);
+      Object.assign(document.createElement("a"), { href: url, download: `${type}.csv` }).click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      if (current()) setExportError(humanizeKernelError(error instanceof Error ? error.message : String(error)));
+    } finally {
+      if (exportCurrent.current.active) setExporting(false);
+    }
+  };
   useEffect(() => {
     if (!visible || window || !info || (view !== "list" && view !== "kanban")) return;
     let current = true;
     const source = from.current;
     setError(undefined);
-    const field = sort.replace(/^-/, "");
-    const known = ["id", "created", "changed"].includes(field) || info.fields.some((f) => f.name === field);
-    const query = { domain, search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived };
     const load = () => {
-      source.list(type, query)
+      source.list(type, recordQuery)
         .then((p) => { if (current) { setLoadedPage({ key: pageKey, page: p }); setError(undefined); } }, (e) => { if (current) { setLoadedPage(undefined); setError(String(e)); } });
     };
-    const stop = source.watchList?.(type, query, load);
+    const stop = source.watchList?.(type, recordQuery, load);
     const handle = setTimeout(load, 150);
     return () => { current = false; stop?.(); clearTimeout(handle); };
   }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible]);
@@ -393,6 +421,8 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />{t("Archived")}</label>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
+        {source.exportCSV && <Button size="sm" disabled={exporting} onClick={() => void exportCSV()}>{t("Export CSV")}</Button>}
+        {exportError && <span role="alert" className="text-xs text-danger">{exportError}</span>}
         {toolbar}
         {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark })}>{t("Save view…")}</Button>}
         {availableViews.length > 1 && (

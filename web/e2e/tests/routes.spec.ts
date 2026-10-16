@@ -344,7 +344,7 @@ test("route 4: an approval reaches the requester's page", async ({ page }) => {
   await page
     .getByRole("textbox", { name: "Filter rows", exact: true })
     .fill("hcm/page/leaves");
-  await page.getByRole("row").filter({ hasText: "hcm/page/leaves" }).click();
+  await page.getByRole("row").filter({ has: page.getByRole("cell", { name: "hcm/page/leaves", exact: true }) }).click();
   await page.getByRole("button", { name: "Open page" }).click();
   await page.getByRole("button", { name: /Draft leave request/ }).click();
   const draft = page.getByRole("dialog");
@@ -381,6 +381,8 @@ test("route 4: an approval reaches the requester's page", async ({ page }) => {
   await managerPage
     .getByRole("button", { name: "Open related record" })
     .click();
+  await managerPage.getByRole("dialog", { name: leave, exact: true })
+    .getByRole("button", { name: "Open record", exact: true }).click();
   await managerPage
     .getByRole("region", { name: "Approvals", exact: true })
     .getByRole("button", { name: "Submit for approval", exact: true })
@@ -411,7 +413,7 @@ test("route 28: preview cannot submit an action", async ({ page }) => {
     .fill("crm/page/opportunities");
   await page
     .getByRole("row")
-    .filter({ hasText: "crm/page/opportunities" })
+    .filter({ has: page.getByRole("cell", { name: "crm/page/opportunities", exact: true }) })
     .click();
   await page.getByRole("button", { name: "Preview page" }).click();
   await expect(

@@ -28,8 +28,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
   const area = route?.view === "project" ? studioArea(route.params?.area)
     : ["action-type", "decision-table", "alert"].includes(route?.view ?? "") || definition?.ref.kind === "action" ? "behavior"
     : selected ? resourceArea(selected) : "assemble";
-  const kinds: readonly string[] = studioAreas.find(item => item.id === area)!.kinds;
-  const visible = owned.filter(item => kinds.includes(item.ref.kind) && `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));
+  const visible = owned.filter(item => `${item.title} ${item.ref.name} ${t(item.kind.label)}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));
   return <div role="region" aria-label={t("Application assets")}>
     <div role="navigation" aria-label={t("Application workspaces")} className="mb-2 grid gap-1">
       {studioAreas.map(item => <Button key={item.id} aria-current={area === item.id ? "page" : undefined} variant={area === item.id ? "primary" : "ghost"} size="sm" className="justify-start" onClick={() => open(studioRoute(project.id, item.id, selected ? refKey(selected.ref) : undefined))}>{t(item.title)}</Button>)}
@@ -37,7 +36,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
     <Input type="search" aria-label={t("Filter application assets")} placeholder={t("Filter application assets")} value={filter} onChange={event => setFilter(event.target.value)} className="h-7 text-xs" />
     {unavailable && <p role="alert" className="p-2 text-xs text-danger">{t("Some application assets are unreadable.")}</p>}
     {conceptTree(project, visible).filter(group => group.items.length).map(group => <PanelSection key={group.id} title={group.title}>
-      {group.items.map(item => <StructureRow key={refKey(item.ref)} icon={kindIcon[item.kind.kind]} label={item.title} selected={selected === item} meta={item.record?.state === "draft" ? t("draft") : undefined} onClick={() => open(assetRoute(item.ref, owned, host.definitions, project.id))} />)}
+      {group.items.map(item => <StructureRow key={refKey(item.ref)} icon={kindIcon[item.kind.kind]} label={item.title} selected={selected === item} meta={item.missing ? t("missing") : item.record?.state === "draft" ? t("draft") : undefined} onClick={() => open(assetRoute(item.ref, owned, host.definitions, project.id))} />)}
     </PanelSection>)}
     <Button variant="ghost" size="sm" onClick={() => open({ view: "project", params: { id: project.id, section: "concepts", ...(selected ? { asset: refKey(selected.ref) } : {}) } })}>{t("Organize business concepts")}</Button>
   </div>;

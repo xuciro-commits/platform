@@ -22,10 +22,10 @@ import (
 // table is a native operation of the builder - callable from a process's
 // compute step, a page's compute widget or the capability API like any other
 // operation - and it is the builder that evaluates it (OperationExecutor).
-// A table is operational configuration: publishing installs it at once and
-// keeps the published image; drafts never change what runs.
+// Its complete rule plan is the original compute release asset. Candidate
+// activation or development publication installs it; drafts never change it.
 const (
-	TableType          = "build.table"
+	TableType          = buildapi.TableType
 	SchemaTablePublish = TableType + ".publish"
 	tableRows          = 500
 	tableCols          = 16
@@ -205,7 +205,7 @@ func tableImage(image []byte) (Table, error) {
 		return record, err
 	}
 	frozen, ok := wasPublished[Table](record.Published)
-	if !ok || record.State != "published" || frozen.ID != record.ID || frozen.Name != record.Name || frozen.Version != record.Version {
+	if !ok || record.State != "published" || frozen.ID != record.ID || frozen.Name != record.Name || frozen.Version < 1 || frozen.Version > record.Version || record.Version > 64 {
 		return frozen, fmt.Errorf("accepted table has no matching immutable publication")
 	}
 	return frozen, nil

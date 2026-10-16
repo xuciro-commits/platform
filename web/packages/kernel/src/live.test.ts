@@ -68,6 +68,37 @@ test("connection loss invalidates cached values and reconnect installs the curre
  release();stop();
 });
 
+test("large workspaces split live registrations by the host's path and byte limits", async () => {
+  vi.useFakeTimers();
+  const connections: { paths: string[]; signal: AbortSignal; stream: ReadableStreamDefaultController<Uint8Array> }[] = [];
+  const encoder = new TextEncoder();
+  const live = new LiveReads(async (paths, signal) => {
+    if (paths.length > 32 || encoder.encode(JSON.stringify(paths)).length > (64 << 10)) return new Response(null, { status: 400 });
+    return new Response(new ReadableStream({ start(stream) {
+      connections.push({ paths, signal, stream });
+      signal.addEventListener("abort", () => stream.error(Error("aborted")));
+    } }));
+  });
+  const paths = [
+    ...Array.from({ length: 40 }, (_, n) => `/v1/records/build.asset${n}`),
+    ...Array.from({ length: 12 }, (_, n) => `/v1/records/build.zone${n}?search=${"温".repeat(2300)}`),
+  ].sort();
+  const stop = live.enable(), changed = vi.fn();
+  const releases = paths.map(path => live.subscribe(path, changed));
+  await vi.advanceTimersByTimeAsync(60);
+  expect(connections.length).toBe(3);
+  expect(connections.flatMap(connection => connection.paths)).toEqual(paths);
+  for (const connection of connections) {
+    connection.stream.enqueue(encoder.encode(`event: snapshot\ndata: ${JSON.stringify({ sequence: 1, results: connection.paths.map(path => ({ path, status: 200, body: { value: path } })) })}\n\n`));
+  }
+  await vi.advanceTimersByTimeAsync(0);
+  expect(changed).toHaveBeenCalledTimes(paths.length);
+  expect(live.read(paths.at(-1)!)?.value).toEqual({ value: paths.at(-1) });
+  releases.forEach(release => release());
+  stop();
+  expect(connections.every(connection => connection.signal.aborted)).toBe(true);
+});
+
 test("inventory leases follow actual page membership and never return a partial inventory after a denied page", async () => {
  vi.useFakeTimers();
  const connections:{paths:string[];stream:ReadableStreamDefaultController<Uint8Array>;signal:AbortSignal}[]=[];

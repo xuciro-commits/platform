@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, fresh, pageUIProfile, test } from "./kit";
 import { switchWorkspace } from "./host";
 
@@ -92,11 +93,25 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
     const business = await operatorContext.newPage();
     await operator.open(business, "/home");
     await expect(business.getByRole("button", { name: "Projects", exact: true })).toHaveCount(0);
+    await expect(business.getByRole("button", { name: /^Asset Library\b/ })).toHaveCount(0);
+    await switchWorkspace(business, "Control Panel");
+    await expect(business.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await business.getByRole("button", { name: "My account", exact: true }).last().click();
+    await expect(business.getByRole("heading", { name: "My account", exact: true })).toBeVisible();
+    await operator.open(business, "/home");
     await business.getByRole("button", { name: "WMS entry probe", exact: true }).click();
     await expect(business.getByRole("heading", { name: "Receiving workspace", exact: true })).toBeVisible();
+    await expect(business.getByRole("button", { name: "New application instance", exact: true })).toHaveCount(0);
+    await expect(business.getByRole("combobox", { name: "Page application", exact: true })).toHaveCount(0);
     const recordID = fresh("RECEIPT");
     await operator.decide(`${object.type}.create`, { type: object.type, id: recordID }, { number: "IN-M1" });
     await expect(business.getByRole("row").filter({ hasText: "IN-M1" })).toBeVisible();
+    await business.getByRole("textbox", { name: "Search", exact: true }).fill("IN-M1");
+    const exported = business.waitForEvent("download", { timeout: 10_000 });
+    await business.getByRole("button", { name: "Export CSV", exact: true }).click();
+    const csv = await readFile((await (await exported).path())!, "utf8");
+    expect(csv).toContain(recordID);
+    expect(csv).toContain("IN-M1");
     await business.reload();
     await expect(business.getByRole("heading", { name: "Receiving workspace", exact: true })).toBeVisible();
     await expect(operator.decide("build.object.edit", { type: "build.object", id: object.id }, { title: "Unauthorized" })).rejects.toThrow(/POLICY_DENIED/);

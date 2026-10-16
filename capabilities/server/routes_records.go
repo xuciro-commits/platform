@@ -147,12 +147,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, rows)
 	})
-	rt.handle(Route{Pattern: "GET /v1/export/{type}", Summary: "The records a list shows the caller, as CSV (ADR-0028)",
-		Query: []Param{{"domain", "Filters in the prefix form"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search")}
-		if sort := r.URL.Query().Get("sort"); sort != "" {
-			q.Sort = strings.Split(sort, ",")
-		}
+	exportCSV := func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant, q platform.Query) {
 		out, err := t.Export(m, r.PathValue("type"), q, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
@@ -161,6 +156,24 @@ func (h *Host) routesRecords(rt *routes) {
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", "attachment; filename="+r.PathValue("type")+".csv")
 		w.Write(out)
+	}
+	rt.handle(Route{Pattern: "GET /v1/export/{type}", Summary: "The records a list shows the caller, as CSV (ADR-0028)",
+		Query: []Param{{"domain", "Filters in the prefix form"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
+		if sort := r.URL.Query().Get("sort"); sort != "" {
+			q.Sort = strings.Split(sort, ",")
+		}
+		exportCSV(w, r, m, t, q)
+	})
+	rt.handle(Route{Pattern: "POST /v1/export/{type}", Summary: "Export the caller's complete authorized record query as CSV, including sets, relations and business time (ADR-0104)", Body: platform.Query{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
+		decoder.DisallowUnknownFields()
+		var q *platform.Query
+		if decoder.Decode(&q) != nil || q == nil || q.Limit < 0 || q.Offset < 0 || decoder.Decode(new(any)) != io.EOF {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		exportCSV(w, r, m, t, *q)
 	})
 	rt.handle(Route{Pattern: "POST /v1/records/{type}/query", Summary: "Read a bounded complete record-set expression in the caller's scope before paging (ADR-0046)", Body: platform.Query{}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))

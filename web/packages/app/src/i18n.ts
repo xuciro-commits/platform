@@ -919,7 +919,6 @@ register("zh-CN", {
   "What the import would do": "导入将做什么",
   "Imported": "已导入",
   "Import CSV": "导入 CSV",
-  "Export CSV": "导出 CSV",
   "A draft waits for": "草稿等待",
   "Agent": "智能体",
   "Archive": "归档",

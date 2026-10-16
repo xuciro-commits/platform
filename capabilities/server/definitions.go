@@ -413,7 +413,7 @@ func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error
 }
 
 func ownedMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation}, kind)
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert}, kind)
 }
 
 // ownedAssetDefinition indexes only an owner's accepted descriptor identity.
@@ -434,6 +434,13 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
 	}
 	definition := platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: plan.Record}
+	if plan.Ref.Kind == platform.AssetAlert {
+		var alert platform.AlertRule
+		if json.Unmarshal(asset.Body, &alert) != nil || alert.Check() != nil {
+			return definition, false, fmt.Errorf("invalid accepted alert rule")
+		}
+		definition.Alert = &alert
+	}
 	if plan.Ref.Kind == platform.AssetObservation {
 		var observation platform.ObservationDefinition
 		if err := json.Unmarshal(asset.Body, &observation); err != nil {
@@ -820,7 +827,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 			def.Protocol = &projected
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet:
+		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetAlert:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {

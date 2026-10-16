@@ -1,10 +1,12 @@
 package platformserver
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +111,36 @@ func TestRecordSetHTTPRejectsMalformedBranchesWithoutFallingBack(t *testing.T) {
 	for _, body := range []string{`null`, `{} {}`, `{"set":{"op":"union","inputs":[null,{}]}}`, `{"set":{"op":"union","inputs":[{},{}]},"offset":-1}`, `{"set":{"op":"union","inputs":[{"limit":1},{}]}}`, `{"set":{"op":"bogus","inputs":[{},{}]}}`, `{"set":{"op":"union","inputs":[{}]}}`, `{"set":{"op":"union","inputs":[{}, {"domain":[["secret","=","hidden"]]}]}}`, strings.Repeat(" ", platform.QuerySetMaxBytes) + `{}`} {
 		if out := request("ana", body); out.Code == 200 {
 			t.Fatal("malformed set accepted", body[:min(len(body), 100)])
+		}
+	}
+}
+
+func TestRecordSetExportPreservesQueryAndMemberScope(t *testing.T) {
+	tn := setFixture(t)
+	handler := NewHost(Tokens(map[string]string{"ana": "ana"}), tn).Handler()
+	export := func(body string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest("POST", "/v1/export/stock.item", strings.NewReader(body))
+		request.Header.Set("Authorization", "Bearer ana")
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	query := platform.Query{Set: setExpression("intersect", setTerm("qty", ">=", 500), setTerm("qty", "<", 520)), Search: "Wrench", Sort: []string{"-qty"}, Offset: 1, Limit: 1}
+	response := export(string(platform.Raw(query)))
+	if response.Code != 200 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	rows, err := csv.NewReader(response.Body).ReadAll()
+	if err != nil || len(rows) != 4 || slices.Contains(rows[0], "secret") {
+		t.Fatal("CSV must contain all matching authorized rows and readable fields", rows, err)
+	}
+	if got := []string{rows[1][0], rows[2][0], rows[3][0]}; !reflect.DeepEqual(got, []string{"I514", "I508", "I502"}) {
+		t.Fatal("export lost its filter, search, sort or original member scope", got)
+	}
+	for _, body := range []string{`null`, `{} {}`, `{"set":{"op":"bogus","inputs":[{},{}]}}`, `{"domain":[["secret","=","hidden"]]}`} {
+		if response := export(body); response.Code == 200 {
+			t.Fatal("invalid query fell back to an unfiltered export", body)
 		}
 	}
 }

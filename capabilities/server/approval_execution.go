@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -10,6 +11,65 @@ import (
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
+
+func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
+	activated := map[string]bool{}
+	for key, raw := range h.t.committed.answers {
+		if !strings.HasPrefix(key, "release:") {
+			continue
+		}
+		result, err := decodeAcceptedRelease(raw)
+		if err == nil && result.Active {
+			activated[result.CandidateID] = true
+		}
+	}
+	if release := h.ActiveRelease(); release != "" {
+		activated[release] = true
+	}
+	for _, release := range slices.Sorted(maps.Keys(activated)) {
+		closed, refusal := h.t.approvalClosure(release, app, action, typ)
+		if refusal != nil {
+			return "", refusal
+		}
+		if closed.ID == "" {
+			continue
+		}
+		running, err := h.t.runningReleaseLocked(closed)
+		if err == nil && sameRetainedCapability(running, closed) {
+			return release, nil
+		}
+	}
+	return "", nil
+}
+
+func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
+	closed, refusal := h.rt.view.approvalClosure(h.rt.release, app, action, typ)
+	if refusal != nil || closed.ID == "" {
+		return "", refusal
+	}
+	return h.rt.release, nil
+}
+
+// A tenant's latest activation may belong to another application. Select an
+// approval's original complete action from an actual installed candidate.
+func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.ReleaseCandidate, *kernel.Error) {
+	if release == "" {
+		return platform.ReleaseCandidate{}, nil
+	}
+	sealed, err := t.releases.candidate(release)
+	if err != nil {
+		return platform.ReleaseCandidate{}, migrationRefusal(err)
+	}
+	root := platform.AssetRef{App: app, Kind: platform.AssetAction, Name: action}
+	if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
+		root = platform.AssetRef{App: app, Kind: platform.AssetObject, Name: typ}
+		if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
+			return platform.ReleaseCandidate{}, nil
+		}
+	}
+	closed, err := sealed.Closure([]platform.AssetRef{root})
+	return closed, migrationRefusal(err)
+}
 
 func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalRequest) (host.WorkHost, *kernel.Error) {
 	if a.Release == "" {

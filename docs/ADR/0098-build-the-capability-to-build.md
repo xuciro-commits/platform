@@ -242,14 +242,14 @@ FDE 不应是一个集中管理各类编辑器的工具箱，而应是能从零�
 
 | 判断 | 当前证据与处理 |
 |---|---|
-| 采纳：说明 Application 与 Authority 的映射 | `ApplicationArtifact` 是原候选的投影，动态对象仍归 Build；补明共享对象、权限、版本和恢复边界，见 [ADR-0107 D2](0107-application-artifact-and-runtime.md#d2-运行形态一个应用是一个运行单元)。不拆 Ledger，不承诺同租户应用之间物理隔离。共享资产的分别升级/退役仍须按实际交付场景检查，文档说明不替代行为证据。 |
+| 采纳：说明 Application 与 Authority 的映射 | `ApplicationArtifact` 是原候选的投影，动态对象仍归 Build；补明共享对象、权限、版本和恢复边界，见 [ADR-0107 D2](0107-application-artifact-and-runtime.md#d2-运行形态一个应用是一个运行单元)。不拆 Ledger，不承诺同租户应用之间物理隔离。共享规则更新包含原依赖方，移出一方应用不改变另一方；已发布定义不可按普通草稿归档，旧版本与读取责任保留。开发场景证据不替代客户使用。 |
 | 采纳：重复对账不应无限形成相同业务事实 | 当前 `confirmation_reconcile.go` 只提交首次差异、观测/错误变化和状态变化；相同结果只推进临时读取间隔，保留第一次差异、人工裁定及重启后的继续读取。原时间戳键不再令相同轮询重复入账；检查与边界归 [ADR-0112 As built](0112-cross-system-coordination.md#5-as-built)。 |
 | 采纳但不泛化：事务表达限制 | 已按资源转移案例去掉无条件主体写入与同类型目标的过严限制；已确定的无条件重复在发布时拒绝，动态或条件目标由原执行器按实际写入拒绝冲突。主体仍保留命令接受元数据。保留逐步骤授权、一次接受、跨权威边界与结果大小限制，见 ADR-0100 As built。 |
 | 采纳但限定：构建器表达与可读性 | 事务已有 `TransactionEditor`，并非只能写 JSON。原 ExpressionEditor 已补齐 `round` 等现有编译算子，保留同一 Expr；合成样本仍主要用 JSON。修改相关组件时正常排版；不新建可视化编程框架，不全仓重排。 |
 | 采纳：重复导航与首访菜单 | Studio 已统一工作区入口和主资产树，删除 ProjectHome/上下文条重复导航；Workspace 在异步菜单首次就绪时显示，保留手动折叠与手机抽屉。应用上下文、原编辑器与输入继续保留，实现与检查归 ADR-0108。 |
 | 采纳：对象编辑器的重复结构与配置入口 | 删除与主区重复的字段/状态/动作/角色树，复用 ContentTabs；主区选择、原 Inspector 编辑，概览数量可直接进入配置。原保存、发布与输入保留；桌面及窄屏已观察，检查归 ADR-0108。 |
 | 采纳：查看详情、编辑和比较的打开语义 | 原 `useOpenRecord` 默认 `beside` 已替换为现有 Sheet/获权 RecordPage 的只读详情。正式工作沿原页签，比较显式分栏；不把全部页面塞入 Inspector，也不只改默认值为 `tab`。读取权限继续由原记录 owner 检查。 |
-| 采纳但分类：已有功能缺少自然入口 | 已补 Builder 的规则、Integration health 与 Release history 入口。Automation 是同一 `flow` 的编辑形态，可创建并加入应用；Decision table / Alert 仍由原共享操作/通知配置持有，不虚构 AssetKind，也不宣称已成为应用包的独立版本成员。 |
+| 采纳但分类：已有功能缺少自然入口 | 已补 Builder 的规则、Integration health 与 Release history 入口。Automation 是同一 `flow` 的编辑形态，可创建并加入应用；Decision table 保留 compute 身份，Alert 以 alert 声明加入同一候选；原求值与通知归属不变，保存草稿不影响运行。相关定义、保留版本与跨环境交付归 ADR-0107/0118。 |
 | 采纳但限定：角色意图与构建应用的体验 | 只改变类别顺序的 Rail 工作区切换器已删除，Operations/Build/Admin 作为门户类别筛选；构建应用 description 已进入原门户。保留统一 Shell、权限与发布工件，不照搬原生行业界面，也不凭一个供暖场景宣称所有角色体验已通过。 |
 | 仍需测量：数据规模 | 唯一约束遍历同类型行、版本固定检查、关系扫描/解码及运行/拒绝历史遍历确实存在（`business_constraints.go`、`business_version.go`、`owned_relations.go`、`application_runtime.go`、`business_refusals.go`）。这证明复杂度随数据增长，不能据此宣称已发生生产性能故障。真实点表确定目标密度后测量最常用的提交与读取，只优化实际主要耗时；不更换存储或全量建立索引。 |
 | 否决为当前缺陷：post/journal 未接入、设备派发未落地 | `transaction_steps.go` / `transaction.go` 已执行 post/journal；旧动作新保存转成同一事务，见 [ADR-0100 As built](0100-business-transaction.md#6-as-built--完整业务事务)。Dispatch、Source/Observation 回读和人工处置已有实现与受控环境证据，见 [ADR-0121 As built](0121-device-dispatch.md#as-built)。现场协议/真实设备仍未验证，不能把工程实现等同于客户上线。 |

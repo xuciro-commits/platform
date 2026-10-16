@@ -213,6 +213,44 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	if refusal != nil || old.Version != 1 || old.Release != preview.CandidateID {
 		t.Fatalf("retained binding chose current activation: %+v %v", old, refusal)
 	}
+	if _, err := tn.ActivateRelease(member, preview.CandidateID, "rollback-first", now); err != nil {
+		t.Fatal(err)
+	}
+	active, activeVersion, exists := operationDefinition(tn.app(build.ID), code.Name, 0)
+	if !exists || activeVersion != 1 || active.Binding.Module != saved.Module {
+		t.Fatal("rollback did not change the active compute")
+	}
+	rolledBack, _ := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	if rolledBack.Version != 2 || len(rolledBack.Versions) != 2 {
+		t.Fatal("compute rollback lost its highest issued ordinal")
+	}
+	submit("edit3", build.CodeType+".edit", []byte(`{"title":"Third publication","source":"package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*3},nil}"}`))
+	submit("compile3", build.SchemaCodeCompile, []byte(`{}`))
+	if clock := time.Now().UTC(); clock.After(now) {
+		now = clock
+	}
+	thirdBuild := tn.operationDispatches(now)
+	for _, run := range thirdBuild {
+		run()
+	}
+	thirdCode, _ := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	if thirdCode.State != "compiled" || !strings.Contains(thirdCode.BuiltSource, "input.Value*3") {
+		t.Fatal("third build did not finish with its declared source")
+	}
+	third, err := tn.PreviewRelease(member, platform.AssetCompute, "C")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.SaveReleaseCandidate(member, platform.AssetCompute, "C", third.CandidateID, "save3", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.ActivateRelease(member, third.CandidateID, "activate3", now); err != nil {
+		t.Fatal(err)
+	}
+	latest, _ := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	if latest.Version != 3 || len(latest.Versions) != 3 {
+		t.Fatal("compute reused an old publication identity")
+	}
 }
 
 func (s *computeStock) Manifest() platform.Manifest {

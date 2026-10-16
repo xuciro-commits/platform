@@ -22,12 +22,17 @@ func TestFunctionImageRetainsOnlyValidPublishedVersions(t *testing.T) {
 	if latest, err := functionImage(image(family)); err != nil || latest.Name != v2.Name || latest.Instructions != v2.Instructions {
 		t.Fatalf("draft replaced the installed version: %+v %v", latest, err)
 	}
+	rolledBack := family
+	rolledBack.Published, rolledBack.State = family.Versions[0], "draft"
+	if selected, err := functionImage(image(rolledBack)); err != nil || selected.Version != 1 || selected.Instructions != v1.Instructions {
+		t.Fatalf("retained pointer did not select the original function: %+v %v", selected, err)
+	}
 	for _, tc := range []struct {
 		name string
 		edit func(*Function)
 	}{
 		{"missing version", func(f *Function) { f.Versions = f.Versions[:1] }},
-		{"wrong pointer", func(f *Function) { f.Published = f.Versions[0] }},
+		{"unretained pointer", func(f *Function) { outside := v2; outside.Version = 3; f.Published = published(outside) }},
 		{"changed source", func(f *Function) {
 			bad := v2
 			bad.Object = "build.other"

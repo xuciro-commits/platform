@@ -262,16 +262,21 @@ func (b *Build) operationDeclarations() []platform.Operation {
 }
 func codeImage(image []byte) (Code, error) {
 	var code Code
-	if json.Unmarshal(image, &code) != nil || code.State != "published" || code.Version < 1 || code.Version > 64 || len(code.Versions) != code.Version || code.Published != code.Versions[code.Version-1] {
+	if json.Unmarshal(image, &code) != nil || !slices.Contains([]string{"draft", "published"}, code.State) || code.Version < 1 || code.Version > 64 || len(code.Versions) != code.Version || !slices.Contains(code.Versions, code.Published) {
 		return code, fmt.Errorf("invalid compute publication family")
 	}
+	var selected Code
 	for i, raw := range code.Versions {
 		prior, ok := wasPublished[Code](raw)
 		if !ok || prior.ID != code.ID || prior.Name != code.Name || prior.Version != i+1 || prior.Definition().Check() != nil || prior.SourceHash != prior.sourceHash() || prior.Published != "" || len(prior.Versions) > 0 {
 			return code, fmt.Errorf("invalid retained compute version")
 		}
+		if raw == code.Published {
+			selected = prior
+		}
 	}
-	return code, nil
+	selected.Versions = code.Versions
+	return selected, nil
 }
 func codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
 	raw, err := json.Marshal(code.Definition())
@@ -284,7 +289,12 @@ func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	out := []platform.ReleaseAsset{}
 	for _, op := range b.operationDeclarations() {
 		if op.Binding.Kind == "native" {
-			continue // a decision table is installed directly, not carried by a release (ADR-0062)
+			asset, err := tableReleaseAsset(b.tables[op.Name], b.Manifest().Version)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, asset)
+			continue
 		}
 		asset, err := codeReleaseAsset(b.codes[op.Name], b.Manifest().Version)
 		if err != nil {
@@ -313,6 +323,13 @@ func (b *Build) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	ordinal, err := strconv.Atoi(text)
 	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid compute candidate asset")
+	}
+	if op.Binding.Kind == "native" {
+		table, err := tableFromAsset(asset)
+		if err != nil {
+			return err
+		}
+		return b.installTable(platform.Caller{Replaying: true}, table)
 	}
 	code := Code{Name: op.Name, Title: op.Title, Description: op.Description, Input: op.Input, Output: op.Output, Roles: op.Roles, Limits: op.Limits, Module: op.Binding.Module, State: "published", Version: ordinal}
 	return b.installCode(platform.Caller{Replaying: true}, code)
@@ -369,6 +386,10 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute {
 			continue
 		}
+		var operation platform.Operation
+		if json.Unmarshal(asset.Body, &operation) == nil && operation.Binding.Kind == "native" {
+			continue
+		}
 		i := slices.IndexFunc(list, func(code Code) bool { return code.Name == asset.Ref.Name && !code.Archived })
 		if i < 0 {
 			return nil, fmt.Errorf("compute has no source owner")
@@ -383,7 +404,23 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		if !ok || err != nil || ordinal < 1 || ordinal > 64 {
 			return nil, fmt.Errorf("compute version is invalid")
 		}
-		if ordinal == record.Version {
+		if ordinal <= record.Version {
+			retained, err := b.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
+			if err != nil || !equalIntegrationAsset(retained, asset) {
+				return nil, fmt.Errorf("retained compute bytes differ")
+			}
+			if len(record.Versions) != record.Version {
+				return nil, fmt.Errorf("retained compute history is unavailable")
+			}
+			selected := record.Versions[ordinal-1]
+			if selected == record.Published {
+				continue
+			}
+			record.Published = selected
+			if ordinal < record.Version {
+				record.State = "draft"
+			}
+			out = append(out, ReleasePublication{Schema: SchemaCodePublish, Image: platform.Raw(record)})
 			continue
 		}
 		built := Code{ABI: record.BuiltABI, Language: record.BuiltLanguage, Source: record.BuiltSource, Input: record.BuiltInput, Output: record.BuiltOutput}

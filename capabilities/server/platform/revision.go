@@ -187,6 +187,20 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 				}
 			}
 		}
+		if ref.Kind == AssetAlert {
+			var alert AlertRule
+			if json.Unmarshal(body, &alert) != nil || alert.Check() != nil {
+				return empty, fmt.Errorf("invalid alert rule")
+			}
+			target, exists := lookup[alert.Object]
+			info, err := queryObjectDescriptor(target.Body)
+			if !exists || err != nil {
+				return empty, fmt.Errorf("alert %s object is unavailable", ref)
+			}
+			if _, exists := info.Field(alert.Field); !exists {
+				return empty, fmt.Errorf("alert %s field %s is unavailable", ref, alert.Field)
+			}
+		}
 		if ref.Kind == AssetLinkType {
 			var l LinkType
 			if json.Unmarshal(body, &l) != nil || asset.ContractVersion != l.Contract() {

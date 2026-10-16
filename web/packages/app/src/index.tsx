@@ -177,17 +177,18 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
 
 /**
  * Opens a record by reference — `"pms.reservation/R-1"` or `{ type, id }` —
- * in a read-only detail sheet. Explicit tab/beside/popout requests use the
- * owning app's view. Apps link to each other's records without knowing each other (D5).
+ * in a read-only detail sheet. Work requests and runtime tasks open their
+ * owning view for handling; explicit inspect/tab/beside/popout requests remain available.
  */
 export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "beside" | "popout" | "inspect" }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
   return (ref, options) => {
     const { type, id } = typeof ref === "string" ? { type: ref.split("/")[0]!, id: ref.split("/").slice(1).join("/") } : ref;
-    if (!options || options.window === "inspect") {
+    const work = ["work.approval", "work.task", "flow.instance", "agent.run"].includes(type);
+    if (options?.window === "inspect" || !options && !work) {
       open({ view: "record", params: { type, id, inspect: "true" } }, { window: "inspect" });
-    } else open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options);
+    } else open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options ?? { window: "tab" });
   };
 }
 
@@ -229,6 +230,8 @@ export type AppUI = {
   nav: (host: Host, route?: Route) => NavSection[];
   /** An application's contextual resource tree, inside the original shell navigation. */
   navigation?: (route?: Route) => ReactNode;
+  /** Original editor context around a shared asset reference view. */
+  referenceContext?: (route: Route, children: ReactNode) => ReactNode;
   home: Route;
   /** Entity type → the id of the view that shows one record, given `{ id }`. */
   opens?: Record<string, string>;
@@ -340,8 +343,7 @@ export function Records({ type, description, actions, covers, saved, kanban }: {
   };
   return (
     <>
-      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} />
-        <Transfer type={type} client={client} importable={can(`${type}.create`) || can(`${type}.edit`)} /></>}
+      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} /></>}
         description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList
         key={saved?.id ?? type}
@@ -349,6 +351,7 @@ export function Records({ type, description, actions, covers, saved, kanban }: {
         type={type}
         initial={initial}
         onSave={setSaving}
+        toolbar={<Transfer type={type} client={client} importable={can(`${type}.create`) || can(`${type}.edit`)} />}
         onOpen={(r) => openRecord({ type, id: r.id })}
         kanban={kanban}
         moves={moves}
@@ -371,19 +374,13 @@ export function Records({ type, description, actions, covers, saved, kanban }: {
   );
 }
 
-/** Export a type's records as CSV, and import them from CSV after a preview of what each row would do (ADR-0028). */
+/** Import a type's records from CSV after a preview of what each row would do (ADR-0028). */
 function Transfer({ type, client, importable }: { type: string; client: EdgeClient; importable: boolean }) {
   const [file, setFile] = useState<File>();
   const [rows, setRows] = useState<{ row: number; id: string; action: string; outcome: string }[]>();
   const [done, setDone] = useState(false);
-  const save = async () => {
-    const url = URL.createObjectURL(await client.exportCSV(type, ""));
-    Object.assign(document.createElement("a"), { href: url, download: `${type}.csv` }).click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
   const close = () => { setFile(undefined); setRows(undefined); setDone(false); };
   return <>
-    <Button onClick={() => void save()}>{t("Export CSV")}</Button>
     {importable && <FilePicker accept=".csv,text/csv" onFile={async (f) => { setFile(f); setRows(await client.importCSV(type, f, true)); }}>{t("Import CSV")}</FilePicker>}
     <Dialog open={!!rows} onOpenChange={(o) => !o && close()} title={done ? t("Imported") : t("What the import would do")}>
       <div className="grid gap-3">

@@ -30,7 +30,8 @@ import { Changes } from "./releases/changes";
 import { CandidateTest } from "./releases/simulate";
 import { ProjectHome, ProjectsList } from "./projects/project";
 import { StudioTemplates } from "./workshop/template-ui";
-import { t, type NavSection, type View } from "@platform/ui";
+import { t, type NavSection, type Route, type View } from "@platform/ui";
+import type { ReactNode } from "react";
 import { ApplicationScope } from "./projects/application-scope";
 import { StudioNavigation } from "./projects/studio-navigation";
 import { studioApplicationID } from "./projects/studio-model";
@@ -86,15 +87,17 @@ const editorViews: View[] = [
   } },
   { id: "release-history", title: () => t("Release history"), render: () => <ReleaseReview key="history" /> },
 ];
-const views = editorViews.map(view => ({ ...view, render: (params: Record<string, string>) => {
-  const route = { view: view.id, params };
-  const application = studioApplicationID(route) ?? (view.id === "module" ? params.id : undefined);
-  return <ApplicationScope application={application} route={route}>{view.render(params)}</ApplicationScope>;
-} }));
+function referenceContext(route: Route, children: ReactNode) {
+  const params = route.params ?? {};
+  const application = studioApplicationID(route) ?? (route.view === "module" ? params.id : undefined);
+  return <ApplicationScope application={application} route={route}>{children}</ApplicationScope>;
+}
+const views = editorViews.map(view => ({ ...view, render: (params: Record<string, string>) => referenceContext({ view: view.id, params }, view.render(params)) }));
 
 /** Build owns the contextual navigation; the Shell retains all editor tabs. */
 export default defineApp({
   id: "build", surface: "studio", category: "build", title: t("Builder"),
+  referenceContext,
   description: t("Build, verify and deliver one business application."), icon: <Hammer />,
   home: { view: "projects" }, views,
   opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.agent": "agent", "build.alertrule": "alert", "build.observation": "observation-source" },

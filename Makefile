@@ -96,7 +96,12 @@ setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright �
 ## check - 提交前检查（数分钟内完成，无浏览器，无容器）
 
 .PHONY: check
-check: check-go check-web ## 执行完整静态检查：宿主编译校验、边界守约、Web 类型检查
+check: check-go check-web check-local ## 执行宿主、边界、Web 类型及本地环境选择检查
+
+.PHONY: check-local
+check-local: ## 检查本地运行模式保留与基础服务启动，不操作实际容器
+	python3 -m unittest discover -s deploy/dev -p '*_test.py'
+	bash -n deploy/local/update.sh
 
 .PHONY: check-go
 check-go: ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
@@ -124,7 +129,7 @@ e2e: export PLATFORM_PACKAGES_DIR ?= $(GATEWAY_PACKAGES)
 endif
 e2e: ## 在开发宿主上运行 docs/Testing.md 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build
-	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts)
+	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts) $(E2E_ARGS)
 
 ## release - 版本发布（完整证据链；CI 在 v* 标签上运行同一检查）
 

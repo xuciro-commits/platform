@@ -230,6 +230,19 @@ export type AggregateWindowResult = {
   last?: AggregateWindowEdge;
 };
 
+export type AlertRule = {
+  name: string;
+  title: string;
+  object: AssetRef;
+  field: string;
+  operator: string;
+  value?: string;
+  message: string;
+  role?: string;
+  every?: boolean;
+  active: boolean;
+};
+
 export type AppConcept = {
   id: string;
   title: string;
@@ -1179,6 +1192,7 @@ export type DecisionTrace = {
 };
 
 export type Definition = {
+  alert?: AlertRule;
   observation?: ObservationDefinition;
   sampleSet?: SampleSet;
   interface?: Interface;

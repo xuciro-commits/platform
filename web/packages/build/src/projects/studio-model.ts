@@ -5,7 +5,7 @@ import type { OwnedResource } from "./resource-inventory";
 
 export const studioAreas = [
   { id: "model", title: "Model", description: "Objects, fields, relationships, versions and constraints", kinds: ["object", "link-type", "property-type", "query"] },
-  { id: "behavior", title: "Behavior", description: "States, actions, transactions, rules and approvals", kinds: ["object", "action", "compute"] },
+  { id: "behavior", title: "Behavior", description: "States, actions, transactions, rules and approvals", kinds: ["object", "action", "compute", "alert"] },
   { id: "interface", title: "Interface", description: "Pages, templates, application header and navigation", kinds: ["page"] },
   { id: "assemble", title: "Assemble", description: "Data connections, flows, AI functions and agents", kinds: ["flow", "function", "agent", "compute", "connection", "source", "dataset", "pipeline", "writeback", "matching", "observation"] },
   { id: "verify", title: "Verify", description: "Samples, roles, candidates, migrations and delivery", kinds: ["sample-set", "test-plan", "evaluation-set"] },

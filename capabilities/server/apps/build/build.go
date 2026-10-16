@@ -230,6 +230,7 @@ const (
 // definition for operators at once, without a saved candidate.
 var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
 	SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
+	SchemaTablePublish, SchemaAlertPublish,
 	SourceType + ".publish", PipelineType + ".publish", WritebackType + ".publish", MatchType + ".publish"}
 
 // checkReleaseProfile refuses a direct install that a production tenant has
@@ -247,7 +248,7 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaEvaluationSetPublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
 // publicationImage reads and verifies the already committed record image
@@ -319,6 +320,17 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaAlertPublish {
+		_, asset, err := alertImage(image)
+		if err != nil {
+			return err
+		}
+		alert, _, err := alertFromAsset(asset)
+		if err != nil {
+			return err
+		}
+		return b.checkAlert(alert)
+	}
 	if schema == SchemaEvaluationSetPublish {
 		_, _, err := b.testPlanImage(image)
 		return err
@@ -413,6 +425,10 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaAlertPublish {
+		_, _, err := alertImage(image)
+		return err
+	}
 	if schema == SchemaEvaluationSetPublish {
 		_, _, err := b.testPlanImage(image)
 		return err
@@ -613,6 +629,15 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	case FunctionType:
 		record, _ := platform.Get[Function](c, id)
 		published = record.Published != ""
+	case TableType:
+		record, _ := platform.Get[Table](c, id)
+		published = record.Published != ""
+	case AlertType:
+		record, _ := platform.Get[Alert](c, id)
+		published = record.Published != "" || legacyAlert(record)
+	case AgentType:
+		record, _ := platform.Get[Agent](c, id)
+		published = record.Published != ""
 	case ObservationType:
 		record, _ := platform.Get[Observation](c, id)
 		published = record.Published != ""
@@ -691,7 +716,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType, TestPlanType, SampleSetType, ObservationType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType, TableType, AlertType, AgentType, TestPlanType, SampleSetType, ObservationType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}

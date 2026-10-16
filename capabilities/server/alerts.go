@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"platformserver/internal/host"
 	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
@@ -19,8 +20,14 @@ func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
 		return
 	}
 	c := t.automation(build.ID, false)
-	domain, _ := json.Marshal([]any{[]any{"object", "=", typ}, []any{"active", "=", true}})
-	rules, _, _ := platform.Find[build.Alert](c, platform.Query{Domain: domain, Limit: 100})
+	owner, ok := t.app(build.ID).(host.AlertDefinitions)
+	if !ok {
+		return
+	}
+	rules, err := owner.AlertRules(typ)
+	if err != nil {
+		return
+	}
 	if len(rules) == 0 {
 		return
 	}

@@ -67,6 +67,10 @@ type ReleaseExecutionOwner interface {
 type OperationDefinitions interface {
 	OperationDefinition(string, int) (platform.Operation, int, bool)
 }
+
+type AlertDefinitions interface {
+	AlertRules(string) ([]build.Alert, error)
+}
 type FlowDefinitionPresence interface {
 	HasDefinition(string, string, int) bool
 }

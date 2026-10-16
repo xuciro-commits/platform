@@ -58,6 +58,11 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	assets = append(assets, code...)
+	alerts, err := b.alertAssets()
+	if err != nil {
+		return nil, err
+	}
+	assets = append(assets, alerts...)
 	integrations, err := b.integrationAssets()
 	if err != nil {
 		return nil, err

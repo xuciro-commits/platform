@@ -88,18 +88,21 @@ func functionImage(image []byte) (Function, error) {
 	if err := json.Unmarshal(image, &record); err != nil {
 		return Function{}, err
 	}
-	if record.State != "published" || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || record.Published != record.Versions[record.Version-1] {
+	if !slices.Contains([]string{"draft", "published"}, record.State) || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || !slices.Contains(record.Versions, record.Published) {
 		return Function{}, fmt.Errorf("accepted function has an invalid version family")
 	}
-	var latest Function
+	var latest, selected Function
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[Function](raw)
 		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object) {
 			return Function{}, fmt.Errorf("accepted function has a malformed version %d", i+1)
 		}
+		if raw == record.Published {
+			selected = f
+		}
 		latest = f
 	}
-	return latest, nil
+	return selected, nil
 }
 
 func (b *Build) functionInventory() ([]Function, error) {

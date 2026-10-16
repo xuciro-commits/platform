@@ -75,7 +75,7 @@ func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 	// These original owner entities supply only identity. Their own draft
 	// compiler supplies dependencies when the traversal reaches that asset.
 	kinds := map[string]platform.AssetKind{PropertyTypeType: platform.AssetPropertyType, LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent, CodeType: platform.AssetCompute, TestPlanType: platform.AssetEvaluation, SampleSetType: platform.AssetSampleSet, MigrationPlanType: platform.AssetMigration,
-		ConnectionType: platform.AssetConnection, SourceType: platform.AssetSource, DatasetType: platform.AssetDataset, PipelineType: platform.AssetPipeline, WritebackType: platform.AssetWriteback, MatchType: platform.AssetMatching, ObservationType: platform.AssetObservation}
+		ConnectionType: platform.AssetConnection, SourceType: platform.AssetSource, DatasetType: platform.AssetDataset, PipelineType: platform.AssetPipeline, WritebackType: platform.AssetWriteback, MatchType: platform.AssetMatching, ObservationType: platform.AssetObservation, TableType: platform.AssetCompute, AlertType: platform.AssetAlert}
 	caller := b.host.Automation(platform.Caller{}, ID)
 	for _, entity := range b.Manifest().Entities {
 		kind, ok := kinds[entity.Type]

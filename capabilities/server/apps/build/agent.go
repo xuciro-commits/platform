@@ -40,6 +40,7 @@ type Agent struct {
 	State       string      `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int         `json:"version,omitempty" field:"readonly"`
 	Published   string      `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions    []string    `json:"versions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 // AgentCase is one test of the agent (ADR-0029 D6), as data: a goal about a
@@ -143,9 +144,16 @@ func (b *Build) publishAgent(c platform.Caller, record any, _ json.RawMessage, _
 	if err := b.checkAgent(*a); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
+	if a.Version >= 64 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An agent may retain at most 64 published versions")
+	}
+	if a.Published != "" && !slices.Contains(a.Versions, a.Published) {
+		a.Versions = append(slices.Clone(a.Versions), a.Published)
+	}
 	a.Version++
 	a.State = "published"
 	a.Published = published(*a)
+	a.Versions = append(a.Versions, a.Published)
 	if !c.Staging() {
 		b.agents[a.Name] = *a
 	}

@@ -143,6 +143,18 @@ func (b *Build) preparePropertyTypeReleasePublications(assets []platform.Release
 			if err != nil || json.Unmarshal(prior.Body, &retained) != nil || json.Unmarshal(asset.Body, &candidate) != nil || !reflect.DeepEqual(retained, candidate) {
 				return nil, fmt.Errorf("property type retained bytes differ")
 			}
+			if len(record.Versions) != record.Version {
+				return nil, fmt.Errorf("retained property type history is unavailable")
+			}
+			selected := record.Versions[version-1]
+			if selected == record.Published {
+				continue
+			}
+			record.Published = selected
+			if version < record.Version {
+				record.State = "draft"
+			}
+			out = append(out, ReleasePublication{Schema: SchemaPropertyType, Image: platform.Raw(record)})
 			continue
 		}
 		var q platform.PropertyType

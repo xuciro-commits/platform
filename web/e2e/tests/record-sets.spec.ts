@@ -1,4 +1,27 @@
+import { readFile } from "node:fs/promises";
 import { expect, runtime, slug, test } from "./kit";
+
+test("record CSV export keeps the current search and order", async ({ page, builder }) => {
+  const object = await builder.object({
+    title: "Exported reading",
+    fields: [{ name: "label", title: "Label", type: "text", search: true }],
+  });
+  await builder.records(object.type, [{ label: "North 1" }, { label: "South" }, { label: "North 2" }]);
+  await builder.open(page, `/definition?app=build&kind=object&name=${object.type}`);
+  await page.getByRole("textbox", { name: "Search", exact: true }).fill("North");
+  await page.getByRole("combobox", { name: "Sort", exact: true }).selectOption("-label");
+  const exported = page.waitForResponse(response => response.url().endsWith(`/v1/export/${object.type}`) && response.request().method() === "POST");
+  const downloaded = page.waitForEvent("download", { timeout: 10_000 });
+  await page.getByRole("button", { name: "Export CSV", exact: true }).click();
+  const response = await exported;
+  expect(response.ok()).toBe(true);
+  expect(response.request().postDataJSON()).toMatchObject({ search: "North", sort: ["-label"] });
+  const csv = await readFile((await (await downloaded).path())!, "utf8");
+  expect(csv).toContain("North 1");
+  expect(csv).toContain("North 2");
+  expect(csv).not.toContain("South");
+  expect(csv.indexOf("North 2")).toBeLessThan(csv.indexOf("North 1"));
+});
 
 test("builder publishes an ordered set and an operator splits its records atomically", async ({page,builder,operator,editor}) => {
   const access=[{role:"user",read:"all",create:true,edit:true,archive:true}];
@@ -24,7 +47,7 @@ test("builder publishes an ordered set and an operator splits its records atomic
     {name:"consume",kind:"update",target:{type:batch.type,id:"$subject"},changes:[{field:"consumed",from:"=true"}]},
   ]};
   await builder.open(page,`/action-type?id=${batch.id}&action=split`);
-  await page.getByRole("button",{name:"Transaction",exact:true}).click();
+  await page.getByRole("region",{name:"Action structure",exact:true}).getByRole("button",{name:/^Transaction\b/}).click();
   await page.getByRole("button",{name:"Transaction source",exact:true}).click();
   const input=page.getByRole("textbox",{name:"Transaction definition",exact:true});
   await input.fill("{");

@@ -18,16 +18,17 @@ export default defineApp({
   id: "catalog",
   surface: "developer",
   category: "developer",
+  for: (host) => host.role("build") === "builder" || host.role("platform") === "admin",
   description: t("Reusable UI, App API and patterns, with live examples and a sandbox."),
   get title() { return t("Asset Library"); },
   icon: <BookOpen />,
   home: { view: "catalog" },
-  nav: (host) => [
+  nav: () => [
     ...catalogNavigation(),
-    ...(host.role("build") === "builder" || host.role("platform") === "admin" ? [{ label: t("Data diagnostics"), items: [
+    { label: t("Data diagnostics"), items: [
       { label: t("Records"), route: { view: "records", params: { surface: "developer" } } },
       { label: t("Definitions"), route: { view: "definitions", params: { surface: "developer" } } },
-    ] }] : []),
+    ] },
   ],
   views: [
     { id: "catalog", title: (p) => catalogTitle(p.id, p.layer), render: (p) => <Catalog initialID={p.id} initialLayer={p.layer} initialExpand={p.expand === "1"} /> },

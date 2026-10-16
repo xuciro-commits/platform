@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,6 +66,99 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 		t.Fatal("the original approved action did not resume its waiting flow token")
 	}
 
+}
+
+func TestApprovalDoesNotBindUnrelatedRelease(t *testing.T) {
+	const id = "approval-unrelated-release"
+	at := time.Date(2026, 10, 15, 15, 0, 0, 0, time.UTC)
+	compose := func() *Tenant { return builderTenant(t, id, work.New(id), flow.New(id)) }
+	tenant := compose()
+	var entries []Entry
+	tenant.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
+	object := map[string]any{
+		"name": "review", "title": "Review", "fields": []any{},
+		"states": []build.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "approved", Title: "Approved"}, {Name: "rejected", Title: "Rejected"}},
+		"actions": []build.Action{{
+			Name: "approve", Title: "Approve", From: []string{"open"}, To: "approved", Roles: []string{build.User},
+			Approval: &build.ActionApproval{Pending: "pending", Levels: []build.ApproverLevel{{Title: "Builder", Role: build.Builder}}},
+		}},
+	}
+	publishObject(t, tenant, "builder", "REVIEW", object, at)
+	publishObject(t, tenant, "builder", "OTHER", map[string]any{"name": "other", "title": "Other", "fields": []any{}}, at)
+	builder := memberOf(t, tenant, "builder")
+	activate := func(id, key string) string {
+		t.Helper()
+		preview, err := tenant.PreviewRelease(builder, platform.AssetObject, id)
+		if err != nil || preview.Diagnostic != "" {
+			t.Fatalf("release %s: %+v %v", id, preview, err)
+		}
+		if _, err := tenant.SaveReleaseCandidate(builder, platform.AssetObject, id, preview.CandidateID, "save-"+key, at); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tenant.ActivateRelease(builder, preview.CandidateID, "activate-"+key, at); err != nil {
+			t.Fatal(err)
+		}
+		return preview.CandidateID
+	}
+	activate("OTHER", "other")
+	decide(t, tenant, "user", build.ID, "build.review.create", "build.review", "R", map[string]any{}, at)
+	result, problem := tenant.InvokeCapability(memberOf(t, tenant, "user"), platform.CapabilityInvocation{
+		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.review.approve"},
+		Key: "approve", Target: "R", Inputs: json.RawMessage(`{}`),
+	}, at)
+	if problem != nil || result.State != "pending" {
+		t.Fatalf("unrelated release blocked approval: %+v %v", result, problem)
+	}
+	request, ok := platform.Get[work.ApprovalRequest](tenant.automation(work.ID, false), "build.approve")
+	if !ok || request.Release != "" {
+		t.Fatalf("approval selected an unrelated candidate: %+v", request)
+	}
+	decide(t, tenant, "builder", work.ID, work.ApprovalType+".approve", work.ApprovalType, request.ID, map[string]any{}, at)
+	view, failure := tenant.RecordOf(builder, "build.review", "R", at)
+	if failure != nil || view.Values["state"] != "approved" {
+		t.Fatalf("approval did not execute its original action: %+v %v", view, failure)
+	}
+	// A remains installed after another application's B is activated. A new
+	// waiting approval must retain A even when A is subsequently upgraded.
+	source := activate("REVIEW", "review")
+	activate("OTHER", "other-again")
+	decide(t, tenant, "user", build.ID, "build.review.create", "build.review", "FROZEN", map[string]any{}, at)
+	result, problem = tenant.InvokeCapability(memberOf(t, tenant, "user"), platform.CapabilityInvocation{
+		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.review.approve"},
+		Key: "approve-frozen", Target: "FROZEN", Inputs: json.RawMessage(`{}`),
+	}, at)
+	if problem != nil || result.State != "pending" {
+		t.Fatalf("installed approval: %+v %v", result, problem)
+	}
+	request, ok = platform.Get[work.ApprovalRequest](tenant.automation(work.ID, false), "build.approve-frozen")
+	if !ok || request.Release != source {
+		t.Fatalf("approval lost the still-installed release: %+v", request)
+	}
+	actions := object["actions"].([]build.Action)
+	actions[0].To = "rejected"
+	decide(t, tenant, "builder", build.ID, "build.object.edit", build.ObjectType, "REVIEW", map[string]any{"actions": actions}, at)
+	next, err := tenant.PreviewRelease(builder, platform.AssetObject, "REVIEW")
+	if err != nil || next.Diagnostic != "" {
+		t.Fatalf("upgraded release: %+v %v", next, err)
+	}
+	if _, err := tenant.SaveReleaseCandidate(builder, platform.AssetObject, "REVIEW", next.CandidateID, "save-review-next", at); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tenant.ActivateRelease(builder, next.CandidateID, "blocked-review-next", at); err == nil || !strings.Contains(err.Error(), "holds build.review.approve under another release") {
+		t.Fatalf("upgrade replaced a pending approval's retained action: %v", err)
+	}
+	decide(t, tenant, "builder", work.ID, work.ApprovalType+".approve", work.ApprovalType, request.ID, map[string]any{}, at)
+	view, failure = tenant.RecordOf(builder, "build.review", "FROZEN", at)
+	if failure != nil || view.Values["state"] != "approved" {
+		t.Fatalf("upgrade changed the waiting approval's original action: %+v %v", view, failure)
+	}
+	if _, err := tenant.ActivateRelease(builder, next.CandidateID, "activate-review-next", at); err != nil {
+		t.Fatal(err)
+	}
+	CheckReplay(t, tenant, entries, compose)
 }
 
 func TestNativeAIFunctionUsesOwnerGrantsWithoutBuildRole(t *testing.T) {

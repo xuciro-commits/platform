@@ -28,6 +28,16 @@ def read_state():
         return {}
 
 
+def write_state(state):
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps(state))
+
+
+def selected_mode():
+    state = read_state()
+    return state.get('mode') or ('native' if alive(state) else 'docker')
+
+
 def stamp(pid):
     result = subprocess.run(['ps', '-p', str(pid), '-o', 'lstart=', '-o', 'command='],
                             capture_output=True, text=True)
@@ -55,6 +65,7 @@ def ready():
 
 def stop():
     state = read_state()
+    mode = selected_mode()
     if alive(state):
         os.kill(state['pid'], signal.SIGTERM)
         deadline = time.monotonic() + 15
@@ -62,7 +73,7 @@ def stop():
             if time.monotonic() > deadline:
                 raise RuntimeError('本地进程尚未退出，请查看 .build/dev/environment.log；未启动 Docker 宿主。')
             time.sleep(0.2)
-    STATE.unlink(missing_ok=True)
+    write_state({'mode': mode, 'status': 'stopped'})
 
 
 def serve():
@@ -76,8 +87,8 @@ def serve():
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGINT, interrupt)
     pid = os.getpid()
-    state = {'pid': pid, 'stamp': stamp(pid), 'status': 'starting'}
-    STATE.write_text(json.dumps(state))
+    state = {'mode': 'native', 'pid': pid, 'stamp': stamp(pid), 'status': 'starting'}
+    write_state(state)
     try:
         for solution, api, web in SOLUTIONS:
             commands = [
@@ -96,7 +107,7 @@ def serve():
             if state['status'] == 'starting':
                 if ready():
                     state['status'] = 'ready'
-                    STATE.write_text(json.dumps(state))
+                    write_state(state)
                 elif time.monotonic() > deadline:
                     raise RuntimeError('本地环境启动超时，请查看 .build/dev/*-api.log 或 *-web.log。')
             time.sleep(0.5)
@@ -116,17 +127,19 @@ def serve():
             except ProcessLookupError:
                 pass
             child.wait()
-        STATE.unlink(missing_ok=True)
+        write_state({'mode': 'native', 'status': 'stopped'})
 
 
 def local():
     if alive(read_state()) and ready():
+        write_state({**read_state(), 'mode': 'native'})
         print('本地热更新已运行：酒店 http://localhost:8495 · 制造 http://localhost:8490')
         return
     air = os.environ.get('AIR') or shutil.which('air')
     if not air or not os.access(air, os.X_OK):
         raise RuntimeError('缺少 Air，请先运行 make setup（只需一次）。')
     stop()
+    write_state({'mode': 'native', 'status': 'starting'})
     run(COMPOSE + ['stop', 'hospitality-server', 'manufacturing-server', 'wasm-worker', 'code-builder'])
     run(['make', 'infra', 'infra-compute'])
     LOGS.mkdir(parents=True, exist_ok=True)
@@ -150,22 +163,26 @@ def local():
         raise
 
 
+def prepare_docker():
+    stop()
+    write_state({'mode': 'docker', 'status': 'starting'})
+    run(COMPOSE + ['-p', 'platform-dev-compute', '-f', 'deploy/dev/compose.compute.yaml', 'stop',
+                   'wasm-worker', 'code-builder'])
+    run(COMPOSE + ['up', '-d', 'postgres', 'rauthy', 'rustfs', 'webhook-sink', 'wasm-worker', 'code-builder'])
+
+
 def docker():
     dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', 'capabilities/server', 'apps',
                                     'solutions', 'protocols', 'contract', 'web/packages', 'web/apps/workspace/src'],
                                    cwd=ROOT, text=True)
     if dirty:
         raise RuntimeError('请先提交源码再切到 Docker，以便核对镜像版本；本地环境仍保留运行。')
-    stop()
-    run(COMPOSE + ['-p', 'platform-dev-compute', '-f', 'deploy/dev/compose.compute.yaml', 'stop',
-                   'wasm-worker', 'code-builder'])
-    run(COMPOSE + ['up', '-d', 'postgres', 'rauthy', 'rustfs', 'webhook-sink', 'wasm-worker', 'code-builder'])
-    run(['deploy/local/update.sh'])
+    run(['env', 'PLATFORM_LOCAL_MODE=docker', 'deploy/local/update.sh'])
 
 
 if __name__ == '__main__':
     try:
-        {'local': local, 'docker': docker, 'serve': serve}[sys.argv[1]]()
+        {'local': local, 'docker': docker, 'serve': serve, 'prepare-docker': prepare_docker}[sys.argv[1]]()
     except (RuntimeError, subprocess.CalledProcessError, KeyError, IndexError) as error:
         print(error, file=sys.stderr)
         sys.exit(1)

@@ -18,7 +18,7 @@ export function useProjectResources(project?: Project) {
     const resolve = (kind: ResourceKindInfo, ref: Api.AssetRef, record: ResourceRecord | undefined, loaded: boolean): OwnedResource => {
       const installed = installedKeys.has(refKey(ref));
       const definition = installed ? definitions.find((d) => refKey(d.ref) === refKey(ref)) : undefined;
-      const title = record?.title ?? definition?.page?.title ?? definition?.entity?.title ?? definition?.query?.title ?? definition?.function?.title ?? definition?.observation?.title ?? ref.name;
+      const title = record?.title ?? definition?.page?.title ?? definition?.entity?.title ?? definition?.query?.title ?? definition?.function?.title ?? definition?.operation?.title ?? definition?.observation?.title ?? ref.name;
       return { kind, record, ref, title, installed, missing: !record && !installed && loaded };
     };
     const pages = inventories.page?.data?.records ?? [];
@@ -27,8 +27,11 @@ export function useProjectResources(project?: Project) {
     }
     for (const ref of project.resources ?? []) {
       const candidates = resourceKinds.filter((item) => (item.ref ?? item.kind) === ref.kind);
+      const definition = definitions.find(item => refKey(item.ref) === refKey(ref));
       const kind = candidates.find(kind => (inventories[kind.kind]?.data?.records ?? []).some(record =>
-        !record.archived && matchesResourceKind(kind, record) && refKey(resourceRef(kind, record.name)) === refKey(ref))) ?? candidates[0];
+        !record.archived && matchesResourceKind(kind, record) && refKey(resourceRef(kind, record.name)) === refKey(ref)))
+        ?? candidates.find(kind => kind.kind === "table" && definition?.operation?.binding.kind === "native" && definition.operation.rules)
+        ?? candidates[0];
       if (!kind) continue;
       const record = (inventories[kind.kind]?.data?.records ?? []).find((item) => !item.archived && matchesResourceKind(kind, item) && refKey(resourceRef(kind, item.name)) === refKey(ref));
       items.push(resolve(kind, ref, record, inventories[kind.kind]?.isSuccess === true));

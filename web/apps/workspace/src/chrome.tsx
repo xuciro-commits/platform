@@ -7,7 +7,7 @@ import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, Ope
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, RecordPage, Select, StatusTag, defineStatuses, submissionStatuses,
-  useWorkspace, type ColumnDef, type InboxTask, type View,
+  useWorkspace, type ColumnDef, type InboxTask, type Route, type View,
  t } from "@platform/ui";
 import { useState, type ReactNode } from "react";
 import { ApplicationsPortal } from "./shell/Applications";
@@ -20,9 +20,8 @@ import { projectionOfSurface } from "./shell/legacy";
 type Notification = Api.Notification;
 type Request = Api.ApprovalRequest;
 
-function StudioReference({ application, children }: { application?: string; children: ReactNode }) {
-  const { open } = useWorkspace();
-  return <div className="grid gap-3">{application && <div><Button onClick={() => open({ view: "project", params: { id: application } })}>{t("Back to project")}</Button></div>}{children}</div>;
+function StudioReference({ route, context, children }: { route: Route; context?: AppUI["referenceContext"]; children: ReactNode }) {
+  return <>{route.params?.surface === "studio" && context ? context(route, children) : children}</>;
 }
 
 const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "warning" }, approved: { label: t("Approved"), tone: "success" },
@@ -243,9 +242,9 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
-  { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },
+  { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference route={{ view: "definition", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title || p.name || t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
-  { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference application={p.surface === "studio" ? p.application : undefined}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
+  { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference route={{ view: "page-preview", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => p.inspect === "true" ? <RecordInspection type={p.type ?? ""} id={p.id ?? ""} /> : <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "application-overview", title: (p) => definitions().find((d) => d.ref.kind === "app" && d.ref.app === p.app && d.application?.name === p.name)?.application?.title ?? t("Application overview"), render: (p) => <ApplicationOverview owner={p.app ?? ""} name={p.name ?? ""} /> },
   { id: "application-runs", title: () => t("Application runs"), render: (p) => <ApplicationRuns key={`${p.app}:${p.name}`} owner={p.app ?? ""} name={p.name ?? ""} /> },

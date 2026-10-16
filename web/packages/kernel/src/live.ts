@@ -1,6 +1,6 @@
 import type { LiveQueryFrame, LiveQueryResult } from "./gen/host";
 
-/** One connection per edge, with leases owned by visible readers. No durable
+/** Shared bounded connections, with leases owned by visible readers. No durable
  * state or permission decisions live here: snapshots are original host reads. */
 export class LiveReads {
   private readers = new Map<string, Set<() => void>>();
@@ -32,7 +32,18 @@ export class LiveReads {
     if (!this.running || !this.readers.size) return;
     this.timer = setTimeout(() => {
       const controller = new AbortController(); this.controller = controller;
-      void this.follow([...this.readers.keys()].sort(), controller.signal);
+      // Match the host's registration limits. A Studio with more asset kinds
+      // must not reject every visible read when it exceeds one registration.
+      const encoder = new TextEncoder();
+      let batch: string[] = [];
+      for (const path of [...this.readers.keys()].sort()) {
+        if (batch.length && (batch.length === 32 || encoder.encode(JSON.stringify([...batch, path])).length > (64 << 10))) {
+          void this.follow(batch, controller.signal);
+          batch = [];
+        }
+        batch.push(path);
+      }
+      if (batch.length) void this.follow(batch, controller.signal);
     }, 50);
   }
   private failure(paths: string[], status: number) {

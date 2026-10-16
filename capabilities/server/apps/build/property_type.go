@@ -92,18 +92,21 @@ func propertyTypeImage(image []byte) (PropertyType, error) {
 	if err := json.Unmarshal(image, &record); err != nil {
 		return PropertyType{}, err
 	}
-	if record.State != "published" || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || record.Published != record.Versions[record.Version-1] {
+	if !slices.Contains([]string{"draft", "published"}, record.State) || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || !slices.Contains(record.Versions, record.Published) {
 		return PropertyType{}, fmt.Errorf("accepted property type has an invalid version family")
 	}
-	var latest PropertyType
+	var latest, selected PropertyType
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[PropertyType](raw)
 		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Type != latest.Type) {
 			return PropertyType{}, fmt.Errorf("accepted property type has a malformed version %d", i+1)
 		}
+		if raw == record.Published {
+			selected = f
+		}
 		latest = f
 	}
-	return latest, nil
+	return selected, nil
 }
 
 func (b *Build) propertyTypeInventory() ([]PropertyType, error) {

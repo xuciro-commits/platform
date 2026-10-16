@@ -491,6 +491,15 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			addObject(f.Object)
 		}
 		capability("function", f.Name, CapabilityEffect, f.Roles, ValueSchema{Type: "object", Properties: map[string]ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}, CapabilityFieldsSchema(f.Output), nil)
+	case AssetAlert:
+		var alert AlertRule
+		if err := json.Unmarshal(asset.Body, &alert); err != nil {
+			return out, err
+		}
+		if err := alert.Check(); err != nil {
+			return out, err
+		}
+		add(alert.Object)
 	case AssetCompute:
 		var operation Operation
 		if err := json.Unmarshal(asset.Body, &operation); err != nil {

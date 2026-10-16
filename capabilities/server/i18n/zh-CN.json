@@ -1,4 +1,5 @@
 {
+  "An agent may retain at most 64 published versions": "智能体最多保留 64 个已发布版本",
   "A current observation does not request a time window or point limit": "当前读数不需要时间窗口或点数限制",
   "Creation transaction": "创建事务",
   "A journal reversal names one original action and declares no new lines": "凭证撤销需要指定一个原记账动作，不能声明新的借贷行",

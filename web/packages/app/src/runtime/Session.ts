@@ -187,6 +187,7 @@ export class PageSessionStore {
         namedInterfaceList: (binding,query) => session.source.namedInterfaceList?session.source.namedInterfaceList(binding,query):Promise.reject(Error("Interface record read is unavailable")),
         watchNamedInterfaceList: (binding,query,changed) => session.source.watchNamedInterfaceList?.(binding,query,changed)??(()=>{}),
         get aggregate(){return session.source.aggregate;},
+        get exportCSV() { return session.source.exportCSV; },
         get scope() { return session.source.scope; }, get revision() { return session.version; },
       };
     }
@@ -407,6 +408,7 @@ export class PageSessionStore {
         interfaceList: (name, query) => session.source.interfaceList ? session.source.interfaceList(name, query) : Promise.reject(Error("Interface record read is unavailable")),
         watchInterfaceList: (name, query, changed) => session.source.watchInterfaceList?.(name, query, changed) ?? (() => {}),
         get aggregate() { return session.source.aggregate; },
+        get exportCSV() { return session.source.exportCSV; },
         get revision() { return session.version; },
         get scope() { return session.source.scope; },
       };

@@ -272,8 +272,12 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		steps = append(steps, step)
 	}
 	raw, _ := protojson.Marshal(held)
+	release, refusal := w.host.ApprovalRelease(app, declared.Schema, held.GetTarget().GetType())
+	if refusal != nil {
+		return nil, refusal
+	}
 	request := ApprovalRequest{Record: platform.Record{ID: s.GetTarget().GetId()}, Action: declared.Schema, Title: declared.Title, App: app,
-		Target: held.GetTarget().GetType() + "/" + held.GetTarget().GetId(), Requester: requester.ID, Submission: string(raw), Levels: steps, State: "pending", Release: w.host.ActiveRelease()}
+		Target: held.GetTarget().GetType() + "/" + held.GetTarget().GetId(), Requester: requester.ID, Submission: string(raw), Levels: steps, State: "pending", Release: release}
 	if _, known := platform.Get[ApprovalRequest](c, request.ID); known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

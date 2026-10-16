@@ -142,6 +142,18 @@ func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsse
 			if err != nil || !equalIntegrationAsset(prior, asset) {
 				return nil, fmt.Errorf("function retained bytes differ")
 			}
+			if len(record.Versions) != record.Version {
+				return nil, fmt.Errorf("retained function history is unavailable")
+			}
+			selected := record.Versions[version-1]
+			if selected == record.Published {
+				continue
+			}
+			record.Published = selected
+			if version < record.Version {
+				record.State = "draft"
+			}
+			out = append(out, ReleasePublication{Schema: SchemaFunction, Image: platform.Raw(record)})
 			continue
 		}
 		var frozen Function

@@ -15,7 +15,7 @@ from pathlib import Path
 spec = importlib.util.spec_from_file_location('dev_environment', Path('deploy/dev/environment.py'))
 environment = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(environment)
-print('native' if environment.alive(environment.read_state()) else 'docker')
+print(environment.selected_mode())
 PY
 )}
 case "$local_mode" in
@@ -60,6 +60,7 @@ report = {'revision': revision, 'mode': 'native', 'checkedAtUTC': datetime.datet
 PY
   exit 0
 fi
+python3 deploy/dev/environment.py prepare-docker
 pnpm --dir web/apps/workspace build
 docker compose -f deploy/local/compose.yaml config --quiet
 docker compose -f deploy/local/compose.yaml up -d --no-deps --build hospitality-server manufacturing-server
@@ -102,6 +103,11 @@ for service, port in [('hospitality-server', 8495), ('manufacturing-server', 849
     started = subprocess.check_output(['docker', 'inspect', '--format', '{{.State.StartedAt}}', container], text=True).strip()
     hosts.append({'service': service, 'url': base, 'revision': stamped, 'image': image, 'container': container, 'started': started, 'health': health, 'matchedAssets': len(assets)})
     print(f'{base}: {revision[:12]}, healthy, HTML + {len(assets)} assets verified')
-report = {'revision': revision, 'checkedAtUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'htmlSHA256': hashlib.sha256(html).hexdigest(), 'hosts': hosts}
+report = {'revision': revision, 'mode': 'docker', 'checkedAtUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'htmlSHA256': hashlib.sha256(html).hexdigest(), 'hosts': hosts}
 (root / '.build/local-update' / (revision + '.json')).write_text(json.dumps(report, indent=2) + '\n')
+import importlib.util
+spec = importlib.util.spec_from_file_location('dev_environment', root / 'deploy/dev/environment.py')
+environment = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(environment)
+environment.write_state({'mode': 'docker', 'status': 'ready'})
 PY

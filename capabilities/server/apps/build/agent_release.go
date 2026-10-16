@@ -57,6 +57,29 @@ func (b *Build) InstallAgentAsset(asset platform.ReleaseAsset) error {
 	return nil
 }
 
+func (b *Build) retainedAgentAsset(ref platform.AssetRef, sourceVersion string) (platform.ReleaseAsset, error) {
+	rows, err := b.agentInventory()
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	for _, record := range rows {
+		if record.Archived || record.Name != ref.Name {
+			continue
+		}
+		for _, raw := range append(slices.Clone(record.Versions), record.Published) {
+			retained, ok := wasPublished[Agent](raw)
+			if !ok {
+				continue
+			}
+			asset, err := agentReleaseAsset(retained, b.Manifest().Version)
+			if err == nil && asset.Ref == ref && asset.SourceVersion == sourceVersion {
+				return asset, nil
+			}
+		}
+	}
+	return platform.ReleaseAsset{}, fmt.Errorf("agent version is not retained")
+}
+
 func (b *Build) agentAssets() ([]platform.ReleaseAsset, error) {
 	names := make([]string, 0, len(b.agents))
 	for name := range b.agents {
@@ -131,9 +154,35 @@ func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) 
 		if index < 0 {
 			return nil, fmt.Errorf("agent has no local draft")
 		}
-		frozen.Record = rows[index].Record
-		frozen.Published = published(frozen)
-		image, err := json.Marshal(frozen)
+		record := rows[index]
+		if frozen.Version <= record.Version {
+			retained, err := b.retainedAgentAsset(asset.Ref, asset.SourceVersion)
+			if err != nil || !equalIntegrationAsset(retained, asset) {
+				return nil, fmt.Errorf("retained agent bytes differ")
+			}
+		} else if record.Version != 0 && frozen.Version != record.Version+1 {
+			return nil, fmt.Errorf("agent needs its next version or retained bytes")
+		}
+		if record.Published != "" && !slices.Contains(record.Versions, record.Published) {
+			record.Versions = append(slices.Clone(record.Versions), record.Published)
+		}
+		frozen.Record = record.Record
+		selected := published(frozen)
+		for _, raw := range record.Versions {
+			if old, ok := wasPublished[Agent](raw); ok && old.Version == frozen.Version {
+				selected = raw
+				break
+			}
+		}
+		if !slices.Contains(record.Versions, selected) {
+			record.Versions = append(record.Versions, selected)
+		}
+		record.Version, record.Published = max(record.Version, frozen.Version), selected
+		record.State = "published"
+		if frozen.Version < record.Version {
+			record.State = "draft"
+		}
+		image, err := json.Marshal(record)
 		if err != nil {
 			return nil, err
 		}

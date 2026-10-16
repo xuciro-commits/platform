@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The rule was saved, but the application could not be read. Save again to retry adding the same rule.": "规则已保存，但无法读取应用。再次保存可重试添加同一条规则。",
+  "The rule was saved but has not joined the application. Save again to retry the same rule.": "规则已保存，但尚未加入应用。再次保存可重试添加同一条规则。",
+  "Business object": "业务对象",
+  "Connect data and systems": "接入数据和系统",
+  "Choose the connections, observations and flows this application needs. Site addresses and credentials stay in environment bindings.": "选择此应用所需的连接、观测和流程。现场地址和凭据保留在环境绑定中。",
   "Modbus TCP ABCD (read only)": "Modbus TCP ABCD（只读）",
   "Read-only TCP with ABCD register order. Addresses use zero-based offsets: coil:0, discrete:0, holding:0, input:0; holding:0.3 selects register bit 3. Local protocol service verified; real devices are unverified.": "只读 TCP，寄存器按 ABCD 顺序解析。地址使用从 0 开始的偏移：coil:0、discrete:0、holding:0、input:0；holding:0.3 表示寄存器第 3 位。已用本地协议服务检查，真实设备尚未确认。",
   "Modbus TCP address, with optional port (default 502)": "Modbus TCP 地址，可附端口（默认 502）",
@@ -4547,6 +4552,7 @@ register("zh-CN", {
   "Case {n}": "用例 {n}",
   "Add a case": "添加用例",
   "Alert rules": "告警规则",
+  "Alert rule": "告警规则",
   "Only a builder can edit alert rules.": "只有构建者能编辑告警规则。",
   "Tell a role when a record comes to match a condition: a late order, a stock below its minimum, a receipt without a supplier.": "当记录满足条件时通知一个角色：延误的订单、低于最低值的库存、没有供应商的收货。",
   "New alert rule": "新建告警规则",
@@ -4554,6 +4560,7 @@ register("zh-CN", {
   "The alert rule could not be loaded.": "告警规则无法加载。",
   "Checked after every change to a record of the object. People holding the role get a notification that opens the record.": "对象的记录每次变更后检查。持有该角色的人收到一条可打开记录的通知。",
   "Save alert rule": "保存告警规则",
+  "Saving keeps a draft. Review and publish it with the application to change the running rules.": "保存只更新草稿。请随应用审阅并发布，运行中的规则才会更新。",
   "Who is told": "通知谁",
   "Message": "消息",
   "What the people told should know or do.": "被通知的人应知道或做什么。",

@@ -943,6 +943,7 @@ export default {
   "Pie": "饼图",
   "Preview": "预览",
   "Previous page": "上一页",
+  "Export CSV": "导出 CSV",
   "Recently changed": "最近修改",
   "Rejected": "已驳回",
   "refused": "被拒绝",

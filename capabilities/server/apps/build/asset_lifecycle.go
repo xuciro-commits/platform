@@ -16,7 +16,7 @@ import (
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
 		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation,
+		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert,
 	}
 }
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {
@@ -66,6 +66,9 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	if ref.Kind == platform.AssetSampleSet {
 		return b.sampleSetPinned(ref, version)
 	}
+	if ref.Kind == platform.AssetAlert {
+		return b.alertPinned(ref, version)
+	}
 	if ref.Kind == platform.AssetMigration {
 		return b.migrationPlanPinned(ref, version)
 	}
@@ -88,7 +91,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 				return asset, nil
 			}
 		}
-		return platform.ReleaseAsset{}, fmt.Errorf("agent version is not installed; use its retained candidate")
+		return b.retainedAgentAsset(ref, version)
 	}
 	if ref.Kind == platform.AssetCompute {
 		return b.OperationReleaseAsset(ref.Name, version)
@@ -529,6 +532,18 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		var r Code
 		_ = json.Unmarshal(image, &r)
 		ref = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: r.Name}
+	case SchemaTablePublish:
+		r, err := tableImage(image)
+		if err != nil {
+			return platform.AssetInstallation{}, err
+		}
+		ref = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: r.Name}
+	case SchemaAlertPublish:
+		_, asset, err := alertImage(image)
+		if err != nil {
+			return platform.AssetInstallation{}, err
+		}
+		ref = asset.Ref
 	default:
 		return platform.AssetInstallation{}, fmt.Errorf("unsupported publication %s", schema)
 	}
@@ -955,6 +970,12 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		d.Version, d.State = 0, "draft"
 		return AgentType, d, nil
 	case platform.AssetCompute:
+		var operation platform.Operation
+		if json.Unmarshal(asset.Body, &operation) == nil && operation.Binding.Kind == "native" {
+			table, err := tableFromAsset(asset)
+			table.State, table.Version = "draft", 0
+			return TableType, table, err
+		}
 		rows, err := b.codeInventory()
 		if err != nil {
 			return "", nil, err
@@ -965,6 +986,10 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 			}
 		}
 		return "", nil, fmt.Errorf("compute %s needs its original compiled target owner; a module descriptor does not carry source or compilation evidence", asset.Ref)
+	case platform.AssetAlert:
+		alert, _, err := alertFromAsset(asset)
+		alert.State = "draft"
+		return AlertType, alert, err
 	}
 	return "", nil, nil
 }

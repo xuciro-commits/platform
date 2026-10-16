@@ -144,7 +144,7 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 			artifact.Integrations = append(artifact.Integrations, binding)
 		case AssetSampleSet, AssetTestPlan:
 			artifact.Samples = append(artifact.Samples, binding)
-		case AssetCompute, AssetMigration:
+		case AssetCompute, AssetMigration, AssetAlert:
 			artifact.Rules = append(artifact.Rules, binding)
 		}
 		if asset.Ref.Kind == AssetConnection {

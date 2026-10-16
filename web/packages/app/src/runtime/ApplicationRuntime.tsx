@@ -45,10 +45,11 @@ export function ApplicationPage({ pageRef, route, preview = false, children }: {
     return () => session.detach(owner);
   }, [session, owner, routeKey]);
   const context = useMemo(() => definition && session ? { definition, session, instance, identity, preview } : undefined, [definition, session, instance, identity, preview]);
+  const showSessionControls = holders.length > 0 && (preview || holders.length > 1 || Object.keys(definition?.application?.variables ?? {}).length > 0);
   const collapsed=useSyncExternalStore(session?.subscribe??emptySubscribe,session?.headerSnapshot??(()=>undefined),()=>undefined);
   const navigate = (application: string, instance: string) => { const params:Record<string,string> = { ...route.params, application, instance }; delete params.call; workspace.open({ ...route, params }); };
   return <ApplicationContext.Provider value={context}><div className="min-w-0 max-w-full">
-    {holders.length > 0 && <div className="mb-3 flex min-w-0 max-w-full flex-wrap items-center gap-2">
+    {showSessionControls && <div className="mb-3 flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <Select aria-label={t("Page application")} value={id} onChange={(event) => navigate(event.target.value, instance)}><option value="">{t("Choose an application")}</option>{holders.map((d) => <option key={idOf(d)} value={idOf(d)}>{d.application?.title}</option>)}</Select>
       <Button disabled={!context} onClick={() => navigate(id, crypto.randomUUID())}>{t("New application instance")}</Button>
       <Button disabled={!context} onClick={() => session?.close()}>{t("Close application instance")}</Button>

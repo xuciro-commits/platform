@@ -2,14 +2,31 @@
 // builder sees object types, actions, queries and functions under the
 // applications they belong to rather than as one flat list. A resource no
 // project lists is shown under "Not in a project" — never guessed into one.
-import { useRecordInventory } from "@platform/app";
+import { useRecordInventory, type Host } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t } from "@platform/ui";
 import { useMemo } from "react";
 import { kindOfType, refKey, resourceRef } from "./resources";
 
-type ProjectRecord = Api.Application & { id: string; archived?: boolean };
+type ProjectRecord = Api.Application & { id: string; revision: number; archived?: boolean };
 export type ProjectIndex = { byRef: Map<string, { id: string; title: string }[]>; loaded: boolean; failed?: boolean };
+
+export function projectResourceChange(project: Pick<Api.Application, "pages" | "resources">, ref: Api.AssetRef): Partial<Api.Application> {
+  if (ref.kind === "page") return project.pages?.includes(ref.name) ? {} : { pages: [...project.pages ?? [], ref.name] };
+  return project.resources?.some(member => refKey(member) === refKey(ref)) ? {} : { resources: [...project.resources ?? [], ref] };
+}
+
+/** New editor drafts join the same application membership as New / Add existing. */
+export async function joinProjectResource(host: Pick<Host, "client" | "decide">, application: string, ref: Api.AssetRef) {
+  const { record } = await host.client.get<{ record?: ProjectRecord }>(`/v1/records/build.app/${encodeURIComponent(application)}`);
+  if (!record || record.archived) throw Error(t("The rule was saved, but the application could not be read. Save again to retry adding the same rule."));
+  const changes = projectResourceChange(record, ref);
+  if (!Object.keys(changes).length) return;
+  let refusal = "";
+  if (!await host.decide("build.app.edit", { type: "build.app", id: application }, changes, { expectedRevision: record.revision, quiet: true, onRefused: message => { refusal = message; } })) {
+    throw Error(refusal || t("The rule was saved but has not joined the application. Save again to retry the same rule."));
+  }
+}
 
 export function useProjectIndex(): ProjectIndex {
   const projects = useRecordInventory<ProjectRecord>("build.app");

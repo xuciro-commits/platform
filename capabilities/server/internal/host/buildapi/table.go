@@ -11,6 +11,8 @@ import (
 	"platformserver/platform"
 )
 
+const TableType = "build.table"
+
 type Table struct {
 	platform.Record
 	Name        string                 `json:"name" field:"required,search"`

@@ -55,7 +55,8 @@ func (h lifecycleHost) Member(id string) (platform.Member, bool) { return h.memb
 func (h lifecycleHost) Entity(name string) (platform.EntityInfo, bool) {
 	return h.info, name == h.info.Type
 }
-func (h lifecycleHost) Declares(string) bool { return false }
+func (h lifecycleHost) Declares(string) bool                             { return false }
+func (h lifecycleHost) ValidateInstallQuery(q platform.NamedQuery) error { return q.Check() }
 func (h lifecycleHost) Action(schema string) (string, platform.Action, bool) {
 	return ID, platform.Action{Schema: schema, Roles: []string{"writer"}}, strings.HasPrefix(schema, h.info.Type+".")
 }

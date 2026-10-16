@@ -114,11 +114,14 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
 
   const source = useMemo<RecordSource | undefined>(() => {
     if (!me) return undefined;
+    // Reading/exporting records updates activity, not the member's read scope.
+    const scopeMe = { ...me, account: { ...me.account, lastSeen: undefined } };
     return {
-      scope: JSON.stringify([me, entities, actions, definitions]),
+      scope: JSON.stringify([client.connection.tenant, client.connection.principal, scopeMe, entities, actions, definitions]),
  ruleIdentity:{me:me.principalId,timezone:me.profile.timezone??me.account.effective.timezone},
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
+      exportCSV: (type, q) => client.exportCSV(type, q),
       interfaceList: (name,q) => client.get<InterfaceRecordPageData>(client.interfaceRecordsPath(name,q)),
       watchInterfaceList: (name,q,changed) => client.subscribeRead(client.interfaceRecordsPath(name,q),changed),
       namedInterfaceList: (binding,q) => client.get<InterfaceRecordPageData>(client.namedQueryPath(binding,q)),

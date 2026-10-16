@@ -146,6 +146,18 @@ func (b *Build) prepareQueryReleasePublications(assets []platform.ReleaseAsset) 
 			if err != nil || json.Unmarshal(prior.Body, &retained) != nil || json.Unmarshal(asset.Body, &candidate) != nil || !reflect.DeepEqual(retained, candidate) {
 				return nil, fmt.Errorf("query retained bytes differ")
 			}
+			if len(record.Versions) != record.Version {
+				return nil, fmt.Errorf("retained query history is unavailable")
+			}
+			selected := record.Versions[version-1]
+			if selected == record.Published {
+				continue
+			}
+			record.Published = selected
+			if version < record.Version {
+				record.State = "draft"
+			}
+			out = append(out, ReleasePublication{Schema: SchemaQuery, Image: platform.Raw(record)})
 			continue
 		}
 		var q platform.NamedQuery

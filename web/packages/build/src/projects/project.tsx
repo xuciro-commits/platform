@@ -12,6 +12,7 @@ import type { ApplicationImportDependency } from "../workshop/module-import/appl
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
 import { refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
+import { projectResourceChange } from "./membership";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
@@ -61,13 +62,14 @@ export function ProjectsList() {
 }
 
 /** `+ New ▾`: create a resource and add it to the project in one step. */
-function NewResourceMenu({ onCreated, children, disabled, area }: { area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
+function NewResourceMenu({ application, onCreated, children, disabled, area }: { application: string; area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { role } = useHost();
+  const { open } = useWorkspace();
   const creators = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (role("build") !== "builder") return null;
   const sections = area ? studioAreas.filter(section => section.id === area) : studioAreas;
   const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && creators[kind.kind]?.available)
-    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) })));
+    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => ["table", "alert"].includes(kind.kind) ? open(resourceRoute(kind, "new", application)) : creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) })));
   return <>
     <ActionMenu label={t("New resource")} variant="primary" icon={<Plus />} commands={commands}>{children ?? t("New")}</ActionMenu>
     {Object.values(creators).map((creator, index) => <span key={index}>{creator.dialog}</span>)}
@@ -86,7 +88,8 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
   type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
-  const initialTab = initialSection === "concepts" ? "concepts" : activeArea === "verify" ? "release" : "resources";
+  const emptyProject = !!project && !project.pages?.length && !project.resources?.length;
+  const initialTab = initialSection === "concepts" ? "concepts" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "verify" ? "release" : "resources";
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
   const visibleView = useViewVisible();
@@ -94,7 +97,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   useEffect(() => {
     setTab(initialTab);
     if (initialSelected !== undefined) setSelected(initialSelected);
-  }, [activeArea, initialSection, initialSelected, initialPlan]);
+  }, [activeArea, initialSection, initialSelected, initialPlan, initialTab]);
   const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
@@ -179,9 +182,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
     return confirmed;
   };
   useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !pendingPatch && !createdResource && !importing, busy: saving, save: saveSettings });
-  const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord): Partial<Api.Application> => kind.kind === "page"
-    ? { pages: [...new Set([...(current.pages ?? []), record.name])] }
-    : { resources: [...(current.resources ?? []).filter(ref => refKey(ref) !== refKey(resourceRef(kind, record.name))), resourceRef(kind, record.name)] };
+  const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord) => projectResourceChange(current, resourceRef(kind, record.name));
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     setCreatedResource({ kind, target });
     if (target.type !== kind.type || lock.current || pendingRef.current) return;
@@ -254,7 +255,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
           {shared.length > 0 && <optgroup label={t("Shared object types (platform and other apps)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app}</option>)}</optgroup>}
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
-        {builder && <NewResourceMenu area={activeArea} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
+        {builder && <NewResourceMenu application={id} area={activeArea} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
         {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
       </>}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
@@ -292,7 +293,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
                 {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}
-                {builder && current.missing && <NewResourceMenu disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
+                {builder && current.missing && <NewResourceMenu application={id} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
                 {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
               </div>
             </div> : <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted">

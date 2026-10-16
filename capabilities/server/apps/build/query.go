@@ -133,18 +133,21 @@ func queryImage(image []byte) (Query, error) {
 	if err := json.Unmarshal(image, &record); err != nil {
 		return Query{}, err
 	}
-	if record.State != "published" || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || record.Published != record.Versions[record.Version-1] {
+	if !slices.Contains([]string{"draft", "published"}, record.State) || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || !slices.Contains(record.Versions, record.Published) {
 		return Query{}, fmt.Errorf("accepted query has an invalid version family")
 	}
-	var latest Query
+	var latest, selected Query
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[Query](raw)
 		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object || f.Interface != latest.Interface) {
 			return Query{}, fmt.Errorf("accepted query has a malformed version %d", i+1)
 		}
+		if raw == record.Published {
+			selected = f
+		}
 		latest = f
 	}
-	return latest, nil
+	return selected, nil
 }
 
 func (b *Build) queryInventory() ([]Query, error) {

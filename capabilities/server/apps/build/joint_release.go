@@ -366,7 +366,13 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		return b.queryDraftAssets(id)
 	}
 	if kind == platform.AssetCompute {
+		if _, ok := platform.Get[Table](b.host.Automation(platform.Caller{}, ID), id); ok {
+			return b.tableDraftAssets(id)
+		}
 		return b.CodeDraftAssets(id)
+	}
+	if kind == platform.AssetAlert {
+		return b.alertDraftAssets(id)
 	}
 	if kind == platform.AssetFunction {
 		return b.functionDraftAssets(id)
