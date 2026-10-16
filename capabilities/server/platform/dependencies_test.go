@@ -233,6 +233,41 @@ func TestCandidateForeignActionNeedsItsOriginalProtocol(t *testing.T) {
 	}
 }
 
+func TestApplicationMembershipRetainsForeignActionsWithoutInvokingThem(t *testing.T) {
+	foreign := AssetRef{App: "erp", Kind: AssetAction, Name: "erp.order.confirm"}
+	foreignAsset, err := WithDependencies(ReleaseAsset{Ref: foreign, SourceVersion: "1", ContractVersion: 1, Body: json.RawMessage(`{"schema":"erp.order.confirm","target":""}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	application := ReleaseAsset{Ref: AssetRef{App: "build", Kind: AssetApp, Name: "shared"}, SourceVersion: "1", ContractVersion: 1}
+	application.Body, _ = json.Marshal(Application{Name: "shared", Title: "Shared action", Resources: []AssetRef{foreign}})
+	application, err = WithDependencies(application)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed, err := Candidate([]AssetRef{application.Ref}, []ReleaseAsset{application, foreignAsset})
+	if err != nil {
+		t.Fatalf("structural membership was treated as execution: %v", err)
+	}
+	if _, err := ReadCandidate(closed.ID, closed.Bytes); err != nil {
+		t.Fatalf("shared membership could not be read from its sealed bytes: %v", err)
+	}
+	caller := AssetRef{App: "build", Kind: AssetAction, Name: "build.order.request"}
+	callBody, _ := json.Marshal(map[string]any{"schema": caller.Name, "target": "", "confirmationBindings": map[string]any{"parties": []any{map[string]any{"name": "erp", "action": foreign}}}})
+	call, err := WithDependencies(ReleaseAsset{Ref: caller, SourceVersion: "1", ContractVersion: 1, Body: callBody})
+	if err != nil {
+		t.Fatal(err)
+	}
+	application.Body, _ = json.Marshal(Application{Name: "shared", Title: "Shared action", Resources: []AssetRef{caller}})
+	application, err = WithDependencies(application)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Candidate([]AssetRef{application.Ref}, []ReleaseAsset{application, call, foreignAsset}); err == nil || !strings.Contains(err.Error(), "cross-application action") {
+		t.Fatalf("membership bypassed the original action's protocol boundary: %v", err)
+	}
+}
+
 func TestCapabilitySchemasRetainOriginalInvocationInputs(t *testing.T) {
 	if got := CapabilityFieldsSchema([]Field{{Name: "items", Type: "string[]"}}); got.Properties["items"].Type != "array" || got.Properties["items"].Items.Type != "string" {
 		t.Fatal("string array advertised as a scalar")

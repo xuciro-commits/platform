@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:99a31d18b3388187",
+  "revision": "sha256:7741ef6aa8ed19f5",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12790,6 +12790,7 @@
       "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/enterprise/properties.tsx",
+      "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/status": [
@@ -13741,6 +13742,7 @@
     ],
     "app/dependency-graph": [
       "web/packages/build/src/ontology/lineage.tsx",
+      "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "app/semantic-selection": [
@@ -14076,6 +14078,7 @@
         "createWidgetDefinitions",
         "createWidgetRegistry",
         "defineApp",
+        "definitionPresentation",
         "findDefinition",
         "interfaceQueryForSection",
         "isComposed",

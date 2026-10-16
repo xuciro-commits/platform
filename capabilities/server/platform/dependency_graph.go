@@ -268,6 +268,9 @@ func (g *DependencyGraph) Reachable(roots []AssetRef) ([]AssetRef, error) {
 // CheckExecutionBindings keeps foreign authoritative calls on the original
 // protocol boundary. Structural model and read edges do not invoke actions.
 func (g *DependencyGraph) CheckExecutionBindings(asset ReleaseAsset, assets map[AssetRef]ReleaseAsset) error {
+	if asset.Ref.Kind == AssetApp {
+		return nil // application membership references original owners; it invokes no action
+	}
 	for _, dependency := range asset.Requires {
 		if dependency.Kind != AssetAction || dependency.App == asset.Ref.App {
 			continue

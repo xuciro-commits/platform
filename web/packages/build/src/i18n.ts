@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Published resource": "已发布资源",
+  "Published resources": "已发布资源",
+  "Published resources (all owners)": "已发布资源（所有所属应用）",
+  "This application references a published asset. Adding or removing the reference does not change its owner, definition or permissions.": "此应用引用一个已发布资产。添加或移除引用不会改变资产的归属、定义或权限。",
   "The rule was saved, but the application could not be read. Save again to retry adding the same rule.": "规则已保存，但无法读取应用。再次保存可重试添加同一条规则。",
   "The rule was saved but has not joined the application. Save again to retry the same rule.": "规则已保存，但尚未加入应用。再次保存可重试添加同一条规则。",
   "Business object": "业务对象",
@@ -4415,9 +4419,7 @@ register("zh-CN", {
   "Transition": "状态流转",
   "From input": "由输入决定",
   "Choose a resource on the left, create one with New, or bring one in with Add existing.": "在左侧选择一个资源，用“新建”创建，或用“添加已有”引入。",
-  "Published and in use, but this tenant holds no draft of it: it was defined in code or by another tenant. It is part of the release as it is.": "已发布且在使用中，但本租户没有它的草稿：它由代码或其他租户定义。它将按现状随发布一起生效。",
-  "Listed in the project, but nothing by this name exists. Remove it, or create it with New (same name) and it is picked up.": "项目中列出了它，但不存在同名的草稿或已发布定义。可以移除，或用“新建”以相同名称创建，即会自动对应。",
-  "{title} is listed but neither a draft nor a published definition exists. Remove it or create it.": "{title} 已列入项目，但既没有草稿也没有已发布定义。请移除或创建它。",
+  "{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.": "{title} 已列入项目，但没有可读的草稿或已发布定义。请检查其归属与访问权限，或移除此引用。",
   "An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one.": "动作类型定义人们如何改变一个对象：它的参数、规则、条件与副作用。每个动作属于一个对象类型；打开对象类型即可添加。",
   "No action types yet. Add a lifecycle state and an action to an object type.": "还没有动作类型。先给对象类型添加生命周期状态和动作。",
   "Inputs and outputs": "输入与输出",
@@ -4465,7 +4467,6 @@ register("zh-CN", {
   "not activated there yet; its release holder reviews the upgrade plan in that environment": "在那里尚未激活；由该环境的发布持有者审阅升级计划",
   "This candidate was promoted from {tenant}{when}. It is not active here: review the differences and the storage upgrade plan below, then activate it.": "此候选由 {tenant} 晋级而来{when}。它在本环境尚未激活：请审阅下方的差异与存储升级计划，然后激活。",
   "Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.": "开发 → 测试 → 生产：该候选的封存字节通过宿主控制台移入另一个租户。",
-  "Shared object types (platform and other apps)": "共享对象类型（平台与其他应用）",
   "HTTP / REST / files": "HTTP / REST / 文件",
   "OData (SAP Gateway)": "OData（SAP Gateway）",
   "PostgreSQL (read-only)": "PostgreSQL（只读）",

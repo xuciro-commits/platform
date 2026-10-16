@@ -113,7 +113,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     try { await job(); }
     finally { lock.current = false; setBusy(false); }
   };
-  const [joint, setJoint] = useState<JointChoice[]>(() => initialDrafts.length && initialID ? merged([{ kind: initialKind, id: initialID }], initialDrafts) : initialDrafts);
+  const [joint, setJoint] = useState<JointChoice[]>(() => initialID && (initialKind === "app" || initialDrafts.length) ? merged([{ kind: initialKind, id: initialID }], initialDrafts) : initialDrafts);
   const [jointNote, setJointNote] = useState("");
   const applications = useRecordInventory<Record & Api.Application>("build.app", 1000, builder);
   const scopedApplication = scope ? applications.data?.records.find(item => item.id === scope) : undefined;

@@ -106,15 +106,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [activeRoute, setActiveRoute] = useState<Route>();
   const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })]
     .filter((app) => (!app.for || !!host && app.for(host)) && (app.id !== "host-console" || hostAdmin)), [apps, definitions, host, hostAdmin, activeRoute?.params?.application, activeRoute?.params?.instance]);
-  const business = all.filter((app) => (app.surface ?? "work") === "work");
   const entries = useRef(all);
   entries.current = all;
-  // The launcher is drawn inside a panel that outlives this render, so it reads
-  // the apps through a reference: one handed over while the workspace is open
-  // belongs there too (ADR-0036).
-  const open = useRef<AppUI[]>([]);
-  open.current = business;
-  const registry = useRef(definitions); // read by tab titles, as the launcher reads `open`
+  const registry = useRef(definitions); // tab titles read current definitions without replacing registered views
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
   const surface = app?.surface ?? "work";
@@ -175,7 +169,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       ? { ...resolved, params: { ...resolved.params, application } } : resolved;
   }, [client, definitions, owner]);
   const views = useMemo(() => {
-    const views = [...chromeViews(() => open.current, () => registry.current), ...(apps ?? []).flatMap((a) => a.views)];
+    const views = [...chromeViews(() => entries.current, () => registry.current), ...(apps ?? []).flatMap((a) => a.views)];
     const seen = new Set<string>();
     for (const v of views) {
       if (seen.has(v.id)) console.error(`view ${v.id} is declared twice; view ids are unique across the workspace`);

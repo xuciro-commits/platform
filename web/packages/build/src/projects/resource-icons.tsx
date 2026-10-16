@@ -8,4 +8,5 @@ export const kindIcon: Record<string, ReactNode> = {
   automation: <Workflow />,
   table: <TableProperties />,
   alert: <BellRing />,
+  definition: <Layers />,
 };

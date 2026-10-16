@@ -4,11 +4,11 @@ import { refKey, resourceRoute } from "./resources";
 import type { OwnedResource } from "./resource-inventory";
 
 export const studioAreas = [
-  { id: "model", title: "Model", description: "Objects, fields, relationships, versions and constraints", kinds: ["object", "link-type", "property-type", "query"] },
+  { id: "model", title: "Model", description: "Objects, fields, relationships, versions and constraints", kinds: ["object", "link-type", "property-type", "query", "interface"] },
   { id: "behavior", title: "Behavior", description: "States, actions, transactions, rules and approvals", kinds: ["object", "action", "compute", "alert"] },
   { id: "interface", title: "Interface", description: "Pages, templates, application header and navigation", kinds: ["page"] },
-  { id: "assemble", title: "Assemble", description: "Data connections, flows, AI functions and agents", kinds: ["flow", "function", "agent", "compute", "connection", "source", "dataset", "pipeline", "writeback", "matching", "observation"] },
-  { id: "verify", title: "Verify", description: "Samples, roles, candidates, migrations and delivery", kinds: ["sample-set", "test-plan", "evaluation-set"] },
+  { id: "assemble", title: "Assemble", description: "Data connections, flows, AI functions and agents", kinds: ["flow", "function", "agent", "compute", "connection", "source", "dataset", "pipeline", "writeback", "matching", "observation", "protocol"] },
+  { id: "verify", title: "Verify", description: "Samples, roles, candidates, migrations and delivery", kinds: ["sample-set", "test-plan", "evaluation-set", "migration"] },
 ] as const;
 export type StudioArea = typeof studioAreas[number]["id"];
 export const studioArea = (value?: string): StudioArea => studioAreas.find(area => area.id === value)?.id ?? "model";
@@ -17,6 +17,11 @@ export const studioRoute = (id: string, area: StudioArea, asset?: string): Route
 
 export function resourceArea(item: OwnedResource): StudioArea {
   return studioAreas.find(area => (area.kinds as readonly string[]).includes(item.ref.kind))?.id ?? "assemble";
+}
+
+export function resourceInArea(item: OwnedResource, area: StudioArea): boolean {
+  const matches = studioAreas.filter(candidate => (candidate.kinds as readonly string[]).includes(item.ref.kind));
+  return matches.length ? matches.some(candidate => candidate.id === area) : area === "assemble";
 }
 
 /** Default groups use the asset's business namespace, never its platform kind. */

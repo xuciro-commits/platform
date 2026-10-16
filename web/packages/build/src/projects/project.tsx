@@ -11,7 +11,7 @@ import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApp
 import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
-import { refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
+import { publishedResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 import { projectResourceChange } from "./membership";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
@@ -20,7 +20,7 @@ export { kindIcon } from "./resource-icons";
 import { kindIcon } from "./resource-icons";
 import { useProjectResources, type OwnedResource } from "./resource-inventory";
 export type { OwnedResource } from "./resource-inventory";
-import { assetRoute, conceptTree, moveConceptAsset, studioArea, studioAreas, studioRoute } from "./studio-model";
+import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
 import { StudioGuide } from "./studio-guide";
 
@@ -211,12 +211,11 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   };
   const builder = role("build") === "builder";
   const unpublished = owned.filter((item) => item.record && item.record.state !== "published");
-  const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed but neither a draft nor a published definition exists. Remove it or create it.", { title: item.title }), subject: t(item.kind.label), locate: () => { setSelected(refKey(item.ref)); setTab("resources"); } }));
+  const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.", { title: item.title }), subject: t(item.kind.label), locate: () => { setSelected(refKey(item.ref)); setTab("resources"); } }));
   const addExisting = (kind: ResourceKindInfo, record: ResourceRecord) => latestProject.current
     ? patch(changesForResource(latestProject.current, kind, record), latestProject.current.revision) : Promise.resolve(false);
   const installed = definitions.find((d) => d.ref.app === "build" && d.ref.kind === "app" && d.ref.name === project?.name);
-  const areaKinds = studioAreas.find(area => area.id === activeArea)!.kinds as readonly string[];
-  const visible = owned.filter(item => (tab === "concepts" || areaKinds.includes(item.ref.kind)) && `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
+  const visible = owned.filter(item => (tab === "concepts" || resourceInArea(item, activeArea)) && `${item.title} ${item.ref.name} ${t(item.kind.plural)}`.toLowerCase().includes(filter.toLowerCase()));
   const current = selected ? owned.find(item => refKey(item.ref) === selected || item.record?.id === selected || item.ref.name === selected) : undefined;
   const selectedKey = current ? refKey(current.ref) : selected;
   const dependencyQuery = useDependencies(current?.ref, undefined, !!current?.installed);
@@ -252,7 +251,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
           const found = available.find(item => item.kind.kind === choice.kind && item.record.id === choice.id);
           if (found) void addExisting(found.kind, found.record); }}>
           <option value="">{t("Add existing…")}</option>
-          {shared.length > 0 && <optgroup label={t("Shared object types (platform and other apps)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app}</option>)}</optgroup>}
+          {shared.length > 0 && <optgroup label={t("Published resources (all owners)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app} · {item.ref.kind}</option>)}</optgroup>}
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
@@ -280,8 +279,8 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
             {current ? <div className="rounded-md border border-border p-4">
               <div className="flex items-center gap-2">{kindIcon[current.kind.kind]}<h2 className="min-w-0 flex-1 truncate font-semibold">{current.title}</h2><DraftStatus state={current.record?.state} /></div>
               <p className="mt-1 text-xs text-muted">{t(current.kind.label)} · {current.ref.name}</p>
-              {!current.record && current.installed && <p className="mt-2 text-xs text-muted">{t("Published and in use, but this tenant holds no draft of it: it was defined in code or by another tenant. It is part of the release as it is.")}</p>}
-              {current.missing && <p className="mt-2 text-xs text-danger">{t("Listed in the project, but nothing by this name exists. Remove it, or create it with New (same name) and it is picked up.")}</p>}
+              {!current.record && current.installed && <p className="mt-2 text-xs text-muted">{t("This application references a published asset. Adding or removing the reference does not change its owner, definition or permissions.")}</p>}
+              {current.missing && <p className="mt-2 text-xs text-danger">{t("{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.", { title: current.title })}</p>}
               {current.ref.kind === "object" && current.record && <div className="mt-2 flex flex-wrap gap-1">
                 {(["actions", "lifecycle", "constraints", "sets", "data"] as const).map(section => <Button size="sm" variant="ghost" key={section} onClick={() => open({ view: "object-type", params: { id: current.record!.id, application: id, tab: section } })}>{t(section === "actions" ? "Actions and rules" : section === "lifecycle" ? "States" : section === "constraints" ? "Business constraints" : section === "sets" ? "Record sets" : "Record samples")}</Button>)}
               </div>}
@@ -293,7 +292,8 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
               <div className="mt-3 flex flex-wrap gap-2">
                 {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
                 {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}
-                {builder && current.missing && <NewResourceMenu application={id} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
+                {!current.record && current.installed && current.ref.kind !== "object" && <Button size="sm" variant="primary" onClick={() => open(assetRoute(current.ref, owned, definitions, project.id))}>{t("Open")}</Button>}
+                {builder && current.missing && current.kind !== publishedResourceKind && <NewResourceMenu application={id} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
                 {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
               </div>
             </div> : <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted">
@@ -315,7 +315,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
             <div className="rounded-md border border-border p-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Contents")}</h3>
               <dl className="mt-2 grid grid-cols-2 gap-1 text-xs">
-                {resourceKinds.map((kind) => { const n = owned.filter((item) => item.kind === kind).length; return n ? <div key={kind.kind} className="contents"><dt className="text-muted">{t(kind.plural)}</dt><dd className="text-right">{n}</dd></div> : null; })}
+                {[...resourceKinds, publishedResourceKind].map((kind) => { const n = owned.filter((item) => item.kind === kind).length; return n ? <div key={kind.kind} className="contents"><dt className="text-muted">{t(kind.plural)}</dt><dd className="text-right">{n}</dd></div> : null; })}
               </dl>
             </div>
             <div role="region" aria-label={t("Application progress")} className="rounded-md border border-border p-3 text-xs">

@@ -1,4 +1,51 @@
-import { expect, fresh, slug, test } from "./kit";
+import { expect, fresh, shots, slug, test } from "./kit";
+
+test("shared published resources retain their owners through application discovery and delivery", async ({ page, builder, operator }, info) => {
+  test.setTimeout(120_000);
+  const before = await builder.definitions<any>();
+  const operatorKeys = new Set((await operator.definitions<any>()).map(definition => JSON.stringify(definition.ref)));
+  const action = before.find(definition => definition.ref.app !== "build" && definition.action && !operatorKeys.has(JSON.stringify(definition.ref)));
+  const fn = before.find(definition => definition.ref.app !== "build" && definition.function);
+  const flow = before.find(definition => definition.ref.app !== "build" && definition.flow);
+  expect(action).toBeTruthy(); expect(fn).toBeTruthy(); expect(flow).toBeTruthy();
+  const resources = [{ definition: action, title: action.action.title }, { definition: fn, title: fn.function.title }, { definition: flow, title: flow.flow.title }];
+  const missing = { app: "build", kind: "action", name: slug("unavailable") };
+  const application = await builder.application({ title: "Shared service resources", resources: [missing] });
+  await builder.open(page, `/project?id=${application.id}&area=behavior&asset=${encodeURIComponent(`${missing.app}/${missing.kind}/${missing.name}`)}`);
+  await expect(page.getByText(`${missing.name} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.`, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create it", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Remove from project", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.app", application.id)).resources ?? []).toEqual([]);
+
+  // Membership uses the existing application action. References have no
+  // tenant draft to edit, and adding them must not change their original owner.
+  for (const resource of resources) {
+    await page.getByRole("combobox", { name: "Add existing resource", exact: true }).selectOption(JSON.stringify({ kind: "shared", ref: resource.definition.ref }));
+    await expect.poll(async () => (await builder.record("build.app", application.id)).resources).toContainEqual(resource.definition.ref);
+    const navigation = page.getByRole("navigation", { name: "Main", exact: true });
+    const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
+    if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+    await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: new RegExp(`^${resource.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) }).click();
+    await expect(page.getByRole("heading", { name: resource.title, exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Published resource", exact: true })).toBeVisible();
+    const diagram = page.getByRole("group", { name: "Dependency diagram", exact: true });
+    await expect(diagram).toHaveAttribute("aria-busy", "false");
+    await shots(page, page.locator("body"), `shared-${resource.definition.ref.kind}`, info);
+    await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Shared service resources", exact: true }).click();
+  }
+
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Verify", exact: true }).click();
+  const review = page.getByRole("region", { name: "Verification and delivery", exact: true });
+  await review.getByRole("button", { name: "Check joint candidate", exact: true }).click();
+  await review.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
+  await review.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(review.getByText("Release active for operators.", { exact: false })).toBeVisible();
+  const delivered = (await builder.definitions<any>()).find(definition => definition.ref.kind === "app" && definition.ref.name === application.name);
+  expect(delivered.application.resources).toEqual(expect.arrayContaining(resources.map(resource => resource.definition.ref)));
+  const after = await builder.definitions<any>();
+  for (const resource of resources) expect(after.find(definition => JSON.stringify(definition.ref) === JSON.stringify(resource.definition.ref))).toEqual(resource.definition);
+  expect((await operator.definitions<any>()).some(definition => JSON.stringify(definition.ref) === JSON.stringify(action.ref))).toBe(false);
+});
 
 test("application capacity, original decisions and headless runtime remain visible", async ({ page, builder, operator }, testInfo) => {
   const object = await builder.object({ title: "Runtime case object", fields: [{ name: "note", title: "Note", type: "text" }] });

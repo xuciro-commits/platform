@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Published resource": "已发布资源",
+  "Published assets from your applications. Inspect their owner, version, capabilities and declared dependencies.": "应用中已发布的资产，可查看其所属应用、版本、能力与声明的依赖。",
+  "This published definition is read only. Its owner keeps the editing, execution and permissions.": "此已发布定义以只读方式查看，编辑、执行与权限仍由原所属应用负责。",
+  "Content version": "内容版本",
+  "Definition contract": "定义详情",
+  "Input fields": "输入字段",
+  "No capabilities are declared by this asset.": "此资产未声明能力。",
   "Application overview": "应用概览",
   "View application runs": "查看应用运行",
   "This application is unavailable.": "此应用不可用。",
@@ -176,7 +183,6 @@ register("zh-CN", {
   "Yes": "是",
   "You": "我的",
   "Installed objects and actions from your apps. Open one to inspect the same contract used by code and the workspace.": "你有权限查看的应用对象和动作。打开一项，可查看代码与工作台共用的契约。",
-  "Installed objects, actions and pages from your apps. Open one to inspect its contract or preview a page.": "你有权限查看的应用对象、动作和页面。打开一项可检查契约或预览页面。",
   "{email} is not a member of this host.": "{email} 不是此宿主的成员。",
   "This page is not open to you.": "这个页面没有对你开放。",
   "It may have been withdrawn, or it shows records you may not read. Whoever builds your organisation's applications can tell you which.": "它可能已被收回，或者它显示的记录你无权查看。负责搭建本组织应用的人可以告诉你是哪一种。",

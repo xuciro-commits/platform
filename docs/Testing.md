@@ -183,8 +183,6 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复；`TestJournalBooksFromBuilderActions` 检查账簿待过账恢复及冲销落盘后丢应答的重试；`TestJournalConcurrentOpen` 检查四个宿主同时初始化同一个测试库。测试地址不含密码，凭据仍通过受控密钥提供。
 
-全量 `make e2e` 现在就是上面 8 条路线；哪条过时就修哪条，不再有"遗留路线"。
-
 ### 应用设计台（ADR-0108）
 
 `TestApprovalDoesNotBindUnrelatedRelease` 检查应用 A 激活后又激活无关应用 B，审批仍绑定 A；改变待处理审批结果的升级被原检查拒绝，审批完成后可继续升级，并检查重放。
@@ -192,6 +190,8 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 工程验证：`make check`；`make test-go PKG='./platform ./apps/build'`；`make test-go PKG=. RUN='TestApplicationStudio|TestLanguages|TestAPIContract|TestJointDraft'`。分组测试核对非应用资产定义的完整字节、声明依赖、用户权限、应用候选分页以及日志重放/快照恢复。浏览器主线：`PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-studio`，在同一应用创建对象/状态动作、保留跨工作区草稿、装配页面、移动业务分组并联合发布；原 `workspaces` 和 `application-delivery` 检查导航与运行；`record-sets` 检查当前查询的 CSV 导出。`web/packages/kernel/src/live.test.ts` 检查资产较多的工作区按服务器条数和字节限制拆分实时订阅，不让一组过大的登记令所有读取失败。
 
 人工走查：由非平台开发者从一个业务意图开始，完成模型、行为、页面、验证与交付，再自由切换五个工作区，检查资产分组词汇、依赖入口、草稿恢复和窄屏操作。记录实际任务、断点与结论；尚未完成，ADR-0108 保持“体验待验收”。截图与自动发布路线不替代该走查。
+
+共享资源路线可单独运行 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-delivery E2E_ARGS='--grep "shared published"'`：显示并移除失效引用，再从正常添加入口引用已发布的动作、函数和流程，查看只读定义并发布应用；检查原定义不变、未给普通成员增加权限。`make test-go PKG=./platform RUN=TestApplicationMembershipRetainsForeignActionsWithoutInvokingThem` 区分结构成员与真正的跨应用调用，后者仍需原协议。
 
 
 ### 跨系统协同（ADR-0112）

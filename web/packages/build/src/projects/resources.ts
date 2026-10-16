@@ -3,7 +3,7 @@
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation";
+export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -36,6 +36,9 @@ export const resourceKinds: ResourceKindInfo[] = [
 ];
 
 export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.type === type);
+
+/** Published owner references without a local draft still have a normal read-only route. */
+export const publishedResourceKind: ResourceKindInfo = { kind: "definition", type: "", view: "definition", label: "Published resource", plural: "Published resources" };
 
 /** Object and Flow identities include their authority prefix; the other Build names are local to their owner. */
 export function resourceRef(kind: ResourceKindInfo, name: string): Api.AssetRef {

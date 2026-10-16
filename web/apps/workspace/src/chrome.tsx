@@ -3,10 +3,10 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
-  Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, RecordPage, Select, StatusTag, defineStatuses, submissionStatuses,
+  Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, RecordPage, Select, StatusTag, defineStatuses, submissionStatuses,
   useWorkspace, type ColumnDef, type InboxTask, type Route, type View,
  t } from "@platform/ui";
 import { useState, type ReactNode } from "react";
@@ -133,14 +133,14 @@ function DefinitionsCatalog() {
   const { data, isPending, error } = useDefinitions();
   const { open } = useWorkspace();
   const columns: ColumnDef<Definition, any>[] = [
-    { id: "title", header: t("Asset"), accessorFn: (d) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.observation?.title ?? d.ref.name },
+    { id: "title", header: t("Asset"), accessorFn: (d) => definitionPresentation(d).title },
     { id: "ref", header: t("Reference"), accessorFn: (d) => assetKey(d.ref), meta: { width: 320 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "version", header: t("App version"), accessorKey: "version", meta: { width: 110 } },
     { id: "dependencies", header: t("Depends on"), accessorFn: (d) => (d.requires ?? []).map(assetKey).join(", "), meta: { width: 320 },
       cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
   ];
   return <>
-    <PageHeader title={t("Definitions")} description={t("Installed objects, actions and pages from your apps. Open one to inspect its contract or preview a page.")} />
+    <PageHeader title={t("Definitions")} description={t("Published assets from your applications. Inspect their owner, version, capabilities and declared dependencies.")} />
     {error ? <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>
       : isPending ? <p className="text-sm text-muted">{t("Loading…")}</p>
         : <DataTable data={data ?? []} columns={columns} getRowId={(d) => assetKey(d.ref)} height="calc(100dvh - 190px)"
@@ -148,7 +148,7 @@ function DefinitionsCatalog() {
   </>;
 }
 
-function DefinitionView({ ref }: { ref: AssetRef }) {
+function DefinitionView({ ref, application }: { ref: AssetRef; application?: string }) {
   const { data, isPending, error } = useDefinitions();
   const { open } = useWorkspace();
   const definition = findDefinition(data ?? [], ref);
@@ -167,17 +167,41 @@ function DefinitionView({ ref }: { ref: AssetRef }) {
     <Records type={definition.entity.type} description={definition.entity.description} />
   </>;
   const action = definition.action;
-  if (!action) return null;
-  const columns: ColumnDef<(typeof action.payload)[number], any>[] = [
+  const presentation = definitionPresentation(definition);
+  const columns: ColumnDef<NonNullable<Definition["action"]>["payload"][number], any>[] = [
     { accessorKey: "name", header: t("Field") },
     { accessorKey: "type", header: t("Type") },
     { id: "required", header: t("Required"), accessorFn: (f) => f.required ? t("Yes") : t("No") },
     { accessorKey: "description", header: t("Description") },
   ];
+  const openDefinition = (ref: AssetRef) => open({ view: "definition", params: { ...ref, ...(application ? { application, surface: "studio" } : {}) } });
   return <>
-    <PageHeader title={action.title} description={action.description} />
-    <p className="mb-3 font-mono text-xs text-muted">{assetKey(definition.ref)} · {action.target}</p>
-    <DataTable data={action.payload} columns={columns} getRowId={(f) => f.name} height={320} empty={t("No input fields.")} />
+    <PageHeader title={presentation.title} description={presentation.description} />
+    <p className="mb-3 font-mono text-xs text-muted">{assetKey(definition.ref)} · {t("Version")} {definition.version}{action ? ` · ${action.target}` : ""}</p>
+    <div className="grid min-w-0 grid-cols-1 gap-4">
+      <Panel role="region" aria-label={t("Published resource")} className="grid gap-2 text-sm">
+        <p>{t("This published definition is read only. Its owner keeps the editing, execution and permissions.")}</p>
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
+          <dt>{t("Owner")}</dt><dd>{definition.ref.app}</dd>
+          <dt>{t("Kind")}</dt><dd>{definition.ref.kind}</dd>
+          <dt>{t("Source")}</dt><dd>{definition.source}</dd>
+          {definition.contentVersion && <><dt>{t("Content version")}</dt><dd className="break-all font-mono">{definition.contentVersion}</dd></>}
+        </dl>
+      </Panel>
+      {action && <div><h2 className="mb-2 text-sm font-semibold">{t("Input fields")}</h2>
+        <DataTable data={action.payload} columns={columns} getRowId={(field) => field.name} height={320} empty={t("No input fields.")} />
+      </div>}
+      <div><h2 className="mb-2 text-sm font-semibold">{t("Available capabilities")}</h2>
+        <DataTable data={definition.provides ?? []} getRowId={(capability) => `${capability.kind}:${capability.name}`} searchable={false} height={160}
+          empty={t("No capabilities are declared by this asset.")} columns={[
+            { id: "name", header: t("Name"), accessorKey: "name" },
+            { id: "kind", header: t("Capability kind"), accessorKey: "kind" },
+            { id: "side", header: t("Invocation type"), accessorFn: (capability) => t(capability.side === "pure" ? "Read only" : capability.side === "effect" ? "Declare an effect" : "Change authoritative state") },
+          ]} />
+      </div>
+      <DependencyGraph asset={definition.ref} height={280} onOpen={openDefinition} />
+      <Disclosure summary={t("Definition contract")}><pre aria-label={t("Definition contract")} className="max-h-96 overflow-auto whitespace-pre-wrap break-all font-mono text-xs">{JSON.stringify(definition, null, 2)}</pre></Disclosure>
+    </div>
   </>;
 }
 
@@ -242,7 +266,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
-  { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <StudioReference route={{ view: "definition", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /></StudioReference> },
+  { id: "definition", title: (p) => { const definition = definitions().find(item => item.ref.app === p.app && item.ref.kind === p.kind && item.ref.name === p.name); return definition ? definitionPresentation(definition).title : p.name ?? t("Definition"); }, render: (p) => <StudioReference route={{ view: "definition", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} application={p.application} /></StudioReference> },
   { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title || p.name || t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <StudioReference route={{ view: "page-preview", params: p }} context={apps().find(app => app.surface === "studio")?.referenceContext}><PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /></StudioReference> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => p.inspect === "true" ? <RecordInspection type={p.type ?? ""} id={p.id ?? ""} /> : <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },

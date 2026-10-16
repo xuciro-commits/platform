@@ -175,6 +175,15 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
   return definitions.find((d) => assetKey(d.ref) === key);
 }
 
+/** Display metadata comes from the original typed declaration, never its record name. */
+export function definitionPresentation(definition: Definition): { title: string; description?: string } {
+  const body = definition.entity ?? definition.action ?? definition.page ?? definition.application ?? definition.query ?? definition.flow
+    ?? definition.function ?? definition.operation ?? definition.agent ?? definition.propertyType ?? definition.linkType ?? definition.interface
+    ?? definition.protocol ?? definition.observation ?? definition.alert ?? definition.evaluation ?? definition.testPlan ?? definition.sampleSet;
+  return { title: body && "title" in body && typeof body.title === "string" && body.title ? body.title : definition.ref.name,
+    description: body && "description" in body && typeof body.description === "string" ? body.description : undefined };
+}
+
 /**
  * Opens a record by reference — `"pms.reservation/R-1"` or `{ type, id }` —
  * in a read-only detail sheet. Work requests and runtime tasks open their
