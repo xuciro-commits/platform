@@ -1,5 +1,7 @@
 # ADR-0063 — Postings: balances kept by actions (ADR-0057 block E, step E3; the ledger of WorkQueue #138)
 
+Status: balance identity, exact arithmetic, floors and reversals remain in force. [ADR-0100](0100-business-transaction.md#6-as-built--完整业务事务) supersedes the `Action.Posts` authoring/execution path with the same transaction implementation. The declarations below describe retained legacy definitions; current editing uses Transaction/Creation transaction, while legacy execution is restricted to old input-log recovery.
+
 ## Decision
 
 An object's action may **post** to a balance kept on another object of the

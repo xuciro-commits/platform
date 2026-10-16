@@ -447,7 +447,9 @@ node scripts/catalog.mjs get ui/button --fields snippet,api
 
 ## 1. 创建应用
 
-从仓库根运行：
+客户应用在 Application Studio 中通过对象、行为、页面和装配创建，沿原应用候选发布；工件与版本边界见 [ADR-0107](ADR/0107-application-artifact-and-runtime.md)。可复用行业内容通过 ADR-0119 的行业包提供，供暖示例见本文对应使用说明。
+
+以下脚手架用于仓库内可信原生参考应用或代码扩展的开发，不是普通客户应用的必经步骤。原生参考应用仍按 ADR-0114 的等价替代与历史责任条件退出。需要开发这类代码时从仓库根运行：
 
 ```sh
 cd capabilities/server

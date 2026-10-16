@@ -2,6 +2,8 @@
 
 状态：有界首版已实施；原生应用回写桥接与运行冻结血缘未提供 · 2026-10-06 · 承接 ADR-0014（出站效果/发件箱）、ADR-0070（Connection）、ADR-0071（Dataset/Pipeline）、ADR-0069（第二程 Ⅰ 集成织物）
 
+后继范围：恢复按 ADR-0097 应用保存的效果意图，定义交付归 ADR-0107；显式 Confirmation 的答复不明、Source 回读与对账由 ADR-0112 补充。普通 Writeback 继续沿原效果重试，不因引入 Confirmation 自动获得外部结果确认。
+
 ## 决定
 
 ### 1. Writeback 就是一个 ADR-0014 效果，目的地是 Connection
@@ -18,7 +20,7 @@
 
 宿主侧（`writebacks.go`）：
 
-- **计划**在 `eventEffects` 里与 webhook 并列：裁决被接受时读取已发布的 writeback，把请求冻结为效果 `Body`（`WritebackRequest`：method/url/body/allowPrivate/密钥**名**），`Endpoint = connection:<id>`，`Event = writeback/<name>`，`App = build`。它在输入内、也在回放内运行，因此回放重建同一意图而不重发；
+- **计划**在 `eventEffects` 里与 webhook 并列：新决定在私有上下文读取已发布的 writeback，把请求冻结为效果 `Body`（`WritebackRequest`：method/url/body/allowPrivate/密钥**名**），`Endpoint = connection:<id>`，`Event = writeback/<name>`，`App = build`，随接受结果保存。恢复应用已保存意图，不重新读取当前定义或重新计划；旧输入日志的兼容恢复保留其原格式责任；
 - **发送**复用 dispatcher：`connectionEndpoints()` 把有未结效果的连接合成为端点——每连接一条序、一个断路器；`sendWriteback` 带 `Idempotency-Key = 效果 ID`（含裁决 change id）与连接密钥作 `Authorization`。2xx 送达，4xx（非 408/429）拒绝，其余重试（5s…1h 退避，约七小时后 failed 进故障工单）；
 - **应答**经 `platform.Answerer`：`Build.Answer` 把结果计入 writeback（`build.writeback.answered`：送达/拒绝/失败计数 + 最近 20 条应答），送达且有 `result` 映射时对记录做 `edit`（幂等键 `answer-fields:<effect>`）。
 

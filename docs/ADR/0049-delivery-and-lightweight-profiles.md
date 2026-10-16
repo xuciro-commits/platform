@@ -1,12 +1,12 @@
 # ADR-0049：两种基础设施 profile——交付环境与轻量环境（已实施）
 
-**状态：** 接受并实施，2026-10-05。负责人已给出方向：平台基础设施做两种 profile——(a) 交付/客户：Docker + PostgreSQL + RustFS(S3) + Wasm Worker（wazero 进程内）；(b) 轻量/边缘小设备：SQLite + Wasm/Rust/Go 单二进制 + 自研轻量 IdP 身份服务。本文按“先设计再实施”的要求给出设计、边界与实施切片；D1–D7 按推荐落地，S1–S3 已实施并验证（同一套契约测试在文件与真实 PostgreSQL 上通过，真实二进制在单个数据目录上完成停止/重启续接），S4（SQLite）按 D2 明确为**后继后端**：接口已就绪，等依赖方案，不阻塞本稿结论。
+**状态：** 接受并实施，2026-10-05。两种 profile 为交付/客户与轻量/边缘；S1–S3 的存储、身份与文件适配已实施，S4（SQLite）仍是后继后端。Worker 沿 ADR-0044 的独立 Go/wazero 进程，不在业务宿主内执行；轻量宿主与本地数据目录不等于已具备所有隔离计算依赖的单进程产品。原恢复、入口与发布归属不变，实施范围见下文。
 **范围：** 运行环境的存储、身份、文件与 worker 选择。不改变 M1–M3 的入口、发布主人与恢复语义（ADR-0047/0048），不引入第二套部署状态机。
 **设计日期：** 2026-10-05。代码事实基线：`a540d93e`（D6 第一批）与其上的 `main`；实施基线 `8f1a663`。
 
 ## 1. 背景：今天的交付环境靠什么运行
 
-- 一个 host 二进制（`capabilities/server`，各 solution 的 `cmd/*-server`）通过 `Deployment` 参数运行（`deploy.go`）：`-database` 是 PostgreSQL 日志（空 = 内存），`-files` 是 S3 兼容存储（空 = 内存），`-oidc-issuer/-oidc-keys` 是外部 OIDC（空 = 开发 token），快照按 `-snapshot-every` 写入同一存储（ADR-0019）。Wasm 由进程内 wazero 执行（ADR-0044），没有外部 worker 进程。
+- 一个 host 二进制（`capabilities/server`，各 solution 的 `cmd/*-server`）通过 `Deployment` 参数运行（`deploy.go`）：`-database` 是 PostgreSQL 日志，`-files` 是 S3 兼容存储，`-oidc-issuer/-oidc-keys` 指定 OIDC；轻量 profile 使用下述文件日志与本地身份。Wasm 沿 ADR-0044 通过私有 socket 交给独立 Go/wazero worker，当前本地交付在 `deploy/local/compose.yaml` 中部署该进程。
 - 因此“交付/客户”profile 就是今天的路径：Docker Compose 起 PostgreSQL 与 RustFS，OIDC 由 Rauthy 提供（`deploy/local/compose.yaml`），host 进程连接它们。
 - 小设备上这套组合太重：需要 Docker/Compose、一个 PostgreSQL 实例、一个对象存储与一个外部 IdP。轻量 profile 的目标是**同一语义的单二进制**：一个进程 + 一个本地数据目录。
 
@@ -18,7 +18,7 @@
 | D2 轻量持久化 | `Journals` 接口（`journals.go`）抽出读/追加/快照/幂等索引，PostgreSQL 是既有实现；`journal_file.go` 是同语义的单文件后端（`journal.jsonl` + `snapshots/` + `derived/`，纯标准库，无新依赖）。SQLite 作为后继后端（同一接口）暂缓，等依赖方案 |
 | D3 身份 | 交付沿用外部 OIDC/开发 token；轻量用内置 `LocalIdP`（HS256，密钥 `-idp-key`，默认 `<data>/idp.key`）：`-idp-new-key` 只生成一次、绝不替换，`-mint-token <subject>` 打印 token（`<user:email>`/`<client:id>`），`-token-ttl` 默认 12h。席位目录仍是 `-directory`/内置 `Seat`，角色模型与审计不变 |
 | D4 文件字节 | `FileStore` 接口不变（ADR-0028）：交付用 S3（`-files`），轻量用 `localFiles`（`<data>/files/<tenant>/<hash>`，内容寻址、原子写、拒绝越界 key）。日志里仍只记哈希 |
-| D5 Worker | 两个 profile 都用进程内 wazero（ADR-0044），不引入外部 worker |
+| D5 Worker | 两个 profile 都复用 ADR-0044 的独立 Go/wazero worker 与原 Work/结果生命周期；轻量宿主未配置执行 socket 时不宣称计算能力可用 |
 | D6 诊断与恢复 | 两种 profile 走**同一个** `restoreTenants`：读本代码的最新快照、重放其后的条目、损坏日志隔离、启动即 `attachJournal`。profile 差异只在存储/身份/文件的位置 |
 | D7 不做 | 没有第二个发布系统/激活指针、没有应用私有恢复、没有“轻量版少一半语义” |
 

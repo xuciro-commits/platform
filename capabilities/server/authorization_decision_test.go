@@ -7,9 +7,85 @@ import (
 	"testing"
 	"time"
 
+	"platformserver/apps/ai"
+	"platformserver/apps/build"
 	"platformserver/platform"
 	"platformserver/platform/authz"
 )
+
+func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T) {
+	const id = "capability-owner-authorization"
+	at := txnAt
+	tenant := composeTenant(t, id, []Seat{
+		seatOf("builder", "build:builder", "ai:admin", "platform:admin"),
+		seatOf("user", "build:user"),
+		seatOf("app:candidate-test", "ai:admin", "platform:admin"),
+	}, ai.New(id), build.New(id))
+	if err := configureFunctionFixtureModel(tenant, "probe/model", at); err != nil {
+		t.Fatal(err)
+	}
+	publishObject(t, tenant, "builder", "NOTES", map[string]any{
+		"name": "note", "title": "Note",
+		"fields": []build.Field{{Name: "text", Title: "Text", Type: "text", Read: []string{build.Builder}}},
+	}, at)
+	definition := platform.RecordAdviceFunction("build.note", []string{"text"}, []string{build.User})
+	definition.Name = "advice"
+	decide(t, tenant, "builder", build.ID, build.FunctionType+".create", build.FunctionType, "ADVICE", definition, at)
+	decide(t, tenant, "builder", build.ID, build.SchemaFunction, build.FunctionType, "ADVICE", map[string]any{}, at)
+	decide(t, tenant, "builder", build.ID, "build.note.create", "build.note", "N", map[string]any{"text": "Synthetic task"}, at)
+
+	// The grant permits the function even though the member's primary role
+	// is builder. Discovery and result reads must not invent a single-role gate.
+	directory := testConsoleOf(tenant)
+	directory.mu.Lock()
+	directory.members["builder"].Grants = []platform.Grant{{App: build.ID, Role: build.Builder}, {App: build.ID, Role: build.User}}
+	directory.mu.Unlock()
+	member := memberOf(t, tenant, "builder")
+	if member.Roles[build.ID] != build.Builder || !member.Holds(build.ID, build.User) {
+		t.Fatalf("test needs a non-primary user grant: %+v", member)
+	}
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFunction, Name: definition.Name}
+	for _, version := range []int{0, 1} {
+		if descriptor, problem := tenant.DescribeCapability(member, ref, version); problem != nil || descriptor.Ref != ref {
+			t.Fatalf("function version %d ignored its effective grant: %+v %v", version, descriptor, problem)
+		}
+	}
+	call, problem := tenant.InvokeCapability(member, platform.CapabilityInvocation{
+		Ref: ref, Version: 1, Key: "advice", Inputs: json.RawMessage(`{"source":"N"}`),
+	}, at)
+	if problem != nil || call.State != "pending" {
+		t.Fatalf("authorized retained function did not start: %+v %v", call, problem)
+	}
+	if result, problem := tenant.ReadCapabilityAI(member, call.Call, at); problem != nil || result.State != "pending" {
+		t.Fatalf("function result ignored its effective grant: %+v %v", result, problem)
+	}
+
+	owner := tenant.app(build.ID)
+	owner.Manifest().Actions.UsePolicies(func() []authz.Policy {
+		return []authz.Policy{{ID: "deny-advice", Effect: "deny", Permission: definition.Name}}
+	})
+	assertDenied := func(reason string) {
+		t.Helper()
+		for _, version := range []int{0, 1} {
+			if _, problem := tenant.DescribeCapability(member, ref, version); problem == nil {
+				t.Fatalf("%s still disclosed function version %d", reason, version)
+			}
+		}
+		if _, problem := tenant.ReadCapabilityAI(member, call.Call, at); problem == nil {
+			t.Fatalf("%s still disclosed the function result", reason)
+		}
+	}
+	assertDenied("owner deny policy")
+	owner.Manifest().Actions.UsePolicies(func() []authz.Policy { return nil })
+	directory.mu.Lock()
+	directory.members["builder"].Grants = []platform.Grant{{App: build.ID, Role: build.User}}
+	directory.mu.Unlock()
+	assertDenied("revoked source-field role with the function role retained")
+	directory.mu.Lock()
+	directory.members["builder"].Grants = []platform.Grant{{App: build.ID, Role: build.Builder}}
+	directory.mu.Unlock()
+	assertDenied("revoked grant in a stale member snapshot")
+}
 
 func TestOwnerAuthorizationExplainsRowsFieldsAndSavedEvidence(t *testing.T) {
 	tn := stockTenant(t)

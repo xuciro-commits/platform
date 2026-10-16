@@ -1,6 +1,6 @@
 # ADR-0076 — 业务核：账簿、单据编号、冲销（ADR-0069 Ⅱ）
 
-状态：接受并实施 · 2026-10-06 · 承接 ADR-0063（台账过账）、ADR-0067（core 共享类型）、ADR-0069 §3
+状态：接受并实施 · 2026-10-06；账簿、账期与跨权威效果责任保留。旧 `Action.Journal/Reverses`、Posts 与编号表达已由 [ADR-0100](0100-business-transaction.md#6-as-built--完整业务事务) 的同一事务替代，旧字段只承担定义转换和历史读取，不再作为新编辑入口 · 承接 ADR-0063、0067、0069 §3
 
 ## 决定
 
@@ -20,7 +20,7 @@ SAP 的交易骨架在这里只剩三件平台级的事：**凭证进账簿、�
 
 ### 2. 构建器的动作可以记账：`Action.Journal`
 
-对象类型的动作在 **Side effects → Books** 配置 **What it books**：
+当前在 **Action types → Transaction** 的 journal 步骤配置，创建编号使用 Creation transaction；旧 Side effects → Books 编辑器已删除。下面的 `journal` 字段例子记录旧定义，其保存/执行按 ADR-0100 转换为同一事务，不恢复第二条业务写入路径：
 
 ```json
 "journal": {"date": "record.receivedon", "text": "=Goods receipt",

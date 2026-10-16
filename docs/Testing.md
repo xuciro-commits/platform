@@ -45,11 +45,9 @@
 
 - **浏览器 spec**（`web/e2e/tests/*.spec.ts`）只从 `./kit` 导入 `test`/`expect`：`builder`（`manager` 席位）造对象 `builder.object()`、记录 `builder.records()`、页面 `builder.page()`、后台改稿 `builder.edit()`；`editor` 走编辑器（`importModule`、`select`、`saveUntil`、`release`，联合依赖交付用 `release(between, true)`）；`runtime(page, operator, name)` 以 `desk` 开运行时页；截图用 `shots()`。spec 里不再出现 `/v1/submissions`、`Authorization`、"Import Workshop module" 对话框步骤或 Review→Check→Candidate→Activate 四连点。一个 spec 一条路线、格式化、分段注释写明每段证明什么；样板 `page-notice.spec.ts`。旧的单行压缩 spec 在触碰时按样板改写，不另立迁移任务。
 - **宿主测试**（`capabilities/server/*_test.go`）用 `testkit_test.go`：`composeTenant(t, id, seats, apps...)` / `builderTenant(t, id, apps...)` 组租户，`seatOf("ann", "build:desk")` 写席位，`decide(...)` 提交并在拒绝时 fail，`refuse(...)` 返回 `code: message` 做权限表，`publishObject(...)` 一步建并发布对象。不手拼 `pb.Submission`、不自维护幂等计数；文件内已有的 `submit := func` 闭包在触碰时改到 kit 上；样板 `build_access_test.go`。
-- **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新功能不自带新测试，除非它改变了某个长期不变量（契约、原子提交/恢复、重放兼容、隔离与授权、发布生命周期、身份）——那就改那条已有测试。浏览器路线封顶 8 条，加一删一。过程探针留在本地不提交（ADR-0082）。
+- **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新增或修改测试应能发现本次变更涉及的重要错误；优先改已有的不变量测试。浏览器按实际任务选择必要路线，保留覆盖不同长期责任的已有路线，不按固定数量增删。临时过程检查不提交（ADR-0082）。
 
-W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Playwright 或重型套件；必要语法/类型/小型逻辑命令使用 8 秒截止加 1 秒强制退出，每条总时长不超过 10 秒。整包类型检查超限不计通过，不反复重试；原已完成且未受影响的证据直接复用。Shell 归属/别名的 Node 检查与既有 Workspace 的 jsdom/Dockview 逻辑仅证明其政策，不替代真实弹窗、原七节点体验、真实 AI、目标存储或独立交接。
-
-本地接手先在 `capabilities/server` 执行原 `go run ./cmd/api-types`，再走现有 Web/API 检查：当前源码取回了 main 的 `StreamPreparationRetry` 与 Intake/Window retry 字段，但本沙箱生成器两次达到截止、随后环境未保留 Go 工具链，宿主 SDK 快照未重新生成；不手写 DTO 或建立替代生成器。该项是明确的生成物交接缺口，不计通过，也不把 main 的旧生成结果冒充本分支已生成。Catalog 在新沙箱因原 `typescript-syntax` 依赖未提供而无法生成（未安装替代依赖）；本地用原 `node scripts/catalog.mjs generate` 更新后再检查。其他验证仍用原 Makefile/Testing 入口在本地完成。
+历史 W4 轻量沙箱的十秒命令限制和缺少生成工具，是当时环境的证据边界，不约束当前本地检查，也不表示 main 仍有同一生成缺口。语法、类型或 jsdom 检查不替代真实弹窗、用户体验、模型、目标存储或交接证据。宿主 API 或 Catalog 源声明发生变化时使用原生成器更新；具体命令与沙箱准备见 AGENTS，不手写生成类型或增加替代生成器。
 
 ## 自动检查的归属
 
@@ -83,6 +81,8 @@ W4 轻量沙箱按负责人要求不启动宿主/数据库/Vite、不运行 Play
 手测：治理页「Roles and permissions / 角色与权限」选择成员，填写动作或对象、记录和字段，查看第一拒绝层；撤回来源权限后重开派生记录，确认文本与出处被遮蔽。检查只证明这些用例；ADR-0105 §4 的九类入口整体验收仍以各入口的实际拒绝证据为准。
 
 `make test-go PKG='./cmd/check-boundaries .' RUN='TestAuthorizationNine|TestAuthorizationRejects|TestHostHTTP|TestMemberProjection|TestSourceBoundary'` 验证九类入口显式拒绝、虚构主体、第二角色、宿主管理依据/恢复和实体投影/评论。`scripts/escapes.sh` 使用同一个 AST 守门检查成员存储投影；它是入口防遗漏检查，不代替任意原生业务算法的权限审查。
+
+能力发现与 AI 结果读取沿 `make test-go PKG=. RUN=TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization`：同一成员以非主角色获准发现当前/保留版本和读取原调用；owner deny、函数角色撤销、来源字段角色单独撤销后旧成员快照均拒绝。历史版本不保留旧权限。
 
 `make test-go PKG=. RUN='TestDerivedDTO|TestUndeclaredDTO|TestUndeclaredOpaque|TestOriginalReadSource|TestMissingSources|TestAuthorizationDefinitionChanges'` 检查非实体/JSON 的来源行与字段、撤权后重新投影、缺少出处的整字段/列表/合并来源、原始配置不能扩大嵌入实体权限、循环/不透明内容关闭以及原字节不变。JSON 检查包含大整数与重复键；来源/策略改变须改变接受依据的定义指纹。通知没有可读出处时保留自身状态而遮蔽文本；原始 Flow 记录读取与纯恢复保留执行状态，不能拿派生遮蔽后的状态驱动调度。
 

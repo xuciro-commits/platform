@@ -1,6 +1,6 @@
 # ADR-0071 — Dataset 与 Pipeline（ADR-0069 Ⅰ-C + Ⅰ-D）
 
-状态：有界首版已实施；独立试跑、节点画布与跨环境制品化未提供 · 2026-10-06 · 承接 ADR-0061（数据源）、ADR-0064（公式）、ADR-0070（Connection 与 profile）、ADR-0069（第二程 Ⅰ 集成织物）
+状态：有界首版已实施（2026-10-06）；Pipeline 画布由 ADR-0086 实现，集成定义候选与跨环境交付由 ADR-0097/0107 接续，规则表达归 ADR-0101。独立 Pipeline 试跑仍未提供；Dataset 版本数据不随定义制品自动迁移 · 承接 ADR-0061、0064、0070、0069
 
 ## 决定
 
@@ -12,7 +12,7 @@
 - 读：`/v1/records/build.dataset/{id}` 与 `/v1/records/build.datasetversion/{id}@{n}`，没有新的 read；
 - Source 新增 `dataset` 目标（与 `object` 二选一）：命中时每次拉取把**原始行**作为数据集下一版本（`loadDataset`），映射字段留空——"映射"从数据源迁到管道，这正是 ADR-0070 §2 预留的收口。老的 object 直映射保留给小而稳定的接口。
 
-Dataset 是 Foundry 的 dataset（不可变版本、schema 推断、drift 可见），但没有独立存储层：版本就是记录，走同一账本与回放。Connection/Source/Dataset/Pipeline 是租户内的集成记录，当前不在封存候选的定义清单中，不能据此声称可随候选跨环境晋级。
+Dataset 版本就是记录，走同一账本与恢复，未引入独立存储层。Connection/Source/Dataset/Pipeline 的定义已按 ADR-0097/0107 纳入原候选与环境交付；凭据和现场配置在目标环境绑定，Dataset 版本行属于运行数据，不因定义晋级而复制。
 
 ### 2. Pipeline：声明式步骤 + 期望 + 一个输出
 
@@ -47,7 +47,7 @@ Dataset 是 Foundry 的 dataset（不可变版本、schema 推断、drift 可见
 
 ### 4. 构建器
 
-Ontology › **Datasets**（列表；编辑器：名称/标题/保留版本数、通过原记录动作 Load a version 手动加载 JSON 行、推断的结构与最近装载漂移、按版本预览前 50 行）、**Pipelines**（列表；编辑器：输入数据集与列、线性步骤表单（按 kind 显示字段、上下移动）、期望、输出二选一、Publish/Run now/Pause、最近运行含隔离行与拒绝）。Data source 编辑器增加 "Rows go to: object | dataset" 分支。
+Datasets 提供定义、手动装载、结构变化与版本预览；Pipelines 的步骤已经由 ADR-0086 改用 FlowCanvas，字段仍在原编辑器配置，不再只有线性步骤表单。输出、期望、运行/暂停、隔离行与拒绝仍归原 owner；应用上下文与入口组织见 ADR-0108，候选发布见 ADR-0107。
 
 ## 做减法
 

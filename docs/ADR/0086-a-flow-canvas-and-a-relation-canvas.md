@@ -1,6 +1,6 @@
 # ADR-0086 画布收敛：一套内核、两副面孔（流程画布与关系画布）
 
-状态：已落地（2026-10-08）；前端部分完成，泳道与子流程展开见「未做」。
+状态：已落地（2026-10-08）；泳道已由 ADR-0087 实现，池与子流程展开仍未提供，见「未做」。
 
 ## 背景
 
@@ -70,7 +70,7 @@ ADR-0084「后果 → 不做」写过一条："把 Flow 与企业画布合成一
 
 ## 未做（需要动契约，单独一块）
 
-- **泳道与池（lanes / pools）**：BPMN 里"谁负责这一步"。宿主 `capabilities/server/apps/build/process.go` 的 `Process`/`ProcessStep` 现在只有步骤自身，没有泳道；这是 `v1` 契约变更，要改 Go、`go run ./cmd/api-types` 重新生成 `web/packages/kernel/src/gen/host.ts`、补 i18n，并单独走契约流程。
+- **泳道与池（lanes / pools）**：泳道已由 [ADR-0087](0087-lanes-on-the-process-canvas.md) 实现，角色、自动/人工与 Flow 配置沿原定义；池仍未提供。原“宿主没有泳道”的限制只描述本文实施时的状态，不能作为当前缺口。
 - **子流程的父/子展开**：`ProcessStep.kind` 已经有 `subflow`/`call`，画布只画了 ⊞ 记号；真正的折叠/展开要 React Flow 的 `parentId` + `extent: 'parent'`，并把子流程的步骤读进来。
 - 因此本块的 BPMN 词汇全部由前端既有事实推导（步骤 kind、`timeoutSeconds`、`error`），没有新增任何存储字段。
 - 其余 BPMN 记号（`script-task`、`gateway-inclusive`、`gateway-event`、`event-message`、`event-intermediate` 的抛出/捕获之分）已经在词汇表里，但宿主还没有会推导出它们的步骤 kind；等契约给出口径再接。

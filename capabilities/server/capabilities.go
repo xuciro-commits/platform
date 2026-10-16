@@ -12,9 +12,13 @@ import (
 // Capabilities derives the Block palette from the same permission-filtered
 // owner definitions used by pages. It owns no storage or business execution.
 func (t *Tenant) Capabilities(m platform.Member) []platform.CapabilityDescriptor {
+	if t.admits(m) != nil {
+		return []platform.CapabilityDescriptor{}
+	}
+	m = t.authorizationMember(m)
 	defs := t.Definitions(m)
 	out := []platform.CapabilityDescriptor{}
-	if m.Roles["build"] == "builder" {
+	if m.Holds("build", "builder") {
 		out = append(out, platform.ControlBlocks()...)
 	}
 	for _, d := range defs {

@@ -2,7 +2,9 @@
 
 面向 **FDE（前线部署工程师）** 与 **企业客户构建者** 的下一代 AI 业务应用平台，产品形态与用户体验对标 **Palantir Foundry / AIP**。
 
-平台提供从**数据连接**、**语义建模（Ontology）**、**动作/流程/AI 编排（Workshop / Automate / AIP Logic）**、**操作界面渲染** 到 **受控发布与持续演进** 的完整闭环。底层通过语言中立的内核契约（`contract/`）、强类型多租户 Go 宿主运行时（`capabilities/server/`）、现代化 Web 工作区（`web/`）以及自治业务应用（`apps/`、`solutions/`）提供数学与工程层面的可靠性保证。
+平台提供从**数据连接**、**语义建模（Ontology）**、**动作/流程/AI 编排（Workshop / Automate / AIP Logic）**、**操作界面** 到 **受控发布与持续演进** 的构建与运行能力。底层由语言中立的内核契约（`contract/`）、多租户 Go 宿主（`capabilities/server/`）和 Web 工作区（`web/`）组成；`apps/` 是原生参考应用，`solutions/` 负责宿主组合。具体支持范围、选定内核证明与真实使用证据见对应 ADR 的 As built。
+
+项目现行文档与主题入口见 [ADR-0124](docs/ADR/0124-platform-consolidation.md)，产品宗旨见 [Intent](docs/Intent.md)，当前工作见 [WorkQueue](docs/WorkQueue.md)；开发规则从 [AGENTS](AGENTS.md) 开始。
 
 ---
 
@@ -26,7 +28,7 @@ make setup
 
 ### 2. 启动模式选择：轻量单机 vs 全栈热开发
 
-平台提供**两套完备的运行架构**（[ADR-0049](docs/ADR/0049-delivery-and-lightweight-profiles.md)），可根据你的开发环境与资源情况自由选择：
+平台用同一套运行语义提供两种环境配置（[ADR-0049](docs/ADR/0049-delivery-and-lightweight-profiles.md)），按开发环境选择：
 
 #### 方案 A：零 Docker 轻量持久化服务 (`make lite` · 强烈推荐个人/轻量环境)
 
@@ -48,7 +50,7 @@ make lite LITE_HOST=0.0.0.0 PNPM="corepack pnpm"
 > 2. 编译对应行业宿主单二进制；
 > 3. 在本地目录（`.build/lite/<solution>/`）自动生成自研本地 IdP 密钥（`idp.key`）；
 > 4. 工作台通过原 `/v1/sign-in` 获取本机签名的角色卡，不在启动日志打印 Token；
-> 5. 以单进程直接提供完整的 API、持久化日志、本地文件存储与前端 SPA 页面服务。
+> 5. 以单进程提供宿主 API、持久化日志、本地文件存储与前端 SPA；隔离编译和 Wasm 执行仍需 ADR-0044 的独立进程与 socket 配置，`make lite` 不自动提供这些依赖。
 
 ---
 

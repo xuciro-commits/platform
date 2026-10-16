@@ -1,6 +1,8 @@
-# 做减法清单（由人执行）
+# 旧实现的替代与退出依赖
 
-ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback / Matching rule。下面列出旧路径的处置；制造方案的 `erpadapter` 与调用方已一起删除，现有外部摄取与回写沿集成织物。沙箱不能编译独立 Go 模块（`apps/*`、`solutions/*`），本地删除须与调用方迁移一起验证。每项完成后按影响面运行 `scripts/verify.sh capabilities composition web`；这里是迁移范围参考，执行顺序仍以 WorkQueue 为准。
+ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback / Matching rule。下面记录旧路径的处置与依赖；制造方案的 `erpadapter` 与调用方已一起删除，现有摄取与回写沿原集成归属。沙箱的独立 Go 模块使用 AGENTS 指定的 `scripts/sandbox-go.sh` 装配后检查；删除与调用方迁移在同一块完成，按实际影响选择 Makefile 检查。这里不是第二份施工队列，当前顺序只归 WorkQueue，整个项目的删除原则见 ADR-0124。
+
+已完成章节中的路径与操作说明记录当时实际删除的内容，不是要求重复执行；未退出实现按 ADR-0114 的等价替代与历史责任判断。
 
 ## 1. `apps/erpadapter` + `web/packages/erpadapter`（已完成 2026-10-08）
 

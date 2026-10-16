@@ -2,7 +2,6 @@ package platformserver
 
 import (
 	"encoding/json"
-	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -18,6 +17,7 @@ func (t *Tenant) ReadCapabilityAI(m platform.Member, id string, now time.Time) (
 	if refusal := t.admits(m); refusal != nil {
 		return answer, refusal
 	}
+	m = t.authorizationMember(m)
 	run, ok := platform.Get[build.FunctionRun](t.automation(build.ID, false), id)
 	if !ok {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Function call is unavailable")
@@ -34,14 +34,12 @@ func (t *Tenant) ReadCapabilityAI(m platform.Member, id string, now time.Time) (
 			return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Retained function definition is unavailable")
 		}
 	}
-	if run.Member != m.ID && m.Roles[build.ID] != build.Builder || !slices.Contains(contract.Roles, m.Roles[owner]) {
+	if run.Member != m.ID && !m.Holds(build.ID, build.Builder) {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Function call is unavailable to this member")
 	}
-	readable := t.mayRead(m, now, false)
-	for _, source := range run.Sources {
-		if !readable(source) {
-			return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Function source permission was revoked")
-		}
+	caller := platform.NewCaller(runtime{t}, m, owner, false, false)
+	if refusal := authorizationRefusal(t.authorizeCapability(caller, owner, contract.Name, contract.Roles, true, authorizationDetails{At: now, Sources: run.Sources})); refusal != nil {
+		return answer, refusal
 	}
 	answer.State = "pending"
 	if run.State == "ready" {

@@ -615,6 +615,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 }
 
 func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []platform.Definition) []platform.Definition {
+	m = t.authorizationMember(m)
 	entities := map[string]platform.EntityInfo{}
 	for _, info := range t.Entities(m) {
 		entities[info.Type] = info
@@ -734,7 +735,8 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 		case platform.AssetFunction:
-			if def.Function == nil || !m.May(def.Ref.App, def.Function.Name, def.Function.Roles).Allow {
+			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
+			if def.Function == nil || !t.authorizeCapability(caller, def.Ref.App, def.Function.Name, def.Function.Roles, true, authorizationDetails{}).Allow {
 				continue
 			}
 			info, ok := entities[def.Function.Object]
@@ -757,7 +759,8 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				def.Agent = &projection
 			}
 		case platform.AssetCompute:
-			if def.Operation == nil || !m.May(def.Ref.App, def.Operation.Name, def.Operation.Roles).Allow {
+			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
+			if def.Operation == nil || !t.authorizeCapability(caller, def.Ref.App, def.Operation.Name, def.Operation.Roles, true, authorizationDetails{}).Allow {
 				continue
 			}
 		case platform.AssetObservation:

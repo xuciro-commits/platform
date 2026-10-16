@@ -20,19 +20,7 @@ func (t *Tenant) DescribeCapability(m platform.Member, ref platform.AssetRef, ve
 		return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained capability is unavailable to this member")
 	}
 	for _, descriptor := range t.Capabilities(m) {
-		if descriptor.Ref != ref {
-			continue
-		}
-		if ref.Kind == platform.AssetCompute {
-			op, ordinal, ok := operationDefinition(t.app(ref.App), ref.Name, version)
-			if !ok || !slices.Contains(op.Roles, m.Roles[ref.App]) {
-				break
-			}
-			descriptor.Input, descriptor.Output, descriptor.Revision = &op.Input, &op.Output, ordinal
-			descriptor.Title, descriptor.Description = op.Title, op.Description
-			return descriptor, nil
-		}
-		if version == 0 {
+		if descriptor.Ref == ref {
 			return descriptor, nil
 		}
 	}
@@ -40,6 +28,7 @@ func (t *Tenant) DescribeCapability(m platform.Member, ref platform.AssetRef, ve
 }
 
 func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, bool) {
+	m = t.authorizationMember(m)
 	app := t.app(ref.App)
 	if app == nil || version < 1 {
 		return platform.CapabilityDescriptor{}, false
@@ -67,7 +56,8 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 	}
 	if ref.Kind == platform.AssetCompute {
 		op, ordinal, ok := operationDefinition(app, ref.Name, version)
-		if !ok || ordinal != version || !slices.Contains(op.Roles, m.Roles[ref.App]) {
+		caller := platform.NewCaller(runtime{t}, m, ref.App, false, false)
+		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, op.Name, op.Roles, true, authorizationDetails{}).Allow {
 			return d, false
 		}
 		d.Kind, d.Title, d.Description, d.Group, d.Icon, d.Tone, d.Input, d.Output = "compute", op.Title, op.Description, "Code", "braces", "info", &op.Input, &op.Output
@@ -77,7 +67,8 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 	if ref.Kind == platform.AssetFunction {
 		d.Side = platform.CapabilityEffect
 		f, ordinal, ok := functionDefinition(app, ref.Name, version)
-		if !ok || ordinal != version || !slices.Contains(f.Roles, m.Roles[ref.App]) {
+		caller := platform.NewCaller(runtime{t}, m, ref.App, false, false)
+		if !ok || ordinal != version || !t.authorizeCapability(caller, ref.App, f.Name, f.Roles, true, authorizationDetails{}).Allow {
 			return d, false
 		}
 		readable := false

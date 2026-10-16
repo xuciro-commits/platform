@@ -142,4 +142,6 @@ record / batch / input / work / effect / usage / host 接受结果保存可选 `
 
 `TestAuthorizationNineEntryFamilies` 覆盖 Submit、Input、协议、作业、效果回调、Agent 步骤、模型计量、Compute 和发布路由的显式拒绝；`TestHostHTTPRetainsItsExplicitAuthorityAndRecoversWithoutAuthorization` 覆盖宿主角色隔离、HTTP 管理接受依据和纯恢复。成员/来源与集合的反例另归 `authorization_decision_test.go` 和记录集测试。
 
+能力目录、当前/保留版本详情与 AI 调用结果读取共用原 `authorizeCapability`，不再各自按主角色字符串决定权限。发现投影与保留版本的来源字段都收窄到当前目录仍保留的角色与原 owner 策略；计算详情直接使用原定义投影，不再重复解析一份当前定义。AI 结果保留原调用人/构建者的读取范围，并由同一决定检查函数角色、显式拒绝及来源。`TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization` 检查非主角色授予、当前与保留函数、原调用结果、deny、函数角色撤销，以及保留函数角色但撤销来源字段角色时旧成员快照均被拒绝；历史版本字节与接受结果不改。
+
 非实体/JSON、缺少出处、撤权、原始声明不能扩大嵌入权限以及原值不变的反例归 `authorization_projection_test.go`；定义依据变化归 `TestAuthorizationDefinitionChangesWithItsSourceContractAndPolicies`。实现边界仍是声明的来源与有界遍历，不实现 `related`、第二套授权语言或跨主体缓存。原生 owner 须如实声明自己复制的字段；AST 守门与反例不构成对任意新 Go 业务算法的数学证明。

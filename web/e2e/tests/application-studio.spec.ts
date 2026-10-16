@@ -61,6 +61,31 @@ test("one application retains drafts across five workspaces and delivers grouped
   await expect.poll(async () => (await builder.record("build.object", objectID)).actions?.length).toBe(1);
   await shots(page, page.locator("body"), "object-editor", testInfo);
 
+  // Object properties and permissions use the shared table; inline edits
+  // still save the same object draft and the application matrix reads it.
+  await objectSections.getByRole("tab", { name: "Properties", exact: true }).click();
+  await page.getByRole("row").filter({ hasText: "Service note" }).click();
+  await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
+  await shots(page, page.locator("body"), "object-properties", testInfo);
+  await objectSections.getByRole("tab", { name: "Permissions", exact: true }).click();
+  await page.getByRole("button", { name: "Add a role", exact: true }).click();
+  await inspector.getByRole("combobox", { name: "Role", exact: true }).selectOption("user");
+  await page.getByRole("combobox", { name: "user · Read", exact: true }).selectOption("all");
+  await page.getByRole("checkbox", { name: "user · archive", exact: true }).check();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.object", objectID)).access?.[0]).toMatchObject({ role: "user", read: "all", archive: true });
+  await shots(page, page.locator("body"), "object-permissions", testInfo);
+  await context.getByRole("button", { name: "Service application", exact: true }).click();
+  await sections.getByRole("tab", { name: "Roles", exact: true }).click();
+  const applicationRead = page.getByRole("combobox", { name: "Service case · user · Read", exact: true });
+  await applicationRead.selectOption("own");
+  await expect(applicationRead).toHaveValue("own");
+  await expect.poll(async () => (await builder.record("build.object", objectID)).access?.[0]?.read).toBe("own");
+  await applicationRead.selectOption("all");
+  await expect(applicationRead).toHaveValue("all");
+  await expect.poll(async () => (await builder.record("build.object", objectID)).access?.[0]?.read).toBe("all");
+  await shots(page, page.locator("body"), "application-roles", testInfo);
+
   const pageDraft = await builder.page({ title: "Service desk", object: `build.${objectName}`, sections: [{ id: "initial", widget: "text", configVersion: 1, text: "Service desk" }] });
   // Add existing uses the same membership decision as creating a page here.
   await navigation.getByRole("button", { name: "Interface", exact: true }).click();

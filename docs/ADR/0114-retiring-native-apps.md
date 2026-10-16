@@ -15,7 +15,7 @@ ADR-0098 §0 定了：`apps/*` 里的原生应用是参考应用，不是产品�
 
 ## 1. 现状：退出清单的起点
 
-[Subtraction](../Subtraction.md) 今天只有三条（`erpadapter` 已完成、`apps/erp` 采购链"现在不删"、几个小项）。`apps/` 下有六个原生应用：`crm`、`csm`、`erp`、`hcm`、`mes`、`pms`。
+[Subtraction](../Subtraction.md) 记录各旧路径的替代者与退出依赖，已完成项不再是待执行任务。原生参考应用位于 `apps/`：`crm`、`csm`、`erp`、`hcm`、`mes`、`pms`；它们仍承担有效业务与历史责任，不能按清单数量或目录名称直接删除。
 
 按 ADR-0098 的口径，这些应用内部的代码分三类，处置方式完全不同：
 

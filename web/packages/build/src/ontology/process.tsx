@@ -12,7 +12,7 @@ import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../edit
 // everything again when the object is published.
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
 import {
-  Button, Card, Checkbox, ContentTabs, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
+  Button, Card, Checkbox, ContentTabs, DataTable, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Trash2, Zap } from "lucide-react";
@@ -94,11 +94,16 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     </div>,
     properties: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Properties")}</h2><Button size="sm" onClick={addField}><Plus />{t("Add a property")}</Button></div>
-      <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="px-2 py-1 font-medium">{t("Title")}</th><th className="px-2 py-1 font-medium">{t("Name")}</th><th className="px-2 py-1 font-medium">{t("Type")}</th><th className="px-2 py-1 font-medium">{t("Required")}</th><th className="px-2 py-1 font-medium">{t("Shared property")}</th></tr></thead>
-        <tbody>{process.fields.map((f, at) => <tr key={`${f.name}:${at}`} aria-selected={chosen?.kind === "field" && chosen.at === at} className={cn("cursor-pointer border-t border-border hover:bg-row-hover", chosen?.kind === "field" && chosen.at === at && "bg-row-selected")} onClick={() => choose({ kind: "field", at })}>
-          <td className="px-2 py-1.5">{f.title || f.name}</td><td className="px-2 py-1.5 font-mono text-xs">{f.name}</td><td className="px-2 py-1.5">{t(f.type)}{f.type === "reference" && f.ref ? ` → ${f.ref}` : ""}</td><td className="px-2 py-1.5">{f.required ? "✓" : ""}</td><td className="px-2 py-1.5 text-xs text-muted">{f.property ? assetBindingKey(f.property) : ""}</td>
-        </tr>)}</tbody></table>
-      {!process.fields.length && <p className="text-sm text-muted">{t("No properties yet. Add one to describe the record.")}</p>}
+      <DataTable data={process.fields.map((field, at) => ({ field, at }))} getRowId={({ at }) => String(at)}
+        searchable={false} height={Math.max(96, Math.min(480, 30 + process.fields.length * 36))} rowHeight={36}
+        selectedId={chosen?.kind === "field" ? String(chosen.at) : undefined} onRowClick={({ at }) => choose({ kind: "field", at })}
+        empty={t("No properties yet. Add one to describe the record.")} columns={[
+          { id: "title", header: t("Title"), accessorFn: ({ field }) => field.title || field.name },
+          { id: "name", header: t("Name"), cell: ({ row }) => <span className="font-mono text-xs">{row.original.field.name}</span> },
+          { id: "type", header: t("Type"), accessorFn: ({ field }) => `${t(field.type)}${field.type === "reference" && field.ref ? ` → ${field.ref}` : ""}` },
+          { id: "required", header: t("Required"), accessorFn: ({ field }) => field.required ? "✓" : "" },
+          { id: "property", header: t("Shared property"), accessorFn: ({ field }) => field.property ? assetBindingKey(field.property) : "" },
+        ]} />
       <Disclosure summary={t("Creation transaction")}><div className="grid gap-3 pt-2"><p className="text-xs text-muted">{t("The new subject exists in the private view. Use a sequence step and assign its result to the number field in an update step.")}</p><Checkbox checked={!!process.createTransaction} onChange={enabled => change({...process,createTransaction:enabled?{subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}]}:undefined})}>{t("Apply a transaction when creating records")}</Checkbox>{process.createTransaction&&<TransactionEditor value={process.createTransaction} onChange={createTransaction=>change({...process,createTransaction})} process={process} roles={[...new Set(["builder",...process.access.map(access=>access.role)])]}/>}</div></Disclosure>
     </div>,
     links: <div className="grid content-start gap-4 p-4">
@@ -129,13 +134,14 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     sets: <RecordSetsEditor process={process} parent={parent} entities={entities} onChange={change} />,
     permissions: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Who may do what")}</h2><Button size="sm" onClick={addAccess}><Plus />{t("Add a role")}</Button></div>
-      <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted"><th className="px-2 py-1 font-medium">{t("Role")}</th><th className="px-2 py-1 font-medium">{t("Read")}</th><th className="px-2 py-1 font-medium">{t("Create")}</th><th className="px-2 py-1 font-medium">{t("Edit")}</th><th className="px-2 py-1 font-medium">{t("Archive")}</th></tr></thead>
-        <tbody>{process.access.map((a, at) => <tr key={`${a.role}:${at}`} className={cn("border-t border-border", chosen?.kind === "access" && chosen.at === at && "bg-row-selected")}>
-          <td className="px-2 py-1.5"><Button variant="row" type="button" className="font-medium hover:underline" onClick={() => choose({ kind: "access", at })}>{a.role}</Button></td>
-          <td className="px-2 py-1.5"><Select value={a.read} onChange={(e) => change({ ...process, access: process.access.map((x, i) => i === at ? { ...x, read: e.target.value as Access["read"] } : x) })}>{readLevels.map((r) => <option key={r} value={r}>{t(r)}</option>)}</Select></td>
-          {(["create", "edit", "archive"] as const).map((key) => <td key={key} className="px-2 py-1.5"><Checkbox checked={!!a[key]} onChange={(checked) => change({ ...process, access: process.access.map((x, i) => i === at ? { ...x, [key]: checked } : x) })}>{""}</Checkbox></td>)}
-        </tr>)}</tbody></table>
-      {!process.access.length && <p className="text-sm text-muted">{t("No roles yet. Without roles only builders see these records.")}</p>}
+      <DataTable data={process.access.map((access, at) => ({ access, at }))} getRowId={({ at }) => String(at)}
+        searchable={false} height={Math.max(96, Math.min(480, 30 + process.access.length * 40))} rowHeight={40}
+        selectedId={chosen?.kind === "access" ? String(chosen.at) : undefined}
+        empty={t("No roles yet. Without roles only builders see these records.")} columns={[
+          { id: "role", header: t("Role"), cell: ({ row: { original: { access, at } } }) => <Button variant="row" type="button" className="font-medium hover:underline" onClick={() => choose({ kind: "access", at })}>{access.role}</Button> },
+          { id: "read", header: t("Read"), cell: ({ row: { original: { access, at } } }) => <Select aria-label={`${access.role} · ${t("Read")}`} value={access.read} onChange={(event) => change({ ...process, access: process.access.map((entry, index) => index === at ? { ...entry, read: event.target.value as Access["read"] } : entry) })}>{readLevels.map((level) => <option key={level} value={level}>{t(level)}</option>)}</Select> },
+          ...(["create", "edit", "archive"] as const).map((key) => ({ id: key, header: t(key), cell: ({ row: { original: { access, at } } }: { row: { original: { access: Access; at: number } } }) => <Checkbox ariaLabel={`${access.role} · ${t(key)}`} checked={!!access[key]} onChange={(checked) => change({ ...process, access: process.access.map((entry, index) => index === at ? { ...entry, [key]: checked } : entry) })} /> })),
+        ]} />
       {process.access.length > 0 && <ScopeFields process={process} onChange={(scope) => change({ ...process, scope })} />}
     </div>,
     data: <div className="grid max-w-4xl content-start gap-3 p-4"><ObjectLineage object={`build.${object.name}`} fields={process.fields.map((f) => ({ name: f.name, title: f.title || f.name }))} /></div>,

@@ -1,6 +1,6 @@
 # ADR-0078 — 租户与授权：租户即边界、权限即一等概念、一个授权引擎（XXL）
 
-状态：接受，已实现有界基座；判定合成口径由 [ADR-0105](0105-one-authorization-engine.md) 取代并正在实施；租户设置、单位授予保留；岗位推角色、策略表达式不做 · 承接 ADR-0012、0025、0028、0037、0066–0069、0073、0075
+状态：接受，已实现有界基座；判定合成口径已由 [ADR-0105](0105-one-authorization-engine.md) 取代并实现，九类入口及来源投影的具体检查范围见其 As built；租户设置、单位授予保留，岗位推角色、策略表达式不做 · 承接 ADR-0012、0025、0028、0037、0066–0069、0073、0075
 
 
 ## 实际边界（As-built）
@@ -9,7 +9,7 @@
 
 | 正文的说法 | 代码里的事实 |
 |---|---|
-| "一个授权引擎，UI/API/智能体/自动化/导出全部经过 `authz.Decide`" | ADR-0105 已接通动作、记录行范围、来源字段、CSV 标记、声明集合和接受依据。原 owner 提供事实，统一引擎决定固定次序；`readsField` 的独立判断已删除。命名读取、输入、作业和回调接入同一引擎；九类入口与直接读取守门尚未全部验收，边界归 [ADR-0105 As built](0105-one-authorization-engine.md#as-built)。 |
+| "一个授权引擎，UI/API/智能体/自动化/导出全部经过 `authz.Decide`" | ADR-0105 已接通动作、行/字段/来源、CSV 标记、集合和接受依据；命名读取、输入、作业与回调共用同一引擎，独立 `readsField` 判断已删除。`TestAuthorizationNineEntryFamilies`、宿主管理与来源投影检查的准确范围归 [ADR-0105 As built](0105-one-authorization-engine.md#as-built)。这些证据不证明任意新原生算法都正确声明来源，也不等于生产验证。 |
 | "RBAC + ReBAC + ABAC 三种判断一个顺序" | 当前固定九层：租户 → 主体 → deny → 动词 → 行 → 字段 → 来源 → 标记 → allow。Scope 的 own/participant/through 是 owner 的行事实，保留多角色并集与有界来源；不实现 `related` 或任意关系遍历。 |
 | "`platform.tenant` 一条记录" | **没有这个实体**。租户信息是 `platform.setting` 的若干键（名称、语言、时区、币种、`signInDomains`、`mfaRequired`、`sessionHours` …）在 `GET /v1/tenant` 里拼成的 `TenantRecord` 视图。 |
 | 租户设置 `signInDomains` / `mfaRequired` / `sessionHours` | **已生效**：命中登录域的已验证陌生身份，在满足 MFA 要求后由宿主记 `platform.member.join`，成员 id 为邮箱 slug、重名加序号，无角色直到授予；并发加入在租户锁内重新检查身份与分配 id。`sessionHours` 从该凭证首次见到起计时，到期凭证持续拒绝，须换新凭证；0 不限。会话/撤销仍为内存，重启清空，不检查 IdP 的 `auth_time`。`mfaRequired` 要求签名验证后的 `amr` 明示 `mfa`，或包含知识/持有/生物中的至少两类方法；`user`、单独 `otp/hwk/sms/swk` 不能证明多因素（[RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176)）。开发/lightweight 宿主无法证明时拒绝登录。个人令牌走独立授权路径，不受三者约束。 |
@@ -19,7 +19,7 @@
 | 模板建租户 | 已做：`deploy/templates/{blank,hospitality,manufacturing}.json`、`GET /v1/host/templates`、`POST /v1/host/tenants`、宿主控制台入口。 |
 | 自定义角色 / 策略 / 团队 / 委托 / explain | 已做，见 §5 B–D 的"已交付"括注，形状以括注为准。 |
 
-退出判据（§6）的完整入口闭合由 ADR-0105 §4 验收；单位范围已按上表生效，不能将当前主路径检查外推为所有入口完成。
+退出判据（§6）的入口实现和检查范围归 ADR-0105 As built；单位范围已按上表生效，不把指定入口与反例的检查外推为所有未来实现或生产环境的证明。
 
 ## 0. 为什么现在
 
