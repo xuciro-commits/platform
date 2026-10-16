@@ -109,7 +109,7 @@ func (b *Build) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	return start.StartManual(c, ID, installed.Name, installed.Version, request.Key, input, now)
 }
 
-func (b *Build) checkFlow(p Process, entity platform.Entity) *kernel.Error {
+func (b *Build) checkFlow(p Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
 	plans, err := b.processInventory()
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
@@ -120,16 +120,40 @@ func (b *Build) checkFlow(p Process, entity platform.Entity) *kernel.Error {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process name {name} is already used", p.Name)
 		}
 	}
-	return b.checkFlowOn(p, entity)
+	return b.checkFlowOn(p, entity, objects...)
 }
 
 // CheckProcess exposes the exact publication compiler to edit/test feedback.
 // It returns node-qualified errors instead of trusting frontend edge rules.
-func (b *Build) CheckProcess(p Process) *kernel.Error { return b.checkFlow(p, b.installed[p.Object]) }
+func (b *Build) CheckProcess(c platform.Caller, p Process) *kernel.Error {
+	objects, err := readDefinitionInventory[Object](c)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object inventory cannot be checked")
+	}
+	source := b.installed[p.Object]
+	models := []platform.Entity{}
+	for _, object := range objects {
+		if object.Archived {
+			continue
+		}
+		model := Entity(object)
+		models = append(models, model)
+		if model.Type == p.Object {
+			source = model
+		}
+	}
+	return b.checkFlow(p, source, models...)
+}
 
-func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
+func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
+	}
+	actionModels := map[string]platform.Entity{}
+	for _, model := range append(objects, entity) {
+		if model.Type != "" {
+			actionModels[model.Type] = model
+		}
 	}
 	if !named(p.Name) {
 		return refuse("The process name {name} must be lower-case letters and digits", p.Name)
@@ -285,9 +309,9 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 				schema = p.Object + "." + schema
 			}
 			owner, action, ok := b.host.Action(schema)
-			if entity.Type == p.Object && strings.HasPrefix(schema, p.Object+".") {
+			if model, selected := actionModels[schema[:strings.LastIndex(schema, ".")]]; selected {
 				ok = false
-				for _, candidate := range platform.EntityActions(entity) {
+				for _, candidate := range platform.EntityActions(model) {
 					if candidate.Schema == schema {
 						action = candidate
 						owner = ID
@@ -560,7 +584,9 @@ func (b *Build) flowOf(p Process) platform.Flow {
 			return raw, err
 		}
 		resolve := func(c platform.Caller, r *platform.Run, binding platform.Binding) (json.RawMessage, *kernel.Error) {
-			if binding.Source == "subject" && len(binding.Path) > 0 {
+			// Identity belongs to the already authorized record, not its
+			// declared business fields. Other paths retain field checks.
+			if binding.Source == "subject" && len(binding.Path) > 0 && binding.Path[0] != "id" {
 				member, known := b.host.Member(r.OnBehalf)
 				if !known {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")

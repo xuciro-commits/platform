@@ -1,7 +1,7 @@
 import { expect, shots, slug, test } from "./kit";
 
 test("an application authors related drafts and a template before its first release", async ({ page, builder, operator, editor }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const application = await builder.application({ title: "Service visits" });
   const parentName = slug("customer"), childName = slug("visit"), pageName = slug("visitdesk");
   const parentType = `build.${parentName}`, childType = `build.${childName}`;
@@ -129,6 +129,20 @@ test("an application authors related drafts and a template before its first rele
   await expect(model.getByRole("status")).toHaveText("This binding includes saved model changes. Publish the model and page together before reading these fields in preview.");
   await editor.save();
   await expect.poll(async () => (await builder.record("build.page", pageID)).sections.find((section: any) => section.widget === "table").model.fields.some((field: any) => field.name === "followup")).toBe(true);
+  await editor.tree.getByRole("button", { name: "Page settings", exact: true }).click();
+  await editor.inspector.getByRole("tab", { name: "Variables", exact: false }).click();
+  await editor.inspector.getByRole("button", { name: "Add variable", exact: true }).click();
+  await editor.inspector.getByRole("textbox", { name: "Variable label", exact: true }).fill("Selected visit");
+  await editor.inspector.getByRole("combobox", { name: "Variable mode", exact: true }).selectOption("resource");
+  await editor.inspector.getByRole("combobox", { name: "Resource output kind", exact: true }).selectOption("record");
+  await editor.inspector.getByRole("button", { name: "Add variable", exact: true }).click();
+  await editor.inspector.getByRole("textbox", { name: "Variable label", exact: true }).fill("Follow-up text");
+  await editor.inspector.getByRole("combobox", { name: "Variable mode", exact: true }).selectOption("property");
+  await editor.inspector.getByRole("combobox", { name: "Record property field", exact: true }).selectOption("followup");
+  await editor.save();
+  await expect.poll(async () => Object.values((await builder.record("build.page", pageID)).document.variables)).toContainEqual(
+    expect.objectContaining({ title: "Follow-up text", type: "string", source: expect.objectContaining({ field: "followup" }) }),
+  );
   const stillPublished = await operator.definitions<any>();
   expect(stillPublished.find(definition => definition.ref.kind === "object" && definition.ref.name === childType)).toEqual(deliveredObject);
   expect(stillPublished.find(definition => definition.ref.kind === "page" && definition.ref.name === pageName)).toEqual(deliveredPage);

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/host"
+	"reflect"
 
 	"slices"
 	"strings"
@@ -194,17 +195,8 @@ func (b *Build) pageEntity() platform.Entity {
 			if c.Replaying {
 				return nil
 			}
-			p := record.(*Page)
-			if err := b.normalizePageModel(p); err != nil {
+			if err := b.validatePageDocument(record.(*Page), b.conditionLookup); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			if p.Document != nil {
-				if err := descriptor(*p).BindRuleTypes(b.conditionLookup); err != nil {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-				}
-				if err := p.Document.NormalizePageRules(); err != nil {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-				}
 			}
 			return nil
 		},
@@ -252,6 +244,57 @@ func (b *Build) pageEntity() platform.Entity {
 					*page = next
 					return nil
 				}}}}}
+}
+
+// Only page create/edit use saved object drafts. Publication and candidate
+// validation still resolve their original installed or precisely selected model.
+func (b *Build) pageDraftEntity() platform.Entity {
+	entity := b.pageEntity()
+	entity.Validate = func(c platform.Caller, record any) *kernel.Error {
+		page := record.(*Page)
+		if c.Replaying || page.Document == nil {
+			return nil
+		}
+		objects, err := readDefinitionInventory[Object](c)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		models := map[string]platform.EntityInfo{}
+		for _, object := range objects {
+			if object.Archived {
+				continue
+			}
+			info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			models[info.Type] = info
+		}
+		lookup := func(typ string) (platform.EntityInfo, bool) {
+			if info, saved := models[typ]; saved {
+				return info, true
+			}
+			return b.conditionLookup(typ)
+		}
+		if err := b.validatePageDocument(page, lookup); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		return nil
+	}
+	return entity
+}
+
+func (b *Build) validatePageDocument(page *Page, lookup func(string) (platform.EntityInfo, bool)) error {
+	if err := b.normalizePageModel(page, lookup); err != nil {
+		return err
+	}
+	if page.Document == nil {
+		return nil
+	}
+	if err := descriptor(*page).BindRuleTypes(lookup); err != nil {
+		return err
+	}
+	return page.Document.NormalizePageRules()
 }
 
 // release installs the page: the host checks it against what is installed now
@@ -371,12 +414,12 @@ func names(info platform.EntityInfo) string {
 
 // Canonicalize the author's original page in place. Only presentation bindings
 // migrate; action identities, saved publication bytes and layout stay intact.
-func (b *Build) normalizePageModel(p *Page) error {
+func (b *Build) normalizePageModel(p *Page, lookup func(string) (platform.EntityInfo, bool)) error {
 	if p.Document == nil {
 		return nil
 	}
 	d := descriptor(*p)
-	if err := d.NormalizeModelBindings(b.conditionLookup); err != nil {
+	if err := d.NormalizeModelBindings(lookup); err != nil {
 		return err
 	}
 	for _, section := range d.Sections {

@@ -246,15 +246,18 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		}
 		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
 		source := b.installed[record.Object]
-		if _, selected := b.jointEntities[record.Object]; selected {
-			for _, object := range inv.objects {
-				if buildapi.TypeOf(object.Name) == record.Object {
-					source = Entity(object)
-					break
-				}
+		models := []platform.Entity{}
+		for _, object := range inv.objects {
+			if _, selected := b.jointEntities[buildapi.TypeOf(object.Name)]; !selected || object.Archived {
+				continue
+			}
+			model := Entity(object)
+			models = append(models, model)
+			if model.Type == record.Object {
+				source = model
 			}
 		}
-		if problem := b.checkFlow(record, source); problem != nil {
+		if problem := b.checkFlow(record, source, models...); problem != nil {
 			err = fmt.Errorf("%s", problem.Message)
 		} else if record.Version >= 64 {
 			err = fmt.Errorf("a process may retain at most 64 published versions")

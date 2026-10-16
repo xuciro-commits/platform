@@ -30,12 +30,7 @@ func (t *Tenant) Capabilities(m platform.Member) []platform.CapabilityDescriptor
 			Ports: []platform.BlockPort{{ID: "in", Title: "In", Direction: "input", Channel: "control", Type: "flow"}, {ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"}, {ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"}}}
 		switch {
 		case d.Action != nil:
-			a := d.Action
-			c.Kind, c.Title, c.Description, c.Group, c.Icon, c.Tone, c.Target = "action", a.Title, a.Description, "Actions", "zap", "success", a.Target
-			c.Effects = []string{"decision"}
-			if a.NeedsApproval {
-				c.Effects = append(c.Effects, "approval")
-			}
+			c = actionBlock(d.Ref, d.Source, d.Version, *d.Action)
 		case d.Query != nil:
 			q := d.Query
 			c.Kind, c.Title, c.Description, c.Group, c.Icon, c.Tone, c.Target = "query", q.Title, q.Description, "Data", "database", "info", q.Object
@@ -80,6 +75,20 @@ func (t *Tenant) Capabilities(m platform.Member) []platform.CapabilityDescriptor
 		return strings.Compare(a.Ref.String(), b.Ref.String())
 	})
 	return out
+}
+
+func actionBlock(ref platform.AssetRef, source, version string, action platform.Action) platform.CapabilityDescriptor {
+	c := platform.CapabilityDescriptor{Ref: ref, Source: source, Version: version, Kind: "action",
+		Title: action.Title, Description: action.Description, Group: "Actions", Icon: "zap", Tone: "success", Target: action.Target,
+		Effects: []string{"decision"}, Ports: []platform.BlockPort{
+			{ID: "in", Title: "In", Direction: "input", Channel: "control", Type: "flow"},
+			{ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"},
+			{ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"},
+		}}
+	if action.NeedsApproval || action.Approval != nil {
+		c.Effects = append(c.Effects, "approval")
+	}
+	return c
 }
 
 func fieldValueSchema(kind, description string, choices []string) platform.ValueSchema {

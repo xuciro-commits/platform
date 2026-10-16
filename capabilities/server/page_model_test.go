@@ -32,6 +32,71 @@ func modelAuthoringSections(sections []platform.Section) []build.Section {
 	return values
 }
 
+func TestPageDraftRulesUseSavedModelsWithoutPublishingThem(t *testing.T) {
+	for _, installed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unpublished object", true: "published object with a new field"}[installed], func(t *testing.T) {
+			at := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+			tn := builderTenant(t, fmt.Sprint("page-draft-rules-", installed))
+			member := memberOf(t, tn, "builder")
+			const object = "build.draftrules"
+			fields := []build.Field{{Name: "note", Title: "Note", Type: "text"}}
+			decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "OBJECT", map[string]any{"name": "draftrules", "title": "Draft rules", "fields": fields}, at)
+			page := modelTestPage(object, []platform.Section{{ID: "records", Widget: "table", ConfigVersion: 1, Model: &platform.ModelBinding{Type: object}}})
+			if installed {
+				decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{}, at)
+				decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
+				decide(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at)
+			}
+			beforeObject, _ := platform.Get[build.Object](tn.automation(build.ID, false), "OBJECT")
+			beforePage, _ := platform.Get[build.Page](tn.automation(build.ID, false), "PAGE")
+			fields = append(fields, build.Field{Name: "followup", Title: "Follow up", Type: "boolean"})
+			decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "OBJECT", map[string]any{"fields": fields}, at)
+			ref := platform.ModelObject(object)
+			path := platform.Expr{Op: "path", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", "selected")}, Path: []string{"followup"}}
+			page.Document.Variables = map[string]platform.PageVariable{
+				"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "records"}},
+				"followup": {Scope: "page", Type: "boolean", Mode: "property", Source: &platform.PageResourceSource{Kind: "property", Variable: "selected", Object: &ref, Field: "followup"}},
+				"visible":  {Scope: "page", Type: "boolean", Mode: "derived", Rule: &path},
+			}
+			if installed {
+				decide(t, tn, "builder", build.ID, "build.page.edit", build.PageType, "PAGE", map[string]any{"document": page.Document}, at)
+			} else {
+				decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
+			}
+			decide(t, tn, "builder", build.ID, "build.page.edit", build.PageType, "PAGE", map[string]any{"title": "Saved draft rules"}, at)
+			saved, _ := platform.Get[build.Page](tn.automation(build.ID, false), "PAGE")
+			resourceType := saved.Document.Variables["selected"].RuleType
+			propertyType := saved.Document.Variables["followup"].RuleType
+			if resourceType == nil || resourceType.Fields["followup"].Kind != "boolean" || propertyType == nil || propertyType.Kind != "boolean" || saved.Document.Variables["visible"].Rule == nil {
+				t.Fatalf("saved rules did not retain their draft field types: %+v", saved.Document.Variables)
+			}
+			if got := refuse(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at); got == "ok" {
+				t.Fatal("direct publication used an unselected object draft")
+			}
+			if alone, err := tn.PreviewRelease(member, platform.AssetPage, "PAGE"); err == nil && alone.Diagnostic == "" {
+				t.Fatal("page-only candidate used an unselected object draft")
+			}
+			selection := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetPage, ID: "PAGE"}}
+			joint, err := tn.PreviewReleaseDrafts(member, selection)
+			if err != nil || joint.Diagnostic != "" || joint.CandidateID == "" {
+				t.Fatalf("joint model and page rules: %+v %v", joint, err)
+			}
+			candidate, err := tn.SaveReleaseCandidates(member, selection, joint.CandidateID, "save-page-rules", at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			afterObject, _ := platform.Get[build.Object](tn.automation(build.ID, false), "OBJECT")
+			afterPage, _ := platform.Get[build.Page](tn.automation(build.ID, false), "PAGE")
+			if afterObject.Published != beforeObject.Published || afterPage.Published != beforePage.Published {
+				t.Fatal("saving drafts or reviewing the candidate rewrote an original publication")
+			}
+			if _, err := tn.ActivateRelease(member, candidate, "activate-page-rules", at); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 // A finite capability vocabulary expresses requirements as a subset: each
 // required capability implies that the candidate equipment has it. The exact
 // same Expr is the original start guard and the selector's rule reference.

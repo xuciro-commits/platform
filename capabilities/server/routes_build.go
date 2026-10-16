@@ -34,6 +34,14 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 func (h *Host) routesBuild(rt *routes) {
 	h.routesProtocolConnections(rt)
 	h.routesPackageDrafts(rt)
+	rt.authorized(Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []platform.CapabilityDescriptor{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		actions, err := t.DraftActionCapabilities(m)
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, actions)
+	})
 	rt.handle(Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none (ADR-0047 §11)", Body: struct {
 		Key   string          `json:"key"`
 		Edits []CompositeEdit `json:"edits"`
@@ -91,7 +99,7 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
-		if refusal := owner.CheckProcess(p); refusal != nil {
+		if refusal := owner.CheckProcess(platform.NewCaller(runtime{t}, m, build.ID, false, false), p); refusal != nil {
 			answer.Valid = false
 			message := refusal.Message
 			node := ""

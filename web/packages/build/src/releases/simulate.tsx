@@ -67,8 +67,9 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const object = kind === "object" ? objects.data?.records.find((record) => record.id === id)
     : kind==="app" ? objects.data?.records.find(record=>application?.resources?.some(ref=>ref.kind==="object"&&ref.name===`build.${record.name}`)) : installedObjects(objects.data?.records ?? []).find((record) => `build.${record.name}` === (fn?.object ?? process?.object));
   const rootRevision = kind==="app" ? application?.revision : kind === "object" ? object?.revision : kind === "flow" ? process?.revision : fn?.revision;
+  const objectRevisions = objects.data?.records.map(record => [record.id, record.revision]);
   const candidateInputs = useQuery({
-    queryKey: [client.connection.token, client.connection.tenant, "candidate-inputs", kind, id, rootRevision],
+    queryKey: [client.connection.token, client.connection.tenant, "candidate-inputs", kind, id, rootRevision, objectRevisions],
     queryFn: async () => {
       const response = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", { kind, id,...(kind==="app"?{applicationDrafts:true}:{}) });
       if (!response.ok) throw new Error(apiErrorMessage(response.body) ?? t("Candidate input fields are unavailable. Use advanced JSON or check the saved draft."));
@@ -321,8 +322,10 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {kind==="app"&&<>
- <label className="grid gap-1 text-xs">{t("Object type")}<Select value={step.type} onChange={event=>update(index,{type:event.target.value,action:step.read?"":`${event.target.value}.edit`,payload:"{}"})}><option value="">{t("Choose an object")}</option>{objects.data?.records.map(o=><option key={o.id} value={`build.${o.name}`}>{o.title}</option>)}</Select></label>
- <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.read?"read":"action"} onChange={event=>update(index,{read:event.target.value==="read",action:event.target.value==="read"?"":`${step.type}.edit`})}><option value="action">{t("Object action")}</option><option value="read">{t("Read record")}</option></Select></label>
+ <label className="grid gap-1 text-xs">{t("Object type")}<Select value={step.type} onChange={event=>update(index,{type:event.target.value,action:step.read||!step.action?"":`${event.target.value}.edit`,payload:"{}"})}><option value="">{t("Choose an object")}</option>{objects.data?.records.map(o=><option key={o.id} value={`build.${o.name}`}>{o.title}</option>)}</Select></label>
+ <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.read?"read":step.action?"action":"clock"} onChange={event=>update(index,event.target.value==="clock"
+   ? {read:false,action:"",payload:"{}",advanceSeconds:step.advanceSeconds||2}
+   : {read:event.target.value==="read",action:event.target.value==="read"?"":`${step.type}.edit`,advanceSeconds:0})}><option value="action">{t("Object action")}</option><option value="read">{t("Read record")}</option><option value="clock">{t("Advance clock")}</option></Select></label>
  {step.action&&<label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={event=>update(index,{action:event.target.value})}>{(candidateInputs.data?.candidateActions??[]).filter(action=>action.target===step.type).map(action=><option key={action.schema} value={action.schema}>{action.title}</option>)}{!candidateInputs.data?.candidateActions?.some(action=>action.schema===step.action)&&<option value={step.action}>{step.action}</option>}</Select></label>}
  </>}
  <label className="grid gap-1 text-xs">{t("Test record ID")}<Input value={step.id} onChange={(event) => update(index, { id: event.target.value })} /></label>
@@ -345,9 +348,9 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
               {object && actions.map((action) => <option key={action.name} value={`build.${object.name}.${action.name}`}>{action.title}</option>)}
             </Select></label> : null}
           </div>
-          {(kind === "flow" || kind === "function") && <div className="grid gap-2 sm:grid-cols-2">
-            <label className="grid gap-1 text-xs">{t("Step member ID (empty: plan member)")}<Input value={step.as ?? ""} onChange={(e) => update(index, { as: e.target.value })} /></label>
-            <label className="grid gap-1 text-xs">{t("Advance clock (seconds)")}<Input draftKey={`step:${index}:clock`} type="number" min={0} max={86400} value={step.advanceSeconds ?? 0} onChange={(e) => update(index, { advanceSeconds: Number(e.target.value) })} /></label>
+          {(kind === "flow" || kind === "function" || kind === "app" && !step.action && !step.read) && <div className="grid gap-2 sm:grid-cols-2">
+            {kind !== "app" && <label className="grid gap-1 text-xs">{t("Step member ID (empty: plan member)")}<Input value={step.as ?? ""} onChange={(e) => update(index, { as: e.target.value })} /></label>}
+            <label className="grid gap-1 text-xs">{t("Advance clock (seconds)")}<Input draftKey={`step:${index}:clock`} type="number" min={kind === "app" ? 1 : 0} max={86400} value={step.advanceSeconds ?? 0} onChange={(e) => update(index, { advanceSeconds: Number(e.target.value) })} /></label>
           </div>}
           <label className="grid gap-1 text-xs">{t("Expected outcome")}
             <Select value={step.expect} onChange={(event) => update(index, { expect: event.target.value as Step["expect"] })}>

@@ -13,6 +13,7 @@ import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } 
 import { WorkflowInspector } from "./workflow-inspector";
 import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";
+import { useAuthoringCapabilities, useAuthoringModel } from "../ontology/authoring-model";
 import { workflowInputs } from "./workflow-session";
 
 type Row = WorkflowDraft & { version?: number; published?: string };
@@ -78,9 +79,10 @@ type Chosen = "trigger" | "condition" | string;
 
 /** One automation as a sentence of cards: trigger → condition → effects, each effect's parameters in the inspector. */
 export function AutomationEditor({ id }: { id: string }) {
-  const { decide, role, entities } = useHost(), { open, close } = useApplicationWorkspace();
+  const { decide, role } = useHost(), { open, close } = useApplicationWorkspace();
+  const model = useAuthoringModel();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`, undefined, id !== "new");
-  const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
+  const catalogQuery = useAuthoringCapabilities<Capability>();
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
   const session = useDraftSession<WorkflowDraft>(empty());
   const [createID]=useState(()=>crypto.randomUUID());
@@ -95,9 +97,9 @@ export function AutomationEditor({ id }: { id: string }) {
     const saved = query.data?.record;
     if (saved && saved.revision >= baseRevision.current && !dirty && !busy && loaded.current !== `${saved.id}:${saved.revision}`) { session.load(saved); baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; }
   }, [query.data?.record, dirty, busy, session.load]);
-  const objects = useMemo(() => entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states, fields: entity.fields })), [entities]);
+  const objects = useMemo(() => model.entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states, fields: entity.fields })), [model.entities]);
   const object = objects.find((item) => item.type === draft.object);
-  const capabilities = catalogQuery.data ?? [];
+  const capabilities = catalogQuery.data;
   const offered = capabilities.filter((capability) => (capability.kind === "action" || capability.kind === "ai") && (!draft.object || capability.ref.name.startsWith(draft.object + ".") || capability.kind === "ai"));
   const { condition, effects } = parts(draft.steps);
   const change = (patch: Partial<WorkflowDraft>) => { if (!lock.current) { session.edit(patch); setError(""); } };
@@ -110,6 +112,7 @@ export function AutomationEditor({ id }: { id: string }) {
     ...(!draft.title ? [{ id: "title", text: t("Give the automation a title."), locate: () => setChosen("trigger") }] : []),
     ...(!draft.every && (!draft.object || !draft.when) ? [{ id: "trigger", text: t("Choose the object type and the state that start it, or a schedule."), locate: () => setChosen("trigger") }] : []),
     ...(!effects.length ? [{ id: "effects", text: t("Add at least one effect.") }] : []),
+    ...(catalogQuery.isError ? [{ id: "catalog", text: t("The capability library could not be loaded."), locate: () => void catalogQuery.refetch() }] : []),
     ...(error ? [{ id: "host", text: error }] : []),
   ];
   const invalid = problems.some((problem) => problem.id !== "host");
@@ -183,7 +186,7 @@ export function AutomationEditor({ id }: { id: string }) {
           <Button variant="ghost" size="sm" aria-label={t("Remove")} onClick={(event) => { event.stopPropagation(); setSteps(condition, effects.filter((item) => item !== step)); if (chosen === step.name) setChosen("trigger"); }}><Trash2 /></Button>
         </>))}
       {draft.object && offered.length > 0 && <div className="w-fit"><ActionMenu label={t("Add an effect")} icon={<Plus />} commands={offered.map((capability) => ({ id: capabilityKey(capability), label: `${t(capability.title)} · ${capability.ref.app}`, icon: capability.kind === "ai" ? <Brain /> : <Zap />, run: () => addEffect(capability) }))}>{t("Add an effect")}</ActionMenu></div>}
-      {draft.object && !offered.length && !catalogQuery.isLoading && <p className="text-xs text-muted">{t("No published action of this object type yet. Publish the object type's actions, then add them here.")}</p>}
+      {draft.object && !offered.length && !catalogQuery.isLoading && !catalogQuery.isError && <p className="text-xs text-muted">{t("No actions yet.")}</p>}
     </div>
   </Workbench>;
 }

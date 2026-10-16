@@ -22,6 +22,7 @@ import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPor
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
 import { WorkflowRuns, type WorkflowRun } from "./workflow-runs";
+import { useAuthoringCapabilities, useAuthoringModel } from "../ontology/authoring-model";
 
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", manual: true, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
 type Edit = Partial<WorkflowDraft> | ((draft: WorkflowDraft) => WorkflowDraft);
@@ -118,9 +119,10 @@ export function Flows() {
 }
 
 export function FlowEditor({ id }: { id: string }) {
-  const { decide, role, client, entities } = useHost(), { open, close } = useApplicationWorkspace();
+  const { decide, role, client } = useHost(), { open, close } = useApplicationWorkspace();
+  const model = useAuthoringModel();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
-  const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
+  const catalogQuery = useAuthoringCapabilities<Capability>();
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
   const session=useDraftSession<WorkflowDraft>(empty());
   const [createID]=useState(()=>crypto.randomUUID());
@@ -152,15 +154,15 @@ export function FlowEditor({ id }: { id: string }) {
   useEffect(()=>{if(chosen&&!draft.steps.some(step=>step.name===chosen))setChosen("");},[chosen,draft.steps]);
   const retainedQueries=useMemo(()=>[...new Set(draft.steps.filter(s=>s.kind==="query"&&s.queryVersion).map(s=>`/v1/capabilities/${encodeURIComponent(s.app??"")}/query/${encodeURIComponent(s.query??"")}?version=${s.queryVersion}`))],[draft.steps]);
   const retained=useQueries({queries:retainedQueries.map(path=>({queryKey:[client.connection.token,client.connection.tenant,path],queryFn:()=>client.get<Capability>(path),retry:false}))});
-  const capabilities = [...(catalogQuery.data ?? []),...retained.flatMap(q=>q.data&&!q.isError?[q.data]:[])];
-  const publishedObjects = entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states }));
+  const capabilities = [...catalogQuery.data,...retained.flatMap(q=>q.data&&!q.isError?[q.data]:[])];
+  const objects = model.entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states }));
   const diagnostics = useMemo(() => {
     const result = workflowDiagnostics(draft);
     if (validation) for (const issue of validation.issues) if (issue.node) (result[issue.node] ??= []).push({ message: issue.message, severity: "error" });
     return result;
   }, [draft, validation]);
   const kinds = useMemo(() => draft.steps.map((step) => nodeKind(step, draft, capabilities)), [draft, capabilities]);
-  const catalog: FlowCatalog = [...(catalogQuery.data??[]).map(definitionKind), ...kinds];
+  const catalog: FlowCatalog = [...catalogQuery.data.map(definitionKind), ...kinds];
   const edges = [...controlEdges(draft), ...dataEdges(draft)];
   const positioned = useFlowArrangement(draft.steps.map((step) => ({ id: step.name, kind: `node:${step.name}`, label: step.title || step.name, position: { x: 0, y: 0 } })), edges, "right", catalog);
   const nodes: FlowNode[] = draft.steps.map((step) => {
@@ -310,7 +312,7 @@ export function FlowEditor({ id }: { id: string }) {
     for (const [key, value] of Object.entries(session.inputs.values)) if (key.startsWith(`step:${old}/`)||key.includes(`/step:${old}/`)) { session.inputs.set(key); if (key !== `step:${old}/identifier:${t("Step name")}:${old}`) session.inputs.set(key.replace(`step:${old}/`,`step:${name}/`), {...value,reveal:()=>setChosen(name)}); }
     setChosen(name);
   };
-  const filtered = (catalogQuery.data??[]).filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
+  const filtered = catalogQuery.data.filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
     && [capability.title, t(capability.title), capability.description, capability.ref.app, capability.ref.name].some((value) => value.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
   const groups = [...new Set(filtered.map((capability) => capability.group))];
   if (role("build") !== "builder") return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{t("Only a builder can edit flows.")}</WorkbenchMessage></Workbench>;
@@ -362,7 +364,7 @@ export function FlowEditor({ id }: { id: string }) {
       right={{ label: t("Flow inspector"), heading: node?.title || node?.name || t("Workflow settings"), scope: node ? `step:${node.name}` : "settings", open: inspectorOpen, onOpenChange: setInspectorOpen, content: <DraftInputs.Provider value={{...session.inputs,scope:node ? `step:${node.name}` : "settings",reveal:()=>setChosen(node?.name??"")}}><div className="p-2">{node ? <WorkflowInspector step={node} steps={draft.steps} lanes={draft.lanes ?? []} capabilities={capabilities} flows={flowQuery.data ?? []} output={matchingRun ? run?.outputs?.[node.name] : undefined}
         onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
         onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} />
-        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} />}</div></DraftInputs.Provider> }}
+        : <WorkflowSettings draft={draft} onChange={change} objects={objects} />}</div></DraftInputs.Provider> }}
       dock={{ label: t("Flow dock"), value: dock, open: dockOpen, onOpenChange: setDockOpen, onChange: (next) => setDock(next as typeof dock), tabs: [
         { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={validation?.valid ? t("The native compiler accepted this draft.") : t("No problems.")} /> },
         { id: "run", title: t("Run"), content: <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]"><DraftInputs.Provider value={{...runInputs,scope:"run"}}><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} /></DraftInputs.Provider>

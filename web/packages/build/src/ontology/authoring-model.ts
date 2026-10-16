@@ -1,4 +1,4 @@
-import { useHost, useRecordInventory } from "@platform/app";
+import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { t, type EntityInfo } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import type { ObjectRecord } from "./object-model";
@@ -63,4 +63,18 @@ export function useAuthoringModel() {
     }
   }
   return { entities: [...entities.values()], entity: (type: string) => entities.get(type) ?? host.source.entity(type), actions: [...actions.values()], drafts };
+}
+
+/** Draft actions replace their object's installed actions for editing only.
+ * All other blocks retain their original published source and version. */
+export function useAuthoringCapabilities<T extends Api.CapabilityDescriptor = Api.CapabilityDescriptor>() {
+  const catalog = useReadQuery<T[]>("/v1/capabilities");
+  const actions = useReadQuery<T[]>("/v1/build/drafts/actions");
+  const targets = new Set((actions.data ?? []).map(action => action.target));
+  return {
+    data: [...(catalog.data ?? []).filter(capability => capability.kind !== "action" || !capability.target || !targets.has(capability.target)), ...(actions.data ?? [])],
+    isLoading: catalog.isLoading || actions.isLoading,
+    isError: catalog.isError || actions.isError,
+    refetch: () => Promise.all([catalog.refetch(), actions.refetch()]),
+  };
 }

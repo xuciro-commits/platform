@@ -17,9 +17,10 @@ type ConstructionDrafts interface {
 	ApplicationDrafts(string) ([]build.JointDraftRef, error)
 	ReferencedDrafts(platform.AssetKind, string) ([]build.JointDraftRef, error)
 	SavedDraftChanges(platform.Caller, string, string, string) ([]build.DraftChange, error)
+	SavedObjectActions(platform.Caller) ([]platform.Action, error)
 	DraftReleaseAssetsMulti([]build.JointDraftRef, platform.Member) (build.JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
-	CheckProcess(build.Process) *kernel.Error
+	CheckProcess(platform.Caller, build.Process) *kernel.Error
 }
 
 // ConstructionDraftReader converts a copied, already authorized object draft
