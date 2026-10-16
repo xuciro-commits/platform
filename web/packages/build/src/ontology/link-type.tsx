@@ -7,6 +7,7 @@ import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } f
 import { Button, Checkbox, Input, Select, PageHeader, Panel, Textarea, t, useUnsavedChanges } from "@platform/ui";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
+import { useAuthoringModel } from "./authoring-model";
 
 type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;storage?:string;roles?:string[];required?:boolean;published?:string;version?:number};
 const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many",deletePolicy:"owner",storage:"edge",roles:["builder","user"]});
@@ -19,6 +20,8 @@ export function LinkTypes() {
 }
 export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;child?:string;via?:string}) {
  const {decide,role,definitions,client}=useHost(),{open,close}=useApplicationWorkspace();
+ const authoring=useAuthoringModel();
+ const objects=(authoring.drafts.data?.records??[]).filter(draft=>!draft.archived).map(draft=>({name:`build.${draft.name}`,title:draft.title}));
  const query=useReadQuery<{record?:Draft}>(`/v1/records/build.linktype/${encodeURIComponent(id)}`);
  const [draft,setDraft]=useState<Draft>(()=>({...empty(),parent:parent??"",child:child??"",via:via??""})),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [migration,setMigration]=useState<Api.RelationMigrationPlan>();
@@ -64,12 +67,12 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship name")}<Input disabled={!!draft.published} value={draft.name} onChange={e=>patch({name:e.target.value})}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship title")}<Input value={draft.title} onChange={e=>patch({title:e.target.value})}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship description")}<Textarea value={draft.description} onChange={e=>patch({description:e.target.value})}/></label>
- <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Parent object")}<SemanticObjectSelect value={draft.parent} label={t("Parent object")} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({parent:ref.name,via:""})}}/></label>
- <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Child object")}<SemanticObjectSelect value={draft.child} label={t("Child object")} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({child:ref.name,via:""})}}/></label>
+ <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Parent object")}<SemanticObjectSelect value={draft.parent} label={t("Parent object")} drafts={objects} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({parent:ref.name,via:""})}}/></label>
+ <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Child object")}<SemanticObjectSelect value={draft.child} label={t("Child object")} drafts={objects} filter={d=>d.source==="tenant"&&d.ref.app==="build"} disabled={!!draft.published} onChange={ref=>{if(ref)patch({child:ref.name,via:""})}}/></label>
  <label className="grid gap-1 text-xs">{t("Relationship storage")}<Select value={draft.storage||"reference"} disabled={!!draft.published} onChange={event=>patch({storage:event.target.value,via:"",cardinality:"one-to-many"})}><option value="edge">{t("Owned relationship records")}</option><option value="reference">{t("Original reference field")}</option></Select></label>
  {draft.storage==="edge"&&<label className="flex items-center gap-2 text-xs"><Checkbox checked={!!draft.required} disabled={!!draft.published&&JSON.parse(draft.published).required===true} onChange={checked=>patch({required:checked})}/>{t("Parent relationship required")}</label>}
  {draft.storage==="edge"&&<label className="grid gap-1 text-xs">{t("Relationship writer roles")}<Input value={draft.roles?.join(", ")??""} onChange={event=>patch({roles:event.target.value.split(",").map(role=>role.trim()).filter(Boolean)})}/></label>}
- {draft.storage!=="edge"&&<label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Reference field")}<SemanticPropertySelect object={object} value={draft.via} label={t("Reference field")} disabled={!!draft.published} filter={f=>f.type==="reference"&&f.ref===draft.parent} onChange={ref=>{if(!draft.published)patch({via:ref?.field??""})}}/></label>}
+ {draft.storage!=="edge"&&<label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Reference field")}<SemanticPropertySelect object={object} value={draft.via} fields={authoring.entity(object.name)?.fields} label={t("Reference field")} disabled={!!draft.published} filter={f=>f.type==="reference"&&f.ref===draft.parent} onChange={ref=>{if(!draft.published)patch({via:ref?.field??""})}}/></label>}
  </Panel>
  <Panel title={t("Relationship directions")} className="grid min-w-0 grid-cols-1 content-start gap-3">
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Parent to children name")}<Input value={draft.forward} onChange={e=>patch({forward:e.target.value})}/></label>

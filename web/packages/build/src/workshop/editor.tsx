@@ -3,6 +3,7 @@ import {ModelBindingInspector} from "./page-editor/ModelBindingInspector";
 import {materializeModelSection,canonicalModelSection,foldModelPorts,modelEntity} from "@platform/app/model";
 import {InputDraftProvider} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { useAuthoringModel } from "../ontology/authoring-model";
 import {WidgetGlyph,LayoutGlyph} from "./page-editor/WidgetGlyph";
 import {canvasModel,canvasDrop,canvasMove,canvasResize,canvasResetSize,canvasGroup,canvasEqualize,canvasUngroup,canvasRemove} from "./page-editor/canvas-layout";
 import {addWidgetSlot} from "./page-editor/widget-slots";
@@ -22,13 +23,13 @@ import { recordPaths } from "../ontology/record-paths";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
 import {
   validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, Card, CanvasEditor, CanvasRegion, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, Download, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
 import { WidgetLibrary } from "./page-editor/WidgetLibrary";
@@ -61,7 +62,6 @@ type PageRecord = {
   document?: HostApi.PageDocument;
   sections?: AuthoringSection[];
 };
-type DraftObjectMetadata = { name: string; title: string; plural?: string; fields: (Omit<HostApi.FieldInfo, "choices"> & { choices?: string })[] };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
 
@@ -107,16 +107,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const { decide, source, catalog, definitions } = useHost();
   const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(id)}`);
-  const draftObjects = useRecordInventory<DraftObjectMetadata>("build.object");
-  // Field pickers may describe a saved object before installation. These
-  // authoring hints never replace runtime definitions, reads or permissions.
-  const authoringEntity = (type: string): EntityInfo | undefined => {
-    const installed = source.entity(type);
-    if (installed) return installed;
-    const object = draftObjects.data?.records.find(record => `build.${record.name}` === type);
-    return object ? { type, app: "build", title: object.title, plural: object.plural || object.title, display: "id", standard: [],
-      fields: [{ name: "id", title: "ID", type: "text", readOnly: true }, ...(object.fields ?? []).map(field => ({ ...field, choices: field.choices?.split(",").map(value => value.trim()) }))] } : undefined;
-  };
+  const model = useAuthoringModel(), authoringEntity = model.entity;
   const page = query.data?.record;
   const session = useDraftSession<PageDraft,LayoutClipboard<Draft>>(emptyDraft(),JSON.stringify([id,source.scope]));
   const [clipboardNotice,setClipboardNotice]=useState<{scope:string;error?:boolean;text:string}>();
@@ -183,14 +174,14 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
   const queryProblem = !queryInventoryBudget(document,sections as unknown as HostApi.Section[],pageVariableContract.query).valid || Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
   const layoutProblems=pageLayoutDiagnostics(document,sections);
-  const inlineProblem=sections.some(s=>s.widget==="inline-action"&&(s.actions?.length!==1||!!s.actionDefaults?.length&&!validActionDefaults(source.entity(s.object||page?.object||""),catalog.find(a=>a.schema===s.actions?.[0]),s.actionDefaults)));
+  const inlineProblem=sections.some(s=>s.widget==="inline-action"&&(s.actions?.length!==1||!!s.actionDefaults?.length&&!validActionDefaults(authoringEntity(s.object||page?.object||""),catalog.find(a=>a.schema===s.actions?.[0]),s.actionDefaults)));
   const tableEditProblem=sections.some(s=>s.inlineEdit&&(!s.inlineEdit.action||s.inlineEdit.fields.length===0||s.inlineEdit.fields.length>pageVariableContract.tableEditing.maxFields||s.inlineEdit.fields.some(f=>!s.fields?.includes(f))));
   const presentationLimits=pageVariableContract.tablePresentation;
   const tableControlsProblem=sections.some(s=>{const p=s.tablePresentation;if(!p)return false;const template=p.titleTemplate,source=document.variables?.[s.collectionVariable??""]?.source;return s.widget!=="table"||!["compact","normal"].includes(p.density)||typeof p.showToolbar!=="boolean"||template!==undefined&&(new TextEncoder().encode(template).length>256||/[{}]/.test(template.replace("{count}",""))||template.includes("{count}")&&source?.kind!=="plan");});
   const tablePresentationProblem=tableControlsProblem||sections.some(s=>(s.tableColumns?.length??0)>presentationLimits.maxColumns||s.tableColumns?.some((c,i)=>c.field!=="id"&&!s.fields?.includes(c.field)||s.tableColumns?.some((other,j)=>j!==i&&other.field===c.field)||new TextEncoder().encode(c.title??"").length>presentationLimits.maxTitleBytes||c.width!==undefined&&(!Number.isInteger(c.width)||c.width<presentationLimits.minWidth||c.width>presentationLimits.maxWidth)));
   const recordViewProblem=sections.some(s=>s.widget==="record-view"&&s.recordView?.tabs.length===0);
   const recordLinksProblem=sections.some(s=>s.widget==="record-links"&&(!s.recordLinks?.length||s.recordLinks.length>pageVariableContract.recordLinks.maxGroups||s.recordLinks.some((g,i)=>!g.field||!g.object.name||new TextEncoder().encode(g.title??"").length>pageVariableContract.recordLinks.maxTitleBytes||s.recordLinks?.some((h,j)=>i!==j&&g.object.name===h.object.name&&g.field===h.field))));
-  const statusTrackerProblem=sections.some(s=>{if(s.widget!=="status-tracker")return false;const value=s.statusTracker,info=source.entity(s.object||page?.object||""),l=info?.lifecycle;return !value||!l||value.field!==l.field||!info?.fields.some(f=>f.name===value.field)||!value.stages.length||value.stages.length>pageVariableContract.statusTracker.maxStages||new Set(value.stages).size!==value.stages.length||value.stages.some(name=>!l.states.some(s=>s.name===name));});
+  const statusTrackerProblem=sections.some(s=>{if(s.widget!=="status-tracker")return false;const value=s.statusTracker,info=authoringEntity(s.object||page?.object||""),l=info?.lifecycle;return !value||!l||value.field!==l.field||!info?.fields.some(f=>f.name===value.field)||!value.stages.length||value.stages.length>pageVariableContract.statusTracker.maxStages||new Set(value.stages).size!==value.stages.length||value.stages.some(name=>!l.states.some(s=>s.name===name));});
   const metricAnnotationProblem=sections.some(s=>{const note=s.metricPresentation?.annotation;return !!note&&(s.widget!=="metric"||!["up","down","flat"].includes(note.direction)||new TextEncoder().encode(note.text).length>256);});
   const metricPresentationProblem=metricAnnotationProblem||sections.some(s=>s.metricPresentation&&(new TextEncoder().encode(s.metricPresentation.prefix??"").length>pageVariableContract.metricPresentation.maxUnitBytes||new TextEncoder().encode(s.metricPresentation.suffix??"").length>pageVariableContract.metricPresentation.maxUnitBytes));
   const titleProblem=sections.some(s=>s.widget==="heading"&&(!s.text?.trim()||new TextEncoder().encode(s.text).length>pageVariableContract.titles.maxTextBytes)||s.widget==="collection-title"&&(!s.collectionVariable||!s.countVariable));
@@ -211,15 +202,15 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const recordGanttProblem=sections.some(s=>s.widget==="record-gantt"&&(!s.recordGantt?.startField||!s.recordGantt?.endField||!s.recordGantt?.titleField||!s.recordGantt?.statusField||!ganttRange(s.recordGantt?.rangeStart??"",s.recordGantt?.rangeEnd??"")||!document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""]?.sort?.length));
   const recordCalendarProblem=sections.some(s=>s.widget==="record-calendar"&&(!s.recordCalendar?.dateField||!s.recordCalendar?.labelField||!/^\d{4}-(0[1-9]|1[0-2])$/.test(s.recordCalendar?.initialMonth??"")||s.recordCalendar?.initialMonth.startsWith("0000")||!document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""]?.sort?.length));
   const recordEventsProblem=sections.some(s=>s.widget==="record-events"&&(!s.recordEvents?.timeField||!s.recordEvents?.titleField||!s.recordEvents?.severityField||!document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""]?.sort?.length));
-  const explorationProblem=sections.some(s=>explorationViewProblem(document,sections,s,page?.object??"",type=>source.entity(type),definitions));
-  const contextProblem=sections.some(s=>contextViewProblem(document,sections,s,page?.object??"",type=>source.entity(type),definitions));
+  const explorationProblem=sections.some(s=>explorationViewProblem(document,sections,s,page?.object??"",type=>authoringEntity(type),definitions));
+  const contextProblem=sections.some(s=>contextViewProblem(document,sections,s,page?.object??"",type=>authoringEntity(type),definitions));
   const workViewProblem=sections.some(s=>{if(!["approval-inbox","notification-feed"].includes(s.widget))return false;const leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0];return !leaf||!!loopOwner(document,leaf)||!!s.object||!!s.fields?.length||!!s.actions?.length||!!s.recordVariable||!!s.selection||!!s.collectionVariable||!!s.selectionVariable||!!s.selectionSetVariable||!!s.filterVariable||!!s.recordSetVariable||!!s.parentSelection||!!s.relation||!!s.query||!!s.inlineEdit||!!s.commentDraftVariable||!!s.fileVariable||!!s.pdfPageVariable;});
   const historyProblem=sections.some(s=>historyViewProblem(document,sections,s,page?.object??""));
   const collaborationProblem=sections.some(s=>{if(!isCollaborationWidget(s.widget))return false;const original=collaborationRecordSource(document,sections,s.recordVariable??"",s.id??"",page?.object??""),r=document.variables?.[s.recordVariable??""],bindingOwner=recordInputOwner(document,s),key=s.widget==="record-comments"?s.commentDraftVariable:s.fileVariable,value=document.variables?.[key??""],pdf=document.variables?.[s.pdfPageVariable??""];return !original||(s.object||page?.object)!==original.object||!!s.fields?.length||!!s.actions?.length||!!s.collectionVariable||!!s.selection||!!s.selectionVariable||!!s.selectionSetVariable||!!s.recordSetVariable||!!s.relation||!!s.parentSelection||!!s.query||!!s.inlineEdit||s.widget==="record-comments"&&!!(s.fileVariable||s.pdfPageVariable)||s.widget==="record-uploader"&&!!(s.commentDraftVariable||s.pdfPageVariable)||["media-preview","pdf-viewer","image-annotation","scene-3d"].includes(s.widget)&&!!s.commentDraftVariable||s.widget==="media-preview"&&!!s.pdfPageVariable||!value||value.type!=="string"||value.scope!==bindingOwner?.scope||value.owner!==bindingOwner?.owner||(value.mode!=="state"&&(!["media-preview","pdf-viewer","image-annotation","scene-3d"].includes(s.widget)||value.mode!=="constant"))||s.widget==="pdf-viewer"&&(!pdf||pdf.type!=="string"||pdf.mode!=="state"||pdf.scope!==r?.scope||pdf.owner!==r?.owner||s.fileVariable===s.pdfPageVariable);});
-  const recordComparisonProblem=sections.some(s=>{if(s.widget!=="record-comparison")return false;const binding=recordComparisonSource(document,sections,s.recordSetVariable??"",s.id??"",page?.object??""),info=binding&&source.entity(binding.object),label=s.recordComparison?.labelField,fields=s.fields??[];return !binding||(s.object||page?.object)!==binding.object||!label||label!=="id"&&!info?.fields.some(f=>f.name===label&&["text","longtext","choice","reference"].includes(f.type))||!fields.length||fields.length>64||new Set(fields).size!==fields.length||fields.some(name=>!info?.fields.some(f=>f.name===name&&["text","longtext","choice","reference","integer","decimal","money","date","datetime","boolean"].includes(f.type)));});
+  const recordComparisonProblem=sections.some(s=>{if(s.widget!=="record-comparison")return false;const binding=recordComparisonSource(document,sections,s.recordSetVariable??"",s.id??"",page?.object??""),info=binding&&authoringEntity(binding.object),label=s.recordComparison?.labelField,fields=s.fields??[];return !binding||(s.object||page?.object)!==binding.object||!label||label!=="id"&&!info?.fields.some(f=>f.name===label&&["text","longtext","choice","reference"].includes(f.type))||!fields.length||fields.length>64||new Set(fields).size!==fields.length||fields.some(name=>!info?.fields.some(f=>f.name===name&&["text","longtext","choice","reference","integer","decimal","money","date","datetime","boolean"].includes(f.type)));});
   const recordCardProblem=sections.some(s=>{if(s.widget!=="record-card")return false;const v=document.variables?.[s.recordVariable??""];return !s.recordCard?.labelField||!s.recordCard.tone||(s.fields?.length??0)>4||!(v?.mode==="resource"&&v.source?.kind==="record"||Number(document.uiProfile.split(".").at(-1))>=98&&v?.mode==="shared"&&v.type==="record"&&v.source?.object?.name===(s.object||page?.object));});
   const sparklineProblem=sections.some(s=>{if(s.widget!=="sparkline-kpi")return false;const c=s.sparkline,q=document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""];return !c||(!s.sparklineDecimalVariable&&!s.sparklineNumberVariable)||!!s.sparklineDecimalVariable&&!!s.sparklineNumberVariable||!!s.collectionVariable&&(!c.field||!q?.sort?.length||!q.limit||q.limit>30)||!s.collectionVariable&&!!c.field;});
-  const tagCountsProblem=sections.some(s=>{if(s.widget!=="tag-counts")return false;const v=document.variables?.[s.collectionVariable??""],output=document.variables?.[s.groupValueVariable??""],info=source.entity(s.object||page?.object||""),leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined;return !leaf||!!loopOwner(document,leaf)||v?.scope!==(owner?"overlay":"page")||v.owner!==owner|| !s.group||s.group==="count"||s.group.includes(":")||!info?.fields.some(f=>f.name===s.group&&["text","choice"].includes(f.type))||v?.mode!=="resource"||v.source?.kind!=="plan"||!!s.groupSetVariable||!!s.groupValueVariable&&(!output||output.type!=="string"||output.mode!=="state"||output.scope!==v.scope||output.owner!==v.owner);});
+  const tagCountsProblem=sections.some(s=>{if(s.widget!=="tag-counts")return false;const v=document.variables?.[s.collectionVariable??""],output=document.variables?.[s.groupValueVariable??""],info=authoringEntity(s.object||page?.object||""),leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined;return !leaf||!!loopOwner(document,leaf)||v?.scope!==(owner?"overlay":"page")||v.owner!==owner|| !s.group||s.group==="count"||s.group.includes(":")||!info?.fields.some(f=>f.name===s.group&&["text","choice"].includes(f.type))||v?.mode!=="resource"||v.source?.kind!=="plan"||!!s.groupSetVariable||!!s.groupValueVariable&&(!output||output.type!=="string"||output.mode!=="state"||output.scope!==v.scope||output.owner!==v.owner);});
   const treemapProblem=sections.some(s=>s.widget==="treemap"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"||!!s.groupValueVariable&&!!s.groupSetVariable));
   const heatmapProblem=sections.some(s=>{if(s.widget!=="heatmap")return false;const v=document.variables?.[s.collectionVariable??""];return !s.group||!s.columnGroup||s.group===s.columnGroup||s.measure!=="count"||v?.mode!=="resource"||v.source?.kind!=="plan"||!!s.rowValueVariable&&!!s.rowSetVariable||!!s.columnValueVariable&&!!s.columnSetVariable;});
   const scatterProblem=sections.some(s=>{if(s.widget!=="record-scatter")return false;const c=s.scatter,v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""];return !c?.xField||!c.yField||!c.colorField||!c.labelField||v?.mode!=="resource"||v.source?.kind!=="plan"||!q?.sort?.length||!q.limit||q.limit>100;});
@@ -227,12 +218,12 @@ const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => 
   const recordListProblem=sections.some(s=>s.widget==="record-list"&&(!s.collectionVariable||!s.recordList||!s.cardLabel||(s.fields?.length??0)>pageVariableContract.recordList.maxFields));
   const sharedRecordSetOutputProblem=sections.some(s=>!!s.selectionSetVariable&&document.variables?.[s.selectionSetVariable]?.mode==="shared"&&(()=>{const v=document.variables![s.selectionSetVariable!],leaf=Object.entries(document.nodes).find(([,n])=>n.section===s.id)?.[0];return s.widget!=="table"||!leaf||!!overlayOwner(document,leaf)||!!loopOwner(document,leaf)||!v?.writable||v.type!=="record-set"||v.source?.object?.name!==(s.object||page?.object);})());
   const sharedRecordOutputProblem=sections.some(s=>["record-list","record-scatter","record-leaderboard","kanban","record-map"].includes(s.widget)&&!!s.selectionVariable&&(()=>{const v=document.variables?.[s.selectionVariable!],leaf=Object.entries(document.nodes).find(([,n])=>n.kind==='widget'&&n.section===s.id)?.[0];return !!s.selection||s.recordList?.layout==='tiles'||!leaf||!!overlayOwner(document,leaf)||!!loopOwner(document,leaf)||v?.type!=='record'||v.scope!=='application'||v.mode!=='shared'||!v.writable||v.source?.kind!=='application'||v.source.object?.name!==(s.object||page?.object);})());
-  const observationInvalid=sections.some(s=>observationProblem(document,sections,s,page?.object??"",type=>source.entity(type),definitions));
-  const analysisProblem=sections.some(s=>collectionAnalysisProblem(document,s,page?.object??"",type=>source.entity(type),definitions));
-  const recordWorkInvalid=sections.some(s=>recordWorkProblem(document,s,page?.object??"",name=>source.entity(name),catalog,definitions));
+  const observationInvalid=sections.some(s=>observationProblem(document,sections,s,page?.object??"",type=>authoringEntity(type),definitions));
+  const analysisProblem=sections.some(s=>collectionAnalysisProblem(document,s,page?.object??"",type=>authoringEntity(type),definitions));
+  const recordWorkInvalid=sections.some(s=>recordWorkProblem(document,s,page?.object??"",name=>authoringEntity(name),catalog,definitions));
   const invalid = sections.some(s=>s.widget==="external-frame"&&!validExternalFrame(s.externalFrame))||sections.some(s=>s.widget==="embedded-page"&&(!s.embedding||!/^page\.sha256\.[0-9a-f]{64}$/.test(s.embedding.contentVersion)))||observationInvalid||recordWorkInvalid||analysisProblem||sections.some(s=>s.widget==="histogram"&&(!s.histogram?.field||!Number.isInteger(s.histogram.bins)||s.histogram.bins<1||s.histogram.bins>64||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||sections.some(s=>s.widget==="term-counts"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||searchInputProblem||pickerValueProblem||spacerProblem||separatorProblem||noticeProblem||alertProblem||pickerProblem||dateProblem||choiceProblem||booleanProblem||rangeProblem||leaderboardProblem||summaryProblem||gaugeProblem||progressProblem||recordGanttProblem||recordCalendarProblem||recordEventsProblem||recordCardProblem||recordComparisonProblem||collaborationProblem||workViewProblem||contextProblem||explorationProblem||historyProblem||sparklineProblem||treemapProblem||tagCountsProblem||heatmapProblem||scatterProblem||recordChartProblem||recordListProblem||sharedRecordOutputProblem||sharedRecordSetOutputProblem||titleProblem||metricPresentationProblem||statusTrackerProblem||recordLinksProblem||groupProblem||recordViewProblem||tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(session.inputProblems).some(Boolean) || !!selectionProblem || incompatible;
-  const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
-    .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
+  const relatedObjects = model.entities.filter(entity => entity.type !== page?.object)
+    .filter(entity => entity.fields.some(field => field.type === "reference" && [page?.object, ...selections.map(selection => selection.object.name)].includes(field.ref))).map(entity => entity.type);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
   const saveRef = useRef<() => Promise<unknown>>(async () => false);
@@ -441,7 +432,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   ] : [];
   const widgetTabs: WorkbenchTab[] = canvasSelection ? widgetInspectorTabs({
     section: canvasSelection, sections, document, info: modelEntity(authoringEntity(canvasSelection.model?.type||canvasSelection.object || page.object),canvasSelection.model,authoringEntity), object: page.object, selections, relatedObjects,
-    catalog: catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target })), onChange: (patch) => change(chosen, patch),
+    catalog: model.actions, onChange: (patch) => change(chosen, patch),
     onResourcesChange: (patch, variables) => edit((old) => ({ ...old, document: { ...old.document, variables }, sections: old.sections.map((s) => s.id === canvasSelection.id ? { ...s, ...patch } : s) }), "graph-resources"),
     events: (() => { const Inspector = widgetInspector(canvasSelection.widget, canvasSelection.configVersion ?? 0)?.events; return <InspectorFrame id={canvasSelection.id ?? String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion ?? 0} part="events">{Inspector && <Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons, document) => edit({ document, sections: sections.map((s) => s.id === canvasSelection.id ? { ...s, buttons } : s) })} document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}</InspectorFrame>; })(),
     appearance: <>
@@ -548,7 +539,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
 type PropertiesProps = {
   section?: Draft; sections:Draft[]; document: HostApi.PageDocument; info?: EntityInfo; object: string; relatedObjects?: string[];
   selections: HostApi.SelectionVariable[];
-  catalog: { schema: string; title: string; target: string }[];
+  catalog: { schema: string; title: string; target: string; draft?: boolean }[];
   onChange: (patch: Partial<Draft>) => void;
   onResourcesChange:(patch:Partial<Draft>,variables:Record<string,HostApi.PageVariable>)=>void;
 };
@@ -590,7 +581,8 @@ function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: 
 }
 
 function Properties({ section, sections, document, info, catalog, object, selections, relatedObjects = [], onChange }: PropertiesProps) {
-  const { definitions, source } = useHost();
+  const { definitions } = useHost();
+  const model = useAuthoringModel();
   const capabilityQuery = useProvidedCapabilities();
   const provided = capabilityQuery.data ?? [];
   const computations = provided.filter(item => item.ref.kind === "compute" && item.capability.kind === "operation" && item.capability.side === "pure").map(item => ({
@@ -612,7 +604,7 @@ function Properties({ section, sections, document, info, catalog, object, select
   const fields = info?.fields ?? [];
   const parentType = section.parentSelection ? selections.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : object;
   const relations = fields.filter((field) => field.type === "reference" && field.ref === parentType && field.inverse).map((field) => field.inverse!);
-  const actions = catalog.filter(action => action.target === (section.object || object) && provided.some(item => item.capability.kind === "action" && item.capability.side === "authoritative" && item.capability.name === action.schema));
+  const actions = catalog.filter(action => action.target === (section.object || object) && (action.draft || provided.some(item => item.capability.kind === "action" && item.capability.side === "authoritative" && item.capability.name === action.schema)));
   const leaf=Object.entries(document.nodes).find(([,n])=>n.section===section.id)?.[0],overlay=leaf?overlayOwner(document,leaf):undefined;
   const accessible=(v:HostApi.PageVariable)=>variableAccessible(v,undefined,overlay);
   const measures = ["count", ...fields.filter((f) => f.type === "integer" || f.type === "decimal" || f.type === "money").flatMap((f) => [`sum:${f.name}`, `avg:${f.name}`])];
@@ -620,11 +612,11 @@ function Properties({ section, sections, document, info, catalog, object, select
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
       {capabilityQuery.isError && <p role="alert" className="text-xs text-danger">{t("Available capabilities could not be loaded.")}</p>}
-      {allows("composite")&&<CompositeBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={source.entity} definitions={definitions} onChange={onChange}/>}
-      {allows("object")&&<ModelBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={type=>type===info?.type?info:source.entity(type)} definitions={definitions} onChange={onChange}/>}
+      {allows("composite")&&<CompositeBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={model.entity} definitions={definitions} onChange={onChange}/>}
+      {allows("object")&&<ModelBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={type=>type===info?.type?info:model.entity(type)} definitions={definitions} onChange={onChange}/>}
       {!section.model&&relatedObjects.length > 0 && allows("object") && !interfaceQueryForSection({document,sections},section) && (
         <label className="grid gap-1 text-xs">{t("Object")}
-          <SemanticObjectSelect label={t("Object")} value={section.object ?? object} filter={(definition) => definition.ref.name === object || relatedObjects.includes(definition.ref.name)}
+          <SemanticObjectSelect label={t("Object")} value={section.object ?? object} drafts={model.drafts.data?.records.filter(draft => !draft.archived && (`build.${draft.name}` === object || relatedObjects.includes(`build.${draft.name}`))).map(draft => ({ name: `build.${draft.name}`, title: draft.title }))} filter={(definition) => definition.ref.name === object || relatedObjects.includes(definition.ref.name)}
             onChange={(ref) => { if (ref) onChange({ object: ref.name === object ? undefined : ref.name,
               selection: undefined,countVariable:undefined,statusTracker:undefined,recordLinks:undefined,tableColumns:undefined, collectionVariable:undefined, parentSelection: undefined, relation: undefined, query: undefined, inputs: undefined, timeStart:undefined,timeEnd:undefined,timeLabel:section.widget==="record-timeline"?"id":undefined,timeGroup:undefined,cardLabel:section.widget==="kanban"?"id":undefined, fields: [], actions: [] }); }} />
         </label>
@@ -719,7 +711,7 @@ function Properties({ section, sections, document, info, catalog, object, select
         </fieldset>
       )}
       {section.widget === "form" && <FormInputBindings fields={fields.filter((field) => !field.readOnly && !(section.relation && field.ref === parentType && field.inverse === section.relation))}
-        parentType={section.relation ? parentType : undefined} entity={source.entity} inputs={section.inputs ?? {}} onChange={(inputs, field, bound) => onChange({ inputs,
+        parentType={section.relation ? parentType : undefined} entity={model.entity} inputs={section.inputs ?? {}} onChange={(inputs, field, bound) => onChange({ inputs,
           fields: bound ? section.fields?.filter((name) => name !== field) : [...new Set([...(section.fields ?? []), field])] })} />}
       {(section.widget === "timeline" || section.widget === "tasks") && (
         <p className="text-xs text-muted">{section.widget === "timeline"

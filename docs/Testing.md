@@ -4,6 +4,8 @@
 
 ## 检查选择与停止
 
+首次联合构建（ADR-0124/0108）：`make e2e SPEC=application-authoring` 从空白应用通过原界面创建两对象、引用字段、状态与动作参数，模板绑定未发布模型并一次发布；保存后续字段和页面修改，核对原运行定义未变。`make test-go PKG=. RUN=TestJointDraftsDeliverNewObjectsAndRelationship` 检查关系与新对象同批交付、错误引用拒绝及发布后的关系约束；它不代替浏览器中的引用配置或真实构建者体验。
+
 专业组件配置（ADR-0110）：`make e2e SPEC=professional-components`，同一图 widget 分别装配工艺路线、组织汇报与单据沿革，同一矩阵分别装配能力和费率表达式，工作站沿原共享规则选资源并提交类型化报工。`make test-go PKG=. RUN=TestPageComposite` 检查原规则读数变化、权限隐藏/标记、分层路径、环路拒绝、候选与日志恢复；Catalog 检查包含原生 MES 页面迁入通用库的拒绝反例。Catalog 样例是合成预览，真实读取另走宿主路线。
 
 构建者验证（ADR-0111）：`make e2e SPEC=builder-verification`，从应用 Verify 准备并保存合成样本，未发布事务以三个真实成员试跑、并排查看结果，保存/重载原 TestPlan，核对样本和生产定义不变。宿主 `make test-go PKG=. RUN=TestApplicationTrial` 另守整笔回滚、规则/约束/Layers 解释与字段隐藏、生产快照字节不变、固定候选在草稿变化和恢复后结果一致及生产拒绝对照。手测：准备工单/关联记录 → 三成员对照 → 展开 Execution explanation 查看规则实际值、约束名与事务前后值 → 临时改样本重跑并确认未回流 → 显式保存样本 → 保存测试计划 → 独立审查候选与激活。缺少原生/外部 owner fixture 时应显示拒绝；试跑通过不能代替发布审查或负责人验收。

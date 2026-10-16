@@ -1,4 +1,6 @@
 {
+  "Link parent needs this builder's published or jointly selected object": "关系的父对象必须是本构建器已发布或在本次联合发布中选中的对象",
+  "Link child needs this builder's published or jointly selected object": "关系的子对象必须是本构建器已发布或在本次联合发布中选中的对象",
   "An agent may retain at most 64 published versions": "智能体最多保留 64 个已发布版本",
   "A current observation does not request a time window or point limit": "当前读数不需要时间窗口或点数限制",
   "Creation transaction": "创建事务",

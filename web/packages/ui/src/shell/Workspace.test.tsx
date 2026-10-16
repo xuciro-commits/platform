@@ -85,6 +85,20 @@ test("inspection preserves the active task and explicit comparison creates a spl
   expect((input as HTMLInputElement).value).toBe("keep A");
 });
 
+test("a late save only follows its original active document, including when the source stays visible beside it", async () => {
+  await start();
+  const original = { view: "flow", params: { id: "A" } }, next = { view: "flow", params: { id: "B" } }, saved = { view: "flow", params: { id: "saved" } };
+  act(() => api.open(next, { window: "beside" }));
+  await screen.findByLabelText("Draft B");
+  act(() => api.open(saved, { ifCurrent: original }));
+  expect(observed.dock!.activePanel?.id).toBe(routeKey(next));
+  expect(observed.dock!.getPanel(routeKey(saved))).toBeUndefined();
+  expect(location.hash).toBe("#/flow?id=B");
+  act(() => api.open(saved, { ifCurrent: next }));
+  await screen.findByLabelText("Draft saved");
+  expect(observed.dock!.activePanel?.id).toBe(routeKey(saved));
+});
+
 test("the first asynchronous navigation opens and later refreshes preserve manual collapse", async () => {
   const props = { product: "Navigation", storageKey: "workspace:async-nav", views, home: { view: "home" } };
   const result = render(<Workspace {...props} nav={[]} />);

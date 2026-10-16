@@ -54,7 +54,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
     }
     if (joining.current && application) await joinProjectResource(host, application, resourceRef(kindOfType("build.table")!, draft.name));
     joining.current = false; markSaved(); setDirty(false);
-    if (id === "new") { open({ view: "decision-table", params: { id: target } }); close({ view: "decision-table", params: { id } }); }
+    if (id === "new") { open({ view: "decision-table", params: { id: target } }, { ifCurrent: { view: "decision-table", params: { id } } }); close({ view: "decision-table", params: { id } }); }
     else await query.refetch();
     return { id: target, revision: baseRevision.current };
   };

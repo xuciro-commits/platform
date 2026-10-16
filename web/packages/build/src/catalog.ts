@@ -27,7 +27,7 @@ export const entries: CatalogEntry[] = [
     id: "scenario/record-handling", owner: "@pkg/build", name: template.title, summary: template.summary, layer: 5, authority: "example", maturity: "recommended", scope: "platform",
     uses: ["template", "reference"], tags: ["record", "actions", "history", "tasks", "studio"], source: "web/packages/build/src/workshop/templates.ts", template: template.id, example: "RecordHandlingExample",
     dependencies: ["pattern/master-detail", "app/composed-page", "app/record-actions", "app/record-detail"], widgets: ["filter", "table", "detail", "actions", "timeline", "tasks"],
-    constraints: ["Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.", "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.", "Template identity and revision are recorded in the editable page description as informative provenance."],
+    constraints: ["Studio requires an object and visible fields. Saved draft objects and actions can be bound before joint publication; execution uses the original permissions.", "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.", "Template identity and revision are recorded in the editable page description as informative provenance."],
   },
   {
     id: "scenario/object-studio", owner: "@pkg/build", name: "Object design workbench", summary: "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.",

@@ -48,7 +48,7 @@ export type Rail = { home: Route; applications: Route; notifications?: { route: 
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
 /** Inspect keeps the current task; tab, beside and popout open working documents. */
-type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect" };
+type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void, busy?: boolean) => void;
   ask: (panels: string[], run: () => void, owner?: symbol) => void;
@@ -377,6 +377,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const open = useCallback((route: Route, options: OpenOptions = {}) => {
     const api = dock.current;
     if (!api || !viewRegistry.current.has(route.view)) return;
+    // A completed save may replace its own new-record tab, but must not
+    // take focus back after the member has already chosen another document.
+    if (options.ifCurrent && api.activePanel?.id !== keyOf(options.ifCurrent)) return;
     if (options.window === "inspect") {
       setInspection(previous => ({ route, focus: previous?.focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null) }));
       return;
@@ -390,7 +393,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       if (previous) history.replaceState(null, "", routeToHash(previous)); // a cancelled hash/back navigation must not leave a false URL
       unsaved.ask(api.panels.map((panel) => panel.id), () => { if (revision === incomingRevision.current) show(route, options); });
     } else show(route, options);
-  }, [show, unsaved]);
+  }, [show, unsaved, keyOf]);
   const readLink = useCallback((route: Route) => {
     const revision = ++incomingRevision.current;
     void Promise.resolve().then(() => routeReader.current?.(route) ?? route).then((resolved) => {

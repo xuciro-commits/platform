@@ -1,14 +1,18 @@
-import {modelBindingContract,materializeModelSection} from '@platform/app/model';
+import {modelBindingContract,materializeModelSection,modelField} from '@platform/app/model';
 import type {Api} from '@platform/kernel';
-import {SemanticObjectSelect,useReadQuery,type Definition} from '@platform/app';
+import {SemanticObjectSelect,useHost,useReadQuery,type Definition} from '@platform/app';
 import {Button,Checkbox,Select,t,type EntityInfo} from '@platform/ui';
 import {ModelFieldPicker} from '../../model-editor/ModelFieldPicker';
 import {ExpressionEditor,literalExpression} from '../../editor/ExpressionEditor';
 import type {AuthoringSection} from './draft';
+import {useAuthoringModel} from '../../ontology/authoring-model';
 
 export function ModelBindingInspector({section,sections,document,object,selections,lookup,definitions,onChange,allowRelation=true}:{allowRelation?:boolean;section:AuthoringSection;sections:AuthoringSection[];document:Api.PageDocument;object:string;selections:Api.SelectionVariable[];lookup:(type:string)=>EntityInfo|undefined;definitions:readonly Definition[];onChange:(patch:Partial<AuthoringSection>)=>void}){
+ const authoring=useAuthoringModel(),drafts=(authoring.drafts.data?.records??[]).filter(draft=>!draft.archived).map(draft=>({name:`build.${draft.name}`,title:draft.title}));
+ const {source}=useHost();
  const rules=useReadQuery<Api.PageModelRule[]>('/v1/page-model/rules');
  const model=section.model??{type:section.object||object},info=lookup(model.type),fields=model.fields??[],effective=materializeModelSection({...section,model},lookup,true);
+ const needsPublication=fields.some(field=>!modelField(model.type,field.path??[field.name??''],source.entity));
  const patch=(next:Partial<Api.ModelBinding>)=>onChange({model:{...model,...next}});
  const recordType=(id:string)=>{const v=document.variables?.[id];if(v?.source?.object)return v.source.object.name;const producer=sections.find(s=>s.id===v?.source?.section);return producer?.model?.type||producer?.object||object;};
  const records=Object.entries(document.variables??{}).filter(([,v])=>v.type==='record').map(([id,v])=>({id,title:v.title||id,type:recordType(id)}));
@@ -21,7 +25,8 @@ export function ModelBindingInspector({section,sections,document,object,selectio
  const editField=(index:number,next:Api.FieldRef)=>patch({fields:fields.map((f,i)=>i===index?next:f)});
  const collection=['table','record-picker','record-list','record-chart','record-events','record-calendar','record-gantt','record-leaderboard','record-scatter','record-timeline','kanban','record-map','histogram','term-counts','tag-counts','sparkline-kpi'].includes(section.widget);
  return <div className="grid gap-3 text-xs" aria-label={t('Model binding')}>
-  <label className="grid gap-1">{t('Model type')}<SemanticObjectSelect label={t('Model type')} value={model.type} onChange={ref=>{if(ref)onChange({model:{type:ref.name,visibility:model.visibility},fields:undefined,object:undefined,relation:undefined,parentSelection:undefined,query:undefined});}}/></label>
+  {needsPublication&&<p role="status" className="text-warning">{t('This binding includes saved model changes. Publish the model and page together before reading these fields in preview.')}</p>}
+  <label className="grid gap-1">{t('Model type')}<SemanticObjectSelect label={t('Model type')} value={model.type} drafts={drafts} onChange={ref=>{if(ref)onChange({model:{type:ref.name,visibility:model.visibility},fields:undefined,object:undefined,relation:undefined,parentSelection:undefined,query:undefined});}}/></label>
   <div className="rounded border border-border p-2"><strong>{t(fields.some(f=>!f.slot||f.slot==='fields')?'Explicit model fields':'Inferred from model')}</strong><p className="mt-1 text-muted">{effective.fields?.map(name=>info?.fields.find(f=>f.name===name)?.title??name).join(' · ')||info?.display||model.type}</p>{info?.lifecycle&&<p className="text-muted">{t('Lifecycle defaults')}: {info.lifecycle.field} · {info.lifecycle.states.map(s=>s.title).join(' → ')}</p>}</div>
   {fields.map((ref,index)=><div key={index} className="grid gap-2 rounded border border-border p-2"><ModelFieldPicker type={model.type} lookup={lookup} value={ref.path??[ref.name??'']} onChange={path=>editField(index,{...ref,...path.length===1?{name:path[0],path:undefined}:{name:undefined,path}})}/><label>{t('Widget field port')}<Select value={ref.slot??''} onChange={e=>editField(index,{...ref,slot:e.target.value||undefined})}><option value="">{t('Displayed fields')}</option>{slots.map(slot=><option key={slot} value={slot}>{slot}</option>)}</Select></label>{ref.transform&&<p>{t('Field transform')}: {ref.transform}</p>}<Button size="sm" onClick={()=>patch({fields:fields.filter((_,i)=>i!==index)})}>{t('Remove model field')}</Button></div>)}
   <div className="flex flex-wrap gap-2"><Button size="sm" disabled={fields.length>=modelBindingContract.maxFields} onClick={()=>patch({fields:[...fields,{name:info?.display||'id',...(section.widget==='record-picker'?{slot:'recordPicker.labelField'}:{})}]})}>{t('Add model field')}</Button><Button size="sm" onClick={()=>patch({fields:fields.filter(f=>!!f.slot&&f.slot!=='fields')})}>{t('Use model field defaults')}</Button></div>

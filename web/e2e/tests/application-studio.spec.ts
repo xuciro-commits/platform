@@ -189,7 +189,9 @@ test("decision tables and alerts remain application members through editing and 
   await navigation.getByRole("button", { name: "Verify", exact: true }).click();
   const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await verify.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
+  await expect(verify.getByRole("list", { name: "Joint selection", exact: true }).getByText(tableID, { exact: true })).toHaveCount(1);
   await verify.getByRole("button", { name: "Check joint candidate", exact: true }).click();
+  await expect(verify.getByRole("button", { name: "Save immutable candidate", exact: true })).toBeVisible();
   await verify.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await verify.getByRole("button", { name: "Activate release", exact: true }).click();
   await expect(verify.getByText("Release active for operators.", { exact: false })).toBeVisible();

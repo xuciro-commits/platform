@@ -12,12 +12,12 @@ import { MigrationWorkbench } from "./migration";
 // One selected saved draft in a joint candidate (ADR-0048 D1). The selection is
 // what the builder checked; the server recomputes the candidate from it.
 export type JointChoice = { kind: ReleaseKind; id: string };
-const jointKey = (choice: JointChoice) => `${choice.kind}/${choice.id}`;
 const ownerDraft = (choice: JointChoice): JointChoice => ({ ...choice, kind: choice.kind === "table" ? "compute" : choice.kind });
+const jointKey = (choice: JointChoice) => `${ownerDraft(choice).kind}/${choice.id}`;
 const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] => {
-  const seen = new Set(current.map(jointKey));
-  const out = [...current];
-  for (const choice of incoming) {
+  const seen = new Set<string>();
+  const out: JointChoice[] = [];
+  for (const choice of [...current, ...incoming]) {
     if (!choice.id || seen.has(jointKey(choice))) continue;
     seen.add(jointKey(choice));
     out.push(choice);
@@ -46,7 +46,8 @@ export function releaseDraftsSelection(value: string | undefined, kinds: readonl
   for (const item of selected) {
     if (!item || typeof item !== "object" || typeof item.kind !== "string" || typeof item.id !== "string"
       || !kinds.includes(item.kind) || !item.id) return invalid();
-    if (!out.some((choice) => jointKey(choice) === `${item.kind}/${item.id}`)) out.push({ kind: item.kind as ReleaseKind, id: item.id });
+    const choice = { kind: item.kind as ReleaseKind, id: item.id };
+    if (!out.some(existing => jointKey(existing) === jointKey(choice))) out.push(choice);
   }
   return { drafts: out };
 }
@@ -254,7 +255,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     if (pendingRef.current) return pendingRef.current.kind === "save" ? send(pendingRef.current) : undefined;
     if (!review?.candidateId || !candidateKey || savedReview) return;
     const selection = review.drafts ?? [];
-    return send({ kind: "save", body: { ...(selection.length ? { drafts: selection.map(choice => ({ ...choice })) } : { kind, id }), candidateId: review.candidateId, key: candidateKey } });
+    return send({ kind: "save", body: { ...(selection.length ? { drafts: selection.map(choice => ({ ...choice })) } : ownerDraft({ kind, id })), candidateId: review.candidateId, key: candidateKey } });
   };
   const activate = () => {
     if (pendingRef.current) return pendingRef.current.kind === "activate" ? send(pendingRef.current) : undefined;

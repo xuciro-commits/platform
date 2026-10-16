@@ -22,6 +22,7 @@ import { ConstraintsEditor } from "./constraints";
 import { TransactionEditor } from "./TransactionEditor";
 import { RecordSetsEditor } from "./record-sets";
 import { BusinessVersionEditor } from "./business-version";
+import { useAuthoringModel } from "./authoring-model";
 
 /** The objects of this organisation: open one to give it states and actions. */
 const objectSections = [
@@ -73,7 +74,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
       onFields={(fields) => change({ ...process, fields })} />}
     {action && chosen && <ActionSummary action={action} states={process.states} issues={draft.issuesOf(action.name).length}
-      onOpen={() => open({ view: "action-type", params: { id, action: action.name } })}
+      onOpen={() => void perform(async () => { if (!dirty || await save()) open({ view: "action-type", params: { id, action: action.name } }); })}
       onRemove={() => { change({ ...process, actions: process.actions.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} />}
     {!chosen && <p className="p-2 text-xs text-muted">{t("Select a property, state, action or role to edit it.")}</p>}
   </div>;
@@ -229,6 +230,8 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
 
 function FieldProperties({ field, others, onChange, onRemove }: { field: Field; others: Field[]; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
   const {definitions}=useHost();
+  const { drafts } = useAuthoringModel();
+  const objects = (drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => ({ name: `build.${draft.name}`, title: draft.title }));
   // "Only when" (#138): another unconditional choice or boolean field, and the values that make this one apply.
   const conditions = others.filter((f) => (f.type === "choice" || f.type === "boolean") && !f.when && f.name);
   const [whenField, whenValues] = (field.when ?? "").split("=") as [string, string | undefined];
@@ -244,7 +247,7 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
     <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
-    {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
+    {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} drafts={objects} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
     {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
     {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? (field.formulaExpr?formulaText(field.formulaExpr):"")} onChange={(e) => onChange({ formula: e.target.value || undefined,formulaExpr:undefined })} /></Label>}
     {(field.formula||field.formulaExpr) && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}

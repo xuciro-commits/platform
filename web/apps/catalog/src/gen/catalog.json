@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:dd80044d79ef2c4c",
+  "revision": "sha256:7cb1c0c739eeed2d",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2354,7 +2354,7 @@
         "tasks"
       ],
       "constraints": [
-        "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.",
+        "Studio requires an object and visible fields. Saved draft objects and actions can be bound before joint publication; execution uses the original permissions.",
         "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.",
         "Template identity and revision are recorded in the editable page description as informative provenance."
       ]
@@ -12302,7 +12302,7 @@
       "Static URL image": "静态地址图片",
       "Steps and tabs": "步骤与标签页",
       "Steps and tabs use canonical index string values and a same-length label list; duplicate labels remain separate choices. An absent write callback renders them read-only.": "步骤与标签页使用规范索引字符串值及等长标签列表；重名标签保留为独立选项。没有写入回调时只读展示。",
-      "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
+      "Studio requires an object and visible fields. Saved draft objects and actions can be bound before joint publication; execution uses the original permissions.": "工坊要求绑定对象和可见字段。可先绑定已保存的对象与动作草稿，再联合发布；执行仍遵循原权限。",
       "Submit an ad hoc form on Enter without reloading the page.": "按回车提交临时表单，不刷新页面。",
       "Submit original typed row targets and revisions, preserving unanswered decision keys.": "提交类型化原行目标与版本，并保留未回答决策的原键。",
       "Submitting": "提交中",

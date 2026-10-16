@@ -41,12 +41,13 @@ export function SemanticPropertyTypeSelect({value,onChange,label,filter,disabled
   </Select>;
 }
 
-export function SemanticPropertySelect({ object, value, onChange, label, filter,disabled }: {
+export function SemanticPropertySelect({ object, value, onChange, label, filter, disabled, fields: authoringFields }: {
   object: Api.AssetRef; value?: string; disabled?:boolean; onChange: (ref?: PropertyRef) => void; label: string;
   filter?: (field: Api.FieldInfo) => boolean;
+  fields?: Api.FieldInfo[];
 }) {
   const { definitions } = useHost();
-  const fields = definitions.find((definition) => definition.ref.kind === "object" && definition.ref.name === object.name)?.entity?.fields.filter((field) => !filter || filter(field)) ?? [];
+  const fields = (authoringFields ?? definitions.find((definition) => definition.ref.kind === "object" && definition.ref.name === object.name)?.entity?.fields ?? []).filter(field => !filter || filter(field));
   return <Select aria-label={label} value={value ?? ""} disabled={disabled} onChange={(event) => onChange(fields.some((field) => field.name === event.target.value) ? { object, field: event.target.value } : undefined)}>
     <option value="">{t("Choose a field")}</option>
     {value && !fields.some((field) => field.name === value) && <option value={value}>{t("Unavailable property: {name}", { name: value })}</option>}

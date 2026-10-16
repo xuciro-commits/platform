@@ -14,6 +14,62 @@ import (
 	"time"
 )
 
+func TestJointDraftsDeliverNewObjectsAndRelationship(t *testing.T) {
+	tn := builderTenant(t, "joint-relationship")
+	member := memberOf(t, tn, "builder")
+	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "PARENT", map[string]any{
+		"name": "jointparent", "title": "Joint parent", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}},
+	}, txnAt)
+	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "CHILD", map[string]any{
+		"name": "jointchild", "title": "Joint child", "fields": []build.Field{
+			{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.jointparent", Required: true},
+			{Name: "note", Title: "Note", Type: "text"},
+		},
+	}, txnAt)
+	decide(t, tn, "builder", build.ID, build.LinkTypeType+".create", build.LinkTypeType, "LINK", map[string]any{
+		"name": "jointchildren", "title": "Joint children", "description": "Jointly delivered child references",
+		"parent": "build.jointparent", "child": "build.jointchild", "via": "parent", "forward": "children", "reverse": "parent",
+		"cardinality": "one-to-one", "deletePolicy": "restrict-active",
+	}, txnAt)
+	selection := []build.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "PARENT"},
+		{Kind: platform.AssetObject, ID: "CHILD"},
+		{Kind: platform.AssetLinkType, ID: "LINK"},
+	}
+	preview, err := tn.PreviewReleaseDrafts(member, selection)
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
+		t.Fatalf("new objects and relationship could not be reviewed together: %+v %v", preview, err)
+	}
+	for _, definition := range tn.Definitions(member) {
+		if definition.Ref.Name == "build.jointparent" || definition.Ref.Name == "build.jointchild" || definition.Ref.Name == "jointchildren" {
+			t.Fatal("preview installed a draft")
+		}
+	}
+	if alone, err := tn.PreviewRelease(member, platform.AssetLinkType, "LINK"); err == nil && alone.Diagnostic == "" {
+		t.Fatal("relationship could be delivered without its unpublished objects")
+	}
+	decide(t, tn, "builder", build.ID, build.LinkTypeType+".edit", build.LinkTypeType, "LINK", map[string]any{"via": "note"}, txnAt)
+	if invalid, err := tn.PreviewReleaseDrafts(member, selection); err == nil && invalid.Diagnostic == "" {
+		t.Fatal("joint candidate accepted a text field as its relationship reference")
+	}
+	decide(t, tn, "builder", build.ID, build.LinkTypeType+".edit", build.LinkTypeType, "LINK", map[string]any{"via": "parent"}, txnAt)
+	saved, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "save-joint-relationship", txnAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.ActivateRelease(member, saved, "activate-joint-relationship", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	decide(t, tn, "user", build.ID, "build.jointparent.create", "build.jointparent", "P", map[string]any{"note": "Parent"}, txnAt)
+	decide(t, tn, "user", build.ID, "build.jointchild.create", "build.jointchild", "C", map[string]any{"parent": "P"}, txnAt)
+	if got := refuse(t, tn, "user", build.ID, "build.jointchild.create", "build.jointchild", "DUPLICATE", map[string]any{"parent": "P"}, txnAt); got == "ok" {
+		t.Fatal("joint publication lost the relationship's one-to-one constraint")
+	}
+	if got := refuse(t, tn, "user", build.ID, "build.jointparent.archive", "build.jointparent", "P", map[string]any{}, txnAt); got == "ok" {
+		t.Fatal("joint publication lost the relationship's active-child protection")
+	}
+}
+
 func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	t.Run("incremental constraints and isolated reverse indexes", func(t *testing.T) {
 		tn := builderTenant(t, "local-reference-index")

@@ -71,15 +71,17 @@ func (b *Build) checkLinkType(f *LinkType) error {
 	if !named(f.Name) || !named(f.Forward) || !named(f.Reverse) {
 		return fmt.Errorf("Link names must use lower-case letters and digits")
 	}
-	if _, ok := b.installed[f.Parent]; !ok {
-		return fmt.Errorf("Link parent needs this builder's published object")
+	parent, parentFound := b.lookupEntity(f.Parent)
+	info, childFound := b.lookupEntity(f.Child)
+	_, parentInstalled := b.installed[f.Parent]
+	_, childInstalled := b.installed[f.Child]
+	_, parentSelected := b.jointEntities[f.Parent]
+	_, childSelected := b.jointEntities[f.Child]
+	if !parentFound || parent.App != ID || !parentInstalled && !parentSelected {
+		return fmt.Errorf("Link parent needs this builder's published or jointly selected object")
 	}
-	if _, ok := b.installed[f.Child]; !ok {
-		return fmt.Errorf("Link child needs this builder's published object")
-	}
-	info, ok := b.lookupEntity(f.Child)
-	if !ok {
-		return fmt.Errorf("Link child is unavailable")
+	if !childFound || info.App != ID || !childInstalled && !childSelected {
+		return fmt.Errorf("Link child needs this builder's published or jointly selected object")
 	}
 	if f.Storage != "edge" {
 		field, ok := info.Field(f.Via)
@@ -88,8 +90,15 @@ func (b *Build) checkLinkType(f *LinkType) error {
 		}
 		f.Required = field.Required
 	}
-	if err := b.host.ValidateInstallLinkType(f.Definition()); err != nil {
+	if err := f.Definition().CheckSchema(parent, info); err != nil {
 		return err
+	}
+	// A joint candidate validates its records and relationship constraints in
+	// the existing private installation, after the selected objects are present.
+	if !b.jointMode {
+		if err := b.host.ValidateInstallLinkType(f.Definition()); err != nil {
+			return err
+		}
 	}
 	list, err := b.linkTypeInventory()
 	if err != nil {

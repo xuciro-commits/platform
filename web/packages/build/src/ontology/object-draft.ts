@@ -8,11 +8,13 @@ import { useEffect, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
 import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
+import { useAuthoringModel } from "./authoring-model";
 
 const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], createTransaction: record.createTransaction, dispatchCommands: record.dispatchCommands ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [] });
 
 export function useObjectDraft(id: string, onReset?: () => void) {
-  const { decide, entities, definitions } = useHost();
+  const { decide, definitions } = useHost();
+  const { entities, drafts } = useAuthoringModel();
   const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: ObjectRecord; valueErrors?: Record<string, string> }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
   const object = query.data?.record;
@@ -34,8 +36,9 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   }, [object, dirty, busy, session.load]);
 
   const parent = object ? `build.${object.name}` : "";
+  const savedObjects = new Set((drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => `build.${draft.name}`));
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
-    && definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type));
+    && (savedObjects.has(entity.type) || definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type)));
   const issuesOf = (name: string) => { const a = process.actions.find((x) => x.name === name); return a ? actionIssues(a, process, parent, targets, entities) : []; };
   const issues = [...conversionError ? [conversionError] : [], ...process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`))];
   const change = (next: Process) => {

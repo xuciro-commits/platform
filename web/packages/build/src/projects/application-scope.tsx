@@ -55,6 +55,6 @@ export function useApplicationWorkspace() {
   const application = useApplicationScope();
   const inApplication = (route: Route) => application && scopedViews.has(route.view)
     ? { ...route, params: { ...route.params, application: route.params?.application ?? application } } : route;
-  return { ...workspace, open: (route: Route, options?: Parameters<typeof workspace.open>[1]) => workspace.open(inApplication(route), options),
+  return { ...workspace, open: (route: Route, options?: Parameters<typeof workspace.open>[1]) => workspace.open(inApplication(route), options?.ifCurrent ? { ...options, ifCurrent: inApplication(options.ifCurrent) } : options),
     close: (route: Route) => workspace.close(inApplication(route)) };
 }

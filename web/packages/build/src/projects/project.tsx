@@ -92,7 +92,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
   type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
   const emptyProject = !!project && !project.pages?.length && !project.resources?.length;
-  const initialTab = initialSection === "concepts" ? "concepts" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "verify" ? "release" : "resources";
+  const initialTab = initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "verify" ? "release" : "resources";
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
   const visibleView = useViewVisible();

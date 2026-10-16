@@ -2,9 +2,11 @@ import { newId, useHost } from "@platform/app";
 import { Button, Checkbox, Form, Input, PageHeader, Panel, Select, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { pageTemplates, templateDraft, type TemplateId } from "./templates";
+import { useAuthoringModel } from "../ontology/authoring-model";
 
 export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuard }: { initial?: string; onCreated?: (target: { type: string; id: string }) => void; onBusy?: (busy: boolean) => void; onClose?: () => void; closeGuard?: { current: (() => void) | undefined } }) {
   const host = useHost();
+  const model = useAuthoringModel();
   const { open } = useWorkspace();
   const [templateId, setTemplateId] = useState<TemplateId>((pageTemplates.find((item) => item.id === initial) ?? pageTemplates[0]!).id);
   const template = pageTemplates.find((item) => item.id === templateId) ?? pageTemplates[0]!;
@@ -25,9 +27,9 @@ export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuar
     request.current = undefined; setPending(false); setName(""); setTitle(""); setObjectType(""); setChildType(""); setFields([]); setActions([]); setError("");
   }, busy);
   if (closeGuard) closeGuard.current = () => { if (!lock.current && onClose) confirmOwnDiscard(onClose); };
-  const objects = host.entities.filter((entity) => entity.fields.length > 0);
+  const objects = model.entities.filter((entity) => entity.fields.length > 0);
   const object = objects.find((entity) => entity.type === objectType);
-  const offered = host.catalog.filter((action) => action.target === objectType);
+  const offered = model.actions.filter((action) => action.target === objectType);
   // Child objects: those with a reference back to the chosen object; the relation is that reference's inverse.
   const children = objects.flatMap((entity) => entity.fields.filter((field) => field.type === "reference" && field.ref === objectType).map((field) => ({ entity, relation: field.inverse })));
   const child = children.find((c) => c.entity.type === childType);
@@ -76,12 +78,14 @@ ${t("Created from template {template} (revision {revision}).", { template: templ
         <Panel className="grid gap-3 p-4">
           <h3 className="text-sm font-semibold">{t("Required bindings")}</h3>
           <label className="grid gap-1 text-xs">{t("Object")}<Select value={objectType} onChange={(event) => chooseObject(event.target.value)} disabled={locked}>
-            <option value="">{t("Choose an object")}</option>{objects.map((entity) => <option key={entity.type} value={entity.type}>{entity.title} · {entity.type}</option>)}
+            <option value="">{t("Choose an object")}</option>{objects.map((entity) => <option key={entity.type} value={entity.type}>{entity.title} · {entity.type}{model.drafts.data?.records.some(draft => !draft.archived && `build.${draft.name}` === entity.type) ? ` · ${t("Saved draft")}` : ""}</option>)}
           </Select></label>
           {template.child && object && <label className="grid gap-1 text-xs">{t("Child object")}<Select value={childType} onChange={(event) => setChildType(event.target.value)} disabled={locked}>
             <option value="">{t("Choose a child object")}</option>{children.map((c) => <option key={c.entity.type} value={c.entity.type}>{c.entity.title} · {c.entity.type}{c.relation ? ` (${c.relation})` : ""}</option>)}
           </Select>{children.length === 0 && <span className="text-muted">{t("No object refers to this one yet. Add a reference field on the child object first.")}</span>}</label>}
-          {objects.length === 0 && <p className="text-xs text-muted">{t("No readable objects are available. Create or publish an object in Studio first.")}</p>}
+          {model.drafts.isError && <p role="alert" className="text-xs text-danger">{t("Saved object drafts could not be loaded.")}</p>}
+          {model.drafts.isPending && <p role="status" className="text-xs text-muted">{t("Loading…")}</p>}
+          {!model.drafts.isPending && !model.drafts.isError && objects.length === 0 && <p className="text-xs text-muted">{t("No readable objects are available. Save an object draft in Studio first.")}</p>}
           {object && <div className="grid gap-3 sm:grid-cols-2">
             <fieldset className="grid content-start gap-2"><legend className="mb-2 text-xs font-medium">{t("Visible fields")}</legend>
               {object.fields.map((field) => <Checkbox key={field.name} checked={fields.includes(field.name)} disabled={locked}
@@ -90,8 +94,8 @@ ${t("Created from template {template} (revision {revision}).", { template: templ
             </fieldset>
             <fieldset className="grid content-start gap-2"><legend className="mb-2 text-xs font-medium">{t("Offered actions")}</legend>
               {offered.map((action) => <Checkbox key={action.schema} checked={actions.includes(action.schema)} disabled={locked}
-                onChange={(selected) => setActions(toggle(actions, action.schema, selected))}>{action.title}</Checkbox>)}
-              <p className="text-xs text-muted">{t("Optional. Select from actions already offered to you; a template never grants access.")}</p>
+                onChange={(selected) => setActions(toggle(actions, action.schema, selected))}>{action.title}{action.draft ? ` · ${t("Saved draft")}` : ""}</Checkbox>)}
+              <p className="text-xs text-muted">{t("Bind saved draft actions or actions already offered to you. Draft bindings are checked at joint publication; execution still requires permission.")}</p>
             </fieldset>
           </div>}
         </Panel>

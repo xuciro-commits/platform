@@ -4,8 +4,9 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, t, type EntityInfo } from "@platform/ui";
 import { useState } from "react";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
-import { nameOf, type Input_, type ObjectRecord, type Process } from "./object-model";
+import { nameOf, type Input_, type Process } from "./object-model";
 import { recordPaths } from "./record-paths";
+import { authoringObject, useAuthoringModel } from "./authoring-model";
 
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 const labels: Record<string, string> = { create: "Create record", update: "Update record", archive: "Archive record", link: "Link records", unlink: "Unlink records", sequence: "Take next number", post: "Post to a balance", journal: "Request journal entry", effect: "Request external write", work: "Create or close work", call: "Read a pure capability", "for-each": "For each record" };
@@ -22,27 +23,11 @@ type EditorContext = {
 export function TransactionEditor({ value, onChange, process, inputs = [], roles }: { value: Api.BusinessTxn; onChange: (value: Api.BusinessTxn) => void; process: Process; inputs?: Input_[]; roles: string[] }) {
   const host = useHost(), capabilities = useProvidedCapabilities("query", "pure");
   const writes = useRecordInventory<EditorContext["writes"][number]>("build.writeback");
-  const drafts = useRecordInventory<ObjectRecord & { archived?: boolean }>("build.object");
+  const authoring = useAuthoringModel();
   const subject = value.subject;
-  const draftEntity = (type: string, title: string, fields: Process["fields"], states: Process["states"]): EntityInfo => ({
-    ...host.source.entity(type), type, app: type.split(".")[0]!, title, plural: title,
-    display: "id", standard: ["create", "edit", "archive"],
-    fields: [
-      ...fields.map((field): Api.FieldInfo => ({
-        name: field.name, title: field.title, type: field.type as Api.FieldInfo["type"], ref: field.ref,
-        required: field.required, readOnly: field.readOnly || !!(field.formula || field.formulaExpr), aliasOf: field.aliasOf,
-        property: field.property, aiInput: field.aiInput, sourceType: field.sourceType as Api.FieldInfo["sourceType"],
-        choices: field.choices?.split(",").map(value => value.trim()).filter(Boolean),
-      })),
-      ...(states.length ? [{ name: "state", title: t("State"), type: "choice" as const, choices: states.map(state => state.name) }] : []),
-    ],
-  });
-  const entities = new Map(host.entities.map(entity => [entity.type, entity]));
-  for (const draft of drafts.data?.records ?? []) {
-    if (!draft.archived) entities.set(`build.${draft.name}`, draftEntity(`build.${draft.name}`, draft.title, draft.fields ?? [], draft.states ?? []));
-  }
-  entities.set(subject, draftEntity(subject, host.source.entity(subject)?.title ?? subject, process.fields, process.states));
-  const lookup = (type: string): EntityInfo | undefined => entities.get(type) ?? host.source.entity(type);
+  const entities = new Map(authoring.entities.map(entity => [entity.type, entity]));
+  entities.set(subject, authoringObject({ ...process, name: subject.slice("build.".length), title: authoring.entity(subject)?.title ?? subject }, authoring.entity(subject)));
+  const lookup = (type: string): EntityInfo | undefined => entities.get(type) ?? authoring.entity(type);
   const choices: ExpressionChoice[] = [{ value: "input.$subject", label: t("Subject record ID"), type: "reference", ref: subject }, { value: "caller.id", label: t("The person taking it"), type: "text" }, ...lookup(subject)!.fields.map(field => ({ value: field.name, label: t("This record: {name}", { name: field.title }), type: expressionKind(field.type), ref: field.ref })), ...inputs.map(input => ({ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: expressionKind(input.type), ref: input.ref }))];
   const context: EditorContext = { subject, actionName: process.actions.find(action => action.transaction === value)?.name, process, inputs, choices, lookup, roles, objects: [lookup(subject)!, ...entities.values()].filter((entity, index) => entity.app === subject.split(".")[0] && (index === 0 || entity.type !== subject)), definitions: host.definitions, pure: capabilities.data ?? [], writes: writes.data?.records ?? [] };
   return <Panel title={t("Transaction steps")} className="grid min-w-0 gap-3">
@@ -89,7 +74,7 @@ function StepEditor({ step, onChange, context, previous, item }: { step: Api.Txn
   const target = step.target?.type ? step.target : { type: context.subject, id: "$subject" };
   const row = item ? context.lookup(item) : undefined;
   const choices = [...context.choices, ...previous.flatMap(resultChoice), ...(row?.fields.map(field => ({ value: `row.${field.name}`, label: t("Current item: {name}", { name: field.title }), type: expressionKind(field.type), ref: field.ref })) ?? [])];
-  const fields = context.lookup(step.target?.type ?? "")?.fields.filter(field => !field.readOnly) ?? [];
+  const fields = context.lookup(step.target?.type ?? "")?.fields.filter(field => !field.readOnly || ["create", "update"].includes(step.kind) && step.target?.type === context.subject && field.name === "state") ?? [];
   const journalActions = context.process.actions.filter(action => action.name !== context.actionName && action.transaction?.steps.some(step => [step, ...step.forEach?.steps ?? []].some(step => step.journal && !step.journal.reverses)));
   const setType = (type: string) => patch({ target: { type, ...step.kind === "create" || step.kind === "post" ? {} : type === context.subject ? { id: "$subject" } : item === type ? { id: "$item" } : { id: "" } }, changes: step.changes ? [] : undefined });
   return <>

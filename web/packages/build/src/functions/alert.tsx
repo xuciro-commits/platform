@@ -66,7 +66,7 @@ export function AlertEditor({ id }: { id: string }) {
     }
     if (joining.current && application) await joinProjectResource(host, application, resourceRef(kindOfType("build.alertrule")!, draft.name));
     joining.current = false; markSaved(); setDirty(false);
-    if (id === "new") { open({ view: "alert", params: { id: target } }); close({ view: "alert", params: { id } }); }
+    if (id === "new") { open({ view: "alert", params: { id: target } }, { ifCurrent: { view: "alert", params: { id } } }); close({ view: "alert", params: { id } }); }
     else { const r = await query.refetch(); if (r.data?.record) load(r.data.record); }
     return target;
   };
