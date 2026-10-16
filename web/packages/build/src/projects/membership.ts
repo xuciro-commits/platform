@@ -18,7 +18,7 @@ export function projectResourceChange(project: Pick<Api.Application, "pages" | "
 
 /** New editor drafts join the same application membership as New / Add existing. */
 export async function joinProjectResource(host: Pick<Host, "client" | "decide">, application: string, ref: Api.AssetRef) {
-  const { record } = await host.client.get<{ record?: ProjectRecord }>(`/v1/records/build.app/${encodeURIComponent(application)}`);
+  const { record } = await host.client.get<{ record?: ProjectRecord }>(`/v1/records/build.app/${encodeURIComponent(application)}`, true);
   if (!record || record.archived) throw Error(t("The resource was saved, but the application could not be read. Save again to retry adding the same resource."));
   const changes = projectResourceChange(record, ref);
   if (!Object.keys(changes).length) return;

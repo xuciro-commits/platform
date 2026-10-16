@@ -12,22 +12,67 @@ test("an unpublished application trials synthetic samples across controlled memb
         steps: [{ name: "complete", kind: "update", target: { type, id: "$subject" }, changes: [{ field: "done", from: "=true" }] }] } }],
   });
   const application = await builder.application({ title: "Trial operations", resources: [{ app: "build", kind: "object", name: type }] });
+  const otherResource = { app: "build", kind: "dataset", name: slug("trialinput") };
+  await builder.decide("build.dataset.create", { type: "build.dataset", id: fresh("DATASET") }, {
+    name: otherResource.name, title: "Another builder's input",
+  });
   const original = await builder.record("build.object", objectId);
   expect(original.published ?? "").toBe("");
   await builder.open(page, `/project?id=${application.id}&area=verify`);
   const workspace = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await expect(workspace.getByRole("heading", { name: "Draft trial", exact: true })).toBeVisible();
-  await workspace.getByRole("checkbox", { name: "Include in application releases", exact: true }).uncheck();
-  const sample = workspace.getByRole("region", { name: "Application samples", exact: true });
+
+  // The normal application menu opens the sample editor. Ordinary records
+  // use typed fields; their record ID and lifecycle state stay explicit.
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sample set", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const sample = page.getByRole("region", { name: "Application samples", exact: true });
   const sampleName = slug("samples");
   await sample.getByRole("textbox", { name: "Sample set name", exact: true }).fill(sampleName);
   await sample.getByRole("textbox", { name: "Sample set title", exact: true }).fill("Completion examples");
-  await sample.getByRole("textbox", { name: "Synthetic sample records (JSON)", exact: true }).fill(JSON.stringify([{ type, records: [{ id: "SAMPLE-1", qty: 2, done: false, state: "draft" }] }]));
+  await sample.getByRole("combobox", { name: "Add sample object type", exact: true }).selectOption(type);
+  await sample.getByRole("textbox", { name: "Synthetic record ID", exact: true }).fill("SAMPLE-1");
+  await sample.getByRole("combobox", { name: "Synthetic record state", exact: true }).selectOption("draft");
+  await sample.getByRole("spinbutton", { name: "Quantity", exact: true }).fill("2");
+  await sample.getByRole("checkbox", { name: "Done", exact: true }).check();
+  await sample.getByRole("checkbox", { name: "Done", exact: true }).uncheck();
+
+  // Refuse only membership, after the real sample save. Retry must retain the
+  // accepted definition and also keep a member added by another builder.
+  const submissions = (url: URL) => url.pathname.endsWith("/submissions");
+  const sampleWrites: string[] = [];
+  let refuseSampleJoin = true;
+  await page.route(submissions, async route => {
+    const input = route.request().postDataJSON();
+    if (input.schema?.name === "build.sample-set.create" || input.schema?.name === "build.sample-set.edit") sampleWrites.push(input.schema.name);
+    if (refuseSampleJoin && input.schema?.name === "build.app.edit" && input.target?.id === application.id) {
+      refuseSampleJoin = false;
+      return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { code: "ERROR_CODE_CONFLICT", message: "Application join refused" } }) });
+    }
+    await route.continue();
+  });
   await sample.getByRole("button", { name: "Save application sample", exact: true }).click();
-  await expect(sample.getByRole("status")).toHaveText("Application sample saved. Release review retains its version.");
+  await expect(sample.getByRole("alert")).toContainText("Application join refused");
   const fixture = await builder.read<any>("records/build.sample-set");
   const savedSample = fixture.records.find((record: any) => record.name === sampleName);
-  expect(savedSample.samples[0].records[0].done).toBe(false);
+  expect(savedSample.samples[0].records[0]).toMatchObject({ id: "SAMPLE-1", qty: 2, done: false, state: "draft" });
+  const beforeJoin = await builder.record("build.app", application.id);
+  await builder.decide("build.app.edit", { type: "build.app", id: application.id }, { resources: [...beforeJoin.resources, otherResource] });
+  await sample.getByRole("button", { name: "Retry adding sample to application", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.app", application.id)).resources).toEqual(expect.arrayContaining([
+    { app: "build", kind: "object", name: type }, otherResource, { app: "build", kind: "sample-set", name: sampleName },
+  ]));
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${savedSample.id}(?:&|$)`));
+  expect(await builder.record("build.sample-set", savedSample.id)).toEqual(savedSample);
+  expect(sampleWrites).toEqual(["build.sample-set.create"]);
+  await page.unroute(submissions);
+
+  await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Trial operations", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Verify", exact: true }).click();
+  await page.getByRole("tab", { name: "Verification and delivery", exact: true }).click();
+  await workspace.getByRole("checkbox", { name: "Include in application releases", exact: true }).uncheck();
+  await workspace.getByRole("region", { name: "Application samples", exact: true }).getByRole("combobox", { name: "Sample set", exact: true }).selectOption(sampleName);
   const me = await builder.read<any>("me"), user = await operator.read<any>("me");
   await workspace.getByRole("textbox", { name: "Comparison members (up to three, comma separated)", exact: true }).fill(`${me.principalId}, ${user.principalId}, sales-1`);
   await workspace.getByRole("textbox", { name: "Test plan name", exact: true }).fill("Complete work order regression");
@@ -39,28 +84,88 @@ test("an unpublished application trials synthetic samples across controlled memb
   const read = workspace.getByRole("group", { name: "Test step 2", exact: true });
   await read.getByRole("textbox", { name: "Test record ID", exact: true }).fill("SAMPLE-1");
   await read.getByRole("combobox", { name: "Test step kind", exact: true }).selectOption("read");
+  const trialSamples = workspace.getByRole("region", { name: "Application samples", exact: true });
+  await trialSamples.getByRole("button", { name: "Advanced JSON", exact: true }).click();
+  const sampleInputs = trialSamples.getByRole("textbox", { name: "Test inputs (JSON)", exact: true });
+  await sampleInputs.fill("{");
+  await expect(workspace.getByRole("button", { name: "Run isolated test", exact: true })).toBeDisabled();
+  await expect(workspace.getByRole("button", { name: "Save test plan", exact: true })).toBeDisabled();
+  await sampleInputs.fill(JSON.stringify({ qty: 2, done: false }));
   await workspace.getByRole("button", { name: "Save test plan", exact: true }).click();
   await expect(workspace.getByRole("status").filter({ hasText: "Test plan saved." })).toBeVisible();
+  await workspace.getByRole("button", { name: "Reload saved plan", exact: true }).click();
+
+  // Older local plans kept only the sample name. Loading one must not turn an
+  // absent sample override into [], which would empty the isolated records.
+  const plans = await builder.read<any>("records/build.testplan?limit=1000");
+  const authoredPlan = plans.records.find((plan: any) => plan.application === application.id && plan.title === "Complete work order regression");
+  const legacyPlanID = fresh("PLAN");
+  await builder.decide("build.testplan.create", { type: "build.testplan", id: legacyPlanID }, {
+    title: "Named completion sample", application: application.id, sample: sampleName,
+    actors: authoredPlan.actors, at: authoredPlan.at, steps: authoredPlan.steps,
+  });
+  await workspace.getByRole("combobox", { name: "Saved test plan", exact: true }).selectOption(legacyPlanID);
   const response = page.waitForResponse(response => response.url().endsWith("/v1/simulate/candidate") && response.request().method() === "POST");
   await workspace.getByRole("button", { name: "Run isolated test", exact: true }).click();
   const run = await response;
   const result = await run.json();
+  expect(run.request().postDataJSON()).toMatchObject({ applicationId: application.id, sample: sampleName });
+  expect(run.request().postDataJSON()).not.toHaveProperty("samples");
   expect(result, JSON.stringify(result)).toHaveProperty("actors");
   expect(run.ok()).toBe(true);
   expect(result.actors.map((actor: any) => actor.steps[0].accepted)).toEqual([true, true, false]);
   expect(result.actors[0].steps[1].read.done).toBe(true);
   expect(result.actors.every((actor: any) => actor.recovered)).toBe(true);
+  expect(result.actors.map((actor: any) => actor.passed)).toEqual([true, true, false]);
   expect(result.actors[0].steps[0].trace.some((event: any) => event.kind === "rule" && event.reads.refs.qty.value === 2)).toBe(true);
   const comparison = workspace.getByRole("region", { name: "Role comparison", exact: true });
-  await expect(comparison.getByRole("region", { name: me.principalId, exact: true })).toBeVisible();
-  await expect(comparison.getByRole("region", { name: user.principalId, exact: true })).toBeVisible();
-  await expect(comparison.getByRole("region", { name: "sales-1", exact: true }).getByText("Refused", { exact: false }).first()).toBeVisible();
+  await expect(comparison.getByRole("region", { name: me.principalId, exact: true }).getByRole("status")).toHaveText("All expected outcomes matched.");
+  await expect(comparison.getByRole("region", { name: user.principalId, exact: true }).getByRole("status")).toHaveText("All expected outcomes matched.");
+  const denied = comparison.getByRole("region", { name: "sales-1", exact: true });
+  await expect(denied.getByText("Refused", { exact: false }).first()).toBeVisible();
+  await expect(denied.getByRole("status")).toHaveText("Some expected outcomes did not match.");
   await shots(page, comparison, "builder-role-comparison", info);
+
+  // A refusal is a passing result when it is expected. The other members now
+  // fail the same expectations, so a single member cannot mask their results.
+  await step.getByRole("combobox", { name: "Expected outcome", exact: true }).selectOption("refused");
+  await read.getByRole("combobox", { name: "Expected outcome", exact: true }).selectOption("refused");
+  const refusalRun = page.waitForResponse(response => response.url().endsWith("/v1/simulate/candidate") && response.request().method() === "POST");
+  await workspace.getByRole("button", { name: "Run isolated test", exact: true }).click();
+  const refusalResponse = await refusalRun;
+  const expectedRefusal = await refusalResponse.json();
+  expect(refusalResponse.ok(), JSON.stringify(expectedRefusal)).toBe(true);
+  expect(expectedRefusal.actors.map((actor: any) => actor.passed)).toEqual([false, false, true]);
+  await expect(denied.getByRole("status")).toHaveText("All expected outcomes matched.");
+  await expect(denied.getByText("Expected outcome matched", { exact: true })).toHaveCount(2);
+  await expect(comparison.getByRole("region", { name: me.principalId, exact: true }).getByRole("status")).toHaveText("Some expected outcomes did not match.");
+
+  // Source editors open beside this run, retaining the application and the
+  // unsaved expected outcomes when the builder returns to the test inputs.
+  await comparison.getByRole("button", { name: "Edit object Trial work order", exact: true }).first().click();
+  await expect(page.getByRole("tablist", { name: "Object sections", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${objectId}(?:&|$)`));
+  await expect(page).toHaveURL(new RegExp(`[?&]application=${application.id}(?:&|$)`));
+  await expect(step.getByRole("textbox", { name: "Test record ID", exact: true })).toHaveValue("SAMPLE-1");
+  await step.getByRole("textbox", { name: "Test record ID", exact: true }).click();
+  await comparison.getByRole("button", { name: "Edit action Complete work order", exact: true }).first().click();
+  await expect(page.getByRole("region", { name: "Action type", exact: true }).getByRole("heading", { name: "Complete work order", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/[?&]action=complete(?:&|$)/);
+  await page.getByRole("tab", { name: "Application Studio · Trial operations", exact: true }).click();
+  await expect(step.getByRole("combobox", { name: "Expected outcome", exact: true })).toHaveValue("refused");
+  await workspace.getByRole("textbox", { name: "Test plan name", exact: true }).click();
   expect(await builder.record("build.object", objectId)).toEqual(original);
   expect(await builder.record("build.sample-set", savedSample.id)).toEqual(savedSample);
   expect((await builder.request.get(`/v1/records/${type}`, {headers:builder.headers})).status()).toBe(404);
   await workspace.getByRole("button", { name: "Reload saved plan", exact: true }).click();
   await expect(workspace.getByRole("textbox", { name: "Comparison members (up to three, comma separated)", exact: true })).toHaveValue(`${me.principalId}, ${user.principalId}, sales-1`);
+  await workspace.getByRole("checkbox", { name: "Include in application releases", exact: true }).check();
+  const portableRun = page.waitForResponse(response => response.url().endsWith("/v1/simulate/candidate") && response.request().method() === "POST");
+  await workspace.getByRole("button", { name: "Run isolated test", exact: true }).click();
+  const portableResponse = await portableRun;
+  expect(portableResponse.ok(), JSON.stringify(await portableResponse.json())).toBe(true);
+  expect(portableResponse.request().postDataJSON().samples).toEqual(savedSample.samples);
+  expect(portableResponse.request().postDataJSON()).not.toHaveProperty("sample");
 });
 
 test("a builder authors a draft state-triggered flow and trials it without publishing", async ({ page, builder, operator }, info) => {
@@ -150,6 +255,11 @@ test("a builder authors a draft state-triggered flow and trials it without publi
 
   await builder.open(page, `/project?id=${application.id}&area=verify`);
   const workspace = page.getByRole("region", { name: "Verification and delivery", exact: true });
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Business test plan", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).not.toHaveURL(/[?&]plan=new(?:&|$)/);
+  await expect(workspace.getByRole("combobox", { name: "Saved test plan", exact: true })).toHaveValue("");
   await workspace.getByRole("button", { name: "Add a test step", exact: true }).click();
   const create = workspace.getByRole("group", { name: "Test step 1", exact: true });
   await create.getByRole("combobox", { name: "Object type", exact: true }).selectOption(type);
@@ -168,8 +278,35 @@ test("a builder authors a draft state-triggered flow and trials it without publi
   await read.getByRole("textbox", { name: "Test record ID", exact: true }).fill("TRIAL-TASK-1");
   await read.getByRole("combobox", { name: "Test step kind", exact: true }).selectOption("read");
   await workspace.getByRole("textbox", { name: "Test plan name", exact: true }).fill("Draft flow trial");
-  await workspace.getByRole("textbox", { name: "Test plan definition name", exact: true }).fill(slug("flowplan"));
+  const planName = slug("flowplan");
+  await workspace.getByRole("textbox", { name: "Test plan definition name", exact: true }).fill(planName);
+
+  // The portable plan is saved before membership is attempted. Retrying a
+  // refused application write must not create or revise that plan again.
+  const submissions = (url: URL) => url.pathname.endsWith("/submissions");
+  const planWrites: string[] = [];
+  let refusePlanJoin = true;
+  await page.route(submissions, async route => {
+    const input = route.request().postDataJSON();
+    if (input.schema?.name === "build.testplan.create" || input.schema?.name === "build.testplan.edit") planWrites.push(input.schema.name);
+    if (refusePlanJoin && input.schema?.name === "build.app.edit" && input.target?.id === application.id) {
+      refusePlanJoin = false;
+      return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { code: "ERROR_CODE_CONFLICT", message: "Application join refused" } }) });
+    }
+    await route.continue();
+  });
   await workspace.getByRole("button", { name: "Save test plan", exact: true }).click();
+  await expect(workspace.getByRole("alert")).toContainText("Application join refused");
+  const plans = await builder.read<any>("records/build.testplan?limit=1000");
+  const savedPlan = plans.records.find((plan: any) => plan.name === planName);
+  expect(savedPlan.roots).toEqual(expect.arrayContaining([
+    { app: "build", kind: "object", name: type }, { app: "build", kind: "flow", name: `build.${flowName}` },
+  ]));
+  await workspace.getByRole("button", { name: "Save test plan", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.app", application.id)).resources).toContainEqual({ app: "build", kind: "test-plan", name: planName });
+  expect(await builder.record("build.testplan", savedPlan.id)).toEqual(savedPlan);
+  expect(planWrites).toEqual(["build.testplan.create"]);
+  await page.unroute(submissions);
   await expect(workspace.getByRole("status").filter({ hasText: "Test plan saved." })).toBeVisible();
   await workspace.getByRole("button", { name: "Reload saved plan", exact: true }).click();
   await expect(advance.getByRole("combobox", { name: "Test step kind", exact: true })).toHaveValue("clock");
@@ -188,6 +325,14 @@ test("a builder authors a draft state-triggered flow and trials it without publi
   expect(result.recovered).toBe(true);
   await expect(workspace.getByRole("status").filter({ hasText: "All expected outcomes matched." })).toBeVisible();
   await shots(page, workspace, "unpublished-flow-trial", info);
+  await workspace.getByRole("button", { name: "Edit workflow Complete open tasks", exact: true }).first().click();
+  await expect(page.getByRole("region", { name: "Flows", exact: true }).getByRole("heading", { name: "Complete open tasks", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${flowID}(?:&|$)`));
+  await expect(page).toHaveURL(new RegExp(`[?&]application=${application.id}(?:&|$)`));
+  await create.getByRole("textbox", { name: "Task label", exact: true }).click();
+  await expect(create.getByRole("textbox", { name: "Task label", exact: true })).toHaveValue("Synthetic task");
+  await expect(advance.getByRole("spinbutton", { name: "Advance clock (seconds)", exact: true })).toHaveValue("2");
+  await expect(workspace.getByRole("textbox", { name: "Test plan name", exact: true })).toHaveValue("Draft flow trial");
   expect(await builder.record("build.object", objectID)).toEqual(originalObject);
   expect(await builder.record("build.process", flowID)).toEqual(originalFlow);
   expect(await builder.record("build.app", application.id)).toEqual(savedApplication);

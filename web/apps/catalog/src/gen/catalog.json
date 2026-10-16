@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:7b4cb1a31112904a",
+  "revision": "sha256:8acdd345d9faccfe",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12531,6 +12531,7 @@
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/releases/test-inputs.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
@@ -12930,6 +12931,7 @@
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/releases/test-inputs.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
@@ -13272,7 +13274,7 @@
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/projects/studio-guide.tsx",
-      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/releases/test-inputs.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/platform/src/operations.tsx"
     ],
@@ -13323,6 +13325,7 @@
       "web/packages/build/src/ontology/TransactionEditor.tsx",
       "web/packages/build/src/ontology/constraints.tsx",
       "web/packages/build/src/ontology/record-sets.tsx",
+      "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
