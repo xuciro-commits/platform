@@ -314,6 +314,8 @@ Button click有互斥的state写入、navigate、return三种处理。navigate�
 
 Workspace内的ApplicationSessions按成员/定义范围、应用身份/版本/声明内容及显式instance标识保存展示状态，不用进程单例或localStorage保存值。应用导航复用实例，页面call/return在目标属于同一应用时保留application/instance上下文；预览使用独立实例。新实例用独立标识，关闭实例关闭其页面；最后一个页面销毁、身份或定义范围变化清理状态。路由只保存身份标识，刷新不恢复值。无应用、成员不可见、类型/写入不兼容时呈现定位诊断，不能降为page初值。
 
+构建者页面编辑器用原应用 AssetRef 显式选择已发布应用，原 `build.app` 记录 ID 只负责构建导航。预览路由用 `previewApplication` / `previewInstance` 保存运行上下文，保留外层构建 `application` 参数；普通运行继续使用原 `application` / `instance`，旧独立预览链接仍可读取。页头与 call/return 共用原会话给出的上下文，预览页头仍打开预览，不切到正式页面；新建和关闭预览实例不改变正式实例。应用草稿不因此成为可运行定义。
+
 ### 6.8 独立页面查询计划
 
 `v2.9` 的PageDocument.queries以稳定ID声明独立查询计划。原页面拥有展示绑定：Object引用、可选精确版本的NamedQuery绑定、条件的字段/有限算子/固定值或page/application变量、可选search与By参数、排序和有界窗口。只通过原成员RecordSource.list读取；NamedQuery的固定domain、By、排序和limit作为原声明约束，不能被计划覆盖，版本不符呈现诊断。计划与对象/具名查询版本进入原页面候选，不另建查询服务或下载全库执行集合逻辑。

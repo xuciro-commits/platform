@@ -516,7 +516,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
           </div>
           <div data-canvas-scroll className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
-              <ApplicationPage pageRef={{ app: "build", kind: "page", name: page.name }} route={canvasRoute} preview><ComposedPage modelDraft editingRoot={preview ? undefined : (() => {
+              <ApplicationPage pageRef={{ app: "build", kind: "page", name: page.name }} applicationRef={module ? { app: "build", kind: "app", name: module.project.name } : undefined} route={canvasRoute} preview><ComposedPage modelDraft editingRoot={preview ? undefined : (() => {
                 if (selection.kind === "queries") return queryPreviewOwner ? document.overlays?.[queryPreviewOwner]?.root : undefined;
                 const node = container ?? (canvasSelection?.id ? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection.id)?.[0] : undefined);
                 return Object.values(document.overlays ?? {}).find((overlay) => {

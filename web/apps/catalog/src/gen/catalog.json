@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ac305471cf0d370e",
+  "revision": "sha256:c00d7c37189cf3d5",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -227,6 +227,13 @@
           "name": "route",
           "type": "Route",
           "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "applicationRef",
+          "type": "Api.AssetRef",
+          "optional": true,
           "isCallback": false,
           "isSlot": false
         },

@@ -108,7 +108,7 @@ type ComposedPageProps = {
 export function ComposedPage(props: ComposedPageProps) {
   const { me,source } = useHost();const application=useApplicationContext();
   const effective={...props.page,sections:props.page.sections?.map(section=>{const value=materializeModelSection(section,source.entity);return interfaceQueryForSection(props.page,section)?{...value,object:undefined}:value;})};
-  return <PageEmbeddingBoundary page={props.page}><PageSession key={JSON.stringify([me, props.definitionKey, props.page, application?.identity, application?.session.readScope])} {...props} page={effective} /></PageEmbeddingBoundary>;
+  return <PageEmbeddingBoundary page={props.page}><PageSession key={JSON.stringify([me, props.definitionKey, props.page, application?.identity, application?.session.readScope])} {...props} live={props.live !== false && !application?.preview} page={effective} /></PageEmbeddingBoundary>;
 }
 
 function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot,pageCall }: ComposedPageProps) {

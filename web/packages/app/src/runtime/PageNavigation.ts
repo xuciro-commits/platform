@@ -71,7 +71,7 @@ export function usePageEffects(page: Api.Page, live: boolean, values: Record<str
     const input = navigationValues(navigation.inputs ?? {}, context?.values ?? values), problem = checkPortValues(targetInterface?.inputs ?? {}, input);
     if (problem) throw new Error(problem);
     const scope = source.scope, applicationIdentity = application?.identity;
-    workspace.transfer("", { view: live ? "page" : "page-preview", params: { app: navigation.page.app, kind: "page", name: navigation.page.name, ...(application?.definition.ref.app === navigation.page.app && application.definition.application?.pages.includes(navigation.page.name) ? { application: `${application.definition.ref.app}:${application.definition.ref.name}`, instance: application.instance } : {}) } }, { version: navigation.interfaceVersion, values: input }, (raw) => {
+    workspace.transfer("", { view: live ? "page" : "page-preview", params: { app: navigation.page.app, kind: "page", name: navigation.page.name, ...(application?.definition.ref.app === navigation.page.app && application.definition.application?.pages.includes(navigation.page.name) ? application.routeParams : {}) } }, { version: navigation.interfaceVersion, values: input }, (raw) => {
       if (!alive(context) || currentScope.current !== scope || currentApplication.current !== applicationIdentity) return;
       const returned = readPageEnvelope(raw);
       if (!returned || returned.version !== navigation.interfaceVersion || checkPortValues(targetInterface?.outputs ?? {}, returned.values)) { setError("The returned page values do not match the interface."); return; }
