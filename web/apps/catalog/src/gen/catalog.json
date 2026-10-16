@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d3ea93b6fd763149",
+  "revision": "sha256:b8f952e9e07a9348",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -183,8 +183,6 @@
         }
       ],
       "composed": [
-        "app/agent-run",
-        "app/flow-instance",
         "ui/button",
         "ui/data-table",
         "ui/input",
@@ -13337,14 +13335,6 @@
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
-    "app/flow-instance": [
-      "web/packages/app/src/automation/application-runs.tsx",
-      "web/apps/workspace/src/chrome.tsx"
-    ],
-    "app/agent-run": [
-      "web/packages/app/src/automation/application-runs.tsx",
-      "web/apps/workspace/src/chrome.tsx"
-    ],
     "ui/input-drafts": [
       "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/index.tsx",
@@ -13853,10 +13843,16 @@
     "app/operation-run": [
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "app/flow-instance": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
     "app/page-workspace": [
       "web/apps/workspace/src/chrome.tsx"
     ],
     "app/agent-assistant": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/agent-run": [
       "web/apps/workspace/src/chrome.tsx"
     ],
     "app/knowledge-search": [

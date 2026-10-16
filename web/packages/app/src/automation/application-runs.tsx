@@ -2,11 +2,8 @@ import { useRunControl } from "./use-run-control";
 import type { Api } from "@platform/kernel";
 import { Card, Button, DataTable, Disclosure, PageHeader, Panel, Input, Select, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
-import { FlowInstanceView } from "./flows";
-import { RunView } from "./agents";
 import { ChainGraph, useHost, useOpenRecord, useReadQuery, useRecordInventory } from "../index";
 import {refusalCategoryName} from "../actions/refusal";
-import { DispatchProgress } from "../widgets/DispatchProgress";
 
 type Run = Api.ApplicationRun;
 const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation", function: "AI function", effect: "External effect", job: "Scheduled job", dispatch: "Device dispatch" } as Record<string, string>)[kind] ?? kind);
@@ -59,6 +56,7 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
     <Button size="sm" disabled={offset+50>=(query.data?.total??0)} onClick={()=>setOffset(offset+50)}>{t("Next page")}</Button></div>
   </>}
   {selected&&<Panel className="grid min-w-0 gap-3" role="region" aria-label={t("Selected run")}>
+   <h2 className="text-sm font-semibold">{selected.title||selected.id}</h2>
    <div className="flex flex-wrap gap-2">{["flow","agent","compute"].includes(selected.kind)&&<Button onClick={()=>open({view:selected.kind==="flow"?"flow-instance":selected.kind==="agent"?"run":"operation-run",params:{id:selected.id,...context,...(selected.kind==="compute"&&selected.subject?{subject:selected.subject}:{})}}, {window:"beside"})}>{t("Open run")}</Button>}
     {selected.subject&&<Button onClick={()=>selected.subject!.startsWith("flow.instance/")?open({view:"flow-instance",params:{id:selected.subject!.slice("flow.instance/".length),...context}},{window:"beside"}):openRecord(selected.subject!)}>{t("Open related record")}</Button>}
     {selected.kind === "dispatch" && <Button onClick={() => openRecord({ type: "build.dispatch", id: selected.id }, {window:"tab"})}>{t("Open dispatch record")}</Button>}
@@ -74,7 +72,7 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
    {!!selected.applications?.length&&<ul className="grid gap-1 text-xs">{selected.applications.map(binding=><li key={`${binding.ref.app}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.app} · {binding.ref.name} @ {binding.sourceVersion}</li>)}</ul>}
    {selected.error&&<p role="alert">{selected.node?`${t("Failed node")}: ${selected.node} · `:""}{selected.error}</p>}
    {!!selected.shared.length&&<p role="status" className="text-xs text-muted">{t("Also referenced by: {applications}",{applications:selected.shared.join(", ")})}</p>}
-   {selected.kind==="flow"?<FlowInstanceView key={selected.id} id={selected.id} {...context}/>:selected.kind==="agent"?<RunView key={selected.id} id={selected.id} {...context}/>:selected.kind==="compute"?<OperationRunView key={selected.id} id={selected.id} subject={selected.subject} {...context}/>:selected.kind==="function"?<ChainGraph of={`build.function-call/${selected.id}`}/>:selected.kind==="effect"?<ChainGraph of={`platform.effect/${selected.id}`}/>:selected.kind==="dispatch"?<DispatchProgress type="build.dispatch" id={selected.id}/>:<p className="text-xs text-muted">{t("Shared scheduler work remains with its original owner.")}</p>}
+   {selected.kind==="function"?<ChainGraph of={`build.function-call/${selected.id}`}/>:selected.kind==="effect"?<ChainGraph of={`platform.effect/${selected.id}`}/>:null}
   </Panel>}
  </div>;
 }

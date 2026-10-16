@@ -1,25 +1,20 @@
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
+import { useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, DataTable, Disclosure, FlowReleaseBinding, FlowCanvas, StatusTag, useFlowArrangement, flowStates, loops, notationOf, t, type FlowNodeStatus, type FlowNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type FlowCatalog } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { controlEdges, workflowKindTitle, workflowStepClass, type WorkflowDraft } from "./workflow-model";
 
 export type WorkflowRun = FlowInstanceData & { data?: string; outputs?: Record<string, unknown>; withheld?: boolean; sources?: string[] };
 
 export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { name: string; versions?: string[]; onStepSelect: (step: string) => void; onRunSelect?: (run: WorkflowRun | undefined) => void }) {
-  const { decide, can } = useHost();
+  const project = useApplicationScope(), { open } = useApplicationWorkspace();
   const inventory = useRecordInventory<WorkflowRun>("flow.instance");
   const definitions = useReadQuery<FlowDefinition[]>("/v1/flows");
   const [selected, setSelected] = useState(""), [step, setStep] = useState("");
-  const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const runs = useMemo(() => (inventory.data?.records ?? []).filter((run) => name ? run.flow === `build.${name}` : run.flow.startsWith("build."))
     .sort((a, b) => (b.trace?.at(-1)?.at ?? "").localeCompare(a.trace?.at(-1)?.at ?? "")), [inventory.data, name]);
   const shown = runs.find((run) => run.id === selected) ?? runs[0];
   useEffect(() => { onRunSelect?.(shown); }, [shown, onRunSelect]);
-  useEffect(() => {
-    if (!shown || ["done", "canceled", "compensated"].includes(shown.state)) return;
-    const timer = setInterval(() => void inventory.refetch(), shown.state === "running" ? 3000 : 10000);
-    return () => clearInterval(timer);
-  }, [shown?.id, shown?.state, inventory.refetch]);
   const snapshot = useMemo(() => {
     if (!shown) return undefined;
     try { return versions?.[shown.version - 1] ? JSON.parse(versions[shown.version - 1]!) as WorkflowDraft : undefined; } catch { return undefined; }
@@ -47,11 +42,6 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
     { accessorKey: "version", header: t("Version"), meta: { width: 80, align: "right" } },
     { accessorKey: "key", header: t("Run key") },
   ];
-  const command = async (schema: string, payload: Record<string, unknown>) => {
-    if (!shown) return; setBusy(true); setError("");
-    try { if (await decide(schema, { type: "flow.instance", id: shown.id }, payload, { quiet: true, onRefused: setError })) await inventory.refetch(); }
-    finally { setBusy(false); }
-  };
   const token = shown?.tokens?.find((token) => token.step === step);
   const output = shown?.outputs?.[step];
   const traceColumns: ColumnDef<NonNullable<WorkflowRun["trace"]>[number] & { id: string }, any>[] = [
@@ -65,11 +55,9 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
     <DataTable data={runs} columns={columns} getRowId={(run) => run.id} height={160} searchable={false} selectedId={shown?.id} onRowClick={(run) => { setSelected(run.id); setStep(""); }} loading={inventory.isLoading} empty={t("No runs of this workflow yet.")} />
     {shown && <>
       <div className="flex flex-wrap items-center gap-2 text-[11px]"><StatusTag status={shown.state} registry={flowStates} /><code>{shown.id}</code><span className="text-muted">v{shown.version}</span>
-        {can("flow.instance.cancel") && !["done", "canceled", "compensated"].includes(shown.state) && <Button disabled={busy} onClick={() => void command("flow.instance.cancel", {})}>{t("Cancel run")}</Button>}
-        {token?.waits === "stuck" && can("flow.instance.retry") && <Button disabled={busy} onClick={() => void command("flow.instance.retry", {})}>{t("Retry run")}</Button>}
+        <Button onClick={() => open({ view: "flow-instance", params: { id: shown.id, ...(project ? { project } : {}) } }, { window: "beside" })}>{t("Open run")}</Button>
       </div>
       <FlowReleaseBinding dependencies={shown.dependencies} release={shown.release} />
-      {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       {shown.withheld ? <p className="text-xs text-muted">{t("Run data is withheld by the current source permissions.")}</p> : <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <FlowCanvas mode="view" label={t("Execution map")} catalog={catalog} nodes={nodes} edges={edges} height={300} selected={step} onSelect={inspect} storeKey={`workflow-runs:${name}`} />
         <div className="grid content-start gap-2 rounded-lg border border-border p-3"><h4 className="text-xs font-medium">{step ? t("Accepted output: {step}", { step }) : t("Workflow input")}</h4>

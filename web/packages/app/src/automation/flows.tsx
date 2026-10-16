@@ -7,7 +7,7 @@ import { useRunControl } from "./use-run-control";
 export function FlowInstanceView({ id, application, project }: { id: string; application?: string; project?: string }) {
   const { open } = useWorkspace(), openRecord = useOpenRecord(), { can } = useHost();
   const actions = useRunControl("flow.instance", id);
-  const view = useReadQuery<{ record: FlowInstanceData }>(`/v1/records/flow.instance/${encodeURIComponent(id)}`, 3000);
+  const view = useReadQuery<{ record: FlowInstanceData }>(`/v1/records/flow.instance/${encodeURIComponent(id)}`);
   const flows = useReadQuery<FlowDefinition[]>("/v1/flows").data ?? [];
   const instance = view.data?.record;
   if (view.isError) return <p role="alert" className="text-sm text-muted">{t("This flow run is unavailable to you.")}</p>;

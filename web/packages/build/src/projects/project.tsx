@@ -62,15 +62,17 @@ export function ProjectsList() {
   </div>;
 }
 
-/** `+ New ▾`: create a resource and add it to the project in one step. */
+const editorCreatedKinds = new Set(["table", "alert", "function", "agent", "evaluation-set", "sample-set", "test-plan", "connection", "source", "dataset", "pipeline", "writeback", "matching"]);
+
+/** Dedicated editors own their creation; only remaining forms keep a dialog session. */
 function NewResourceMenu({ application, onCreated, children, disabled, area }: { application: string; area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
-  const { role } = useHost();
+  const { role, catalog } = useHost();
   const { open } = useWorkspace();
-  const creators = Object.fromEntries(resourceKinds.map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
+  const creators = Object.fromEntries(resourceKinds.filter(kind => !editorCreatedKinds.has(kind.kind)).map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (role("build") !== "builder") return null;
   const sections = area ? studioAreas.filter(section => section.id === area) : studioAreas;
-  const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && creators[kind.kind]?.available)
-    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => ["table", "alert", "function", "agent", "evaluation-set", "sample-set", "test-plan", "connection", "source", "dataset", "pipeline", "writeback", "matching"].includes(kind.kind) ? open(resourceRoute(kind, "new", application)) : creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) })));
+  const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && catalog.some(action => action.target === kind.type && action.new))
+    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => editorCreatedKinds.has(kind.kind) ? open(resourceRoute(kind, "new", application)) : creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) })));
   return <>
     <ActionMenu label={t("New resource")} variant="primary" icon={<Plus />} commands={commands}>{children ?? t("New")}</ActionMenu>
     {Object.values(creators).map((creator, index) => <span key={index}>{creator.dialog}</span>)}

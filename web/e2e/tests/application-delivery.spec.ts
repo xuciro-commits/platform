@@ -120,14 +120,19 @@ test("application capacity, original decisions and headless runtime remain visib
   expect(firstRun).toMatchObject({ subject: `${object.type}/${first}` });
   expect(secondRun).toMatchObject({ subject: `${object.type}/${second}` });
 
-  // Project Runs keeps the original flow controls. Canceled is the native
-  // flow state, and the related-record filter uses the exact type/id.
+  // Project Runs selects and explains a run; handling belongs to its original
+  // detail view rather than a second set of controls in the list.
   await page.getByRole("tab", { name: "Runs", exact: true }).click();
   await page.getByRole("combobox", { name: "Run kind", exact: true }).selectOption("flow");
   const firstRunButton = page.getByRole("button", { name: `${workflow.title} ${first}`, exact: true });
   const secondRunButton = page.getByRole("button", { name: `${workflow.title} ${second}`, exact: true });
   await firstRunButton.click();
   const selected = page.getByRole("region", { name: "Selected run", exact: true });
+  await expect(selected.getByRole("button", { name: "Cancel", exact: true })).toHaveCount(0);
+  await expect(selected.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+  await expect(selected.getByRole("button", { name: "Retry original operation", exact: true })).toHaveCount(0);
+  await selected.getByRole("button", { name: "Open run", exact: true }).click();
+  const runView = page.getByRole("region", { name: firstRun.id, exact: true });
 
   // The server accepts cancellation before its reply is lost. Retrying the
   // original operation must reuse that decision, without another revision.
@@ -148,17 +153,20 @@ test("application capacity, original decisions and headless runtime remain visib
     }
     await route.continue();
   });
-  await selected.getByRole("button", { name: "Cancel", exact: true }).click();
+  await runView.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect.poll(async () => (await builder.record("flow.instance", firstRun.id)).state).toBe("canceled");
   const canceled = await builder.record("flow.instance", firstRun.id);
-  const retryCancellation = selected.getByRole("button", { name: "Retry original operation", exact: true });
+  const retryCancellation = runView.getByRole("button", { name: "Retry original operation", exact: true });
   await retryCancellation.click();
   await expect(retryCancellation).toHaveCount(0);
   expect(cancelKeys.length).toBeGreaterThanOrEqual(2);
   expect(new Set(cancelKeys).size).toBe(1);
   expect((await builder.record("flow.instance", firstRun.id)).revision).toBe(canceled.revision);
   await page.unroute(submissions);
+  await runView.getByRole("button", { name: "Back to project", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Runs", exact: true })).toHaveAttribute("aria-selected", "true");
 
+  // Canceled is the native flow state. Related records match exact type/id.
   const state = page.getByRole("combobox", { name: "Run state", exact: true });
   await state.selectOption({ label: "Canceled" });
   await expect(state).toHaveValue("canceled");
@@ -186,7 +194,6 @@ test("application capacity, original decisions and headless runtime remain visib
   // The full run opens beside its project and returns to the same Runs
   // selection and filters, including after visiting another project section.
   await selected.getByRole("button", { name: "Open run", exact: true }).click();
-  const runView = page.getByRole("region", { name: firstRun.id, exact: true });
   await expect(runView.getByRole("button", { name: "Back to project", exact: true })).toBeVisible();
   await expect(runView.getByRole("button", { name: "Back to application runs", exact: true })).toHaveCount(0);
   await runView.getByRole("button", { name: "Back to project", exact: true }).click();
@@ -201,10 +208,30 @@ test("application capacity, original decisions and headless runtime remain visib
   await expect(subject).toHaveValue(`${object.type}/${first}`);
   await expect(selected).toContainText(`${workflow.title} ${first}`);
 
+  // The source editor retains its history/input view and opens the same
+  // original runtime detail instead of offering another cancellation path.
+  await selected.getByRole("button", { name: "Open current source editor", exact: true }).click();
+  const source = page.getByRole("region", { name: "Flows", exact: true });
+  await expect(source.getByRole("heading", { name: workflow.title, exact: true })).toBeVisible();
+  const dock = source.getByRole("button", { name: "Toggle dock", exact: true });
+  if (await dock.getAttribute("aria-expanded") !== "true") await dock.click();
+  await source.getByRole("tab", { name: "Runs", exact: true }).click();
+  await source.getByRole("row").filter({ hasText: `${workflow.title} ${second}` }).click();
+  await expect(source.getByText("Workflow input", { exact: true })).toBeVisible();
+  await expect(source.getByRole("button", { name: "Cancel run", exact: true })).toHaveCount(0);
+  await expect(source.getByRole("button", { name: "Retry run", exact: true })).toHaveCount(0);
+  await source.getByRole("button", { name: "Open run", exact: true }).click();
+  const secondRunView = page.getByRole("region", { name: secondRun.id, exact: true });
+  await expect(secondRunView.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+  await secondRunView.getByRole("button", { name: "Back to project", exact: true }).click();
+  await expect(state).toHaveValue("canceled");
+  await expect(subject).toHaveValue(`${object.type}/${first}`);
+  await expect(selected).toContainText(`${workflow.title} ${first}`);
+
   // The installed headless app retains its original runtime/record diagnosis
   // and returns from the full run to application runs, without a project.
   await builder.open(page, "/portal");
-  await page.getByRole("button", { name: "Runtime case application", exact: true }).click();
+  await page.getByRole("region", { name: "Applications", exact: true }).getByRole("button", { name: "Runtime case application", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Application overview", exact: true })).toBeVisible();
   await expect(page.getByText("No business pages are available in this application. You can view its activity and diagnose problems from application runs.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "View application runs", exact: true }).click();

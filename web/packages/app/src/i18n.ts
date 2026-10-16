@@ -380,7 +380,6 @@ register("zh-CN", {
   "All run states": "全部运行状态",
   "Started after": "开始时间不早于",
   "Started before": "开始时间不晚于",
-  "Shared scheduler work remains with its original owner.": "共享调度工作仍由原归属方管理。",
   "Application runtime is unavailable. Refresh after publishing the application.": "应用运行视图不可用，请在发布后刷新。",
   "Application artifact": "应用制品",
   "Counts and diagnostics follow your authorized scope.": "计数与诊断遵循你的获权范围。",

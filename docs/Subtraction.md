@@ -52,3 +52,11 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 ## 8. 行业私有版本与业务时间（ADR-0103，平台机制已提供）
 
 新构建产物使用普通记录的 Versioning、固定映射和有效期查询，不另造版本对象、最新版查找器或时间模型。企业模型的半开生效期委托平台判断。MES 的 MasterData / DemoMaster 保留为接管前演示数据，其替换与删除归 ADR-0113 / ADR-0114；不把旧种子包装成新的产品主数据路径，也不重写旧发布或历史单据。
+
+## 9. 运行与专用编辑器的重复会话（ADR-0124，已替换）
+
+- `ApplicationRuns` 不再嵌入 `FlowInstanceView`、`RunView`、`OperationRunView`、`DispatchProgress`：选中项只显示依据与原详情入口，取消、重试和设备处理只在原正式详情执行，删除打开详情后同时存活的第二份读取和操作状态。
+- `automate/workflow-runs.tsx` 的本地 `command()`、`decide/can`、忙碌/错误状态及取消/重试按钮已删除，正式操作复用 `FlowInstanceView` / `useRunControl`；额外 `setInterval` 删除，原 `useRecordInventory` 负责实时更新。历史版本画布、输入/已接受输出、token、步骤定位与运行覆盖保留。
+- 应用 New 菜单不再为已使用专用编辑器的十三类资源初始化 `useNewRecord` 与通用对话框状态；原目录决定创建资格，原专用路由承担创建。仍使用通用表单的资源沿原表单，不增加第二套创建器。
+
+检查沿 Testing 的应用运行任务与构建者验证任务：原正式详情取消、答复丢失后同键重试、编辑器历史查看及正常新建入口已通过；旧操作按钮明确不存在。Web 类型、目录及双语检查通过，不改执行、权限、持久格式或历史版本责任。
