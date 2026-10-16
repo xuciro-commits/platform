@@ -2560,6 +2560,7 @@ export type PackageView = {
   descriptor: PackageDescriptor;
   installed?: InstalledPackage;
   precheck: Precheck;
+  source: string;
 };
 
 export type Page = {

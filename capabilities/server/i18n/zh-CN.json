@@ -2352,5 +2352,7 @@
   "Portable test roots cannot include local draft, member or model bindings": "可移交测试不能包含本地草稿、成员或模型绑定",
   "A published test plan keeps its kind; create another plan": "已发布的测试计划不能更改类型，请创建另一份计划",
   "Configure the connection address before checking it": "请先配置连接地址，再检查连接",
-  "Test roots must be distinct objects or workflows": "测试根必须是互不重复的对象或流程"
+  "Test roots must be distinct objects or workflows": "测试根必须是互不重复的对象或流程",
+  "Package retirement cannot check {package}: {reason}": "包退役时无法检查 {package}：{reason}",
+  "The package {package} is still required by {dependent}": "{dependent} 仍依赖包 {package}"
 }

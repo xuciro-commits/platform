@@ -106,6 +106,7 @@ type PackageView struct {
 	Descriptor PackageDescriptor `json:"descriptor"`
 	Installed  *InstalledPackage `json:"installed,omitempty"`
 	Precheck   Precheck          `json:"precheck"`
+	Source     string            `json:"source"` // index or installed; an installed record is not an installation offer
 }
 
 // Contribution is one namespaced contribution of this tenant: built-in app
@@ -412,7 +413,7 @@ func (d *Console) blueprintViews() []PackageView {
 			continue
 		}
 		copy := p
-		out = append(out, PackageView{Descriptor: descriptor, Installed: &copy, Precheck: Precheck{ID: p.ID, Version: p.Version, OK: true}})
+		out = append(out, PackageView{Descriptor: descriptor, Installed: &copy, Precheck: Precheck{ID: p.ID, Version: p.Version, OK: true}, Source: "installed"})
 	}
 	slices.SortFunc(out, func(a, b PackageView) int { return strings.Compare(a.Descriptor.ID, b.Descriptor.ID) })
 	return out
@@ -635,12 +636,46 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 	}
 	schema := s.GetSchema().GetName()
 	if schema == SchemaPackageRetire || schema == SchemaPackageDrain {
-		held := d.packagesOf()[p.ID]
+		installed := d.packagesOf()
+		held := installed[p.ID]
 		if held == nil || held.State == "retired" {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		state := "draining"
 		if schema == SchemaPackageRetire {
+			ids := make([]string, 0, len(installed))
+			for id := range installed {
+				ids = append(ids, id)
+			}
+			slices.Sort(ids)
+			for _, id := range ids {
+				dependent := installed[id]
+				if id == p.ID || dependent.State == "retired" {
+					continue
+				}
+				var descriptor PackageDescriptor
+				var err error
+				if dependent.Artifact != "" {
+					descriptor, err = d.sealedPackageDescriptor(id, dependent.Version, dependent.Artifact)
+				} else {
+					// Pre-sealing installations can only recover their original declaration from the index.
+					var index *PackageIndex
+					index, err = d.packageIndex()
+					if err == nil {
+						var found bool
+						descriptor, found = index.find(id, dependent.Version)
+						if !found {
+							err = fmt.Errorf("installed declaration %s@%s is unavailable", id, dependent.Version)
+						}
+					}
+				}
+				if err != nil {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package retirement cannot check {package}: {reason}", id, err.Error())
+				}
+				if slices.Contains(descriptor.Requires, p.ID) {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} is still required by {dependent}", p.ID, id)
+				}
+			}
 			state = "retired"
 		}
 		return func(*pb.ChangeRecord) {
@@ -675,11 +710,13 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 		if prior == nil || prior.State == "retired" {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
+	} else if prior != nil && prior.State != "retired" {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} is already installed; upgrade it instead", p.ID)
+	}
+	if prior != nil {
 		if err := d.verifySealedPackage(*prior); err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The installed package {package} cannot be upgraded: {reason}", p.ID, err.Error())
 		}
-	} else if prior != nil && prior.State == "active" {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} is already installed; upgrade it instead", p.ID)
 	}
 	sealed, err := d.sealPackageBytes(descriptor, index.Directory)
 	if err != nil {
@@ -697,14 +734,16 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 			Runtime: descriptor.Runtime,
 			Title:   descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
 			Artifact: sealed, InstalledAt: now, ChangedAt: now}
-		if upgrade && prior != nil {
+		if prior != nil {
 			installed.InstalledAt = prior.InstalledAt
-			retained := prior.Artifact
-			if retained == "" {
-				retained = prior.Digest
+			installed.Retained = slices.Clone(prior.Retained)
+			if prior.Version != descriptor.Version {
+				retained := prior.Artifact
+				if retained == "" {
+					retained = prior.Digest
+				}
+				installed.Retained = append(installed.Retained, RetainedArtifact{Version: prior.Version, Digest: retained, At: now})
 			}
-			installed.Retained = append(slices.Clone(prior.Retained),
-				RetainedArtifact{Version: prior.Version, Digest: retained, At: now})
 		}
 		d.packages[descriptor.ID] = installed
 	}, nil
@@ -714,19 +753,44 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 func (d *Console) PackageViews() []PackageView {
 	out := []PackageView{}
 	index, indexErr := d.packageIndex()
+	installed := d.packagesOf()
+	listed := map[string]bool{}
 	for _, descriptor := range index.Packages {
 		pre := d.precheck(descriptor, index)
 		if indexErr != nil {
 			pre.OK = false
 			pre.Problems = append(pre.Problems, indexErr.Error())
 		}
-		view := PackageView{Descriptor: descriptor, Precheck: pre}
-		if held := d.packagesOf()[descriptor.ID]; held != nil {
+		view := PackageView{Descriptor: descriptor, Precheck: pre, Source: "index"}
+		if held := installed[descriptor.ID]; held != nil {
 			copy := *held
 			view.Installed = &copy
 		}
 		out = append(out, view)
+		listed[descriptor.ID+"@"+descriptor.Version] = true
 	}
+	for _, held := range installed {
+		if listed[held.ID+"@"+held.Version] {
+			continue
+		}
+		descriptor := PackageDescriptor{ID: held.ID, Version: held.Version, Title: held.Title, Namespace: held.Namespace, Runtime: held.Runtime, Contributions: held.Contributions}
+		pre := Precheck{ID: held.ID, Version: held.Version, Problems: []string{"This installed version is not in the deployment index and cannot be installed from this list."}}
+		if held.Artifact != "" {
+			if sealed, err := d.sealedPackageDescriptor(held.ID, held.Version, held.Artifact); err == nil {
+				descriptor = sealed
+			} else {
+				pre.Problems = append(pre.Problems, err.Error())
+			}
+		}
+		copy := *held
+		out = append(out, PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Source: "installed"})
+	}
+	slices.SortFunc(out, func(a, b PackageView) int {
+		if a.Descriptor.ID != b.Descriptor.ID {
+			return strings.Compare(a.Descriptor.ID, b.Descriptor.ID)
+		}
+		return strings.Compare(a.Descriptor.Version, b.Descriptor.Version)
+	})
 	return out
 }
 

@@ -82,7 +82,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
         const protocol = available.some(item => item.descriptor.runtime), blueprint = available.some(item => item.descriptor.blueprint);
         const version = versions[packageID] ?? held?.version ?? (protocol || blueprint ? "" : available[0]!.descriptor.version);
         const chosen = available.find(item => item.descriptor.version === version);
-        const { descriptor: d, precheck } = chosen ?? available[0]!;
+        const { descriptor: d, precheck, source } = chosen ?? available[0]!;
         const id = d.id || held?.id || "";
         const state = held?.state;
         const newer = !!held && state !== "retired" && !!d.version && d.version !== held.version;
@@ -101,7 +101,8 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
             </Select></label>}
             <dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
               <dt className="text-muted">{t("Namespace")}</dt><dd className="break-all font-mono">{d.namespace || held?.namespace}</dd>
-              <dt className="text-muted">{t("Offered")}</dt><dd>{d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
+              <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : "Deployment index")}</dd>
+              <dt className="text-muted">{t("Offered")}</dt><dd>{source === "installed" ? "—" : d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
               <dt className="text-muted">{t("Installed")}</dt><dd>{held ? `${held.version}${held.installedAt ? ` · ${when(held.installedAt)}` : ""}` : "—"}</dd>
               <dt className="text-muted">{t("Requires")}</dt><dd>{d.requires?.length ? d.requires.join(", ") : t("nothing")}</dd>
               <dt className="text-muted">{t("Contributions")}</dt><dd>{(held?.contributions ?? d.contributions ?? []).map((c) => c.title || c.view).join(", ") || "—"}</dd>
@@ -120,11 +121,11 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
               {d.blueprint.guide && <Disclosure summary={t("Build guide")}><p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{d.blueprint.guide}</p></Disclosure>}
               {can("build.app.create") && <div><Button size="sm" variant="primary" disabled={busy === id || state !== "active" || held?.version !== d.version || !chosen} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
             </div>}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            {(next === "install" || newer || source === "installed") && <div className="flex flex-wrap items-center gap-2 text-xs">
               <Tag label={precheck.ok ? t("precheck ok") : t("precheck failed")} tone={precheck.ok ? "success" : "danger"} />
               {!!precheck.missing?.length && <span className="text-[var(--tone-danger)]">{t("needs {packages} installed first", { packages: precheck.missing.join(", ") })}</span>}
-              {precheck.problems?.map((x) => <span key={x} className="text-[var(--tone-danger)]">{x}</span>)}
-            </div>
+              {precheck.problems?.map((x) => <span key={x} className="text-[var(--tone-danger)]">{t(x)}</span>)}
+            </div>}
             {can("platform.package.install") && <div className="flex flex-wrap gap-2">
               {next === "install" && <Button size="sm" variant="primary" disabled={!chosen || !precheck.ok || busy === id} title={precheck.ok ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t("Install")}</Button>}
               {newer && <Button size="sm" variant="primary" disabled={!chosen || !precheck.ok || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Upgrade to {v}", { v: d.version })}</Button>}

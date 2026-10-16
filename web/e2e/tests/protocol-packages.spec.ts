@@ -12,6 +12,9 @@ test("an installed protocol binary configures devices, previews points and publi
   await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);
   await card.getByRole("button", { name: "Install", exact: true }).click();
   await expect(card.getByText("active", { exact: true })).toBeVisible();
+  await expect(card.getByText("Deployment index", { exact: true })).toBeVisible();
+  await expect(card.getByText("precheck failed", { exact: true })).toHaveCount(0);
+  await shots(page, card, "protocol-package", info);
 
   const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");
   const simulator = kinds.items.find(kind => kind.package === packageID && kind.version === version && kind.profile?.id === "simulator");

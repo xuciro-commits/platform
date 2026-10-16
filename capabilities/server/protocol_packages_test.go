@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
@@ -43,6 +44,15 @@ func TestProtocolPackageInstallRetainsVerifiedBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Now().UTC()
+	var entries []Entry
+	fail := false
+	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		if fail {
+			return nil, errors.New("append unavailable")
+		}
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
 	if got := refuse(t, tn, "admin", PlatformApp, SchemaPackageInstall, PackageType, "test.protocol", map[string]any{"id": "test.protocol"}, at); got == "ok" {
 		t.Fatal("protocol installed without exact version")
 	}
@@ -70,6 +80,57 @@ func TestProtocolPackageInstallRetainsVerifiedBinary(t *testing.T) {
 	}
 	if _, err = console.ResolveDriver("test.protocol", "2.0.0", first, "read"); err == nil {
 		t.Fatal("wrong content digest resolved")
+	}
+	decide(t, tn, "admin", PlatformApp, SchemaPackageDrain, PackageType, "test.protocol", map[string]any{"id": "test.protocol"}, at)
+	third := write("3.0.0")
+	if got := refuse(t, tn, "admin", PlatformApp, SchemaPackageInstall, PackageType, "test.protocol", map[string]any{"id": "test.protocol", "version": "3.0.0"}, at); got == "ok" {
+		t.Fatal("install bypassed the draining package's upgrade path")
+	}
+	if held := console.packagesOf()["test.protocol"]; held.State != "draining" || held.Version != "2.0.0" || len(held.Retained) != 1 {
+		t.Fatalf("refused install changed the draining package: %+v", held)
+	}
+	decide(t, tn, "admin", PlatformApp, SchemaPackageRetire, PackageType, "test.protocol", map[string]any{"id": "test.protocol"}, at)
+	admin := memberOf(t, tn, "admin")
+	reinstall := submission(tn, admin, PlatformApp, SchemaPackageInstall, PackageType, "test.protocol", map[string]any{"id": "test.protocol", "version": "3.0.0"})
+	fail = true
+	if _, refusal := tn.Submit(admin, reinstall, at); refusal == nil {
+		t.Fatal("failed append accepted the reinstallation")
+	}
+	if held := console.packagesOf()["test.protocol"]; held.State != "retired" || held.Version != "2.0.0" || len(held.Retained) != 1 {
+		t.Fatalf("failed append exposed the reinstallation: %+v", held)
+	}
+	fail = false
+	if _, refusal := tn.Submit(admin, reinstall, at); refusal != nil {
+		t.Fatalf("same-key reinstallation retry failed: %v", refusal)
+	}
+	for version, digest := range map[string]string{"1.0.0": first, "2.0.0": second, "3.0.0": third} {
+		if _, err = console.ResolveDriver("test.protocol", version, digest, "read"); err != nil {
+			t.Fatalf("reinstallation lost %s: %v", version, err)
+		}
+	}
+	if held := console.packagesOf()["test.protocol"]; len(held.Retained) != 2 {
+		t.Fatalf("reinstallation lost its version history: %+v", held)
+	}
+	snapshot, _, err := tn.Snapshot(func() int64 { return int64(len(entries)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fromSnapshot := range []bool{false, true} {
+		recovered := composeTenant(t, "protocol-package", []Seat{seatOf("admin", PlatformApp+":"+Admin)})
+		recovered.Files = tn.files()
+		if fromSnapshot {
+			err = recovered.Restore(snapshot)
+		} else {
+			err = recovered.Replay(entries)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		for version, digest := range map[string]string{"1.0.0": first, "2.0.0": second, "3.0.0": third} {
+			if _, err = testConsoleOf(recovered).ResolveDriver("test.protocol", version, digest, "read"); err != nil {
+				t.Fatalf("recovery (snapshot=%v) lost %s: %v", fromSnapshot, version, err)
+			}
+		}
 	}
 	if err = tn.files().Put(context.Background(), packageBinaryKey(tn.ID, "test.protocol", "1.0.0", first), []byte("modified"), "application/octet-stream"); err != nil {
 		t.Fatal(err)

@@ -389,6 +389,14 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.crm", map[string]any{"id": "acme.crm", "version": "1.0.0"}); got != "ok" {
 		t.Fatalf("dependent install: %s", got)
 	}
+	// Retirement uses the installed dependency, not a later edit of the deployment directory.
+	write("crm.json", map[string]any{"id": "acme.crm", "version": "1.0.0", "namespace": "acme-crm", "title": "CRM views"})
+	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got == "ok" {
+		t.Fatal("retirement ignored the dependent's sealed requirement")
+	}
+	if held := console.packagesOf()["acme.base"]; held.State != "active" {
+		t.Fatalf("refused retirement changed the base package: %+v", held)
+	}
 	keys := map[string]bool{}
 	for _, c := range console.Contributions() {
 		keys[c.Key] = true
@@ -427,12 +435,20 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 	if held := console.packagesOf()["acme.base"]; held.Version != "1.1.0" {
 		t.Fatalf("the refused upgrade moved the version: %+v", held)
 	}
+	// Restore the test's known sealed bytes before the remaining lifecycle decisions.
+	sealed, _ := index.find("acme.base", "1.1.0")
+	if err := tn.files().Put(context.Background(), packageArtifactKey(tn.ID, "acme.base", "1.1.0"), platform.Raw(sealed), "application/json"); err != nil {
+		t.Fatal(err)
+	}
 	if got := submit("dana", SchemaPackageDrain, PackageType, "acme.crm", map[string]any{"id": "acme.crm"}); got != "ok" {
 		t.Fatalf("drain: %s", got)
 	}
 	held := console.packagesOf()["acme.crm"]
 	if held == nil || held.State != "draining" {
 		t.Fatalf("drain state: %+v", held)
+	}
+	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got == "ok" {
+		t.Fatal("retirement ignored a draining dependent")
 	}
 	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.crm", map[string]any{"id": "acme.crm"}); got != "ok" {
 		t.Fatalf("retire: %s", got)
@@ -445,6 +461,27 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 		if c.Key == "acme-crm.board" {
 			t.Fatal("a retired package still contributes")
 		}
+	}
+	for _, name := range []string{"crm.json", "base2.json"} {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	listed := map[string]PackageView{}
+	for _, view := range console.PackageViews() {
+		listed[view.Descriptor.ID+"@"+view.Descriptor.Version] = view
+	}
+	for _, identity := range []string{"acme.crm@1.0.0", "acme.base@1.1.0"} {
+		view, found := listed[identity]
+		if !found || view.Installed == nil || view.Source != "installed" || view.Precheck.OK || len(view.Precheck.Problems) == 0 {
+			t.Fatalf("missing deployment version lost its installed record: %s %+v", identity, view)
+		}
+	}
+	if view := listed["acme.crm@1.0.0"]; view.Installed.State != "retired" || !slices.Contains(view.Descriptor.Requires, "acme.base") {
+		t.Fatalf("retired package lost its original declaration: %+v", view)
+	}
+	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got != "ok" {
+		t.Fatalf("retired dependent still blocked the base package: %s", got)
 	}
 }
 
