@@ -70,7 +70,74 @@ func (b *Build) agentEntity() platform.Entity {
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this agent as its next version; a changed definition stops existing runs.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishAgent}}}}
 }
 
+// Only create/edit may refer to readable saved definitions. Publication and
+// candidate installation keep checking the original installed/selected tools.
+func (b *Build) agentDraftEntity() platform.Entity {
+	entity := b.agentEntity()
+	entity.Validate = func(c platform.Caller, record any) *kernel.Error {
+		if c.Replaying {
+			return nil
+		}
+		objects, err := readDefinitionInventory[Object](c)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		queries, err := readDefinitionInventory[Query](c)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		tools := map[string]bool{}
+		var roles []string
+		for _, object := range objects {
+			if object.Archived {
+				continue
+			}
+			model := Entity(object)
+			for _, action := range objectActions(object, model) {
+				tools[action.Schema] = true
+			}
+			for role := range model.Scope.Levels {
+				roles = append(roles, role)
+			}
+		}
+		for _, query := range queries {
+			if !query.Archived {
+				tools["query:"+query.Name] = true
+			}
+		}
+		if err := b.checkAgentWithDrafts(*record.(*Agent), tools, roles); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+		}
+		return nil
+	}
+	return entity
+}
+
 func (b *Build) checkAgent(a Agent) error {
+	var roles []string
+	tools := map[string]bool{}
+	for _, model := range b.jointEntities {
+		for role := range model.Scope.Levels {
+			roles = append(roles, role)
+		}
+		for _, standard := range model.Standard {
+			tools[model.Type+"."+standard] = true
+		}
+		if model.Lifecycle != nil {
+			for _, transition := range model.Lifecycle.Transitions {
+				tools[transition.Schema] = true
+			}
+		}
+	}
+	for ref := range b.jointDeclarations {
+		if ref.App == ID && ref.Kind == platform.AssetQuery {
+			tools["query:"+ref.Name] = true
+		}
+	}
+	return b.checkAgentWithDrafts(a, tools, roles)
+}
+
+func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []string) error {
 	if !named(a.Name) {
 		return fmt.Errorf("The agent name %s must be lower-case letters and digits", a.Name)
 	}
@@ -81,6 +148,9 @@ func (b *Build) checkAgent(a Agent) error {
 		return fmt.Errorf("The agent %s needs at least one action or query", a.Name)
 	}
 	for _, tool := range a.Tools {
+		if tools[tool] {
+			continue
+		}
 		if query, ok := strings.CutPrefix(tool, "query:"); ok {
 			if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: query}] {
 				continue
@@ -102,7 +172,7 @@ func (b *Build) checkAgent(a Agent) error {
 			return fmt.Errorf("The checkpoint %s is not one of the agent's tools", cp)
 		}
 	}
-	if a.HandoffRole != "" && !slices.Contains(b.Manifest().AllRoles(), a.HandoffRole) {
+	if a.HandoffRole != "" && !slices.Contains(roles, a.HandoffRole) && !slices.Contains(b.Manifest().AllRoles(), a.HandoffRole) {
 		return fmt.Errorf("The role %s is not a role of this builder", a.HandoffRole)
 	}
 	for i, c := range a.Cases {

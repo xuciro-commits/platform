@@ -78,7 +78,7 @@ const editorViews: View[] = [
   { id: "agent", title: () => t("Agents"), render: p => p.id ? <AgentEditor key={p.id} id={p.id} /> : <Agents /> },
   { id: "alert", title: () => t("Alert rules"), render: p => p.id ? <AlertEditor key={p.id} id={p.id} /> : <Alerts /> },
   {id:"sample-set",title:()=>t("Sample set"),render:p=><ApplicationSampleAsset id={p.id}/>},
-  { id: "evaluation-set", title: () => t("Evaluation set"), render: p => <CandidateTest key={p.id ?? "new"} planId={p.id} /> },
+  { id: "evaluation-set", title: () => t("Evaluation set"), render: p => <CandidateTest key={p.id ?? "new"} planId={p.id === "new" ? undefined : p.id} evaluationSet /> },
   { id: "test-plan", title: () => t("Business test plan"), render: p => <CandidateTest key={p.id ?? "new"} planId={p.id} applicationId={p.application} /> },
   { id: "changes", title: () => t("Changes"), render: p => <Changes key={`${p.kind ?? ""}:${p.id ?? ""}`} initialKind={p.kind} initialID={p.id} /> },
   { id: "release-review", title: () => t("Release review"), render: p => {

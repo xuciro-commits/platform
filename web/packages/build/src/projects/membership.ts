@@ -19,12 +19,12 @@ export function projectResourceChange(project: Pick<Api.Application, "pages" | "
 /** New editor drafts join the same application membership as New / Add existing. */
 export async function joinProjectResource(host: Pick<Host, "client" | "decide">, application: string, ref: Api.AssetRef) {
   const { record } = await host.client.get<{ record?: ProjectRecord }>(`/v1/records/build.app/${encodeURIComponent(application)}`);
-  if (!record || record.archived) throw Error(t("The rule was saved, but the application could not be read. Save again to retry adding the same rule."));
+  if (!record || record.archived) throw Error(t("The resource was saved, but the application could not be read. Save again to retry adding the same resource."));
   const changes = projectResourceChange(record, ref);
   if (!Object.keys(changes).length) return;
   let refusal = "";
   if (!await host.decide("build.app.edit", { type: "build.app", id: application }, changes, { expectedRevision: record.revision, quiet: true, onRefused: message => { refusal = message; } })) {
-    throw Error(refusal || t("The rule was saved but has not joined the application. Save again to retry the same rule."));
+    throw Error(refusal || t("The resource was saved but has not joined the application. Save again to retry the same resource."));
   }
 }
 

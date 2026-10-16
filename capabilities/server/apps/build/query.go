@@ -54,11 +54,16 @@ func (b *Build) checkQuery(f Query) error {
 	if !named(f.Name) {
 		return fmt.Errorf("The query name %s must be lower-case letters and digits", f.Name)
 	}
-	if _, ok := b.installed[f.Object]; f.Interface == "" && !ok {
+	shape, selected := b.jointEntities[f.Object]
+	if _, ok := b.installed[f.Object]; f.Interface == "" && !ok && (!selected || shape.App != ID) {
 		return fmt.Errorf("Query %s needs a published object of this builder", f.Name)
 	}
 	var validation error
-	if f.Interface != "" && b.jointMode {
+	if f.Interface == "" && selected {
+		// The original private installation checks fields against the exact
+		// selected model, not a different live version during compilation.
+		validation = f.Definition().Check()
+	} else if f.Interface != "" && b.jointMode {
 		_, validation = b.host.BindInterfaceQuery(f.Definition(), b.queryDraftObjects()...)
 	} else {
 		validation = b.host.ValidateInstallQuery(f.Definition())

@@ -41,7 +41,7 @@ test("a builder assembles proposal review and a person adopts through the origin
     await expect.poll(async () => (await builder.record("build.function", functionID)).proposal?.minimumConfidence).toBe(0.7);
     await builder.decide("build.function.publish", { type: "build.function", id: functionID }, {});
     await builder.open(page, `/action-type?id=${object.id}&action=adopt`);
-    await page.getByRole("button", { name: "Transaction", exact: true }).click();
+    await page.getByRole("region", { name: "Action structure", exact: true }).getByRole("button", { name: /^Transaction/ }).click();
     await page.getByRole("checkbox", { name: "Adopt an AI proposal", exact: true }).check();
     await page.getByRole("textbox", { name: "Proposal function name", exact: true }).fill(functionName);
     await page.getByRole("button", { name: "Add proposal mapping", exact: true }).click();

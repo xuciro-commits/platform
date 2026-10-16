@@ -1,6 +1,7 @@
 package build
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -106,17 +107,21 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	inv := draftInventories{objects: objects, pages: pages, apps: apps, processes: processes}
 	overrides := map[platform.AssetRef]platform.ReleaseAsset{}
 	removed := map[platform.AssetRef]bool{}
-	// Evaluation plans pin a selected function's candidate version, so produce
-	// those declarations before freezing the dependent plans.
+	// Agents consume selected queries; evaluation plans pin selected function
+	// versions. Produce those dependencies before their consumers, independent
+	// of the order in which the builder selected them.
 	declarations := slices.Clone(drafts)
-	slices.SortStableFunc(declarations, func(a, b JointDraftRef) int {
-		if (a.Kind == platform.AssetEvaluation) == (b.Kind == platform.AssetEvaluation) {
-			return 0
-		}
-		if a.Kind == platform.AssetEvaluation {
+	priority := func(kind platform.AssetKind) int {
+		switch kind {
+		case platform.AssetEvaluation:
+			return 2
+		case platform.AssetAgent:
 			return 1
 		}
-		return -1
+		return 0
+	}
+	slices.SortStableFunc(declarations, func(a, b JointDraftRef) int {
+		return cmp.Compare(priority(a.Kind), priority(b.Kind))
 	})
 	for _, draft := range declarations {
 		if !recordKind(draft.Kind) {

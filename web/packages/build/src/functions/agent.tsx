@@ -3,10 +3,11 @@ import {useInputDrafts} from "@platform/ui";
 // published actions and queries they may use, a budget, checkpoints and the
 // cases they must pass. Publishing installs one as build.<name>; the host runs
 // it like any agent - every step journaled, drafts confirmed by a person.
-import { useApplicationWorkspace } from "../projects/application-scope";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
+import { joinProjectResource } from "../projects/membership";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, WorkbenchMessage, savingState } from "../editor/workbench";
-import { installedObjects, type WorkflowObject } from "../automate/workflow-model";
+import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
+import { useAuthoringModel } from "../ontology/authoring-model";
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t, useUnsavedChanges } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
@@ -15,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 type Case = { name: string; goal: string; ref?: string; expect?: string; asks?: boolean; takes?: string[]; avoids?: string[] };
 type Draft = { id: string; revision: number; name: string; title: string; description: string; instructions: string; tools: string[]; steps?: number; tokens?: number; actions?: number; cost?: number;
   checkpoints?: string[]; handoffRole?: string; cases?: Case[]; state?: string; version?: number; published?: string };
-type QueryRecord = { id: string; name: string; title: string; published?: string };
+type QueryRecord = { id: string; name: string; title: string; published?: string; archived?: boolean };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", description: "", instructions: "", tools: [], cases: [] });
 const fieldClass = "grid gap-1 text-xs";
 
@@ -30,13 +31,15 @@ export function Agents() {
 }
 
 export function AgentEditor({ id }: { id: string }) {
-  const { decide, role } = useHost(), { open, close } = useApplicationWorkspace();
+  const host = useHost(), { decide, role } = host, { open, close } = useApplicationWorkspace();
+  const application = useApplicationScope();
   const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.agent/${encodeURIComponent(id)}`);
-  const inventory = useRecordInventory<WorkflowObject>("build.object"), queries = useRecordInventory<QueryRecord>("build.query");
-  const objects = installedObjects(inventory.data?.records ?? []);
+  const model = useAuthoringModel(), queries = useRecordInventory<QueryRecord>("build.query");
+  const objects = (model.drafts.data?.records ?? []).filter(object => !object.archived);
+  const objectTitles = new Map(objects.map(object => [`build.${object.name}`, object.title]));
   const tools = [
-    ...objects.flatMap((o) => (o.actions ?? []).map((a) => ({ value: `build.${o.name}.${a.name}`, label: `${o.title} · ${a.title}` }))),
-    ...(queries.data?.records ?? []).filter((q) => q.published).map((q) => ({ value: `query:${q.name}`, label: t("Query: {name}", { name: q.title }) })),
+    ...model.actions.filter(action => objectTitles.has(action.target)).map(action => ({ value: action.schema, label: `${objectTitles.get(action.target)} · ${action.title}` })),
+    ...(queries.data?.records ?? []).filter(query => !query.archived).map(query => ({ value: `query:${query.name}`, label: t("Query: {name}", { name: query.title }) })),
   ];
   const roles = [...new Set(["builder", ...objects.flatMap((o) => (o.access ?? []).map((a) => a.role))])];
   const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -51,23 +54,36 @@ export function AgentEditor({ id }: { id: string }) {
   if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !draft.title.trim() || !draft.description.trim()) issues.push(t("Give the agent a lower-case name, a title and a description."));
   if (!draft.instructions.trim()) issues.push(t("Write its instructions."));
   if (!draft.tools.length) issues.push(t("Give it at least one action or query."));
-  const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch { setError(t("The agent could not be saved. Your draft is still here.")); } finally { setBusy(false); } };
+  const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch (problem) { setError(problem instanceof Error ? problem.message : t("The agent could not be saved. Your draft is still here.")); } finally { setBusy(false); } };
   const payload = () => {
     const { name, title, description, instructions, tools, steps, tokens, actions, cost, checkpoints, handoffRole, cases } = draft;
     return { name, title, description, instructions, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] };
   };
   const save = async (): Promise<{ id: string; revision: number } | undefined> => {
+    if (inputs?.invalid) return;
     const target = draft.id || createID;
-    if (!await decide(`build.agent.${draft.id ? "edit" : "create"}`, { type: "build.agent", id: target }, payload(), { expectedRevision: draft.id ? draft.revision : 0, quiet: true, onRefused: setError })) return;
-    const revision = draft.id ? draft.revision + 1 : 1;
-    markSaved(); setDirty(false);
-    if (!draft.id) { open({ view: "agent", params: { id: target } }); close({ view: "agent", params: { id } }); }
+    let revision = draft.revision;
+    if (dirty || !draft.id) {
+      if (!await decide(`build.agent.${draft.id ? "edit" : "create"}`, { type: "build.agent", id: target }, payload(), { expectedRevision: draft.id ? draft.revision : 0, quiet: true, onRefused: setError })) return;
+      revision = draft.id ? draft.revision + 1 : 1;
+      load({ ...draft, id: target, revision });
+      inputs?.clear();
+      markSaved(); setDirty(false);
+    }
+    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "agent", name: draft.name });
+    markSaved();
+    if (id === "new") { open({ view: "agent", params: { id: target } }, { ifCurrent: { view: "agent", params: { id } } }); close({ view: "agent", params: { id } }); }
     else { const r = await query.refetch(); if (r.data?.record) load(r.data.record); }
     return { id: target, revision };
   };
+  const review = async () => {
+    if (issues.length) { setError(issues.join(" ")); return; }
+    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
+    if (saved) open({ view: "release-review", params: { kind: "agent", id: saved.id } }, { ifCurrent: { view: "agent", params: { id: saved.id } } });
+  };
   const publish = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
-    const saved = dirty || !draft.id ? await save() : { id: draft.id, revision: draft.revision };
+    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
     if (!saved) return;
     if (await decide("build.agent.publish", { type: "build.agent", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) {
       const r = await query.refetch(); if (r.data?.record) load(r.data.record);
@@ -81,12 +97,13 @@ export function AgentEditor({ id }: { id: string }) {
     status={<DraftStatus state={draft.version ? "published" : "draft"} problems={dirty ? issues.length : 0} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
       <Button size="sm" disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
-      <Button size="sm" disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save agent")}</Button>
-      <Button size="sm" variant="primary" disabled={busy || issues.length > 0} onClick={() => void perform(publish)}>{t("Publish")}</Button>
+      <Button size="sm" disabled={busy || (!dirty && id !== "new")} onClick={() => void perform(save)}>{t("Save agent")}</Button>
+      <PublishMenu type="build.agent" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "agent", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <p className="text-xs text-muted">{t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}</p>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
+    {(model.drafts.isError || queries.isError) && <Panel role="alert">{t("The capability library could not be loaded.")}</Panel>}
     <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Agent")} className="grid content-start gap-3">
         <label className={fieldClass}>{t("Agent name")}<Input disabled={!!draft.published} value={draft.name} placeholder="expediter" onChange={(e) => change({ name: e.target.value })} /></label>
@@ -99,7 +116,7 @@ export function AgentEditor({ id }: { id: string }) {
       </Panel>
       <Panel title={t("Tools and budget")} className="grid content-start gap-3">
         <fieldset className={fieldClass}><legend className="mb-1">{t("Actions and queries it may use")}</legend>
-          {tools.length ? <Toggles options={tools} value={draft.tools} onChange={(next) => change({ tools: next, checkpoints: (draft.checkpoints ?? []).filter((c) => next.includes(c)) })} /> : <p className="text-muted">{t("Publish an object with actions, or a query, first.")}</p>}
+          {tools.length ? <Toggles options={tools} value={draft.tools} onChange={(next) => change({ tools: next, checkpoints: (draft.checkpoints ?? []).filter((c) => next.includes(c)) })} /> : <p className="text-muted">{t("No actions or queries yet.")}</p>}
           <span className="text-[11px] text-muted">{t("It also always has: context, search, knowledge, remember, ask and finish.")}</span></fieldset>
         {draft.tools.length > 0 && <fieldset className={fieldClass}><legend className="mb-1">{t("Checkpoints")}</legend>
           <Toggles options={tools.filter((x) => draft.tools.includes(x.value))} value={draft.checkpoints ?? []} onChange={(checkpoints) => change({ checkpoints })} />

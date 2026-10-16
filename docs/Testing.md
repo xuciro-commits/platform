@@ -14,6 +14,8 @@
 
 应用上下文（ADR-0124 / ADR-0046 §6.7）：`make e2e SPEC=application-context`，从已发布应用的页面进入原构建编辑器，预览自动使用所属应用；改变共享值后通过页面调用/返回和页头切换，核对预览实例、构建应用 ID 与值保持一致。新建/关闭预览实例后，正式页面的共享值和原定义应保持不变；原 `ApplicationSessions.test.mjs` 检查实例退役、版本/成员隔离及迟到读取不能恢复旧状态。预览只使用可读的已发布应用，不把构建草稿当运行版本。
 
+应用 AI 配置（ADR-0124 / ADR-0116）：`make e2e SPEC=ai-authoring` 从应用新建入口配置未发布模型上的函数、智能体及函数评测集，检查排除字段不可选、成员更新失败后重试同一保存、切换文档后迟到保存不抢焦点，以及原定义不变。`TestAIAuthoringUsesSavedModelsOnlyForExplicitJointDelivery` 检查草稿动作、查询与角色可保存、单独发布拒绝、明确选择模型与 AI 声明后可共同候选、无评测不能激活；未知查询字段仍由原私有安装检查拒绝。实际提议、采纳、审批、模型评估与运行继续用 `proposal-adoption` 和原 `TestApplicationProposalAdoption|TestApplicationAgentCandidateEvaluationGate`，合成模型不代表真实模型质量。
+
 自动测试集中在契约、业务行为、权限、数据一致性和恢复；浏览器只保留规范入口与关键构建/操作路线。外观、布局、画布拖动、一般交互和体验由截图检查及负责人走查。不为颜色、面板宽高、拖动距离或每种设备/语言复制自动路线。
 
 | 变更 | 适用检查 |

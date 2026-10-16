@@ -2,7 +2,8 @@ import {InputDraftProvider} from "@platform/ui";
 import {useInputDrafts} from "@platform/ui";
 import type { Project } from "../projects/project";
 import { ApplicationSamples } from "./samples";
-import { useApplicationWorkspace } from "../projects/application-scope";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
+import { joinProjectResource } from "../projects/membership";
 import { refKey, resourceKinds, resourceRef } from "../projects/resources";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { AppSelect, PayloadFields, useHost, useRecordInventory } from "@platform/app";
@@ -23,17 +24,18 @@ type TestPlan = { id: string; revision: number; name?:string;functionVersion?:nu
 export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
   return <InputDraftProvider isolated scope="candidate-test"><CandidateTestForm {...props}/></InputDraftProvider>;
 }
-function CandidateTestForm({ applicationId = "", processId = "", functionId = "", objectId = "", planId = "", embedded = false, onStepSelect }: {
-  applicationId?: string; processId?: string; functionId?: string; objectId?: string; planId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
+function CandidateTestForm({ applicationId = "", processId = "", functionId = "", objectId = "", planId = "", embedded = false, evaluationSet = false, onStepSelect }: {
+  applicationId?: string; processId?: string; functionId?: string; objectId?: string; planId?: string; embedded?: boolean; evaluationSet?: boolean; onStepSelect?: (step: string) => void;
 }) {
-  const { client, role, decide, action } = useHost();
+  const host = useHost(), { client, role, decide, action } = host;
+  const constructionApplication = useApplicationScope();
   const { open } = useApplicationWorkspace();
   const objects = useRecordInventory<ObjectDraft>("build.object");
   const plans = useRecordInventory<TestPlan>("build.testplan");
   const processes = useRecordInventory<WorkflowDraft>("build.process");
   const functions = useRecordInventory<FunctionDraft>("build.function");
  const applications=useRecordInventory<Project>("build.app");
-  const [kind, setKind] = useState<"object" | "flow" | "function" | "app">(applicationId ? "app" : functionId ? "function" : processId ? "flow" : "object");
+  const [kind, setKind] = useState<"object" | "flow" | "function" | "app">(applicationId ? "app" : functionId || evaluationSet ? "function" : processId ? "flow" : "object");
   const [model, setModel] = useState("fixture/probe");
   const [planID, setPlanID] = useState(""),[createID,setCreateID]=useState(()=>crypto.randomUUID());
   const [revision, setRevision] = useState(0);
@@ -54,7 +56,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
  const [candidateID,setCandidateID]=useState("");
  const application=kind==="app"?applications.data?.records.find(record=>record.id===id):undefined;
   const planRoots = kind === "app" && includeInReleases ? roots.length ? roots : (application?.resources ?? []).filter(ref => ref.app === "build" && (ref.kind === "object" || ref.kind === "flow")) : [];
-  const [evaluationEnabled, setEvaluationEnabled] = useState(false);
+  const [evaluationEnabled, setEvaluationEnabled] = useState(evaluationSet);
   const [minQuality, setMinQuality] = useState(1);
   const [maxCostUsd, setMaxCostUsd] = useState(0.1);
   const [maxLatencyMillis, setMaxLatencyMillis] = useState(30000);
@@ -65,7 +67,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const process = kind === "flow" ? processes.data?.records.find((record) => record.id === id) : undefined;
   const fn = kind === "function" ? functions.data?.records.find((record) => record.id === id) : undefined;
   const object = kind === "object" ? objects.data?.records.find((record) => record.id === id)
-    : kind==="app" ? objects.data?.records.find(record=>application?.resources?.some(ref=>ref.kind==="object"&&ref.name===`build.${record.name}`)) : installedObjects(objects.data?.records ?? []).find((record) => `build.${record.name}` === (fn?.object ?? process?.object));
+    : kind==="app" ? objects.data?.records.find(record=>application?.resources?.some(ref=>ref.kind==="object"&&ref.name===`build.${record.name}`)) : (kind === "function" ? objects.data?.records ?? [] : installedObjects(objects.data?.records ?? [])).find((record) => `build.${record.name}` === (fn?.object ?? process?.object));
   const rootRevision = kind==="app" ? application?.revision : kind === "object" ? object?.revision : kind === "flow" ? process?.revision : fn?.revision;
   const objectRevisions = objects.data?.records.map(record => [record.id, record.revision]);
   const candidateInputs = useQuery({
@@ -117,7 +119,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     // A new root gets a new plan identity; Save must never move the previous
     // asset's plan simply because the user selected a different draft.
     setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");setSample("");setMembers("");setCandidateID("");
-    setModel("fixture/probe"); setEvaluationEnabled(false);
+    setModel("fixture/probe"); setEvaluationEnabled(evaluationSet && nextKind === "function");
     setMinQuality(1); setMaxCostUsd(0.1); setMaxLatencyMillis(30000);
     setCases([{ name: "synthetic", input: "{}", expected: "{}" }]);
   };
@@ -186,12 +188,10 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
         const record = refreshed.data?.records.find((plan) => plan.id === target);
         if (record) {
           setPlanID(target); setRevision(record.revision); setRoots(record.roots ?? []);
-          if (planRoots.length && application) {
-            const ref = resourceRef(resourceKinds.find(kind => kind.kind === "test-plan")!, record.name!);
-            if (!application.resources?.some(resource => refKey(resource) === refKey(ref))) {
-              if (!await decide("build.app.edit", { type: "build.app", id: application.id }, { resources: [...(application.resources ?? []), ref] }, { expectedRevision: application.revision, quiet: true, onRefused: setError })) return;
-              await applications.refetch();
-            }
+          const owner = planRoots.length ? application?.id : kind === "function" && evaluationEnabled && record.name ? constructionApplication : undefined;
+          if (owner) {
+            await joinProjectResource(host, owner, resourceRef(resourceKinds.find(item => item.kind === (planRoots.length ? "test-plan" : "evaluation-set"))!, record.name!));
+            await applications.refetch();
           }
           markSaved(); setDirty(false); setSaved(true);
         }
