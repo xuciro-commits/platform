@@ -914,8 +914,13 @@ func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member pla
 }
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
-	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, MigrationPlanType: platform.AssetMigration, SampleSetType: platform.AssetSampleSet}
+	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, MigrationPlanType: platform.AssetMigration, SampleSetType: platform.AssetSampleSet,
+		PropertyTypeType: platform.AssetPropertyType, LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent,
+		CodeType: platform.AssetCompute, TableType: platform.AssetCompute, AlertType: platform.AssetAlert, TestPlanType: platform.AssetTestPlan}
 	kind := kinds[typ]
+	if kind == "" {
+		kind = integrationKindOf(typ)
+	}
 	if kind == "" {
 		return platform.AssetRef{}, fmt.Errorf("unknown native release draft %s", typ)
 	}

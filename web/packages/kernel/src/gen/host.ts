@@ -1354,6 +1354,24 @@ export type Draft = {
   step: number;
 };
 
+export type DraftChange = {
+  ref: AssetRef;
+  type: string;
+  id: string;
+  title: string;
+  variant?: string;
+  published: boolean;
+  changed: Stamp;
+  fields: DraftChangeField[];
+  diagnostic?: string;
+};
+
+export type DraftChangeField = {
+  name: string;
+  before?: unknown;
+  after?: unknown;
+};
+
 export type DriverBinding = {
   package: string;
   version: string;
@@ -3710,6 +3728,10 @@ export type ReleaseAsset = {
   requires: AssetRef[];
   provides?: Capability[];
   body: unknown;
+};
+
+export type ReleaseDraftChanges = {
+  changes: DraftChange[];
 };
 
 export type ReleaseDraftClosure = {

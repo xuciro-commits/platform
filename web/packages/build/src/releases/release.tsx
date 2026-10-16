@@ -13,6 +13,7 @@ import { MigrationWorkbench } from "./migration";
 // what the builder checked; the server recomputes the candidate from it.
 export type JointChoice = { kind: ReleaseKind; id: string };
 const jointKey = (choice: JointChoice) => `${choice.kind}/${choice.id}`;
+const ownerDraft = (choice: JointChoice): JointChoice => ({ ...choice, kind: choice.kind === "table" ? "compute" : choice.kind });
 const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] => {
   const seen = new Set(current.map(jointKey));
   const out = [...current];
@@ -24,7 +25,7 @@ const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] 
   return out;
 };
 
-export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app";
+export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app" | "migration";
 /** Decode incoming candidate selections without silently discarding a bad
  * joint closure and delivering only its application root (ADR-0048 D6). */
 export function releaseDraftsSelection(value: string | undefined, kinds: readonly string[]): { drafts: JointChoice[]; error?: string } {
@@ -65,6 +66,7 @@ type EvaluationReport = { id: string; candidate: string; function: string; state
 const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
   ...resourceKinds.filter((item) => item.kind !== "action" && item.kind !== "automation").map((item) => ({ kind: item.kind as ReleaseKind, type: item.type, label: item.plural })),
   { kind: "app", type: "build.app", label: "Applications" },
+  { kind: "migration", type: "build.migration-plan", label: "Migration plans" },
 ];
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
@@ -129,7 +131,13 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const functions = useRecordInventory<Record>("build.function", 1000, builder);
   const plans = useRecordInventory<EvaluationPlan>("build.testplan", 1000, builder);
   const reports = useRecordInventory<EvaluationReport>("build.evaluation", 1000, mayRelease);
-  const records = (query.isError ? [] : query.data?.records ?? []).filter(record => (kind === "app" || kind === "flow" || matchesResourceKind(resourceKinds.find(item => item.kind === kind)!, record)) && (!scope || (kind === "app" ? record.id === scope : !!scopedApplication && held.has(refKey(resourceRef(resourceKinds.find(item => item.kind === kind)!, record.name))))));
+  const resourceKind = resourceKinds.find(item => item.kind === kind);
+  const records = (query.isError ? [] : query.data?.records ?? []).filter(record => {
+    if (resourceKind && kind !== "flow" && !matchesResourceKind(resourceKind, record)) return false;
+    if (!scope) return true;
+    if (kind === "app") return record.id === scope;
+    return !!scopedApplication && held.has(refKey(resourceKind ? resourceRef(resourceKind, record.name) : { app: "build", kind, name: record.name }));
+  });
   const functionNames = (review?.included ?? []).filter((ref) => ref.app === "build" && ref.kind === "function").map((ref) => ref.name);
   const localPlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
   const eligiblePlans = [...localPlans, ...assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "evaluation-set" && !localPlans.some(plan => plan.name === asset.ref.name)).map(asset => ({id:asset.ref.name,title:asset.ref.name}))];
@@ -178,7 +186,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   };
   const inspect = (drafts?: JointChoice[]) => {
     if (pendingRef.current || selectionError) return;
-    const request: Api.ReleasePreviewRequest = drafts?.length ? { drafts: drafts.map(choice => ({ ...choice })) } : { kind, id };
+    const request: Api.ReleasePreviewRequest = drafts?.length ? { drafts: drafts.map(ownerDraft) } : ownerDraft({ kind, id });
     if (new TextEncoder().encode(JSON.stringify(request)).length > 4096) { setError(t("The release selection exceeds the original 4096-byte request budget. No drafts were dropped.")); return; }
     return perform(async () => {
       clearReview(); setSavedID(""); setConfirmedUpgrade(""); setCandidateKey("");
@@ -196,7 +204,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     return perform(async () => {
       setJointNote("");
       try {
-        const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", from satisfies Api.ReleaseDraftsRequest);
+        const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", ownerDraft(from) satisfies Api.ReleaseDraftsRequest);
         if (!result.ok) setJointNote(apiErrorMessage(result.body) ?? t("Draft dependencies could not be read."));
         else {
           const found = result.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));

@@ -47,6 +47,44 @@ test("shared published resources retain their owners through application discove
   expect((await operator.definitions<any>()).some(definition => JSON.stringify(definition.ref) === JSON.stringify(action.ref))).toBe(false);
 });
 
+test("saved application changes include published drafts and use the original joint release", async ({ page, builder }, info) => {
+  const object = await builder.object({ title: "Change discovery object", fields: [{ name: "note", title: "Note", type: "text" }] });
+  const application = await builder.application({ title: "Change discovery app", resources: [{ app: "build", kind: "object", name: object.type }] });
+  await builder.activate(await builder.candidate([{ kind: "app", id: application.id }]));
+  const original = (await builder.record("build.object", object.id)).published;
+  await builder.decide("build.object.edit", { type: "build.object", id: object.id }, { title: "Change discovery object updated" });
+  await builder.decide("build.app.edit", { type: "build.app", id: application.id }, { description: "Saved application update" });
+  expect((await builder.record("build.object", object.id)).state).toBe("published");
+  await builder.open(page, `/project?id=${application.id}`);
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const jointSelection = page.getByRole("list", { name: "Joint selection", exact: true });
+  await expect(jointSelection).toContainText(object.id);
+  await expect(jointSelection).toContainText(application.id);
+  await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Change discovery app", exact: true }).click();
+  await page.getByRole("button", { name: /^Changes/ }).click();
+  await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Verify", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("cell", { name: "Change discovery app", exact: true })).toBeVisible();
+  await page.getByRole("cell", { name: "Change discovery object updated", exact: true }).click();
+  const differences = page.getByRole("region", { name: "Saved definition differences", exact: true });
+  await differences.getByText("title", { exact: true }).click();
+  await expect(differences.getByText('"Change discovery object"', { exact: true })).toBeVisible();
+  await expect(differences.getByText('"Change discovery object updated"', { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review selected changes", exact: true })).toBeDisabled();
+  expect((await builder.record("build.object", object.id)).published).toBe(original);
+  await shots(page, differences, "saved-definition-differences", info);
+  await page.getByRole("checkbox", { name: "Select Change discovery app", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Select Change discovery object updated", exact: true }).check();
+  await shots(page, page.locator("body"), "saved-changes", info);
+  await page.getByRole("button", { name: "Review selected changes", exact: true }).click();
+  await page.getByRole("button", { name: "Check joint candidate", exact: true }).click();
+  await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
+  const confirmation = page.getByRole("checkbox", { name: "Confirm this optional field upgrade plan", exact: true });
+  if (await confirmation.count()) await confirmation.check();
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
+  await expect.poll(async () => (await builder.read<{ changes: unknown[] }>(`releases/drafts/changes?application=${application.id}`)).changes.length).toBe(0);
+});
+
 test("application capacity, original decisions and headless runtime remain visible", async ({ page, builder, operator }, testInfo) => {
   const object = await builder.object({ title: "Runtime case object", fields: [{ name: "note", title: "Note", type: "text" }] });
   const application = await builder.application({ title: "Runtime case application", resources: [{ app: "build", kind: "object", name: object.type }] });

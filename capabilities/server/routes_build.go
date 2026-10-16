@@ -158,6 +158,14 @@ func (h *Host) routesBuild(rt *routes) {
 		answer.PromotedTo = h.promotionsOf(t.ID, answer.Preview.CandidateID)
 		WriteJSON(w, http.StatusOK, answer)
 	})
+	rt.authorized(Route{Pattern: "GET /v1/releases/drafts/changes", Summary: "Read saved authoring changes against original retained publications without creating a candidate", Answer: ReleaseDraftChanges{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.SavedDraftChanges(m, r.URL.Query().Get("application"), r.URL.Query().Get("type"), r.URL.Query().Get("id"))
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
 	rt.authorized(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0048 D1)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
 		if readErr != nil || len(body) > 4096 {

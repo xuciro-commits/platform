@@ -13,6 +13,7 @@ import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
 import { publishedResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 import { projectResourceChange } from "./membership";
+import { draftChangeKind, useSavedDraftChanges } from "../releases/changes";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
@@ -83,6 +84,8 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
+  const builder = role("build") === "builder";
+  const savedChanges = useSavedDraftChanges(id, undefined, builder);
   const { inventories, owned, available, shared, loading } = useProjectResources(project);
   const resourcesUnavailable = owned.some(resource => !resource.installed && inventories[resource.kind.kind]?.isError);
   const [filter, setFilter] = useState("");
@@ -209,8 +212,12 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
       : { resources: (current.resources ?? []).filter(item => refKey(item) !== refKey(ref)) };
     if (await patch(changes, current.revision)) setSelected(undefined);
   };
-  const builder = role("build") === "builder";
-  const unpublished = owned.filter((item) => item.record && item.record.state !== "published");
+  const unpublished = savedChanges.data?.changes ?? [];
+  const releaseSelection = [...new Map([...unpublished.map(change => ({ kind: draftChangeKind(change), id: change.id })), ...importedDependencies].map(choice => [JSON.stringify([choice.kind, choice.id]), choice])).values()];
+  // Prepare Verify once from the same saved changes as Publish. Later reads
+  // must not replace an in-progress or unconfirmed release selection.
+  const verificationSelection = useRef<typeof releaseSelection | undefined>(undefined);
+  if (!verificationSelection.current && visited.includes("release") && savedChanges.isSuccess && !savedChanges.isFetching) verificationSelection.current = releaseSelection;
   const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.", { title: item.title }), subject: t(item.kind.label), locate: () => { setSelected(refKey(item.ref)); setTab("resources"); } }));
   const addExisting = (kind: ResourceKindInfo, record: ResourceRecord) => latestProject.current
     ? patch(changesForResource(latestProject.current, kind, record), latestProject.current.revision) : Promise.resolve(false);
@@ -255,7 +262,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, ...(importedDependencies.length ? { drafts: releaseDraftsValue(importedDependencies) } : {}) } })}>{t("Publish")}</Button>}
+        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || savedChanges.isPending || savedChanges.isError || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, drafts: releaseDraftsValue(releaseSelection) } })}>{t("Publish")}</Button>}
       </>}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
@@ -301,11 +308,12 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
             </div>}
             <div className="grid gap-2">
               <h2 className="text-sm font-semibold">{t("Unpublished changes")} <span className="text-muted">({unpublished.length})</span></h2>
-              {!unpublished.length && <p className="text-xs text-muted">{loading ? t("Loading…") : !owned.length ? t("Nothing to publish yet: the project has no resources.") : t("Everything in this project is published.")}</p>}
+              {savedChanges.isError && <p role="alert" className="text-xs text-danger">{t("Saved changes could not be loaded.")}</p>}
+              {!savedChanges.isError && !unpublished.length && <p className="text-xs text-muted">{loading || savedChanges.isPending ? t("Loading…") : t("No saved changes. Unsaved editor input is not included.")}</p>}
               <ul className="divide-y divide-border rounded-md border border-border">
-                {unpublished.slice(0, 12).map((item) => <li key={refKey(item.ref)}>
-                  <Button variant="row" type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-row-hover" onClick={() => item.record && open(resourceRoute(item.kind, item.record.id, project.id))}>
-                    <span className="text-muted [&>svg]:size-4">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{t(item.kind.label)}</span><DraftStatus state={item.record?.state} />
+                {unpublished.slice(0, 12).map((item) => <li key={`${item.type}/${item.id}`}>
+                  <Button variant="row" type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-row-hover" onClick={() => open({ view: "changes", params: { application: project.id, kind: draftChangeKind(item), id: item.id } })}>
+                    <span className="text-muted [&>svg]:size-4">{kindIcon[resourceKinds.find(kind => kind.type === item.type)?.kind ?? "definition"]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{item.fields.map(field => field.name).join(", ")}</span><DraftStatus state="draft" />
                   </Button>
                 </li>)}
               </ul>
@@ -320,7 +328,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
             </div>
             <div role="region" aria-label={t("Application progress")} className="rounded-md border border-border p-3 text-xs">
               <h3 className="font-semibold">{t("Application progress")}</h3>
-              <p className="mt-2">{t("{models} models · {pages} pages · {drafts} unpublished assets", { models: owned.filter(item => item.ref.kind === "object").length, pages: owned.filter(item => item.ref.kind === "page").length, drafts: unpublished.length })}</p>
+              <p className="mt-2">{t("{models} models · {pages} pages · {drafts} saved changes", { models: owned.filter(item => item.ref.kind === "object").length, pages: owned.filter(item => item.ref.kind === "page").length, drafts: unpublished.length })}</p>
               <p>{t("{count} missing assets", { count: problems.length })}</p>
               <p className="mt-2 text-muted">{t("The release owner checks model completeness, rules and page bindings before delivery.")}</p>
               <Button size="sm" className="mt-2" onClick={() => open(studioRoute(id, "verify", selected))}>{t("Verify application")}</Button>
@@ -352,7 +360,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
         {visited.includes("release") && <div hidden={tab !== "release"}><ViewVisibilityContext.Provider value={visibleView && tab === "release"}><div className="grid gap-4 p-4" role="region" aria-label={t("Verification and delivery")}>
           <CandidateTest applicationId={id} planId={initialPlan} embedded />
  {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
-          <ReleaseReview initialKind="app" initialID={id} initialDrafts={importedDependencies} embedded />
+          {verificationSelection.current ? <ReleaseReview initialKind="app" initialID={id} initialDrafts={verificationSelection.current} embedded /> : <p role={savedChanges.isError ? "alert" : "status"}>{t(savedChanges.isError ? "Saved changes could not be loaded." : "Loading…")}</p>}
         </div></ViewVisibilityContext.Provider></div>}
         {tab === "runs" && <ApplicationRuns owner="build" name={project.name} />}
         {tab === "roles" && <ProjectRoles owned={owned} />}

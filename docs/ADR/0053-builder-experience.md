@@ -296,7 +296,7 @@ shared/      asset-controls, record-paths, release-profile（不变）
 | `Application` → 增加 `navigation: NavItem[]`（group/page/external，图标、可见条件） | `groups` 保留为派生；前端只写 `navigation`。 |
 | 新资源 `automation`（`Definition.automation`） | 新 kind；运行时在 host 的事件总线上订阅对象事件与计划任务，效果执行复用动作/流程/通知现有路径。 |
 | `Definition.action` 独立可寻址 | 已是 `AssetRef`；补 `requires` 以便 `changes` 列 diff。 |
-| 发布 diff API：`GET /changes?project=` 返回结构化改动 | 后端已有 revision/版本；新增一个只读聚合端点。 |
+| 发布 diff API | 已实现为原 Build 的 `GET /v1/releases/drafts/changes?application=<draft-id>`，选定 `type/id` 后读取字段原值与草稿值。原 `GET /changes?project=` 提案未采用，不占用实时更新的 `/v1/changes`。Publish / Verify 与 Changes 使用同一份已保存变更选择；候选、版本和接受仍归原发布过程。 |
 
 前端先行：P1–P4 不依赖 Go 变更（事件链用前端折算，自动化模型先以 `Process` 的 `when/manual` 子集呈现）；P5 起需要后端配合，届时提交 Go 代码由用户本地 `go test` 验证。
 
@@ -363,7 +363,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 | §6 动作类型是一等资源：Overview · Parameters · Form · Rules · Submission criteria · Side effects · Approval · Permissions | `build/ontology/action-type.tsx` `ActionTypeEditor({id, action})`：左栏 = 对象的动作列表 + 分区；主区 = 分区的表格 / 表单预览；检查器编辑选中的行；底栏 Problems 只列本动作的问题。动作仍存于对象记录的 `actions[]`，与对象工作台共用同一草稿会话 |
 | §7 事件 → 效果链 | `build/workshop/page-editor/EffectsPanel.tsx` `EventEffects`（按钮：全部效果；按钮组：set / overlay / action；表格选择：仅 set）；运行时 `app/runtime/PageNavigation.ts` `usePageEffects` 顺序执行，`useActionEffect` 走动作表单或直接 `decide`，被拒绝/取消即停链；删除 `NavigationPanel.tsx`、`ButtonEventProperties` |
 | D3 Automate：自动化卡片（when/then 一句话） + 线性自动化编辑器 + 逻辑流程工作台 + Runs | `build/automate/automation.tsx`（`Automations` 列表仅收 `kind: "automation"` 的 `build.process`；`AutomationEditor`：触发器 · 条件 · 效果三张卡片，右侧复用 `WorkflowInspector`，底栏 Problems · Runs，保存时把卡片编译成步骤）、`automate/workflow.tsx`（`Flows`、`FlowEditor`）。Flow / Automation 的检查器只持有字段，标题与关闭由 Workbench 提供，Input / Settings / Output 页签复用 `ContentTabs`；关闭检查器不取消选中节点，重开保留页签及未解析输入。 |
-| D8 Changes 视图（所有草稿一览 + 发布审查） | `build/releases/changes.tsx` |
+| D8 Changes 视图（已保存定义变更 + 原发布审查） | `build/releases/changes.tsx` 读取原 Build 的 `GET /v1/releases/drafts/changes`，包含应用自身、已发布后再编辑的定义及修改人/时间；按字段查看保留发布值与草稿值，批量选择进入原联合发布。当前为字段级差异，页面 sections/document/events 展示原属性整体，不宣称逐 Widget 的语义分类。ADR-0124 取消用生命周期状态猜测差异及前端重复扫描；未保存输入不计入。 |
 | D9 路由：`projects, project, object-type, action-type, module, automation, flow, runs, changes, release-history` | `build/index.tsx`；旧路由 `applications/application/studio/pages/compose/model/process/workflow/candidate-test` 由 `apps/workspace/src/shell/legacy.ts` 的别名表（含参数映射）转向 |
 | 删除 | `projects/application.tsx`、`projects/studio.tsx`、`shared/asset-controls.tsx`、`PagesList`、`Objects`、`Workflows`、`WorkflowEditor`、`ProcessEditor` |
 

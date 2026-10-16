@@ -1,58 +1,73 @@
-// Changes (ADR-0053 §9): everything in the project that differs from what is
-// live — drafts across object types, pages, modules, flows and functions — on
-// one list, grouped by kind, with the release review for a chosen set beside
-// it. The ReleaseReview keeps the host dialogue (preview, candidate, upgrade,
-// activation); this view is the way in and the place to pick the set.
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, PageHeader, Tag, cn, t, useUnsavedChanges } from "@platform/ui";
+// Discovery and field differences come from the original Build declarations.
+// Selecting changes opens the existing release review, not another publisher.
+import { useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { PackageCheck } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Button, Checkbox, DataTable, Disclosure, PageHeader, Panel, Tag, t, useUnsavedChanges, type ColumnDef } from "@platform/ui";
+import { useState } from "react";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { kindIcon } from "../projects/project";
-import { refKey, resourceRef, resourceKinds, resourceRoute, type ResourceRecord } from "../projects/resources";
-import { ReleaseReview, releaseKinds, type ReleaseKind } from "./release";
+import { resourceKinds, resourceRoute } from "../projects/resources";
+import { releaseDraftsValue, type JointChoice, type ReleaseKind } from "./release";
+
+export const draftChangeKind = (change: Api.DraftChange): ReleaseKind => change.type === "build.app" ? "app" : change.type === "build.migration-plan" ? "migration" : change.type === "build.process" ? "flow"
+  : resourceKinds.find(kind => kind.type === change.type && (kind.ref ?? kind.kind) === change.ref.kind && (kind.kind !== "automation" || change.variant === "automation") && (kind.kind !== "flow" || change.variant !== "automation"))?.kind as ReleaseKind;
+const changeKey = (change: Api.DraftChange) => `${change.type}/${change.id}`;
+
+export function useSavedDraftChanges(application?: string, detail?: Pick<Api.DraftChange, "type" | "id">, enabled = true) {
+  const params = new URLSearchParams();
+  if (application) params.set("application", application);
+  if (detail) { params.set("type", detail.type); params.set("id", detail.id); }
+  return useReadQuery<Api.ReleaseDraftChanges>(`/v1/releases/drafts/changes${params.size ? `?${params}` : ""}`, undefined, enabled);
+}
 
 export function Changes({ initialKind, initialID }: { initialKind?: string; initialID?: string }) {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
-  const scope = useApplicationScope();
+  const scope = useApplicationScope(), { open } = useApplicationWorkspace();
+  const query = useSavedDraftChanges(scope), rows = query.data?.changes ?? [];
+  const [picked, setPicked] = useState<{ kind?: string; id?: string }>({ kind: initialKind, id: initialID });
+  const [checked, setChecked] = useState<string[]>([]);
+  const current = rows.find(row => row.id === picked.id && draftChangeKind(row) === picked.kind);
+  const detail = useSavedDraftChanges(scope, current, !!current);
+  const original = detail.data?.changes.find(row => row.type === current?.type && row.id === current?.id);
   const { confirmDiscard } = useUnsavedChanges(false, () => {});
-  const application = useReadQuery<{ record: Api.Application }>(`/v1/records/build.app/${encodeURIComponent(scope ?? "")}`, undefined, !!scope);
-  const held = useMemo(() => scope && application.data?.record ? new Set([
-    ...(application.data.record.resources ?? []).map(refKey),
-    ...(application.data.record.pages ?? []).map(name => refKey({ app: "build", kind: "page", name })),
-  ]) : undefined, [scope, application.data]);
-  const kinds = resourceKinds.filter((kind) => releaseKinds.includes(kind.kind as ReleaseKind));
-  // One inventory per kind; the kind list is a module constant, so the hook count is stable.
-  const inventories = kinds.map((kind) => ({ kind, rows: useRecordInventory<ResourceRecord>(kind.type, 500) }));
-  const loading = inventories.some((entry) => entry.rows.isLoading);
-  const unreadable = inventories.some((entry) => entry.rows.isError) || !!scope && application.isError;
-  const scopePending = !!scope && !application.data;
-  const changed = useMemo(() => inventories.flatMap(({ kind, rows }) => (rows.data?.records ?? []).filter((row) => !row.archived && (!scope || !!held?.has(refKey(resourceRef(kind, row.name)))) && (row.state ? row.state === "draft" : !row.version)).map((row) => ({ kind, row }))),
-    [scope, held, ...inventories.map((entry) => entry.rows.data)]);
-  const [picked, setPicked] = useState<{ kind: ReleaseKind; id: string } | undefined>(initialID && releaseKinds.includes(initialKind as ReleaseKind) ? { kind: initialKind as ReleaseKind, id: initialID } : undefined);
-  const mayRelease = role("build") === "builder" || role("build") === "publisher";
-  return <div className="flex min-h-0 flex-1 flex-col">
-    <div className="px-4 pt-4"><PageHeader title={t("Changes")} description={t("What differs from the live workspace. Pick a draft to review what its release would change, then activate it.")} /></div>
-    <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
-      <div className="min-h-0 overflow-auto border-r border-border">
-        {kinds.map((kind) => { const rows = changed.filter((entry) => entry.kind.kind === kind.kind); if (!rows.length) return null; return <div key={kind.kind} className="border-b border-border">
-          <h3 className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">{t(kind.plural)} <span className="rounded-full bg-row-hover px-1.5 text-[10px]">{rows.length}</span></h3>
-          <ul>{rows.map(({ row }) => <li key={row.id}><Button variant="row" type="button" aria-pressed={picked?.kind === kind.kind && picked.id === row.id}
-            onClick={() => { if (picked?.kind !== kind.kind || picked.id !== row.id) confirmDiscard(() => setPicked({ kind: kind.kind as ReleaseKind, id: row.id })); }} onDoubleClick={() => confirmDiscard(() => open(resourceRoute(kind, row.id, scope)))}
-            className={cn("flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-row-hover", picked?.kind === kind.kind && picked.id === row.id && "bg-row-selected")}>
-            <span className="text-muted [&>svg]:size-4">{kindIcon[kind.kind]}</span><span className="min-w-0 flex-1 truncate">{row.title || row.name}</span><Tag label={t("Draft")} tone="warning" />
-          </Button></li>)}</ul>
-        </div>; })}
-        {unreadable && <p role="alert" className="p-4 text-sm text-danger">{t("Some draft inventories are unavailable. An empty list does not mean every draft is live.")}</p>}
-        {!unreadable && !changed.length && <p className="p-4 text-sm text-muted">{loading || scopePending ? t("Loading…") : t("Nothing to release. Every draft matches what is live.")}</p>}
-      </div>
-      <div className="min-h-0 overflow-auto p-4">
-        {picked ? <ReleaseReview key={`${picked.kind}:${picked.id}`} initialKind={picked.kind} initialID={picked.id} embedded /> : <div className="grid h-full place-content-center gap-2 text-center text-sm text-muted">
-          <PackageCheck className="mx-auto size-8" /><p>{t("Pick a change to review its release.")}</p>
-          {mayRelease && <Button variant="ghost" size="sm" onClick={() => open({ view: "release-history" })}>{t("Release history")}</Button>}
-        </div>}
-      </div>
+  const selected = rows.filter(row => checked.includes(changeKey(row)));
+  const review = (selection: Api.DraftChange[]) => {
+    const drafts: JointChoice[] = selection.map(change => ({ kind: draftChangeKind(change), id: change.id }));
+    if (!drafts.length || drafts.length > 32) return;
+    open({ view: "release-review", params: { kind: drafts[0]!.kind, id: drafts[0]!.id, drafts: releaseDraftsValue(drafts) } });
+  };
+  const columns: ColumnDef<Api.DraftChange, any>[] = [
+    { id: "selected", header: t("Select"), meta: { width: 50 }, cell: ({ row: { original: change } }) => <span onClick={event => event.stopPropagation()}><Checkbox ariaLabel={t("Select {title}", { title: change.title })} checked={checked.includes(changeKey(change))} onChange={value => setChecked(current => value ? [...current, changeKey(change)] : current.filter(key => key !== changeKey(change)))} /></span> },
+    { id: "title", header: t("Resource"), accessorKey: "title", meta: { width: 220 } },
+    { id: "fields", header: t("Changed fields"), accessorFn: row => row.fields.map(field => field.name).join(", ") },
+    { id: "state", header: t("Status"), accessorFn: row => row.diagnostic ? t("Needs review") : row.published ? t("Modified") : t("Draft"), cell: ({ getValue }) => <Tag label={getValue()} tone="warning" /> },
+    { id: "by", header: t("Changed by"), accessorFn: row => row.changed.by },
+    { id: "at", header: t("Changed at"), accessorFn: row => row.changed.at ? new Date(row.changed.at).toLocaleString() : "" },
+  ];
+  const kind = current && resourceKinds.find(kind => kind.kind === (current.variant === "automation" ? "automation" : draftChangeKind(current)));
+  return <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+    <PageHeader title={t("Changes")} description={t("Saved changes compared with retained publications. Unsaved editor input is not included.")} />
+    <div className="flex flex-wrap items-center gap-2">
+      <Button variant="primary" disabled={!selected.length || selected.length > 32 || query.isError} onClick={() => review(selected)}>{t("Review selected changes")}</Button>
+      <Button variant="ghost" onClick={() => open({ view: "release-history" })}>{t("Release history")}</Button>
+      {selected.length > 32 && <p role="alert" className="text-sm text-warning">{t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")}</p>}
     </div>
+    {query.isError ? <p role="alert">{t("Saved changes could not be loaded.")}</p> : <DataTable data={rows} columns={columns} getRowId={changeKey} selectedId={current && changeKey(current)} loading={query.isPending}
+      height={280} empty={t("No saved changes. Unsaved editor input is not included.")} onRowClick={row => confirmDiscard(() => setPicked({ kind: draftChangeKind(row), id: row.id }))} />}
+    {current && <Panel role="region" aria-label={t("Saved definition differences")} className="grid min-w-0 gap-3">
+      <h2 className="text-sm font-semibold">{current.title}</h2>
+      <p className="break-all font-mono text-xs text-muted">{current.ref.app}/{current.ref.kind}/{current.ref.name}</p>
+      {detail.isError ? <p role="alert">{t("Saved changes could not be loaded.")}</p> : detail.isPending ? <p>{t("Loading…")}</p> : <>
+        {original?.diagnostic && <p role="alert" className="text-sm text-danger">{original.diagnostic}</p>}
+        {original?.fields.map(field => <Disclosure key={field.name} summary={field.name}><div className="grid min-w-0 gap-3 md:grid-cols-2">
+          <div className="min-w-0"><h3 className="mb-1 text-xs font-semibold">{t("Published")}</h3><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{field.before === undefined ? "—" : JSON.stringify(field.before, null, 2)}</pre></div>
+          <div className="min-w-0"><h3 className="mb-1 text-xs font-semibold">{t("Saved draft")}</h3><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{field.after === undefined ? "—" : JSON.stringify(field.after, null, 2)}</pre></div>
+        </div></Disclosure>)}
+        {!original && <p className="text-sm text-muted">{t("No saved changes. Unsaved editor input is not included.")}</p>}
+      </>}
+      <div className="flex flex-wrap gap-2">
+        {kind && <Button size="sm" onClick={() => open(resourceRoute(kind, current.id, scope))}>{t("Open")}</Button>}
+        {current.type === "build.app" && <Button size="sm" onClick={() => open({ view: "project", params: { id: current.id } })}>{t("Open")}</Button>}
+        <Button size="sm" onClick={() => review([current])}>{t("Review and publish…")}</Button>
+      </div>
+    </Panel>}
   </div>;
 }

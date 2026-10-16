@@ -193,6 +193,8 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 共享资源路线可单独运行 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-delivery E2E_ARGS='--grep "shared published"'`：显示并移除失效引用，再从正常添加入口引用已发布的动作、函数和流程，查看只读定义并发布应用；检查原定义不变、未给普通成员增加权限。`make test-go PKG=./platform RUN=TestApplicationMembershipRetainsForeignActionsWithoutInvokingThem` 区分结构成员与真正的跨应用调用，后者仍需原协议。
 
+发布后修改路线用同一 spec 的 `--grep "saved application changes"`：已发布对象和应用再保存修改，从项目进入 Changes、查看原值/草稿值、批量选择并沿原联合候选激活。`TestSavedDraftChangesRetainPublicationsAndIncludeApplication` 核对应用自身、保留字节、恢复原值后无差异及成员权限；`TestDraftComparisonUsesOriginalPortableOwners` 核对接入与告警原描述，`TestApprovalRequestsJoinSharedLiveReads` 确保新读取参与原实时更新而不使同组其他读取失败。不以此代替完整构建者走查。
+
 
 ### 跨系统协同（ADR-0112）
 

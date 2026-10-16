@@ -26,6 +26,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
     !!route?.params?.asset && refKey(item.ref) === route.params.asset ||
     !!definition && (refKey(item.ref) === refKey(definition.ref) || item.ref.kind === "object" && item.ref.name === definition.action?.target));
   const area = route?.view === "project" ? studioArea(route.params?.area)
+    : ["changes", "release-review", "release-history", "test-plan", "sample-set", "evaluation-set"].includes(route?.view ?? "") ? "verify"
     : ["action-type", "decision-table", "alert"].includes(route?.view ?? "") || definition?.ref.kind === "action" ? "behavior"
     : selected ? resourceArea(selected) : "assemble";
   const visible = owned.filter(item => `${item.title} ${item.ref.name} ${t(item.kind.label)}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));

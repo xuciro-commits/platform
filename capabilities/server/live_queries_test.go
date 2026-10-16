@@ -75,7 +75,7 @@ func TestApprovalRequestsJoinSharedLiveReads(t *testing.T) {
 	}
 	server := httptest.NewServer(NewHost(Tokens(map[string]string{"builder": "builder"}), tn).Handler())
 	defer server.Close()
-	paths := []string{"/v1/me", "/v1/requests", "/v1/inbox", "/v1/releases/active", "/v1/releases/candidates", "/v1/page-model/rules"}
+	paths := []string{"/v1/me", "/v1/requests", "/v1/inbox", "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/changes", "/v1/page-model/rules"}
 	watch, _ := json.Marshal(paths)
 	req, _ := http.NewRequest("GET", server.URL+"/v1/changes?"+url.Values{"watch": {string(watch)}}.Encode(), nil)
 	req.Header.Set("Authorization", "Bearer builder")

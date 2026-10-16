@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:7741ef6aa8ed19f5",
+  "revision": "sha256:dd80044d79ef2c4c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12724,6 +12724,7 @@
       "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/projects/studio-guide.tsx",
+      "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/samples.tsx",
@@ -12782,6 +12783,7 @@
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
       "web/packages/build/src/ontology/TransactionEditor.tsx",
       "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
@@ -13069,6 +13071,7 @@
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/shape.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
+      "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
@@ -13279,6 +13282,7 @@
       "web/packages/build/src/ontology/lineage.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
+      "web/packages/build/src/releases/changes.tsx",
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",

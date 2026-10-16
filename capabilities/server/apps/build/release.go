@@ -135,9 +135,21 @@ func (b *Build) releaseInventory() ([]Object, []Page, []Application, error) {
 // The host caps one read page at 500; the existing release bound is 1000.
 // Read the complete bounded inventory or fail, never silently omit assets.
 func readDefinitionInventory[T any](c platform.Caller) ([]T, error) {
+	rows, err := readDefinitionInventoryOf(c, reflect.TypeFor[T]())
+	if err != nil {
+		return nil, err
+	}
 	var all []T
+	for _, row := range rows {
+		all = append(all, row.(T))
+	}
+	return all, nil
+}
+
+func readDefinitionInventoryOf(c platform.Caller, typ reflect.Type) ([]any, error) {
+	var all []any
 	for {
-		rows, count, err := platform.Find[T](c, platform.Query{Limit: 500, Offset: len(all), Sort: []string{"id"}})
+		rows, count, err := c.FindOf(typ, platform.Query{Limit: 500, Offset: len(all), Sort: []string{"id"}})
 		if err != nil {
 			return nil, err
 		}

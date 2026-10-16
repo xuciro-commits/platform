@@ -105,7 +105,6 @@ export default defineApp({
   nav: (host, route): NavSection[] => {
     if (integrator(host)) return [integration()];
     if (!builder(host)) return [{ label: t("Verify"), items: [
-      { label: t("Changes"), route: { view: "changes" } },
       { label: t("Release history"), route: { view: "release-history" } },
     ] }];
     const application = studioApplicationID(route);
