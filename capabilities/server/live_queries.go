@@ -41,7 +41,7 @@ func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/capabilities/") || strings.HasPrefix(p, "/v1/releases/candidates/") {
 		return true
 	}
-	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") {
+	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") || strings.HasPrefix(p, "/v1/chain/") {
 		return true
 	}
 	// One segment under /v1/ is a platform read or an app's own read (served
@@ -238,7 +238,8 @@ func (t *Tenant) liveVersion(query string) string {
 		t.records.mu.Unlock()
 		return fmt.Sprintf("%d/%d/%d/%d/%d", global, meta, a, b, operationVersion)
 	}
-	if liveOperationRead(p) || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
+	if liveOperationRead(p) || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
+		// A chain spans original Flow/Agent records and their effect progress.
 		return fmt.Sprint(seq)
 	}
 	for _, prefix := range []string{"/v1/records/", "/v1/aggregates/"} {

@@ -92,7 +92,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
   type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
   const emptyProject = !!project && !project.pages?.length && !project.resources?.length;
-  const initialTab = initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "verify" ? "release" : "resources";
+  const initialTab = initialSection === "runs" ? "runs" : initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "verify" ? "release" : "resources";
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
   const visibleView = useViewVisible();
@@ -362,7 +362,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
  {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
           {verificationSelection.current ? <ReleaseReview initialKind="app" initialID={id} initialDrafts={verificationSelection.current} embedded /> : <p role={savedChanges.isError ? "alert" : "status"}>{t(savedChanges.isError ? "Saved changes could not be loaded." : "Loading…")}</p>}
         </div></ViewVisibilityContext.Provider></div>}
-        {tab === "runs" && <ApplicationRuns owner="build" name={project.name} />}
+        {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
         {tab === "roles" && <ProjectRoles owned={owned} />}
         {tab === "settings" && settings && <fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>

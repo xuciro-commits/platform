@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8acdd345d9faccfe",
+  "revision": "sha256:d3ea93b6fd763149",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -102,6 +102,13 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
+        },
+        {
+          "name": "project",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "composed": [
@@ -164,6 +171,13 @@
           "name": "name",
           "type": "string",
           "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "project",
+          "type": "string",
+          "optional": true,
           "isCallback": false,
           "isSlot": false
         }
@@ -1137,6 +1151,20 @@
         },
         {
           "name": "application",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "project",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "subject",
           "type": "string",
           "optional": true,
           "isCallback": false,

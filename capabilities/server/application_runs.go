@@ -178,6 +178,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		return page.Records, err
 	}
 	relatedFlows := map[string]ApplicationRun{}
+	readableFlows := map[string]bool{}
 	operationNodes := map[string]string{}
 	{
 		rows, err := records(platform.FlowInstanceType, nil)
@@ -190,6 +191,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 			if json.Unmarshal(raw, &x) != nil {
 				continue
 			}
+			readableFlows[platform.FlowInstanceType+"/"+x.ID] = true
 			var resource platform.AssetRef
 			for r := range graphFor(x.Release) {
 				if r.Kind == platform.AssetFlow && r.Name == x.Flow {
@@ -213,16 +215,17 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 					if token.Operation != "" {
 						operationNodes[token.Operation] = token.Step
 					}
-					if token.Error != "" {
+					if run.Error == "" && token.Error != "" && slices.Contains([]string{"retry", "undo", "stuck"}, token.Waits) {
 						run.Node, run.Error = token.Step, token.Error
-						break
 					}
 				}
 			}
-			if !x.Withheld && run.Error == "" {
+			// Compensation replaces the failed token. Its reason belongs to
+			// this outcome; retry/fault history does not describe a recovered run.
+			if !x.Withheld && run.Error == "" && (x.State == "compensating" || x.State == "compensated") {
 				for i := len(x.Trace) - 1; i >= 0; i-- {
 					line := x.Trace[i]
-					if slices.Contains([]string{"retry", "fault", "stuck", "compensating"}, line.What) && line.Detail != "" {
+					if line.What == "compensating" && line.Detail != "" {
 						run.Node, run.Error = line.Step, line.Detail
 						break
 					}
@@ -293,6 +296,17 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		}
 		resource := platform.AssetRef{App: effect.App, Kind: platform.AssetCompute, Name: binding.Definition.Name}
 		association := "resource"
+		subject := ""
+		if readableFlows[effect.Target] {
+			subject = effect.Target
+		} else {
+			for _, source := range binding.Call.Sources {
+				if readableFlows[source] {
+					subject = source
+					break
+				}
+			}
+		}
 		parentType, parentID, _ := strings.Cut(effect.Target, "/")
 		_, hasParent := relatedFlows[parentID]
 		if parentType == platform.FlowInstanceType && hasParent {
@@ -313,7 +327,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 				continue
 			}
 		}
-		appendRun(ApplicationRun{Applications: effect.Applications, ID: effect.ID, Kind: "compute", Title: binding.Definition.Title, Resource: &resource, ResourceName: resource.Name, State: result.State, Version: operationStartupVersion(binding.Call), Release: binding.Call.Release, Dependencies: binding.Call.Dependencies, Module: binding.Call.Module, Node: operationNodes[effect.ID], Error: result.Error, Association: association, Created: effect.At})
+		appendRun(ApplicationRun{Applications: effect.Applications, Subject: subject, ID: effect.ID, Kind: "compute", Title: binding.Definition.Title, Resource: &resource, ResourceName: resource.Name, State: result.State, Version: operationStartupVersion(binding.Call), Release: binding.Call.Release, Dependencies: binding.Call.Dependencies, Module: binding.Call.Module, Node: operationNodes[effect.ID], Error: result.Error, Association: association, Created: effect.At})
 	}
 	if rows, err := records(buildapi.FunctionCallType, nil); err != nil {
 		return out, err

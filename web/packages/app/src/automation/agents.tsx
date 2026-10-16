@@ -66,7 +66,7 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
 }
 
 /** A run's page: goal, state, the draft waiting for the member, each step and why, and what people made of it. */
-export function RunView({ id, compact, application }: { id: string; compact?: boolean; application?: string }) {
+export function RunView({ id, compact, application, project }: { id: string; compact?: boolean; application?: string; project?: string }) {
   const { me, can, role } = useHost();
   const control = useRunControl("agent.run", id);
   const openRecord = useOpenRecord();
@@ -79,7 +79,8 @@ export function RunView({ id, compact, application }: { id: string; compact?: bo
   const live = run.state === "running" || run.state === "waiting";
   return (
     <div className="grid max-w-4xl gap-3">
-      {application&&<Button variant="ghost" onClick={()=>openWorkspace({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
+      {project && <Button variant="ghost" onClick={() => openWorkspace({ view: "project", params: { id: project, section: "runs" } })}>{t("Back to project")}</Button>}
+      {!project&&application&&<Button variant="ghost" onClick={()=>openWorkspace({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
       {control.error && <Panel role="alert" className="text-sm text-danger">{control.error}</Panel>}
       {control.pending && <Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p>
         <Button disabled={control.busy} onClick={() => void control.retry()}>{t("Retry original operation")}</Button></Panel>}

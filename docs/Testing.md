@@ -193,6 +193,8 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 ### 应用设计台（ADR-0108）
 
+应用运行任务可单独执行 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-delivery E2E_ARGS='--grep "application capacity, original decisions and headless runtime"'`：原流程取消成功后丢失答复、原键重试且修订不增加，按实际取消状态和完整关联记录筛选，只读查看记录，从正式运行返回原项目或已发布应用，以及切换设置后保留所选运行。`make test-go PKG=. RUN='TestApplicationRunsCurrentFlowFailures|TestApplicationRunsComputeParentSubject|TestLiveChainSharesOriginalAuthorizedReads|TestLiveRegistrationRejectsWritesAndStreams'` 检查恢复后不沿用历史失败、补偿故障保留、原计算的流程主体/筛选/来源授权、编码流程 ID 的因果图与成员读取共同实时更新及撤权后拒绝。没有新增执行、重试或持久格式，也不把这项任务当真实外部系统和生产容量证据。
+
 `TestApprovalDoesNotBindUnrelatedRelease` 检查应用 A 激活后又激活无关应用 B，审批仍绑定 A；改变待处理审批结果的升级被原检查拒绝，审批完成后可继续升级，并检查重放。
 
 工程验证：`make check`；`make test-go PKG='./platform ./apps/build'`；`make test-go PKG=. RUN='TestApplicationStudio|TestLanguages|TestAPIContract|TestJointDraft'`。分组测试核对非应用资产定义的完整字节、声明依赖、用户权限、应用候选分页以及日志重放/快照恢复。浏览器主线：`PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-studio`，在同一应用创建对象/状态动作、保留跨工作区草稿、装配页面、移动业务分组并联合发布；原 `workspaces` 和 `application-delivery` 检查导航与运行；`record-sets` 检查当前查询的 CSV 导出。`web/packages/kernel/src/live.test.ts` 检查资产较多的工作区按服务器条数和字节限制拆分实时订阅，不让一组过大的登记令所有读取失败。

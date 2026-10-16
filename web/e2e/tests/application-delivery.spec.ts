@@ -86,8 +86,20 @@ test("saved application changes include published drafts and use the original jo
 });
 
 test("application capacity, original decisions and headless runtime remain visible", async ({ page, builder, operator }, testInfo) => {
+  test.setTimeout(120_000);
   const object = await builder.object({ title: "Runtime case object", fields: [{ name: "note", title: "Note", type: "text" }] });
-  const application = await builder.application({ title: "Runtime case application", resources: [{ app: "build", kind: "object", name: object.type }] });
+  const workflow = { id: fresh("FLOW"), name: slug("runtime"), title: "Runtime review" };
+  await builder.decide("build.process.create", { type: "build.process", id: workflow.id }, {
+    name: workflow.name, title: workflow.title, object: object.type, manual: true,
+    steps: [{ name: "hold", title: "Wait for review", kind: "wait", untilSeconds: 3600 }],
+  });
+  const application = await builder.application({ title: "Runtime case application", resources: [
+    { app: "build", kind: "object", name: object.type },
+    { app: "build", kind: "flow", name: `build.${workflow.name}` },
+  ] });
+
+  // Set the original application profile, then publish the workflow and app
+  // together through the existing release owner.
   await builder.open(page, `/project?id=${application.id}`);
   await page.getByRole("tab", { name: "Settings", exact: true }).click();
   const capacity = page.getByRole("spinbutton", { name: "Expected records: Runtime case object", exact: true });
@@ -95,10 +107,102 @@ test("application capacity, original decisions and headless runtime remain visib
   await expect.poll(async () => (await builder.record("build.app", application.id)).profile?.expectedRecords?.[object.type]).toBe(1);
   await page.getByRole("textbox", { name: "Target recovery time", exact: true }).fill("30m");
   await expect.poll(async () => (await builder.record("build.app", application.id)).profile?.rto).toBe("30m");
-  await builder.decide("build.app.publish", { type: "build.app", id: application.id }, {});
+  await builder.activate(await builder.candidate([{ kind: "flow", id: workflow.id }, { kind: "app", id: application.id }]));
   const first = `${application.id}-FIRST`, second = `${application.id}-SECOND`;
   await operator.decide(`${object.type}.create`, { type: object.type, id: first }, { note: "First" });
   await operator.decide(`${object.type}.create`, { type: object.type, id: second }, { note: "Second" });
+  for (const key of [first, second]) {
+    await builder.decide("build.process.run", { type: "build.process", id: workflow.id }, { key, input: "{}" });
+  }
+  const inventory = await builder.read<{ records: { id: string; flow: string; key: string; subject: string }[] }>("records/flow.instance?limit=1000");
+  const firstRun = inventory.records.find(run => run.flow === `build.${workflow.name}` && run.key === first)!;
+  const secondRun = inventory.records.find(run => run.flow === `build.${workflow.name}` && run.key === second)!;
+  expect(firstRun).toMatchObject({ subject: `${object.type}/${first}` });
+  expect(secondRun).toMatchObject({ subject: `${object.type}/${second}` });
+
+  // Project Runs keeps the original flow controls. Canceled is the native
+  // flow state, and the related-record filter uses the exact type/id.
+  await page.getByRole("tab", { name: "Runs", exact: true }).click();
+  await page.getByRole("combobox", { name: "Run kind", exact: true }).selectOption("flow");
+  const firstRunButton = page.getByRole("button", { name: `${workflow.title} ${first}`, exact: true });
+  const secondRunButton = page.getByRole("button", { name: `${workflow.title} ${second}`, exact: true });
+  await firstRunButton.click();
+  const selected = page.getByRole("region", { name: "Selected run", exact: true });
+
+  // The server accepts cancellation before its reply is lost. Retrying the
+  // original operation must reuse that decision, without another revision.
+  const cancelKeys: string[] = [];
+  const submissions = (url: URL) => url.pathname.endsWith("/submissions");
+  await page.route(submissions, async route => {
+    const body = route.request().postDataJSON();
+    if (body.schema?.name !== "flow.instance.cancel" || body.target?.id !== firstRun.id) {
+      await route.continue();
+      return;
+    }
+    cancelKeys.push(body.idempotencyKey);
+    if (cancelKeys.length === 1) {
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.continue();
+  });
+  await selected.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect.poll(async () => (await builder.record("flow.instance", firstRun.id)).state).toBe("canceled");
+  const canceled = await builder.record("flow.instance", firstRun.id);
+  const retryCancellation = selected.getByRole("button", { name: "Retry original operation", exact: true });
+  await retryCancellation.click();
+  await expect(retryCancellation).toHaveCount(0);
+  expect(cancelKeys.length).toBeGreaterThanOrEqual(2);
+  expect(new Set(cancelKeys).size).toBe(1);
+  expect((await builder.record("flow.instance", firstRun.id)).revision).toBe(canceled.revision);
+  await page.unroute(submissions);
+
+  const state = page.getByRole("combobox", { name: "Run state", exact: true });
+  await state.selectOption({ label: "Canceled" });
+  await expect(state).toHaveValue("canceled");
+  await expect(firstRunButton).toBeVisible();
+  await expect(secondRunButton).toHaveCount(0);
+  const subject = page.getByRole("textbox", { name: "Related record", exact: true });
+  await subject.fill(`${object.type}/${second}`);
+  await expect(page.getByText("No related runs you can read.", { exact: true })).toBeVisible();
+  await subject.fill(`${object.type}/${first.slice(0, -1)}`);
+  await expect(page.getByText("No related runs you can read.", { exact: true })).toBeVisible();
+  await subject.fill(`${object.type}/${first}`);
+  await firstRunButton.click();
+
+  // Viewing a business record stays read-only and leaves the current task.
+  const beforeInspection = page.url();
+  await selected.getByRole("button", { name: "Open related record", exact: true }).first().click();
+  const inspection = page.getByRole("dialog", { name: first, exact: true });
+  await expect(inspection).toContainText("First");
+  await expect(inspection.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: first, exact: true })).toHaveCount(0);
+  expect(page.url()).toBe(beforeInspection);
+  await page.keyboard.press("Escape");
+  await expect(inspection).not.toBeVisible();
+
+  // The full run opens beside its project and returns to the same Runs
+  // selection and filters, including after visiting another project section.
+  await selected.getByRole("button", { name: "Open run", exact: true }).click();
+  const runView = page.getByRole("region", { name: firstRun.id, exact: true });
+  await expect(runView.getByRole("button", { name: "Back to project", exact: true })).toBeVisible();
+  await expect(runView.getByRole("button", { name: "Back to application runs", exact: true })).toHaveCount(0);
+  await runView.getByRole("button", { name: "Back to project", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Runs", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(state).toHaveValue("canceled");
+  await expect(subject).toHaveValue(`${object.type}/${first}`);
+  await expect(selected).toContainText(`${workflow.title} ${first}`);
+  await shots(page, page.locator("body"), "project-runtime", testInfo);
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Runs", exact: true }).click();
+  await expect(state).toHaveValue("canceled");
+  await expect(subject).toHaveValue(`${object.type}/${first}`);
+  await expect(selected).toContainText(`${workflow.title} ${first}`);
+
+  // The installed headless app retains its original runtime/record diagnosis
+  // and returns from the full run to application runs, without a project.
   await builder.open(page, "/portal");
   await page.getByRole("button", { name: "Runtime case application", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Application overview", exact: true })).toBeVisible();
@@ -113,7 +217,13 @@ test("application capacity, original decisions and headless runtime remain visib
   await expect(page.getByText(/^Definition content: schema.sha256\./)).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Run kind", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Run state", exact: true })).toBeVisible();
-  if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("application-runtime.png"), fullPage: true });
+  await firstRunButton.click();
+  await selected.getByRole("button", { name: "Open run", exact: true }).click();
+  await expect(runView.getByRole("button", { name: "Back to project", exact: true })).toHaveCount(0);
+  await runView.getByRole("button", { name: "Back to application runs", exact: true }).click();
+  await expect(page.getByText("Current content version", { exact: true })).toBeVisible();
+  await expect(selected).toContainText(`${workflow.title} ${first}`);
+  await shots(page, page.locator("body"), "application-runtime", testInfo);
 });
 
 test("published evaluation sets open in their original test-plan editor and release review", async ({ page, builder }) => {

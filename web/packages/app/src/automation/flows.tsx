@@ -17,8 +17,8 @@ export function FlowInstanceView({ id, application, project }: { id: string; app
   const next = flows.some((flow) => flow.id === instance.flow && flow.version > instance.version);
   return <div className="grid max-w-4xl gap-3">
     <div className="flex flex-wrap gap-2">
-      {project && <Button variant="ghost" onClick={() => open({ view: "project", params: { id: project } })}>{t("Back to project")}</Button>}
-      {application && <Button variant="ghost" onClick={() => open({ view: "application-runs", params: { app: application.split(":")[0] ?? "", name: application.split(":").slice(1).join(":"), application } })}>{t("Back to application runs")}</Button>}
+      {project && <Button variant="ghost" onClick={() => open({ view: "project", params: { id: project, section: "runs" } })}>{t("Back to project")}</Button>}
+      {!project && application && <Button variant="ghost" onClick={() => open({ view: "application-runs", params: { app: application.split(":")[0] ?? "", name: application.split(":").slice(1).join(":"), application } })}>{t("Back to application runs")}</Button>}
       <Button variant="ghost" onClick={() => open({ view: "inbox" }, { window: "beside" })}>{t("Back to inbox")}</Button>
       {instance.subject && <Button variant="ghost" onClick={() => openRecord(instance.subject!)}>{t("Open related record")}</Button>}
     </div>

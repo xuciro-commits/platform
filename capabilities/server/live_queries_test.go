@@ -9,8 +9,10 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/apps/enterprise"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
+	"platformserver/platform/authz"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -317,6 +319,89 @@ func TestLiveQueriesUseOriginalMemberAuthorizationAfterRevocation(t *testing.T) 
 	} else if result.Status == 200 {
 		t.Fatalf("revocation did not invalidate the protected query: %+v", result)
 	}
+}
+
+func TestLiveChainSharesOriginalAuthorizedReads(t *testing.T) {
+	const tenant = "live-chain"
+	at := time.Date(2026, 10, 16, 9, 0, 0, 0, time.UTC)
+	process := platform.Flow{Name: "review", Title: "Review", Version: 1, Start: platform.Start{On: []string{"shop.order.place"}, Begin: func(_ platform.Caller, event platform.Event) (string, any, bool) {
+		return event.Record.GetSubmission().GetTarget().GetId(), nil, true
+	}}, Steps: []platform.Step{{Name: "waiting", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}}}
+	tn := composeTenant(t, tenant, []Seat{seatOf("ana", "shop:clerk", "flow:admin")}, work.New(tenant), flow.New(tenant), newShop(tenant, process))
+	decide(t, tn, "ana", "shop", "shop.order.place", "shop.order", "order", map[string]any{"item": "ordinary"}, at)
+	tn.Work(at)
+	id := "shop.review:order"
+	ref := flow.InstanceType + "/" + id
+	chainPath := "/v1/chain/" + flow.InstanceType + "/" + strings.ReplaceAll(url.PathEscape(id), ":", "%3A")
+	watch, _ := json.Marshal([]string{"/v1/me", chainPath})
+	server := httptest.NewServer(NewHost(Tokens(map[string]string{"ana": "ana"}), tn).Handler())
+	defer server.Close()
+	request, _ := http.NewRequest("GET", server.URL+"/v1/changes?"+url.Values{"watch": {string(watch)}}.Encode(), nil)
+	request.Header.Set("Authorization", "Bearer ana")
+	response, err := (&http.Client{Timeout: 3 * time.Second}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("chain registration: HTTP %d", response.StatusCode)
+	}
+	reader := bufio.NewReader(response.Body)
+	read := func() LiveQueryFrame {
+		t.Helper()
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.HasPrefix(line, "data: ") {
+				var frame LiveQueryFrame
+				if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &frame); err != nil {
+					t.Fatal(err)
+				}
+				return frame
+			}
+		}
+	}
+	checkChain := func(frame LiveQueryFrame, state string) {
+		t.Helper()
+		for _, result := range frame.Results {
+			if result.Status != http.StatusOK {
+				t.Fatalf("original read failed: %+v", result)
+			}
+			if result.Path == chainPath {
+				var chain Chain
+				if json.Unmarshal(result.Body, &chain) != nil || len(chain.Nodes) != 1 || chain.Nodes[0].Ref != ref || chain.Nodes[0].State != state {
+					t.Fatalf("original chain identity or state changed: %s", result.Body)
+				}
+				return
+			}
+		}
+		t.Fatalf("chain missing: %+v", frame)
+	}
+	initial := read()
+	if len(initial.Results) != 2 || initial.Results[0].Path != "/v1/me" || initial.Results[0].Status != http.StatusOK {
+		t.Fatalf("shared member read failed: %+v", initial)
+	}
+	checkChain(initial, "waiting")
+	instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), id)
+	decide(t, tn, "ana", flow.ID, flow.SchemaFlowSkip, flow.InstanceType, id, map[string]any{"token": instance.Tokens[0].ID}, at.Add(time.Second))
+	checkChain(read(), "done")
+	tn.mu.Lock()
+	tn.app(flow.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
+		return []authz.Policy{{ID: "chain-source-revoked", Effect: "deny", Permission: flow.InstanceType + ".read"}}
+	})
+	tn.mu.Unlock()
+	tn.changedOwner(flow.ID)
+	for _, result := range read().Results {
+		if result.Path == chainPath {
+			if result.Status != http.StatusForbidden || strings.Contains(string(result.Body), ref) {
+				t.Fatalf("revoked chain remained readable: %+v", result)
+			}
+			return
+		}
+	}
+	t.Fatal("chain permission change was not returned")
 }
 
 func TestEnterpriseAppliedPatternReplays(t *testing.T) {
