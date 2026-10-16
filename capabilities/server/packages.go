@@ -26,7 +26,8 @@ import (
 // precheck first (required dependencies, compatibility, namespace conflicts),
 // then register. An upgrade replaces the version and keeps the retired
 // artifact; draining stops new use of a contribution while work in flight
-// finishes; retiring keeps history and artifacts and registers nothing.
+// finishes; retiring keeps history and artifacts and registers nothing. The
+// same sealed version can be installed again without changing its contents.
 // Installation never grants business permissions: a package asks for
 // capabilities, and the tenant's own authorization still decides.
 //
@@ -80,7 +81,7 @@ type InstalledPackage struct {
 	Artifact      string                  `json:"artifact,omitempty"` // sha256 over the bytes sealed in this tenant's store
 	InstalledAt   time.Time               `json:"installedAt,omitempty"`
 	ChangedAt     time.Time               `json:"changedAt,omitempty"`
-	// Retained are versions this tenant replaced: their artifacts stay.
+	// Retained are inactive versions this tenant installed: their artifacts stay.
 	Retained []RetainedArtifact `json:"retained,omitempty"`
 }
 
@@ -377,11 +378,11 @@ func (d *Console) sealedPackageDescriptor(id, version, artifact string) (Package
 	}
 	sealed := sha256.Sum256(raw)
 	if "sha256:"+hex.EncodeToString(sealed[:]) != artifact {
-		return PackageDescriptor{}, fmt.Errorf("the retained protocol descriptor content differs")
+		return PackageDescriptor{}, fmt.Errorf("the retained package descriptor content differs")
 	}
 	var descriptor PackageDescriptor
 	if json.Unmarshal(raw, &descriptor) != nil || descriptor.ID != id || descriptor.Version != version {
-		return PackageDescriptor{}, fmt.Errorf("the retained protocol descriptor is unavailable")
+		return PackageDescriptor{}, fmt.Errorf("the retained package descriptor is unavailable")
 	}
 	return descriptor, nil
 }
@@ -527,6 +528,9 @@ func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 		out.Problems = append(out.Problems, fmt.Sprintf("needs platform %s, this host is %s", p.Compatibility, platformCompatibility))
 	}
 	installed := d.packagesOf()
+	if err := d.verifyPackageVersion(p, installed[p.ID]); err != nil {
+		out.Problems = append(out.Problems, err.Error())
+	}
 	for _, need := range p.Requires {
 		held, ok := installed[need]
 		if !ok || held.State == "retired" {
@@ -535,6 +539,9 @@ func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 			} else {
 				out.Problems = append(out.Problems, fmt.Sprintf("requires %s, which is not installed and not in the index", need))
 			}
+		} else if held.State != "active" {
+			out.Missing = append(out.Missing, need)
+			out.Problems = append(out.Problems, "A required package is preparing to uninstall")
 		}
 	}
 	if held, ok := installed[p.ID]; ok && held.State != "retired" && held.Version == p.Version {
@@ -547,7 +554,7 @@ func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 			out.Problems = append(out.Problems, fmt.Sprintf("view %s is already brought by %s", key, owner))
 		}
 	}
-	out.OK = len(out.Problems) == 0
+	out.OK = len(out.Problems) == 0 && len(out.Missing) == 0
 	return out
 }
 
@@ -557,7 +564,7 @@ func (d *Console) contributionKeys() map[string]string {
 	defer d.mu.Unlock()
 	out := map[string]string{}
 	for id, p := range d.packages {
-		if p.State != "active" {
+		if p.State == "retired" {
 			continue
 		}
 		for _, c := range p.Contributions {
@@ -570,6 +577,35 @@ func (d *Console) contributionKeys() map[string]string {
 // packageArtifactKey is where one package version's sealed bytes live.
 func packageArtifactKey(tenant, id, version string) string {
 	return "packages/" + tenant + "/" + id + "/" + version + ".json"
+}
+
+// Installation state can change; an accepted version's contents cannot.
+// Check the current and retained versions alike, including packages without a runtime.
+func (d *Console) verifyPackageVersion(descriptor PackageDescriptor, prior *InstalledPackage) error {
+	if prior == nil {
+		return nil
+	}
+	artifact := ""
+	if prior.Version == descriptor.Version {
+		artifact = prior.Artifact
+	} else if i := slices.IndexFunc(prior.Retained, func(r RetainedArtifact) bool { return r.Version == descriptor.Version }); i >= 0 {
+		artifact = prior.Retained[i].Digest
+	} else {
+		return nil
+	}
+	if artifact == "" {
+		return fmt.Errorf("The original package has no sealed artifact; its contents cannot be verified")
+	}
+	raw, err := json.Marshal(descriptor)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(raw)
+	if "sha256:"+hex.EncodeToString(sum[:]) != artifact {
+		return fmt.Errorf("A package version cannot be replaced; publish a new version")
+	}
+	_, err = d.sealedPackageDescriptor(descriptor.ID, descriptor.Version, artifact)
+	return err
 }
 
 // sealPackageBytes writes a descriptor into the tenant's artifact store and
@@ -703,9 +739,6 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 	}
 	upgrade := schema == SchemaPackageUpgrade
 	prior := d.packagesOf()[p.ID]
-	if (descriptor.Runtime != nil || descriptor.Blueprint != nil) && prior != nil && (prior.Version == descriptor.Version || slices.ContainsFunc(prior.Retained, func(r RetainedArtifact) bool { return r.Version == descriptor.Version })) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A package version cannot be replaced; publish a new version")
-	}
 	if upgrade {
 		if prior == nil || prior.State == "retired" {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -713,9 +746,9 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 	} else if prior != nil && prior.State != "retired" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} is already installed; upgrade it instead", p.ID)
 	}
-	if prior != nil {
+	if prior != nil && prior.Version != descriptor.Version {
 		if err := d.verifySealedPackage(*prior); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The installed package {package} cannot be upgraded: {reason}", p.ID, err.Error())
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} cannot be installed: {reason}", p.ID, err.Error())
 		}
 	}
 	sealed, err := d.sealPackageBytes(descriptor, index.Directory)
@@ -736,7 +769,9 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 			Artifact: sealed, InstalledAt: now, ChangedAt: now}
 		if prior != nil {
 			installed.InstalledAt = prior.InstalledAt
-			installed.Retained = slices.Clone(prior.Retained)
+			installed.Retained = slices.DeleteFunc(slices.Clone(prior.Retained), func(r RetainedArtifact) bool {
+				return r.Version == descriptor.Version || r.Version == prior.Version
+			})
 			if prior.Version != descriptor.Version {
 				retained := prior.Artifact
 				if retained == "" {

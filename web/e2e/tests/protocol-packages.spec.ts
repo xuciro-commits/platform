@@ -14,6 +14,18 @@ test("an installed protocol binary configures devices, previews points and publi
   await expect(card.getByText("active", { exact: true })).toBeVisible();
   await expect(card.getByText("Deployment index", { exact: true })).toBeVisible();
   await expect(card.getByText("precheck failed", { exact: true })).toHaveCount(0);
+  const installed = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID && item.descriptor.version === version)!.installed!;
+  await card.getByRole("button", { name: "Prepare to uninstall", exact: true }).click();
+  await expect(card.getByText("draining", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Uninstall", exact: true }).click();
+  await expect(card.getByText("not installed", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Reinstall", exact: true })).toBeEnabled();
+  await card.getByRole("button", { name: "Reinstall", exact: true }).click();
+  await expect(card.getByText("active", { exact: true })).toBeVisible();
+  const reinstalled = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID && item.descriptor.version === version)!.installed!;
+  expect(reinstalled.artifact).toBe(installed.artifact);
+  expect(reinstalled.version).toBe(installed.version);
+  expect(reinstalled.retained ?? []).toEqual([]);
   await shots(page, card, "protocol-package", info);
 
   const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");

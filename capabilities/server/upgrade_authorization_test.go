@@ -377,8 +377,8 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 	console := tn.app(PlatformApp).(*Console)
 	console.index = index
 
-	if views := console.PackageViews(); len(views) != 2 {
-		t.Fatalf("package views: %d", len(views))
+	if views := console.PackageViews(); len(views) != 2 || views[1].Precheck.OK || len(views[1].Precheck.Missing) != 1 {
+		t.Fatalf("package dependency precheck: %+v", views)
 	}
 	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.crm", map[string]any{"id": "acme.crm", "version": "1.0.0"}); got == "ok" {
 		t.Fatal("a package installed with a missing requirement")
@@ -447,6 +447,14 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 	if held == nil || held.State != "draining" {
 		t.Fatalf("drain state: %+v", held)
 	}
+	for _, descriptor := range []PackageDescriptor{
+		{ID: "acme.collision", Version: "1.0.0", Namespace: "acme-crm", Contributions: []PackageContribution{{View: "board"}}},
+		{ID: "acme.extension", Version: "1.0.0", Namespace: "extension", Requires: []string{"acme.crm"}},
+	} {
+		if pre := console.Precheck(descriptor); pre.OK {
+			t.Fatalf("draining package released its namespace or accepted a new dependent: %+v", descriptor)
+		}
+	}
 	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got == "ok" {
 		t.Fatal("retirement ignored a draining dependent")
 	}
@@ -482,6 +490,25 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 	}
 	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got != "ok" {
 		t.Fatalf("retired dependent still blocked the base package: %s", got)
+	}
+	// The same immutability rule applies to ordinary contribution packages.
+	original, err := os.ReadFile(filepath.Join(dir, "base.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write("base.json", map[string]any{"id": "acme.base", "version": "1.0.0", "namespace": "changed"})
+	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got == "ok" {
+		t.Fatal("ordinary package replaced a retained version")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "base.json"), original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got != "ok" {
+		t.Fatalf("original contribution package could not be reinstalled: %s", got)
+	}
+	held = console.packagesOf()["acme.base"]
+	if held.State != "active" || held.Version != "1.0.0" || len(held.Retained) != 1 || held.Retained[0].Version != "1.1.0" {
+		t.Fatalf("reinstalling an older version lost the newer artifact: %+v", held)
 	}
 }
 

@@ -29,6 +29,7 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 	descriptor := PackageDescriptor{ID: "example.inventory", Version: "1.0.0", Namespace: "example.inventory", Blueprint: &PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "inventory"}}, Assets: candidate.Assets}}
 	directory := t.TempDir()
 	raw, _ := json.Marshal(descriptor)
+	original := append([]byte(nil), raw...)
 	path := filepath.Join(directory, "inventory.json")
 	if err = os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
@@ -120,6 +121,20 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 	}
 	if _, err = target.CreatePackageDrafts(builder, descriptor.ID, descriptor.Version, "another", at); err == nil || !strings.Contains(err.Error(), "already has a draft") {
 		t.Fatalf("existing asset was not reported: %v", err)
+	}
+	decide(t, target, "admin", PlatformApp, SchemaPackageRetire, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID}, at)
+	if got := refuse(t, target, "admin", PlatformApp, SchemaPackageInstall, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "version": descriptor.Version}, at); got == "ok" {
+		t.Fatal("changed blueprint replaced its original version")
+	}
+	if err = os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	decide(t, target, "admin", PlatformApp, SchemaPackageInstall, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "version": descriptor.Version}, at)
+	if held := testConsoleOf(target).packagesOf()[descriptor.ID]; held.State != "active" || len(held.Retained) != 0 {
+		t.Fatalf("blueprint was not reinstalled as the same version: %+v", held)
+	}
+	if current, ok := platform.Get[build.Application](target.automation(build.ID, false), answer.ApplicationID); !ok || !reflect.DeepEqual(current, app) {
+		t.Fatalf("uninstall and reinstall changed the application draft: %+v", current)
 	}
 	recovered := compose()
 	recovered.Files = target.files()

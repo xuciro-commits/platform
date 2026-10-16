@@ -169,7 +169,7 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 | #138/#132 条件字段（「仅当」） | 对象字段配置「Only when」条件必填与显示联动；业务表单条件隐藏并剔除 payload，直接 API 提交非法条件值返回 400 | 更广泛字段类型非法条件值的 API 拒绝拦截。 |
 | #141 宿主控制台（纯宿主管理员、晋级/迁移结果） | 轻量宿主加 `-host-admins` 启动，非租户成员仅加载 Host Console；跨环境晋级候选；记录迁移按行幂等写入与拒绝行定位 | 纯宿主管理员装载与记录迁移拒绝行列表。 |
 | #141 项目资产编辑委派 | 配置项目资产委派，受委派成员仅可编辑指定资产，范围外及发布拒绝；归档项目撤销委派 | 多重组合角色与完整撤权生效边界。 |
-| #141 包生命周期 | 宿主加 `-packages` 启动；查看依赖预检，安装依赖包再安装主包；升级版本；排空（draining）与退役（retire） | 需先装载包索引目录后验证安装、升级、排空与退役全流程。 |
+| #141 包生命周期 | 宿主加 `-packages` 启动；查看依赖预检，安装依赖包再安装主包；切换版本；准备卸载、卸载与同版重新安装 | `make test-go PKG=. RUN='TestPackagePrecheckInstallDrainRetire\|TestProtocolPackageInstallRetainsVerifiedBinary\|TestPackageBlueprintCreatesOnlyDraftsAndRecovers'` 检查同版内容一致可重装、内容变化拒绝、切回保留版无重复、依赖/名称保护、已有应用保留，以及保存失败重试、日志与快照恢复；`make e2e SPEC=protocol-packages` 从原包卡片卸载并同版重装，继续配置与发布连接。 |
 
 权限、数据、版本及恢复保证不能仅交给截图证明。人工走查负责可用性和任务体验；自动回归负责其规范边界。负责人认可只在相关 ADR 简短记录日期与范围，不为每次工程增量重新验收。
 
