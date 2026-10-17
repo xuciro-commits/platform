@@ -7,7 +7,6 @@ import (
 	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
-	"strings"
 
 	"platformserver/platform"
 )
@@ -159,16 +158,6 @@ func pageFunctionBindings(p platform.Page) map[string]string {
 		}
 	}
 	return bindings
-}
-
-// publicationRecord identifies the metadata row, without executing a decision.
-func publicationRecord(p ReleasePublication) (string, string, error) {
-	typ, _, ok := strings.Cut(p.Schema, ".publish")
-	var record platform.Record
-	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType, AgentType, TestPlanType, TableType, AlertType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
-		return "", "", fmt.Errorf("invalid release publication row")
-	}
-	return typ, record.ID, nil
 }
 
 // pageDraft is the builder's page record a saved page descriptor denotes: what

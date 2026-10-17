@@ -68,6 +68,61 @@ func lifecycleBuild() (*Build, *lifecycleRows) {
 	return b, rows
 }
 
+func TestNativeInstallationDecodePreservesOuterIdentityAndImage(t *testing.T) {
+	b, _ := lifecycleBuild()
+	for _, tc := range []struct {
+		schema string
+		typ    string
+		kind   platform.AssetKind
+		name   string
+	}{
+		{SchemaPublish, ObjectType, platform.AssetObject, "build.outer"},
+		{SchemaRelease, PageType, platform.AssetPage, "outer"},
+		{SchemaHandOver, AppType, platform.AssetApp, "outer"},
+		{SchemaProcess, ProcessType, platform.AssetFlow, "build.outer"},
+		{SchemaPropertyType, PropertyTypeType, platform.AssetPropertyType, "outer"},
+		{SchemaLinkType, LinkTypeType, platform.AssetLinkType, "outer"},
+		{SchemaQuery, QueryType, platform.AssetQuery, "outer"},
+		{SchemaFunction, FunctionType, platform.AssetFunction, "outer"},
+		{SchemaAgentPublish, AgentType, platform.AssetAgent, "outer"},
+		{SchemaCodePublish, CodeType, platform.AssetCompute, "outer"},
+	} {
+		t.Run(tc.typ, func(t *testing.T) {
+			image := platform.Raw(map[string]any{"id": "row", "name": "outer", "published": string(platform.Raw(map[string]string{"name": "published"}))})
+			decoded, err := b.DecodeAssetInstallation(tc.schema, image)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := platform.AssetRef{App: ID, Kind: tc.kind, Name: tc.name}
+			if decoded.Ref != want || decoded.Schema != tc.schema || decoded.Record != tc.typ+"/row" || !slices.Equal(decoded.Image, image) {
+				t.Fatal("installation lost its outer record identity or saved image", decoded)
+			}
+			image[0] = ' '
+			if decoded.Image[0] != '{' {
+				t.Fatal("installation image aliases its input buffer")
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name   string
+		schema string
+		image  json.RawMessage
+	}{
+		{"unknown schema", "build.unknown.publish", platform.Raw(map[string]string{"id": "row", "name": "outer"})},
+		{"empty id", SchemaPublish, platform.Raw(map[string]string{"name": "outer"})},
+		{"invalid json", SchemaPublish, json.RawMessage(`{`)},
+		{"evaluation publication", SchemaEvaluationSetPublish, platform.Raw(TestPlan{Record: platform.Record{ID: "row"}, Name: "outer", DefinitionVersion: 1, Published: "broken", Versions: []string{"broken"}})},
+		{"table publication", SchemaTablePublish, platform.Raw(Table{Record: platform.Record{ID: "row"}, Name: "outer", State: "published", Version: 1, Published: "broken"})},
+		{"alert publication", SchemaAlertPublish, platform.Raw(Alert{Record: platform.Record{ID: "row"}, Name: "outer", State: "published", Published: "broken"})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := b.DecodeAssetInstallation(tc.schema, tc.image); err == nil {
+				t.Fatal("malformed native installation was accepted")
+			}
+		})
+	}
+}
+
 func TestIntegrationInstallationDecodePreservesImagesAndRejectsMalformedRecords(t *testing.T) {
 	b, rows := lifecycleBuild()
 	connection := Connection{Record: platform.Record{ID: "connection"}, Name: "erp", Title: "ERP", Kind: "http", State: "ready"}

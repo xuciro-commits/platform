@@ -64,6 +64,8 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 
 检查沿 Testing 的应用运行任务与构建者验证任务：原正式详情取消、答复丢失后同键重试、编辑器历史查看及正常新建入口已通过；旧操作按钮明确不存在。Web 类型、目录及双语检查通过，不改执行、权限、持久格式或历史版本责任。
 
-## 10. 集成资产的重复目录读取与安装解码（ADR-0124，已替换）
+## 10. 资产的重复目录读取与安装解码（ADR-0124，已替换）
 
 `Build.integrationInventory` 的七份分页读取、类型转换与归档过滤退出，改用原 `readDefinitionInventoryOf` 和一份归档过滤；500 条分页、1000 条上限和原 Build 读取主体不变。`DecodeAssetInstallation` 的独立七类分配/解引用分支删除，与安装校验、升级校验共用 `integrationInstallationRecord`；目录和解码只在 `integrationRecordType` 维护一次记录类型。严格解码、安装身份、保留版本族、描述与权限检查及保存图像字节继续保留，没有新注册表或历史格式。原 `asset_lifecycle_test.go` 检查七类记录、错误图像、跨页读取、归档过滤与数量上限；其余原安装、升级和恢复测试继续使用同一实现。
+
+原生发布安装的十个重复身份解析分支和 `activation.go` 中仅供它调用的 `publicationRecord` 已删除。安装元数据只读一次，种类与名称使用原 `draftAssetRef`，发布资格使用原 `AcceptedPublicationSchemas`，不再维护第二份白名单。评测/测试计划、决策表和告警的专用内容/版本检查保留；外层记录名称、Object/Flow 前缀与克隆的原图像不变，实际发布、安装、历史恢复仍由原实现负责。

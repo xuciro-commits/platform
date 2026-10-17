@@ -447,59 +447,24 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		}
 		return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: typ + "/" + integrationRecord(record).ID, Image: slices.Clone(image)}, nil
 	}
-	typ, id, err := publicationRecord(ReleasePublication{Schema: schema, Image: image})
+	var record struct {
+		platform.Record
+		Name string `json:"name"`
+	}
+	if !slices.Contains(b.AcceptedPublicationSchemas(), schema) || json.Unmarshal(image, &record) != nil || record.ID == "" {
+		return platform.AssetInstallation{}, fmt.Errorf("invalid release publication row")
+	}
+	ref, err := draftAssetRef(typ, record.Name)
 	if err != nil {
 		return platform.AssetInstallation{}, err
 	}
-	var ref platform.AssetRef
 	switch schema {
-	case SchemaPublish:
-		var r Object
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(r.Name)}
-	case SchemaRelease:
-		var r Page
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetPage, Name: r.Name}
-	case SchemaHandOver:
-		var r Application
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: r.Name}
-	case SchemaProcess:
-		var r Process
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: buildapi.TypeOf(r.Name)}
-	case SchemaPropertyType:
-		var r PropertyType
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: r.Name}
-	case SchemaLinkType:
-		var r LinkType
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: r.Name}
-	case SchemaQuery:
-		var r Query
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: r.Name}
-	case SchemaFunction:
-		var r Function
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: r.Name}
 	case SchemaEvaluationSetPublish:
-		r, asset, err := b.testPlanImage(image)
+		_, asset, err := b.testPlanImage(image)
 		if err != nil {
 			return platform.AssetInstallation{}, err
 		}
 		ref = asset.Ref
-		_ = r
-	case SchemaAgentPublish:
-		var r Agent
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: r.Name}
-	case SchemaCodePublish:
-		var r Code
-		_ = json.Unmarshal(image, &r)
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: r.Name}
 	case SchemaTablePublish:
 		r, err := tableImage(image)
 		if err != nil {
@@ -512,10 +477,8 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 			return platform.AssetInstallation{}, err
 		}
 		ref = asset.Ref
-	default:
-		return platform.AssetInstallation{}, fmt.Errorf("unsupported publication %s", schema)
 	}
-	return platform.AssetInstallation{Ref: ref, Schema: schema, Record: typ + "/" + id, Image: slices.Clone(image)}, nil
+	return platform.AssetInstallation{Ref: ref, Schema: schema, Record: typ + "/" + record.ID, Image: slices.Clone(image)}, nil
 }
 
 // Validation is performed against the private installation host, after the
