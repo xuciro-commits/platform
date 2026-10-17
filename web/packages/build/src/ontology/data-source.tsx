@@ -1,4 +1,4 @@
-import { useIntegrationDraft } from "./integration-draft";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -38,7 +38,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired");
   const datasetQuery = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200");
   const datasets = datasetQuery.data?.records ?? [];
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useIntegrationDraft<Draft>({
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.source", kind: "source", view: "data-source", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
     failure: t("The data source could not be saved or loaded. Your draft is still here."),
     payload: draft => {

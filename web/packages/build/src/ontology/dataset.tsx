@@ -1,4 +1,4 @@
-import { useIntegrationDraft } from "./integration-draft";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
 import { ResourceList } from "../editor/ResourceList";
@@ -32,7 +32,7 @@ export function Datasets() {
 export function DatasetEditor({ id }: { id: string }) {
   const host = useHost(), { decide, role } = host, { open } = useApplicationWorkspace();
   const application = useApplicationScope();
-  const { draft, query, dirty, busy, error, setError, inputs, patch, perform, save, review, discardChanges } = useIntegrationDraft<Draft>({
+  const { draft, query, dirty, busy, error, setError, inputs, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.dataset", kind: "dataset", view: "dataset", empty,
     failure: t("The dataset could not be saved or loaded. Your draft is still here."),
     payload: draft => {

@@ -33,8 +33,8 @@ test("Workshop list and board imports retain independent card fields and the ori
     await shots(page, dialog, "import-list-board-mappings", info);
   });
   const saved = await editor.saveUntil(builder, id, "kanban", 1);
-  expect(saved.sections.find((section: any) => section.widget === "record-list")).toMatchObject({ cardLabel: "name", fields: ["detail"], recordList: { layout: "grid" } });
-  expect(saved.sections.find((section: any) => section.widget === "kanban")).toMatchObject({ cardLabel: "detail", fields: ["quantity"], actions: [`${type}.move`] });
+  expect(saved.sections.find((section: any) => section.widget === "record-list")).toMatchObject({ model: { type, fields: [{ name: "detail" }, { name: "name", slot: "cardLabel" }] }, recordList: { layout: "grid" } });
+  expect(saved.sections.find((section: any) => section.widget === "kanban")).toMatchObject({ model: { type, fields: [{ name: "quantity" }, { name: "detail", slot: "cardLabel" }] }, actions: [`${type}.move`] });
 });
 
 // A Callout imported from Workshop becomes a notice: its text is literal (no

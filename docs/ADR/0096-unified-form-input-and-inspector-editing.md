@@ -214,6 +214,8 @@ A 不冒充全局完成，B 不塞假选项。API 名称可随实施收敛，责
 
 统一输入由原应用 API、宿主与共享 UI/App/Build 负责，迁入 §3 的业务表单、动作参数、页面创建、构建者/企业 Inspector、治理设置、AI 确认和运行试填。搜索、过滤、读者排布继续是浏览状态；代码、Markdown、凭据、附件和图像仍使用各自原 editor 与权限，不转成另一份业务定义。
 
+六类集成定义、查询、关系、共享属性和 AI 函数共用 `build/session/definition-draft.ts` 的保存、修订、读取、丢弃与提交锁；原 `ontology/integration-draft.ts` 及四个编辑器的独立生命周期实现已删除。字段转换、AI 发布诊断、关系迁移和权限留在原编辑器。已接受修订不被陈旧读取覆盖，读取失败后的丢弃恢复已接受值；应用成员加入仍限于原集成定义和 AI 函数，不给其他编辑器增加写入。
+
 - **声明与诊断**：FieldInfo/Field/build.Input 投影有限 InputConstraints：安全整数、数值上下界及包含性、UTF-16 min/max length、日期/显式带偏移 datetime、同类型 before/after。group 和两条真实 date 路径的 range 属于原动作，Form 预览消费同一投影。原 minLength 定义格式保留，编译到同一约束，删除重复 take 检查。声明检查不存在/类型不符的端点、重复区间终点、空范围与依赖循环；记录检查器检查修改后的完整记录，部分 edit 不能绕过关系，0/false 保留。授权先行，库存、状态、并发和其他复杂判断仍归 owner；replay 不重新运行新增输入约束。
 - **共同输入过程**：原 DraftSession 的 buffer 移到 UI Kit，Build 复用同一个 context/hook。数字、JSON、日期与 datetime 分开保留原文/解析值；不完整数字、非法 JSON/日期不写成 0/NaN/null 或最后合法值。合法值才通知原文档/RHF；整数、安全精度、空值以及专用 decimal/money 的口径保持原 owner。EntityForm/RecordForm 的 onTouched、Controller onBlur/ref、首错聚焦和完整 RHF/Zod 校验继续有效。共同错误区可定位/放弃原文，控件的错误描述不改变可访问名称。
 - **会话与历史**：原 AppUI 视图按租户/主体/入口文档隔离，普通读取 revision 不换会话；弹窗、原生 Form 和运行试填有自己的 scope。Inspector 选中项/Tab 的原文随文档保留，raw 与 RHF 的合法修改均计 dirty/离开保护，待完成提交与各构建者 busy 状态阻止切应用、关闭及放弃；非法原文阻止提交、自动保存、运行和发布。未提供 Workspace 的本地例子复用同一输入语义但不制造壳。重命名迁移原路径；删除和重排行以原行/节点迁移或销毁 buffer，不串到下一行。原有 80 步文档历史同时捕获输入快照，Undo 可先撤回当前未解析输入、Redo 恢复；文档删除的 Undo/Redo 也保留对应快照。每会话最多 256 个 buffer、4 Mi 字符，每输入 65536 字符；超限明确拒绝新增并保留前文，不静默淘汰。原文与凭据不写 localStorage 或新的服务端个人档案。

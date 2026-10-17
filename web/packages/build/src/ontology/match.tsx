@@ -1,4 +1,4 @@
-import { useIntegrationDraft } from "./integration-draft";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -36,7 +36,7 @@ export function MatchEditor({ id }: { id: string }) {
   const pipelineQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.pipeline?limit=200");
   const sourceQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.source?limit=200");
   const pipelines = pipelineQuery.data?.records ?? [], sources = sourceQuery.data?.records ?? [];
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useIntegrationDraft<Draft>({
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.match", kind: "matching", view: "match", empty, normalize: record => ({ ...record, keys: record.keys ?? [], prefer: record.prefer ?? [] }),
     failure: t("The matching rule could not be saved or loaded. Your draft is still here."),
     payload: draft => {

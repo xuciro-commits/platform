@@ -1,10 +1,9 @@
-import {useInputDrafts} from "@platform/ui";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import {useEffect,useRef,useState} from "react";
 import type {Api} from "@platform/kernel";
-import {useHost,useReadQuery,semanticPropertyTypes} from "@platform/app";
-import {Button,Input,PageHeader,Panel,Select,Textarea,t,useUnsavedChanges} from "@platform/ui";
+import {useHost,semanticPropertyTypes} from "@platform/app";
+import {Button,Input,PageHeader,Panel,Select,Textarea,t} from "@platform/ui";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 
@@ -20,30 +19,16 @@ export function PropertyTypes() {
 }
 
 export function PropertyTypeEditor({id}:{id:string}) {
- const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
- const query=useReadQuery<{record?:Draft}>(`/v1/records/build.propertytype/${encodeURIComponent(id)}`);
- const [draft,setDraft]=useState<Draft>(empty),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
- const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false);
- const load=(record:Draft)=>{setDraft(hydrate(record));baseRevision.current=record.revision;loaded.current=`${record.id}:${record.revision}`;};
- const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record)load(query.data.record);else setDraft(empty());setDirty(false);setError("");}, busy);
- useEffect(()=>{const record=query.data?.record;if(record&&!dirty&&!busy&&loaded.current!==`${record.id}:${record.revision}`)load(record);},[query.data,dirty,busy]);
- const patch=(change:Partial<Draft>)=>{if(lock.current)return;setDraft(d=>({...d,...change}));setDirty(true);setError("");};
- const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The shared property could not be saved or loaded. Your draft is still here."));}finally{lock.current=false;setBusy(false);}};
- const reload=async()=>{const result=await query.refetch();if(result.isSuccess&&result.data?.record){load(result.data.record);markSaved();setDirty(false);}else setError(t("Reload the saved shared property before editing again."));};
- const save=async():Promise<{id:string;revision:number}|undefined>=>{
-  const target=draft.id || createID,expected=baseRevision.current,{name,title,description,type}=draft;
-  if(!await decide(`build.propertytype.${draft.id?"edit":"create"}`,{type:"build.propertytype",id:target},{name,title,description,type},{expectedRevision:draft.id?expected:0,quiet:true,onRefused:setError}))return;
-  baseRevision.current=expected+1;loaded.current=`${target}:${expected+1}`;
-  setDraft(d=>({...d,id:target,revision:expected+1}));markSaved();setDirty(false);
-  if(!draft.id){open({view:"property-type",params:{id:target}});close({view:"property-type",params:{id}});}
-  else {const result=await query.refetch();if(result.isSuccess&&result.data?.record?.revision===expected+1)load(result.data.record);}
-  return {id:target,revision:expected+1};
- };
+ const {role,definitions}=useHost(),{open}=useApplicationWorkspace();
+ const editor=useDefinitionDraft<Draft>({
+  id,type:"build.propertytype",kind:"property-type",view:"property-type",empty,normalize:hydrate,joinApplication:false,
+  failure:t("The shared property could not be saved or loaded. Your draft is still here."),
+  payload:({name,title,description,type})=>({name,title,description,type}),
+ });
+ const {draft,query,dirty,busy,error,patch,perform,save,review,discardChanges,confirmDiscard}=editor;
+ const reload=()=>editor.reload(t("Reload the saved shared property before editing again."));
+ const publish=()=>editor.transition("publish");
  const directInstall = useDirectInstall();
- const publish=async()=>{const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(!saved)return;if(await decide("build.propertytype.publish",{type:"build.propertytype",id:saved.id},{},{expectedRevision:saved.revision,quiet:true,onRefused:setError}))await reload();};
- const review=async()=>{const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(saved)open({view:"release-review",params:{kind:"property-type",id:saved.id}});};
  const versions=semanticPropertyTypes(definitions).filter(p=>p.binding.ref.app==="build"&&p.binding.ref.name===draft.name);
  if(role("build")!=="builder")return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Shared properties")} description={query.isError?t("The shared property could not be loaded."):t("Loading…")}/>;

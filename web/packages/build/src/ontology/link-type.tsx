@@ -1,10 +1,10 @@
 import type { Api } from "@platform/kernel";
-import {useInputDrafts} from "@platform/ui";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import { useEffect, useRef, useState } from "react";
-import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
-import { Button, Checkbox, Input, Select, PageHeader, Panel, Textarea, t, useUnsavedChanges } from "@platform/ui";
+import { useState } from "react";
+import { useHost, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
+import { Button, Checkbox, Input, Select, PageHeader, Panel, Textarea, t } from "@platform/ui";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 import { useAuthoringModel } from "./authoring-model";
@@ -19,40 +19,21 @@ export function LinkTypes() {
  return <div className="grid gap-3"><PageHeader title={t("Relationships")} description={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"link-type",params:{id:"new"}})}>{t("New relationship")}</Button>}/><ResourceList source={source} type="build.linktype" fields={["title","name","parent","child","version"]} onOpen={(record)=>open({view:"link-type",params:{id:record.id}})}/></div>;
 }
 export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;child?:string;via?:string}) {
- const {decide,role,definitions,client}=useHost(),{open,close}=useApplicationWorkspace();
+ const {decide,role,definitions,client}=useHost(),{open}=useApplicationWorkspace();
  const authoring=useAuthoringModel();
  const objects=(authoring.drafts.data?.records??[]).filter(draft=>!draft.archived).map(draft=>({name:`build.${draft.name}`,title:draft.title}));
- const query=useReadQuery<{record?:Draft}>(`/v1/records/build.linktype/${encodeURIComponent(id)}`);
- const [draft,setDraft]=useState<Draft>(()=>({...empty(),parent:parent??"",child:child??"",via:via??""})),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [migration,setMigration]=useState<Api.RelationMigrationPlan>();
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
- const lock=useRef(false),baseRevision=useRef(0),loaded=useRef(""),confirmedDraft=useRef<Draft>(empty());
- const load=(record:Draft)=>{confirmedDraft.current=hydrate(record);setDraft(confirmedDraft.current);baseRevision.current=record.revision;loaded.current=`${record.id}:${record.revision}`;};
- const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record&&query.data.record.revision>=baseRevision.current)load(query.data.record);else setDraft(structuredClone(confirmedDraft.current));setDirty(false);setError("");}, busy);
- useEffect(()=>{const record=query.data?.record;if(record&&!dirty&&!busy&&record.revision>=baseRevision.current&&loaded.current!==`${record.id}:${record.revision}`)load(record);},[query.data,dirty,busy]);
+ const editor=useDefinitionDraft<Draft>({
+  id,type:"build.linktype",kind:"link-type",view:"link-type",empty:() => ({...empty(),parent:parent??"",child:child??"",via:via??""}),normalize:hydrate,joinApplication:false,
+  failure:t("The relationship could not be saved or loaded. Your draft is still here."),
+  payload:draft=>{const {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required}=draft;return {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required};},
+ });
+ const {draft,query,dirty,busy,error,setError,inputs,perform,save,review,discardChanges,confirmDiscard}=editor;
  const object={app:"build",kind:"object" as const,name:draft.child};
- const patch=(change:Partial<Draft>)=>{if(lock.current)return;setDraft((d)=>({...d,...change}));setDirty(true);setError("");setMigration(undefined);};
- const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The relationship could not be saved or loaded. Your draft is still here."));}finally{lock.current=false;setBusy(false);}};
- const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){load(r.data.record);markSaved();setDirty(false);}else setError(t("Reload the saved relationship before editing again."));};
- const save=async():Promise<{id:string;revision:number}|undefined>=>{
-  if(inputs?.invalid)return;
-  const submitted=structuredClone(draft),target=submitted.id||createID,expected=submitted.id?baseRevision.current:0;
-  const {name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required}=submitted;
-  if(!await decide(`build.linktype.${submitted.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy,storage,roles,required},{expectedRevision:submitted.id?expected:0,quiet:true,onRefused:setError}))return;
-  const revision=expected+1;load({...submitted,id:target,revision});markSaved();setDirty(false);
-  if(!submitted.id){open({view:"link-type",params:{id:target}});close({view:"link-type",params:{id}});}
-  else {try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===revision)load(fresh.data.record);else setError(t("The resource was saved, but its current record could not be reloaded."));}catch{setError(t("The resource was saved, but its current record could not be reloaded."));}}
-  return {id:target,revision};
- };
+ const patch=(change:Partial<Draft>)=>{editor.patch(change);setMigration(undefined);};
+ const reload=()=>editor.reload(t("Reload the saved relationship before editing again."));
+ const publish=()=>editor.transition("publish");
  const directInstall = useDirectInstall();
- const publish=async()=>{
-  const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(!saved?.id)return;
-  if(!await decide("build.linktype.publish",{type:"build.linktype",id:saved.id},{},{expectedRevision:saved.revision,quiet:true,onRefused:setError}))return;
-  baseRevision.current=saved.revision+1;loaded.current=`${saved.id}:${baseRevision.current}`;
-  try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===baseRevision.current){load(fresh.data.record);markSaved();setDirty(false);}else setError(t("The resource was installed, but its current record could not be reloaded."));}catch{setError(t("The resource was installed, but its current record could not be reloaded."));}
- };
- const review=async()=>{const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(saved?.id)open({view:"release-review",params:{kind:"link-type",id:saved.id}});};
  const installed=definitions.find((d)=>d.ref.kind==="link-type"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.linkVersions??{});
  if(role("build")!=="builder")return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
@@ -88,7 +69,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
    <p className="text-xs text-muted">{t("Preview historical links, then move them in one accepted decision. Original history remains readable.")}</p>
    <Button disabled={busy||dirty} onClick={()=>void perform(async()=>setMigration(await client.get<Api.RelationMigrationPlan>(`/v1/relation-migrations/preview\n${JSON.stringify({ref:installed.ref,sourceVersion:installed.version})}`,true)))}>{t("Preview relationship migration")}</Button>
    {migration&&<><p>{migration.migrated?t("Relationships already migrated"):t("{n} visible relationships",{n:migration.links.length})}</p>{migration.partial&&<p role="alert">{t("Migration contains hidden relationships and cannot proceed.")}</p>}
-   <Button disabled={busy||dirty||migration.partial||migration.migrated} onClick={()=>void perform(async()=>{if(await decide("build.linktype.migrate",{type:"build.linktype",id:draft.id},{},{expectedRevision:baseRevision.current,onRefused:setError})){setMigration(undefined);await reload();}})}>{t("Migrate relationships")}</Button></>}
+   <Button disabled={busy||dirty||migration.partial||migration.migrated} onClick={()=>void perform(async()=>{if(await decide("build.linktype.migrate",{type:"build.linktype",id:draft.id},{},{expectedRevision:draft.revision,onRefused:setError})){setMigration(undefined);await reload();}})}>{t("Migrate relationships")}</Button></>}
  </Panel>}
  <Panel role="region" aria-label={t("Published relationship versions")} title={t("Published relationship versions")} className="grid gap-2"><p className="text-xs">{t("New drafts and publications do not replace versions already bound by pages.")}</p>{versions.length?versions.map((version)=><p key={version} className="break-all text-xs">{version}</p>):<p className="text-xs text-muted">{t("No published relationship yet.")}</p>}</Panel>
  </div>;

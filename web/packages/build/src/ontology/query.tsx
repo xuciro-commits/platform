@@ -1,10 +1,10 @@
-import {useInputDrafts} from "@platform/ui";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useOpenRecord, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
-import { Button, Card, Checkbox, Input, PageHeader, Panel, Select, Textarea, RecordLookup, InterfaceRecordLookup, t, useUnsavedChanges, type InterfaceRecordIdentity, type InterfaceRecordPageData, type RecordPageData, type RecordSource } from "@platform/ui";
+import { Button, Card, Checkbox, Input, PageHeader, Panel, Select, Textarea, RecordLookup, InterfaceRecordLookup, t, type InterfaceRecordIdentity, type InterfaceRecordPageData, type RecordPageData, type RecordSource } from "@platform/ui";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 
@@ -20,41 +20,22 @@ export function Queries() {
  return <div className="grid gap-3"><PageHeader title={t("Queries")} description={t("Publish reusable record reads and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"query",params:{id:"new"}})}>{t("New query")}</Button>}/><ResourceList source={source} type="build.query" fields={["title","name","object","interface","version"]} onOpen={(record)=>open({view:"query",params:{id:record.id}})}/></div>;
 }
 export function QueryEditor({id}:{id:string}) {
- const {decide,role,definitions}=useHost(),{open,close}=useApplicationWorkspace();
- const query=useReadQuery<{record?:Draft}>(`/v1/records/build.query/${encodeURIComponent(id)}`);
+ const {role,definitions}=useHost(),{open}=useApplicationWorkspace();
  const apps=useReadQuery<Api.AppInfo[]>("/v1/apps").data ?? [];
  const interfaces=apps.flatMap(app=>app.interfaces??[]);
- const [draft,setDraft]=useState<Draft>(empty),[edited,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
- const lock=useRef(false),baseRevision=useRef(0),loaded=useRef(""),confirmedDraft=useRef<Draft>(empty());
- const load=(record:Draft)=>{confirmedDraft.current=hydrate(record);setDraft(confirmedDraft.current);baseRevision.current=record.revision;loaded.current=`${record.id}:${record.revision}`;};
- const {markSaved,discardChanges,confirmDiscard}=useUnsavedChanges(dirty,()=>{if(query.data?.record&&query.data.record.revision>=baseRevision.current)load(query.data.record);else setDraft(structuredClone(confirmedDraft.current));setDirty(false);setError("");}, busy);
- useEffect(()=>{const record=query.data?.record;if(record&&!dirty&&!busy&&record.revision>=baseRevision.current&&loaded.current!==`${record.id}:${record.revision}`)load(record);},[query.data,dirty,busy]);
+ const editor=useDefinitionDraft<Draft>({
+  id,type:"build.query",kind:"query",view:"query",empty:empty,normalize:hydrate,joinApplication:false,
+  failure:t("The query could not be saved or loaded. Your draft is still here."),
+  payload:draft=>{const {name,title,description,object,interface:interfaceName,by,domain,sort,limit}=draft;return {name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,sort,limit};},
+ });
+ const {draft,query,dirty,busy,error,inputs,perform,save,review,discardChanges,confirmDiscard}=editor;
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
  const currentShape=interfaces.find(item=>item.name===draft.interface)??draft.interfaceShape,fields=draft.interface?currentShape?.fields:info?.fields;
- const patch=(change:Partial<Draft>)=>{if(lock.current)return;setDraft((d)=>({...d,...change}));setDirty(true);setError("");};
+ const patch=editor.patch;
  const term=(index:number,value:Term)=>patch({domain:draft.domain.map((c,i)=>i===index?value:c)});
- const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The query could not be saved or loaded. Your draft is still here."));}finally{lock.current=false;setBusy(false);}};
- const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){load(r.data.record);markSaved();setDirty(false);}else setError(t("Reload the saved query before editing again."));};
- const save=async():Promise<{id:string;revision:number}|undefined>=>{
-  if(inputs?.invalid)return;
-  const submitted=structuredClone(draft),target=submitted.id||createID,expected=submitted.id?baseRevision.current:0;
-  const {name,title,description,object,interface:interfaceName,by,domain,sort,limit}=submitted;
-  if(!await decide(`build.query.${submitted.id?"edit":"create"}`,{type:"build.query",id:target},{name,title,description,object:object??"",interface:interfaceName??"",by:by??"",domain,sort,limit},{expectedRevision:submitted.id?expected:0,quiet:true,onRefused:setError}))return;
-  const revision=expected+1;load({...submitted,id:target,revision});markSaved();setDirty(false);
-  if(!submitted.id){open({view:"query",params:{id:target}});close({view:"query",params:{id}});}
-  else {try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===revision)load(fresh.data.record);else setError(t("The resource was saved, but its current record could not be reloaded."));}catch{setError(t("The resource was saved, but its current record could not be reloaded."));}}
-  return {id:target,revision};
- };
+ const reload=()=>editor.reload(t("Reload the saved query before editing again."));
+ const publish=()=>editor.transition("publish");
  const directInstall = useDirectInstall();
- const publish=async()=>{
-  const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(!saved?.id)return;
-  if(!await decide("build.query.publish",{type:"build.query",id:saved.id},{},{expectedRevision:saved.revision,quiet:true,onRefused:setError}))return;
-  baseRevision.current=saved.revision+1;loaded.current=`${saved.id}:${baseRevision.current}`;
-  try{const fresh=await query.refetch();if(fresh.isSuccess&&fresh.data?.record?.revision===baseRevision.current){load(fresh.data.record);markSaved();setDirty(false);}else setError(t("The resource was installed, but its current record could not be reloaded."));}catch{setError(t("The resource was installed, but its current record could not be reloaded."));}
- };
- const review=async()=>{const saved=dirty?await save():{id:draft.id,revision:baseRevision.current};if(saved?.id)open({view:"release-review",params:{kind:"query",id:saved.id}});};
  const installed=definitions.find((d)=>d.ref.kind==="query"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.queryVersions??{});
  if(role("build")!=="builder")return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;

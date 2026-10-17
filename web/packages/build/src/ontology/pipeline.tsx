@@ -1,5 +1,5 @@
 import {formulaText} from "../editor/rule-text";
-import { useIntegrationDraft } from "./integration-draft";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { ArrowDown, ArrowUp } from "lucide-react";
@@ -84,7 +84,7 @@ export function PipelineEditor({ id }: { id: string }) {
   // The enterprise model's own kinds and elements, so a pipeline writing into
   // it chooses them rather than spelling their ids.
   const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useIntegrationDraft<Draft>({
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.pipeline", kind: "pipeline", view: "pipeline", empty, normalize: record => ({ ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }),
     failure: t("The pipeline could not be saved or loaded. Your draft is still here."),
     payload: draft => {

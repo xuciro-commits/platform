@@ -1,4 +1,4 @@
-import { useIntegrationDraft } from "./integration-draft";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useId, useRef, useState } from "react";
@@ -29,7 +29,7 @@ export function ConnectionEditor({ id }: { id: string }) {
   const { client, role } = useHost(), { open } = useApplicationWorkspace();
   const fieldID = useId();
   const kinds = useReadQuery<{ items: Api.ConnectionKind[] }>("/v1/connection-kinds");
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition, createID } = useIntegrationDraft<Draft>({
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition, createID } = useDefinitionDraft<Draft>({
     id, type: "build.connection", kind: "connection", view: "connection", empty,
     failure: t("The connection could not be saved or loaded. Your draft is still here."),
     payload: draft => {

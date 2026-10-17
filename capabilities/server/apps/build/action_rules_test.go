@@ -3,6 +3,8 @@ package build
 import (
 	"encoding/json"
 	"platformserver/platform"
+	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -10,6 +12,41 @@ import (
 func actionRulesObject() Object {
 	return Object{Name: "asset", States: []State{{Name: "active", Title: "Active"}, {Name: "offline", Title: "Offline"}}, Fields: []Field{{Name: "priority", Type: "choice", Choices: "Low,High"}, {Name: "operator", Type: "reference", Ref: "build.operator"}}, Actions: []Action{{Name: "update", Title: "Update", From: []string{"active", "offline"}, ToInput: "status", Inputs: []Input{{Name: "status", Title: "Status", Type: "choice", Choices: "active,offline", Required: true}, {Name: "priority", Title: "Priority", Type: "choice", Choices: "Low,High"}}, Sets: []Set{{Field: "priority", From: "priority"}}, Conditions: []Condition{{When: &Condition{Field: "input.status", Operator: "=", Value: "offline"}, Field: "input.priority", Operator: "=", Value: "High", Message: "Offline requires High"}}}}}
 }
+
+func TestCanonicalActionLifecycleRetainsTransactionDestinations(t *testing.T) {
+	for _, tc := range []struct {
+		name, to, input string
+		want            []string
+	}{
+		{"input", "", "status", []string{"active", "offline"}},
+		{"fixed", "offline", "", []string{"offline"}},
+		{"unchanged", "", "", []string{"active", "offline"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := actionRulesObject()
+			o.Actions[0].To, o.Actions[0].ToInput = tc.to, tc.input
+			b := New("destinations")
+			canonical, err := b.CanonicalObject(o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if canonical.Actions[0].To != "" || canonical.Actions[0].ToInput != "" {
+				t.Fatal("canonical action retained a second state rule")
+			}
+			for _, object := range []Object{o, canonical} {
+				info, err := platform.Describe(ID, b.entity(object), func(reflect.Type) string { return "" })
+				if err != nil {
+					t.Fatal(err)
+				}
+				move := info.Lifecycle.Transitions[0]
+				if move.ToInput != tc.input || !slices.Equal(move.To, tc.want) {
+					t.Fatalf("destination = %v from %q; want %v from %q", move.To, move.ToInput, tc.want, tc.input)
+				}
+			}
+		})
+	}
+}
+
 func TestActionRulesChooseOriginalStatesAndGuardConditionsBeforeMutation(t *testing.T) {
 	o := actionRulesObject()
 	if err := checkProcess(o, nil); err != nil {

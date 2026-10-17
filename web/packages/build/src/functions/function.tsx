@@ -1,16 +1,15 @@
-import {useInputDrafts} from "@platform/ui";
-import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { joinProjectResource } from "../projects/membership";
+import { useDefinitionDraft } from "../session/definition-draft";
+import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
+import { useHost, useRecordInventory } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, FlowCanvas, PageHeader, Panel, Select, Textarea, Workbench, t, useUnsavedChanges,
+import { Button, Card, Checkbox, Input, FlowCanvas, PageHeader, Panel, Select, Textarea, Workbench, t,
   type FlowNode, type FlowCatalog } from "@platform/ui";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { type WorkflowObject } from "../automate/workflow-model";
 
 type FunctionDraft = { proposal?:Api.ProposalPolicy; conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
@@ -36,28 +35,21 @@ export function Functions() {
 }
 
 export function FunctionEditor({ id }: { id: string }) {
-  const host = useHost(), { decide, role } = host;
-  const application = useApplicationScope();
-  const { open, close } = useApplicationWorkspace();
-  const query = useReadQuery<{ record?: FunctionDraft }>(`/v1/records/build.function/${encodeURIComponent(id)}`);
+  const { role } = useHost();
+  const { open } = useApplicationWorkspace();
   const inventory = useRecordInventory<Source>("build.object");
   const objects = (inventory.data?.records ?? []).filter(object => !object.archived);
-  const [draft, setDraft] = useState<FunctionDraft>(empty);
-  const [chosen, setChosen] = useState<Stage>("settings");
-  const [testing, setTesting] = useState(false);
-  const [edited, setDirty] = useState(false);
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
-    setDraft(query.data?.record ? loaded(query.data.record) : empty); setDirty(false); setError(""); setChosen("settings");
-  }, busy);
-  useEffect(() => { if (query.data?.record && !dirty && !busy) setDraft(loaded(query.data.record)); }, [query.data, dirty, busy]);
+  const [chosen, setChosen] = useState<Stage>("settings"), [testing, setTesting] = useState(false);
+  const editor = useDefinitionDraft<FunctionDraft>({
+    id, type: "build.function", kind: "function", view: "function", empty, normalize: loaded,
+    failure: t("The function could not be saved or loaded. Your draft is still here."), onDiscard: () => setChosen("settings"),
+    payload: ({proposal,conversation,name,title,description,object,fields,instructions,output,model,maxInputBytes,maxOutputBytes,maxTokens,roles}) =>
+      ({proposal:proposal??null,conversation:conversation??false,name,title,description,object,fields,instructions,output,model:model??"",maxInputBytes,maxOutputBytes,maxTokens,roles}),
+  });
+  const {draft,query,dirty,busy,error,setError,patch:change,perform,discardChanges,confirmDiscard}=editor;
   const source = objects.find((object) => `build.${object.name}` === draft.object);
   const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)&&field.aiInput!==false) ?? [];
   const roles = [...new Set(["builder", ...(source?.access?.length ? source.access.filter((access) => access.read !== "none").map((access) => access.role) : ["user"])])];
-  const change = (patch: Partial<FunctionDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); };
   const updateOutput = (index: number, patch: Partial<Api.Field>) => change({ output: draft.output.map((field, i) => i === index ? { ...field, ...patch } : field) });
   // Hints never replace the owner's authoritative publication validation.
   const issues: string[] = [];
@@ -67,56 +59,22 @@ export function FunctionEditor({ id }: { id: string }) {
   if (!draft.instructions.trim()) issues.push(t("Write instructions for the model stage."));
   if (!draft.output.length || draft.output.some((field) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.name) || !field.description?.trim()) || new Set(draft.output.map((field) => field.name)).size !== draft.output.length)
     issues.push(t("Give every output a unique field name, scalar type and description."));
-  const perform = async (action: () => Promise<unknown>) => {
-    setBusy(true); setError("");
-    try { await action(); } catch (problem) { setError(problem instanceof Error ? problem.message : t("The function could not be saved or loaded. Your draft is still here.")); }
-    finally { setBusy(false); }
-  };
-  const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    if (inputs?.invalid) return;
-    const target = draft.id || createID;
-    const { proposal,conversation,name, title, description, object, fields, instructions, output, model, maxInputBytes, maxOutputBytes, maxTokens, roles } = draft;
-    let revision = draft.revision;
-    if (dirty || !draft.id) {
-      if (!await decide(`build.function.${draft.id ? "edit" : "create"}`, { type: "build.function", id: target },
-        { proposal:proposal??null,conversation:conversation??false,name, title, description, object, fields, instructions, output, model: model ?? "", maxInputBytes, maxOutputBytes, maxTokens, roles },
-        { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
-      revision = draft.id ? draft.revision + 1 : 1;
-      setDraft(saved => ({ ...saved, id: target, revision }));
-      inputs?.clear();
-      markSaved(); setDirty(false);
-    }
-    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "function", name });
-    markSaved();
-    if (id === "new") {
-      open({ view: "function", params: { id: target } }, { ifCurrent: { view: "function", params: { id } } }); close({ view: "function", params: { id } });
-    } else {
-      const refreshed = await query.refetch();
-      if (!refreshed.data?.record || refreshed.isError) { setError(t("Reload the saved function before editing again.")); return; }
-      setDraft(loaded(refreshed.data.record)); markSaved(); setDirty(false);
-    }
-    return { id: target, revision };
+  const save = async () => {
+    const saved = await editor.save();
+    if (saved?.reloaded === false) { setError(t("Reload the saved function before editing again.")); return; }
+    return saved;
   };
   const publish = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
     const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
-    if (!saved) return;
-    if (await decide("build.function.publish", { type: "build.function", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) {
-      const refreshed = await query.refetch();
-      if (refreshed.data?.record && !refreshed.isError) { setDraft(loaded(refreshed.data.record)); setDirty(false); }
-      else setError(t("Reload the saved function before editing again."));
-    }
+    if (saved) await editor.transition("publish", saved);
   };
   const review = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
     const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
     if (saved) open({ view: "release-review", params: { kind: "function", id: saved.id } }, { ifCurrent: { view: "function", params: { id: saved.id } } });
   };
-  const reload = async () => {
-    const refreshed = await query.refetch();
-    if (refreshed.data?.record && !refreshed.isError) { setDraft(loaded(refreshed.data.record)); markSaved(); setDirty(false); }
-    else setError(t("The function could not be saved or loaded. Your draft is still here."));
-  };
+  const reload = () => editor.reload(t("The function could not be saved or loaded. Your draft is still here."));
   if (role("build") !== "builder") return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{t("Only a builder can edit AI functions.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{query.isError ? t("The function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const stages: { id: Stage; title: string }[] = [{ id: "settings", title: t("Function settings") }, { id: "source", title: t("Record inputs") }, { id: "model", title: t("Model inference") }, { id: "output", title: t("Strict output") }];

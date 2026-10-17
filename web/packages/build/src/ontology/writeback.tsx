@@ -1,4 +1,4 @@
-import { useIntegrationDraft } from "./integration-draft";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -35,7 +35,7 @@ export function WritebackEditor({ id }: { id: string }) {
   const connectionQuery = useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100");
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired" && c.kind !== "postgres");
   const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 5000).data ?? [];
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useIntegrationDraft<Draft>({
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.writeback", kind: "writeback", view: "writeback", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [], result: record.result ?? [] }),
     failure: t("The writeback could not be saved or loaded. Your draft is still here."),
     payload: draft => {
