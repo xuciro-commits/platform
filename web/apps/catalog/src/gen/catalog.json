@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:5b298459589a1f93",
+  "revision": "sha256:8bde7d7b22d8cfbb",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -9613,6 +9613,7 @@
       "source": "web/packages/ui/src/records/Records.tsx",
       "exports": [
         "RecordPage",
+        "useRecordView",
         "RecordLinks"
       ],
       "example": "RecordDetails",
@@ -13450,6 +13451,7 @@
     "ui/record-page": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages/pages.tsx",
+      "web/packages/app/src/widgets/RecordActivity.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],

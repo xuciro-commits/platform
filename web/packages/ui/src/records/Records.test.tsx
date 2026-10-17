@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { RecordList, RecordPage, RecordLinks, RecordStatus, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
+import { RecordList, RecordPage, RecordLinks, RecordStatus, useRecordView, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
 afterEach(cleanup);
@@ -9,6 +9,99 @@ for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as cons
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+
+test("record view refresh retains its current value while revisions and reloads ignore older replies", async () => {
+  const requests: ReturnType<typeof pending<RecordView>>[] = [];
+  const get = vi.fn(() => { const response = pending<RecordView>(); requests.push(response); return response.promise; });
+  const release = vi.fn(), watchRecord = vi.fn(() => release);
+  const source: RecordSource = { scope: "member", revision: 0, entity: () => entity, list: vi.fn(), get, watchRecord };
+  const { result, rerender, unmount } = renderHook(({ source, reload }) => useRecordView(source, entity.type, "A", reload), { initialProps: { source, reload: 0 } });
+  expect(result.current.loading).toBe(true);
+  const original = { record: record("A") } as RecordView;
+  await act(async () => requests[0]!.resolve(original));
+  expect(result.current.view).toBe(original);
+  expect(result.current.loading).toBe(false);
+  rerender({ source: { ...source }, reload: 0 });
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(watchRecord).toHaveBeenCalledTimes(1);
+
+  const revised = { ...source, revision: 1 };
+  rerender({ source: revised, reload: 0 });
+  expect(requests).toHaveLength(2);
+  expect(result.current.view).toBe(original);
+  expect(result.current.loading).toBe(true);
+  rerender({ source: revised, reload: 1 });
+  expect(requests).toHaveLength(3);
+  const latest = { record: { ...record("A"), revision: 3 } } as RecordView;
+  await act(async () => requests[2]!.resolve(latest));
+  await act(async () => requests[1]!.resolve({ record: { ...record("A"), revision: 2 } } as RecordView));
+  expect(result.current.view).toBe(latest);
+  expect(result.current.loading).toBe(false);
+  expect(watchRecord).toHaveBeenCalledTimes(3);
+  expect(release).toHaveBeenCalledTimes(2);
+  unmount();
+  expect(release).toHaveBeenCalledTimes(3);
+});
+
+test("record views clear on record, scope or type changes and reject a mismatched response identity", async () => {
+  const requests: ReturnType<typeof pending<RecordView>>[] = [];
+  const get = vi.fn(() => { const response = pending<RecordView>(); requests.push(response); return response.promise; });
+  const source: RecordSource = { scope: "member-one", entity: () => entity, list: vi.fn(), get };
+  const { result, rerender } = renderHook(({ source, type, id }) => useRecordView(source, type, id), { initialProps: { source, type: entity.type, id: "A" } });
+  await act(async () => requests[0]!.resolve({ record: record("A") } as RecordView));
+  expect(result.current.view?.record.id).toBe("A");
+  rerender({ source, type: entity.type, id: "B" });
+  expect(result.current.view).toBeUndefined();
+  expect(result.current.loading).toBe(true);
+  const otherScope = { ...source, scope: "member-two" };
+  rerender({ source: otherScope, type: entity.type, id: "B" });
+  await act(async () => requests[1]!.resolve({ record: record("B") } as RecordView));
+  expect(result.current.view).toBeUndefined();
+  await act(async () => requests[2]!.resolve({ record: { ...record("B"), revision: 2 } } as RecordView));
+  expect(result.current.view?.record.revision).toBe(2);
+  rerender({ source: otherScope, type: "sample.other", id: "B" });
+  expect(result.current.view).toBeUndefined();
+  await act(async () => requests[3]!.resolve({ record: record("WRONG") } as RecordView));
+  expect(result.current.view).toBeUndefined();
+  expect(result.current.error).toBeTruthy();
+  expect(result.current.loading).toBe(false);
+});
+
+test("record view retries failed reads and releases hidden subscriptions before accepting a fresh visible reply", async () => {
+  const requests: ReturnType<typeof pending<RecordView>>[] = [];
+  const get = vi.fn<RecordSource["get"]>().mockRejectedValueOnce(new Error("Read refused")).mockImplementation(() => {
+    const response = pending<RecordView>(); requests.push(response); return response.promise;
+  });
+  const release = vi.fn(), changed: (() => void)[] = [];
+  const watchRecord = vi.fn((_type: string, _id: string, refresh: () => void) => { changed.push(refresh); return release; });
+  const source: RecordSource = { scope: "member", entity: () => entity, list: vi.fn(), get, watchRecord };
+  let visible = true;
+  const { result, rerender, unmount } = renderHook(() => useRecordView(source, entity.type, "A"), {
+    wrapper: ({ children }) => <ViewVisibilityContext.Provider value={visible}>{children}</ViewVisibilityContext.Provider>,
+  });
+  await waitFor(() => expect(result.current.error).toBe("Read refused"));
+  expect(result.current.view).toBeUndefined();
+  act(() => result.current.refresh());
+  expect(result.current.error).toBeUndefined();
+  expect(result.current.loading).toBe(true);
+  const original = { record: record("A") } as RecordView;
+  await act(async () => requests[0]!.resolve(original));
+  act(() => changed[0]!());
+  expect(result.current.view).toBe(original);
+  expect(result.current.loading).toBe(true);
+  visible = false; rerender();
+  expect(release).toHaveBeenCalledTimes(1);
+  await act(async () => requests[1]!.resolve({ record: { ...record("A"), revision: 2 } } as RecordView));
+  expect(result.current.view).toBe(original);
+  expect(get).toHaveBeenCalledTimes(3);
+  visible = true; rerender();
+  expect(watchRecord).toHaveBeenCalledTimes(2);
+  await act(async () => requests[2]!.resolve({ record: { ...record("A"), revision: 3 } } as RecordView));
+  expect(result.current.view?.record.revision).toBe(3);
+  expect(result.current.loading).toBe(false);
+  unmount();
+  expect(release).toHaveBeenCalledTimes(2);
+});
 
 test("JSON fields render structured flow outputs and nested line values without treating objects as React children",async()=>{
  const info={...entity,fields:[{name:"outputs",title:"Outputs",type:"json" as const,readOnly:true},{name:"trace",title:"Trace",type:"lines" as const,fields:[{name:"result",title:"Result",type:"json" as const}]}]};

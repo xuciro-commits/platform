@@ -510,6 +510,37 @@ export function RecordHistory({info,history=[],heading=true,label,limit,total,lo
 
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
+/** Read and watch one record; callers choose whether to show its previous value while loading. */
+export function useRecordView(source: RecordSource, type: string, id?: string, reload = 0) {
+  const identity = JSON.stringify([source.scope, type, id]);
+  const key = JSON.stringify([identity, source.revision, reload]);
+  const from = useRef(source);
+  from.current = source;
+  const sourceIdentity = source.scope ?? source;
+  const [result, setResult] = useState<{ identity: string; key: string; view?: RecordView; error?: string; loading: boolean }>();
+  const request = useRef(0);
+  const refresh = useCallback(() => {
+    if (!id) return;
+    const epoch = ++request.current, source = from.current, scope = source.scope;
+    setResult(previous => ({ identity, key, view: previous?.identity === identity ? previous.view : undefined, loading: true }));
+    source.get(type, id).then(view => {
+      if (view.record.id !== id) throw new Error("Record identity mismatch");
+      if (request.current === epoch && source.scope === scope) setResult({ identity, key, view, loading: false });
+    }).catch(error => {
+      if (request.current === epoch && source.scope === scope) setResult({ identity, key, error: error instanceof Error ? error.message : String(error), loading: false });
+    });
+  }, [sourceIdentity, type, id, identity, key]);
+  const visible = useViewVisible();
+  useEffect(() => {
+    if (!visible || !id) return;
+    refresh();
+    const stop = from.current.watchRecord?.(type, id, refresh);
+    return () => { request.current++; stop?.(); };
+  }, [refresh, visible, type, id]);
+  const current = result?.identity === identity ? result : undefined;
+  return { view: current?.view, error: current?.key === key ? current.error : undefined, loading: !!id && (current?.key !== key || current.loading), refresh };
+}
+
 /** One record: its fields, the records that refer to it, and its history from the journal. */
 export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {
   detailPresentation?:Api.PageDetailPresentation;recordTabs?:readonly string[];recordLinks?:readonly Api.PageRecordLink[];linksOnly?:boolean;statusTracker?:Api.PageStatusTracker;statusOnly?:boolean;
@@ -533,25 +564,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   const tabIdentity=JSON.stringify([source.scope,type,id,recordTabs]);
   const [tabState,setTab]=useState<{identity:string;value:string}>();
   const info = source.entity(type);
-  const [loaded, setLoaded] = useState<{ type: string; id: string; scope?: string; view: RecordView }>();
-  const view = loaded?.type === type && loaded.id === id && loaded.scope === source.scope ? loaded.view : undefined;
-  const [error, setError] = useState<string>();
-  const request = useRef(0);
-  const load = useCallback(() => {
-    const epoch = ++request.current;
-    const scope = source.scope;
-    setError(undefined);
-    source.get(type, id).then((value) => { if (request.current === epoch && source.scope === scope) setLoaded({ type, id, scope, view: value }); }, (e) => {
-      if (request.current === epoch && source.scope === scope) { setLoaded(undefined); setError(e instanceof Error ? e.message : String(e)); }
-    });
-  }, [source, source.scope, type, id]);
-  const visible = useViewVisible();
-  useEffect(() => {
-    if (!visible) return;
-    load();
-    const stop = source.watchRecord?.(type, id, load);
-    return () => { request.current++; stop?.(); };
-  }, [load, reload, source.revision, visible, source.watchRecord, type, id]);
+  const { view, error, refresh: load } = useRecordView(source, type, id, reload);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
   if (error) {
     return (
