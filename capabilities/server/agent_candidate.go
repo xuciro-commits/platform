@@ -7,8 +7,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	build "platformserver/apps/build"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -37,7 +37,7 @@ func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.App, str
 	if i < 0 {
 		return nil, "", fmt.Errorf("the saved candidate does not contain this agent")
 	}
-	compiler, ok := h.t.app(owner).(host.ReleaseExecutionOwner)
+	compiler, ok := h.t.app(owner).(ReleaseExecutionOwner)
 	if !ok {
 		return nil, "", fmt.Errorf("the agent's original execution owner is unavailable")
 	}

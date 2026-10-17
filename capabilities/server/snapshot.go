@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"maps"
-	"platformserver/internal/host"
 	"reflect"
 	"slices"
 	"strings"
@@ -15,7 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -308,7 +307,7 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 					Version int    `json:"version"`
 				}
 				json.Unmarshal([]byte(meta.Published), &state)
-				owner, ok := t.procs.(host.FlowDefinitionPresence)
+				owner, ok := t.procs.(FlowDefinitionPresence)
 				needsDefinitions = needsDefinitions || !ok || !owner.HasDefinition(build.ID, state.Name, state.Version)
 				continue
 			}

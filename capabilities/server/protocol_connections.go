@@ -13,7 +13,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 

@@ -1,18 +1,17 @@
 package enterprise
 
 import (
-	"platformserver/internal/host/enterpriseapi"
 	"strconv"
 	"strings"
 
-	"platformserver/internal/host/enterpriseapi/uaf"
+	"platformserver/apps/enterprise/uaf"
 	"platformserver/platform"
 )
 
 // The typed SDK over this app's declarations (ADR-0094 D4): the same pipeline
 // that generates the host's TypeScript (cmd/api-types) emits this file into
 // web/packages/kernel/src/gen/enterprise-sdk.ts, and TestAPIContract fails
-// while it is stale. Nothing here is written by hand — enterpriseapi.Profile(), enterpriseapi.Views() and
+// while it is stale. Nothing here is written by hand — Profile(), Views() and
 // declarations() are the sources, so the types cannot drift from the contract.
 
 // SDK is the generated enterprise-sdk.ts source.
@@ -24,14 +23,14 @@ func SDK() string {
 
 	b.WriteString("// EnterpriseStereotype is every stereotype the Enterprise Core Profile offers the palette (ADR-0067 D1).\n")
 	b.WriteString("export type EnterpriseStereotype =\n")
-	for _, p := range enterpriseapi.Profile() {
+	for _, p := range Profile() {
 		b.WriteString("\t| " + strconv.Quote(p.Stereotype) + "\n")
 	}
 	b.WriteString(";\n\n")
 
 	b.WriteString("// EnterpriseViewpoint is the five description views the model projects onto itself (ADR-0093).\n")
 	b.WriteString("export type EnterpriseViewpoint =\n")
-	for _, v := range enterpriseapi.Views(uaf.Current()) {
+	for _, v := range Views(uaf.Current()) {
 		b.WriteString("\t| " + strconv.Quote(v.ID) + "\n")
 	}
 	b.WriteString(";\n\n")

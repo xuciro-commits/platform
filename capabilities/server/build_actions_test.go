@@ -3,7 +3,6 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
 	"strings"
 	"testing"
 	"time"
@@ -65,7 +64,7 @@ func TestTenantDefinedActions(t *testing.T) {
 		"inputs": []map[string]any{{"name": "who", "title": "Who asked", "type": "text"}}, "sets": []map[string]any{{"field": "claimant", "from": "who"}}}
 	verify := map[string]any{"name": "verify", "title": "Verify unchecked", "from": []string{"found"},
 		"conditions": []map[string]any{{"field": "checked", "operator": "=", "value": "false", "message": "This item has not been marked unchecked."}}}
-	lost := buildapi.TypeOf("lost")
+	lost := build.TypeOf("lost")
 
 	// What the host refuses while it is a draft, with the reason.
 	for _, x := range []struct {

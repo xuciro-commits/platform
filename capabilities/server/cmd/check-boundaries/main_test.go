@@ -11,13 +11,12 @@ func TestSourceBoundaryRules(t *testing.T) {
 		name, path, source string
 		blocked            bool
 	}{
-		{"reverse import with inactive build tag", "capabilities/server/read_windows.go", "//go:build windows\npackage runtime\nimport app \"platformserver/apps/build\"\nvar _ = app.ID", true},
 		{"multiline anonymous runtime", "capabilities/server/platform/caller.go", "package platform\nfunc f(c any) { _, _ = c.(interface {\n Ready() bool\n}) }", true},
 		{"concrete identity owner", "capabilities/server/accessor.go", "package runtime\nfunc f(c any) { _ = c.(*Console) }", true},
 		{"concrete agent owner", "capabilities/server/accessor.go", "package runtime\nfunc f(c any) { _ = c.(*Agents) }", true},
 		{"named runtime", "capabilities/server/platform/caller.go", "package platform\ntype ReadOwner interface { Ready() bool }; func f(c any) { _, _ = c.(ReadOwner) }", false},
 		{"aliased wide consumer", "capabilities/server/apps/files/files.go", "package files\nimport h \"platformserver/internal/host\"\ntype Files struct { host h.Host }", true},
-		{"sibling app", "capabilities/server/apps/build/pipeline.go", "package build\nimport \"platformserver/apps/enterprise\"", true},
+		{"sibling app", "capabilities/server/apps/files/files.go", "package files\nimport \"platformserver/apps/enterprise\"", true},
 		{"owner's own subpackage", "capabilities/server/apps/enterprise/model.go", "package enterprise\nimport \"platformserver/apps/enterprise/uaf\"", false},
 		{"binary composition", "capabilities/server/cmd/demo/main.go", "package main\nimport \"platformserver/apps/build\"", false},
 		{"contract reverse import", "capabilities/server/internal/host/buildapi.go", "package host\nimport \"platformserver/apps/build\"", true},

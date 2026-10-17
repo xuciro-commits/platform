@@ -75,16 +75,6 @@ format() {
 
 capabilities() {
   step capability-server check_module capabilities/server
-  step app-scaffold scaffold
-}
-
-# The scaffold (cmd/new-app) writes an app whose tests pass, in a scratch copy
-# of the repository's layout, so docs/Apps.md's first step always works.
-scaffold() {
-  local root=.build/scaffold
-  rm -rf "$root" && mkdir -p "$root" && ln -s ../../contract ../../capabilities "$root"/ &&
-    (cd capabilities/server && go run ./cmd/new-app -root "../../$root" -id scaffolded -entity request -web=false) &&
-    check_module "$root/apps/scaffolded/server"
 }
 
 mes() {

@@ -3,13 +3,12 @@ package platformserver
 import (
 	"encoding/json"
 	"log"
-	"platformserver/internal/host"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
-	enterprise "platformserver/internal/host/enterpriseapi"
+	build "platformserver/apps/build"
+	enterprise "platformserver/apps/enterprise"
 	"platformserver/platform"
 )
 
@@ -28,7 +27,7 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	c := t.automation(build.ID, false)
 	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	versions := map[string]int{}
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
+	owner := t.app(build.ID).(IntegrationDefinitions)
 	var fixed []build.Pipeline
 	for _, p := range pipelines {
 		p, err := owner.ExecutionPipeline(p)
@@ -67,7 +66,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 		}
 		for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
 			if ds, ok := platform.Get[build.Dataset](c, id); ok {
-				fixed, definitionErr := t.app(build.ID).(host.IntegrationDefinitions).ExecutionDataset(ds)
+				fixed, definitionErr := t.app(build.ID).(IntegrationDefinitions).ExecutionDataset(ds)
 				if definitionErr != nil {
 					err = definitionErr
 					break
@@ -95,7 +94,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 					if build.Guarded(run.Marking) {
 						run.Error = "The enterprise model is tenant-readable; confidential or restricted rows cannot land there"
 					} else {
-						elements, rels, skipped := p.OutputEnterprise.Slice(kept)
+						elements, rels, skipped := sliceEnterpriseTarget(*p.OutputEnterprise, kept)
 						payload, _ := json.Marshal(map[string]any{"source": p.OutputEnterprise.Source, "elements": elements, "relationships": rels})
 						_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: enterprise.ID, IdempotencyKey: "sync:" + p.ID + ":" + now.UTC().Format(time.RFC3339Nano),
 							Target: &pb.EntityRef{Type: enterprise.ModelType, Id: "model"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaSliceSync, Version: 1}, Payload: payload}, now)
@@ -151,4 +150,49 @@ func (t *Tenant) unguarded(object, marking string) []string {
 		return nil
 	}
 	return build.UnguardedFields(et.info, nil)
+}
+
+// sliceEnterpriseTarget turns the rows into the elements and relationships one sync lands.
+// Rows without an id or a name are skipped; the counts tell.
+func sliceEnterpriseTarget(e build.EnterpriseTarget, rows []map[string]any) ([]enterprise.Element, []enterprise.Relationship, int) {
+	var elements []enterprise.Element
+	var rels []enterprise.Relationship
+	skipped := 0
+	ids := map[string]bool{}
+	for _, row := range rows {
+		raw, name := e.Value(row, e.ID), e.Value(row, e.Name)
+		if raw == "" || name == "" || ids[raw] {
+			skipped++
+			continue
+		}
+		ids[raw] = true
+		el := enterprise.Element{ID: e.ElementID(raw), Stereotype: e.Stereotype, Name: name, ShortName: e.Value(row, e.ShortName), Kind: e.Value(row, e.Kind), From: e.Value(row, e.From), Until: e.Value(row, e.Until)}
+		bag := map[string]any{}
+		for _, c := range e.Properties {
+			if v, ok := row[c]; ok && v != nil {
+				bag[c] = v
+			}
+		}
+		if len(bag) > 0 { // the system's own attributes live under its name; UAF tagged values stay the model's
+			el.Properties = map[string]any{"source:" + e.Source: bag}
+		}
+		elements = append(elements, el)
+		if parent := e.Value(row, e.Parent); e.Parent != "" && parent != "" && parent != raw {
+			rels = append(rels, enterprise.Relationship{ID: "pl:" + raw, Stereotype: enterprise.Placement, Kind: e.In, Source: el.ID, Target: e.ElementID(parent), Relation: e.Relation, From: el.From, Until: el.Until})
+		} else if e.Root != "" && e.In != "" {
+			rels = append(rels, enterprise.Relationship{ID: "pl:" + raw, Stereotype: enterprise.Placement, Kind: e.In, Source: el.ID, Target: e.Root, Relation: e.Relation, From: el.From, Until: el.Until})
+		}
+		if at := e.Value(row, e.At); e.At != "" && at != "" {
+			kind := e.AtKind
+			if kind == "" {
+				kind = enterprise.Owns
+			}
+			src, dst := e.ElementID(at), el.ID
+			if kind == enterprise.FillsPost || kind == enterprise.Membership || kind == enterprise.Performs {
+				src, dst = el.ID, e.ElementID(at) // the row's element is the one that fills, belongs or performs
+			}
+			rels = append(rels, enterprise.Relationship{ID: "at:" + raw, Stereotype: kind, Source: src, Target: dst, From: el.From, Until: el.Until})
+		}
+	}
+	return elements, rels, skipped
 }

@@ -1,7 +1,6 @@
 package build
 
 import (
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 	"testing"
 	"time"
@@ -23,7 +22,7 @@ func TestFormula(t *testing.T) {
 	if err := checkFormulas([]Field{{Name: "a", Type: "integer", Formula: "b + 1"}}); err == nil {
 		t.Fatal("an unknown operand passed")
 	}
-	if _, err := buildapi.ValueParseFormula("1 +"); err == nil {
+	if _, err := ValueParseFormula("1 +"); err == nil {
 		t.Fatal("a broken formula parsed")
 	}
 	type rec struct {

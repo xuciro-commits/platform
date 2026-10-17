@@ -13,8 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -77,7 +76,7 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 		return nil, refusal
 	}
 	live := map[string]bool{}
-	if owner, ok := t.app(build.ID).(host.IntegrationDefinitions); ok {
+	if owner, ok := t.app(build.ID).(IntegrationDefinitions); ok {
 		for _, connection := range connections {
 			if connection.State == "ready" && !connection.Archived {
 				if fixed, err := owner.ExecutionConnection(connection); err == nil && fixed.Protocol != nil {
@@ -180,7 +179,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if plan.connection.ID == "" || plan.connection.State != "ready" {
 		return plan, observationUnavailable(fmt.Errorf("observation connection is not ready"))
 	}
-	owner, ok := t.app(definition.Connection.App).(host.IntegrationDefinitions)
+	owner, ok := t.app(definition.Connection.App).(IntegrationDefinitions)
 	if !ok {
 		return plan, observationUnavailable(fmt.Errorf("observation connection has no original owner"))
 	}

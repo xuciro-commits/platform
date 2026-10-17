@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"platformserver/apps/build"
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -36,7 +35,7 @@ func TestApplicationTrial(t *testing.T) {
 	decide(t, tn, "builder", build.ID, "build.dataset.create", build.DatasetType, "DATASET", map[string]any{"name": "trialinput", "title": "Synthetic input"}, at)
 	decide(t, tn, "builder", build.ID, "build.app.create", build.AppType, "APP", map[string]any{"name": "trialapp", "title": "Trial application", "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.trialjob"}, {App: build.ID, Kind: platform.AssetSampleSet, Name: "jobs"}, {App: build.ID, Kind: platform.AssetDataset, Name: "trialinput"}}}, at)
 	builder := memberOf(t, tn, "builder")
-	drafts, err := tn.app(build.ID).(host.ConstructionDrafts).ApplicationDrafts("APP")
+	drafts, err := tn.app(build.ID).(ConstructionDrafts).ApplicationDrafts("APP")
 	if err != nil {
 		t.Fatal(err)
 	}

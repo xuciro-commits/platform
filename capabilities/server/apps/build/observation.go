@@ -3,20 +3,12 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
+	"slices"
+	"time"
 )
-
-const ObservationType = buildapi.ObservationType
-const SchemaObservation = buildapi.SchemaObservation
-
-type Observation = buildapi.Observation
 
 func (b *Build) observationEntity() platform.Entity {
 	return platform.Entity{Type: ObservationType, Title: "Observation source", Plural: "Observation sources", Model: Observation{}, Display: "title",
@@ -89,7 +81,7 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record Observation
 	}
 	if record.Published != "" {
 		var prior platform.ReleaseAsset
-		if buildapi.ValueDecodeIntegration([]byte(record.Published), &prior) != nil || prior.Ref.Name != record.Name {
+		if ValueDecodeIntegration([]byte(record.Published), &prior) != nil || prior.Ref.Name != record.Name {
 			return fmt.Errorf("A published observation source keeps its name")
 		}
 	}
@@ -143,7 +135,7 @@ func (b *Build) observationAction(definition platform.ObservationDefinition) (st
 			return "", platform.Action{}, false
 		}
 		for _, object := range objects {
-			if object.Archived || buildapi.TypeOf(object.Name) != definition.Object.Name {
+			if object.Archived || TypeOf(object.Name) != definition.Object.Name {
 				continue
 			}
 			for _, action := range objectActions(object, Entity(object)) {
@@ -160,17 +152,46 @@ func (b *Build) observationAction(definition platform.ObservationDefinition) (st
 // editor row and never observations fetched from the external store.
 func (b *Build) ExecutionObservation(record Observation) (platform.ObservationDefinition, error) {
 	var asset platform.ReleaseAsset
-	if record.Published == "" || buildapi.ValueDecodeIntegration([]byte(record.Published), &asset) != nil || asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetObservation, Name: record.Name}) {
+	if record.Published == "" || ValueDecodeIntegration([]byte(record.Published), &asset) != nil || asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetObservation, Name: record.Name}) {
 		return platform.ObservationDefinition{}, fmt.Errorf("The observation source is not published")
 	}
 	if err := validateIntegrationFamily(record, asset); err != nil {
 		return platform.ObservationDefinition{}, err
 	}
 	var definition platform.ObservationDefinition
-	if err := buildapi.ValueDecodeIntegration(asset.Body, &definition); err != nil {
+	if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
 		return definition, err
 	}
 	return definition, nil
 }
 
-var _ host.ObservationDefinitions = (*Build)(nil)
+const ObservationType = "build.observation"
+const SchemaObservation = ObservationType + ".publish"
+
+// Observation is a portable read/decision declaration over an external store.
+// It never holds samples, summaries or credentials.
+type Observation struct {
+	platform.Record
+	Name                       string                        `json:"name" field:"required,search" source:"record"`
+	Title                      string                        `json:"title" field:"required,search" source:"record"`
+	Description                string                        `json:"description,omitempty" type:"longtext"`
+	Connection                 string                        `json:"connection" field:"required" ref:"build.connection" source:"record"`
+	Object                     string                        `json:"object" field:"required"`
+	DeviceField                string                        `json:"deviceField" field:"required" title:"Device identity field"`
+	Signal                     string                        `json:"signal" field:"required"`
+	Unit                       string                        `json:"unit" field:"required"`
+	Path                       string                        `json:"path" field:"required" help:"Relative adapter path on the logical connection"`
+	WindowSeconds              int                           `json:"windowSeconds" field:"required" title:"Decision window in seconds"`
+	ExpectedRetentionSeconds   int                           `json:"expectedRetentionSeconds" field:"required" title:"Expected external retention in seconds"`
+	ExpectedGranularitySeconds int                           `json:"expectedGranularitySeconds" field:"required" title:"Expected external granularity in seconds"`
+	Roles                      []string                      `json:"roles" field:"required"`
+	Scheduled                  bool                          `json:"scheduled,omitempty" title:"Evaluate completed windows"`
+	RequireComplete            bool                          `json:"requireComplete,omitempty" title:"Require complete, good-quality windows"`
+	Decision                   *platform.ObservationDecision `json:"decision,omitempty" type:"json"`
+	State                      string                        `json:"state" field:"readonly" choices:"draft,published,retired"`
+	Publisher                  string                        `json:"publisher,omitempty" field:"readonly" source:"record"`
+	PublisherScopes            string                        `json:"publisherScopes" field:"readonly" type:"json" title:"Publisher scopes"`
+	DefinitionVersion          int                           `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published                  string                        `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed" source:"record"`
+	Versions                   []string                      `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+}

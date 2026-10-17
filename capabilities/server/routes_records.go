@@ -11,16 +11,15 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
-	enterprise "platformserver/internal/host/enterpriseapi"
+	build "platformserver/apps/build"
+	enterprise "platformserver/apps/enterprise"
 	"platformserver/platform"
 )
 
 // enterpriseApp is the tenant's enterprise modeling app, when one is mounted:
 // the typed query and resolve reads (ADR-0094) dispatch into it.
-func enterpriseApp(t *Tenant) host.EnterpriseQueries {
-	d, _ := t.app(enterprise.ID).(host.EnterpriseQueries)
+func enterpriseApp(t *Tenant) EnterpriseQueries {
+	d, _ := t.app(enterprise.ID).(EnterpriseQueries)
 	return d
 }
 
@@ -392,7 +391,7 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(build.ID).(host.ConstructionDraftReader)
+	owner, ok := t.app(build.ID).(ConstructionDraftReader)
 	if !ok {
 		return record, nil
 	}

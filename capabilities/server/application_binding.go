@@ -2,7 +2,7 @@ package platformserver
 
 import (
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/apps/build"
 	"platformserver/platform"
 	"slices"
 )
@@ -90,7 +90,7 @@ func checkRunApplicationBindings(record any) error {
 		bindings = run.Applications
 	case AgentRunRecord:
 		bindings = run.Applications
-	case buildapi.FunctionRun:
+	case build.FunctionRun:
 		bindings = run.Applications
 	}
 	return checkApplicationBindings(bindings)

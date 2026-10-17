@@ -3,8 +3,7 @@ package enterprise
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host/enterpriseapi"
-	"platformserver/internal/host/enterpriseapi/uaf"
+	"platformserver/apps/enterprise/uaf"
 	"platformserver/platform"
 	"strings"
 )
@@ -46,7 +45,7 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload) (func
 		sourceEnd = &Element{Stereotype: Person} // an account stands where a person stands
 	}
 	if sourceEnd != nil {
-		if ok, why := enterpriseapi.Allowed(enterpriseapi.Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
+		if ok, why := Allowed(Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
 			return nil, invalid(why)
 		}
 	}
@@ -62,7 +61,7 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload) (func
 		}
 		ends = func() { // a tree keeps one current parent
 			for i, r := range m.Relationships {
-				if r.Stereotype == Placement && r.Kind == p.Kind && r.Source == p.Source && (!k.Matrix || r.Target == p.Target) && enterpriseapi.ActiveOn(r.From, r.Until, p.From) {
+				if r.Stereotype == Placement && r.Kind == p.Kind && r.Source == p.Source && (!k.Matrix || r.Target == p.Target) && ActiveOn(r.From, r.Until, p.From) {
 					m.Relationships[i].Until = p.From
 				}
 			}

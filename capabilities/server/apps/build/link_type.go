@@ -3,13 +3,11 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-
-	"strconv"
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"strconv"
+	"time"
 )
 
 // LinkType owns one bounded declaration and its retained publications. Draft
@@ -178,3 +176,7 @@ func (b *Build) LinkPublication(image []byte) (platform.LinkType, error) {
 	}
 	return saved.Definition(), nil
 }
+
+const LinkTypeType = "build.linktype"
+
+const SchemaLinkType = LinkTypeType + ".publish"

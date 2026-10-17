@@ -11,7 +11,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -260,7 +259,7 @@ func checkAdoptionSources(o Object, a Action, lookup func(string) (platform.Enti
 			}
 			taintedSteps[step.Name] = true
 			source := ""
-			if step.Target.Type == buildapi.TypeOf(o.Name) {
+			if step.Target.Type == TypeOf(o.Name) {
 				for _, field := range o.Fields {
 					if field.Name == change.Field {
 						source = field.SourceType

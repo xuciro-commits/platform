@@ -10,14 +10,13 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -528,7 +527,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	source, ok := view.Record.(build.Source)
 	if ok {
 		var err error
-		source, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionSource(source)
+		source, err = t.app(build.ID).(IntegrationDefinitions).ExecutionSource(source)
 		if err != nil {
 			ok = false
 		}
@@ -543,7 +542,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	connection, ok := view.Record.(build.Connection)
 	if ok {
 		var err error
-		connection, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionConnection(connection)
+		connection, err = t.app(build.ID).(IntegrationDefinitions).ExecutionConnection(connection)
 		if err != nil {
 			ok = false
 		}
@@ -852,7 +851,7 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
 					if exists {
 						var err error
-						source, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionSource(source)
+						source, err = t.app(build.ID).(IntegrationDefinitions).ExecutionSource(source)
 						if err != nil {
 							exists = false
 						}

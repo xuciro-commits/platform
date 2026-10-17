@@ -11,8 +11,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -93,7 +92,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+		owner, ok := t.app(build.ID).(ConstructionDrafts)
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
 			return

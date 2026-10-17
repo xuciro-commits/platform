@@ -3,7 +3,6 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
 	"slices"
 	"strconv"
 	"strings"
@@ -67,7 +66,7 @@ func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.Release
 		var frozen Function
 		text, valid := strings.CutPrefix(selected.SourceVersion, b.Manifest().Version+".function-")
 		version, err := strconv.Atoi(text)
-		if valid && err == nil && version > 0 && (plan.FunctionVersion == 0 || plan.FunctionVersion == version) && buildapi.ValueDecodeIntegration(selected.Body, &frozen) == nil {
+		if valid && err == nil && version > 0 && (plan.FunctionVersion == 0 || plan.FunctionVersion == version) && ValueDecodeIntegration(selected.Body, &frozen) == nil {
 			definition, ordinal, ok = frozen.Definition(), version, true
 		}
 	}
@@ -92,16 +91,16 @@ func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.Release
 
 func (b *Build) testPlanImage(raw []byte) (TestPlan, platform.ReleaseAsset, error) {
 	var plan TestPlan
-	if buildapi.ValueDecodeIntegration(raw, &plan) != nil || plan.ID == "" || plan.DefinitionVersion < 1 || plan.DefinitionVersion > 64 || len(plan.Versions) != plan.DefinitionVersion {
+	if ValueDecodeIntegration(raw, &plan) != nil || plan.ID == "" || plan.DefinitionVersion < 1 || plan.DefinitionVersion > 64 || len(plan.Versions) != plan.DefinitionVersion {
 		return plan, platform.ReleaseAsset{}, fmt.Errorf("invalid evaluation set publication")
 	}
 	var asset platform.ReleaseAsset
-	if buildapi.ValueDecodeIntegration([]byte(plan.Published), &asset) != nil {
+	if ValueDecodeIntegration([]byte(plan.Published), &asset) != nil {
 		return plan, asset, fmt.Errorf("evaluation set has no immutable descriptor")
 	}
 	for i, raw := range plan.Versions {
 		var retained platform.ReleaseAsset
-		if buildapi.ValueDecodeIntegration([]byte(raw), &retained) != nil || b.checkTestPlanAsset(retained, plan.Name, i+1) != nil || retained.Ref.Kind != asset.Ref.Kind {
+		if ValueDecodeIntegration([]byte(raw), &retained) != nil || b.checkTestPlanAsset(retained, plan.Name, i+1) != nil || retained.Ref.Kind != asset.Ref.Kind {
 			return plan, asset, fmt.Errorf("evaluation set retained family differs")
 		}
 	}

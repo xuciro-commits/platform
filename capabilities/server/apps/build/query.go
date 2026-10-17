@@ -3,12 +3,10 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"time"
 )
 
 const SchemaQuery = QueryType + ".publish"
@@ -146,3 +144,5 @@ func (b *Build) QueryDefinition(name string, version int) (platform.NamedQuery, 
 func (b *Build) queryDeclarations() []platform.NamedQuery {
 	return definitionDeclarations(b.queries)
 }
+
+const QueryType = "build.query"

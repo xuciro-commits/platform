@@ -5,17 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/platform"
 	"reflect"
 	"slices"
-
-	"platformserver/platform"
 )
 
 // JointDraftAssets is one candidate image built from several saved drafts at
 // once: what is installed today, and what the tenant would run if this exact
 // selection were saved and activated.
-type JointDraftAssets = buildapi.JointDraftAssets
 
 // recordKind reports whether a draft is substituted in the shared definition
 // inventories (objects, pages, applications, flows) rather than in its own
@@ -246,14 +243,14 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		}
 		record := inv.processes[i]
 		if was, ok := wasPublished[Process](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(was.Name)}
+			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
+		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
 		source := b.installed[record.Object]
 		models := []platform.Entity{}
 		for _, object := range inv.objects {
-			if _, selected := b.jointEntities[buildapi.TypeOf(object.Name)]; !selected || object.Archived {
+			if _, selected := b.jointEntities[TypeOf(object.Name)]; !selected || object.Archived {
 				continue
 			}
 			model := Entity(object)
@@ -292,10 +289,10 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		}
 		record := inv.objects[i]
 		if was, ok := wasPublished[Object](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(was.Name)}
+			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
+		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
 		if err = b.captureExtensionSource(&record); err != nil {
 			return prior, next, hadPrior, err
 		}
@@ -352,7 +349,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 // singleDraftAssets is the owner's original one-draft comparison, unchanged for
 // simple kinds and routed through the shared record substitution otherwise.
 func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	if buildapi.ValueIntegrationKind(kind) {
+	if ValueIntegrationKind(kind) {
 		return b.integrationDraftAssets(kind, id)
 	}
 	if kind == platform.AssetEvaluation || kind == platform.AssetTestPlan {
@@ -432,19 +429,19 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 		switch want {
 		case platform.AssetObject:
 			for _, o := range objects {
-				if o.Published == "" && (o.Name == name || buildapi.TypeOf(o.Name) == name) {
+				if o.Published == "" && (o.Name == name || TypeOf(o.Name) == name) {
 					return JointDraftRef{Kind: want, ID: o.ID}, true
 				}
 			}
 		case platform.AssetPage:
 			for _, p := range pages {
-				if p.Published == "" && (p.Name == name || buildapi.TypeOf(p.Name) == name) {
+				if p.Published == "" && (p.Name == name || TypeOf(p.Name) == name) {
 					return JointDraftRef{Kind: want, ID: p.ID}, true
 				}
 			}
 		case platform.AssetFlow:
 			for _, p := range processes {
-				if p.Published == "" && (p.Name == name || buildapi.TypeOf(p.Name) == name) {
+				if p.Published == "" && (p.Name == name || TypeOf(p.Name) == name) {
 					return JointDraftRef{Kind: want, ID: p.ID}, true
 				}
 			}
@@ -513,4 +510,30 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 		}
 	}
 	return result, nil
+}
+
+// JointDraftRef names one saved draft in a joint candidate (ADR-0048 D1).
+type JointDraftRef struct {
+	Kind platform.AssetKind `json:"kind"`
+	ID   string             `json:"id"`
+}
+
+// DraftChange reads an owner declaration, not additional publication state.
+type DraftChange struct {
+	Ref        platform.AssetRef  `json:"ref"`
+	Type       string             `json:"type"`
+	ID         string             `json:"id"`
+	Title      string             `json:"title"`
+	Variant    string             `json:"variant,omitempty"`
+	Published  bool               `json:"published"`
+	Changed    platform.Stamp     `json:"changed"`
+	Fields     []DraftChangeField `json:"fields"`
+	Diagnostic string             `json:"diagnostic,omitempty"`
+}
+
+// Lists carry names only; the selected draft's read includes field values.
+type DraftChangeField struct {
+	Name   string          `json:"name"`
+	Before json.RawMessage `json:"before,omitempty"`
+	After  json.RawMessage `json:"after,omitempty"`
 }

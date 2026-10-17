@@ -2,7 +2,6 @@ package build
 
 import (
 	"encoding/json"
-	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
 	"strconv"
@@ -485,7 +484,7 @@ func TestBootstrapObjectShapesAreCompleteScopedAndPrivate(t *testing.T) {
 	var assets []platform.ReleaseAsset
 	for _, object := range objects {
 		raw, _ := json.Marshal(object)
-		assets = append(assets, platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(object.Name)}, Body: raw})
+		assets = append(assets, platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(object.Name)}, Body: raw})
 	}
 	catalogSize := len(b.ledger.Catalog.All())
 	release, err := b.BeginAssetBootstrap(assets)
@@ -800,7 +799,7 @@ func TestLegacyIntegrationCandidateUsesFrozenReferences(t *testing.T) {
 	// old execution metadata remains valid; a new publication removes it.
 	writebackBody, _ := json.Marshal(WritebackDefinition{Name: "confirm", Title: "Confirm", Connection: connection.Name, Object: object.Name, On: "confirmation"})
 	oldWriteback := platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: "confirm"}, ContractVersion: 1, SourceVersion: integrationVersion(1, platform.AssetWriteback), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: object.Name + ".confirmation"}, connection, object}, Body: writebackBody}
-	if err := buildapi.ValueValidateIntegrationDescriptor(oldWriteback); err != nil {
+	if err := ValueValidateIntegrationDescriptor(oldWriteback); err != nil {
 		t.Fatal("original confirmation metadata became unreadable", err)
 	}
 	if _, err := integrationCandidateAsset(oldWriteback); err == nil || !strings.Contains(err.Error(), "publish a new writeback version") {

@@ -8,14 +8,13 @@ import (
 	"slices"
 	"strings"
 
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
 // SavedDraftChanges compares saved declarations, not lifecycle badges or a
 // newly allocated publication version. It performs no publication or execution.
-func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string) ([]buildapi.DraftChange, error) {
-	out := []buildapi.DraftChange{}
+func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string) ([]DraftChange, error) {
+	out := []DraftChange{}
 	held := map[platform.AssetRef]bool{}
 	if application != "" {
 		app, ok := platform.Get[Application](c, application)
@@ -79,7 +78,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 					continue
 				}
 			}
-			change := buildapi.DraftChange{Ref: ref, Type: entity.Type, ID: meta.ID, Title: meta.Title, Variant: meta.Kind, Published: meta.Published != "", Changed: meta.Changed, Fields: []buildapi.DraftChangeField{}}
+			change := DraftChange{Ref: ref, Type: entity.Type, ID: meta.ID, Title: meta.Title, Variant: meta.Kind, Published: meta.Published != "", Changed: meta.Changed, Fields: []DraftChangeField{}}
 			before, after, portable, err := b.draftComparison(record, meta.Published, info)
 			if err != nil {
 				change.Diagnostic = err.Error()
@@ -106,7 +105,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 					if bytes.Equal(before[name], after[name]) {
 						continue
 					}
-					field := buildapi.DraftChangeField{Name: name}
+					field := DraftChangeField{Name: name}
 					if typ != "" && id != "" {
 						field.Before, field.After = before[name], after[name]
 					}
@@ -118,7 +117,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 			}
 		}
 	}
-	slices.SortFunc(out, func(a, b buildapi.DraftChange) int { return strings.Compare(a.Type+"/"+a.ID, b.Type+"/"+b.ID) })
+	slices.SortFunc(out, func(a, b DraftChange) int { return strings.Compare(a.Type+"/"+a.ID, b.Type+"/"+b.ID) })
 	return out, nil
 }
 

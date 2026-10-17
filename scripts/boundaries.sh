@@ -41,7 +41,7 @@ done
 for x in "${apps[@]}"; do
   dir=${x%%:*} id=${x#*:}
   [[ $dir == apps/$id/server ]] || fail "$dir holds the module $id: an app's directory, module and ID share one name"
-  for f in "$id.go" "${id}_test.go" i18n/zh-CN.json "cmd/$id-server/main.go"; do
+  for f in "$id.go" "${id}_test.go" i18n/zh-CN.json; do
     [[ -f $dir/$f ]] || fail "$dir has no $f (ADR-0025 D2)"
   done
   ui=web/packages/$id

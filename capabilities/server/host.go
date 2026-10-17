@@ -20,7 +20,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-
 	"platformserver/internal/host"
 	"platformserver/platform"
 )

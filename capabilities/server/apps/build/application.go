@@ -3,12 +3,11 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"slices"
+	"time"
 )
 
 // An application someone hands to the people it was built for (ADR-0036): a
@@ -140,4 +139,16 @@ func (b *Build) checkApplication(a Application) error {
 		return err
 	}
 	return applicationDescriptor(a).CheckGroups()
+}
+
+const (
+	AppType        = "build.app"
+	SchemaHandOver = AppType + ".publish"
+	ValuePagesHelp = "The pages it holds, by their name, in the order people see them"
+)
+
+// Group is one heading in an application's navigation.
+type Group struct {
+	Title string   `json:"title" field:"required" title:"Heading"`
+	Pages []string `json:"pages" title:"Pages" help:"Pages of the application, by their name, in their order"`
 }

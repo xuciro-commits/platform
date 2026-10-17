@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"slices"
 
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -71,7 +70,7 @@ func (b *Build) captureObjectSchema(object *Object) error {
 
 func objectSchemaBody(object Object) (json.RawMessage, error) {
 	object.SchemaVersions = nil
-	return definitionBody(object, buildapi.TypeOf(object.Name))
+	return definitionBody(object, TypeOf(object.Name))
 }
 
 func checkObjectSchemas(object Object) error {

@@ -3,10 +3,8 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
-
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
+	"slices"
 )
 
 // CompleteBlueprintAssets uses exactly the ordinary object publisher's
@@ -16,7 +14,7 @@ func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platfo
 	for _, asset := range input {
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject {
 			var object Object
-			if err := json.Unmarshal(asset.Body, &object); err != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
+			if err := json.Unmarshal(asset.Body, &object); err != nil || TypeOf(object.Name) != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid blueprint object %s", asset.Ref)
 			}
 			object.ID = object.Name
@@ -62,7 +60,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 		switch root.Kind {
 		case platform.AssetObject:
 			for _, o := range objects {
-				if !o.Archived && buildapi.TypeOf(o.Name) == root.Name {
+				if !o.Archived && TypeOf(o.Name) == root.Name {
 					if id != "" {
 						return nil, fmt.Errorf("test root %s is ambiguous", root)
 					}
@@ -71,7 +69,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 			}
 		case platform.AssetFlow:
 			for _, p := range processes {
-				if !p.Archived && buildapi.TypeOf(p.Name) == root.Name {
+				if !p.Archived && TypeOf(p.Name) == root.Name {
 					if id != "" {
 						return nil, fmt.Errorf("test root %s is ambiguous", root)
 					}
@@ -105,7 +103,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 
 func portableConnectionDraft(asset platform.ReleaseAsset) (Connection, error) {
 	var definition ConnectionDefinition
-	if err := buildapi.ValueDecodeIntegration(asset.Body, &definition); err != nil {
+	if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
 		return Connection{}, err
 	}
 	// Site addresses, credentials and concrete protocol settings are filled in
@@ -115,7 +113,7 @@ func portableConnectionDraft(asset platform.ReleaseAsset) (Connection, error) {
 
 func (b *Build) draftIntegrationTargets(assets []platform.ReleaseAsset) {
 	for _, asset := range assets {
-		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
+		if asset.Ref.App != ID || !ValueIntegrationKind(asset.Ref.Kind) {
 			continue
 		}
 		id := asset.Ref.Name

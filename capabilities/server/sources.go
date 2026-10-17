@@ -7,14 +7,13 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -34,7 +33,7 @@ func (t *Tenant) PullSources(now time.Time) {
 	t.mu.Lock()
 	sources, _, _ := platform.Find[build.Source](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	t.mu.Unlock()
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
+	owner := t.app(build.ID).(IntegrationDefinitions)
 	for _, s := range sources {
 		s, err := owner.ExecutionSource(s)
 		if err != nil {
@@ -127,7 +126,7 @@ func (t *Tenant) connectionMarking(connection string) string {
 		return ""
 	}
 	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
-	fixed, err := t.app(build.ID).(host.IntegrationDefinitions).ExecutionConnection(conn)
+	fixed, err := t.app(build.ID).(IntegrationDefinitions).ExecutionConnection(conn)
 	if err != nil {
 		return "restricted"
 	}
@@ -138,7 +137,7 @@ func (t *Tenant) connectionMarking(connection string) string {
 // records as they are now, or nil when rows land as they come.
 func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
 	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
+	owner := t.app(build.ID).(IntegrationDefinitions)
 	var fixed []build.Match
 	for _, rule := range rules {
 		execution, err := owner.ExecutionMatching(rule)
@@ -193,7 +192,7 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 		c, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
 		if ok {
 			var err error
-			c, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionConnection(c)
+			c, err = t.app(build.ID).(IntegrationDefinitions).ExecutionConnection(c)
 			if err != nil {
 				ok = false
 			}

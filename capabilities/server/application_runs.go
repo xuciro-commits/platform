@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -329,11 +329,11 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		}
 		appendRun(ApplicationRun{Applications: effect.Applications, Subject: subject, ID: effect.ID, Kind: "compute", Title: binding.Definition.Title, Resource: &resource, ResourceName: resource.Name, State: result.State, Version: operationStartupVersion(binding.Call), Release: binding.Call.Release, Dependencies: binding.Call.Dependencies, Module: binding.Call.Module, Node: operationNodes[effect.ID], Error: result.Error, Association: association, Created: effect.At})
 	}
-	if rows, err := records(buildapi.FunctionCallType, nil); err != nil {
+	if rows, err := records(build.FunctionCallType, nil); err != nil {
 		return out, err
 	} else {
 		for _, row := range rows {
-			var call buildapi.FunctionRun
+			var call build.FunctionRun
 			raw, _ := json.Marshal(row)
 			if json.Unmarshal(raw, &call) != nil {
 				continue
@@ -365,10 +365,10 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 			if json.Unmarshal(platform.Raw(row), &dispatch) != nil {
 				continue
 			}
-			resource := platform.AssetRef{App: buildapi.ID, Kind: platform.AssetAction, Name: dispatch.Action}
+			resource := platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: dispatch.Action}
 			if !graphFor(dispatch.Release)[resource] {
 				typ, _, _ := strings.Cut(dispatch.Subject, "/")
-				resource = platform.AssetRef{App: buildapi.ID, Kind: platform.AssetObject, Name: typ}
+				resource = platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: typ}
 				if !graphFor(dispatch.Release)[resource] {
 					continue
 				}

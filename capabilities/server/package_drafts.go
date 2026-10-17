@@ -7,8 +7,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/build"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -100,7 +100,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		return answer, err
 	}
 	blueprint := PackageBlueprint{Roots: roots, Assets: assets}
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(ConstructionDrafts)
 	if !ok {
 		return answer, fmt.Errorf("this tenant has no Build draft owner")
 	}

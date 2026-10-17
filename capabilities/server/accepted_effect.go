@@ -478,7 +478,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		if app, ok := t.procs.(platform.App); ok {
 			processesOwner = draft.stateApp(app).(host.Processes)
 		}
-		if processes, ok := processesOwner.(host.OperationCompletion); ok {
+		if processes, ok := processesOwner.(OperationCompletion); ok {
 			c := platform.NewCaller(draft, platform.Member{ID: "app:" + "flow", Tenant: t.ID}, "flow", false, true)
 			if err := processes.OperationEnded(c, x.ID, at); err != nil {
 				return err

@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"slices"
 
-	"platformserver/internal/host"
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -71,7 +69,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			continue
 		}
 		var object Object
-		if asset.SourceVersion != definitionVersion || json.Unmarshal(asset.Body, &object) != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
+		if asset.SourceVersion != definitionVersion || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
 		}
 		info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
@@ -112,5 +110,3 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	// declaration selection changes; today's policy and grants remain in force.
 	return &releaseExecution{Build: bound, catalog: b.ledger.Catalog.WithActions(actions)}, nil
 }
-
-var _ host.ReleaseExecutionOwner = (*Build)(nil)

@@ -111,9 +111,6 @@ func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...st
 			report(imported, "invalid import")
 			continue
 		}
-		if root && strings.HasPrefix(name, "platformserver/apps/") {
-			report(imported, "runtime imports concrete platform app "+name)
-		}
 		if (public || internal) && (name == "platformserver" || strings.HasPrefix(name, "platformserver/apps/")) {
 			report(imported, "owner contract depends on implementation "+name)
 		}

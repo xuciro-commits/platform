@@ -7,13 +7,12 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"io"
-	"platformserver/internal/host"
 	"strconv"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -275,7 +274,7 @@ func compositeAnswer(saved acceptedComposite) (CompositeAnswer, error) {
 // the apps (their ledgers are the apps' own business) but owns its records and
 // definitions, so a refusal cannot change what the tenant sees.
 func (t *Tenant) stageCompositeLocked(m platform.Member, edits []CompositeEdit, key string, now time.Time) (*Tenant, error) {
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(ConstructionDrafts)
 	if !ok {
 		return nil, fmt.Errorf("this tenant runs no builder")
 	}

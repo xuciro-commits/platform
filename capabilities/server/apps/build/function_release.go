@@ -3,7 +3,6 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
 	"slices"
 	"strconv"
 
@@ -55,7 +54,7 @@ func (b *Build) functionDraftAssets(id string) (before, after []platform.Release
 func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, b.functionInventory, platform.AssetFunction, "function", SchemaFunction, "function", b.FunctionReleaseAsset, func(record Function, asset platform.ReleaseAsset, version int) (Function, error) {
 		var frozen Function
-		if version != record.Version+1 || buildapi.ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
+		if version != record.Version+1 || ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
 			return record, fmt.Errorf("function version requires its retained predecessors and matching target definition")
 		}
 		if asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {

@@ -14,7 +14,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/driver"
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -251,7 +250,7 @@ func (b PackageBlueprint) check() error {
 	return nil
 }
 
-func (b PackageBlueprint) candidate(owner host.ConstructionDrafts) (platform.ReleaseCandidate, error) {
+func (b PackageBlueprint) candidate(owner ConstructionDrafts) (platform.ReleaseCandidate, error) {
 	assets, err := owner.CompleteBlueprintAssets(b.Assets)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
@@ -500,10 +499,10 @@ func (d *Console) packageIndex() (*PackageIndex, error) {
 func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 	out := Precheck{ID: p.ID, Version: p.Version, OK: true}
 	if p.Blueprint != nil {
-		var owner host.ConstructionDrafts
+		var owner ConstructionDrafts
 		for _, app := range d.host.Apps() {
 			if app.Manifest().ID == "build" {
-				owner, _ = app.(host.ConstructionDrafts)
+				owner, _ = app.(ConstructionDrafts)
 				break
 			}
 		}

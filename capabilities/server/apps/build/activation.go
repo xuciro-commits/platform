@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/platform"
 	"reflect"
 	"slices"
-
-	"platformserver/platform"
 )
 
 // prepareReleasePublications compiles frozen owner descriptors. It neither
@@ -45,7 +43,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				continue
 			}
 			var frozen Object
-			if err := json.Unmarshal(asset.Body, &frozen); err != nil || buildapi.TypeOf(frozen.Name) != asset.Ref.Name {
+			if err := json.Unmarshal(asset.Body, &frozen); err != nil || TypeOf(frozen.Name) != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid saved object %s", asset.Ref)
 			}
 			if err := mapDispatchIntegrations(&frozen, b.integrationID); err != nil {
@@ -56,7 +54,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				return nil, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
 			}
 			frozen.Record = objects[i].Record
-			objects[i].State, objects[i].Installed = "published", buildapi.TypeOf(frozen.Name)
+			objects[i].State, objects[i].Installed = "published", TypeOf(frozen.Name)
 			objects[i].Published = published(frozen)
 			objects[i].ExtensionSource = frozen.ExtensionSource
 			objects[i].SchemaVersions = frozen.SchemaVersions
@@ -104,7 +102,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				return nil, err
 			}
 		case platform.AssetFlow:
-			i := slices.IndexFunc(processes, func(p Process) bool { return !p.Archived && buildapi.TypeOf(p.Name) == asset.Ref.Name })
+			i := slices.IndexFunc(processes, func(p Process) bool { return !p.Archived && TypeOf(p.Name) == asset.Ref.Name })
 			if i < 0 {
 				return nil, fmt.Errorf("saved flow %s has no matching owner", asset.Ref)
 			}
@@ -277,4 +275,11 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 		}
 	}
 	return out, nil
+}
+
+// ReleasePublication changes only publication metadata beside the mutable draft.
+// The host commits these images with the release pointer in one release-result.
+type ReleasePublication struct {
+	Schema string          `json:"schema"`
+	Image  json.RawMessage `json:"image"`
 }

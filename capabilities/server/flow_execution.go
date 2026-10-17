@@ -69,7 +69,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		if len(selected) == 0 {
 			continue
 		}
-		compiler, ok := owner.(host.ReleaseExecutionOwner)
+		compiler, ok := owner.(ReleaseExecutionOwner)
 		if !ok {
 			current, err := h.t.releaseAssetsLocked(nil, false)
 			if err != nil {

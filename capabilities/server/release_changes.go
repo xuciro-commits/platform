@@ -3,8 +3,7 @@ package platformserver
 import (
 	"fmt"
 
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -22,7 +21,7 @@ func (t *Tenant) SavedDraftChanges(m platform.Member, application, typ, id strin
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(ConstructionDrafts)
 	if !ok {
 		return ReleaseDraftChanges{}, fmt.Errorf("tenant has no builder")
 	}
