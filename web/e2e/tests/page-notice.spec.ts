@@ -5,7 +5,7 @@ test("Workshop list and board imports retain independent card fields and the ori
     name: slug("importcards"), title: "Imported card records",
     fields: [{ name: "name", title: "Name", type: "text" }, { name: "detail", title: "Detail", type: "text" }, { name: "quantity", title: "Quantity", type: "integer" }],
     states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
-    actions: [{ name: "move", title: "Move original record", from: ["open", "done"], toInput: "status", inputs: [{ name: "status", title: "Destination state", type: "choice", choices: "open,done", required: true }] }],
+    actions: [{ name: "move", title: "Move original record", from: ["open", "done"], toInput: "status", roles: ["builder", "user"], inputs: [{ name: "status", title: "Destination state", type: "choice", choices: "open,done", required: true }] }],
   });
   const m = sampleModule();
   m.variables = m.variables.filter((variable: any) => variable.id === "notes");
