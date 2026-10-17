@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b4973fa953eeeed0",
+  "revision": "sha256:1042774c4cfc183f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13180,6 +13180,7 @@
       "web/packages/build/src/releases/test-inputs.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/operations.tsx"
     ],
     "ui/data-table": [

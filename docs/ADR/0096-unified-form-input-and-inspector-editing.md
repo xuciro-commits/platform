@@ -226,7 +226,7 @@ A 不冒充全局完成，B 不塞假选项。API 名称可随实施收敛，责
 - **区间与目录**：UI Kit DateRangeInput 提供单入口、双月/窄屏单月、连续区间、悬停/拖选、方向键/Enter 和原文修复。CRM/PMS 日住宿为 exclusive；HCM 保留包含终点；PMS 小时房继续使用原两个本地 datetime 输入与单位规则。lodging.room-types/1 是与 booking/1 并列的 typed 有界目录；PMS 沿原受权读取提供 id/name/night-or-hour，CRM 只沿声明协议绑定读取当前 booking 提供方，最多 200 项。旧选择保留并标不可用，失败/撤权/空目录分开；只有明确未接目录的人工提供方保留原人工来源，不把失败降级为 ID 输入。
 - **拒绝与恢复**：实际 Reply、ErrorBody、SubmissionAnswer 和 Entry 使用同一 typed 字段诊断；原 code/HTTP/outbox 状态保持。字段拒绝沿原 AcceptResult 提交，无效果拒绝也不绕过持久回执；保存失败不公开拒绝。带诊断封套版本 2 的数量/路径/文字有界且 issues 纳入摘要；版本 1 的省略字段与摘要口径不变。同 key/同载荷读取封存答复，改变载荷仍冲突；未启用 AcceptResult 的轻量宿主仅返回请求内诊断。内核 Error/Protobuf 未变。
 
-Catalog 注册公共输入草稿资产，条目数 140，生成物沿原工具生成。原运行表单/字段分派和专用 editor 的语义归属保留，没有独立 Form 实体、全局草稿仓库或第二执行器。
+Catalog 注册公共输入草稿资产，生成物沿原工具生成。MES 停机原因共用原 `DeclaredActionForm`，不再维护第二份原因选项、校验与提交；派生事件仍不传记录修订号。其余专用 editor 的语义归属保留，没有独立 Form 实体、全局草稿仓库或第二执行器。
 
 验证：A–B 的宿主约束、持久拒绝/新旧摘要、协议组合、PMS/MES owner 与 K5/离线检查见原对应代码测试。本次 C–D 使用 make check-web/check-go、既有全包单元/构建和 13 条浏览器路线；仅扩展原 components、canvas-layout、routes、workflow 的相关步骤。覆盖非法数字/JSON切项、提交锁/拒绝保留、原文 Undo/Redo、绑定创建未知回执同 key 重试及修正后成功。integration-fabric 中陈旧的 Add step/Lineage 按钮定位已改为当前 Add block → option 与血缘节点双击，不恢复旧界面或新增脚手架。两 Docker 宿主按原 update.sh 更新并核对版本、健康和页面资源，保留数据卷。
 

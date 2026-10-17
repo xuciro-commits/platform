@@ -2,7 +2,7 @@
 // routing, quality holds and equipment downtime — manufacturing's reference app
 // (Opcenter / SAP ME model) as a contribution to the workspace.
 import "./i18n";
-import { RecordDetail, Records, defineApp, newId, useHost, useRead } from "@platform/app";
+import { DeclaredActionForm, RecordDetail, Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, FlowSteps, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type FlowStepEdge, type FlowStepNode,
  t } from "@platform/ui";
@@ -36,7 +36,6 @@ type Planned = { erpId: string; number: string; product: string; quantity: numbe
 type Downtime = { id: string; resource: string; start: string; end?: string; reason?: string; needsCheck?: boolean };
 
 const ncCodes = ["POROSITY", "DIMENSION", "SURFACE", "LEAK"];
-const downtimeReasons = ["Tool change", "Setup", "Material shortage", "Breakdown", "Quality issue"];
 
 
 const sfcStatus = defineStatuses({
@@ -362,7 +361,8 @@ function Craft() {
 function Equipment() {
   const data = useRead<Downtime[]>("/v1/downtime");
   const events = data ?? [];
-  const { decide, can } = usePlant();
+  const { action } = useHost();
+  const declared = action("mes.downtime.reason");
   const [assigning, setAssigning] = useState<Downtime>();
   const columns: ColumnDef<Downtime, any>[] = [
     { accessorKey: "resource", header: t("Resource"), meta: { width: 110 } },
@@ -372,18 +372,17 @@ function Equipment() {
       cell: (c) => <StatusTag status={c.getValue()} registry={downtimeStatus} /> },
     { accessorKey: "reason", header: t("Reason") },
     { id: "act", header: "", meta: { width: 110 }, enableSorting: false, cell: ({ row: { original: d } }) =>
-        can("mes.downtime.reason") && <Button size="sm" onClick={() => setAssigning(d)}>{d.reason ? t("Change") : t("Set reason")}</Button> },
+        declared && <Button size="sm" onClick={() => setAssigning(d)}>{d.reason ? t("Change") : t("Set reason")}</Button> },
   ];
   return (
     <>
       <PageHeader title={t("Equipment downtime")} description={t("Derived from gateway state batches; each stop is an entity, so its reason survives late data.")} />
       <DataTable data={events} columns={columns} getRowId={(d) => d.id} height="calc(100dvh - 190px)" loading={!data} empty={t("No downtime yet — run gateway-sim")} />
       <Dialog open={!!assigning} onOpenChange={(o) => !o && setAssigning(undefined)} title={t("Reason for {resource} stop", { resource: assigning?.resource ?? "" })}>
-        {assigning && (
-          <EntityForm schema={z.object({ reason: z.string().min(1) })} defaultValues={{ reason: assigning.reason ?? downtimeReasons[0] }}
-            fields={[{ name: "reason", label: t("Reason"), kind: "select", options: downtimeReasons.map((r) => ({ value: r, label: r })) }]}
-            submitLabel={t("Save")} onCancel={() => setAssigning(undefined)}
-            onSubmit={async (v) => { let reason = ""; const ok = await decide("mes.downtime.reason", { type: "mes.downtime", id: assigning.id }, v, { quiet: true, onRefused: value => { reason = value; } }); if (ok) setAssigning(undefined); else if (reason) throw new Error(reason); return ok; }} />
+        {assigning && declared && (
+          <DeclaredActionForm declared={declared} target={{ type: "mes.downtime", id: assigning.id }}
+            initial={{ reason: assigning.reason ?? declared.payload.find(field => field.name === "reason")?.choices?.[0] }}
+            submitLabel={t("Save")} onCancel={() => setAssigning(undefined)} onCompleted={() => setAssigning(undefined)} />
         )}
       </Dialog>
     </>
