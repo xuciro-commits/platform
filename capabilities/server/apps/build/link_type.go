@@ -159,10 +159,6 @@ func (b *Build) LinkTypeDefinition(name string, version int) (platform.LinkType,
 	return retainedDefinition(b.linkTypes, b.linkTypeInventory, linkTypeImage, name, version)
 }
 
-func (b *Build) linkTypeDeclarations() []platform.LinkType {
-	return definitionDeclarations(b.linkTypes)
-}
-
 func linkKeepsGuarantees(old, next LinkType) bool {
 	before, after := old.Definition(), next.Definition()
 	return before.Storage == after.Storage && !(before.Required && !after.Required || before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")

@@ -30,9 +30,6 @@ export const PERSON = "ActualPerson";
 /** «ResponsibleFor»: the organisation a post belongs to (and, on locations, the unit that owns a place). */
 export const RESPONSIBLE_FOR = "ResponsibleFor";
 
-/** «Exhibits»: UAF's own pair for "this element has that capability" (ADR-0085 D3). */
-export const EXHIBITS = "Exhibits";
-
 /** Is a stereotype the named one, or a specialisation of it? The metamodel's
  * own generalisation chain decides, so a validation and a proposal agree. */
 export function is(meta: Metamodel, stereotype: string, general: string): boolean {

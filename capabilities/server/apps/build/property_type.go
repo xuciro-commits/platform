@@ -108,7 +108,3 @@ func (b *Build) installPropertyType(c platform.Caller, f PropertyType) error {
 func (b *Build) PropertyTypeDefinition(name string, version int) (platform.PropertyType, int, bool) {
 	return retainedDefinition(b.propertyTypes, b.propertyTypeInventory, propertyTypeImage, name, version)
 }
-
-func (b *Build) propertyTypeDeclarations() []platform.PropertyType {
-	return definitionDeclarations(b.propertyTypes)
-}
