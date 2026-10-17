@@ -112,6 +112,10 @@ func retainedDefinitionAsset[D any](source, prefix, label string, kind platform.
 	if !ok || ordinal != version || version < 1 {
 		return platform.ReleaseAsset{}, fmt.Errorf("%s %s version %d is not retained", kind, name, version)
 	}
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: kind, Name: name}, versionText, definition)
+}
+
+func definitionReleaseAsset(ref platform.AssetRef, version string, definition any) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(definition)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
@@ -120,8 +124,16 @@ func retainedDefinitionAsset[D any](source, prefix, label string, kind platform.
 	if link, ok := any(definition).(platform.LinkType); ok {
 		contract = link.Contract()
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: kind, Name: name}, ContractVersion: contract,
-		SourceVersion: versionText, Body: body})
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
+}
+
+func (b *Build) definitionAssetVersion(asset platform.ReleaseAsset, kind platform.AssetKind, prefix string) int {
+	ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+"."+prefix+"-")
+	version, err := strconv.Atoi(ordinal)
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != kind || platform.CheckAssetDependencies(asset) != nil {
+		return 0
+	}
+	return version
 }
 
 func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAsset, inventory func() ([]T, error), kind platform.AssetKind, prefix, schema, label string, resolve func(string, string) (platform.ReleaseAsset, error), freeze func(T, platform.ReleaseAsset, int) (T, error)) ([]ReleasePublication, error) {

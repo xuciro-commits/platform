@@ -5,18 +5,12 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	"platformserver/platform"
 )
 
 func queryReleaseAsset(f Query, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.Definition())
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".query-" + strconv.Itoa(f.Version), Body: body})
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, sourceVersion+".query-"+strconv.Itoa(f.Version), f.Definition())
 }
 
 // QueryReleaseAsset resolves only a retained version from this owner.
@@ -34,14 +28,11 @@ func (b *Build) queryAssets() ([]platform.ReleaseAsset, error) {
 // test app. It does not invent a publication history or run a publish action.
 // The candidate constructor checks this declaration before snapshot restore.
 func (b *Build) InstallQueryAsset(asset platform.ReleaseAsset) error {
-	prefix := b.Manifest().Version + ".query-"
-	ordinal, ok := strings.CutPrefix(asset.SourceVersion, prefix)
-	version, err := strconv.Atoi(ordinal)
+	version := b.definitionAssetVersion(asset, platform.AssetQuery, "query")
 	var f Query
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal ||
-		asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetQuery ||
+	if version == 0 || asset.ContractVersion != 1 ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.Definition().Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+		f.Definition().Check() != nil {
 		return fmt.Errorf("invalid builder query asset %s", asset.Ref)
 	}
 	if _, exists := b.queries[f.Name]; exists {

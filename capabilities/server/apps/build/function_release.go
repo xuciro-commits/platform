@@ -6,18 +6,12 @@ import (
 	buildapi "platformserver/internal/host/buildapi"
 	"slices"
 	"strconv"
-	"strings"
 
 	"platformserver/platform"
 )
 
 func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.Definition())
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".function-" + strconv.Itoa(f.Version), Body: body})
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, sourceVersion+".function-"+strconv.Itoa(f.Version), f.Definition())
 }
 
 // FunctionReleaseAsset resolves only a retained version from this owner.
@@ -35,14 +29,11 @@ func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
 // test app. It does not invent a publication history or run a publish action.
 // The candidate constructor repeats this compilation before snapshot restore.
 func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
-	prefix := b.Manifest().Version + ".function-"
-	ordinal, ok := strings.CutPrefix(asset.SourceVersion, prefix)
-	version, err := strconv.Atoi(ordinal)
+	version := b.definitionAssetVersion(asset, platform.AssetFunction, "function")
 	var f Function
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal ||
-		asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFunction ||
+	if version == 0 || asset.ContractVersion != 1 ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.Definition().Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+		f.Definition().Check() != nil {
 		return fmt.Errorf("invalid builder function asset %s", asset.Ref)
 	}
 	if _, exists := b.functions[f.Name]; exists {

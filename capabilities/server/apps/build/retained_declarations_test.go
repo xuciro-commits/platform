@@ -3,11 +3,103 @@ package build
 import (
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
 	"platformserver/platform"
 )
+
+func TestRetainedDeclarationAssetsPreserveDescriptorsAndRejectInvalidVersions(t *testing.T) {
+	b, _ := lifecycleBuild()
+	source := b.Manifest().Version
+	query := Query{Name: "lookup", Title: "Lookup", Object: "build.receipt"}
+	function := Function{Name: "advice", Title: "Advice", Description: "Review a receipt", Object: "build.receipt", Fields: []string{"item"}, Instructions: "Use the item", Output: []platform.Field{{Name: "summary", Type: "string", Required: true, Description: "Summary"}}, MaxInputBytes: 1024, MaxOutputBytes: 256, MaxTokens: 64, Roles: []string{User}}
+	property := PropertyType{Name: "label", Title: "Label", Description: "Receipt label", Type: "text"}
+	link := LinkType{Name: "related", Title: "Related", Description: "Related receipts", Parent: "build.receipt", Child: "build.receipt", Forward: "children", Reverse: "parent", Storage: "edge", Cardinality: "one-to-many", DeletePolicy: "owner", Roles: []string{Builder}}
+	for _, tc := range []struct {
+		prefix     string
+		name       string
+		kind       platform.AssetKind
+		definition any
+		contract   int
+		release    func(int) (platform.ReleaseAsset, error)
+		install    func(*Build, platform.ReleaseAsset) error
+	}{
+		{"query", "lookup", platform.AssetQuery, query.Definition(), 1, func(version int) (platform.ReleaseAsset, error) {
+			f := query
+			f.Version = version
+			return queryReleaseAsset(f, source)
+		}, (*Build).InstallQueryAsset},
+		{"function", "advice", platform.AssetFunction, function.Definition(), 1, func(version int) (platform.ReleaseAsset, error) {
+			f := function
+			f.Version = version
+			return functionReleaseAsset(f, source)
+		}, (*Build).InstallFunctionAsset},
+		{"property", "label", platform.AssetPropertyType, property.Definition(), 1, func(version int) (platform.ReleaseAsset, error) {
+			f := property
+			f.Version = version
+			return propertyTypeReleaseAsset(f, source)
+		}, (*Build).InstallPropertyTypeAsset},
+		{"link", "related", platform.AssetLinkType, link.Definition(), 4, func(version int) (platform.ReleaseAsset, error) {
+			f := link
+			f.Version = version
+			return linkTypeReleaseAsset(f, source)
+		}, (*Build).InstallLinkTypeAsset},
+	} {
+		t.Run(tc.prefix, func(t *testing.T) {
+			body, err := json.Marshal(tc.definition)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, version := range []int{1, 64} {
+				t.Run(strconv.Itoa(version), func(t *testing.T) {
+					asset, err := tc.release(version)
+					if err != nil {
+						t.Fatal(err)
+					}
+					want, err := platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: tc.kind, Name: tc.name}, ContractVersion: tc.contract, SourceVersion: source + "." + tc.prefix + "-" + strconv.Itoa(version), Body: body})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(asset, want) || asset.Ref.App != ID || asset.Ref.Kind != tc.kind || b.definitionAssetVersion(asset, tc.kind, tc.prefix) != version {
+						t.Fatal("release descriptor or version changed", asset, want)
+					}
+				})
+			}
+			asset, err := tc.release(1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, invalid := range []struct {
+				name   string
+				change func(*platform.ReleaseAsset)
+			}{
+				{"wrong prefix", func(a *platform.ReleaseAsset) { a.SourceVersion = source + ".other-1" }},
+				{"zero", func(a *platform.ReleaseAsset) { a.SourceVersion = source + "." + tc.prefix + "-0" }},
+				{"above limit", func(a *platform.ReleaseAsset) { a.SourceVersion = source + "." + tc.prefix + "-65" }},
+				{"leading zero", func(a *platform.ReleaseAsset) { a.SourceVersion = source + "." + tc.prefix + "-01" }},
+				{"wrong app", func(a *platform.ReleaseAsset) { a.Ref.App = "other" }},
+				{"wrong kind", func(a *platform.ReleaseAsset) { a.Ref.Kind = platform.AssetPage }},
+				{"different dependencies", func(a *platform.ReleaseAsset) {
+					a.Requires = []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: "build.other"}}
+				}},
+			} {
+				t.Run(invalid.name, func(t *testing.T) {
+					candidate := asset
+					invalid.change(&candidate)
+					b, _ := lifecycleBuild()
+					if b.definitionAssetVersion(candidate, tc.kind, tc.prefix) != 0 || tc.install(b, candidate) == nil {
+						t.Fatal("invalid release asset was accepted", candidate)
+					}
+					if len(b.queries)+len(b.functions)+len(b.propertyTypes)+len(b.linkTypes) != 0 {
+						t.Fatal("rejected release asset changed installed definitions")
+					}
+				})
+			}
+		})
+	}
+}
 
 func TestRetainedDeclarationsSelectOldRuntimeAndKeepNextOrdinal(t *testing.T) {
 	t.Run("query", func(t *testing.T) {

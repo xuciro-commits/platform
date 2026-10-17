@@ -5,18 +5,12 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	"platformserver/platform"
 )
 
 func propertyTypeReleaseAsset(f PropertyType, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.Definition())
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: f.Name}, ContractVersion: 1,
-		SourceVersion: sourceVersion + ".property-" + strconv.Itoa(f.Version), Body: body})
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: f.Name}, sourceVersion+".property-"+strconv.Itoa(f.Version), f.Definition())
 }
 
 // PropertyTypeReleaseAsset resolves only a retained version from this owner.
@@ -34,11 +28,9 @@ func (b *Build) propertyTypeAssets() ([]platform.ReleaseAsset, error) {
 // test app. It does not invent a publication history or run a publish action.
 // The candidate constructor checks this declaration before snapshot restore.
 func (b *Build) InstallPropertyTypeAsset(asset platform.ReleaseAsset) error {
-	prefix := b.Manifest().Version + ".property-"
-	ordinal, ok := strings.CutPrefix(asset.SourceVersion, prefix)
-	version, err := strconv.Atoi(ordinal)
+	version := b.definitionAssetVersion(asset, platform.AssetPropertyType, "property")
 	var declaration platform.PropertyType
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetPropertyType || json.Unmarshal(asset.Body, &declaration) != nil || declaration.Check() != nil || declaration.Name != asset.Ref.Name || platform.CheckAssetDependencies(asset) != nil {
+	if version == 0 || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &declaration) != nil || declaration.Check() != nil || declaration.Name != asset.Ref.Name {
 		return fmt.Errorf("invalid builder property type asset %s", asset.Ref)
 	}
 	f := propertyTypeFromDeclaration(declaration)

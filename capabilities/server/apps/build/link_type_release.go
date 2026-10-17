@@ -5,18 +5,12 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	"platformserver/platform"
 )
 
 func linkTypeReleaseAsset(f LinkType, sourceVersion string) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(f.Definition())
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, ContractVersion: f.Definition().Contract(),
-		SourceVersion: sourceVersion + ".link-" + strconv.Itoa(f.Version), Body: body})
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, sourceVersion+".link-"+strconv.Itoa(f.Version), f.Definition())
 }
 
 // LinkTypeReleaseAsset resolves only a retained version from this owner.
@@ -34,11 +28,9 @@ func (b *Build) linkTypeAssets() ([]platform.ReleaseAsset, error) {
 // test app. It does not invent a publication history or run a publish action.
 // The candidate constructor checks this declaration before snapshot restore.
 func (b *Build) InstallLinkTypeAsset(asset platform.ReleaseAsset) error {
-	prefix := b.Manifest().Version + ".link-"
-	ordinal, ok := strings.CutPrefix(asset.SourceVersion, prefix)
-	version, err := strconv.Atoi(ordinal)
+	version := b.definitionAssetVersion(asset, platform.AssetLinkType, "link")
 	var declaration platform.LinkType
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetLinkType || json.Unmarshal(asset.Body, &declaration) != nil || asset.ContractVersion != declaration.Contract() || declaration.Check() != nil || declaration.Name != asset.Ref.Name || declaration.Parent.App != ID || declaration.Child.App != ID || platform.CheckAssetDependencies(asset) != nil {
+	if version == 0 || json.Unmarshal(asset.Body, &declaration) != nil || asset.ContractVersion != declaration.Contract() || declaration.Check() != nil || declaration.Name != asset.Ref.Name || declaration.Parent.App != ID || declaration.Child.App != ID {
 		return fmt.Errorf("invalid builder link type asset %s", asset.Ref)
 	}
 	f := linkTypeFromDeclaration(declaration)
