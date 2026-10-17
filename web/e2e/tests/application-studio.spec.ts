@@ -144,6 +144,35 @@ test("one application retains drafts across five workspaces and delivers grouped
   await expect(page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Service application", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Service desk", exact: true }).first()).toBeVisible();
   await shots(page, page.locator("body"), "application-studio", testInfo);
+
+  // Two editor categories share one original record inventory.
+  const manualFlowID = slug("manualflow"), automaticID = slug("automaticflow");
+  await builder.decide("build.process.create", { type: "build.process", id: manualFlowID }, {
+    name: slug("manualflow"), title: "Inventory manual flow", manual: true, steps: [{ name: "done", kind: "end" }],
+  });
+  await builder.decide("build.process.create", { type: "build.process", id: automaticID }, {
+    name: slug("automaticflow"), title: "Inventory automation", kind: "automation", object: `build.${objectName}`, when: "open", steps: [{ name: "done", kind: "end" }],
+  });
+  await builder.open(page, `/project?id=${application.id}&area=assemble`);
+  const existing = page.getByRole("combobox", { name: "Add existing resource", exact: true });
+  const manualChoice = JSON.stringify({ kind: "flow", id: manualFlowID }), automaticChoice = JSON.stringify({ kind: "automation", id: automaticID });
+  await expect(existing.locator("option").filter({ hasText: "Inventory manual flow" })).toHaveCount(1);
+  await expect(existing.locator("option").filter({ hasText: "Inventory automation" })).toHaveCount(1);
+  await expect(existing.locator("option").filter({ hasText: "Inventory manual flow" })).toHaveAttribute("value", manualChoice);
+  await expect(existing.locator("option").filter({ hasText: "Inventory automation" })).toHaveAttribute("value", automaticChoice);
+  await existing.selectOption(manualChoice);
+  await expect(existing).toBeEnabled();
+  await existing.selectOption(automaticChoice);
+  const inventoryAssets = navigation.getByRole("region", { name: "Application assets", exact: true });
+  await expect(inventoryAssets.getByRole("button", { name: /^Inventory manual flow/ })).toHaveCount(1);
+  await expect(inventoryAssets.getByRole("button", { name: /^Inventory automation/ })).toHaveCount(1);
+  await inventoryAssets.getByRole("button", { name: /^Inventory manual flow/ }).click();
+  await expect.poll(() => new URL(page.url()).hash.startsWith("#/flow?")).toBe(true);
+  await inventoryAssets.getByRole("button", { name: /^Inventory automation/ }).click();
+  await expect.poll(() => new URL(page.url()).hash.startsWith("#/automation?")).toBe(true);
+  await builder.decide("build.process.edit", { type: "build.process", id: automaticID }, { title: "Inventory automation updated" });
+  await expect(inventoryAssets.getByRole("button", { name: /^Inventory automation updated/ })).toHaveCount(1);
+  await shots(page, page.locator("body"), "shared-inventory-categories", testInfo);
 });
 
 test("decision tables and alerts remain application members through editing and release", async ({ page, builder }, testInfo) => {
