@@ -923,12 +923,13 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		Lifecycle       *LifecycleInfo               `json:"lifecycle"`
 		States          []State                      `json:"states"`
 		Actions         []struct {
-			Name    string   `json:"name"`
-			Title   string   `json:"title"`
-			From    []string `json:"from"`
-			To      string   `json:"to"`
-			ToInput string   `json:"toInput"`
-			Inputs  []struct {
+			Transaction *BusinessTxn `json:"transaction"`
+			Name        string       `json:"name"`
+			Title       string       `json:"title"`
+			From        []string     `json:"from"`
+			To          string       `json:"to"`
+			ToInput     string       `json:"toInput"`
+			Inputs      []struct {
 				Name     string `json:"name"`
 				Type     string `json:"type"`
 				Required bool   `json:"required"`
@@ -994,6 +995,27 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		fields = append(fields, FieldInfo{Name: "state", Title: "State", Type: "choice", ReadOnly: true, Choices: choices})
 		for _, a := range shape.Actions {
+			inputs := make([]Field, 0, len(a.Inputs))
+			for _, input := range a.Inputs {
+				kind := input.Type
+				if kind == "choice" {
+					kind = "string"
+				}
+				var options []string
+				for _, option := range strings.Split(input.Choices, ",") {
+					if value := strings.TrimSpace(option); value != "" {
+						options = append(options, value)
+					}
+				}
+				inputs = append(inputs, Field{Name: input.Name, Type: kind, Required: input.Required, Choices: options})
+			}
+			if to, input := transactionDestination(shape.Type, "state", a.Transaction, inputs); len(to) > 0 {
+				if slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {
+					return EntityInfo{}, fmt.Errorf("frozen object transaction destination differs")
+				}
+				l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: input})
+				continue
+			}
 			to := []string{}
 			if a.To != "" {
 				to = append(to, a.To)

@@ -183,7 +183,7 @@ post 的十进制、整数与金额运算复用原精确表达式引擎，币种
 
 **旧表达替换**：新保存与读取供编辑的定义由 Build 的 `CanonicalObject` / `migrateObjectTransactions` 将 Sets、Creates、Posts、Journal、Reverses、Conditions、Reads、To/ToInput 转为事务并移除原字段；旧编号转为创建事务中的命名序列。旧不可变发布字节不改，当前执行时在内存编译为同一事务。旧 take/stored/create/post/numberingOf 仅供历史 raw-input 日志的 `LegacyReplay` 恢复，入口拒绝普通调用；已接受结果的恢复不经过它们。旧编号首次取号按原字段与格式读取已有最大值，接受时才保存起点，后续不再计数记录。退出登记见 [Subtraction §4](../Subtraction.md#4-构建器旧动作表达adr-0100已替换)。
 
-构建者的 Action types → Transaction 和 Creation transaction 复用同一个类型化步骤编辑器，可配置 Guard/When、字段与前序结果、状态、关系、迭代、过账、出站、任务及纯查询。旧的 Rules、赋值、关联创建、过账、账簿和记录计数编号编辑器已删除，状态图读写事务中的状态赋值；复杂定义仍可在折叠的 Transaction source 编辑同一份事务，非法 JSON 保留在输入控件中。
+构建者的 Action types → Transaction 和 Creation transaction 复用同一个类型化步骤编辑器，可配置 Guard/When、字段与前序结果、状态、关系、迭代、过账、出站、任务及纯查询。旧的 Rules、赋值、关联创建、过账、账簿和记录计数编号编辑器已删除，状态图读写事务中的状态赋值；当前与冻结对象描述也从同一事务投影直接状态常量及必填选择参数，供看板保留原动作目标，不恢复旧执行字段。条件、循环或多次状态写入不推断唯一目标。复杂定义仍可在折叠的 Transaction source 编辑同一份事务，非法 JSON 保留在输入控件中。
 
 检查：`make check`、Build/platform owner 测试、宿主事务/审批/记账/原动作/旧草稿读取与保存/迁移/确认/派发的对应场景及语言/API 类型检查通过；新增 `coalesce` 的 Go owner 与同一 Go/Wasm 共享向量通过。完整单据接受结果 **14396 / 1048576 字节**；真实子进程在 fsync 后、应用前退出，重开后 **14362 字节**结果一致，不重跑规则、授权或外部调用。旧输入恢复后再执行原动作只产生一个凭证意图，撤销使用原凭证金额，不使用后来修改的记录金额。旧单号只授予创建权限且字段必填，仍连续编号。
 

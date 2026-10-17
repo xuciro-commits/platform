@@ -204,6 +204,50 @@ type TransitionInfo struct {
 	To      []string `json:"to"`
 }
 
+// A direct subject-state assignment describes the existing transaction; it
+// does not add another execution rule. Conditional or repeated writes do not
+// promise one destination.
+func transactionDestination(subject, field string, txn *BusinessTxn, inputs []Field) ([]string, string) {
+	if txn == nil || txn.Subject != subject {
+		return nil, ""
+	}
+	var assignment *Expr
+	writes, direct := 0, false
+	var visit func([]TxnStep, bool)
+	visit = func(steps []TxnStep, nested bool) {
+		for _, step := range steps {
+			if step.Kind == "update" && step.Target.Type == subject {
+				for _, change := range step.Changes {
+					if change.Field == field {
+						writes++
+						assignment = change.Expr
+						direct = !nested && step.When == nil && step.Target.ID == "$subject" && step.Target.Via == ""
+					}
+				}
+			}
+			if step.ForEach != nil {
+				visit(step.ForEach.Steps, true)
+			}
+		}
+	}
+	visit(txn.Steps, false)
+	if writes != 1 || !direct || assignment == nil || assignment.Op != "" {
+		return nil, ""
+	}
+	if assignment.Lit != nil {
+		var state string
+		if json.Unmarshal(assignment.Lit.Value, &state) == nil {
+			return []string{state}, ""
+		}
+	}
+	for _, input := range inputs {
+		if assignment.Ref == "input."+input.Name && input.Type == "string" && input.Required && len(input.Choices) > 0 {
+			return slices.Clone(input.Choices), input.Name
+		}
+	}
+	return nil, ""
+}
+
 // Standard are the generated actions an entity type asks for, and who may call them.
 type Standard struct {
 	Create, Edit, Archive bool
@@ -510,6 +554,9 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 		info.Lifecycle = &LifecycleInfo{Field: l.Field, Initial: l.Initial, States: l.States, Transitions: []TransitionInfo{}}
 		for i, t := range l.Transitions {
+			if to, input := transactionDestination(e.Type, l.Field, t.Txn, t.Payload); len(to) > 0 {
+				t.To, t.ToInput = to, input
+			}
 			ends := append(slices.Clone(t.From), t.To...)
 			if t.Name == "" || len(t.From) == 0 || len(t.To) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
 				slices.ContainsFunc(l.Transitions[:i], func(x Transition) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
@@ -521,7 +568,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 				if index >= 0 {
 					input = t.Payload[index]
 				}
-				if index < 0 || input.Type != "string" || !input.Required || input.Ref != "" || len(input.Choices) != len(t.To) || slices.ContainsFunc(t.To, func(state string) bool { return !slices.Contains(input.Choices, state) }) || t.Do == nil {
+				if index < 0 || input.Type != "string" || !input.Required || input.Ref != "" || len(input.Choices) != len(t.To) || slices.ContainsFunc(t.To, func(state string) bool { return !slices.Contains(input.Choices, state) }) || t.Do == nil && (t.Txn == nil || t.ApplyTxn == nil) {
 					return EntityInfo{}, fmt.Errorf("entity %s: transition %s needs its required destination choice and original action", e.Type, t.Name)
 				}
 			}
