@@ -1,10 +1,9 @@
 // ADR-0118: declaration, reverse impact and discovery read one owner descriptor.
-import { assetKey, DependencyGraph, useDependencies, useDefinitions, useProvidedCapabilities, type AssetRef, type Definition, type ProvidedCapability } from "@platform/app";
+import { assetKey, definitionPresentation, DependencyGraph, useDependencies, useDefinitions, useProvidedCapabilities, type AssetRef, type ProvidedCapability } from "@platform/app";
 import { Button, DataTable, Disclosure, PageHeader, Panel, relationNodeClasses, Select, useWorkspace, t } from "@platform/ui";
 import { useState } from "react";
 
 const kindLabel = (kind: string) => t(relationNodeClasses[kind]?.title ?? kind);
-const titleOf = (d?: Definition) => d?.entity?.title ?? d?.action?.title ?? d?.page?.title ?? d?.application?.title ?? d?.ref.name;
 const capabilityKey = (item: ProvidedCapability) => `${assetKey(item.ref)}@${item.version}:${item.capability.kind}:${item.capability.name}`;
 const sideLabels: Record<string, string> = { pure: "Read only", effect: "Declare an effect", authoritative: "Change authoritative state" };
 
@@ -32,7 +31,10 @@ export function Lineage({ ref: requested }: { ref?: string }) {
         <Select aria-label={t("App")} value={scopeApp} className="w-40" onChange={event => { setApp(event.target.value); setPicked(""); }}>{apps.map(id => <option key={id} value={id}>{id}</option>)}</Select>
         <Select aria-label={t("Asset")} value={focus} className="w-72" onChange={event => setPicked(event.target.value)}>
           <option value="">{t("Every asset of {app}", { app: scopeApp })}</option>
-          {descriptors.filter(d => d.ref.app === scopeApp).map(d => <option key={assetKey(d.ref)} value={assetKey(d.ref)}>{kindLabel(d.ref.kind)} · {titleOf(definitions.find(item => assetKey(item.ref) === assetKey(d.ref))) ?? d.ref.name}</option>)}
+          {descriptors.filter(d => d.ref.app === scopeApp).map(d => {
+            const definition = definitions.find(item => assetKey(item.ref) === assetKey(d.ref));
+            return <option key={assetKey(d.ref)} value={assetKey(d.ref)}>{kindLabel(d.ref.kind)} · {definition ? definitionPresentation(definition).title : d.ref.name}</option>;
+          })}
         </Select>
       </>} />
     <Panel title={t("Declared dependencies")}>

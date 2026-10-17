@@ -32,3 +32,9 @@ refused naming the inputs. Condition cells: empty or `*`, `= v`, `!= v`,
 Rules that previously had to be code functions or branch chains in a flow can
 be one table; no DMN import, no hit policies beyond first-match, no nested
 tables.
+
+The hand-written matrix and its UI boundary exception have been removed. The
+editor uses the shared `DataTable` with grouped, editable column headers. The
+original column and row operations, first-match order and default results stay
+in this editor; sorting and filtering are disabled rather than changing rule
+precedence. The shared table owns layout, scrolling and row virtualization.

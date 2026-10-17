@@ -25,7 +25,7 @@ import { recordPaths } from "../ontology/record-paths";
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, Card, CanvasEditor, CanvasRegion, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
+  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, Card, CanvasEditor, CanvasRegion, DataTable, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, Download, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
@@ -492,8 +492,11 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         tabs: inspectorTabs }}
       dock={{ label: t("Page dock"), tabs: [
         { id: "problems", title: t("Problems"), badge: problemList.length, content: <ProblemList problems={problemList} empty={t("No problems. The page can be published.")} /> },
-        { id: "variables", title: t("Variables"), badge: liveValues.length || undefined, content: liveValues.length ? <table className="w-full text-xs"><thead><tr className="text-left text-muted"><th className="px-3 py-1 font-medium">{t("Variable")}</th><th className="px-3 py-1 font-medium">{t("Type")}</th><th className="px-3 py-1 font-medium">{t("Current value")}</th></tr></thead>
-          <tbody>{liveValues.map(([name, value]) => <tr key={name} className="border-t border-border"><td className="px-3 py-1 font-mono">{document.variables?.[name]?.title || name}</td><td className="px-3 py-1 text-muted">{document.variables?.[name]?.type}</td><td className="max-w-md truncate px-3 py-1 font-mono">{JSON.stringify(value)}</td></tr>)}</tbody></table> : <p className="p-3 text-xs text-muted">{t("Variables show their live values here once the page renders.")}</p> },
+        { id: "variables", title: t("Variables"), badge: liveValues.length || undefined, content: <DataTable data={liveValues} getRowId={([name]) => name} searchable={false} height="100%" empty={t("Variables show their live values here once the page renders.")} columns={[
+          { id: "name", header: t("Variable"), accessorFn: ([name]) => document.variables?.[name]?.title || name, enableSorting: false },
+          { id: "type", header: t("Type"), accessorFn: ([name]) => document.variables?.[name]?.type, enableSorting: false },
+          { id: "value", header: t("Current value"), accessorFn: ([, value]) => JSON.stringify(value), enableSorting: false },
+        ]} /> },
       ] }}>
       {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}

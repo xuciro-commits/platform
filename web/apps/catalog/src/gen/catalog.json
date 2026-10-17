@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:61dc7a54f02ad663",
+  "revision": "sha256:3a5d3b953cd182db",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13308,6 +13308,7 @@
       "web/packages/app/src/widgets/CompositeViews.tsx",
       "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
+      "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
       "web/packages/build/src/ontology/dataset.tsx",
@@ -13316,6 +13317,7 @@
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
       "web/packages/build/src/releases/changes.tsx",
+      "web/packages/build/src/workshop/editor.tsx",
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",

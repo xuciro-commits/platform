@@ -197,6 +197,8 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 同一任务在原应用内新建告警并取消，确认返回应用且没有创建记录；保存后修改再丢弃，确认留在原编辑器。未保存修改时归档禁用，干净时只有一个归档入口和确认对话框，取消不改变记录。发布、取消与归档共用 `ResourceControls`，不恢复第二套控件；观测源的原保存/发布/读取继续用 `observations`。
 
+公共表格替代构建者手写表格：`application-authoring` 检查变量底栏的声明标题、类型和原 JSON 空状态；`application-studio` 的决策表任务检查连续输入、重叠条件的行顺序、增删条件/结果列、默认值保存与原联合发布。`dependencies` 保留原依赖图、标题呈现和成员权限检查；UI 原组件测试覆盖分组表头跨度、占位项不重复、表头编辑和已有筛选/排序/单元格输入。截图仍须实际查看，不把类型检查当界面证据。
+
 应用运行任务可单独执行 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-delivery E2E_ARGS='--grep "application capacity, original decisions and headless runtime"'`：原流程取消成功后丢失答复、原键重试且修订不增加，按实际取消状态和完整关联记录筛选，只读查看记录，从正式运行返回原项目或已发布应用，以及切换设置后保留所选运行。`make test-go PKG=. RUN='TestApplicationRunsCurrentFlowFailures|TestApplicationRunsComputeParentSubject|TestLiveChainSharesOriginalAuthorizedReads|TestLiveRegistrationRejectsWritesAndStreams'` 检查恢复后不沿用历史失败、补偿故障保留、原计算的流程主体/筛选/来源授权、编码流程 ID 的因果图与成员读取共同实时更新及撤权后拒绝。没有新增执行、重试或持久格式，也不把这项任务当真实外部系统和生产容量证据。
 
 `TestApprovalDoesNotBindUnrelatedRelease` 检查应用 A 激活后又激活无关应用 B，审批仍绑定 A；改变待处理审批结果的升级被原检查拒绝，审批完成后可继续升级，并检查重放。

@@ -167,9 +167,10 @@ export function DataTable<T>({
       <div ref={scroller} role="table" aria-rowcount={rows.length} aria-colcount={leaf.length} aria-busy={loading || undefined}
         className="overflow-auto rounded-md border border-border bg-surface" style={{ height, scrollbarGutter: "stable" }}>
         <div role="rowgroup" className="sticky top-0 z-10 border-b border-border bg-surface" style={{ minWidth }}>
-          {table.getHeaderGroups().map((group) => (
+          {table.getHeaderGroups().map((group) => { let columnIndex = 0; return (
             <div role="row" key={group.id} className="grid" style={{ gridTemplateColumns: template }}>
-              {group.headers.map((header, ci) => {
+              {group.headers.map((header) => {
+                const ci = columnIndex; columnIndex += header.colSpan;
                 if(mountedColumns&&!mountedColumns.has(ci))return null;
                 const sorted = header.column.getIsSorted();
                 const meta = header.column.columnDef.meta;
@@ -177,18 +178,19 @@ export function DataTable<T>({
                 return (
                   <div role="columnheader" key={header.id}
                     aria-colindex={ci+1}
+                    aria-colspan={header.colSpan > 1 ? header.colSpan : undefined}
                     aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
-                    className={cn("relative flex h-7 items-center gap-1 truncate px-2 text-xs font-medium uppercase tracking-wide text-muted",
+                    className={cn("relative flex min-h-7 items-center gap-1 px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted",
                       (meta?.align ?? meta?.field?.align) === "right" && "justify-end text-right", pin != null && "z-[2] bg-surface")}
-                    style={{...(horizontal?{gridColumn:ci+1}:{}),...(pin != null ? { position: "sticky", left: pin } : {})}}>
-                    {header.column.getCanSort() ? (
+                    style={{gridColumn:`${ci+1} / span ${header.colSpan}`,...(pin != null ? { position: "sticky", left: pin } : {})}}>
+                    {!header.isPlaceholder && (header.column.getCanSort() ? (
                       <button type="button" className="flex min-w-0 items-center gap-1 hover:text-foreground"
                         onClick={header.column.getToggleSortingHandler()}>
                         <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
                         {sorted === "asc" ? <ArrowUp className="size-3 shrink-0" /> : sorted === "desc" ? <ArrowDown className="size-3 shrink-0" /> : null}
                       </button>
-                    ) : <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>}
-                    {resizable && (
+                    ) : <div className="min-w-0 flex-1">{flexRender(header.column.columnDef.header, header.getContext())}</div>)}
+                    {resizable && !header.isPlaceholder && !header.column.columns.length && (
                       <span aria-hidden className="absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize hover:bg-ring"
                         onDoubleClick={() => setSizing(({ [header.column.id]: _, ...rest }) => rest)}
                         onPointerDown={(e) => {
@@ -204,7 +206,7 @@ export function DataTable<T>({
                 );
               })}
             </div>
-          ))}
+          );})}
         </div>
         {loading && rows.length === 0 ? (
           <div role="status" className="p-6 text-center text-sm text-muted">{loadingText ?? t("Loading…")}</div>

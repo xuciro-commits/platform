@@ -4,10 +4,10 @@ import { joinProjectResource } from "../projects/membership";
 import { kindOfType, resourceRef } from "../projects/resources";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls } from "../editor/workbench";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Input, PageHeader, Panel, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
+import { Button, DataTable, Input, PageHeader, Panel, Select, Textarea, t, useInputDrafts, useUnsavedChanges, type ColumnDef } from "@platform/ui";
 
 // Decision tables (ADR-0062): condition columns → result columns, first match
 // wins. A saved draft joins the same release review as its application;
@@ -77,6 +77,28 @@ export function DecisionTableEditor({ id }: { id: string }) {
   const setCell = (row: number, key: "when" | "then", i: number, value: string) => patch({ rows: draft.rows.map((r, j) => j === row ? { ...r, ...(key==="when"?{expressions:undefined}:{}),[key]: r[key].map((c, k) => k === i ? value : c) } : r) });
   const moveRow = (row: number, by: number) => { const to = row + by; if (to < 0 || to >= draft.rows.length) return; const rows = [...draft.rows]; const a = rows[row]!, b = rows[to]!; rows[row] = b; rows[to] = a; patch({ rows }); };
   const defaults = draft.default?.length === draft.outputs.length ? draft.default : draft.outputs.map(() => "");
+  // Stable renderer functions keep the active input mounted while typing.
+  const tableState = useRef({ draft, defaults, patch, setColumn, addColumn, removeColumn, setCell, moveRow });
+  tableState.current = { draft, defaults, patch, setColumn, addColumn, removeColumn, setCell, moveRow };
+  const columns = useMemo<ColumnDef<number, unknown>[]>(() => [
+    { id: "order", header: "", meta: { width: 60 }, enableSorting: false, cell: ({ row }) => row.original < 0 ? t("else") : row.original + 1 },
+    ...(["inputs", "outputs"] as const).map(side => ({
+      id: side, header: () => <div className="flex items-center gap-2">{t(side === "inputs" ? "When" : "Then")}<Button size="sm" variant="ghost" onClick={() => tableState.current.addColumn(side)}>+ {t(side === "inputs" ? "condition" : "result")}</Button></div>,
+      columns: draft[side].map((_, i): ColumnDef<number, unknown> => ({
+        id: `${side}-${i}`, enableSorting: false, meta: { width: 220 },
+        header: () => { const { draft, setColumn, removeColumn } = tableState.current, col = draft[side][i]!; return <div className="grid gap-1"><Input className={cell} value={col.name} onChange={e => setColumn(side, i, { name: e.target.value })} />
+          <div className="flex gap-1"><Select className={cell} value={col.type} onChange={e => setColumn(side, i, { type: e.target.value })}>{types.map(x => <option key={x} value={x}>{t(x)}</option>)}</Select>
+            <Button size="sm" variant="ghost" aria-label={t("Remove column")} disabled={draft[side].length <= 1} onClick={() => removeColumn(side, i)}>×</Button></div></div>; },
+        cell: ({ row: { original: r } }) => { const { draft, defaults, patch, setCell } = tableState.current; return r < 0 && side === "inputs" ? i === 0 ? t("no row matches") : null
+          : <Input className={cell} value={r < 0 ? defaults[i] : draft.rows[r]![side === "inputs" ? "when" : "then"][i]} placeholder={r < 0 ? t("refuse") : side === "inputs" ? "*" : undefined}
+            onChange={e => r < 0 ? patch({ default: defaults.map((c, k) => k === i ? e.target.value : c) }) : setCell(r, side === "inputs" ? "when" : "then", i, e.target.value)} />; },
+      })),
+    })),
+    { id: "actions", header: "", meta: { width: 120 }, enableSorting: false, cell: ({ row: { original: r } }) => { const { draft, patch, moveRow } = tableState.current; return r < 0 ? null : <div className="flex">
+      <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => moveRow(r, -1)}>↑</Button>
+      <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => moveRow(r, 1)}>↓</Button>
+      <Button size="sm" variant="ghost" aria-label={t("Remove row")} disabled={draft.rows.length <= 1} onClick={() => patch({ rows: draft.rows.filter((_, j) => j !== r) })}>×</Button></div>; } },
+  ], [draft.inputs.length, draft.outputs.length]);
   if (role("build") !== "builder") return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Decision tables")} description={query.isError ? t("The decision table could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
@@ -96,44 +118,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Description")}<Textarea rows={1} value={draft.description ?? ""} onChange={(e) => patch({ description: e.target.value })} /></label>
       </Panel>
       <Panel title={t("Rules")} className="grid min-w-0 gap-2 overflow-auto">
-        <table className="w-max border-separate border-spacing-1 text-xs">
-          <thead>
-            <tr>
-              <th />
-              <th colSpan={draft.inputs.length} className="rounded bg-[var(--tone-warning-soft,rgba(234,179,8,.12))] px-2 py-1 text-left font-medium">{t("When")} <Button size="sm" variant="ghost" onClick={() => addColumn("inputs")}>+ {t("condition")}</Button></th>
-              <th colSpan={draft.outputs.length} className="rounded bg-[var(--tone-success-soft,rgba(34,197,94,.12))] px-2 py-1 text-left font-medium">{t("Then")} <Button size="sm" variant="ghost" onClick={() => addColumn("outputs")}>+ {t("result")}</Button></th>
-              <th />
-            </tr>
-            <tr>
-              <th />
-              {(["inputs", "outputs"] as const).map((side) => draft[side].map((col, i) => <th key={`${side}${i}`} className="align-top">
-                <div className="grid gap-1">
-                  <Input className={cell} value={col.name} onChange={(e) => setColumn(side, i, { name: e.target.value })} />
-                  <div className="flex gap-1"><Select className={cell} value={col.type} onChange={(e) => setColumn(side, i, { type: e.target.value })}>{types.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select>
-                    <Button size="sm" variant="ghost" aria-label={t("Remove column")} disabled={draft[side].length <= 1} onClick={() => removeColumn(side, i)}>×</Button></div>
-                </div></th>))}
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {draft.rows.map((row, r) => <tr key={r}>
-              <td className="text-muted">{r + 1}</td>
-              {row.when.map((v, i) => <td key={`w${i}`}><Input className={cell} value={v} placeholder="*" onChange={(e) => setCell(r, "when", i, e.target.value)} /></td>)}
-              {row.then.map((v, i) => <td key={`t${i}`}><Input className={cell} value={v} onChange={(e) => setCell(r, "then", i, e.target.value)} /></td>)}
-              <td className="whitespace-nowrap">
-                <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => moveRow(r, -1)}>↑</Button>
-                <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => moveRow(r, 1)}>↓</Button>
-                <Button size="sm" variant="ghost" aria-label={t("Remove row")} disabled={draft.rows.length <= 1} onClick={() => patch({ rows: draft.rows.filter((_, j) => j !== r) })}>×</Button>
-              </td>
-            </tr>)}
-            <tr>
-              <td className="text-muted">{t("else")}</td>
-              <td colSpan={draft.inputs.length} className="text-muted">{t("no row matches")}</td>
-              {defaults.map((v, i) => <td key={`d${i}`}><Input className={cell} value={v} placeholder={t("refuse")} onChange={(e) => patch({ default: defaults.map((c, k) => k === i ? e.target.value : c) })} /></td>)}
-              <td />
-            </tr>
-          </tbody>
-        </table>
+        <DataTable data={[...draft.rows.map((_, i) => i), -1]} columns={columns} getRowId={r => r < 0 ? "default" : String(r)} height={Math.min(480, 124 + (draft.rows.length + 1) * 40)} rowHeight={40} searchable={false} resizable={false} />
         <div><Button size="sm" onClick={() => patch({ rows: [...draft.rows, { when: draft.inputs.map(() => ""), then: draft.outputs.map(() => "") }] })}>{t("Add row")}</Button></div>
         <p className="text-[11px] text-muted">{t("Leave the default empty to refuse a call no row matches; fill it to answer anyway.")}</p>
       </Panel>

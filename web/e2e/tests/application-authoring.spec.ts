@@ -105,7 +105,7 @@ test("an application authors related drafts and a template before its first rele
   await expect(verify.getByRole("button", { name: "Save immutable candidate", exact: true })).toBeVisible();
   await verify.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await verify.getByRole("button", { name: "Activate release", exact: true }).click();
-  await expect(verify.getByText("Release active for operators.", { exact: false })).toBeVisible();
+  await expect(verify.getByRole("status").filter({ hasText: /^Release active for operators\./ })).toBeVisible();
   const delivered = await operator.definitions<any>();
   const deliveredObject = delivered.find(definition => definition.ref.kind === "object" && definition.ref.name === childType);
   const deliveredPage = delivered.find(definition => definition.ref.kind === "page" && definition.ref.name === pageName);
@@ -147,4 +147,18 @@ test("an application authors related drafts and a template before its first rele
   expect(stillPublished.find(definition => definition.ref.kind === "object" && definition.ref.name === childType)).toEqual(deliveredObject);
   expect(stillPublished.find(definition => definition.ref.kind === "page" && definition.ref.name === pageName)).toEqual(deliveredPage);
   await shots(page, page.locator("body"), "saved-draft-page-field", testInfo);
+
+  const variablesTab = page.getByRole("tablist", { name: "Page dock", exact: true })
+    .getByRole("tab", { name: /^Variables/ });
+  await variablesTab.click();
+  const variablesPanelID = await variablesTab.getAttribute("aria-controls");
+  expect(variablesPanelID).toBeTruthy();
+  const variablesPanel = page.getByRole("tabpanel").filter({ has: page.getByRole("columnheader", { name: "Current value", exact: true }) });
+  await expect(variablesPanel).toHaveAttribute("id", variablesPanelID!);
+  await expect(variablesPanel.getByRole("columnheader")).toHaveText(["Variable", "Type", "Current value"]);
+  await expect(variablesPanel.getByRole("row").filter({ hasText: "Selected visit" }).getByRole("cell"))
+    .toHaveText(["Selected visit", "record", JSON.stringify({ status: "empty" })]);
+  await expect(variablesPanel.getByRole("row").filter({ hasText: "Follow-up text" }).getByRole("cell"))
+    .toHaveText(["Follow-up text", "string", JSON.stringify({ status: "empty" })]);
+  await shots(page, variablesPanel, "page-variable-values", testInfo);
 });

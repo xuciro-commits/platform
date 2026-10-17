@@ -70,3 +70,7 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 `Build.integrationInventory` 的七份分页读取、类型转换与归档过滤退出，改用原 `readDefinitionInventoryOf` 和一份归档过滤；500 条分页、1000 条上限和原 Build 读取主体不变。`DecodeAssetInstallation` 的独立七类分配/解引用分支删除，与安装校验、升级校验共用 `integrationInstallationRecord`；目录和解码只在 `integrationRecordType` 维护一次记录类型。严格解码、安装身份、保留版本族、描述与权限检查及保存图像字节继续保留，没有新注册表或历史格式。原 `asset_lifecycle_test.go` 检查七类记录、错误图像、跨页读取、归档过滤与数量上限；其余原安装、升级和恢复测试继续使用同一实现。
 
 原生发布安装的十个重复身份解析分支和 `activation.go` 中仅供它调用的 `publicationRecord` 已删除。安装元数据只读一次，种类与名称使用原 `draftAssetRef`，发布资格使用原 `AcceptedPublicationSchemas`，不再维护第二份白名单。评测/测试计划、决策表和告警的专用内容/版本检查保留；外层记录名称、Object/Flow 前缀与克隆的原图像不变，实际发布、安装、历史恢复仍由原实现负责。
+
+## 11. 构建者自制表格（ADR-0124，已替换）
+
+页面变量底栏和决策表的手写 `<table>`、行列呈现与两项 UI 豁免删除，改用原 `DataTable`。公共表格修正分组表头跨度并容纳原 Input/Select；决策表保留原条件、输出、默认值、增删列行、重排和保存逻辑，不通过排序改变首个命中的优先级。变量底栏保留标签、类型和原 JSON 值。Lineage 的本地标题分派也删除，沿原 `definitionPresentation` 显示，权限与依赖读取不变。

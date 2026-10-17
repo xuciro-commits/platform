@@ -37,6 +37,36 @@ test("DataTable filters and sorts", () => {
   expect(screen.getAllByRole("cell")[0]!.textContent).toBe("Item 4");
 });
 
+test("DataTable spans grouped headers and keeps header controls usable without duplicating placeholders", () => {
+  const rename = vi.fn(), add = vi.fn();
+  const grouped: ColumnDef<Row, any>[] = [
+    { accessorKey: "id", header: "Identity", enableSorting: false },
+    { id: "when", header: () => <div>When <Button onClick={add}>Add condition</Button></div>, columns: [
+      { accessorKey: "name", enableSorting: false, header: () => <Input aria-label="Condition name" defaultValue="condition" onChange={event => rename(event.target.value)} /> },
+      { accessorKey: "qty", header: "Limit", enableSorting: false },
+    ] },
+    { id: "then", header: "Then", columns: [
+      { id: "result", accessorFn: row => row.name, header: "Result", enableSorting: false },
+    ] },
+  ];
+  render(<DataTable data={rows.slice(0, 2)} columns={grouped} getRowId={row => row.id} searchable={false} height={280} />);
+  expect(screen.getAllByText("Identity")).toHaveLength(1);
+  const when = screen.getByRole("columnheader", { name: "When Add condition" });
+  expect(when.getAttribute("aria-colspan")).toBe("2");
+  expect(when.getAttribute("aria-colindex")).toBe("2");
+  expect(when.style.gridColumn).toBe("2 / span 2");
+  const then = screen.getByRole("columnheader", { name: "Then" });
+  expect(then.getAttribute("aria-colindex")).toBe("4");
+  expect(then.style.gridColumn).toBe("4 / span 1");
+  const name = screen.getByRole("textbox", { name: "Condition name" });
+  expect(name.closest('[role="columnheader"]')?.getAttribute("aria-colindex")).toBe("2");
+  expect(screen.getByRole("columnheader", { name: "Limit" }).getAttribute("aria-colindex")).toBe("3");
+  fireEvent.change(name, { target: { value: "temperature" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add condition" }));
+  expect(rename).toHaveBeenCalledWith("temperature");
+  expect(add).toHaveBeenCalledTimes(1);
+});
+
 test("DataTable shows loading state when loading is true and data is empty", () => {
   render(<DataTable data={[]} columns={columns} getRowId={(r) => r.id} loading />);
   expect(screen.getByText("Loading…")).toBeTruthy();

@@ -146,7 +146,8 @@ test("one application retains drafts across five workspaces and delivers grouped
   await shots(page, page.locator("body"), "application-studio", testInfo);
 });
 
-test("decision tables and alerts remain application members through editing and release", async ({ page, builder }) => {
+test("decision tables and alerts remain application members through editing and release", async ({ page, builder }, testInfo) => {
+  test.setTimeout(120_000);
   const object = await builder.object({ title: "Heating zone", fields: [{ name: "temperature", title: "Temperature", type: "decimal" }] });
   const tableID = slug("table"), tableName = slug("heatdecision");
   await builder.decide("build.table.create", { type: "build.table", id: tableID }, {
@@ -182,6 +183,52 @@ test("decision tables and alerts remain application members through editing and 
   await assets.getByRole("button", { name: /^Heating decision/ }).click();
   await expect(page.getByRole("heading", { name: "Heating decision", exact: true }).first()).toBeVisible();
   await expect(navigation.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
+
+  const rulePanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Rules", exact: true }) }).last();
+  const ruleTable = rulePanel.getByRole("table");
+  const ruleRows = ruleTable.getByRole("row").filter({ has: page.getByRole("button", { name: "Move up", exact: true }) });
+  const ruleColumns = ruleTable.getByRole("columnheader").filter({ has: page.getByRole("textbox") });
+  const defaultRow = ruleTable.getByRole("row").filter({ has: page.getByRole("cell", { name: "else", exact: true }) });
+  await expect(ruleTable.getByRole("columnheader").filter({ hasText: /^When/ })).toHaveCount(1);
+  await expect(ruleTable.getByRole("columnheader").filter({ hasText: /^Then/ })).toHaveCount(1);
+  await rulePanel.getByRole("button", { name: "Add row", exact: true }).click();
+  await ruleRows.nth(1).getByRole("textbox").nth(0).pressSequentially("< 25");
+  await ruleRows.nth(1).getByRole("textbox").nth(1).fill("false");
+  await ruleRows.nth(1).getByRole("button", { name: "Move up", exact: true }).click();
+  await expect(ruleRows.nth(0).getByRole("textbox").nth(0)).toHaveValue("< 25");
+  await rulePanel.getByRole("button", { name: /^\+ condition$/ }).click();
+  await ruleColumns.nth(1).getByRole("textbox").fill("");
+  await ruleColumns.nth(1).getByRole("textbox").pressSequentially("season");
+  await rulePanel.getByRole("button", { name: /^\+ result$/ }).click();
+  await ruleColumns.nth(3).getByRole("textbox").fill("instruction");
+  await ruleRows.nth(0).getByRole("textbox").nth(3).fill("Check first");
+  await ruleRows.nth(1).getByRole("textbox").nth(3).fill("Start heating");
+  await expect(defaultRow.getByRole("textbox").nth(0)).toHaveValue("false");
+  await defaultRow.getByRole("textbox").nth(1).fill("Leave unchanged");
+  await page.getByRole("button", { name: "Save decision table", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.table", tableID)).inputs.length).toBe(2);
+  const expandedTable = await builder.record("build.table", tableID);
+  expect(expandedTable.inputs).toMatchObject([{ name: "temperature", type: "number" }, { name: "season", type: "text" }]);
+  expect(expandedTable.outputs).toMatchObject([{ name: "heat", type: "boolean" }, { name: "instruction", type: "text" }]);
+  expect(expandedTable.rows.map((row: any) => [row.expressions.length, row.then.length])).toEqual([[2, 2], [2, 2]]);
+  expect(expandedTable.rows.map((row: any) => row.then)).toEqual([["false", "Check first"], ["true", "Start heating"]]);
+  expect(expandedTable.default).toEqual(["false", "Leave unchanged"]);
+  await shots(page, rulePanel, "decision-table-columns", testInfo);
+
+  await ruleColumns.nth(1).getByRole("button", { name: "Remove column", exact: true }).click();
+  await ruleColumns.nth(2).getByRole("button", { name: "Remove column", exact: true }).click();
+  await expect(defaultRow.getByRole("textbox")).toHaveValue("false");
+  await page.getByRole("button", { name: "Save decision table", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.table", tableID)).inputs.length).toBe(1);
+  const savedTable = await builder.record("build.table", tableID);
+  expect(savedTable.inputs).toMatchObject([{ name: "temperature", type: "number" }]);
+  expect(savedTable.outputs).toMatchObject([{ name: "heat", type: "boolean" }]);
+  expect(savedTable.rows.map((row: any) => row.expressions)).toMatchObject([
+    [{ op: "<", args: [{ ref: "input.temperature" }, { lit: { value: "25" } }] }],
+    [{ op: "<", args: [{ ref: "input.temperature" }, { lit: { value: "20" } }] }],
+  ]);
+  expect(savedTable.rows.map((row: any) => row.then)).toEqual([["false"], ["true"]]);
+  expect(savedTable.default).toEqual(["false"]);
   await assets.getByRole("button", { name: /^Low temperature/ }).click();
   await expect(page.getByRole("heading", { name: "Low temperature", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Heating control", exact: true })).toBeVisible();
