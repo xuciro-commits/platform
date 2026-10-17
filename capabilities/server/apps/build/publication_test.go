@@ -2,11 +2,49 @@ package build
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 )
+
+func TestPublishRetainedQueryKeepsHistoryAndInstallerOutcome(t *testing.T) {
+	q := Query{Name: "lookup", Title: "Lookup", Object: "build.receipt", State: "published", Version: 1}
+	previous := published(q)
+	q.State, q.Published, q.Versions = "draft", previous, []string{previous}
+	calls := 0
+	var installed Query
+	var failure error
+	install := func(_ platform.Caller, current Query) error {
+		calls++
+		installed = current
+		return failure
+	}
+	if err := publishRetainedDefinition(platform.Caller{}, &q, "query limit", install); err != nil {
+		t.Fatal(err)
+	}
+	if q.Version != 2 || q.State != "published" || len(q.Versions) != 2 || q.Versions[0] != previous || q.Versions[1] != q.Published || calls != 1 || installed.Version != 2 || installed.State != q.State || installed.Published != q.Published {
+		t.Fatal("publication lost history or did not install the new current once", q, installed, calls)
+	}
+	var image Query
+	if err := json.Unmarshal([]byte(q.Published), &image); err != nil {
+		t.Fatal(err)
+	}
+	if image.Version != 2 || image.State != "published" || image.Name != q.Name || image.Object != q.Object || image.Published != "" || len(image.Versions) != 0 {
+		t.Fatal("published bytes lost the current definition or recursively retained history", image)
+	}
+	full := q
+	full.Version = 64
+	if err := publishRetainedDefinition(platform.Caller{}, &full, "query limit", install); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT || err.Message != "query limit" || calls != 1 {
+		t.Fatal("full version family was installed or lost its refusal", err, calls)
+	}
+	failure = errors.New("query installer failed")
+	if err := publishRetainedDefinition(platform.Caller{}, &q, "query limit", install); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT || err.Message != failure.Error() || calls != 2 || installed.Version != 3 {
+		t.Fatal("installer failure was lost", err, calls, installed)
+	}
+}
 
 func TestPublishedImageKeepsOnlyTheCurrentDefinition(t *testing.T) {
 	for _, initial := range []struct {

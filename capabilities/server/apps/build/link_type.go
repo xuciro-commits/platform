@@ -121,19 +121,7 @@ func (b *Build) publishLinkType(c platform.Caller, record any, _ json.RawMessage
 	if err := b.checkLinkType(f); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	if f.Version >= 64 {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A link type may retain at most 64 published versions")
-	}
-	f.Version++
-	f.State = "published"
-	f.Published = published(*f)
-	f.Versions = append(f.Versions, f.Published)
-	if !c.Staging() {
-		if err := b.installLinkType(c, *f); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
-		}
-	}
-	return nil
+	return publishRetainedDefinition(c, f, "A link type may retain at most 64 published versions", b.installLinkType)
 }
 
 func linkTypeImage(image []byte) (LinkType, error) {

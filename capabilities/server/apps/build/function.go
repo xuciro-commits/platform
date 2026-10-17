@@ -68,19 +68,7 @@ func (b *Build) publishFunction(c platform.Caller, record any, _ json.RawMessage
 	if err := b.checkFunction(*f); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	if f.Version >= 64 {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An AI function may retain at most 64 published versions")
-	}
-	f.Version++
-	f.State = "published"
-	f.Published = published(*f)
-	f.Versions = append(f.Versions, f.Published)
-	if !c.Staging() {
-		if err := b.installFunction(c, *f); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
-		}
-	}
-	return nil
+	return publishRetainedDefinition(c, f, "An AI function may retain at most 64 published versions", b.installFunction)
 }
 
 func functionImage(image []byte) (Function, error) {

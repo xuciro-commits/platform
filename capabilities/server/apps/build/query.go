@@ -117,19 +117,7 @@ func (b *Build) publishQuery(c platform.Caller, record any, _ json.RawMessage, _
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	*f = bound
-	if f.Version >= 64 {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A query may retain at most 64 published versions")
-	}
-	f.Version++
-	f.State = "published"
-	f.Published = published(*f)
-	f.Versions = append(f.Versions, f.Published)
-	if !c.Staging() {
-		if err := b.installQuery(c, *f); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
-		}
-	}
-	return nil
+	return publishRetainedDefinition(c, f, "A query may retain at most 64 published versions", b.installQuery)
 }
 
 func queryImage(image []byte) (Query, error) {

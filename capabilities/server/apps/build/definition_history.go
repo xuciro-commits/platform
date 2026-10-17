@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -34,6 +36,42 @@ func definitionFamilyOf(record any) definitionFamily {
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	}
 	panic("unsupported retained definition")
+}
+
+func setDefinitionFamily(record any, family definitionFamily) {
+	switch r := record.(type) {
+	case *Query:
+		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+	case *Function:
+		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+	case *PropertyType:
+		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+	case *LinkType:
+		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+	default:
+		panic("unsupported retained definition")
+	}
+}
+
+// Type-specific checks have already prepared the declaration. Its original
+// installer still owns runtime changes; staged decisions retain only metadata.
+func publishRetainedDefinition[T any](c platform.Caller, record *T, limitMessage string, install func(platform.Caller, T) error) *kernel.Error {
+	family := definitionFamilyOf(*record)
+	if family.Version >= 64 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, limitMessage)
+	}
+	family.Version++
+	family.State = "published"
+	setDefinitionFamily(record, family)
+	family.Published = published(*record)
+	family.Versions = append(family.Versions, family.Published)
+	setDefinitionFamily(record, family)
+	if !c.Staging() {
+		if err := install(c, *record); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+	}
+	return nil
 }
 
 func definitionImage[T interface{ Definition() D }, D interface{ Check() error }](image []byte, label string, keeps func(T, T) bool) (selected T, err error) {
@@ -185,16 +223,7 @@ func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAss
 			if version < family.Version {
 				family.State = "draft"
 			}
-			switch r := any(&record).(type) {
-			case *Query:
-				r.Published, r.State = family.Published, family.State
-			case *Function:
-				r.Published, r.State = family.Published, family.State
-			case *PropertyType:
-				r.Published, r.State = family.Published, family.State
-			case *LinkType:
-				r.Published, r.State = family.Published, family.State
-			}
+			setDefinitionFamily(&record, family)
 		} else {
 			record, err = freeze(record, asset, version)
 			if err != nil {
