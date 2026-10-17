@@ -362,19 +362,35 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 		if len(et.info.Constraints) == 0 {
 			continue
 		}
-		ids := make([]string, 0, et.rows.len())
-		for id := range et.rows.all() {
-			ids = append(ids, id)
+		plans := make([]constraintReadPlan, len(et.info.Constraints))
+		local := true
+		for i, rule := range et.info.Constraints {
+			plans[i] = d.constraintReadPlan(et.info, rule)
+			local = local && plans[i].local
+		}
+		var ids []string
+		if local {
+			for _, ref := range refs {
+				typ, id, _ := strings.Cut(ref, "/")
+				if typ == et.info.Type && et.rows.get(id) != nil {
+					ids = append(ids, id)
+				}
+			}
+		} else {
+			ids = make([]string, 0, et.rows.len())
+			for id := range et.rows.all() {
+				ids = append(ids, id)
+			}
 		}
 		slices.Sort(ids)
 		for _, id := range ids {
 			ref := et.info.Type + "/" + id
-			for _, rule := range et.info.Constraints {
+			for i, rule := range et.info.Constraints {
 				write, touched := d.constraintWrites[ref]
 				if !touched {
 					for _, source := range refs {
 						candidate := d.constraintWrites[source]
-						if candidate.caller.App == et.info.App && d.constraintDepends(et.info, rule, et.rows.get(id), source, candidate.before) {
+						if candidate.caller.App == et.info.App && d.constraintDepends(et.info, rule, plans[i], et.rows.get(id), source, candidate.before) {
 							write, touched = candidate, true
 							write.before = et.rows.get(id)
 							break
@@ -394,7 +410,7 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 	return nil
 }
 
-func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platform.Constraint, root *row, changed string, old *row) bool {
+func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platform.Constraint, plan constraintReadPlan, root *row, changed string, old *row) bool {
 	typ, id, _ := strings.Cut(changed, "/")
 	rootID := recordOf(root.value).ID
 	if rule.Reads != nil {
@@ -435,68 +451,10 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			}
 		}
 	}
-	paths := map[string][][]string{}
-	if rule.Kind == "unique" && rule.Scope != "" && rule.Scope != "tenant" {
-		path, _ := platform.ConstraintScopePath(info, rule.Scope)
-		paths[""] = append(paths[""], path)
+	if plan.unknown {
+		return true
 	}
-	var visit func(platform.Expr, string)
-	visit = func(expr platform.Expr, collection string) {
-		if expr.Agg != nil {
-			collection = expr.Agg.Source
-			if len(expr.Agg.Field) > 1 {
-				paths[collection] = append(paths[collection], expr.Agg.Field)
-			}
-		}
-		if expr.Op == "path" && len(expr.Args) == 1 {
-			ref := expr.Args[0].Ref
-			if strings.HasPrefix(ref, "item.") {
-				paths[collection] = append(paths[collection], append([]string{strings.TrimPrefix(ref, "item.")}, expr.Path...))
-			} else {
-				paths[""] = append(paths[""], append([]string{ref}, expr.Path...))
-			}
-		}
-		for _, child := range expr.Args {
-			visit(child, collection)
-		}
-		if expr.In != nil {
-			visit(*expr.In, collection)
-		}
-	}
-	if rule.Expr != nil {
-		visit(*rule.Expr, "")
-	}
-	if rule.Reads != nil {
-		for name, binding := range rule.Reads.Collections {
-			if binding.Set == "" {
-				continue
-			}
-			index := slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == binding.Set })
-			if index < 0 {
-				return true
-			}
-			set := info.Sets[index]
-			var capture func(platform.Expr)
-			capture = func(expr platform.Expr) {
-				if expr.Op == "path" && len(expr.Args) == 1 {
-					paths[name] = append(paths[name], append([]string{expr.Args[0].Ref}, expr.Path...))
-				}
-				for _, child := range expr.Args {
-					capture(child)
-				}
-			}
-			for _, predicate := range set.Where {
-				lowered, err := platform.LowerRecordSetPredicate(set, predicate, d.constraintLookup)
-				if err != nil {
-					return true
-				}
-				capture(lowered)
-			}
-			for _, order := range set.Order {
-				capture(order.Expr)
-			}
-		}
-	}
+	paths := plan.paths
 	follows := func(root *row, info platform.EntityInfo, path []string) bool {
 		current, currentInfo := root, info
 		for _, name := range path {
@@ -573,6 +531,85 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 		}
 	}
 	return false
+}
+
+type constraintReadPlan struct {
+	paths          map[string][][]string
+	local, unknown bool
+}
+
+// Prepare declaration paths once per final check, not once per candidate row.
+func (d *stagedDecision) constraintReadPlan(info platform.EntityInfo, rule platform.Constraint) constraintReadPlan {
+	plan := constraintReadPlan{paths: map[string][][]string{}, local: rule.Reads == nil}
+	paths := plan.paths
+	if rule.Kind == "unique" && rule.Scope != "" && rule.Scope != "tenant" {
+		plan.local = false
+		path, _ := platform.ConstraintScopePath(info, rule.Scope)
+		paths[""] = append(paths[""], path)
+	}
+	var visit func(platform.Expr, string)
+	visit = func(expr platform.Expr, collection string) {
+		if expr.Op == "path" || expr.Agg != nil || expr.Window != nil {
+			plan.local = false
+		}
+		if expr.Agg != nil {
+			collection = expr.Agg.Source
+			if len(expr.Agg.Field) > 1 {
+				paths[collection] = append(paths[collection], expr.Agg.Field)
+			}
+		}
+		if expr.Op == "path" && len(expr.Args) == 1 {
+			ref := expr.Args[0].Ref
+			if strings.HasPrefix(ref, "item.") {
+				paths[collection] = append(paths[collection], append([]string{strings.TrimPrefix(ref, "item.")}, expr.Path...))
+			} else {
+				paths[""] = append(paths[""], append([]string{ref}, expr.Path...))
+			}
+		}
+		for _, child := range expr.Args {
+			visit(child, collection)
+		}
+		if expr.In != nil {
+			visit(*expr.In, collection)
+		}
+	}
+	if rule.Expr != nil {
+		visit(*rule.Expr, "")
+	}
+	if rule.Reads != nil {
+		for name, binding := range rule.Reads.Collections {
+			if binding.Set == "" {
+				continue
+			}
+			index := slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == binding.Set })
+			if index < 0 {
+				plan.unknown = true
+				return plan
+			}
+			set := info.Sets[index]
+			var capture func(platform.Expr)
+			capture = func(expr platform.Expr) {
+				if expr.Op == "path" && len(expr.Args) == 1 {
+					paths[name] = append(paths[name], append([]string{expr.Args[0].Ref}, expr.Path...))
+				}
+				for _, child := range expr.Args {
+					capture(child)
+				}
+			}
+			for _, predicate := range set.Where {
+				lowered, err := platform.LowerRecordSetPredicate(set, predicate, d.constraintLookup)
+				if err != nil {
+					plan.unknown = true
+					return plan
+				}
+				capture(lowered)
+			}
+			for _, order := range set.Order {
+				capture(order.Expr)
+			}
+		}
+	}
+	return plan
 }
 
 // This is dependency discovery, not a second rule evaluation. It considers

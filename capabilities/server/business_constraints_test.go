@@ -189,6 +189,88 @@ func BenchmarkFinalConstraintScan(b *testing.B) {
 	}
 }
 
+func TestFinalLocalConstraintsKeepOrderingAndIgnoreUntouchedHistory(t *testing.T) {
+	tenant := constraintTenant(t)
+	first := tenant.records.types["invariants.entry"]
+	rules := commonConstraints()
+	first.info.Constraints = []platform.Constraint{rules[1], rules[2], {Name: "bounded", Kind: "expression", Fields: []string{"qty"}, Message: "Quantity is below the limit.", Expr: booleanRule("<", platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 1000))}}
+	second := &entityType{info: first.info}
+	second.info.Type = "invariants.zentry"
+	tenant.records.types[second.info.Type] = second
+	for _, et := range []*entityType{second, first} {
+		for _, id := range []string{"Z", "OLD", "A"} {
+			value := constraintEntry{Record: platform.Record{ID: id, Revision: 1}, Qty: 0, Start: "2026-10-12", End: "2026-10-13", State: "draft"}
+			et.setRow(id, &row{value: reflect.ValueOf(&value).Elem()})
+		}
+	}
+	var trace []string
+	tenant.simulationTrace = func(event platform.DecisionTrace) {
+		if event.Kind == "constraint" {
+			trace = append(trace, event.Type+"/"+event.ID+"/"+event.Name)
+		}
+	}
+	draft := tenant.newStagedDecision()
+	draft.at = txnAt
+	caller := platform.NewCaller(draft, memberOf(t, tenant, "builder"), "invariants", false, false)
+	draft.constraintWrites = map[string]constraintWrite{}
+	for _, ref := range []string{second.info.Type + "/A", first.info.Type + "/Z", first.info.Type + "/A"} {
+		typ, id, _ := strings.Cut(ref, "/")
+		draft.constraintWrites[ref] = constraintWrite{caller: caller, before: tenant.records.types[typ].rows.get(id)}
+	}
+	value := constraintEntry{Record: platform.Record{ID: "A", Revision: 2}, Qty: 2, Start: "2026-10-12", End: "2026-10-11", State: "draft"}
+	draft.records.types[first.info.Type].setRow("A", &row{value: reflect.ValueOf(&value).Elem()})
+	err := draft.checkFinalConstraints()
+	issues := draft.inputIssues[err]
+	if err == nil || len(issues) != 1 || issues[0].Record != first.info.Type+"/A" || issues[0].Constraint != "period" {
+		t.Fatal("final constraints changed type/id/rule refusal order", err, issues)
+	}
+	if !reflect.DeepEqual(trace, []string{first.info.Type + "/A/positive", first.info.Type + "/A/period"}) {
+		t.Fatal("final constraints skipped or reordered the original rules", trace)
+	}
+	trace = nil
+	draft = tenant.newStagedDecision()
+	draft.at = txnAt
+	caller = platform.NewCaller(draft, memberOf(t, tenant, "builder"), "invariants", false, false)
+	draft.constraintWrites = map[string]constraintWrite{first.info.Type + "/A": {caller: caller, before: first.rows.get("A")}}
+	value.End = "2026-10-13"
+	draft.records.types[first.info.Type].setRow("A", &row{value: reflect.ValueOf(&value).Elem()})
+	if err := draft.checkFinalConstraints(); err != nil {
+		t.Fatal("untouched historical violations blocked a valid local write", err)
+	}
+	if !reflect.DeepEqual(trace, []string{first.info.Type + "/A/positive", first.info.Type + "/A/period", first.info.Type + "/A/bounded"}) {
+		t.Fatal("one local write evaluated more than its three original rules", trace)
+	}
+}
+
+func TestConstraintReadPlanKeepsExternalDependenciesNonlocal(t *testing.T) {
+	path := platform.Expr{Op: "path", Kind: "integer", Args: []platform.Expr{platform.ExprReference("reference", "parent")}, Path: []string{"qty"}}
+	info := platform.EntityInfo{App: "invariants", Type: "invariants.child", Fields: []platform.FieldInfo{{Name: "parent", Type: "reference", Ref: "invariants.entry"}}}
+	draft := &stagedDecision{}
+	for _, tc := range []struct {
+		name    string
+		rule    platform.Constraint
+		paths   map[string][][]string
+		unknown bool
+	}{
+		{name: "path inside args and in", rule: platform.Constraint{Expr: &platform.Expr{Op: "all", In: booleanRule(">", path, platform.ExprLiteralValue("integer", 0))}}, paths: map[string][][]string{"": {{"parent", "qty"}}}},
+		{name: "aggregate field", rule: platform.Constraint{Expr: &platform.Expr{Op: "sum", Agg: &platform.ExprAggregate{Source: "items", Field: []string{"parent", "qty"}}}}, paths: map[string][][]string{"items": {{"parent", "qty"}}}},
+		{name: "window inside args", rule: platform.Constraint{Expr: booleanRule(">", platform.Expr{Window: &platform.ExprWindowReference{Source: "readings"}}, platform.ExprLiteralValue("integer", 0))}},
+		{name: "declared reads", rule: platform.Constraint{Reads: &platform.RuleReadSpec{}}},
+		{name: "parent unique", rule: platform.Constraint{Kind: "unique", Scope: "parent"}, paths: map[string][][]string{"": {{"parent"}}}},
+		{name: "missing declared set", rule: platform.Constraint{Reads: &platform.RuleReadSpec{Collections: map[string]platform.RuleCollection{"items": {Set: "missing"}}}}, unknown: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := draft.constraintReadPlan(info, tc.rule)
+			if plan.local || plan.unknown != tc.unknown {
+				t.Fatal("external dependency was treated as a local constraint", plan)
+			}
+			if tc.paths != nil && !reflect.DeepEqual(plan.paths, tc.paths) {
+				t.Fatal("constraint dependency paths changed", plan.paths)
+			}
+		})
+	}
+}
+
 // One declared invariant group, the real generated/transaction/import/agent/
 // protocol entry paths, and an ignored Put error all yield the same answer.
 func TestBusinessConstraintsAllWriteEntrances(t *testing.T) {

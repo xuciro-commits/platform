@@ -194,6 +194,10 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 }
 
 func (d *stagedDecision) checkBusinessVersionPins() *kernel.Error {
+	types := d.records.sortedTypes()
+	if !slices.ContainsFunc(types, func(et *entityType) bool { return et.info.Versioning != nil }) {
+		return nil
+	}
 	pinned := map[string]bool{}
 	// Only versions already used before this decision freeze their contents.
 	// A new version, its children and its first consumer may be accepted together.
@@ -209,7 +213,7 @@ func (d *stagedDecision) checkBusinessVersionPins() *kernel.Error {
 		refs = append(refs, ref)
 	}
 	slices.Sort(refs)
-	for _, et := range d.records.sortedTypes() {
+	for _, et := range types {
 		if et.info.Versioning == nil {
 			continue
 		}
