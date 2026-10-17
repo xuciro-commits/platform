@@ -141,12 +141,6 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	return out, nil
 }
 
-// probe1 checks one submission's policy and rules as m, applying nothing.
-func (t *Tenant) probe1(m platform.Member, s *pb.Submission, now time.Time) *kernel.Error {
-	err, _ := t.probeDiagnosed(m, s, now)
-	return err
-}
-
 func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*kernel.Error, []platform.FieldIssue) {
 	a := t.owner["action:"+s.GetSchema().GetName()]
 	if a == nil {

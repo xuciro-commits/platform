@@ -33,7 +33,6 @@ type TableRow = buildapi.TableRow
 
 const AppType = buildapi.AppType
 const SchemaHandOver = buildapi.SchemaHandOver
-const pagesHelp = buildapi.ValuePagesHelp
 const FunctionType = buildapi.FunctionType
 
 type Function = buildapi.Function
@@ -85,7 +84,6 @@ const SourceType = buildapi.SourceType
 const SchemaSourcePulled = buildapi.SchemaSourcePulled
 const SourceBody = buildapi.SourceBody
 const sourceRows = buildapi.ValueSourceRows
-const sourceFailuresKept = buildapi.ValueSourceFailuresKept
 
 type Source = buildapi.Source
 type SourceField = buildapi.SourceField
@@ -141,7 +139,6 @@ type TestSample = buildapi.TestSample
 type TestStep = buildapi.TestStep
 type ComputeFixture = buildapi.ComputeFixture
 type FunctionFixture = buildapi.FunctionFixture
-type condition = buildapi.ValueCondition
 type Group = buildapi.Group
 type Post = buildapi.Post
 
@@ -150,8 +147,6 @@ var ConnectionKinds = buildapi.ConnectionKinds
 type JournalPost = buildapi.JournalPost
 type JournalPostLine = buildapi.JournalPostLine
 type OperationRef = buildapi.OperationRef
-
-var sourceName = buildapi.ValueSourceName
 
 type DatasetVersion = buildapi.DatasetVersion
 type ConnectionDefinition = buildapi.ConnectionDefinition

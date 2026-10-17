@@ -7,8 +7,6 @@ import { useSyncExternalStore } from "react";
  * application definitions never carry CSS, storage keys or changes to the document element. */
 export type Scheme = "system" | "light" | "dark";
 export type Skin = "default" | "industrial";
-export const skins: Skin[] = ["default", "industrial"];
-export const schemes: Scheme[] = ["system", "light", "dark"];
 
 const storageKey = "platform.appearance";
 const listeners = new Set<() => void>();

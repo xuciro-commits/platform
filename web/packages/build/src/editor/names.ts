@@ -4,7 +4,7 @@
 const cjk = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/;
 const latinWord = /[a-z]{2,}/; // a word, not an acronym
 
-export const mixesLanguages = (s: string | undefined) => !!s && cjk.test(s) && latinWord.test(s);
+const mixesLanguages = (s: string | undefined) => !!s && cjk.test(s) && latinWord.test(s);
 
 /** The texts of an object draft that mix languages, each named for the problems dock. */
 export function mixedNames(object: { title?: string; plural?: string; fields?: { title?: string }[]; states?: { title?: string }[]; actions?: { title?: string }[] }): string[] {

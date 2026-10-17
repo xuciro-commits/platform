@@ -8,10 +8,10 @@ import { readFileSync } from "node:fs";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 import { decide, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision } from "./host";
 
-export { expect, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision };
+export { expect, fresh, pageUIProfile, retainActionCatalog, stableReadRevision };
 
-export const BUILDER = "manager";
-export const OPERATOR = "desk";
+const BUILDER = "manager";
+const OPERATOR = "desk";
 const APP = "build";
 
 /** A short lowercase name usable as an object or page name. */

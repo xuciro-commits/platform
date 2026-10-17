@@ -53,8 +53,8 @@ export function stackedLeaf(h: Hierarchy, id: string): boolean {
 }
 
 export type TreeSpacing = { sibling: number; layer: number; trunk: number; stackTop: number; stack: number; forest: number };
-export const verticalSpacing: TreeSpacing = { sibling: 24, layer: 56, trunk: 40, stackTop: 20, stack: 12, forest: 64 };
-export const horizontalSpacing: TreeSpacing = { sibling: 16, layer: 72, trunk: 24, stackTop: 0, stack: 0, forest: 40 };
+const verticalSpacing: TreeSpacing = { sibling: 24, layer: 56, trunk: 40, stackTop: 20, stack: 12, forest: 64 };
+const horizontalSpacing: TreeSpacing = { sibling: 16, layer: 72, trunk: 24, stackTop: 0, stack: 0, forest: 40 };
 
 // Canonical frame: breadth along x, depth along y, root at the top. Each
 // direction is this frame turned; the tree itself is computed once.

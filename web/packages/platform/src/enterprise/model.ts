@@ -6,14 +6,10 @@ import { relationLayout } from "@platform/ui";
 export type Model = Api.EnterpriseModel;
 export type Element = Api.Element;
 export type Relationship = Api.Relationship;
-export type View = Api.View;
-export type Kind = Api.Kind;
 export type Metamodel = Api.Metamodel;
 /** One description view of the model: who and where, what it holds, what it can
  * do, what it offers, how it is run (ADR-0093). */
 export type Viewpoint = Api.Viewpoint;
-export type ProfileEntry = Api.ProfileEntry;
-export type Contract = Api.Contract;
 export type Pin = Api.Pin;
 
 export const ELEMENT = "enterprise.element";

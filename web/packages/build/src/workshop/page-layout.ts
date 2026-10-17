@@ -5,7 +5,7 @@ export type LayoutKind = "rows" | "columns" | "tabs" | "flow" | "toolbar" | "loo
 type Kind = LayoutKind;
 import { pageUIProfile, pageVariableContract } from "@platform/app";
 
-export function widgetSubtreeSections(document:Document,section:string):Set<string>{
+function widgetSubtreeSections(document:Document,section:string):Set<string>{
  const found=new Set<string>(),seen=new Set<string>();const visit=(id:string)=>{if(seen.has(id))return;seen.add(id);const node=document.nodes[id];if(node?.section)found.add(node.section);for(const child of [...node?.children??[],...(document.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)])visit(child);};
  const leaf=leafOf(document,section);if(leaf)visit(leaf);return found;
 }
@@ -33,7 +33,7 @@ export function appendWidget(document: Document, section: string, container = do
   return repairTabs(next);
 }
 
-export function removeWidget(document: Document, section: string): Document {
+function removeWidget(document: Document, section: string): Document {
   const leaf = leafOf(document, section);
   const parent = leaf && parentOf(document, leaf);
   if (!leaf || !parent) return document;

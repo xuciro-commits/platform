@@ -48,6 +48,12 @@ apps/crm、csm、erp、hcm、mes、pms 仍有有效业务与历史责任。ERP �
 | 页面变量访问与作用域的重复清单 | Section.variablePorts/variableReferences 与原组件检查；嵌入、观测及权限例外保留 |
 | ERP 六处创建表单、Dialog/Sheet 生命周期、管理页第二套宿主接口 | 原 useNewRecord/DeclaredActionForm、OverlayFrame、useHost；ID、输入、焦点、隐藏草稿和权限保留 |
 
+工具扫描后已删除七个无调用私有函数（jsonPayload、matching、closeTask、observe、probe1、setSource、policies）和四个私有别名；实际历史恢复、Wasm 入口及公开适配接口保留。控制视图首次创建与保存点共用 newControlView，原前驱映像及各暂存所有者不变，重复装配由两份减为一份。前端仅删除无消费者的 skins/schemes、旧转导出和四个无用类型别名，其余内部值/类型只取消 export、保留实现；测试成员初始化继续建立原单位关系。
+
+相对 be3f682a，本块手写生产代码 159,996 → 159,924，净减 72 行；测试准备净减 1 行，未删断言。相同扫描配置下，Staticcheck U1000 为 13 → 0，Knip 值/类型导出告警分别为 31/30 → 0，控制视图的 jscpd 重复块为 1 → 0。公共 API、默认入口、生成类型和依赖清单未为消除误报而修改。命令及报告在 .build/tool-cleanup/，既有依赖/工具配置告警不在该结果内。
+
+make check、控制保存点/嵌套决定和相关宿主/Build、Web 包测试通过。额外运行 MES 全包及浏览器 spec 类型检查时遇到设备输入权限失败与七项类型错误；修改前的 be3f682a 副本产生相同失败，不能称为通过，也不在本次清理中修改其业务或断言。
+
 无调用私有函数、未引用依赖和同值翻译已按真实调用删除；公开导出、动态词条与历史适配不因静态匹配少而删除。scripts/escapes.sh 当前只剩 MES/PMS 两个后端事实日志条目，不通过删清单伪造退出。
 
 ## 12. 代码规模与本轮可删除空间（ADR-0124）

@@ -88,13 +88,6 @@ func counted(t *Tenant, kind, app, outcome string) {
 	}
 }
 
-// observe registers gauges read from the tenants when metrics are collected:
-// queue depth and the oldest item's age per app, failed items, open breakers
-// and apps deferred past their quota.
-func observe(tenants []*Tenant) {
-	observeFrom(func() []*Tenant { return tenants })
-}
-
 func observeFrom(current func() []*Tenant) {
 	m := otel.Meter("platformserver")
 	depth, _ := m.Int64ObservableGauge("platform.queue.depth", metric.WithDescription("Owned work waiting, per tenant and app"))

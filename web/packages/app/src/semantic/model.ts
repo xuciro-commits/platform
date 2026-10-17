@@ -2,7 +2,7 @@ import type { Api } from "@platform/kernel";
 
 export type PropertyRef = { object: Api.AssetRef; field: string };
 export type ReferenceRelationRef = { kind: "reference"; object: Api.AssetRef; field: string; direction: "outbound" | "inbound" };
-export type LinkRelationRef = Omit<ReferenceRelationRef,"kind"> & {kind:"link-type";binding:Api.AssetBinding};
+type LinkRelationRef = Omit<ReferenceRelationRef,"kind"> & {kind:"link-type";binding:Api.AssetBinding};
 export type SemanticRelation = {
   definition?:Api.Definition;linkType?:Api.LinkType;
   ref: ReferenceRelationRef|LinkRelationRef; target: Api.AssetRef; title: string; inverse?: string;

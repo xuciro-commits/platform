@@ -8,7 +8,7 @@ import { CanvasEdgeLabel, canvasEdgeColor } from "../core/edge";
 import { routePath, type Route } from "../core/route";
 import { relationNodeCaption, relationNodeClasses, relationNodeSize, type RelationEdge, type RelationNode } from "./model";
 
-export type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean };
+type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean };
 export type RelationShapeNode = Node<RelationNodeData>;
 /** `quiet` keeps a hierarchy line's name until the line or one of its ends is chosen. */
 export type RelationLineEdge = Edge<RelationEdge & { route?: Route; quiet?: boolean } & Record<string, unknown>>;
@@ -23,7 +23,7 @@ function Sides({ data }: { data: RelationNodeData }) {
   </>;
 }
 
-export function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
+function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
   const classDecl = data.class ? relationNodeClasses[data.class] : undefined;
   const color = (data.tone ?? classDecl?.tone) ? `var(--tone-${data.tone ?? classDecl?.tone})` : "var(--primary)";
   // A disc is what a reader needs when the only question is which neighbour is which.
@@ -46,7 +46,7 @@ export function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode
   </div>;
 }
 
-export function RelationEdgeView({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, selected }: EdgeProps<RelationLineEdge>) {
+function RelationEdgeView({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, selected }: EdgeProps<RelationLineEdge>) {
   const { path, label } = routePath(data?.route?.points ?? [{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }]);
   const color = canvasEdgeColor(data?.tone, selected, "var(--muted)");
   return <g className={cn("platform-canvas-edge", selected && "platform-canvas-edge-selected")}>

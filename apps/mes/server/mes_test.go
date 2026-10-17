@@ -27,13 +27,10 @@ var (
 	qa1    = member("qa-1", Quality)
 	qa2    = member("qa-2", Quality)
 	gw     = member("gateway-l1", Gateway)
-	asst   = agent(member("agent-l1", Assistant, "L1"))
+	_      = member("agent-l1", Assistant, "L1") // retain the test tenant membership
 	t0     = time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	keys   = 0
 )
-
-// agent marks a member as an AI agent (ADR-0014 D6).
-func agent(c platform.Caller) platform.Caller { c.Agent = true; return c }
 
 // units are the test members' memberships in the site structure.
 var units []platform.Membership

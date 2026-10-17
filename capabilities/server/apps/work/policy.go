@@ -93,12 +93,6 @@ func CountFor(step ApprovalStep, all bool, policy int, approvers int) int {
 	return policy
 }
 
-// policies is the administrator read: every rule of the tenant.
-func (w *Work) policies(c platform.Caller) ([]ApprovalPolicy, *kernel.Error) {
-	out, _, err := platform.Find[ApprovalPolicy](c, platform.Query{})
-	return out, err
-}
-
 // input saves or removes a policy through the same lifecycle as every record.
 func (w *Work) inputPolicy(_ platform.Caller, payload json.RawMessage, _ time.Time) *kernel.Error {
 	var p struct {

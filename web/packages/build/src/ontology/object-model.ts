@@ -19,19 +19,19 @@ export function actionInputFields(inputs: Input_[]): Api.Field[] {
     choices: input.type === "choice" ? (input.choices ?? "").split(",").map(value => value.trim()).filter(Boolean) : undefined,
   }));
 }
-export type Set_ = { field: string; from: string;expr?:Api.Expr };
-export type Condition = {expr?:Api.Expr; field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
+type Set_ = { field: string; from: string;expr?:Api.Expr };
+type Condition = {expr?:Api.Expr; field: string; operator: string; value?: string; valueField?: string; message: string;when?:Condition };
 export type ApproverLevel = { title: string; role: string; all?: boolean };
-export type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
-export type Create_ = { object: string; via: string; sets?: Set_[] };
+type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
+type Create_ = { object: string; via: string; sets?: Set_[] };
 /** A posting to a balance kept on another object (ADR-0063): match fields identify the balance, the amount is added or subtracted. */
-export type Post_ = { object: string; match: Set_[]; field: string; amount: string; subtract?: boolean; floor?: boolean };
+type Post_ = { object: string; match: Set_[]; field: string; amount: string; subtract?: boolean; floor?: boolean };
 /** One line of the journal entry an action books (ADR-0076): an account (=code or a source), a debit or a credit source, and what it is about. */
-export type JournalLine_ = { account: string; debit?: string; credit?: string; text?: string; object?: string; partner?: string };
-export type Journal_ = { date?: string; text?: string; lines: JournalLine_[] };
+type JournalLine_ = { account: string; debit?: string; credit?: string; text?: string; object?: string; partner?: string };
+type Journal_ = { date?: string; text?: string; lines: JournalLine_[] };
 export type Action = {adoption?:Api.ProposalAdoption; name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[]; journal?: Journal_; reverses?: string; transaction?: Api.BusinessTxn; reads?: Api.RuleReadSpec };
 /** Gapless document numbers for an object's records (ADR-0076): prefix, optional year, zero-padded count. */
-export type Numbering_ = { field: string; prefix?: string; yearly?: boolean; width?: number };
+type Numbering_ = { field: string; prefix?: string; yearly?: boolean; width?: number };
 /** What one role of the builder app may do with the object (ADR-0037 18b). */
 export type Access = { role: string; read: "all" | "below" | "unit" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
 /** The fields that place a record for row scopes: its owner (empty: creator) and its unit within a structure (ADR-0066). */

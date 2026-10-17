@@ -26,7 +26,7 @@ export type CatalogEntry = {
   relatedTypes?: CatalogRelatedType[];
 };
 
-export type CatalogProp = {
+type CatalogProp = {
   name: string;
   type: string;
   optional: boolean;
@@ -36,14 +36,14 @@ export type CatalogProp = {
   isSlot?: boolean;
 };
 
-export type CatalogSlot = {
+type CatalogSlot = {
   name: string;
   type: string;
   optional?: boolean;
   description?: string;
 };
 
-export type CatalogRelatedType = {
+type CatalogRelatedType = {
   name: string;
   kind?: "interface" | "type" | "enum";
   signature?: string;

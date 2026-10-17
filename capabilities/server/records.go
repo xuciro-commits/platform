@@ -824,12 +824,6 @@ func (s *recordStore) find(et *entityType, q platform.Query, visible func(reflec
 	return page, total, nil
 }
 
-// matching are the records of a type in the caller's scope that match a
-// domain and a search, archived ones only when asked; the caller holds s.mu.
-func (s *recordStore) matching(et *entityType, domain json.RawMessage, search string, archived bool, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {
-	return s.matchingQuery(et, platform.Query{Domain: domain, Search: search, Archived: archived}, visible)
-}
-
 func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {
 	if err := q.CheckSet(); err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}

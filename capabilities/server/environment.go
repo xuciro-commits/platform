@@ -316,9 +316,3 @@ func (t *Tenant) Migrations() []MigrationManifest { return t.console.migrationLi
 func (t *Tenant) grantUsable(id string, now time.Time) (SupportGrant, error) {
 	return t.console.usableSupport(t.ID, id, now)
 }
-
-// jsonPayload is the console's helper for small JSON answers.
-func jsonPayload(v any) json.RawMessage {
-	raw, _ := json.Marshal(v)
-	return raw
-}

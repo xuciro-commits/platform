@@ -5,7 +5,7 @@ export type ValueSchema = Api.ValueSchema;
 export type Binding = Api.Binding;
 export type Predicate = Api.Predicate;
 export type WorkflowStep = Api.ProcessStep;
-export type WorkflowKind = WorkflowStep["kind"];
+type WorkflowKind = WorkflowStep["kind"];
 /** A local draft can precede the owner-assigned record stamps and lifecycle. */
 export type WorkflowDraft = Partial<Api.Process> & Pick<Api.Process, "id" | "revision" | "name" | "title" | "steps"> & { object: string; when: string };
 export type WorkflowObject = { id: string; name: string; title: string; published?: string; states?: { name: string; title: string }[];

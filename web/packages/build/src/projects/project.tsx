@@ -17,7 +17,6 @@ import { draftChangeKind, useSavedDraftChanges } from "../releases/changes";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
-export { kindIcon } from "./resource-icons";
 import { kindIcon } from "./resource-icons";
 import { useProjectResources, type OwnedResource } from "./resource-inventory";
 export type { OwnedResource } from "./resource-inventory";

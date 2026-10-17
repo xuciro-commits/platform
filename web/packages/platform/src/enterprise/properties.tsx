@@ -6,7 +6,7 @@ export type ElementEdit = { name: string; kind: string; shortName: string; prope
 type Property = NonNullable<Metamodel["stereotypes"][string]["properties"]>[number];
 
 /** The tagged values of the actual stereotype, including inherited values. */
-export function propertiesOf(meta: Metamodel, stereotype: string): Property[] {
+function propertiesOf(meta: Metamodel, stereotype: string): Property[] {
   const out = new Map<string, Property>(), seen = new Set<string>();
   const walk = (name: string) => {
     if (seen.has(name)) return;

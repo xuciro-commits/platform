@@ -2,7 +2,7 @@ import type {Api} from '@platform/kernel';
 import {parseDecimal} from './decimal';
 import type {VariableResult} from './variables';
 
-export function computeScalar(output:unknown,field:string|undefined,type:string):VariableResult {
+function computeScalar(output:unknown,field:string|undefined,type:string):VariableResult {
  const value=field&&output&&typeof output==='object'&&!Array.isArray(output)?(output as Record<string,unknown>)[field]:field?undefined:output;
  if(typeof value!=='number'||!Number.isFinite(value)||Number.isInteger(value)&&!Number.isSafeInteger(value))return {status:'error',code:'The calculation result could not be read.'};
  if(type==='number')return {status:'value',value:{kind:'number',value}};

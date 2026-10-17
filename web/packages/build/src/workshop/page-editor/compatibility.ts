@@ -3,7 +3,7 @@ import {queryInventoryBudget} from "@platform/app/query-inventory";
 import type {Api} from "@platform/kernel";
 import type {PageDraft} from "./draft";
 
-export type CompatibilityIssue={section:string;widget:string;version?:number;code:"unknown-widget"|"unsupported-config"};
+type CompatibilityIssue={section:string;widget:string;version?:number;code:"unknown-widget"|"unsupported-config"};
 export type ProfileUpgrade={baseline:string;from:string;to:string};
 
 /** Compatibility discovery cannot grant a renderer or migrate an unknown version. */

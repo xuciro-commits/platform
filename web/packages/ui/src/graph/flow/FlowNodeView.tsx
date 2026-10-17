@@ -6,7 +6,7 @@ import { cn } from "../../lib/cn";
 import { flowBlockHeight, flowNodeWidth, flowShapeBox, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort } from "./model";
 import { eventRing, flowNodeIcon, flowShape, loops, notationGlyph, notationOf, notationTitle, type FlowNotation, type FlowShape } from "./notation";
 
-export type FlowNodeData = FlowNode & { definition: FlowNodeKind; direction: "right" | "down"; editable: boolean; collapsedView: boolean };
+type FlowNodeData = FlowNode & { definition: FlowNodeKind; direction: "right" | "down"; editable: boolean; collapsedView: boolean };
 export type FlowShapeNode = Node<FlowNodeData, "block">;
 export const FlowInteraction = createContext<{ onCollapse: (id: string) => void }>({ onCollapse: () => {} });
 

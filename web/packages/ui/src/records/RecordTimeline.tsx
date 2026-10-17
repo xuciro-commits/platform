@@ -21,7 +21,7 @@ export function timelineTime(value:unknown,kind:TimelineFields["kind"]):number|u
  if(m[5]!=="Z"&&(Number(m[5]!.slice(1,3))>23||Number(m[5]!.slice(4))>59))return;
  const stamp=Date.parse(value);return Number.isFinite(stamp)?stamp:undefined;
 }
-export function timelineRows<T extends TimelineRecord>(records:T[],fields:TimelineFields) {
+function timelineRows<T extends TimelineRecord>(records:T[],fields:TimelineFields) {
  const rows=records.flatMap(record=>{
   const start=timelineTime(record[fields.start],fields.kind),end=fields.end?timelineTime(record[fields.end],fields.kind):start;
   if(start===undefined||end===undefined||end<start)return [];

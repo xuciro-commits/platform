@@ -6,7 +6,7 @@ import type { QueryWindow, RecordReference } from "./Session";
 type Contract = typeof pageUIManifest.runtime;
 type Variables = Record<string, Api.PageVariable>;
 type Scalar = ScalarValue;
-export type VariableIssue = { variable: string; code: string };
+type VariableIssue = { variable: string; code: string };
 export type PropertyReader=((reference:RecordReference,field:string,type:string)=>VariableResult)&{clock?:{me?:string;now:string;today:string}};
 export type ResourceValue = import("./collection-input").CollectionInput | import("@platform/ui").StatisticsValue | {kind:"record-set";object:string;records:RecordReference[]} | { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
 export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string;reasons?:import("./rule-engine").RuleIssue[] } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };

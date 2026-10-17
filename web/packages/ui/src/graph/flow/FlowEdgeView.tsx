@@ -8,7 +8,7 @@ import type { LayoutRoute } from "../core/layout/types";
 import type { CanvasPosition } from "../core/types";
 import type { FlowEdge } from "./model";
 
-export type FlowEdgeData = Record<string, unknown> & { definition: FlowEdge; editable: boolean; route?: LayoutRoute };
+type FlowEdgeData = Record<string, unknown> & { definition: FlowEdge; editable: boolean; route?: LayoutRoute };
 export type FlowLineEdge = Edge<FlowEdgeData>;
 export const FlowEdgeInteraction = createContext<{ onInsert: (edge: FlowEdge, position: CanvasPosition) => void }>({ onInsert: () => {} });
 

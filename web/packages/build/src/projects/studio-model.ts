@@ -39,7 +39,7 @@ export function studioContext(route: Route | undefined, resources: readonly Owne
   return { selected, ref, area };
 }
 
-export function resourceArea(item: OwnedResource): StudioArea {
+function resourceArea(item: OwnedResource): StudioArea {
   return studioAreas.find(area => (area.kinds as readonly string[]).includes(item.ref.kind))?.id ?? "assemble";
 }
 

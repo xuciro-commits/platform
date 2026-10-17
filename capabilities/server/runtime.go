@@ -117,13 +117,6 @@ func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assi
 
 func (runtime) Probing() bool { return false }
 
-// closeTask cancels a task a platform app no longer waits for, when the tenant runs the work app.
-func (t *Tenant) closeTask(c platform.Caller, r *pb.ChangeRecord, id string) {
-	if t.tasks != nil {
-		t.tasks.Close(c, r, id)
-	}
-}
-
 func (r runtime) Readable(c platform.Caller, ref string) bool {
 	return r.t.Readable(c.Member, ref, time.Now())
 }

@@ -52,7 +52,7 @@ export function Members() {
 }
 
 /** A member's standing (ADR-0079 §4): active, invited, suspended or left. */
-export function Standing({ status }: { status?: string }) {
+function Standing({ status }: { status?: string }) {
   const s = status || "active";
   return <Tag label={t(s)} tone={s === "active" ? "success" : s === "invited" ? "info" : s === "suspended" ? "warning" : "neutral"} />;
 }

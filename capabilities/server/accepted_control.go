@@ -270,7 +270,14 @@ func (d *stagedDecision) controlHost() *Tenant {
 	if err != nil {
 		unsupportedStagedEffect()
 	}
-	view, err := d.tenant.forkControl(base)
+	d.control = &controlDecision{d.newControlView(base), base}
+	return d.control.host
+}
+
+// Both a first control change and a savepoint use the same private owners.
+// Their predecessor images remain selected by the calling operation.
+func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tenant {
+	view, err := d.tenant.forkControl(images)
 	if err != nil {
 		unsupportedStagedEffect()
 	}
@@ -294,7 +301,6 @@ func (d *stagedDecision) controlHost() *Tenant {
 	if d.tenant.agents != nil {
 		view.agents = d.stateApp(d.tenant.agents).(AgentRuntime)
 	}
-	d.control = &controlDecision{view, base}
 	return view
 }
 
@@ -535,31 +541,7 @@ func (d *stagedDecision) forkControlDecision(original *controlDecision) {
 	if err != nil {
 		unsupportedStagedEffect()
 	}
-	view, err := d.tenant.forkControl(images)
-	if err != nil {
-		unsupportedStagedEffect()
-	}
-	view.records = d.records
-	view.connectors.kernel = d.connectors
-	view.connectors.byID = map[string]*pb.ConnectorDescriptor{}
-	connectors, _ := d.connectors.State()
-	for _, descriptor := range connectors {
-		view.connectors.byID[descriptor.GetConnectorId()] = descriptor
-	}
-	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *kernel.Error {
-		if err := d.tenant.stageEffectAnswer(d, x, out, nil, at); err != nil {
-			if refusal, ok := err.(*kernel.Error); ok {
-				d.failure = refusal
-			} else {
-				unsupportedStagedEffect()
-			}
-		}
-		return d.failure
-	}
-	if d.tenant.agents != nil {
-		view.agents = d.stateApp(d.tenant.agents).(AgentRuntime)
-	}
-	d.control = &controlDecision{view, maps.Clone(original.base)}
+	d.control = &controlDecision{d.newControlView(images), maps.Clone(original.base)}
 }
 
 func (d *stagedDecision) routingTenant() *Tenant {

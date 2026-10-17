@@ -29,7 +29,7 @@ function originalLinkFields(source:RecordSource,link:Api.LinkType) {
  originalInfo(source,link.parent);const child=originalInfo(source,link.child),via=child.fields.find(f=>f.name===link.via);
  if(!via||via.type!=="reference"||via.ref!==link.parent.name)throw Error("The original relationship field is unavailable.");
 }
-export function explorationRelations(source:RecordSource,definitions:readonly Api.Definition[],config:Api.PageGraphExplorer,current:ExplorationReference):ExplorationRelation[] {
+function explorationRelations(source:RecordSource,definitions:readonly Api.Definition[],config:Api.PageGraphExplorer,current:ExplorationReference):ExplorationRelation[] {
  if(config.objects.length>8||config.relations.length>12||!config.objects.some(o=>same(o.object,current.object)))throw Error("The original exploration graph is unavailable or exceeds its budget.");
  originalInfo(source,current.object,config.objects.find(o=>same(o.object,current.object))!.labelField);
  const result:ExplorationRelation[]=[];

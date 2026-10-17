@@ -6,7 +6,7 @@ import type { CSSProperties } from "react";
 import { cn } from "../../lib/cn";
 import type { FlowLane } from "./model";
 
-export type FlowLaneData = { lane: FlowLane; vertical: boolean };
+type FlowLaneData = { lane: FlowLane; vertical: boolean };
 export type FlowLaneShapeNode = Node<FlowLaneData, "lane">;
 
 export function FlowLaneView({ data }: NodeProps<FlowLaneShapeNode>) {

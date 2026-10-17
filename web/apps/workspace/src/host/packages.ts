@@ -7,7 +7,7 @@
 // Data Connection, Agents, AI and Knowledge.
 import type { AppUI } from "@platform/app";
 
-export type PackageLoad = { default: AppUI; contributions?: AppUI[] };
+type PackageLoad = { default: AppUI; contributions?: AppUI[] };
 export type Package = { serves: string[]; role?: string; public?: boolean; load: () => Promise<PackageLoad> };
 
 export const packages: Package[] = [

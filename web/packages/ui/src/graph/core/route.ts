@@ -8,7 +8,7 @@
 import type { CanvasPosition } from "./types";
 
 export type Rect = { x: number; y: number; width: number; height: number };
-export type Side = "top" | "right" | "bottom" | "left";
+type Side = "top" | "right" | "bottom" | "left";
 export type Route = { points: CanvasPosition[]; sourceSide: Side; targetSide: Side };
 /** A line of the drawing's hierarchy names its parent end. `trunk`: the child is a
  * stacked leaf, reached along the parent's trunk. `axis`: the way the parent's
@@ -16,7 +16,7 @@ export type Route = { points: CanvasPosition[]; sourceSide: Side; targetSide: Si
 export type RouteRequest = { id: string; source: string; target: string; hierarchy?: { parent: "source" | "target"; trunk?: boolean; axis?: "vertical" | "horizontal" } };
 
 /** How far a bus runs from the row it serves. */
-export const BUS = 20;
+const BUS = 20;
 const MARGIN = 8, STUB = 14, BEND = 28, PAD = 96, BUDGET = 120;
 
 const cx = (r: Rect) => r.x + r.width / 2, cy = (r: Rect) => r.y + r.height / 2;

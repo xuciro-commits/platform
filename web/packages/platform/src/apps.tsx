@@ -155,7 +155,7 @@ const capabilityTitles: Record<string, string> = {
   queries: "Queries", relationships: "Relationships", runs: "Runs", seed: "Seeding", settings: "Settings", switch: "Agent switch",
   tasks: "Tasks", views: "Views", tickets: "Tickets", orders: "Orders", notes: "Notes",
 };
-export const capabilityTitle = (name: string) => t(capabilityTitles[name] ?? (name.charAt(0).toUpperCase() + name.slice(1)));
+const capabilityTitle = (name: string) => t(capabilityTitles[name] ?? (name.charAt(0).toUpperCase() + name.slice(1)));
 
 /** A list of short facts; nothing in it has a fixed height, so long lists wrap and never overlap. */
 function Facts({ items }: { items: [label: string, value: React.ReactNode][] }) {

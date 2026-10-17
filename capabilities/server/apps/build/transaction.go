@@ -16,26 +16,6 @@ import (
 	"platformserver/platform"
 )
 
-// setSource adapts only frozen legacy assignment inputs. New saved actions
-// and transactions carry Expr; step facts remain named, typed private values.
-func setSource(c platform.Caller, kind, from string, inputs map[string]any, now time.Time) (any, bool, error) {
-	switch {
-	case from == "$me":
-		return c.ID, true, nil
-	case from == "$now":
-		if kind == "date" {
-			return c.Today(now), true, nil
-		}
-		return now.UTC(), true, nil
-	case strings.HasPrefix(from, "="):
-		v, err := literal(kind, strings.TrimPrefix(from, "="))
-		return v, true, err
-	default:
-		v, ok := inputs[from]
-		return v, ok && v != nil, nil
-	}
-}
-
 func decodeTxnValues(raw json.RawMessage) (map[string]any, error) {
 	var value map[string]any
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))

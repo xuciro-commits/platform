@@ -38,7 +38,7 @@ export type FieldInfo = Api.FieldInfo;
 export type State = Api.State;
 export type Lifecycle = Api.LifecycleInfo;
 export type EntityInfo = Api.EntityInfo;
-export type Stamp = Api.Stamp;
+type Stamp = Api.Stamp;
 export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
 export type RecordQuery = Omit<Api.Query,"domain"> & {domain?:unknown[]};
 export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
@@ -685,7 +685,7 @@ const cellOf = (f: FieldInfo, v: unknown) => f.type === "money" && v && typeof v
  * changed in some cells. Lines are matched by the first column whose values
  * are unique on both sides (a booking, an account), else by position.
  */
-export function LinesChange({ field, before, after }: { field: FieldInfo; before: unknown; after: unknown }) {
+function LinesChange({ field, before, after }: { field: FieldInfo; before: unknown; after: unknown }) {
   const columns = field.fields ?? [];
   const was = Array.isArray(before) ? (before as Row[]) : [], is = Array.isArray(after) ? (after as Row[]) : [];
   const unique = (rows: Row[], name: string) => rows.every((r) => ["string", "number"].includes(typeof r[name]) && r[name] !== "")

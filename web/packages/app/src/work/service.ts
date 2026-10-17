@@ -16,7 +16,7 @@ export function approvalDecisionReason(request:Api.ApprovalRequest,member:string
  if(!who)return "You are not a current approver for this request.";
  if((level.approved??[]).includes(who))return "Your approval is already recorded at this level. Other approvers are still awaited.";
 }
-export function approvalTaskID(task:Api.InboxTask):string|undefined {
+function approvalTaskID(task:Api.InboxTask):string|undefined {
  const id=task.ref?.startsWith("work.approval/")?task.ref.slice("work.approval/".length):undefined;
  return validID(id)?id:undefined;
 }
@@ -28,7 +28,7 @@ export function approvalTasks(items:readonly Api.InboxTask[],member:string):Api.
  if(new Set(tasks.map(approvalTaskID)).size!==tasks.length)throw Error("The original approval inbox has duplicate request identities.");
  return tasks;
 }
-export function originalApproval(task:Api.InboxTask,value:unknown):Api.ApprovalRequest {
+function originalApproval(task:Api.InboxTask,value:unknown):Api.ApprovalRequest {
  const request=value as Api.ApprovalRequest;
  if(!request||request.id!==approvalTaskID(task)||request.archived||!Number.isSafeInteger(request.revision)||request.revision<1||request.state!=="pending"||!validID(request.target)||!validID(request.requester)||!validID(request.action)||typeof request.title!=="string"||!Array.isArray(request.levels)||!Number.isSafeInteger(request.level)||request.level<0||request.level>=request.levels.length||request.levels.some(level=>!level||typeof level.title!=="string"||!Array.isArray(level.approvers)||level.approved!==null&&!Array.isArray(level.approved)||level.approvers.some(id=>!validID(id))||(level.approved??[]).some(id=>!validID(id))))throw Error("The original approval request is unavailable or has changed.");
  // Original Go nil Approved slices serialize as null and mean no approvals.
