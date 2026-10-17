@@ -26,8 +26,8 @@ function AISession({config,functionBinding,record,recordType,status,active,live,
   try{if(await reader.request(next)&&valid()){setRequests(old=>config.kind==="chatbot"?[...old,next]:[next]);setAttempt(undefined);if(config.kind==="chatbot")onQuestion?.("");}}catch(err){if(valid())setError(err instanceof Error?t(err.message):t("The AI request was not confirmed."));}finally{if(valid())setBusy(false);}
  };
  return <div className="grid gap-3"><AIResult kind={config.kind} turns={turns} question={text} suggestions={config.suggestions??[]} disabled={!live||!enabled||!valid()||pending||!host.can("build.function-call.start")} busy={busy} error={error} onQuestion={value=>{if(valid())onQuestion?.(value);}} onRun={value=>void run(value)} onReset={()=>{if(valid()){setRequests([]);setAttempt(undefined);setError(undefined);}}} onRetry={attempt?()=>void run(undefined,true):undefined}/>{answers.map((answer,index)=>answer.data?.contract.proposal?<ProposalReview key={requests[index]!.id} call={answer.data} live={live&&enabled} active={valid} onChanged={()=>void answer.refetch()}/>:null)}
-  {recordType&&live&&valid()&&<section aria-label={t("Function call history")}><RecordList source={host.source} type="build.function-call" fields={["function","version","state","source"]}
+  {recordType&&live&&valid()&&<Panel title={t("Function call history")} aria-label={t("Function call history")}><RecordList source={host.source} type="build.function-call" fields={["function","version","state","source"]}
    domain={[["source","=",`${recordType}/${record.id}`],["function","=",fn.ref.name],["version","=",version]]}
-   onOpen={call=>openRecord({type:"build.function-call",id:call.id},{window:"tab"})}/></section>}
+   onOpen={call=>openRecord({type:"build.function-call",id:call.id},{window:"tab"})}/></Panel>}
  </div>;
 }

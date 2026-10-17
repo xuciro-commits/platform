@@ -97,6 +97,7 @@ test("a builder assembles proposal review and a person adopts through the origin
     await expect(page.getByRole("region", { name: "Proposal review", exact: true })).toBeVisible();
     const history = page.getByRole("region", { name: "Function call history", exact: true });
     await expect(history.getByRole("row").filter({ hasText: `${object.type}/${sourceID}` })).toBeVisible();
+    await shots(page, history, "function-call-history", info);
     await page.getByRole("row").filter({ has: page.getByRole("cell", { name: "57", exact: true }) }).click();
     await expect(page.getByText("Original AI result", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Proposal review", exact: true })).toHaveCount(0);
