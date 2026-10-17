@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { DataTable, RecordForm, applyFilters, columnsFor, defineEntity, field, recordSchema } from "../index";
+import { z } from "zod";
+import { DataTable, EntityForm, RecordForm, applyFilters, columnsFor, defineEntity, field, recordSchema } from "../index";
 
 afterEach(cleanup);
 Element.prototype.getBoundingClientRect = () => ({ width: 800, height: 280, top: 0, left: 0, right: 800, bottom: 280, x: 0, y: 0, toJSON: () => ({}) });
@@ -85,6 +86,37 @@ test("a record form uses field editors and reports field errors", async () => {
   fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "raw" } });
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
   expect(submit).toHaveBeenCalledWith({ name: "Bolt", kind: "raw", supplier: "buyer@example.com" }); // one value: the form never leaks the DOM event
+});
+
+test("clearing existing required and optional fields stays visible through validation and refusal", async () => {
+  const submit = vi.fn(() => false);
+  render(<RecordForm entity={material} keys={["name", "supplier"]} onSubmit={submit}
+    defaultValues={{ name: "Bolt", supplier: "buyer@example.com" }} />);
+  const name = screen.getByLabelText(/Name/) as HTMLInputElement;
+  const supplier = screen.getByLabelText("Supplier") as HTMLInputElement;
+  fireEvent.change(name, { target: { value: "" } });
+  fireEvent.change(supplier, { target: { value: "" } });
+  expect(name.value).toBe("");
+  expect(supplier.value).toBe("");
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
+  expect(submit).not.toHaveBeenCalled();
+  expect(screen.getByText("Enter a value.")).toBeTruthy();
+  fireEvent.change(name, { target: { value: "New bolt" } });
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
+  expect(submit).toHaveBeenCalledWith({ name: "New bolt", supplier: undefined });
+  expect(screen.getByRole("alert").textContent).toBe("The request was not confirmed. Your input is retained.");
+  expect(name.value).toBe("New bolt");
+  expect(supplier.value).toBe("");
+});
+
+test("schema forms explain common validation errors and preserve explicit business messages", async () => {
+  const schema = z.object({ name: z.string().min(3), quantity: z.number().min(1), account: z.string().min(3, "Use the registered account name.") });
+  render(<EntityForm schema={schema} fields={[{ name: "name", label: "Name" }, { name: "quantity", label: "Quantity", kind: "number" }, { name: "account", label: "Account" }]}
+    defaultValues={{ name: "x", quantity: 0, account: "x" }} onSubmit={vi.fn()} />);
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
+  expect(screen.getByText("Use at least 3 characters.")).toBeTruthy();
+  expect(screen.getByText("Value must be at least 1.")).toBeTruthy();
+  expect(screen.getByText("Use the registered account name.")).toBeTruthy();
 });
 
 // Words a person types, with no list to choose from: the editor of a tags field

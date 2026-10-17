@@ -1,4 +1,4 @@
-import { expect, shots, slug, test } from "./kit";
+import { expect, pageUIProfile, shots, slug, test } from "./kit";
 
 test("an application authors related drafts and a template before its first release", async ({ page, builder, operator, editor }, testInfo) => {
   test.setTimeout(180_000);
@@ -161,4 +161,35 @@ test("an application authors related drafts and a template before its first rele
   await expect(variablesPanel.getByRole("row").filter({ hasText: "Follow-up text" }).getByRole("cell"))
     .toHaveText(["Follow-up text", "string", JSON.stringify({ status: "empty" })]);
   await shots(page, variablesPanel, "page-variable-values", testInfo);
+});
+
+test("a narrow workspace can search applications and reopen the empty page widget library", async ({ page, builder, editor }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await builder.open(page, "/projects");
+  await expect(page.getByRole("searchbox", { name: "Search projects", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New application", exact: true })).toBeEnabled();
+  await shots(page, page.locator("body"), "applications-narrow", testInfo);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Workspace menu", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Dark", exact: true })).toBeVisible();
+  await shots(page, page.locator("body"), "workspace-menu-narrow", testInfo);
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  const { type } = await builder.object({ title: "Empty page records", fields: [{ name: "title", title: "Title", type: "text" }] });
+  const { id } = await builder.page({ title: "Empty page", object: type, sections: [],
+    document: { formatVersion: 2, uiProfile: pageUIProfile, root: "root", nodes: { root: { kind: "rows", children: [] } } },
+  });
+  await editor.open(builder, id);
+  if (await editor.inspector.isVisible()) await page.getByRole("button", { name: "Close inspector panel", exact: true }).click();
+  if (await editor.tree.isVisible()) await page.getByRole("button", { name: "Close structure panel", exact: true }).click();
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.getByRole("button", { name: "Add widget", exact: true }).click();
+    await expect(editor.tree).toBeVisible();
+    await expect(editor.tree.getByRole("tab", { name: "Widgets", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(editor.tree.getByRole("searchbox", { name: "Search widgets", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close structure panel", exact: true }).click();
+  }
+  await shots(page, page.locator("body"), "empty-page-narrow", testInfo);
 });

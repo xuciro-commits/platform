@@ -2,7 +2,7 @@ import {useInputDrafts} from "../fields/draft";
 import {useTheme} from "../themes/theme";
 import { Command } from "cmdk";
 import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SerializedDockview } from "dockview-react";
-import { Bell, ChevronDown, Clock, Grid2x2, Home as HomeIcon, LayoutGrid, PanelLeft, Search, Sparkles, Star } from "lucide-react";
+import { Bell, ChevronDown, Clock, Ellipsis, Grid2x2, Home as HomeIcon, LayoutGrid, PanelLeft, Search, Sparkles, Star } from "lucide-react";
 import { ContextMenu, DropdownMenu, Menubar } from "radix-ui";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
@@ -662,6 +662,22 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               </Menubar.Menu>
             ))}
           </Menubar.Root>
+          {compact && <DropdownMenu.Root>
+            <DropdownMenu.Trigger aria-label={t("Workspace menu")} className="grid size-7 shrink-0 place-items-center rounded-sm text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover">
+              <Ellipsis className="size-4" />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content align="start" sideOffset={4} className={cn(menuPanel, "max-h-[70dvh] max-w-[calc(100vw-16px)] overflow-auto")}>
+                {[...menus, ...builtInMenus].map((menu, index) => <DropdownMenu.Group key={menu.label}>
+                  {index > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border" />}
+                  <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-muted">{menu.label}</DropdownMenu.Label>
+                  {menu.items.map((item) => <DropdownMenu.Item key={item.label} disabled={item.disabled} onSelect={item.onSelect} className={cn(menuItem, "h-auto min-h-8 gap-3 py-1 pl-2")}>
+                    <span className="min-w-0 break-words">{item.label}</span>{item.shortcut && <span className="ml-auto shrink-0 text-xs text-muted">{item.shortcut}</span>}
+                  </DropdownMenu.Item>)}
+                </DropdownMenu.Group>)}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>}
           <button type="button" aria-label={t("Search and commands")} onClick={() => setPaletteOpen(true)}
             className="mx-auto flex h-6 w-6 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-background text-sm text-muted hover:text-foreground lg:w-72 lg:justify-start lg:px-2">
             <Search className="size-3.5" /><span className="max-lg:hidden">{t("Search and commands")}</span><kbd className="ml-auto text-xs max-lg:hidden">⌘K</kbd>
@@ -684,9 +700,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
                     const key = routeKey(item.route);
                     return (
                       <button key={key} type="button" onClick={() => { open(item.route); setMobileNavOpen(false); }} aria-current={key === active ? "page" : undefined}
-                        className={cn("flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-row-hover [&_svg]:size-3.5",
+                        className={cn("flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-row-hover [&_svg]:size-3.5 [&_svg]:shrink-0",
                           key === active && "bg-row-selected font-medium")}>
-                        {item.icon}{item.label}<span className="ml-auto">{item.badge}</span>
+                        {item.icon}<span className="min-w-0 flex-1 break-words">{item.label}</span>{item.badge != null && <span className="shrink-0">{item.badge}</span>}
                       </button>
                     );
                   })}

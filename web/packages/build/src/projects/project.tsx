@@ -39,9 +39,9 @@ export function ProjectsList() {
   return <div className="grid min-w-0 gap-4">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="text-xl font-semibold tracking-tight">{t("Applications")}</h1><p className="text-sm text-muted">{t("Projects organize drafts. Applications are delivered as one closed artifact.")}</p></div>
-      <div className="flex items-center gap-2">
-        <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="w-56" />
-        {builder && create.available && <Button variant="primary" onClick={() => create.take()}><Plus />{t("New application")}</Button>}
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+        <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 basis-56 sm:w-56 sm:flex-none" />
+        {builder && create.available && <Button className="shrink-0" variant="primary" onClick={() => create.take()}><Plus />{t("New application")}</Button>}
       </div>
     </div>
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}

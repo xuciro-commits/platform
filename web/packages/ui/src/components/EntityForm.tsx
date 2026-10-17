@@ -77,8 +77,25 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
 }) {
   const inputs=useInputDrafts();
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
+  const resolve = zodResolver(schema as z.ZodType<Record<string, unknown>, Record<string, unknown>>, { error: issue => {
+    switch (issue.code) {
+      case "invalid_type": return t(issue.input === undefined ? "Enter a value." : "Enter a valid value.");
+      case "invalid_value": return t("Choose a listed value.");
+      case "too_small":
+        if (issue.origin === "string") return t("Use at least {count} characters.", { count: Number(issue.minimum) });
+        if (issue.origin === "number") return t(issue.inclusive ? "Value must be at least {value}." : "Value must be greater than {value}.", { value: String(issue.minimum) });
+        break;
+      case "too_big":
+        if (issue.origin === "string") return t("Use at most {count} characters.", { count: Number(issue.maximum) });
+        if (issue.origin === "number") return t(issue.inclusive ? "Value must be at most {value}." : "Value must be less than {value}.", { value: String(issue.maximum) });
+        break;
+    }
+    return t("Enter a valid value.");
+  } });
+  // Controller falls back to defaultValues for undefined; keep cleared editors as null until validation.
   const { control, handleSubmit, setValue, setError, trigger, reset, formState: { errors, isSubmitting, isDirty } } =
-    useForm<Record<string, unknown>>({ mode: "onTouched", resolver: zodResolver(schema as never) as never, defaultValues: defaultValues as never });
+    useForm<Record<string, unknown>>({ mode: "onTouched", resolver: (values, context, options) =>
+      resolve(Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value === null ? undefined : value])), context, options), defaultValues: defaultValues as never });
   const { confirmOwnDiscard, markSaved } = useUnsavedChanges(isDirty || !!locked, () => {
     reset(defaultValues as never); setFailure(""); inputs?.reject();
   }, isSubmitting);
@@ -86,7 +103,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
   // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
   const conditions = [...new Set(fields.flatMap(({name,type}) => [name,...(type.when ? [type.when.field] : [])]))];
   const watched = useWatch({ control, name: conditions });
-  const current = Object.fromEntries(conditions.map((name, i) => [name, watched[i]]));
+  const current = Object.fromEntries(conditions.map((name, i) => [name, watched[i] ?? undefined]));
   const valuesChanged = useRef(onValuesChange); valuesChanged.current = onValuesChange;
   const valueSignature = JSON.stringify(current);
   useEffect(() => { valuesChanged.current?.(JSON.parse(valueSignature)); }, [valueSignature]);
@@ -131,7 +148,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
                     {type.display(field.value, (defaultValues ?? {}) as never)}
                   </div>
                 ) : (
-                  range&&endField?<DateRangeInput id={id} start={String(field.value??"")} end={String(current[endField.name]??"")} startLabel={type.label} endLabel={endField.type.label} inclusive={range.inclusive} invalid={!!error||!!endError} describedBy={ariaDescribedBy} onChange={(start,end)=>{setValue(name,start,{shouldTouch:true,shouldDirty:true});setValue(endField.name,end,{shouldTouch:!!end,shouldDirty:true});void trigger(end?[name,endField.name]:[name]);}}/>:type.editor?.({ id, value: field.value, onChange: value=>{field.onChange(value);const dependent=fields.filter(f=>errors[f.name]&&(f.type.input?.constraints?.before===name||f.type.input?.constraints?.after===name||issues?.some(issue=>issue.path[0]===f.name&&issue.relatedPaths?.some(path=>path[0]===name)))).map(f=>f.name);if(dependent.length)void trigger(dependent);}, invalid: !!error, describedBy: ariaDescribedBy }) ??
+                  range&&endField?<DateRangeInput id={id} start={String(field.value??"")} end={String(current[endField.name]??"")} startLabel={type.label} endLabel={endField.type.label} inclusive={range.inclusive} invalid={!!error||!!endError} describedBy={ariaDescribedBy} onChange={(start,end)=>{setValue(name,start,{shouldTouch:true,shouldDirty:true});setValue(endField.name,end,{shouldTouch:!!end,shouldDirty:true});void trigger(end?[name,endField.name]:[name]);}}/>:type.editor?.({ id, value: field.value ?? undefined, onChange: value=>{field.onChange(value ?? null);const dependent=fields.filter(f=>errors[f.name]&&(f.type.input?.constraints?.before===name||f.type.input?.constraints?.after===name||issues?.some(issue=>issue.path[0]===f.name&&issue.relatedPaths?.some(path=>path[0]===name)))).map(f=>f.name);if(dependent.length)void trigger(dependent);}, invalid: !!error, describedBy: ariaDescribedBy }) ??
                   type.display(field.value, (defaultValues ?? {}) as never)
                 )}
               </span>

@@ -72,6 +72,25 @@ test("DataTable shows loading state when loading is true and data is empty", () 
   expect(screen.getByText("Loading…")).toBeTruthy();
 });
 
+test("DataTable counts header rows and lets Tab leave either edge of an editable table", () => {
+  const onCellEdit = vi.fn();
+  const editable: ColumnDef<Row, any>[] = [{ accessorKey: "name", header: "Name", meta: { field: {
+    label: "Name", editor: ({ value, onChange }: any) => <input aria-label="Cell draft" value={value ?? ""} onChange={event => onChange(event.target.value)} />,
+  } as any } }];
+  render(<><Button>Before table</Button><DataTable data={rows.slice(0, 2)} columns={editable} getRowId={row => row.id} onCellEdit={onCellEdit} /><Button>After table</Button></>);
+  expect(screen.getByRole("table").getAttribute("aria-rowcount")).toBe("3");
+  expect(screen.getAllByRole("row").map(row => row.getAttribute("aria-rowindex"))).toEqual(["1", "2", "3"]);
+  const cells = screen.getAllByRole("cell");
+  expect(fireEvent.keyDown(cells[0]!, { key: "Tab", shiftKey: true })).toBe(true);
+  expect(fireEvent.keyDown(cells[1]!, { key: "Tab" })).toBe(true);
+  expect(fireEvent.keyDown(cells[0]!, { key: "Tab" })).toBe(false);
+  fireEvent.doubleClick(cells[1]!);
+  fireEvent.change(screen.getByLabelText("Cell draft"), { target: { value: "Last edited" } });
+  expect(fireEvent.keyDown(screen.getByLabelText("Cell draft"), { key: "Tab" })).toBe(true);
+  expect(onCellEdit).toHaveBeenCalledWith(rows[1], "name", "Last edited");
+  expect(screen.queryByLabelText("Cell draft")).toBeNull();
+});
+
 test("DataTable shows custom empty text when not loading and data is empty", () => {
   render(<DataTable data={[]} columns={columns} getRowId={(r) => r.id} empty="Nothing here" />);
   expect(screen.getByText("Nothing here")).toBeTruthy();
@@ -377,6 +396,33 @@ test("incomplete numbers survive inspector switches and block the owning form", 
   expect(screen.getByTestId("input-state").textContent).toBe("valid");
   fireEvent.click(screen.getByRole("button",{name:"Commit"}));
   await waitFor(()=>expect(submit).toHaveBeenCalledOnce());
+});
+
+test("number inputs report actual values and bounds to assistive technology", () => {
+  render(<Input type="number" aria-label="Quantity" defaultValue="" optional min={2} max="10" />);
+  const input = screen.getByRole("spinbutton", { name: "Quantity" });
+  expect(input.getAttribute("aria-valuenow")).toBeNull();
+  expect(input.getAttribute("aria-valuemin")).toBe("2");
+  expect(input.getAttribute("aria-valuemax")).toBe("10");
+  fireEvent.change(input, { target: { value: "3" } });
+  expect(input.getAttribute("aria-valuenow")).toBe("3");
+  fireEvent.change(input, { target: { value: "-" } });
+  expect(input.getAttribute("aria-valuenow")).toBeNull();
+  fireEvent.change(input, { target: { value: "" } });
+  expect(input.getAttribute("aria-valuenow")).toBeNull();
+});
+
+test("JSON textareas preserve their default value and editable drafts", () => {
+  const onChange = vi.fn();
+  render(<Textarea parse="json" aria-label="Payload" defaultValue={'{"quantity":2}'} onChange={onChange} />);
+  const input = screen.getByRole("textbox", { name: "Payload" }) as HTMLTextAreaElement;
+  expect(input.value).toBe('{"quantity":2}');
+  fireEvent.change(input, { target: { value: "{" } });
+  expect(input.value).toBe("{");
+  expect(onChange).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: '{"quantity":3}' } });
+  expect(input.value).toBe('{"quantity":3}');
+  expect(onChange).toHaveBeenCalledOnce();
 });
 
 test("a JSON form waits for its request and retains the rejected input", async () => {

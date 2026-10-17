@@ -63,6 +63,7 @@ class FixtureClient extends EdgeClient {
     if (path === "/v1/runs") result = [sampleRun];
     else if (path === "/v1/agents") result = [{ id: "catalog.advisor", app: "catalog", title: "Sample advisor", tools: [], instructions: "Local fixture only.", budget: {} }];
     else if (path === "/v1/memories" || path.startsWith("/v1/knowledge")) result = [];
+    else if (path === "/v1/provides" || path.startsWith("/v1/provides?")) result = [];
     else if (path.startsWith("/v1/search")) result = sampleRecords.map((record) => ({ type: sampleObject.type, id: record.id, title: record.title }));
     else if (path === "/v1/records/agent.run/RUN-SAMPLE") result = { record: sampleRun };
     else if (path.startsWith("/v1/chain/")) result = { nodes: [{ ref: "catalog.sample/SAMPLE-001", title: "Incoming order", kind: "record" }, { ref: "agent.run/RUN-SAMPLE", title: "Sample review", kind: "run", state: "done" }], edges: [{ from: "catalog.sample/SAMPLE-001", to: "agent.run/RUN-SAMPLE" }] };

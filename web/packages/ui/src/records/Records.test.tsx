@@ -3,12 +3,26 @@ import { afterEach, expect, test, vi } from "vitest";
 import { RecordList, RecordPage, RecordLinks, RecordStatus, useRecordView, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
+import { RecordWorkspace } from "./RecordWorkspace";
 afterEach(cleanup);
 Element.prototype.getBoundingClientRect = () => ({ width: 800, height: 280, top: 0, left: 0, right: 800, bottom: 280, x: 0, y: 0, toJSON: () => ({}) });
 for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as const) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => value });
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+
+test("record workspace marks the row whose details are open and clears it on return", async () => {
+  const data = [record("A"), record("B")];
+  const source: RecordSource = { entity: () => entity, list: async () => ({ records: data, total: 2 }), get: vi.fn() };
+  const props = { title: "Items", source, type: entity.type, onSelect: vi.fn(), detail: (id: string) => <p>Details for {id}</p> };
+  const view = render(<RecordWorkspace {...props} selected="A" />);
+  await waitFor(() => expect(screen.getByRole("row", { name: "A", selected: true })).toBeTruthy());
+  view.rerender(<RecordWorkspace {...props} selected="B" />);
+  expect(screen.getByRole("row", { name: "B", selected: true })).toBeTruthy();
+  expect(screen.getByRole("row", { name: "A" }).getAttribute("aria-selected")).toBe("false");
+  view.rerender(<RecordWorkspace {...props} />);
+  expect(screen.queryByRole("row", { selected: true })).toBeNull();
+});
 
 test("record view refresh retains its current value while revisions and reloads ignore older replies", async () => {
   const requests: ReturnType<typeof pending<RecordView>>[] = [];

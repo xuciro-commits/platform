@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
 import type { EditorProps } from "../fields/types";
+import { ContentTabs } from "../layout/ContentTabs";
 
 /** Renders standard Markdown text safely into React elements without dangerous HTML. */
 export function Markdown({ content = "", className }: { content?: string; className?: string }) {
@@ -152,6 +153,7 @@ export function MarkdownEditor({
   value = "",
   onChange,
   invalid,
+  describedBy,
   autoFocus,
   placeholder,
   rows = 8,
@@ -160,50 +162,22 @@ export function MarkdownEditor({
 
   return (
     <div className="flex flex-col rounded-md border border-border bg-surface text-sm">
-      <div className="flex items-center justify-between border-b border-border bg-muted/10 px-2 py-1">
-        <div className="flex gap-1" role="tablist" aria-label={t("Editor tabs")}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "write"}
-            onClick={() => setTab("write")}
-            className={cn(
-              "rounded px-2 py-0.5 text-xs font-medium transition-colors",
-              tab === "write" ? "bg-surface text-foreground shadow-xs font-semibold" : "text-muted hover:text-foreground"
-            )}
-          >
-            {t("Write")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "preview"}
-            onClick={() => setTab("preview")}
-            className={cn(
-              "rounded px-2 py-0.5 text-xs font-medium transition-colors",
-              tab === "preview" ? "bg-surface text-foreground shadow-xs font-semibold" : "text-muted hover:text-foreground"
-            )}
-          >
-            {t("Preview")}
-          </button>
-        </div>
-        <span className="text-[11px] text-muted">
-          {(value ?? "").length} {t("characters")}
-        </span>
-      </div>
-
-      {tab === "write" ? (
+      <ContentTabs label={t("Editor tabs")} compact value={tab} onChange={(next) => setTab(next as "write" | "preview")}
+        className="flex-none [&>div:first-child]:bg-muted/10"
+        actions={<span className="pr-2 text-[11px] text-muted">{(value ?? "").length} {t("characters")}</span>}
+        items={[{ id: "write", title: t("Write"), content: tab === "write" ? (
         <textarea
           id={id}
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value || undefined)}
           aria-invalid={invalid}
+          aria-describedby={describedBy}
           autoFocus={autoFocus}
           placeholder={placeholder ?? t("Write markdown here…")}
           rows={rows}
           className="w-full resize-y rounded-b-md bg-transparent p-2.5 font-mono text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-      ) : (
+      ) : null }, { id: "preview", title: t("Preview"), content: tab === "preview" ? (
         <div className="min-h-[140px] max-h-[360px] overflow-y-auto p-3">
           {value ? (
             <Markdown content={value} />
@@ -211,7 +185,7 @@ export function MarkdownEditor({
             <p className="text-xs italic text-muted">{t("Nothing to preview.")}</p>
           )}
         </div>
-      )}
+      ) : null }]} />
     </div>
   );
 }

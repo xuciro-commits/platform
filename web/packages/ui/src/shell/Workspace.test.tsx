@@ -112,6 +112,26 @@ test("the first asynchronous navigation opens and later refreshes preserve manua
   expect(screen.getByRole("button", { name: "Toggle navigation" }).getAttribute("aria-expanded")).toBe("false");
 });
 
+test("the compact workspace keeps application and built-in menus keyboard accessible and guards dirty closes", async () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 639px)", media: query, addEventListener() {}, removeEventListener() {} }));
+  const run = vi.fn();
+  render(<Workspace product="Compact" storageKey="workspace:compact" views={views} home={{ view: "home" }} nav={[]}
+    menus={[{ label: "Application", items: [{ label: "Run report", onSelect: run }] }]} />);
+  const input = await screen.findByLabelText("Draft A");
+  fireEvent.change(input, { target: { value: "keep mobile draft" } });
+  const trigger = screen.getByRole("button", { name: "Workspace menu" });
+  fireEvent.keyDown(trigger, { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Run report" }));
+  expect(run).toHaveBeenCalledOnce();
+  fireEvent.keyDown(trigger, { key: "Enter" });
+  expect((await screen.findByRole("menuitem", { name: "Open beside" })).hasAttribute("data-disabled")).toBe(true);
+  expect(screen.getByRole("menuitem", { name: "Dark" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("menuitem", { name: "Close all" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
+  expect((screen.getByLabelText("Draft A") as HTMLInputElement).value).toBe("keep mobile draft");
+  expect(discard).not.toHaveBeenCalled();
+});
+
 test("application navigation reuses its document while different applications keep separate tabs", async () => {
   await start();
   act(() => api.open({ view: "project", params: { id: "one", area: "model" } }));

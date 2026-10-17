@@ -110,6 +110,26 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
       if (compact) { dock?.onOpenChange?.(false); setLayout(layout => ({ ...layout, dockOpen: false })); setFocusedPane("right"); }
     }
   }, [right?.scope, right?.value, right?.open, compact]);
+  const previousStructureOpen = useRef(left?.open);
+  useEffect(() => {
+    const wasOpen = previousStructureOpen.current;
+    previousStructureOpen.current = left?.open;
+    if (left?.open === false) {
+      setFocusedPane(pane => pane === "left" ? undefined : pane);
+      if (document.getElementById(`${prefix}-left`)?.contains(document.activeElement)) document.getElementById(`${prefix}-toggle-left`)?.focus();
+    } else if (left?.open === true && (wasOpen !== true || compact)) {
+      setLayout(layout => ({ ...layout, leftOpen: true }));
+      if (compact) { setDockOpen(false); setFocusedPane("left"); }
+      const frame = requestAnimationFrame(() => document.getElementById(`${prefix}-left`)?.focus());
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [left?.open, compact]);
+  const previousFocusedPane = useRef(focusedPane);
+  useEffect(() => {
+    const previous = previousFocusedPane.current;
+    previousFocusedPane.current = focusedPane;
+    if (compact && previous === "left" && focusedPane !== "left") left?.onOpenChange?.(false);
+  }, [compact, focusedPane]);
   const panel = (side: Side) => side === "left" ? left : side === "right" ? right : dock;
   const limits = (side: Side) => ({ min: panel(side)?.min ?? (side === "dock" ? 120 : 200), max: panel(side)?.max ?? (side === "dock" ? 520 : 560) });
   const baseSize = (side: Side) => Math.max(limits(side).min, Math.min(limits(side).max, layout[side]));

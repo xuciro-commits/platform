@@ -143,6 +143,8 @@ export function DataTable<T>({
     else if (nc >= leaf.length && nr < rows.length - 1) { nr += 1; nc = 0; }
     go(nr, nc);
   };
+  const canHop = (r: number, c: number, backwards: boolean) => backwards ? r > 0 || c > 0 : r < rows.length - 1 || c < leaf.length - 1;
+  const headerRows = table.getHeaderGroups().length;
 
   const page = () => Math.max(1, Math.floor((scroller.current?.clientHeight ?? 480) / rh) - 2);
   const filterTo = (v: string) => { setGlobalFilter(v); if (scroller.current) scroller.current.scrollTop = 0; };
@@ -150,9 +152,9 @@ export function DataTable<T>({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {(searchable || toolbar) && (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {searchable && (
-            <div className="relative w-64">
+            <div className="relative min-w-0 max-w-full basis-64">
               <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
               <Input aria-label={t("Filter rows")} placeholder={t("Filter")} value={globalFilter}
                 onChange={(e) => filterTo(e.target.value)}
@@ -160,15 +162,15 @@ export function DataTable<T>({
                 className="pl-7" />
             </div>
           )}
-          <span className="text-xs text-muted tabular-nums" aria-live="polite">{t("{n} rows", { n: rows.length.toLocaleString() })}</span>
-          <div className="ml-auto flex items-center gap-2">{toolbar}</div>
+          <span className="shrink-0 text-xs text-muted tabular-nums" aria-live="polite">{t("{n} rows", { n: rows.length.toLocaleString() })}</span>
+          {toolbar && <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">{toolbar}</div>}
         </div>
       )}
-      <div ref={scroller} role="table" aria-rowcount={rows.length} aria-colcount={leaf.length} aria-busy={loading || undefined}
+      <div ref={scroller} role="table" aria-rowcount={rows.length + headerRows} aria-colcount={leaf.length} aria-busy={loading || undefined}
         className="overflow-auto rounded-md border border-border bg-surface" style={{ height, scrollbarGutter: "stable" }}>
         <div role="rowgroup" className="sticky top-0 z-10 border-b border-border bg-surface" style={{ minWidth }}>
-          {table.getHeaderGroups().map((group) => { let columnIndex = 0; return (
-            <div role="row" key={group.id} className="grid" style={{ gridTemplateColumns: template }}>
+          {table.getHeaderGroups().map((group, index) => { let columnIndex = 0; return (
+            <div role="row" aria-rowindex={index + 1} key={group.id} className="grid" style={{ gridTemplateColumns: template }}>
               {group.headers.map((header) => {
                 const ci = columnIndex; columnIndex += header.colSpan;
                 if(mountedColumns&&!mountedColumns.has(ci))return null;
@@ -218,7 +220,7 @@ export function DataTable<T>({
               const row = rows[item.index]!;
               const selected = selectedIds?.includes(row.id)??(selectedId != null && row.id === selectedId);
               return (
-                <div role="row" key={row.id} data-row={item.index} aria-rowindex={item.index + 1} aria-selected={selected} tabIndex={browse ? 0 : undefined}
+                <div role="row" key={row.id} data-row={item.index} aria-rowindex={item.index + headerRows + 1} aria-selected={selected} tabIndex={browse ? 0 : undefined}
                   onClick={browse ? (e) => { if (!window.getSelection()?.toString()) onRowClick?.(row.original,{shift:e.shiftKey,toggle:e.ctrlKey||e.metaKey}); } : undefined}
                   onContextMenu={onRowContextMenu ? (e) => { e.preventDefault(); onRowContextMenu(row.original); } : undefined}
                   onKeyDown={browse ? (e) => {
@@ -265,7 +267,10 @@ export function DataTable<T>({
                             }
                             return;
                           }
-                          if (e.key === "Tab") { e.preventDefault(); hop(item.index, ci, e.shiftKey ? -1 : 1); return; }
+                          if (e.key === "Tab") {
+                            if (canHop(item.index, ci, e.shiftKey)) { e.preventDefault(); hop(item.index, ci, e.shiftKey ? -1 : 1); }
+                            return;
+                          }
                           const step: Record<string, [number, number]> = {
                             ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0],
                             Home: [0, -ci], End: [0, leaf.length - 1 - ci], PageUp: [-page(), 0], PageDown: [page(), 0],
@@ -282,7 +287,11 @@ export function DataTable<T>({
                             className="relative z-20 min-w-full rounded-md bg-surface p-0.5 shadow-lg ring-1 ring-border"
                             onKeyDown={(e) => {
                               if (e.nativeEvent.isComposing) return;
-                              if (e.key === "Tab") { e.preventDefault(); e.stopPropagation(); close(true); hop(item.index, ci, e.shiftKey ? -1 : 1); }
+                              if (e.key === "Tab") {
+                                e.stopPropagation();
+                                if (canHop(item.index, ci, e.shiftKey)) { e.preventDefault(); close(true); hop(item.index, ci, e.shiftKey ? -1 : 1); }
+                                else { e.currentTarget.closest<HTMLElement>("[data-nav]")?.focus(); close(true); }
+                              }
                               else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); close(true, true); }
                               else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(false, true); }
                             }}

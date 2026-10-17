@@ -100,8 +100,8 @@ export const longText = (o: Common & { rows?: number; placeholder?: string }): F
 export const markdown = (o: Common & { rows?: number; placeholder?: string }): FieldType<string> => ({
   ...text(o), type: "markdown",
   display: (v) => (empty(v) ? muted : <Markdown content={v!} />),
-  editor: ({ id, value, onChange, invalid, autoFocus }) => (
-    <MarkdownEditor id={id} value={value} onChange={onChange} invalid={invalid} autoFocus={autoFocus} placeholder={o.placeholder} rows={o.rows} />
+  editor: ({ id, value, onChange, invalid, autoFocus, describedBy }) => (
+    <MarkdownEditor id={id} value={value} onChange={onChange} invalid={invalid} autoFocus={autoFocus} describedBy={describedBy} placeholder={o.placeholder} rows={o.rows} />
   ),
 });
 

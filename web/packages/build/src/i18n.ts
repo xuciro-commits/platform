@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Selection commands": "选中项操作",
+  "Preview controls": "预览设置",
+  "Group in tabs": "组成标签页布局",
+  "General": "基本属性",
+  "Widget settings": "组件设置",
+  "Data bindings": "数据绑定",
+  "Placement": "放置位置",
   "The connections could not be loaded.": "无法加载连接。",
   "The datasets could not be loaded.": "无法加载数据集。",
   "The saved object definitions could not be loaded.": "无法加载已保存的对象定义。",

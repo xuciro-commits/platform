@@ -145,7 +145,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   if (!project || !context) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{query.isError ? t("The project could not be loaded.") : t("Loading…")}{pendingPage}</WorkbenchMessage></Workbench>;
   if (page) return <>{pendingPage}<InputDraftProvider isolated scope={`page:${page}`}><PageEditor key={page} id={page} module={context} /></InputDraftProvider>{createPage.dialog}</>;
   const problems: WorkbenchProblem[] = [
-    ...pages.filter((item) => !item.id && pageRecords.data).map((item) => ({ id: `missing:${item.name}`, severity: "warning" as const, text: t("Page {name} is listed but has no saved draft.", { name: item.name }), locate: () => edit({ pages: (draft.pages ?? []).filter((name) => name !== item.name) }) })),
+    ...pages.filter((item) => !item.id && pageRecords.data).map((item) => ({ id: `missing:${item.name}`, severity: "warning" as const, text: t("Page {name} is listed but has no saved draft.", { name: item.name }), locate: () => setFocus("navigation") })),
     ...(!pages.length ? [{ id: "empty", severity: "info" as const, text: t("Add at least one page before publishing the module.") }] : []),
     ...(draft.header && !draft.header.title.trim() ? [{ id: "header-title", severity: "warning" as const, text: t("The header has no title."), locate: () => setFocus("header") }] : []),
     // The host refuses these at publication (CheckGroups); say so here, where

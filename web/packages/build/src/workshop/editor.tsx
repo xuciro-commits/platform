@@ -25,7 +25,7 @@ import { recordPaths } from "../ontology/record-paths";
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, Card, CanvasEditor, CanvasRegion, DataTable, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
+  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, CanvasEditor, CanvasRegion, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, Download, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
@@ -110,6 +110,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const [compatibilityOpen,setCompatibilityOpen]=useState(false);
   const [importPackage,setImportPackage]=useState<{scope:string;pack:ImportPackage}>();
   const [leftTab, setLeftTab] = useState("layers"), [preview, setPreview] = useState(false);
+  const [leftOpen, setLeftOpen] = useState<boolean>();
   const [inspectorTab, setInspectorTab] = useState<Record<string, string>>({});
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop"), [zoom, setZoom] = useState(100);
   const [refused, setRefused] = useState<string>();
@@ -407,7 +408,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     { id: "interface", title: t("Inputs and outputs"), content: <InterfacePanel document={document} object={objectRef} onChange={(document) => edit({ document })} /> },
   ];
   const containerTabs: WorkbenchTab[] = container ? [
-    { id: "layout", title: t("Layout"), content: <div className="grid content-start gap-2 p-2">
+    { id: "layout", title: t("Layout"), content: <div className="grid content-start">
       {overlayEntries.map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
         onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
         onRemove={() => { const result = removeOverlay(document, id);for(const removed of result.sections)session.inputs.clear(`${session.inputs.scope}/widget:${removed}/`);edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}
@@ -415,7 +416,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
         onUngroup={() => canvasCommands(container).find((command) => command.id === "ungroup")?.run()} ungroupDisabled={!canvasUngroup(document, container, sections)} /></InputDraftProvider>
     </div> },
-    { id: "appearance", title: t("Appearance"), content: <div className="grid content-start gap-2 p-2">
+    { id: "appearance", title: t("Appearance"), content: <div className="grid content-start">
       <InputDraftProvider scope="layout" reveal={()=>select(selection)}><LayoutSizing document={document} id={container} onPatch={patchNode} /></InputDraftProvider>
       <NodeBindings document={document} id={container} button={false} input={false} onChange={(patch) => patchNode(container, patch)} />
     </div> },
@@ -426,7 +427,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     onResourcesChange: (patch, variables) => edit((old) => ({ ...old, document: { ...old.document, variables }, sections: old.sections.map((s) => s.id === canvasSelection.id ? { ...s, ...patch } : s) }), "graph-resources"),
     events: (() => { const Inspector = widgetInspector(canvasSelection.widget, canvasSelection.configVersion ?? 0)?.events; return <InspectorFrame id={canvasSelection.id ?? String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion ?? 0} part="events">{Inspector && <Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons, document) => edit({ document, sections: sections.map((s) => s.id === canvasSelection.id ? { ...s, buttons } : s) })} document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}</InspectorFrame>; })(),
     appearance: <>
-      {Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value && nodeID) canvasCommitDrop({ kind: "move", id: nodeID, label: canvasSelection.title ?? nodeID }, { kind: "into", parent: event.target.value }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
+      {Object.keys(document.overlays ?? {}).length > 0 && <InspectorSection title={t("Placement")}><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value && nodeID) canvasCommitDrop({ kind: "move", id: nodeID, label: canvasSelection.title ?? nodeID }, { kind: "into", parent: event.target.value }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></InspectorSection>}
       {nodeID && <InputDraftProvider scope="layout" reveal={()=>select(selection)}><LayoutSizing document={document} id={nodeID} onPatch={patchNode} /></InputDraftProvider>}
       {nodeID && <NodeBindings document={document} id={nodeID} button={!!widgetContract(canvasSelection.widget)?.inputPorts.some((port) => port.bindingField === "enabledWhen") && canvasSelection.widget !== "input"} input={canvasSelection.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />}
     </>,
@@ -467,7 +468,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         if (event.key.toLowerCase() === "c" && nodeID && !window.getSelection()?.toString()) { event.preventDefault(); runSelectionCommand("copy"); }
         if (event.key.toLowerCase() === "v" && nodeID && session.clipboard) { event.preventDefault(); runSelectionCommand("paste"); }
       }}
-      left={{ label: t("Page structure"), value: leftTab, onChange: setLeftTab, tabs: [
+      left={{ label: t("Page structure"), open: leftOpen, onOpenChange: setLeftOpen, value: leftTab, onChange: setLeftTab, tabs: [
         { id: "layers", title: t("Layers"), content: <div className="grid content-start">
           {module && <ModuleTree context={module} compact />}
           <LayoutTree document={document} sections={sections} chosen={chosen} container={container} title={title || page.title}
@@ -478,7 +479,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         </div> },
         { id: "widgets", title: t("Widgets"), content: <WidgetLibrary widgets={widgets} widgetTitles={widgetTitles} onAdd={(widget) => add(widget)} /> },
       ] }}
-      right={preview ? undefined : { label: t("Inspector"), heading: <span className="flex min-w-0 items-center gap-1.5">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3.5 shrink-0" />}<span className="truncate">{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, scope:inspectorKey,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
+      right={preview ? undefined : { label: t("Inspector"), heading: <span className="flex min-w-0 items-center gap-1.5">{canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : container ? <LayoutGlyph kind={document.nodes[container]?.kind ?? "rows"} /> : <Settings2 className="size-3.5 shrink-0" />}<span className="truncate" title={canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}>{canvasSelection ? canvasSelection.title || widgetTitles[canvasSelection.widget]?.() : container ? t("Layout") : t("Page")}</span></span>, scope:inspectorKey,locate:()=>select(selection), value: inspectorValue, onChange: (next) => { if (["variables", "queries", "interface"].includes(next) && !canvasSelection && !container) select({ kind: next as "variables" | "queries" | "interface" }); else if (next === "page") select({ kind: "page" }); setInspectorTab((old) => ({ ...old, [inspectorKey.split(":")[0]!]: next })); },
         tabs: inspectorTabs }}
       dock={{ label: t("Page dock"), tabs: [
         { id: "problems", title: t("Problems"), badge: problemList.length, content: <ProblemList problems={problemList} empty={t("No problems. The page can be published.")} /> },
@@ -498,14 +499,20 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
           onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id, delta) => canvasEdit(canvasMove(document, id, delta, sections))}
           resize={(id, axis, pixels, rects) => canvasResize(document, id, axis, pixels, rects)} onResize={canvasCommitSizes}
           onResetSize={(id, axis) => { const sizes = canvasResetSize(document, id, axis); if (sizes) canvasCommitSizes(sizes); }}>
-          <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
-            {([["duplicate", "Duplicate selection", Copy], ["copy", "Copy selection", Copy], ["paste", "Paste into layout", Clipboard]] as const).map(([cid, label, Icon]) => <Button key={cid} size="sm" variant="ghost" title={t(label)} aria-label={t(label)} disabled={busy || incompatible || preview || !selectionCommand(cid) || selectionCommand(cid)?.disabled} onClick={() => runSelectionCommand(cid)}><Icon /></Button>)}
-            <span className="mx-1 h-4 w-px bg-border" />
-            {(["rows", "columns", "tabs"] as const).map((kind) => <Button key={kind} size="sm" variant="ghost" disabled={!nodeID || preview} title={t(kind === "rows" ? "Group in rows" : kind === "columns" ? "Group in columns" : "Group in tabs")} aria-label={t(kind === "rows" ? "Group in rows" : kind === "columns" ? "Group in columns" : "Group in tabs")} onClick={() => { if (!nodeID) return; const result = canvasGroup(document, nodeID, kind, sections); if (result) { canvasEdit(result.document); select({ kind: "container", id: result.id }); } }}>{kind === "rows" ? <Rows3 /> : kind === "columns" ? <Columns2 /> : <Group />}</Button>)}
-            {clipboardNotice?.scope === clipboardScope && <span role={clipboardNotice.error ? "alert" : "status"} className={"ml-2 truncate text-xs " + (clipboardNotice.error ? "text-danger" : "text-muted")}>{clipboardNotice.text}</span>}
-            <span className="ml-auto" />
-            {([["desktop", "Desktop preview", Monitor], ["tablet", "Tablet preview", Tablet], ["mobile", "Mobile preview", Smartphone]] as const).map(([device, label, Icon]) => <Button key={device} size="sm" variant="ghost" aria-label={t(label)} aria-pressed={viewport === device} onClick={() => setViewport(device)}><Icon /></Button>)}
-            <Select aria-label={t("Canvas zoom")} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} className="w-20">{[50, 75, 100, 125].map((value) => <option key={value} value={value}>{value}%</option>)}</Select>
+          <div className="shrink-0 border-b border-border px-2 py-2">
+            <FlowLayout toolbar label={t("Canvas tools")}>
+              <div role="group" aria-label={t("Selection commands")} className="flex shrink-0 items-center gap-1">
+                {([["duplicate", "Duplicate selection", Copy], ["copy", "Copy selection", Copy], ["paste", "Paste into layout", Clipboard]] as const).map(([cid, label, Icon]) => <Button key={cid} size="sm" variant="ghost" title={t(label)} aria-label={t(label)} disabled={busy || incompatible || preview || !selectionCommand(cid) || selectionCommand(cid)?.disabled} onClick={() => runSelectionCommand(cid)}><Icon /></Button>)}
+              </div>
+              <div role="group" aria-label={t("Layout commands")} className="flex shrink-0 items-center gap-1">
+                {(["rows", "columns", "tabs"] as const).map((kind) => <Button key={kind} size="sm" variant="ghost" disabled={!nodeID || preview} title={t(kind === "rows" ? "Group in rows" : kind === "columns" ? "Group in columns" : "Group in tabs")} aria-label={t(kind === "rows" ? "Group in rows" : kind === "columns" ? "Group in columns" : "Group in tabs")} onClick={() => { if (!nodeID) return; const result = canvasGroup(document, nodeID, kind, sections); if (result) { canvasEdit(result.document); select({ kind: "container", id: result.id }); } }}>{kind === "rows" ? <Rows3 /> : kind === "columns" ? <Columns2 /> : <Group />}</Button>)}
+              </div>
+              <div role="group" aria-label={t("Preview controls")} className="ml-auto flex shrink-0 items-center gap-1">
+                {([["desktop", "Desktop preview", Monitor], ["tablet", "Tablet preview", Tablet], ["mobile", "Mobile preview", Smartphone]] as const).map(([device, label, Icon]) => <Button key={device} size="sm" variant="ghost" title={t(label)} aria-label={t(label)} aria-pressed={viewport === device} onClick={() => setViewport(device)}><Icon /></Button>)}
+                <Select aria-label={t("Canvas zoom")} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} className="w-20">{[50, 75, 100, 125].map((value) => <option key={value} value={value}>{value}%</option>)}</Select>
+              </div>
+            </FlowLayout>
+            {clipboardNotice?.scope === clipboardScope && <p role={clipboardNotice.error ? "alert" : "status"} className={"mt-2 break-words text-xs " + (clipboardNotice.error ? "text-danger" : "text-muted")}>{clipboardNotice.text}</p>}
           </div>
           <div data-canvas-scroll className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
@@ -517,7 +524,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
                   return includes(overlay.root);
                 })?.root;
               })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={preview} chosen={preview ? -1 : chosen} onChoose={preview ? () => {} : choose}
-                notice={nothing && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted"><p>{t("This page is empty.")}</p><p className="mt-1 text-xs">{t("Drag a widget from the library, or pick one to add it here.")}</p><Button className="mt-3" size="sm" onClick={() => setLeftTab("widgets")}><Plus />{t("Add widget")}</Button></div>}
+                notice={nothing && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted"><p>{t("This page is empty.")}</p><p className="mt-1 text-xs">{t("Drag a widget from the library, or pick one to add it here.")}</p><Button className="mt-3" size="sm" onClick={() => { setPreview(false); setLeftTab("widgets"); setLeftOpen(true); }}><Plus />{t("Add widget")}</Button></div>}
                 wrapLayout={preview ? undefined : (id, _node, body) => <CanvasRegion key={id} id={id}>{body}</CanvasRegion>} /></ApplicationPage>
             </div>
           </div>
@@ -546,8 +553,8 @@ function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: 
   const Inspector = widgetBindingInspector(section.widget, section.configVersion ?? 0);
   const contract = widgetContract(section.widget);
   return [
-    { id: "properties", title: t("Properties"), content: <div className="grid content-start gap-2 p-2">
-      <Card className="grid gap-3 p-3">
+    { id: "properties", title: t("Properties"), content: <div className="grid content-start">
+      <InspectorSection title={t("General")}>
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={section.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} /></label>
         {section.widget === "input" && <label className="grid gap-1 text-xs">{t("Input presentation")}
           <Select value={section.inputKind ?? ""} onChange={(event) => onChange({ inputKind: event.target.value || undefined })}>
@@ -558,18 +565,18 @@ function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: 
           <span className="font-medium text-muted">{t("Words")}</span>
           <MarkdownEditor value={section.text ?? ""} onChange={(text) => onChange({ text })} rows={6} placeholder={t("Write markdown here…")} />
         </div>}
-      </Card>
-      {Inspector && <Card className="grid gap-3 p-3">
+      </InspectorSection>
+      {Inspector && <InspectorSection title={t("Widget settings")}>
         <InspectorFrame id={section.id ?? "selected"} widget={section.widget} version={section.configVersion ?? 0} part="bindings">
           <Inspector section={section} document={document} object={object} info={info} overlay={overlay}
             itemOwner={leaf ? loopOwner(document, leaf) : undefined} sections={sections}
             onResourcesChange={onResourcesChange} onChange={onChange} />
         </InspectorFrame>
-      </Card>}
+      </InspectorSection>}
     </div> },
-    { id: "data", title: t("Data"), content: <div className="grid content-start gap-2 p-2"><Properties {...props} /></div> },
+    { id: "data", title: t("Data"), content: <div className="grid content-start"><Properties {...props} /></div> },
     ...(contract && "events" in contract && contract.events.length ? [{ id: "events", title: t("Events"), badge: document.events?.filter((binding) => binding.source === section.id).length || undefined, content: <div className="grid content-start gap-2 p-2">{props.events}</div> }] : []),
-    { id: "appearance", title: t("Appearance"), content: <div className="grid content-start gap-2 p-2">{props.appearance}</div> },
+    { id: "appearance", title: t("Appearance"), content: <div className="grid content-start">{props.appearance}</div> },
   ];
 }
 
@@ -591,7 +598,7 @@ function Properties({ section, sections, document, info, catalog, object, select
   const queriesOf = (obj: string) => definitions
     .filter(definition => definition.query?.object === obj && provided.some(item => item.capability.kind === "query" && item.capability.side === "pure" && item.ref.app === definition.ref.app && item.ref.name === definition.ref.name && item.version === definition.version))
     .map(definition => ({ key: `${definition.ref.app}.${definition.ref.name}`, title: definition.query?.title ?? definition.ref.name }));
-  if (!section) return <Card className="p-3 text-xs text-muted">{t("Choose a section to configure it.")}</Card>;
+  if (!section) return <p className="p-3 text-xs text-muted">{t("Choose a section to configure it.")}</p>;
   const contract = widgetContract(section.widget);
   const allows = (kind: string) => contract?.bindingKinds.some((binding) => binding === kind) ?? false;
   const fields = info?.fields ?? [];
@@ -602,8 +609,7 @@ function Properties({ section, sections, document, info, catalog, object, select
   const accessible=(v:HostApi.PageVariable)=>variableAccessible(v,undefined,overlay);
   const measures = ["count", ...fields.filter((f) => f.type === "integer" || f.type === "decimal" || f.type === "money").flatMap((f) => [`sum:${f.name}`, `avg:${f.name}`])];
   return (
-    <Card className="grid content-start gap-3 p-3">
-      <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
+    <InspectorSection title={t("Data bindings")}>
       {capabilityQuery.isError && <p role="alert" className="text-xs text-danger">{t("Available capabilities could not be loaded.")}</p>}
       {allows("composite")&&<CompositeBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={model.entity} definitions={definitions} onChange={onChange}/>}
       {allows("object")&&<ModelBindingInspector section={section} sections={sections} document={document} object={object} selections={selections} lookup={type=>type===info?.type?info:model.entity(type)} definitions={definitions} onChange={onChange}/>}
@@ -732,7 +738,7 @@ function Properties({ section, sections, document, info, catalog, object, select
           </Select>
         </label>
       )}
-    </Card>
+    </InspectorSection>
   );
 }
 
@@ -745,8 +751,8 @@ function Settings({ value, object, selections, objects, onSelections, onChange, 
   onChange: (patch: Partial<{ title: string; description: string }>) => void;
 }) {
   return (
-    <Card className="grid content-start gap-3 p-3">
-      <div className="text-xs font-semibold text-muted">{t("Page settings")}</div>
+    <div className="grid content-start">
+      <InspectorSection title={t("Page settings")}>
       <label className="grid gap-1 text-xs">{t("What people call it")}
         <Input value={value.title} onChange={(e) => onChange({ title: e.target.value })} />
       </label>
@@ -760,8 +766,8 @@ function Settings({ value, object, selections, objects, onSelections, onChange, 
           {pageVariableContract.device.kinds.map((kind) => <option key={kind} value={kind}>{t(kind === "handheld" ? "Handheld terminal: one column, large targets" : kind)}</option>)}
         </Select>
       </label>
-      <fieldset className="grid gap-3 border-t border-border pt-3">
-        <legend className="text-xs font-semibold">{t("Record selections")}</legend>
+      </InspectorSection>
+      <InspectorSection title={t("Record selections")}>
         <p className="text-xs text-muted">{t("A table writes a selection; details and actions read it. Each selection holds records of one object.")}</p>
         {selections.map((v, i) => <div key={i} className="grid gap-2 rounded-sm border border-border p-2">
           <label className="grid gap-1 text-xs">{t("Selection name")}
@@ -779,8 +785,8 @@ function Settings({ value, object, selections, objects, onSelections, onChange, 
           let n = 1; while (selections.some((v) => v.name === `selection${n}`)) n++;
           onSelections([...selections, { name: `selection${n}`, object: objects[0]! }]);
         }}><Plus />{t("Add record selection")}</Button>
-      </fieldset>
-    </Card>
+      </InspectorSection>
+    </div>
   );
 }
 

@@ -30,6 +30,18 @@ test("toolbar arrows skip disabled controls and stay inside their toolbar", () =
   fireEvent.keyDown(a, { key: "End" }); expect(document.activeElement).toBe(c);
 });
 
+test("toolbar leaves modified arrow shortcuts to its editor", () => {
+  const shortcuts: string[] = [];
+  render(<div onKeyDown={event => { if (!event.defaultPrevented) shortcuts.push(event.key); }}>
+    <FlowLayout toolbar label="Commands"><Button>A</Button><Button>C</Button></FlowLayout>
+  </div>);
+  const a = screen.getByRole("button", { name: "A" }); a.focus();
+  fireEvent.keyDown(a, { key: "ArrowDown", altKey: true });
+  fireEvent.keyDown(a, { key: "ArrowRight", altKey: true });
+  expect(shortcuts).toEqual(["ArrowDown", "ArrowRight"]);
+  expect(document.activeElement).toBe(a);
+});
+
 test("an unavailable overlay caller returns focus to the page fallback", async () => {
   const fallback = document.createElement("button"), caller = document.createElement("button");
   document.body.append(fallback, caller); caller.disabled = true;

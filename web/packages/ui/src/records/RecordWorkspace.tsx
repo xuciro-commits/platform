@@ -15,7 +15,7 @@ export function RecordWorkspace({ title, description, source, type, listFields, 
     {notice}
     <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(20rem,45%)_minmax(0,1fr)]">
       <section aria-label={t("Records in this page")} className={selected ? "hidden min-w-0 lg:block" : "min-w-0"}>
-        <RecordList source={source} type={type} fields={listFields} onOpen={(r) => onSelect(r.id)} height="calc(100dvh - 255px)" />
+        <RecordList source={source} type={type} fields={listFields} selectedId={selected} onOpen={(r) => onSelect(r.id)} height="calc(100dvh - 255px)" />
       </section>
       <section aria-label={t("Selected record")} className={!selected ? "hidden min-w-0 lg:block" : "min-w-0"}>
         {selected ? <>

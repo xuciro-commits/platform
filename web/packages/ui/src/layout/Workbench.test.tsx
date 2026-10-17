@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { Workbench } from "./Workbench";
 import { setLanguage } from "../i18n";
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
@@ -9,7 +9,7 @@ beforeEach(() => {
   localStorage.clear();
   setLanguage("en");
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const dock = {
   label: "Flow dock",
@@ -110,6 +110,40 @@ test("closing the shared inspector frame keeps the selected item, tab and draft"
   expect(screen.getByRole("heading", { name: "Selected block" })).toBeTruthy();
   expect(screen.getByRole("tab", { name: "Settings" }).getAttribute("aria-selected")).toBe("true");
   expect((screen.getByLabelText("Mock timeout draft") as HTMLInputElement).value).toBe("-");
+});
+
+test("a structure command reveals and focuses its retained draft in a compact editor", async () => {
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(640);
+  function Example() {
+    const [open, setOpen] = useState<boolean>(), [preview, setPreview] = useState(true);
+    const [selected, setSelected] = useState("page");
+    return <Workbench storageKey="page" actions={<button onClick={() => { setPreview(false); setOpen(true); }}>Add widget</button>}
+      left={{ label: "Library", open, onOpenChange: setOpen, content: <><input aria-label="Widget search" /><button onClick={() => setSelected("chart")}>Insert chart</button></> }}
+      right={preview ? undefined : { label: "Inspector", scope: selected, content: <p>Page settings</p> }}
+      dock={dock}><p>Canvas</p></Workbench>;
+  }
+  render(<Example />);
+  fireEvent.click(screen.getByRole("button", { name: "Add widget" }));
+  const library = screen.getByRole("region", { name: "Library" });
+  await waitFor(() => expect(document.activeElement).toBe(library));
+  expect(screen.queryByRole("region", { name: "Inspector" })).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Widget search" }), { target: { value: "chart" } });
+  fireEvent.click(screen.getByRole("button", { name: "Insert chart" }));
+  expect(screen.getByRole("region", { name: "Inspector" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Add widget" }));
+  await waitFor(() => expect(document.activeElement).toBe(library));
+  expect(screen.queryByRole("region", { name: "Inspector" })).toBeNull();
+  expect((screen.getByRole("textbox", { name: "Widget search" }) as HTMLInputElement).value).toBe("chart");
+  fireEvent.click(screen.getByRole("button", { name: "Toggle dock" }));
+  expect(screen.getByRole("region", { name: "Editor" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Add widget" }));
+  expect(screen.getByRole("region", { name: "Library" })).toBeTruthy();
+});
+
+test("an initially open structure panel is shown in a compact editor", () => {
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(640);
+  render(<Workbench storageKey="page" left={{ label: "Library", open: true, content: <p>Widgets</p> }}><p>Canvas</p></Workbench>);
+  expect(screen.getByRole("region", { name: "Library" })).toBeTruthy();
 });
 
 test("a hidden workspace does not eagerly mount unvisited dock tasks", () => {
