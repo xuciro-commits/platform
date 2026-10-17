@@ -13,8 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -72,24 +71,10 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 	if err != nil {
 		return nil, observationUnavailable(err)
 	}
-	connections, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
-	if refusal != nil {
-		return nil, refusal
-	}
-	live := map[string]bool{}
-	if owner, ok := t.app(build.ID).(host.IntegrationDefinitions); ok {
-		for _, connection := range connections {
-			if connection.State == "ready" && !connection.Archived {
-				if fixed, err := owner.ExecutionConnection(connection); err == nil && fixed.Protocol != nil {
-					live[fixed.Name] = true
-				}
-			}
-		}
-	}
 	out := []ObservationInfo{}
 	for _, definition := range definitions {
 		if definition.Observation != nil {
-			out = append(out, ObservationInfo{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation, SupportsLatest: definition.Observation.Connection.App == build.ID && live[definition.Observation.Connection.Name]})
+			out = append(out, ObservationInfo{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation})
 		}
 	}
 	return out, nil
@@ -180,7 +165,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if plan.connection.ID == "" || plan.connection.State != "ready" {
 		return plan, observationUnavailable(fmt.Errorf("observation connection is not ready"))
 	}
-	owner, ok := t.app(definition.Connection.App).(host.IntegrationDefinitions)
+	owner, ok := t.app(definition.Connection.App).(IntegrationDefinitions)
 	if !ok {
 		return plan, observationUnavailable(fmt.Errorf("observation connection has no original owner"))
 	}
@@ -293,11 +278,8 @@ func checkObservationRead(q *ObservationRead, now time.Time) error {
 
 func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan, q ObservationRead) (platform.ObservationResult, error) {
 	result := platform.ObservationResult{Ref: plan.info.Ref, Version: plan.info.Version, Object: plan.info.Definition.Object, Record: q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Sources: plan.sources}
-	if q.Mode == "latest" && plan.connection.Protocol == nil {
+	if q.Mode == "latest" {
 		return result, fmt.Errorf("current device reads require a protocol connection")
-	}
-	if err := t.configureProtocol(ctx, plan.connection, plan.retained); err != nil {
-		return result, err
 	}
 	body, err := json.Marshal(struct {
 		Device string    `json:"device"`
@@ -336,10 +318,8 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		return result, fmt.Errorf("observation answer exceeds its read budget")
 	}
 	var answer struct {
-		Window   platform.ObservationWindow  `json:"window"`
-		Points   []platform.ObservationPoint `json:"points,omitempty"`
-		Coverage *platform.DriverCoverage    `json:"coverage,omitempty"`
-		Samples  []platform.DriverSample     `json:"samples,omitempty"`
+		Window platform.ObservationWindow  `json:"window"`
+		Points []platform.ObservationPoint `json:"points,omitempty"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -349,33 +329,11 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, fmt.Errorf("observation storage returned trailing data")
 	}
-	if q.Mode == "latest" {
-		if len(answer.Samples) != 1 || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) != 0 || answer.Coverage != nil {
-			return result, fmt.Errorf("current observation needs exactly its declared point without a window")
-		}
-		sample := answer.Samples[0]
-		if err := platform.CheckObservationLatest(sample, plan.device, plan.info.Definition.Signal, plan.info.Definition.Unit); err != nil {
-			return result, err
-		}
-		if sample.Source.Connection != plan.connection.ID || sample.Source.Revision != plan.connection.Protocol.Revision() || sample.Source.Generation == "" {
-			return result, fmt.Errorf("current observation has another connection or configuration revision")
-		}
-		result.Latest = &sample
-		return result, nil
-	}
-	if len(answer.Samples) != 0 {
-		return result, fmt.Errorf("current device readings cannot replace a historical observation window")
-	}
 	if err := platform.CheckObservationWindowRange(answer.Window, q.Since, q.Until, plan.info.Definition.Unit); err != nil {
 		return result, err
 	}
-	if plan.connection.Protocol != nil || plan.info.Definition.RequireComplete {
-		if answer.Coverage == nil {
-			return result, fmt.Errorf("observation storage did not declare window coverage")
-		}
-		if err := platform.CheckObservationCoverage(*answer.Coverage, answer.Window); err != nil {
-			return result, err
-		}
+	if plan.info.Definition.RequireComplete {
+		return result, fmt.Errorf("observation storage did not declare window coverage")
 	}
 	if q.Mode == "summary" && len(answer.Points) > 0 || q.Mode == "points" && len(answer.Points) > q.Limit {
 		return result, fmt.Errorf("observation storage exceeded the requested point shape")
@@ -386,7 +344,6 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		}
 	}
 	result.Window, result.Points = answer.Window, answer.Points
-	result.Coverage = answer.Coverage
 	return result, nil
 }
 

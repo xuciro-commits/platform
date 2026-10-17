@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@platform/catalog-app": "workspace:*",
     "@pkg/build": "workspace:*",
     "@pkg/crm": "workspace:*",
     "@pkg/erp": "workspace:*",

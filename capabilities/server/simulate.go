@@ -10,7 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 

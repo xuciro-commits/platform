@@ -3,12 +3,10 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"time"
 )
 
 const SchemaPropertyType = PropertyTypeType + ".publish"
@@ -96,3 +94,5 @@ func (b *Build) installPropertyType(c platform.Caller, f PropertyType) error {
 func (b *Build) PropertyTypeDefinition(name string, version int) (platform.PropertyType, int, bool) {
 	return retainedDefinition(b.propertyTypes, b.propertyTypeInventory, propertyTypeImage, name, version)
 }
+
+const PropertyTypeType = "build.propertytype"

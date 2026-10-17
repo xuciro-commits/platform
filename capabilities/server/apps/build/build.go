@@ -1,25 +1,18 @@
-// Package build is the platform's builder app (ADR-0034), on the app API and
-// internal/host (ADR-0025 D4): objects a tenant defines, published into the
-// running host so they behave like an app's own — the same records, generated
-// actions and forms, search, aggregates, journal and replay. The definition is
-// data; nothing about it is a second runtime.
 package build
 
 import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	buildapi "platformserver/internal/host/buildapi"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/internal/host"
+	"platformserver/platform"
 	"reflect"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	"platformserver/internal/host"
-	"platformserver/platform"
 )
 
 // Build is the builder app of one tenant.
@@ -140,7 +133,7 @@ func (b *Build) objectEntity() platform.Entity {
 					} else if err := b.install(c, *object); err != nil {
 						return err
 					}
-					object.Installed = buildapi.TypeOf(object.Name) // what its records are kept as, for people to see
+					object.Installed = TypeOf(object.Name) // what its records are kept as, for people to see
 					object.Published = published(*object)
 					return nil
 				}}}}}
@@ -274,7 +267,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 		}
 		published, ok := wasPublished[Object](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
-			record.Name != published.Name || record.Installed != buildapi.TypeOf(published.Name) {
+			record.Name != published.Name || record.Installed != TypeOf(published.Name) {
 			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted object has no matching published definition")
 		}
 		if published.ExtensionSource != nil {
@@ -818,7 +811,7 @@ func (b *Build) checkShape(o Object) error {
 		}
 	}
 	if o.Extends != "" {
-		if o.Extends == buildapi.TypeOf(o.Name) || !b.fieldKnown(o.Extends) {
+		if o.Extends == TypeOf(o.Name) || !b.fieldKnown(o.Extends) {
 			return fmt.Errorf("the object cannot extend %s: not an object type this tenant has", o.Extends)
 		}
 		k := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == BaseField })
@@ -938,7 +931,7 @@ func checkConditions(fields []Field) error {
 		}
 		allowed := []string{"true", "false"}
 		if fields[i].Type == "choice" {
-			allowed = buildapi.ValueChoices(fields[i].Choices)
+			allowed = ValueChoices(fields[i].Choices)
 		}
 		for _, v := range strings.Split(values, ",") {
 			if !slices.Contains(allowed, v) {
@@ -956,7 +949,7 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 	if b.host == nil {
 		return "", false, nil
 	}
-	if _, mine := b.installed[buildapi.TypeOf(name)]; !mine && b.host.Declares(buildapi.TypeOf(name)) {
+	if _, mine := b.installed[TypeOf(name)]; !mine && b.host.Declares(TypeOf(name)) {
 		return "an app's own type", true, nil
 	}
 	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
@@ -1189,7 +1182,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	// objects distinct, just as two named Go record types are distinct; this
 	// tag adds no JSON field and stays stable across draft/publication/restore.
 	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[platform.Record](), Anonymous: true,
-		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, buildapi.TypeOf(o.Name)))}}
+		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, TypeOf(o.Name)))}}
 	for _, f := range o.Fields {
 		tag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, f.Name, f.Title)
 		if f.AIInput != nil {
@@ -1206,7 +1199,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		case "longtext", "date", "datetime":
 			tag += fmt.Sprintf(` type:"%s"`, f.Type)
 		case "choice":
-			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(buildapi.ValueChoices(f.Choices), ","))
+			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(ValueChoices(f.Choices), ","))
 		case "reference":
 			tag += fmt.Sprintf(` ref:"%s"`, f.Ref)
 			if f.Inverse != "" {
@@ -1283,7 +1276,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		}
 	}
 	std, scope, roles := access(o)
-	entity := platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
+	entity := platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
 		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model, lookup), ValidateAt: numberingOf(o, model)}
 	entity.CreateTxn = creation
 	if creationError != nil {
@@ -1328,7 +1321,7 @@ func page(o Object) platform.Page {
 	if len(o.States) > 0 { // where each record stands, in the list and on its page
 		list, names = append(list, "state"), append(names, "state")
 	}
-	typ := buildapi.TypeOf(o.Name)
+	typ := TypeOf(o.Name)
 	actions := []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: typ + ".create"}, {App: ID, Kind: platform.AssetAction, Name: typ + ".edit"}}
 	for _, a := range o.Actions {
 		actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: typ + "." + a.Name})
@@ -1379,3 +1372,108 @@ func (b *Build) ForkDecision() (platform.App, error) {
 }
 
 var _ platform.DecisionForkApp = (*Build)(nil)
+
+const (
+	ID                     = "build"
+	ValueDefinitionVersion = "1"
+	ObjectType             = "build.object"
+	// Builder defines and publishes objects; Publisher saves and activates
+	// release candidates without editing definitions; User works with what is
+	// published (ADR-0047 §11).
+	Builder       = "builder"
+	Publisher     = "publisher"
+	User          = "user"
+	SchemaPublish = ObjectType + ".publish"
+)
+
+// Object is an object someone defines in this tenant: what it is called and
+// which fields it holds. Publishing it installs it (ADR-0034 D2).
+type Object struct {
+	platform.Record
+	Name              string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
+	Title             string                       `json:"title" field:"required,search" title:"What people call it" example:"Visit"`
+	Plural            string                       `json:"plural,omitempty" title:"What people call several" example:"Visits"`
+	Description       string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
+	Fields            []Field                      `json:"fields" title:"Fields"`
+	Reads             *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
+	Constraints       []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
+	Sets              []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Declared record sets"`
+	DispatchCommands  []platform.DispatchCommand   `json:"dispatchCommands,omitempty" type:"json" field:"aside" title:"Device commands"`
+	CreateTransaction *platform.BusinessTxn        `json:"createTransaction,omitempty" type:"json" field:"aside" title:"Creation transaction"`
+	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
+	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
+	// States and Actions make its records a small process (ADR-0037): the
+	// object editor owns them, so generated forms do not ask for them.
+	States  []State  `json:"states,omitempty" field:"aside" title:"States"`
+	Actions []Action `json:"actions,omitempty" field:"aside" title:"Actions"`
+	// Access is who may do what with it (ADR-0037 18b); empty: builder and
+	// user do everything, as before.
+	Access []Access `json:"access,omitempty" field:"aside" title:"Access"`
+	// Scope says which fields place a record for the row scopes of Access:
+	// its owner (for "own"; empty: whoever created it) and its organisational
+	// unit within a structure (for "unit" and "below") (ADR-0066).
+	Scope *ObjectScope `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
+	// Implements names the interfaces this object carries the fields of; Extends
+	// names an installed object type this one adds fields to, one record per base
+	// record through its `base` reference (ADR-0058 A2, A3).
+	Implements      []string                  `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
+	Extends         string                    `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
+	ExtensionSource *platform.ExtensionSource `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
+	SchemaVersions  []platform.SchemaVersion  `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
+	// Numbering (ADR-0076) gives every new record a document number in a text field: <prefix>[<year>-]<n>, gapless in order of creation.
+	Numbering *Numbering `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
+	State     string     `json:"state" field:"readonly" choices:"draft,published"`
+	Installed string     `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	// Published is the definition as it was last published, which is what is
+	// installed and what a restore installs again — not the draft beside it.
+	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+}
+
+// Field is one field of a defined object, as a person describes it.
+type Field struct {
+	AIInput    *bool                  `json:"aiInput,omitempty" title:"Allow AI context"`
+	SourceType string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
+	Property   *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
+	Name       string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
+	Title      string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
+	Type       string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
+	Choices    string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
+	Ref        string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	// Inverse names the relation seen from the referenced record (ADR-0040 21b).
+	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
+	Required bool   `json:"required,omitempty"`
+	Search   bool   `json:"search,omitempty" title:"Searchable"`
+	ReadOnly bool   `json:"readOnly,omitempty" title:"Read only"`
+	AliasOf  string `json:"aliasOf,omitempty" title:"Read alias of" help:"The retained old name reads this field; it cannot be written directly"`
+	// When bounds the field to another field's value (WorkQueue #138/#132):
+	// "kind=refund,return" or "urgent=true". The field is asked for, and
+	// required if marked so, only while the condition holds; otherwise it
+	// stays empty. One level: the condition's field is unconditional.
+	When string `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
+	// Formula computes an integer or decimal field from the record's other
+	// number fields at every decision; such a field is read-only (ADR-0064).
+	FormulaExpr *platform.Expr `json:"formulaExpr,omitempty" type:"json" field:"aside"`
+	Formula     string         `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
+	// Read and Write, when set, are the roles that read and set it (ADR-0028 D3).
+	Read  []string `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
+	Write []string `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
+}
+
+// Installed reports the entity type an object is installed as.
+func TypeOf(name string) string { return ID + "." + name }
+
+func ValueChoices(s string) []string {
+	var out []string
+	for _, c := range strings.Split(s, ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+const definitionVersion = ValueDefinitionVersion
+const sourceRows = ValueSourceRows
+const writebackAnswerKept = ValueWritebackAnswerKept
+
+var inputTypes = ValueInputTypes

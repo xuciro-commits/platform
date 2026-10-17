@@ -15,8 +15,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
-	enterprise "platformserver/internal/host/enterpriseapi"
+	build "platformserver/apps/build"
+	enterprise "platformserver/apps/enterprise"
 	"platformserver/platform"
 )
 
@@ -290,7 +290,7 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 			}[name]; public != "" {
 				name = public
 			}
-		case "platformserver/internal/host/enterpriseapi":
+		case "platformserver/apps/enterprise":
 			if name == "Model" {
 				name = "EnterpriseModel"
 			}

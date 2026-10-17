@@ -1,7 +1,6 @@
 package enterprise
 
 import (
-	"platformserver/internal/host/enterpriseapi"
 	"slices"
 	"strings"
 	"time"
@@ -17,14 +16,12 @@ import (
 // /v1/enterprise-resolve; the generated SDK (SDK()) wraps both.
 
 // EnterpriseQueryElement is one element as the query contract projects it.
-type EnterpriseQueryElement = enterpriseapi.EnterpriseQueryElement
 
 // EnterpriseQueryResult is the answer both reads share.
-type EnterpriseQueryResult = enterpriseapi.EnterpriseQueryResult
 
 func project(e Element, today Date) EnterpriseQueryElement {
 	return EnterpriseQueryElement{ID: e.ID, Stereotype: e.Stereotype, Name: e.Name, Kind: e.Kind, ShortName: e.ShortName,
-		Legal: e.Legal, From: e.From, Until: e.Until, Closed: !enterpriseapi.ActiveOn(e.From, e.Until, today)}
+		Legal: e.Legal, From: e.From, Until: e.Until, Closed: !ActiveOn(e.From, e.Until, today)}
 }
 
 // Query answers the typed read (ADR-0094 D1): stereotypes is an OR-filter
@@ -55,7 +52,7 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 		if len(keep) > 0 && !keep[el.Stereotype] || kind != "" && el.Kind != kind {
 			continue
 		}
-		if alive != "all" && !enterpriseapi.ActiveOn(el.From, el.Until, today) {
+		if alive != "all" && !ActiveOn(el.From, el.Until, today) {
 			continue
 		}
 		if needle != "" && !strings.Contains(strings.ToLower(el.ID+" "+el.Name+" "+el.ShortName+" "+el.Kind), needle) {

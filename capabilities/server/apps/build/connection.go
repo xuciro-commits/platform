@@ -3,14 +3,12 @@ package build
 import (
 	"encoding/json"
 	"net/url"
-	"reflect"
 	"slices"
-
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -21,7 +19,7 @@ func (b *Build) connectionEntity() platform.Entity {
 			if err := b.validConnection(*next); err != nil {
 				return err
 			}
-			if old, ok := platform.Get[Connection](c, next.ID); ok && (old.Kind != next.Kind || old.Address != next.Address || old.Secret != next.Secret || old.AllowPrivate != next.AllowPrivate || !reflect.DeepEqual(old.Protocol, next.Protocol)) {
+			if old, ok := platform.Get[Connection](c, next.ID); ok && (old.Kind != next.Kind || old.Address != next.Address || old.Secret != next.Secret || old.AllowPrivate != next.AllowPrivate) {
 				next.State, next.Requested, next.Last = "draft", false, nil
 			}
 			return nil
@@ -65,23 +63,8 @@ func (b *Build) validConnection(c Connection) *kernel.Error {
 	if !slices.Contains(ConnectionKinds, c.Kind) {
 		return refuse("A connection is one of http, odata, postgres")
 	}
-	if c.Address == "" && c.State != "ready" && !c.Requested && c.Protocol == nil {
+	if c.Address == "" && c.State != "ready" && !c.Requested {
 		return nil
-	}
-	if c.Protocol != nil {
-		if c.Kind != "http" {
-			return refuse("A protocol package uses an HTTP gateway connection")
-		}
-		if err := c.Protocol.Check(); err != nil {
-			return refuse("Protocol configuration is invalid: {reason}", err.Error())
-		}
-		packages, ok := b.host.(host.DriverPackages)
-		if !ok {
-			return refuse("Protocol packages are unavailable on this host")
-		}
-		if err := packages.CheckDriverBinding(*c.Protocol); err != nil {
-			return refuse("Protocol package is unavailable: {reason}", err.Error())
-		}
 	}
 	u, err := url.Parse(c.Address)
 	if err != nil || u.Host == "" {
@@ -115,7 +98,6 @@ func (b *Build) submitConnectionChecked(c platform.Caller, s *pb.Submission, now
 		}
 		return func(r *pb.ChangeRecord) {
 			check := payload.Check
-			check.Samples = nil // Samples are read-only preview data, never accepted business state.
 			conn.Last, conn.Requested = &check, false
 			conn.State = "draft"
 			if check.OK {
@@ -124,4 +106,46 @@ func (b *Build) submitConnectionChecked(c platform.Caller, s *pb.Submission, now
 			c.Put(r, conn)
 		}, nil
 	})
+}
+
+const (
+	ConnectionType          = "build.connection"
+	SchemaConnectionChecked = "build.connection.checked"
+)
+
+var ConnectionKinds = []string{"http", "odata", "postgres"}
+
+type Connection struct {
+	platform.Record
+	Name              string           `json:"name" field:"required,search" source:"record"`
+	Title             string           `json:"title" field:"required,search" source:"record"`
+	Kind              string           `json:"kind" field:"required" choices:"http,odata,postgres" source:"record"`
+	Address           string           `json:"address" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
+	Secret            string           `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential" source:"record"`
+	AllowPrivate      bool             `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
+	Marking           string           `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking" help:"What is read through it is at least this: internal, confidential or restricted"`
+	State             string           `json:"state" field:"readonly" source:"record"`
+	Requested         bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
+	Last              *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
+	DefinitionVersion int              `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string           `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed" source:"record"`
+	Versions          []string         `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+}
+
+type ConnectionCheck struct {
+	At              time.Time `json:"at"`
+	OK              bool      `json:"ok"`
+	Error           string    `json:"error,omitempty"`
+	Detail          string    `json:"detail,omitempty"`
+	BindingRevision string    `json:"bindingRevision,omitempty"`
+}
+
+func (c Connection) Resolve(ref string) string {
+	if ref == "" {
+		return c.Address
+	}
+	if strings.Contains(ref, "://") {
+		return ref
+	}
+	return strings.TrimRight(c.Address, "/") + "/" + strings.TrimLeft(ref, "/")
 }

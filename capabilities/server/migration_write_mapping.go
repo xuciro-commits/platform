@@ -8,7 +8,6 @@ import (
 	"slices"
 	"time"
 
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -149,7 +148,7 @@ func (t *Tenant) releaseShapes(id string) (map[string]platform.EntityInfo, error
 func (t *Tenant) releaseAssetShapes(available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
 	shapes := map[string]platform.EntityInfo{}
 	for _, owner := range t.apps {
-		compiler, ok := owner.(host.ReleaseExecutionOwner)
+		compiler, ok := owner.(ReleaseExecutionOwner)
 		if !ok {
 			continue
 		}

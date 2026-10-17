@@ -5,14 +5,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	"platformserver/platform"
 )
 
 const SchemaCodeCompile = CodeType + ".compile"
@@ -423,3 +422,5 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 	}
 	return out, nil
 }
+
+const CodeType = "build.code"

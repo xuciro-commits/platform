@@ -2,7 +2,6 @@ package platformserver
 
 import (
 	"encoding/json"
-	buildapi "platformserver/internal/host/buildapi"
 	"slices"
 	"strings"
 	"testing"
@@ -72,7 +71,7 @@ func TestTenantDefinedAccess(t *testing.T) {
 	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
 		t.Fatalf("publish: %s", got)
 	}
-	lost := buildapi.TypeOf("lost")
+	lost := build.TypeOf("lost")
 
 	// The roles an object names are the builder app's: the Console grants them.
 	if roles := tn.app(build.ID).Manifest().AllRoles(); !slices.Contains(roles, "cleaner") || !slices.Contains(roles, "desk") {

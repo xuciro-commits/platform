@@ -1,7 +1,6 @@
 package platformserver
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,14 +8,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -81,7 +79,7 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 	c := t.automation(build.ID, false)
 	writebacks, _, _ := platform.Find[build.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	var planned []platform.Effect
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
+	owner := t.app(build.ID).(IntegrationDefinitions)
 	for _, w := range writebacks {
 		w, err := owner.ExecutionWriteback(w)
 		if err != nil {
@@ -147,20 +145,7 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		out.Result, out.Detail = "rejected", "only https addresses (http when private addresses are allowed)"
 		return out
 	}
-	var requestBody any = req.Body
-	if req.Protocol != nil {
-		if req.Dispatch == "" || req.DriverDispatch == nil || req.DriverCommand == nil {
-			out.Result, out.Detail = "rejected", "Protocol command has no original dispatch identity"
-			return out
-		}
-		connection := build.Connection{Record: platform.Record{ID: req.Connection}, Kind: "http", Address: req.Gateway, Secret: req.Secret, AllowPrivate: req.AllowPrivate, Protocol: req.Protocol}
-		if err := t.configureProtocol(context.Background(), connection, true); err != nil {
-			out.Result, out.Detail = "unknown", err.Error()
-			return out
-		}
-		requestBody = platform.DriverExecute{Dispatch: *req.DriverDispatch, Command: *req.DriverCommand}
-	}
-	body, _ := json.Marshal(requestBody)
+	body, _ := json.Marshal(req.Body)
 	r, err := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
 	if err != nil {
 		out.Result, out.Detail = "rejected", "the request method or address is invalid"
@@ -205,25 +190,6 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		switch {
 		case code >= 200 && code < 300:
 			out.Result = "delivered"
-			if req.Protocol != nil {
-				var execution platform.DriverExecution
-				if json.Unmarshal(answer, &execution) != nil {
-					out.Result, out.Detail = "unknown", "The protocol gateway returned no communication result"
-					return out
-				}
-				switch execution.Sending {
-				case "answered":
-					out.Result = "delivered"
-				case "not-sent", "refused":
-					out.Result = "rejected"
-				default:
-					out.Result = "unknown"
-				}
-				out.Detail = execution.Reason
-				if execution.State == "unknown" {
-					out.Result = "unknown"
-				}
-			}
 		case code >= 400 && code < 500 && code != 408 && code != 429:
 			out.Result, out.Detail = "rejected", resp.Status+": "+clipDetail(answer)
 		default:

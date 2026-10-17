@@ -3,8 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	build "platformserver/apps/build"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 	"reflect"
 	"slices"

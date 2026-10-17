@@ -2,7 +2,7 @@ package platformserver
 
 import (
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	buildapi "platformserver/apps/build"
 	"platformserver/platform"
 	"slices"
 )

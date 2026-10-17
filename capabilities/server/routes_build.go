@@ -11,8 +11,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -32,8 +31,6 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 
 // routesBuild serves the builder: composites, code SDK, process checks, releases, queries and simulation.
 func (h *Host) routesBuild(rt *routes) {
-	h.routesProtocolConnections(rt)
-	h.routesPackageDrafts(rt)
 	rt.authorized(Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []platform.CapabilityDescriptor{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		actions, err := t.DraftActionCapabilities(m)
 		if err != nil {
@@ -93,7 +90,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+		owner, ok := t.app(build.ID).(ConstructionDrafts)
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
 			return

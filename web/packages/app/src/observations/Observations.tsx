@@ -115,16 +115,6 @@ export function ObservationRead({ info, initialRecord = "" }: { info: Api.Observ
 }
 
 export function ObservationWindowResult({ result }: { result: Api.ObservationResult }) {
-  if (result.latest) {
-    const sample = result.latest;
-    const quality = ({ good: t("Good quality"), bad: t("Bad quality"), uncertain: t("Uncertain quality"), stale: t("Stale reading") } as Record<string, string>)[sample.quality] ?? sample.quality;
-    return <Panel role="region" aria-label={t("Current device reading")} title={t("Current device reading")} className="grid gap-3">
-      <p className="text-2xl font-semibold tabular-nums">{sample.value === undefined || sample.value === null ? t("No value") : String(sample.value)}{sample.unit && <span className="ml-2 text-sm font-normal text-muted">{sample.unit}</span>}</p>
-      <PropertyList items={[[t("Device"), sample.device], [t("Signal"), sample.signal], [t("Quality"), quality], [t("Observed at"), new Date(sample.at).toLocaleString()], [t("Received at"), new Date(sample.receivedAt).toLocaleString()]]} />
-      {sample.quality !== "good" && <Notice tone="warning" role="status" message={sample.reason || quality} />}
-      <Disclosure summary={t("Reading source details")}><PropertyList items={[[t("Connection"), sample.source.connection], [t("Configuration revision"), sample.source.revision], [t("Read generation"), sample.source.generation], ...(sample.source.sequence ? [[t("Sequence"), sample.source.sequence] as [string, string]] : [])]} /></Disclosure>
-    </Panel>;
-  }
   const window = result.window, points = result.points ?? [];
   const statistics: [string, string][] = window.count ? [[t("First"), window.first ?? ""], [t("Latest"), window.last ?? ""], [t("Minimum"), window.min ?? ""], [t("Maximum"), window.max ?? ""], [t("Sum"), window.sum ?? ""], [t("Mean"), window.mean ?? ""]] : [];
   return <div className="grid min-w-0 gap-3">

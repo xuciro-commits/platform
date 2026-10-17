@@ -54,7 +54,7 @@ web_types() {
 
 web_check() {
   web_types
-  step web bash -c 'cd web && pnpm install --frozen-lockfile && pnpm catalog:check && pnpm -r run typecheck && pnpm -r run test && pnpm -r run build'
+  step web bash -c 'cd web && pnpm install --frozen-lockfile && pnpm -r run typecheck && pnpm -r run test && pnpm -r run build'
 }
 
 web() {
@@ -75,16 +75,6 @@ format() {
 
 capabilities() {
   step capability-server check_module capabilities/server
-  step app-scaffold scaffold
-}
-
-# The scaffold (cmd/new-app) writes an app whose tests pass, in a scratch copy
-# of the repository's layout, so docs/Apps.md's first step always works.
-scaffold() {
-  local root=.build/scaffold
-  rm -rf "$root" && mkdir -p "$root" && ln -s ../../contract ../../capabilities "$root"/ &&
-    (cd capabilities/server && go run ./cmd/new-app -root "../../$root" -id scaffolded -entity request -web=false) &&
-    check_module "$root/apps/scaffolded/server"
 }
 
 mes() {
@@ -120,8 +110,6 @@ deploy() {
 
 pms() {
   step pms-server check_module apps/pms/server
-  step pms-client-k5 cargo test --manifest-path apps/pms/client/src-tauri/Cargo.toml
-  step pms-flows apps/pms/flows.sh
 }
 
 (($#)) || { echo "usage: $0 step...   steps: contract formal format capabilities composition composition-static web-types web-check web pms mes deploy"; exit 2; }

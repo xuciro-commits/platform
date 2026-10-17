@@ -3,16 +3,14 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/internal/host"
+	"platformserver/platform"
 	"reflect"
-
 	"slices"
 	"strings"
 	"time"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	"platformserver/platform"
 )
 
 // A page someone composes here (ADR-0034, #132): which object it shows, the
@@ -350,3 +348,8 @@ func (b *Build) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 	}
 	return nil
 }
+
+const (
+	PageType      = "build.page"
+	SchemaRelease = PageType + ".publish"
+)

@@ -5,8 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -20,7 +19,7 @@ func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
 		return
 	}
 	c := t.automation(build.ID, false)
-	owner, ok := t.app(build.ID).(host.AlertDefinitions)
+	owner, ok := t.app(build.ID).(AlertDefinitions)
 	if !ok {
 		return
 	}

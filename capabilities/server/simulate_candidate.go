@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
@@ -14,7 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 
 	"platformserver/platform"
 )
@@ -188,7 +187,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		candidate, err = t.releases.candidate(request.CandidateID)
 	} else {
 		if len(request.Roots) > 0 {
-			owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+			owner, ok := t.app(build.ID).(ConstructionDrafts)
 			if !ok {
 				err = fmt.Errorf("Construction draft owner is unavailable")
 			} else {
@@ -196,7 +195,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 			}
 		}
 		if request.ApplicationID != "" {
-			owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+			owner, ok := t.app(build.ID).(ConstructionDrafts)
 			if !ok {
 				err = fmt.Errorf("Construction draft owner is unavailable")
 			} else {
@@ -638,7 +637,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	if err != nil {
 		return nil, err
 	}
-	b, ok := construction.(host.ConstructionSandbox)
+	b, ok := construction.(ConstructionSandbox)
 	if !ok {
 		return nil, fmt.Errorf("construction owner has no isolated asset installer")
 	}

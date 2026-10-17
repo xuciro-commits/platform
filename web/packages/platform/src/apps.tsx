@@ -1,8 +1,8 @@
 // Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0010, ADR-0011).
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
-import { Fragment, useRef, useState } from "react";
+import type { Api } from "@platform/kernel";
+import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
+import { Fragment, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";
 
 // Tiers of the protocol graph: an app sits one column right of the providers of
@@ -48,39 +48,22 @@ const stateTone = (state?: string): "neutral" | "success" | "warning" => state =
 
 /** One card per package: what the index offers, what is installed, the precheck, and the decision that applies next. */
 function PackageList({ items }: { items: Api.PackageView[] }) {
-  const { can, client, decide } = useHost(), { open } = useWorkspace();
+  const { can, decide } = useHost();
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [versions, setVersions] = useState<Record<string, string>>({});
-  const creationKeys = useRef<Record<string, string>>({});
   if (!items.length) return <p className="text-sm text-muted">{t("No packages: the host offers no index and nothing is installed.")}</p>;
   const act = async (schema: string, id: string, payload: unknown) => {
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
     await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) }); // the host's own reason stays on the card
     setBusy("");
   };
-  const createDrafts = async (id: string, version: string) => {
-    const identity = `${id}@${version}`, key = creationKeys.current[identity] ??= crypto.randomUUID();
-    setBusy(id); setRefused(current => ({ ...current, [id]: "" }));
-    try {
-      const response = await client.call<Api.PackageDraftResult>("POST", `/v1/packages/${encodeURIComponent(id)}/drafts`, { version, key });
-      if (!response.ok) {
-        if (response.status < 500) delete creationKeys.current[identity];
-        setRefused(current => ({ ...current, [id]: apiErrorMessage(response.body) ?? t("Application drafts could not be created.") }));
-        return;
-      }
-      delete creationKeys.current[identity];
-      open({ view: "project", params: { id: response.body.applicationID } });
-    } catch (error) { setRefused(current => ({ ...current, [id]: apiErrorMessage(error) ?? t("The draft request is unconfirmed. Retry to check the same request.") })); }
-    finally { setBusy(""); }
-  };
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {[...new Set(items.map(item => item.descriptor.id || item.installed?.id || ""))].map(packageID => {
         const available = items.filter(item => (item.descriptor.id || item.installed?.id) === packageID);
         const held = available.find(item => item.installed)?.installed;
-        const protocol = available.some(item => item.descriptor.runtime), blueprint = available.some(item => item.descriptor.blueprint);
-        const version = versions[packageID] ?? held?.version ?? (protocol || blueprint ? "" : available[0]!.descriptor.version);
+        const version = versions[packageID] ?? held?.version ?? available[0]!.descriptor.version;
         const chosen = available.find(item => item.descriptor.version === version);
         const { descriptor: d, precheck, source } = chosen ?? available[0]!;
         const id = d.id || held?.id || "";
@@ -93,11 +76,9 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{d.title || held?.title || id}</span><span className="break-all font-mono text-xs text-muted">{id}</span>
               <Tag label={state && state !== "retired" ? t(state) : t("not installed")} tone={stateTone(state)} />
-              {d.runtime && <Tag label={d.runtime.profiles.some(profile => profile.simulation) ? t("Simulation protocol package") : t("Device protocol package")} tone={d.runtime.profiles.some(profile => profile.simulation) ? "warning" : "neutral"} />}
-              {d.blueprint && <Tag label={t("Application blueprint")} tone="info" />}
             </div>
             {d.description && <p className="text-xs text-muted">{d.description}</p>}
-            {(protocol || blueprint || available.length > 1) && <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select value={version} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
+            {available.length > 1 && <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select value={version} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
               <option value="">{t("Choose an exact version")}</option>{available.map(item => <option key={item.descriptor.version} value={item.descriptor.version}>{item.descriptor.version}{item.descriptor.version === held?.version ? ` · ${t(state === "retired" ? "Last installed" : "Installed")}` : ""}</option>)}
             </Select></label>}
             <dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
@@ -109,19 +90,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
               <dt className="text-muted">{t("Contributions")}</dt><dd>{(held?.contributions ?? d.contributions ?? []).map((c) => c.title || c.view).join(", ") || "—"}</dd>
               {held?.artifact && <><dt className="text-muted">{t("Sealed artifact")}</dt><dd className="break-all font-mono">{held.artifact}</dd></>}
               {!!held?.retained?.length && <><dt className="text-muted">{t("Retained")}</dt><dd>{held.retained.map((r) => `${r.version} (${when(r.at)})`).join(", ")}</dd></>}
-              {d.runtime && <>
-                <dt className="text-muted">{t("Driver interface")}</dt><dd>{d.runtime.abi}</dd>
-                <dt className="text-muted">{t("Binary targets")}</dt><dd>{d.runtime.targets.map(target => `${target.os}/${target.arch}`).join(", ")}</dd>
-                <dt className="text-muted">{t("Driver profiles")}</dt><dd className="grid gap-1">{d.runtime.profiles.map(profile => <span key={profile.id}>{t(profile.title)} · {profile.operations.map(operation => t(operation)).join(", ")}</span>)}</dd>
-              </>}
             </dl>
-            {d.runtime && <p className="text-xs text-muted">{t("Installing makes this exact version available to Connections. Configure and check a connection before publishing it; installation does not enable device writes.")}</p>}
-            {d.blueprint && <div className="grid gap-2 text-xs">
-              <p className="text-muted">{t("Install this version, then create editable application drafts from its blueprint. Review and publish those drafts in Application Studio. Creating drafts does not create business records or grant access.")}</p>
-              <p className="text-muted">{t("{count} definitions in the blueprint", { count: d.blueprint.assets.length })}</p>
-              {d.blueprint.guide && <Disclosure summary={t("Build guide")}><p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{d.blueprint.guide}</p></Disclosure>}
-              {can("build.app.create") && <div><Button size="sm" variant="primary" disabled={busy === id || state !== "active" || held?.version !== d.version || !chosen} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
-            </div>}
             {(next === "install" || different || source === "installed") && <div className="flex flex-wrap items-center gap-2 text-xs">
               <Tag label={precheck.ok ? t("precheck ok") : t("precheck failed")} tone={precheck.ok ? "success" : "danger"} />
               {!!precheck.missing?.length && <span className="text-[var(--tone-danger)]">{t("needs {packages} installed first", { packages: precheck.missing.join(", ") })}</span>}

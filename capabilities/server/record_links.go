@@ -2,13 +2,12 @@ package platformserver
 
 import (
 	"fmt"
-	"platformserver/internal/host"
 	"reflect"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -200,7 +199,7 @@ func (t *Tenant) installPublicationLinkConstraint(store *recordStore, schema str
 	if schema != build.SchemaLinkType {
 		return nil
 	}
-	owner, ok := t.app(build.ID).(host.LinkPublicationReader)
+	owner, ok := t.app(build.ID).(LinkPublicationReader)
 	if !ok {
 		return fmt.Errorf("link publication owner is unavailable")
 	}

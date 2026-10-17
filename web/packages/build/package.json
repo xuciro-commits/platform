@@ -4,8 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
-    "./catalog": "./src/catalog.ts",
-    "./catalog/examples": "./src/catalog.examples.tsx",
     "./templates": "./src/workshop/templates.ts"
   },
   "scripts": {
@@ -19,8 +17,7 @@
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "lucide-react": "^1.47.0",
-    "react": "^19.3.0",
-    "@platform/catalog": "workspace:*"
+    "react": "^19.3.0"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

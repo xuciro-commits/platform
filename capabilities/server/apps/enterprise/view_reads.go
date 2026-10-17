@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -33,7 +32,7 @@ func readableModel(c platform.Caller, m Model, now time.Time) Model {
 			if err != nil {
 				continue
 			}
-			pin.Label = enterpriseapi.RefID(pin.Ref)
+			pin.Label = RefID(pin.Ref)
 			for _, key := range []string{"name", "title", "number", "code"} {
 				if label, ok := row[key].(string); ok && label != "" {
 					pin.Label = label

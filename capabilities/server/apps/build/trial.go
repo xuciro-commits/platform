@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"slices"
 
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -43,7 +42,7 @@ func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 	}
 	for _, o := range objects {
 		if !o.Archived {
-			add(platform.AssetObject, o.ID, buildapi.TypeOf(o.Name))
+			add(platform.AssetObject, o.ID, TypeOf(o.Name))
 			add(platform.AssetPage, o.ID, o.Name)
 			index[platform.AssetRef{App: ID, Kind: platform.AssetPage, Name: o.Name}] = JointDraftRef{Kind: platform.AssetObject, ID: o.ID}
 			for _, a := range objectActions(o, Entity(o)) {
@@ -66,7 +65,7 @@ func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 	}
 	for _, p := range processes {
 		if !p.Archived {
-			add(platform.AssetFlow, p.ID, buildapi.TypeOf(p.Name))
+			add(platform.AssetFlow, p.ID, TypeOf(p.Name))
 		}
 	}
 	if root.Name == "" {
@@ -199,7 +198,7 @@ func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 		if deps, ok := graph[ref]; ok {
 			queue = append(queue, deps...)
 		} else if draft.Kind == platform.AssetObject {
-			queue = append(queue, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(objects[slices.IndexFunc(objects, func(o Object) bool { return o.ID == draft.ID })].Name)})
+			queue = append(queue, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(objects[slices.IndexFunc(objects, func(o Object) bool { return o.ID == draft.ID })].Name)})
 		}
 	}
 	return out, nil

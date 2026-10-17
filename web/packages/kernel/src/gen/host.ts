@@ -1015,7 +1015,6 @@ export type Connection = {
   name: string;
   title: string;
   kind: "http" | "odata" | "postgres";
-  protocol?: DriverBinding;
   address: string;
   secret?: string;
   allowPrivate?: boolean;
@@ -1033,23 +1032,7 @@ export type ConnectionCheck = {
   ok: boolean;
   error?: string;
   detail?: string;
-  samples?: DriverSample[];
   bindingRevision?: string;
-};
-
-export type ConnectionKind = {
-  id: string;
-  title: string;
-  kind: string;
-  addressPlaceholder?: string;
-  package?: string;
-  version?: string;
-  digest?: string;
-  profile?: DriverProfile;
-};
-
-export type ConnectionKindPage = {
-  items: ConnectionKind[];
 };
 
 export type ConnectorError = {
@@ -1370,102 +1353,6 @@ export type DraftChangeField = {
   name: string;
   before?: unknown;
   after?: unknown;
-};
-
-export type DriverBinding = {
-  package: string;
-  version: string;
-  digest: string;
-  profile: string;
-  configuration: DriverConfiguration;
-};
-
-export type DriverCommand = {
-  id: string;
-  point: string;
-  min?: string;
-  max?: string;
-};
-
-export type DriverConfiguration = {
-  connection?: Record<string, unknown>;
-  devices: DriverDevice[];
-  points: DriverPoint[];
-  commands?: DriverCommand[];
-  scenario?: string;
-  seed?: number;
-};
-
-export type DriverCoverage = {
-  availableSince: string;
-  completeUntil: string;
-  truncated: boolean;
-  good: number;
-  bad: number;
-  uncertain: number;
-  stale: number;
-};
-
-export type DriverDevice = {
-  id: string;
-  title: string;
-  settings?: Record<string, unknown>;
-};
-
-export type DriverPoint = {
-  id: string;
-  device: string;
-  address: string;
-  type: string;
-  dataType?: string;
-  unit?: string;
-  scale?: string;
-  offset?: string;
-  intervalMS: number;
-};
-
-export type DriverProfile = {
-  id: string;
-  title: string;
-  description?: string;
-  operations: string[];
-  simulation?: boolean;
-  scenarios?: string[];
-  connectionFields?: Field[];
-  deviceFields?: Field[];
-};
-
-export type DriverRuntime = {
-  abi: string;
-  targets: DriverTarget[];
-  profiles: DriverProfile[];
-};
-
-export type DriverSample = {
-  device: string;
-  signal: string;
-  type: string;
-  value?: unknown;
-  unit?: string;
-  quality: string;
-  at: string;
-  receivedAt: string;
-  reason?: string;
-  source: DriverSampleSource;
-};
-
-export type DriverSampleSource = {
-  connection: string;
-  revision: string;
-  generation: string;
-  sequence?: string;
-  clock?: string;
-};
-
-export type DriverTarget = {
-  os: string;
-  arch: string;
-  artifact: string;
 };
 
 export type Edge = {
@@ -1986,7 +1873,6 @@ export type InputOptions = {
 };
 
 export type InstalledPackage = {
-  runtime?: DriverRuntime;
   id: string;
   version: string;
   namespace: string;
@@ -2460,8 +2346,6 @@ export type ObservationResult = {
   points?: ObservationPoint[];
   sources: string[];
   matched?: boolean;
-  coverage?: DriverCoverage;
-  latest?: DriverSample;
 };
 
 export type Operation = {
@@ -2526,12 +2410,6 @@ export type OrgSeed = {
   memberships: Membership[];
 };
 
-export type PackageBlueprint = {
-  roots: AssetRef[];
-  assets: ReleaseAsset[];
-  guide?: string;
-};
-
 export type PackageContribution = {
   view: string;
   surface?: string;
@@ -2541,8 +2419,6 @@ export type PackageContribution = {
 };
 
 export type PackageDescriptor = {
-  blueprint?: PackageBlueprint;
-  runtime?: DriverRuntime;
   id: string;
   version: string;
   title?: string;
@@ -2552,26 +2428,6 @@ export type PackageDescriptor = {
   contributions?: PackageContribution[];
   artifactDigest?: string;
   description?: string;
-};
-
-export type PackageDraft = {
-  ref: AssetRef;
-  type: string;
-  id: string;
-};
-
-export type PackageDraftRequest = {
-  version: string;
-  key: string;
-};
-
-export type PackageDraftResult = {
-  package: string;
-  version: string;
-  key: string;
-  application: string;
-  applicationID: string;
-  drafts: PackageDraft[];
 };
 
 export type PackageView = {

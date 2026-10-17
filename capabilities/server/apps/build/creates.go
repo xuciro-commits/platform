@@ -2,7 +2,6 @@ package build
 
 import (
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"strings"
 	"time"
@@ -22,7 +21,7 @@ func (b *Build) checkCreates(o Object) error {
 			if !strings.HasPrefix(cr.Object, ID+".") {
 				return fmt.Errorf("%s, which is another app's object; change it through that app's actions", where)
 			}
-			if cr.Object == buildapi.TypeOf(o.Name) {
+			if cr.Object == TypeOf(o.Name) {
 				return fmt.Errorf("%s, which is this object itself", where)
 			}
 			if b.host == nil {
@@ -33,8 +32,8 @@ func (b *Build) checkCreates(o Object) error {
 				return fmt.Errorf("%s, which this tenant has not published", where)
 			}
 			via, ok := info.Field(cr.Via)
-			if !ok || via.Type != "reference" || via.Ref != buildapi.TypeOf(o.Name) {
-				return fmt.Errorf("%s through %q, which is not its reference to %s", where, cr.Via, buildapi.TypeOf(o.Name))
+			if !ok || via.Type != "reference" || via.Ref != TypeOf(o.Name) {
+				return fmt.Errorf("%s through %q, which is not its reference to %s", where, cr.Via, TypeOf(o.Name))
 			}
 			for _, set := range cr.Sets {
 				if set.Field == cr.Via {

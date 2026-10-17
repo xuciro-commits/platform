@@ -2,13 +2,12 @@ package platformserver
 
 import (
 	"fmt"
-	"platformserver/internal/host"
 	"platformserver/platform"
 	"slices"
 )
 
 func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (platform.ReleaseAsset, error) {
-	provider, ok := t.procs.(host.NativeFlowAssets)
+	provider, ok := t.procs.(NativeFlowAssets)
 	if !ok {
 		return platform.ReleaseAsset{}, fmt.Errorf("native flow has no original descriptor owner")
 	}
@@ -27,7 +26,7 @@ func (t *Tenant) flowReleaseAsset(app, name string, version int) (platform.Relea
 	if owner == nil {
 		return platform.ReleaseAsset{}, fmt.Errorf("flow owner is unavailable")
 	}
-	if provider, ok := owner.(host.FlowReleaseOwner); ok {
+	if provider, ok := owner.(FlowReleaseOwner); ok {
 		return provider.FlowReleaseAsset(name, version)
 	}
 	return t.nativeFlowAsset(owner, name, version)

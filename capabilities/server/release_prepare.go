@@ -9,8 +9,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	build "platformserver/apps/build"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 

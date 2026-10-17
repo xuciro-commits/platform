@@ -8,13 +8,12 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
 func ruleLookup(o Object, lookup func(string) (platform.EntityInfo, bool)) func(string) (platform.EntityInfo, bool) {
 	return func(typ string) (platform.EntityInfo, bool) {
-		if typ != buildapi.TypeOf(o.Name) {
+		if typ != TypeOf(o.Name) {
 			if lookup == nil {
 				return platform.EntityInfo{}, false
 			}
@@ -35,7 +34,7 @@ func ruleLookup(o Object, lookup func(string) (platform.EntityInfo, bool)) func(
 	}
 }
 func ruleSpec(o Object, a Action, read *platform.RuleReadSpec) platform.RuleReadSpec {
-	s := platform.RuleReadSpec{Object: buildapi.TypeOf(o.Name), Inputs: map[string]platform.ExprType{}}
+	s := platform.RuleReadSpec{Object: TypeOf(o.Name), Inputs: map[string]platform.ExprType{}}
 	if a.Transaction != nil {
 		s.Inputs["$subject"] = platform.ExprType{Kind: "reference", Object: s.Object}
 	}
@@ -210,7 +209,7 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 	for i := range o.Fields {
 		f := &o.Fields[i]
 		if f.Formula != "" {
-			node, parseErr := buildapi.ValueParseFormula(f.Formula)
+			node, parseErr := ValueParseFormula(f.Formula)
 			if parseErr != nil {
 				return parseErr
 			}
@@ -275,7 +274,7 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 						return fmt.Errorf("action %s assignment input %s does not fit %s", a.Name, set.From, f.Type)
 					}
 					if f.Type == "choice" {
-						for _, option := range buildapi.ValueChoices(a.Inputs[ix].Choices) {
+						for _, option := range ValueChoices(a.Inputs[ix].Choices) {
 							found := false
 							for _, allowed := range f.Choices {
 								if option == allowed {

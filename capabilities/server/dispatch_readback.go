@@ -9,7 +9,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -129,9 +129,6 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			problem = fmt.Errorf("The dispatch status credential is unavailable in this environment")
 		} else {
 			rows, problem = t.readSourceWithConnection(source, &connection, true)
-			if connection.Protocol != nil {
-				rows = slices.DeleteFunc(rows, func(row map[string]any) bool { return row["runID"] != run.ID || row["attemptID"] != run.Intent })
-			}
 		}
 	case policy.Observation != "":
 		var definition platform.ObservationDefinition

@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -21,7 +20,7 @@ func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]platform.Capabili
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(ConstructionDrafts)
 	if !ok {
 		return nil, fmt.Errorf("tenant has no builder")
 	}

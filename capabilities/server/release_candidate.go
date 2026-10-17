@@ -3,12 +3,11 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/host"
 	"slices"
 	"strings"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	build "platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -291,7 +290,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(ConstructionDrafts)
 	if !ok {
 		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
@@ -364,7 +363,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 		// A function/flow candidate retains its source object, but may not
 		// retain its create/edit action assets. Ask the original owner for
 		// those test inputs using that exact object image, not the live model.
-		owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+		owner, ok := t.app(build.ID).(ConstructionDrafts)
 		if !ok {
 			return reply, fmt.Errorf("construction owner is unavailable")
 		}
@@ -386,7 +385,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 // comparison. A later save must recompute it under the tenant lock and reject
 // a stale candidate ID rather than trusting bytes supplied by the browser.
 func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(ConstructionDrafts)
 	if !ok {
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
@@ -572,7 +571,7 @@ func (t *Tenant) PreviewApplicationDrafts(m platform.Member, id string) (Release
 		return ReleasePreview{}, fmt.Errorf("Only a builder can inspect application drafts")
 	}
 	t.mu.Lock()
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(ConstructionDrafts)
 	if !ok {
 		t.mu.Unlock()
 		return ReleasePreview{}, fmt.Errorf("Construction owner is unavailable")

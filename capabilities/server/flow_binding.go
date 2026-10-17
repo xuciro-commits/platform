@@ -13,7 +13,7 @@ import (
 // its retained native version; dependency owners supply their complete assets.
 func (h hostView) BindFlow(app, name string, version int, prior host.FlowBinding) (host.FlowBinding, error) {
 	if prior.Existing && prior.Dependencies == "" && prior.Release == "" {
-		if _, controlled := h.t.app(app).(host.FlowReleaseOwner); !controlled {
+		if _, controlled := h.t.app(app).(FlowReleaseOwner); !controlled {
 			return host.FlowBinding{}, nil
 		}
 	}
