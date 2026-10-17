@@ -89,11 +89,7 @@ func (b *Build) checkMigrationPlan(m MigrationPlanRecord) error {
 }
 
 func migrationPlanAsset(m MigrationPlanRecord, version int) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(m.descriptor())
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetMigration, Name: m.Name}, SourceVersion: definitionVersion + ".migration-" + strconv.Itoa(version), ContractVersion: 1, Body: body})
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetMigration, Name: m.Name}, definitionVersion+".migration-"+strconv.Itoa(version), m.descriptor())
 }
 
 func decodeMigrationAsset(asset platform.ReleaseAsset) (platform.MigrationDescriptor, int, error) {
@@ -127,44 +123,11 @@ func (b *Build) retainMigrationPlan(m MigrationPlanRecord) (MigrationPlanRecord,
 }
 
 func (b *Build) migrationPlanAssets() ([]platform.ReleaseAsset, error) {
-	rows, err := b.migrationPlanInventory()
-	if err != nil {
-		return nil, err
-	}
-	out := []platform.ReleaseAsset{}
-	for _, m := range rows {
-		if m.Archived || m.Published == "" {
-			continue
-		}
-		var a platform.ReleaseAsset
-		if json.Unmarshal([]byte(m.Published), &a) != nil {
-			return nil, fmt.Errorf("Invalid retained migration plan")
-		}
-		if _, _, err := decodeMigrationAsset(a); err != nil {
-			return nil, err
-		}
-		out = append(out, a)
-	}
-	return out, nil
+	return portableDefinitionAssets(b.migrationPlanInventory, decodeMigrationAsset, "migration plan")
 }
 
 func (b *Build) migrationPlanPinned(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
-	rows, err := b.migrationPlanInventory()
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	for _, m := range rows {
-		for _, raw := range m.Versions {
-			var a platform.ReleaseAsset
-			if json.Unmarshal([]byte(raw), &a) == nil && a.Ref == ref && a.SourceVersion == version {
-				if _, _, err := decodeMigrationAsset(a); err != nil {
-					return a, err
-				}
-				return a, nil
-			}
-		}
-	}
-	return platform.ReleaseAsset{}, fmt.Errorf("The migration plan version is not retained")
+	return pinnedDefinitionAsset(b.migrationPlanInventory, decodeMigrationAsset, ref, version, "migration plan")
 }
 
 func (b *Build) migrationPlanDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
@@ -248,26 +211,7 @@ func equalMigrationAssets(a, b platform.ReleaseAsset) bool {
 }
 
 func migrationPlanInstallation(image json.RawMessage) (platform.AssetInstallation, error) {
-	var m MigrationPlanRecord
-	var a platform.ReleaseAsset
-	if json.Unmarshal(image, &m) != nil || m.ID == "" || m.State != "published" || json.Unmarshal([]byte(m.Published), &a) != nil {
-		return platform.AssetInstallation{}, fmt.Errorf("Invalid migration installation")
-	}
-	d, version, err := decodeMigrationAsset(a)
-	if err != nil || version != m.DefinitionVersion || d.Name != m.Name || len(m.Versions) != version || m.Versions[len(m.Versions)-1] != m.Published {
-		return platform.AssetInstallation{}, fmt.Errorf("Invalid migration version history")
-	}
-	for i, raw := range m.Versions {
-		var prior platform.ReleaseAsset
-		if json.Unmarshal([]byte(raw), &prior) != nil {
-			return platform.AssetInstallation{}, fmt.Errorf("Invalid migration version history")
-		}
-		p, v, e := decodeMigrationAsset(prior)
-		if e != nil || v != i+1 || p.Name != m.Name {
-			return platform.AssetInstallation{}, fmt.Errorf("Invalid migration version history")
-		}
-	}
-	return platform.AssetInstallation{Ref: a.Ref, Schema: SchemaMigrationPlan, Record: MigrationPlanType + "/" + m.ID, Image: slices.Clone(image)}, nil
+	return portableDefinitionInstallation[MigrationPlanRecord](image, MigrationPlanType, SchemaMigrationPlan, "migration", decodeMigrationAsset)
 }
 
 // Legacy plan inputs are frozen through the same declaration owner inside

@@ -10,6 +10,75 @@ import (
 	"platformserver/platform"
 )
 
+func TestPortableDefinitionsKeepPinnedHistoryAndInstallationBytes(t *testing.T) {
+	sample := SampleSetRecord{Name: "example", Title: "Example", Samples: []platform.SampleRecords{{Type: "build.receipt", Records: []json.RawMessage{json.RawMessage(`{"id":"R","item":"sample"}`)}}}}
+	migration := MigrationPlanRecord{Name: "example", Title: "Example", Plan: platform.MigrationPlan{From: "sha256-v1:" + strings.Repeat("1", 64), To: "sha256-v1:" + strings.Repeat("2", 64), Scope: platform.MigrationScope{Type: "build.receipt"}, Steps: []platform.MigrateStep{{Kind: "rename", Types: []string{"build.receipt"}, Batch: 1, Fields: []platform.MigrateField{{From: "item", To: "title"}}}}}}
+	for _, tc := range []struct {
+		prefix      string
+		kind        platform.AssetKind
+		record      any
+		descriptor  any
+		current     func(*Build) ([]platform.ReleaseAsset, error)
+		pinned      func(*Build, platform.AssetRef, string) (platform.ReleaseAsset, error)
+		install     func(json.RawMessage) (platform.AssetInstallation, error)
+		typ, schema string
+	}{
+		{"samples", platform.AssetSampleSet, &sample, sample.descriptor(), (*Build).sampleSetAssets, (*Build).sampleSetPinned, sampleSetInstallation, SampleSetType, SchemaSampleSet},
+		{"migration", platform.AssetMigration, &migration, migration.descriptor(), (*Build).migrationPlanAssets, (*Build).migrationPlanPinned, migrationPlanInstallation, MigrationPlanType, SchemaMigrationPlan},
+	} {
+		t.Run(tc.prefix, func(t *testing.T) {
+			b, rows := lifecycleBuild()
+			asset, err := definitionReleaseAsset(platform.AssetRef{App: ID, Kind: tc.kind, Name: "example"}, definitionVersion+"."+tc.prefix+"-1", tc.descriptor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second := asset
+			second.SourceVersion = definitionVersion + "." + tc.prefix + "-2"
+			firstRaw, secondRaw := string(platform.Raw(asset)), string(platform.Raw(second))
+			damaged := asset
+			damaged.Body = json.RawMessage(`{}`)
+			unrelated := damaged
+			unrelated.SourceVersion = "not-requested"
+			row := map[string]any{}
+			if err := json.Unmarshal(platform.Raw(tc.record), &row); err != nil {
+				t.Fatal(err)
+			}
+			row["id"], row["state"], row["definitionVersion"], row["published"], row["archived"] = "row", "published", 2, secondRaw, true
+			for i, history := range [][]string{{"{", string(platform.Raw(unrelated)), firstRaw, secondRaw}, {string(platform.Raw(damaged)), firstRaw, secondRaw}} {
+				row["versions"] = history
+				if err := json.Unmarshal(platform.Raw(row), tc.record); err != nil {
+					t.Fatal(err)
+				}
+				rows.rows[reflect.TypeOf(tc.record).Elem()] = []any{reflect.ValueOf(tc.record).Elem().Interface()}
+				if current, err := tc.current(b); err != nil || len(current) != 0 {
+					t.Fatal("archived asset appeared in current assets", current, err)
+				}
+				found, err := tc.pinned(b, asset.Ref, asset.SourceVersion)
+				if i == 0 && (err != nil || !reflect.DeepEqual(found, asset)) || i == 1 && err == nil {
+					t.Fatal("pinned read skipped matching damage or rejected unrelated history", found, err)
+				}
+			}
+			row["archived"], row["versions"] = false, []string{firstRaw, secondRaw}
+			image := json.RawMessage(" \n" + string(platform.Raw(row)) + "\n")
+			installed, err := tc.install(image)
+			if err != nil || installed.Ref != asset.Ref || installed.Schema != tc.schema || installed.Record != tc.typ+"/row" || string(installed.Image) != string(image) {
+				t.Fatal("installation changed its identity or original image bytes", installed, err)
+			}
+			for _, invalid := range []struct {
+				field string
+				value any
+			}{{"versions", []string{secondRaw, secondRaw}}, {"versions", []string{strings.ReplaceAll(firstRaw, `"name":"example"`, `"name":"other"`), secondRaw}}, {"published", " " + secondRaw}} {
+				saved := row[invalid.field]
+				row[invalid.field] = invalid.value
+				if _, err := tc.install(platform.Raw(row)); err == nil {
+					t.Fatal("installation accepted inconsistent history", invalid.field)
+				}
+				row[invalid.field] = saved
+			}
+		})
+	}
+}
+
 func TestRetainedDeclarationAssetsPreserveDescriptorsAndRejectInvalidVersions(t *testing.T) {
 	b, _ := lifecycleBuild()
 	source := b.Manifest().Version

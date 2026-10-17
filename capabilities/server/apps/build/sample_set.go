@@ -88,11 +88,7 @@ func (b *Build) checkSampleSet(m SampleSetRecord) error {
 }
 
 func sampleSetAsset(m SampleSetRecord, version int) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(m.descriptor())
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}, SourceVersion: definitionVersion + ".samples-" + strconv.Itoa(version), ContractVersion: 1, Body: body})
+	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}, definitionVersion+".samples-"+strconv.Itoa(version), m.descriptor())
 }
 
 func decodeSampleAsset(asset platform.ReleaseAsset) (platform.SampleSet, int, error) {
@@ -126,44 +122,11 @@ func (b *Build) retainSampleSet(m SampleSetRecord) (SampleSetRecord, error) {
 }
 
 func (b *Build) sampleSetAssets() ([]platform.ReleaseAsset, error) {
-	rows, err := b.sampleSetInventory()
-	if err != nil {
-		return nil, err
-	}
-	out := []platform.ReleaseAsset{}
-	for _, m := range rows {
-		if m.Archived || m.Published == "" {
-			continue
-		}
-		var a platform.ReleaseAsset
-		if json.Unmarshal([]byte(m.Published), &a) != nil {
-			return nil, fmt.Errorf("Invalid retained sample set")
-		}
-		if _, _, err := decodeSampleAsset(a); err != nil {
-			return nil, err
-		}
-		out = append(out, a)
-	}
-	return out, nil
+	return portableDefinitionAssets(b.sampleSetInventory, decodeSampleAsset, "sample set")
 }
 
 func (b *Build) sampleSetPinned(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
-	rows, err := b.sampleSetInventory()
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	for _, m := range rows {
-		for _, raw := range m.Versions {
-			var a platform.ReleaseAsset
-			if json.Unmarshal([]byte(raw), &a) == nil && a.Ref == ref && a.SourceVersion == version {
-				if _, _, err := decodeSampleAsset(a); err != nil {
-					return a, err
-				}
-				return a, nil
-			}
-		}
-	}
-	return platform.ReleaseAsset{}, fmt.Errorf("The sample set version is not retained")
+	return pinnedDefinitionAsset(b.sampleSetInventory, decodeSampleAsset, ref, version, "sample set")
 }
 
 func (b *Build) sampleSetDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
@@ -247,24 +210,5 @@ func equalSampleAssets(a, b platform.ReleaseAsset) bool {
 }
 
 func sampleSetInstallation(image json.RawMessage) (platform.AssetInstallation, error) {
-	var m SampleSetRecord
-	var a platform.ReleaseAsset
-	if json.Unmarshal(image, &m) != nil || m.ID == "" || m.State != "published" || json.Unmarshal([]byte(m.Published), &a) != nil {
-		return platform.AssetInstallation{}, fmt.Errorf("Invalid sample installation")
-	}
-	d, version, err := decodeSampleAsset(a)
-	if err != nil || version != m.DefinitionVersion || d.Name != m.Name || len(m.Versions) != version || m.Versions[len(m.Versions)-1] != m.Published {
-		return platform.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
-	}
-	for i, raw := range m.Versions {
-		var prior platform.ReleaseAsset
-		if json.Unmarshal([]byte(raw), &prior) != nil {
-			return platform.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
-		}
-		p, v, e := decodeSampleAsset(prior)
-		if e != nil || v != i+1 || p.Name != m.Name {
-			return platform.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
-		}
-	}
-	return platform.AssetInstallation{Ref: a.Ref, Schema: SchemaSampleSet, Record: SampleSetType + "/" + m.ID, Image: slices.Clone(image)}, nil
+	return portableDefinitionInstallation[SampleSetRecord](image, SampleSetType, SchemaSampleSet, "sample", decodeSampleAsset)
 }

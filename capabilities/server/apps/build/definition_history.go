@@ -14,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-// definitionFamily contains only the owner metadata shared by these four
+// definitionFamily contains only the owner metadata shared by these
 // retained declaration families. Their declaration checks remain type specific.
 type definitionFamily struct {
 	platform.Record
@@ -34,6 +34,10 @@ func definitionFamilyOf(record any) definitionFamily {
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case LinkType:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
+	case SampleSetRecord:
+		return definitionFamily{r.Record, r.Name, r.State, r.DefinitionVersion, r.Published, r.Versions}
+	case MigrationPlanRecord:
+		return definitionFamily{r.Record, r.Name, r.State, r.DefinitionVersion, r.Published, r.Versions}
 	}
 	panic("unsupported retained definition")
 }
@@ -51,6 +55,72 @@ func setDefinitionFamily(record any, family definitionFamily) {
 	default:
 		panic("unsupported retained definition")
 	}
+}
+
+func portableDefinitionAssets[T, D any](inventory func() ([]T, error), decode func(platform.ReleaseAsset) (D, int, error), label string) ([]platform.ReleaseAsset, error) {
+	rows, err := inventory()
+	if err != nil {
+		return nil, err
+	}
+	out := []platform.ReleaseAsset{}
+	for _, record := range rows {
+		family := definitionFamilyOf(record)
+		if family.Archived || family.Published == "" {
+			continue
+		}
+		var asset platform.ReleaseAsset
+		if json.Unmarshal([]byte(family.Published), &asset) != nil {
+			return nil, fmt.Errorf("Invalid retained %s", label)
+		}
+		if _, _, err := decode(asset); err != nil {
+			return nil, err
+		}
+		out = append(out, asset)
+	}
+	return out, nil
+}
+
+func pinnedDefinitionAsset[T, D any](inventory func() ([]T, error), decode func(platform.ReleaseAsset) (D, int, error), ref platform.AssetRef, version, label string) (platform.ReleaseAsset, error) {
+	rows, err := inventory()
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	for _, record := range rows {
+		for _, raw := range definitionFamilyOf(record).Versions {
+			var asset platform.ReleaseAsset
+			if json.Unmarshal([]byte(raw), &asset) == nil && asset.Ref == ref && asset.SourceVersion == version {
+				_, _, err := decode(asset)
+				return asset, err
+			}
+		}
+	}
+	return platform.ReleaseAsset{}, fmt.Errorf("The %s version is not retained", label)
+}
+
+func portableDefinitionInstallation[T, D any](image json.RawMessage, typ, schema, label string, decode func(platform.ReleaseAsset) (D, int, error)) (platform.AssetInstallation, error) {
+	var record T
+	var asset platform.ReleaseAsset
+	if json.Unmarshal(image, &record) != nil {
+		return platform.AssetInstallation{}, fmt.Errorf("Invalid %s installation", label)
+	}
+	family := definitionFamilyOf(record)
+	if family.ID == "" || family.State != "published" || json.Unmarshal([]byte(family.Published), &asset) != nil {
+		return platform.AssetInstallation{}, fmt.Errorf("Invalid %s installation", label)
+	}
+	_, version, err := decode(asset)
+	if err != nil || version != family.Version || asset.Ref.Name != family.Name || len(family.Versions) != version || family.Versions[len(family.Versions)-1] != family.Published {
+		return platform.AssetInstallation{}, fmt.Errorf("Invalid %s version history", label)
+	}
+	for i, raw := range family.Versions {
+		var prior platform.ReleaseAsset
+		if json.Unmarshal([]byte(raw), &prior) != nil {
+			return platform.AssetInstallation{}, fmt.Errorf("Invalid %s version history", label)
+		}
+		if _, ordinal, err := decode(prior); err != nil || ordinal != i+1 || prior.Ref.Name != family.Name {
+			return platform.AssetInstallation{}, fmt.Errorf("Invalid %s version history", label)
+		}
+	}
+	return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: typ + "/" + family.ID, Image: slices.Clone(image)}, nil
 }
 
 // Type-specific checks have already prepared the declaration. Its original
