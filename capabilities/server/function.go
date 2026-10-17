@@ -254,13 +254,8 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 		return err
 	}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	if i >= 0 {
-		if h.t.definitions[i].Source != "tenant" {
-			return fmt.Errorf("function %s is owned by code", ref)
-		}
-		h.t.definitions[i] = def
-	} else {
-		h.t.definitions = append(h.t.definitions, def)
+	if i >= 0 && h.t.definitions[i].Source != "tenant" {
+		return fmt.Errorf("function %s is owned by code", ref)
 	}
 	// An installed declaration may grant an existing code action to newly
 	// declared tenant roles. Keep discovery consistent with the owner's catalog.
@@ -272,7 +267,7 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 			}
 		}
 	}
-	slices.SortFunc(h.t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	h.t.storeDefinition(i, def)
 	return nil
 }
 

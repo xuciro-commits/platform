@@ -110,6 +110,17 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	return nil
 }
 
+// storeDefinition updates the existing discovery registry; callers own
+// declaration validation, version retention and installation side effects.
+func (t *Tenant) storeDefinition(index int, def platform.Definition) {
+	if index >= 0 {
+		t.definitions[index] = def
+	} else {
+		t.definitions = append(t.definitions, def)
+	}
+	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+}
+
 // installDefinitions puts the installed object, its actions and its pages in
 // the asset registry, so code and builder discover one set of assets (ADR-0032).
 func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page) error {
@@ -902,11 +913,6 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	if err != nil {
 		return err
 	}
-	if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
-		t.definitions[i] = def
-	} else {
-		t.definitions = append(t.definitions, def)
-	}
-	slices.SortFunc(t.definitions, func(x, y platform.Definition) int { return strings.Compare(x.Ref.String(), y.Ref.String()) })
+	t.storeDefinition(slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }), def)
 	return nil
 }

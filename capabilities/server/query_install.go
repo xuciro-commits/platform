@@ -91,13 +91,11 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 		if retained, ok := def.QueryVersions[def.Version]; ok && !sameQuery(retained, q) {
 			return fmt.Errorf("query version bytes cannot change")
 		}
-		def.QueryVersions[def.Version] = q
-		h.t.definitions[i] = def
 	} else {
-		def.QueryVersions = map[string]platform.NamedQuery{def.Version: q}
-		h.t.definitions = append(h.t.definitions, def)
+		def.QueryVersions = map[string]platform.NamedQuery{}
 	}
-	slices.SortFunc(h.t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	def.QueryVersions[def.Version] = q
+	h.t.storeDefinition(i, def)
 	return nil
 }
 

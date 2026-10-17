@@ -9,7 +9,6 @@ import (
 	"platformserver/platform"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -86,12 +85,7 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 		return err
 	}
 	def.LinkVersions[def.Version] = l
-	if i >= 0 {
-		h.t.definitions[i] = def
-	} else {
-		h.t.definitions = append(h.t.definitions, def)
-	}
-	slices.SortFunc(h.t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	h.t.storeDefinition(i, def)
 	return nil
 }
 

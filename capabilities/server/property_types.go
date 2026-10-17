@@ -6,7 +6,6 @@ import (
 	"platformserver/platform"
 	"slices"
 	"strconv"
-	"strings"
 )
 
 func (h hostView) ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool) {
@@ -58,12 +57,7 @@ func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType
 		}
 	}
 	d.PropertyVersions[d.Version] = p
-	if i >= 0 {
-		h.t.definitions[i] = d
-	} else {
-		h.t.definitions = append(h.t.definitions, d)
-	}
-	slices.SortFunc(h.t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	h.t.storeDefinition(i, d)
 	return nil
 }
 

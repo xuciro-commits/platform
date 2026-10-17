@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	"platformserver/platform"
 )
@@ -73,14 +72,9 @@ func (h hostView) InstallOperation(c platform.Caller, o platform.Operation, vers
 		return err
 	}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-	if i >= 0 {
-		if h.t.definitions[i].Source != "tenant" {
-			return fmt.Errorf("operation %s is owned by code", o.Name)
-		}
-		h.t.definitions[i] = def
-	} else {
-		h.t.definitions = append(h.t.definitions, def)
+	if i >= 0 && h.t.definitions[i].Source != "tenant" {
+		return fmt.Errorf("operation %s is owned by code", o.Name)
 	}
-	slices.SortFunc(h.t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	h.t.storeDefinition(i, def)
 	return nil
 }
