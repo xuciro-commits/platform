@@ -4,7 +4,6 @@
 // runtime. A spec reads as the route a person would walk; the kit is the
 // hands. Members are the development host's seats: a builder (`manager`) and
 // an operator (`desk`).
-import { readFileSync } from "node:fs";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 import { decide, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision } from "./host";
 
@@ -16,11 +15,6 @@ const APP = "build";
 
 /** A short lowercase name usable as an object or page name. */
 export const slug = (prefix: string) => fresh(prefix).replace(/[^a-z0-9]/gi, "").toLowerCase();
-
-/** The sample Workshop module the import dialog understands, fresh each call. */
-export function sampleModule(): any {
-  return JSON.parse(readFileSync(new URL("../../packages/build/src/workshop/module-import/sample.workshop.json", import.meta.url), "utf8"));
-}
 
 /** The host as one member: decisions over the API, records read back. */
 export class Member {
@@ -107,16 +101,6 @@ export class Editor {
     this.inspector = page.getByRole("region", { name: "Inspector", exact: true });
   }
   open(builder: Builder, pageID: string) { return builder.open(this.page, `/module?page=${pageID}&surface=studio`); }
-  /** Imports a Workshop module through the dialog; `map` chooses object/field/metric targets. */
-  async importModule(module: unknown, map?: (dialog: ReturnType<Page["getByRole"]>) => Promise<void>) {
-    await this.page.getByRole("button", { name: "More page commands", exact: true }).click();
-    await this.page.getByRole("menuitem", { name: "Import Workshop module…", exact: true }).click();
-    const dialog = this.page.getByRole("dialog", { name: "Import Workshop module", exact: true });
-    await dialog.getByRole("textbox", { name: "Source module JSON", exact: true }).fill(JSON.stringify(module));
-    await map?.(dialog);
-    await dialog.getByRole("checkbox").check();
-    await dialog.getByRole("button", { name: "Apply imported page draft", exact: true }).click();
-  }
   select(widgetTitle: string) { return this.tree.getByRole("button", { name: widgetTitle, exact: true }).click(); }
   get publish() { return this.page.getByRole("button", { name: "Publish", exact: true }); }
   /** The current canvas saves valid edits after a pause; Cmd/Ctrl-S requests it immediately. */

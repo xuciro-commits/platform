@@ -2,13 +2,11 @@ import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // ADR-0108: one application, five workspaces and builder-named concepts.
 // Membership, edits, candidates and runtime keep their original owners.
-import { ApplicationRuns, ApplicationRuntimePanel, pageUIProfile, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
+import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
-import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
 import { publishedResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
@@ -81,7 +79,7 @@ function NewResourceMenu({ application, onCreated, children, disabled, area }: {
 /** The project home: resource tree, what changed, settings. */
 export function ProjectHome({ id, area, initialSelected, initialSection, initialPlan }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string }) {
   const activeArea = studioArea(area);
-  const { client, decide, role, definitions, me } = useHost();
+  const { client, decide, role, definitions } = useHost();
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
@@ -104,13 +102,10 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   }, [activeArea, initialSection, initialSelected, initialPlan, initialTab]);
   const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
-  const [importing, setImporting] = useState(false);
-  const [importedDependencies, setImportedDependencies] = useState<ApplicationImportDependency[]>([]);
   const [createdResource, setCreatedResource] = useState<{ kind: ResourceKindInfo; target: { type: string; id: string } }>();
   const [pendingPatch, setPendingPatch] = useState<{ changes: Partial<Api.Application>; revision?: number; settings: boolean }>();
   const pendingRef = useRef(pendingPatch); pendingRef.current = pendingPatch;
   const latestProject = useRef(project); latestProject.current = project;
-  const importRequest = useRef<{ changes: Partial<Api.Application>; revision: number; dependencies: ApplicationImportDependency[] } | undefined>(undefined);
   // Settings follow the record until this editor types into them (`edited`);
   // only typed changes are saved, and only the fields that differ. Comparing
   // a stale local copy against a record that another editor moved on would
@@ -185,7 +180,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
     if (confirmed) { baseline.current = undefined; setEdited(false); markSaved(); }
     return confirmed;
   };
-  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !pendingPatch && !createdResource && !importing, busy: saving, save: saveSettings });
+  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !pendingPatch && !createdResource, busy: saving, save: saveSettings });
   const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord) => projectResourceChange(current, resourceRef(kind, record.name));
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     setCreatedResource({ kind, target });
@@ -214,7 +209,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
     if (await patch(changes, current.revision)) setSelected(undefined);
   };
   const unpublished = savedChanges.data?.changes ?? [];
-  const releaseSelection = [...new Map([...unpublished.map(change => ({ kind: draftChangeKind(change), id: change.id })), ...importedDependencies].map(choice => [JSON.stringify([choice.kind, choice.id]), choice])).values()];
+  const releaseSelection = [...new Map(unpublished.map(change => ({ kind: draftChangeKind(change), id: change.id })).map(choice => [JSON.stringify([choice.kind, choice.id]), choice])).values()];
   // Prepare Verify once from the same saved changes as Publish. Later reads
   // must not replace an in-progress or unconfirmed release selection.
   const verificationSelection = useRef<typeof releaseSelection | undefined>(undefined);
@@ -245,7 +240,6 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && installed?.application && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => { importRequest.current = undefined; setImporting(true); }}>{t("Import Workshop module")}</Button>}
         {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
         {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={saving || dirty || !!pendingPatch || !!createdResource} onChange={(event) => {
           let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
@@ -402,32 +396,6 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
         </fieldset>}
       </div>
     </Workbench>
-    {installed?.application && <WorkshopApplicationImport key={JSON.stringify([project.id, me])} open={importing} onClose={() => setImporting(false)} application={{ ref: installed.ref, sourceVersion: installed.version }}
-      onReviewMembership={async () => {
-        if (pendingRef.current || lock.current) { setError(t("An earlier application update is unconfirmed. Retry its original payload before changing membership.")); return false; }
-        if (dirty) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
-        const fresh = await query.refetch();
-        if (!fresh.isSuccess || !fresh.data?.record) return false;
-        latestProject.current = fresh.data.record;
-        // Only this explicit operator choice can adopt a new revision after
-        // refusal. Background updates cannot replace the original request.
-        importRequest.current = undefined;
-        return true;
-      }}
-      onPrepared={async ({ pages, header, dependencies }) => {
-        if (!importRequest.current) {
-          const current = latestProject.current;
-          if (!current) return false;
-          importRequest.current = {
-            changes: { pages: [...pages, ...(current.pages ?? []).filter(name => !pages.includes(name))], ...(header ? { header, uiProfile: pageUIProfile } : {}) },
-            revision: current.revision, dependencies: structuredClone(dependencies),
-          };
-        }
-        const submitted = importRequest.current;
-        const confirmed = await patch(submitted.changes, submitted.revision);
-        if (confirmed) { setImportedDependencies(submitted.dependencies); importRequest.current = undefined; }
-        return confirmed;
-      }} />}
   </>;
 }
 

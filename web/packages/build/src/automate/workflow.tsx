@@ -1,7 +1,6 @@
 import {useInputBuffers} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import {DraftInputs,useDraftSession} from "../session/DraftSession";
 import {workflowInputs,workflowRunMatches} from "./workflow-session";
@@ -131,7 +130,6 @@ export function FlowEditor({ id }: { id: string }) {
   const [chosen, setChosenValue] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState<boolean>();
   const setChosen = useCallback((name: string) => { setChosenValue(name); setInspectorOpen(true); }, []);
-  const [importingFlow,setImportingFlow]=useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [dock, setDockValue] = useState<"problems" | "run" | "history" | "test" | "release">("problems");
   const [dockOpen, setDockOpen] = useState<boolean>();
@@ -349,13 +347,12 @@ export function FlowEditor({ id }: { id: string }) {
       actions={<>
         <Button size="sm" variant="ghost" disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate")}</Button>
         <Button size="sm" variant={dock === "run" ? "primary" : "ghost"} disabled={busy || !synchronized || !installed?.manual || dirty} onClick={() => setDock("run")}><Play />{t("Run")}</Button>
-        <ActionMenu label={t("More flow commands")} icon={<MoreHorizontal />} commands={[
-          { id: "import", label: t("Import Workshop flow…"), disabled: busy || !!draft.id, run: () => setImportingFlow(true) },
-          ...(draft.id ? [{ id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess && fresh.data?.record) { markSaved(); session.load(fresh.data.record); baseRevision.current = fresh.data.record.revision; loaded.current = `${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } })) }] : []),
-        ]} />
+        {draft.id && <ActionMenu label={t("More flow commands")} icon={<MoreHorizontal />} commands={[
+          { id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess && fresh.data?.record) { markSaved(); session.load(fresh.data.record); baseRevision.current = fresh.data.record.revision; loaded.current = `${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } })) },
+        ]} />}
         <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "flow", params: { id } }} />
       </>}
-      onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy && !importingFlow && !brokenForm.length) void perform(save); } }}
+      onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy && !brokenForm.length) void perform(save); } }}
       left={{ label: t("Flow structure"), tabs: [
         { id: "steps", title: t("Steps"), badge: draft.steps.length || undefined, content: steps },
         { id: "blocks", title: t("Blocks"), content: library },
@@ -377,7 +374,6 @@ export function FlowEditor({ id }: { id: string }) {
         { id: "test", title: t("Test"), content: <div className="p-3">{mountedDocks.test && (draft.id && !dirty && synchronized ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => setChosen(name)} /> : <p className="text-xs text-muted">{t("Save the flow before isolated testing.")}</p>)}</div> },
         { id: "release", title: t("Release"), content: <div className="p-3">{mountedDocks.release && (draft.id && !dirty && synchronized ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the flow before release review.")}</p>)}</div> },
       ] }}>
-      {importingFlow && <FlowImportDialog name={draft.name || "importedflow"} capabilities={capabilities} onClose={() => setImportingFlow(false)} onApply={(next) => { change(next); setChosen(""); setImportingFlow(false); }} />}
       {run && !matchingRun && <Panel role="status" className="m-2 text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
       <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
         onSelect={(name) => setChosen(name)} onOpen={(name) => setChosen(name)} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
