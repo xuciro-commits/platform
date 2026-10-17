@@ -105,6 +105,90 @@ func publishConstraintEntry(t *testing.T, tenant *Tenant) string {
 	return publishObject(t, tenant, "builder", "ENTRY", object, txnAt)
 }
 
+// Measure final checks on an already prepared private decision, including the
+// parent version-pin scan. Preparation and writes are outside the timed loop;
+// the existing decision trace counts successful expression checks, not visits.
+func BenchmarkFinalConstraintScan(b *testing.B) {
+	for _, count := range []int{1000, 10000, 100000} {
+		for _, affected := range []bool{false, true} {
+			scenario := "unrelated-write"
+			if affected {
+				scenario = "one-constrained-write"
+			}
+			b.Run(fmt.Sprintf("records=%d/%s", count, scenario), func(b *testing.B) {
+				entity := newConstraintOwner("benchmark").entity
+				rules := commonConstraints()
+				entity.Constraints = []platform.Constraint{rules[1], rules[2], {Name: "bounded", Kind: "expression", Fields: []string{"qty"}, Message: "Quantity is below the limit.", Expr: booleanRule("<", platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 1000))}}
+				info, err := platform.Describe("invariants", entity, func(reflect.Type) string { return "" })
+				if err != nil {
+					b.Fatal(err)
+				}
+				type note struct {
+					platform.Record
+					Text string `json:"text"`
+				}
+				unrelated, err := platform.Describe("invariants", platform.Entity{Type: "invariants.note", Model: note{}}, func(reflect.Type) string { return "" })
+				if err != nil {
+					b.Fatal(err)
+				}
+				entries := make([]recordEntry[*row], count)
+				for i := range entries {
+					id := fmt.Sprintf("ROW-%06d", i)
+					value := constraintEntry{Record: platform.Record{ID: id, Revision: 1}, Qty: 2, Start: "2026-10-12", End: "2026-10-13", State: "draft"}
+					entries[i] = recordEntry[*row]{key: id, value: &row{value: reflect.ValueOf(&value).Elem()}}
+				}
+				index, err := recordIndexFrom(entries)
+				if err != nil {
+					b.Fatal(err)
+				}
+				store := newRecordStore()
+				store.types[info.Type] = &entityType{info: info, rows: index}
+				store.types[unrelated.Type] = &entityType{info: unrelated}
+				store.types[unrelated.Type].setRow("NOTE", &row{value: reflect.ValueOf(&note{Record: platform.Record{ID: "NOTE", Revision: 1}, Text: "before"}).Elem()})
+				tenant := &Tenant{records: store}
+				draft := &stagedDecision{tenant: tenant, records: store.forkRecords(), at: txnAt, constraintWrites: map[string]constraintWrite{}}
+				caller := platform.NewCaller(draft, platform.Member{ID: "operator", Roles: map[string]string{"invariants": "operator"}}, "invariants", false, false)
+				typ, id := unrelated.Type, "NOTE"
+				after := &row{value: reflect.ValueOf(&note{Record: platform.Record{ID: id, Revision: 2}, Text: "after"}).Elem()}
+				if affected {
+					typ, id = info.Type, "ROW-000000"
+					value := store.types[typ].rows.get(id).value.Interface().(constraintEntry)
+					value.Qty = 3
+					value.Revision++
+					after = &row{value: reflect.ValueOf(&value).Elem()}
+				}
+				draft.constraintWrites[typ+"/"+id] = constraintWrite{caller: caller, before: store.types[typ].rows.get(id)}
+				draft.records.types[typ].setRow(id, after)
+				checks := 0
+				tenant.simulationTrace = func(event platform.DecisionTrace) {
+					if event.Kind == "constraint" {
+						checks++
+					}
+				}
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					if err := draft.checkFinalConstraints(); err != nil {
+						b.Fatal(err)
+					}
+				}
+				b.StopTimer()
+				want := 0
+				if affected {
+					want = len(info.Constraints) * b.N
+				}
+				if checks != want {
+					b.Fatalf("measured %d constraint evaluations, want %d", checks, want)
+				}
+				b.ReportMetric(float64(count), "constrained-records")
+				b.ReportMetric(float64(len(info.Constraints)), "constraints/record")
+				b.ReportMetric(float64(len(draft.constraintWrites)), "writes/op")
+				b.ReportMetric(float64(checks)/float64(b.N), "evals/op")
+			})
+		}
+	}
+}
+
 // One declared invariant group, the real generated/transaction/import/agent/
 // protocol entry paths, and an ignored Put error all yield the same answer.
 func TestBusinessConstraintsAllWriteEntrances(t *testing.T) {
