@@ -212,6 +212,41 @@ test("decision tables and alerts remain application members through editing and 
   await assets.getByRole("button", { name: /^Heating decision/ }).click();
   await expect(page.getByRole("heading", { name: "Heating decision", exact: true }).first()).toBeVisible();
   await expect(navigation.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(assets.getByText("Current application", { exact: true })).toBeVisible();
+  await expect(assets.getByRole("paragraph").filter({ hasText: /^Heating control$/ })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Application context", exact: true })
+    .getByRole("button", { name: "Heating control", exact: true })).toBeVisible();
+  expect(new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("application")).toBe(application.id);
+
+  // The tenant-wide inventory opens the same record without claiming it is shared.
+  const applicationTableTab = page.getByRole("tab", { name: /^Decision tables/ }).first();
+  await expect(applicationTableTab).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("textbox", { name: "Description", exact: true }).fill("Unsaved application decision note");
+  await expect(navigation.getByText("All readable rules", { exact: true })).toBeVisible();
+  await expect(navigation.getByText("Shared rules", { exact: true })).toHaveCount(0);
+  await navigation.getByRole("button", { name: "Decision tables", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Decision tables", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Application context", exact: true })).toHaveCount(0);
+  await expect(assets).toHaveCount(0);
+  const allTables = page.getByRole("region", { name: "Decision tables", exact: true });
+  const heatingDecision = allTables.getByRole("treeitem").filter({ hasText: tableName }).last();
+  await expect(heatingDecision).toContainText("Heating decision");
+  await heatingDecision.click();
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${tableID}(?:&|$)`));
+  const globalParams = new URLSearchParams(new URL(page.url()).hash.split("?")[1]);
+  expect(globalParams.get("id")).toBe(tableID);
+  expect(globalParams.has("application")).toBe(false);
+  await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue("");
+  await applicationTableTab.click();
+  await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue("Unsaved application decision note");
+  expect(new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("application")).toBe(application.id);
+  await shots(page, page.locator("body"), "application-and-readable-rules", testInfo);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await toggle.click();
+  await expect(assets.getByText("Current application", { exact: true })).toBeVisible();
+  await expect(navigation.getByText("Tenant delivery", { exact: true })).toBeVisible();
+  await shots(page, navigation, "application-navigation", testInfo);
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   const rulePanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Rules", exact: true }) }).last();
   const ruleTable = rulePanel.getByRole("table");

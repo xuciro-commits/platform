@@ -5,7 +5,7 @@ import type { Project } from "./project";
 import { kindIcon } from "./resource-icons";
 import { refKey } from "./resources";
 import { useProjectResources } from "./resource-inventory";
-import { assetRoute, conceptTree, resourceArea, studioApplicationID, studioArea, studioAreas, studioRoute } from "./studio-model";
+import { assetRoute, conceptTree, studioApplicationID, studioAreas, studioContext, studioRoute } from "./studio-model";
 
 /** The resource tree is contributed by Build, inside the existing Shell. */
 export function StudioNavigation({ route }: { route?: Route }) {
@@ -18,19 +18,11 @@ export function StudioNavigation({ route }: { route?: Route }) {
   if (host.role("build") !== "builder") return null;
   if (!id) return null;
   if (!project) return <p role={query.isError ? "alert" : "status"} className="p-2 text-xs text-muted">{query.isError ? t("The project could not be loaded.") : t("Loading…")}</p>;
-  const definition = route?.view === "definition" ? host.definitions.find(item => item.ref.app === route.params?.app && item.ref.kind === route.params?.kind && item.ref.name === route.params?.name) : undefined;
-  const recordID = route?.view === "project" ? undefined : route?.params?.page ?? route?.params?.id;
-  const selected = owned.find(item =>
-    !!recordID && item.record?.id === recordID ||
-    !!route?.params?.object && item.ref.name === route.params.object ||
-    !!route?.params?.asset && refKey(item.ref) === route.params.asset ||
-    !!definition && (refKey(item.ref) === refKey(definition.ref) || item.ref.kind === "object" && item.ref.name === definition.action?.target));
-  const area = route?.view === "project" ? studioArea(route.params?.area)
-    : ["changes", "release-review", "release-history", "test-plan", "sample-set", "evaluation-set"].includes(route?.view ?? "") ? "verify"
-    : ["action-type", "decision-table", "alert"].includes(route?.view ?? "") || definition?.ref.kind === "action" ? "behavior"
-    : selected ? resourceArea(selected) : "assemble";
+  const { selected, area } = studioContext(route, owned, host.definitions);
   const visible = owned.filter(item => `${item.title} ${item.ref.name} ${t(item.kind.label)}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));
   return <div role="region" aria-label={t("Application assets")}>
+    <p className="px-2 pt-1 text-xs font-medium text-muted">{t("Current application")}</p>
+    <p className="break-words px-2 pb-2 text-sm font-semibold">{project.title || project.name}</p>
     <div role="navigation" aria-label={t("Application workspaces")} className="mb-2 grid gap-1">
       {studioAreas.map(item => <Button key={item.id} aria-current={area === item.id ? "page" : undefined} variant={area === item.id ? "primary" : "ghost"} size="sm" className="justify-start" onClick={() => open(studioRoute(project.id, item.id, selected ? refKey(selected.ref) : undefined))}>{t(item.title)}</Button>)}
     </div>

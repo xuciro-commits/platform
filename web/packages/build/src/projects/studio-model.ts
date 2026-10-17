@@ -15,6 +15,30 @@ export const studioArea = (value?: string): StudioArea => studioAreas.find(area 
 export const studioApplicationID = (route?: Route) => route?.view === "project" || route?.view === "module" && route.params?.id ? route.params?.id : route?.params?.application;
 export const studioRoute = (id: string, area: StudioArea, asset?: string): Route => ({ view: "project", params: { id, area, ...(asset ? { asset } : {}) } });
 
+/** The tree and the editor's return bar describe the same original asset. */
+export function studioContext(route: Route | undefined, resources: readonly OwnedResource[], definitions: readonly Api.Definition[]) {
+  const params = route?.params;
+  const definition = ["definition", "page-preview"].includes(route?.view ?? "")
+    ? definitions.find(item => item.ref.app === params?.app && item.ref.kind === params?.kind && item.ref.name === params?.name) : undefined;
+  const recordID = route?.view === "project" ? undefined : route?.view === "module" ? params?.page : params?.id;
+  const selected = resources.find(item => {
+    if (params?.asset && refKey(item.ref) === params.asset || params?.object && item.ref.name === params.object) return true;
+    if (definition && (refKey(item.ref) === refKey(definition.ref) || item.ref.kind === "object" && item.ref.name === definition.action?.target)) return true;
+    if (!recordID || item.record?.id !== recordID) return false;
+    return route?.view === item.kind.view
+      || item.kind.type === "build.process" && ["flow", "automation"].includes(route?.view ?? "")
+      || route?.view === "action-type" && item.ref.kind === "object"
+      || route?.view === "release-review" && (params?.kind === item.kind.kind || item.kind.kind === "automation" && params?.kind === "flow");
+  });
+  const ref = definition?.ref ?? (route?.view === "action-type" && selected && params?.action
+    ? { app: selected.ref.app, kind: "action", name: `${selected.ref.name}.${params.action}` } : selected?.ref);
+  const area: StudioArea = route?.view === "project" ? studioArea(params?.area)
+    : ["changes", "release-review", "release-history", "test-plan", "sample-set", "evaluation-set"].includes(route?.view ?? "") ? "verify"
+    : ["action-type", "decision-table", "alert"].includes(route?.view ?? "") || definition?.ref.kind === "action" ? "behavior"
+    : selected ? resourceArea(selected) : "assemble";
+  return { selected, ref, area };
+}
+
 export function resourceArea(item: OwnedResource): StudioArea {
   return studioAreas.find(area => (area.kinds as readonly string[]).includes(item.ref.kind))?.id ?? "assemble";
 }

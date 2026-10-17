@@ -102,22 +102,21 @@ export default defineApp({
   home: { view: "projects" }, views,
   opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.agent": "agent", "build.alertrule": "alert", "build.observation": "observation-source" },
   navigation: route => <StudioNavigation route={route} />,
-  nav: (host, route): NavSection[] => {
+  nav: (host): NavSection[] => {
     if (integrator(host)) return [integration()];
     if (!builder(host)) return [{ label: t("Verify"), items: [
       { label: t("Release history"), route: { view: "release-history" } },
     ] }];
-    const application = studioApplicationID(route);
     return [
       { label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] },
-      { label: t("Shared rules"), items: [
+      { label: t("All readable rules"), items: [
         { label: t("Decision tables"), route: { view: "decision-table" } },
         { label: t("Automations"), route: { view: "automation" } },
         { label: t("Alert rules"), route: { view: "alert" } },
       ] },
-      { label: t("Delivery"), items: [
-        { label: t("Integration health"), route: { view: "integration-health", params: application ? { application } : undefined } },
-        { label: t("Release history"), route: { view: "release-history", params: application ? { application } : undefined } },
+      { label: t("Tenant delivery"), items: [
+        { label: t("Integration health"), route: { view: "integration-health" } },
+        { label: t("Release history"), route: { view: "release-history" } },
       ] },
       { label: t("Explore"), items: [{ label: t("Asset Library"), icon: <BookOpen />, route: { view: "catalog" } }] },
     ];
