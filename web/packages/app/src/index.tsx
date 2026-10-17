@@ -459,10 +459,22 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
       <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
         work={view => {
           const dispatchTask = type === "work.task" && typeof view.record.ref === "string" && view.record.ref.startsWith("build.dispatch/") ? view.record.ref.slice("build.dispatch/".length) : undefined;
+          const call = type === "build.function-call" ? view.record : undefined;
           return <>
             <RefusalHistory key={`${type}/${view.record.id}`} type={type} id={view.record.id} />
             {dispatchTask ? <DispatchProgress type="build.dispatch" id={dispatchTask} /> : type.startsWith("build.") && <DispatchProgress type={type} id={view.record.id} />}
             {type.startsWith("build.") && type !== "build.function-call" && <ConfirmationProgress type={type} id={view.record.id} />}
+            {call && !call.withheld && call.metered === true && <Panel title={t("Measured model call")} className="grid gap-2">
+              <PropertyList items={[
+                [t("Input tokens"), call.tokensReported ? String(call.inputTokens ?? 0) : t("Not reported")],
+                [t("Output tokens"), call.tokensReported ? String(call.outputTokens ?? 0) : t("Not reported")],
+                [t("Model latency"), `${call.latencyMillis ?? 0} ms`],
+                [t("Reported USD cost"), call.costReported ? `$${Number(call.costUsd ?? 0).toFixed(6)}` : t("Not reported")],
+                [t("Requested model"), String(call.model ?? t("Not reported"))],
+                [t("Served model"), call.servedModel ? String(call.servedModel) : t("Not reported")],
+              ]} />
+            </Panel>}
+            {call && !call.withheld && call.state !== "pending" && call.metered === false && <p className="text-xs text-muted">{t("No model call was measured for this result.")}</p>}
             {type === "build.function-call" ? <ProposalReview key={view.record.id} call={view.record as unknown as Api.FunctionRun} live active={active} onChanged={() => void refresh?.()} /> : advice && <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} />}
           </>;
         }} onOpen={(t, r) => openRecord({ type: t, id: r.id })}

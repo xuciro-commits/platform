@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:082807f2edaf6183",
+  "revision": "sha256:7ea34e1eee22516f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1453,7 +1453,9 @@
         "app/record-actions",
         "ui/button",
         "ui/disclosure",
+        "ui/entity-card",
         "ui/page-header",
+        "ui/panels",
         "ui/record-page"
       ]
     },
@@ -12502,7 +12504,6 @@
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
-      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordActivity.tsx",
@@ -12694,7 +12695,6 @@
       "web/packages/app/src/widgets/Exploration.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/FilterSurface.tsx",
-      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/app/src/widgets/Histogram.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
@@ -13423,7 +13423,6 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/CreateForm.tsx",
-      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
@@ -13437,7 +13436,7 @@
     ],
     "ui/record-list": [
       "web/packages/app/src/index.tsx",
-      "web/packages/app/src/widgets/FunctionAdvice.tsx",
+      "web/packages/app/src/widgets/AIWidget.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -13449,7 +13448,6 @@
     "ui/record-page": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages/pages.tsx",
-      "web/packages/app/src/widgets/FunctionAdvice.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],

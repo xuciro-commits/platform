@@ -453,6 +453,7 @@ register("zh-CN", {
   "denied": "拒绝",
 
   "Application runs": "应用运行",
+  "Function call history": "函数调用历史",
   "Related record": "关联记录",
   "Selected run": "所选运行",
   "Open function call": "打开函数调用",
@@ -892,11 +893,6 @@ register("zh-CN", {
   "Request advice for this record. Business actions remain your decision.": "为此记录请求建议；业务操作仍由你决定。",
 
   "Version": "版本",
-  "Choose a published function for this page.": "请为此页面选择已发布函数。",
-  "Select a record to request advice.": "选中记录后再请求建议。",
-  "Request advice": "请求建议",
-  "Requesting advice…": "正在请求建议…",
-  "Refresh advice": "刷新建议",
   "Measured model call": "已计量的模型调用",
   "Input tokens": "输入 Token 数",
   "Output tokens": "输出 Token 数",
@@ -906,7 +902,6 @@ register("zh-CN", {
   "Served model": "实际提供的模型",
   "Requested model": "请求的模型",
   "No model call was measured for this result.": "此结果没有已计量的模型调用。",
-  "Advice calls do not run while you compose.": "组合页面时不会执行建议调用。",
   "Action preview": "动作预览",
   "Preview only": "仅预览",
   "Preview record is unavailable.": "预览记录不可用。",

@@ -14,7 +14,7 @@
 
 应用上下文（ADR-0124 / ADR-0046 §6.7）：`make e2e SPEC=application-context`，从已发布应用的页面进入原构建编辑器，预览自动使用所属应用；改变共享值后通过页面调用/返回和页头切换，核对预览实例、构建应用 ID 与值保持一致。新建/关闭预览实例后，正式页面的共享值和原定义应保持不变；原 `ApplicationSessions.test.mjs` 检查实例退役、版本/成员隔离及迟到读取不能恢复旧状态。预览只使用可读的已发布应用，不把构建草稿当运行版本。
 
-应用 AI 配置（ADR-0124 / ADR-0116）：`make e2e SPEC=ai-authoring` 从应用新建入口配置未发布模型上的函数、智能体及函数评测集，检查排除字段不可选、成员更新失败后重试同一保存、切换文档后迟到保存不抢焦点，以及原定义不变。`TestAIAuthoringUsesSavedModelsOnlyForExplicitJointDelivery` 检查草稿动作、查询与角色可保存、单独发布拒绝、明确选择模型与 AI 声明后可共同候选、无评测不能激活；未知查询字段仍由原私有安装检查拒绝。实际提议、采纳、审批、模型评估与运行继续用 `proposal-adoption` 和原 `TestApplicationProposalAdoption|TestApplicationAgentCandidateEvaluationGate`，合成模型不代表真实模型质量。
+应用 AI 配置（ADR-0124 / ADR-0116）：`make e2e SPEC=ai-authoring` 从应用新建入口配置未发布模型上的函数、智能体及函数评测集，检查排除字段不可选、成员更新失败后重试同一保存、切换文档后迟到保存不抢焦点，以及原定义不变。`TestAIAuthoringUsesSavedModelsOnlyForExplicitJointDelivery` 检查草稿动作、查询与角色可保存、单独发布拒绝、明确选择模型与 AI 声明后可共同候选、无评测不能激活；未知查询字段仍由原私有安装检查拒绝。`proposal-adoption` 的首条任务从旧 `function` 页面经统一 AI 部件启动一次运行调用，检查等待与结果、切换记录后的隔离、历史原调用详情的计量和原审批采纳；旧独立请求按钮不存在，评测与运行合计调用数保持四次。其他实际提议、采纳、审批、模型评估与运行继续用该文件和原 `TestApplicationProposalAdoption|TestApplicationAgentCandidateEvaluationGate`，合成模型不代表真实模型质量。
 
 应用集成配置（ADR-0124 / ADR-0070–0074）：`make e2e SPEC=integration-authoring` 从应用新建入口配置连接、数据集、数据源、管道、回写和匹配规则，使用尚未发布的模型；检查成员写入失败重试、未就绪连接拒绝后保留原页与同一资源，再经原共同候选激活，实际拉取并回填外部答复。`TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels` 检查已发布配置改用新字段/对象时可保存、运行定义不变、单独发布与无效字段拒绝、明确选定后共同激活，以及匹配规则唯一性按实际发布定义判断。`TestDependencyDiscoveryIncludesOriginalDatasetConfigurations` 检查原创建/装载的数据集与已发布管道沿同一描述双向发现，普通成员与未发布管道拒绝，运行行不进入元数据。原跨环境、投递失败/重试和恢复继续使用 `integration-fabric` 与本表的集成交付检查；本地 HTTP 不代替客户外部系统或真实设备。
 

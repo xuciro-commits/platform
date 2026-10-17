@@ -1,16 +1,16 @@
 import {ProposalReview} from "./ProposalReview";
 import {useEffect,useRef,useState} from "react";
 import {useQueries} from "@tanstack/react-query";
-import {AIResult,Panel,t,type AIResultTurn,type EntityRecord} from "@platform/ui";
+import {AIResult,Panel,RecordList,t,type AIResultTurn,type EntityRecord} from "@platform/ui";
 import type {Api} from "@platform/kernel";
-import {useHost} from "../index";
+import {useHost,useOpenRecord} from "../index";
 import {createAIReader,type AIRequest} from "../ai/service";
 import type {VariableResult} from "../runtime/variables";
 
-type Props={config?:Api.PageAI;functionBinding?:Api.AssetBinding;record?:EntityRecord;status?:string;identity:string;active:()=>boolean;live:boolean;enabled?:boolean;question?:VariableResult;onQuestion?:(value:string)=>void};
+type Props={config?:Api.PageAI;functionBinding?:Api.AssetBinding;record?:EntityRecord;recordType?:string;status?:string;identity:string;active:()=>boolean;live:boolean;enabled?:boolean;question?:VariableResult;onQuestion?:(value:string)=>void};
 export function AIWidget(props:Props){const host=useHost();return <AISession key={JSON.stringify([host.source.scope,props.identity,props.functionBinding,props.config])} {...props}/>;}
-function AISession({config,functionBinding,record,status,active,live,enabled=true,question,onQuestion}:Props){
- const host=useHost(),lease=useRef(true),current=useRef({active,live,enabled,status});current.current={active,live,enabled,status};useEffect(()=>{lease.current=true;return()=>{lease.current=false;};},[]);
+function AISession({config,functionBinding,record,recordType,status,active,live,enabled=true,question,onQuestion}:Props){
+ const host=useHost(),openRecord=useOpenRecord(),lease=useRef(true),current=useRef({active,live,enabled,status});current.current={active,live,enabled,status};useEffect(()=>{lease.current=true;return()=>{lease.current=false;};},[]);
  const valid=()=>lease.current&&current.current.active(),reader=createAIReader(host,valid),[requests,setRequests]=useState<AIRequest[]>([]),[attempt,setAttempt]=useState<AIRequest>(),[busy,setBusy]=useState(false),[error,setError]=useState<string>();
  const fn=functionBinding,version=Number(fn?.sourceVersion.match(/\.function-(\d+)$/)?.[1]??0),text=question?.status==="value"&&typeof question.value==="string"?question.value:"";
  const answers=useQueries({queries:requests.map(request=>({queryKey:["original-ai-call",host.source.scope,request.id],queryFn:()=>reader.read(request),enabled:valid(),refetchInterval:(query:{state:{error:unknown;data?:Api.FunctionRun}})=>!valid()||query.state.error?false:query.state.data?.state==="pending"?1000:false}))});
@@ -25,5 +25,9 @@ function AISession({config,functionBinding,record,status,active,live,enabled=tru
   setAttempt(next);setBusy(true);setError(undefined);
   try{if(await reader.request(next)&&valid()){setRequests(old=>config.kind==="chatbot"?[...old,next]:[next]);setAttempt(undefined);if(config.kind==="chatbot")onQuestion?.("");}}catch(err){if(valid())setError(err instanceof Error?t(err.message):t("The AI request was not confirmed."));}finally{if(valid())setBusy(false);}
  };
- return <div className="grid gap-3"><AIResult kind={config.kind} turns={turns} question={text} suggestions={config.suggestions??[]} disabled={!live||!enabled||!valid()||pending||!host.can("build.function-call.start")} busy={busy} error={error} onQuestion={value=>{if(valid())onQuestion?.(value);}} onRun={value=>void run(value)} onReset={()=>{if(valid()){setRequests([]);setAttempt(undefined);setError(undefined);}}} onRetry={attempt?()=>void run(undefined,true):undefined}/>{answers.map((answer,index)=>answer.data?.contract.proposal?<ProposalReview key={requests[index]!.id} call={answer.data} live={live&&enabled} active={valid} onChanged={()=>void answer.refetch()}/>:null)}</div>;
+ return <div className="grid gap-3"><AIResult kind={config.kind} turns={turns} question={text} suggestions={config.suggestions??[]} disabled={!live||!enabled||!valid()||pending||!host.can("build.function-call.start")} busy={busy} error={error} onQuestion={value=>{if(valid())onQuestion?.(value);}} onRun={value=>void run(value)} onReset={()=>{if(valid()){setRequests([]);setAttempt(undefined);setError(undefined);}}} onRetry={attempt?()=>void run(undefined,true):undefined}/>{answers.map((answer,index)=>answer.data?.contract.proposal?<ProposalReview key={requests[index]!.id} call={answer.data} live={live&&enabled} active={valid} onChanged={()=>void answer.refetch()}/>:null)}
+  {recordType&&live&&valid()&&<section aria-label={t("Function call history")}><RecordList source={host.source} type="build.function-call" fields={["function","version","state","source"]}
+   domain={[["source","=",`${recordType}/${record.id}`],["function","=",fn.ref.name],["version","=",version]]}
+   onOpen={call=>openRecord({type:"build.function-call",id:call.id},{window:"tab"})}/></section>}
+ </div>;
 }
