@@ -99,7 +99,6 @@ def serve():
                 with (LOGS / f'{solution}-{kind}.log').open('w') as log:
                     children.append(subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                                                      start_new_session=True))
-        deadline = time.monotonic() + 180
         while not interrupted:
             for child in children:
                 if child.poll() is not None:
@@ -108,8 +107,6 @@ def serve():
                 if ready():
                     state['status'] = 'ready'
                     write_state(state)
-                elif time.monotonic() > deadline:
-                    raise RuntimeError('本地环境启动超时，请查看 .build/dev/*-api.log 或 *-web.log。')
             time.sleep(0.5)
     finally:
         # Air, Go and Vite may have descendants; stop each group we started.
@@ -146,9 +143,8 @@ def local():
     with (LOGS / 'environment.log').open('w') as log:
         supervisor = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'serve'], cwd=ROOT,
                                       stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-    deadline = time.monotonic() + 190
     try:
-        while time.monotonic() < deadline:
+        while True:
             if supervisor.poll() is not None:
                 raise RuntimeError((LOGS / 'environment.log').read_text())
             state = read_state()
@@ -157,7 +153,6 @@ def local():
                 print('Go 自动编译重启，前端 HMR；日志：.build/dev/；切回容器：make docker')
                 return
             time.sleep(0.5)
-        raise RuntimeError('本地环境启动超时，请查看 .build/dev/environment.log。')
     except BaseException:
         stop()
         raise
