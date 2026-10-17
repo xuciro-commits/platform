@@ -143,6 +143,7 @@ AI 函数的构建配置与运行版本同样分开：输入选择可用保存�
 | 权限与共享资产 | 独立单主角色判断、重复解析当前计算描述退出；原授权引擎、定义、完整 AssetRef 成员和候选继续负责 | [ADR-0105](0105-one-authorization-engine.md)、[ADR-0107](0107-application-artifact-and-runtime.md) |
 | 建模与表格 | 两处字段转换、三处手写表格和两项旧豁免退出；构建期对象描述与公共 DataTable 承担，原草稿、Inspector、编辑动作和发布保留 | [ADR-0108](0108-application-studio.md) |
 | 新建资源 | 专用编辑种类的 13 套 `useNewRecord` 会话/对话框初始化退出；菜单仅判断目录资格并进入原编辑器，保存后沿原应用成员更新 | [ADR-0108](0108-application-studio.md)、[ADR-0111](0111-builder-verification.md)、[ADR-0116](0116-ai-and-human-in-applications.md) |
+| 标准记录创建 | 文档/术语的第二套新建表单及 `NewActions` 独立弹窗状态退出；列表和菜单共用原 `useNewRecord` / 动作对话框 | [ADR-0022](0022-knowledge-memory-a2a.md)、[ADR-0096](0096-unified-form-input-and-inspector-editing.md) |
 | 应用预览 | 构建应用 ID 不再兼作运行身份；原 ApplicationSession 拥有共享值与预览实例，调用、返回和页头保留上下文 | [ADR-0046 §6.7](0046-application-studio-fusion.md)、[ADR-0108](0108-application-studio.md) |
 | 发布后变更 | 前端按生命周期猜测变更及逐类型重复读取退出；原 Build 比较可编辑声明与发布声明，清单和数量共用读取，详细值按选择取得 | [ADR-0053](0053-builder-experience.md)、[ADR-0108](0108-application-studio.md) |
 | 应用运行 | `ApplicationRuns` 内嵌的流程、智能体、操作与设备操作详情退出；保留列表元数据和明确打开原详情的入口，原归属方负责正式操作 | [ADR-0107](0107-application-artifact-and-runtime.md) |

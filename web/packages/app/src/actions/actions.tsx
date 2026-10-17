@@ -204,12 +204,11 @@ function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}
 
 /** The type's actions that make a new record, except those a hand-written view already offers (`covers`). */
 export function NewActions({ type, covers = [], allowed, disabled = false, onCreated }: { type: string; covers?: string[]; allowed?: string[]; disabled?: boolean; onCreated?: (target: { type: string; id: string }) => void }) {
-  const { catalog } = useHost();
-  const [taking, setTaking] = useState<ActionDeclaration>();
-  const offered = catalog.filter((a) => a.target === type && a.new && !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
+  const create = useNewRecord(type, onCreated);
+  const offered = create.offered.filter((a) => !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
   return <>
-    {offered.map((a) => <Button key={a.schema} variant="primary" disabled={disabled} onClick={() => setTaking(a)}><span aria-hidden="true">+</span> {a.title}</Button>)}
-    {taking && <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} />}
+    {offered.map((a) => <Button key={a.schema} variant="primary" disabled={disabled} onClick={() => create.take(a.schema)}><span aria-hidden="true">+</span> {a.title}</Button>)}
+    {create.dialog}
   </>;
 }
 

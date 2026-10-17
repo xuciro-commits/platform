@@ -58,5 +58,6 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 - `ApplicationRuns` 不再嵌入 `FlowInstanceView`、`RunView`、`OperationRunView`、`DispatchProgress`：选中项只显示依据与原详情入口，取消、重试和设备处理只在原正式详情执行，删除打开详情后同时存活的第二份读取和操作状态。
 - `automate/workflow-runs.tsx` 的本地 `command()`、`decide/can`、忙碌/错误状态及取消/重试按钮已删除，正式操作复用 `FlowInstanceView` / `useRunControl`；额外 `setInterval` 删除，原 `useRecordInventory` 负责实时更新。历史版本画布、输入/已接受输出、token、步骤定位与运行覆盖保留。
 - 应用 New 菜单不再为已使用专用编辑器的十三类资源初始化 `useNewRecord` 与通用对话框状态；原目录决定创建资格，原专用路由承担创建。仍使用通用表单的资源沿原表单，不增加第二套创建器。
+- 知识文档和术语的手写新建按钮、`Dialog` / `GeneratedForm`、记录 ID、打开状态与提交回调删除，保留原 `Records` 的唯一声明动作入口；`NewActions` 的独立弹窗状态也删除，列表与菜单共用已有 `useNewRecord`。检索和术语影响说明保留，标准创建的拒绝、纠正和同键确认沿原动作会话。
 
 检查沿 Testing 的应用运行任务与构建者验证任务：原正式详情取消、答复丢失后同键重试、编辑器历史查看及正常新建入口已通过；旧操作按钮明确不存在。Web 类型、目录及双语检查通过，不改执行、权限、持久格式或历史版本责任。

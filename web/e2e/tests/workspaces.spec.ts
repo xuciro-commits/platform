@@ -3,7 +3,7 @@ import { expect, fresh, pageUIProfile, test } from "./kit";
 import { switchWorkspace } from "./host";
 
 test("task workspaces preserve native PMS and hand off a controlled receiving application", async ({ browser, page, builder, operator, editor }, testInfo) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   const suffix = fresh("workspace").replace(/[^a-z0-9]/gi, "").toLowerCase();
   const appID = fresh("APP"), flowID = fresh("FLOW");
   const objectName = `receipt${suffix}`, pageName = `receiving${suffix}`, appName = `wms${suffix}`, flowName = `routing${suffix}`;
@@ -64,6 +64,75 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(page.getByRole("heading", { name: "Reservations", exact: true })).toBeVisible();
   await switchWorkspace(page, "Knowledge");
   await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create document", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "New document", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Create document", exact: true }).click();
+  const document = page.getByRole("dialog", { name: "Create document", exact: true });
+  const documentID = fresh("DOCUMENT"), documentTitle = `Receiving instructions ${suffix}`;
+  await document.getByRole("textbox", { name: "ID *", exact: true }).fill(documentID);
+  await document.getByRole("textbox", { name: "Title *", exact: true }).fill(documentTitle);
+  await document.getByRole("textbox", { name: "Text *", exact: true }).fill("Check the receipt number before accepting delivery.");
+  await document.getByRole("textbox", { name: "Where it comes from", exact: true }).fill("Receiving desk");
+  await document.getByRole("textbox", { name: "Read by members of", exact: true }).fill("pms");
+  await document.getByRole("textbox", { name: "Read by members of", exact: true }).press("Enter");
+
+  // Losing an accepted reply retains this document's original request.
+  const documentRequests: unknown[] = [];
+  await page.route("**/v1/submissions", async route => {
+    const body = route.request().postDataJSON();
+    if (body.schema?.name !== "knowledge.document.create") { await route.continue(); return; }
+    documentRequests.push(body);
+    if (documentRequests.length === 1) {
+      const response = await route.fetch();
+      expect(response.ok()).toBeTruthy();
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.continue();
+  });
+  await document.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(document.getByRole("button", { name: "Retry confirmation", exact: true })).toBeVisible();
+  expect(await builder.record("knowledge.document", documentID)).toMatchObject({ title: documentTitle, text: "Check the receipt number before accepting delivery.", source: "Receiving desk", apps: ["pms"] });
+  await expect(document.getByRole("textbox", { name: "Title *", exact: true })).toHaveValue(documentTitle);
+  await expect(document.getByRole("textbox", { name: "Title *", exact: true })).toBeDisabled();
+  await document.getByRole("button", { name: "Retry confirmation", exact: true }).click();
+  await expect(document).toHaveCount(0);
+  expect(documentRequests).toHaveLength(2);
+  expect(documentRequests[1]).toEqual(documentRequests[0]);
+  expect((await builder.record("knowledge.document", documentID)).revision).toBe(1);
+  await page.unroute("**/v1/submissions");
+  await expect(page.getByRole("row").filter({ hasText: documentTitle })).toBeVisible();
+
+  const knowledgeToggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
+  if (await knowledgeToggle.getAttribute("aria-expanded") !== "true") await knowledgeToggle.click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Glossary", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Terms", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create term", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "New term", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Create term", exact: true }).click();
+  const term = page.getByRole("dialog", { name: "Create term", exact: true });
+  const termID = fresh("TERM"), termName = `Receiving ${suffix}`, missingDeclaration = `build.missing${suffix}`;
+  await term.getByRole("textbox", { name: "ID *", exact: true }).fill(termID);
+  await term.getByRole("textbox", { name: "Term *", exact: true }).fill(termName);
+  await term.getByRole("textbox", { name: "Meaning *", exact: true }).fill("Accepting an incoming delivery");
+  await term.getByRole("textbox", { name: "Synonyms", exact: true }).fill("Goods receipt, delivery acceptance");
+  await term.getByRole("textbox", { name: "Refers to", exact: true }).fill(missingDeclaration);
+  await term.getByRole("textbox", { name: "Read by members of", exact: true }).fill("pms");
+  await term.getByRole("textbox", { name: "Read by members of", exact: true }).press("Enter");
+  await term.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(term.getByText("ERROR_CODE_INVALID_ARGUMENT", { exact: true })).toBeVisible();
+  await expect(term.getByRole("textbox", { name: "ID *", exact: true })).toHaveValue(termID);
+  await expect(term.getByRole("textbox", { name: "Term *", exact: true })).toHaveValue(termName);
+  await expect(term.getByRole("textbox", { name: "Meaning *", exact: true })).toHaveValue("Accepting an incoming delivery");
+  await expect(term.getByRole("textbox", { name: "Synonyms", exact: true })).toHaveValue("Goods receipt, delivery acceptance");
+  await expect(term.getByRole("textbox", { name: "Refers to", exact: true })).toHaveValue(missingDeclaration);
+  await expect(term.getByRole("button", { name: "Remove pms", exact: true })).toBeVisible();
+  expect(await builder.record("knowledge.term", termID)).toBeUndefined();
+  await term.getByRole("textbox", { name: "Refers to", exact: true }).fill(object.type);
+  await term.getByRole("button", { name: "Submit corrected inputs", exact: true }).click();
+  await expect(term).toHaveCount(0);
+  expect(await builder.record("knowledge.term", termID)).toMatchObject({ term: termName, meaning: "Accepting an incoming delivery", synonyms: "Goods receipt, delivery acceptance", refersTo: object.type, apps: ["pms"] });
+  await expect(page.getByRole("row").filter({ hasText: termName })).toBeVisible();
 
   await switchWorkspace(page, "Builder");
   await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("WMS entry probe");
@@ -94,6 +163,14 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
     await operator.open(business, "/home");
     await expect(business.getByRole("button", { name: "Projects", exact: true })).toHaveCount(0);
     await expect(business.getByRole("button", { name: /^Asset Library\b/ })).toHaveCount(0);
+    await operator.open(business, "/records");
+    const entityTypes = business.getByRole("combobox", { name: "Entity type", exact: true });
+    await expect(entityTypes).toBeVisible();
+    await expect(entityTypes.locator('option[value="knowledge.document"]')).toHaveCount(0);
+    await expect(entityTypes.locator('option[value="knowledge.term"]')).toHaveCount(0);
+    await expect(business.getByRole("button", { name: "Create document", exact: true })).toHaveCount(0);
+    await expect(business.getByRole("button", { name: "Create term", exact: true })).toHaveCount(0);
+    await expect(operator.decide("knowledge.document.create", { type: "knowledge.document", id: fresh("DENIED") }, { title: "Not an editor", text: "Not allowed" }, "knowledge")).rejects.toThrow(/POLICY_DENIED/);
     await switchWorkspace(business, "Control Panel");
     await expect(business.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
     await business.getByRole("button", { name: "My account", exact: true }).last().click();

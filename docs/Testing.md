@@ -193,6 +193,8 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 ### 应用设计台（ADR-0108）
 
+`make e2e SPEC=workspaces` 同时检查文档/术语只保留一个声明创建入口、文档已接受但答复丢失后的同键确认不增加修订、术语无效引用拒绝后保留输入并可纠正；普通成员的目录与创建权限保持原样。原手写知识创建入口不再存在，检索与术语影响说明不改。
+
 应用运行任务可单独执行 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-delivery E2E_ARGS='--grep "application capacity, original decisions and headless runtime"'`：原流程取消成功后丢失答复、原键重试且修订不增加，按实际取消状态和完整关联记录筛选，只读查看记录，从正式运行返回原项目或已发布应用，以及切换设置后保留所选运行。`make test-go PKG=. RUN='TestApplicationRunsCurrentFlowFailures|TestApplicationRunsComputeParentSubject|TestLiveChainSharesOriginalAuthorizedReads|TestLiveRegistrationRejectsWritesAndStreams'` 检查恢复后不沿用历史失败、补偿故障保留、原计算的流程主体/筛选/来源授权、编码流程 ID 的因果图与成员读取共同实时更新及撤权后拒绝。没有新增执行、重试或持久格式，也不把这项任务当真实外部系统和生产容量证据。
 
 `TestApprovalDoesNotBindUnrelatedRelease` 检查应用 A 激活后又激活无关应用 B，审批仍绑定 A；改变待处理审批结果的升级被原检查拒绝，审批完成后可继续升级，并检查重放。

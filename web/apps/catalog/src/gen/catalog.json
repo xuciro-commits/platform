@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b8f952e9e07a9348",
+  "revision": "sha256:082807f2edaf6183",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13178,7 +13178,6 @@
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
-      "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
@@ -13203,8 +13202,7 @@
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/widgets/CreateForm.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/platform/src/knowledge.tsx"
+      "web/packages/erp/src/index.tsx"
     ],
     "app/decision-confirmation": [
       "web/packages/app/src/actions/record-actions.ts",
