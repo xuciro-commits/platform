@@ -108,8 +108,8 @@ func TestInterfacePageBindingKeepsPublishedShapeAndConcreteRecordIdentity(t *tes
 	named := NamedQuery{Name: "coded", Title: "Coded", Interface: shape.Name, InterfaceShape: &shape, Implementations: []string{root.Name}, Sort: []string{"id"}, Limit: 20}
 	definition := Definition{Ref: binding.Ref, Version: binding.SourceVersion, Query: &named}
 	p := Page{Name: "picker", Object: root, Layout: "composed", Sections: []Section{
-		{ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", RecordPicker: &PageRecordPicker{LabelField: "name"}},
-		{ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", RecordCard: &PageRecordCard{LabelField: "name", Tone: "neutral"}, Fields: []string{"name"}},
+		{PageWidgetConfig: PageWidgetConfig{RecordPicker: &PageRecordPicker{LabelField: "name"}}, ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window"},
+		{PageWidgetConfig: PageWidgetConfig{RecordCard: &PageRecordCard{LabelField: "name", Tone: "neutral"}}, ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", Fields: []string{"name"}},
 	}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"picker", "card"}}, "picker": {Kind: "widget", Section: "picker"}, "card": {Kind: "widget", Section: "card"}}, Queries: map[string]PageQuery{"coded": {Interface: shape.Name, Query: &binding, Limit: 20, Sort: []string{"id"}}}, Variables: map[string]PageVariable{
 		"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "coded"}},
 		"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "picker"}},

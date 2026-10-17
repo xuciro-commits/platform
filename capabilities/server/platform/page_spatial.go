@@ -190,11 +190,8 @@ func (s Section) CheckMap(info EntityInfo) error {
 			return fmt.Errorf("map color needs visible text or choice")
 		}
 	}
-	if s.Map.LabelField != "id" {
-		f, ok := info.Field(s.Map.LabelField)
-		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) {
-			return fmt.Errorf("map title needs visible original text or ID")
-		}
+	if !visibleContextField(info, s.Map.LabelField, true) {
+		return fmt.Errorf("map title needs visible original text or ID")
 	}
 	return nil
 }

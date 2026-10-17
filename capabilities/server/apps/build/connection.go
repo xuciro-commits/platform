@@ -95,9 +95,6 @@ func (b *Build) validConnection(c Connection) *kernel.Error {
 		if u.Scheme != "postgres" && u.Scheme != "postgresql" {
 			return refuse("A postgres connection's address starts with postgres://")
 		}
-		if _, has := u.User.Password(); has {
-			return refuse("The address carries no password; name a secret instead")
-		}
 	default:
 		if u.Scheme != "https" && !(u.Scheme == "http" && c.AllowPrivate) {
 			return refuse("A connection answers over https; http only to a private address when allowed")

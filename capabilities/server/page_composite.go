@@ -57,7 +57,7 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 				read.Records[name] = record
 			}
 		}
-		value, err := t.readPageModelSource(member, page, platform.Section{ID: section.ID, Widget: "table", Model: &model}, read, at)
+		value, err := t.readPageModelSource(member, page, platform.Section{PageWidgetConfig: platform.PageWidgetConfig{Model: &model}, ID: section.ID, Widget: "table"}, read, at)
 		if err != nil {
 			return result, err
 		}

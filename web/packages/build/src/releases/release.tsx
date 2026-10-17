@@ -51,9 +51,6 @@ export function releaseDraftsSelection(value: string | undefined, kinds: readonl
   }
   return { drafts: out };
 }
-/** Source compatibility for consumers that only need the decoded list. */
-export const releaseDraftsParam = (value: string | undefined, kinds: readonly string[]): JointChoice[] => releaseDraftsSelection(value, kinds).drafts;
-
 /** New links carry lossless JSON, not punctuation-delimited record identities. */
 export const releaseDraftsValue = (drafts: readonly JointChoice[]): string => JSON.stringify(drafts.map(({ kind, id }) => ({ kind, id })));
 

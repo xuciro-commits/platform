@@ -8,7 +8,7 @@ func TestOriginalSearchInputBindingAndProfile(t *testing.T) {
 	q := d.Queries["read"]
 	q.Search = &PageValue{Variable: "bucket"}
 	d.Queries["read"] = q
-	s := Section{ID: "search", Widget: "input", ConfigVersion: 1, InputKind: "search"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{InputKind: "search"}, ID: "search", Widget: "input", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID, ValueVariable: "bucket"}
 	r := d.Nodes[d.Root]
 	r.Children = append(r.Children, s.ID)

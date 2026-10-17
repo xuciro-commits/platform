@@ -18,7 +18,7 @@ func TestExternalFrameUsesReviewedOriginWithoutPlatformBindings(t *testing.T) {
 		}
 	}
 	page := embeddedTestPage("external")
-	page.Sections = []Section{{ID: "text", Widget: "external-frame", ConfigVersion: 1, ExternalFrame: &frame}}
+	page.Sections = []Section{{PageWidgetConfig: PageWidgetConfig{ExternalFrame: &frame}, ID: "text", Widget: "external-frame", ConfigVersion: 1}}
 	if err := page.Document.Check(page.Sections); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestExternalDocumentsConsumeTheEmbeddingInstanceBudget(t *testing.T) {
 	page.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows"}}
 	for i := 0; i < 16; i++ {
 		id := fmt.Sprintf("frame%d", i)
-		page.Sections = append(page.Sections, Section{ID: id, Widget: "external-frame", ConfigVersion: 1, ExternalFrame: &PageExternalFrame{URL: "https://docs.example.com/report", Origin: "https://docs.example.com"}})
+		page.Sections = append(page.Sections, Section{PageWidgetConfig: PageWidgetConfig{ExternalFrame: &PageExternalFrame{URL: "https://docs.example.com/report", Origin: "https://docs.example.com"}}, ID: id, Widget: "external-frame", ConfigVersion: 1})
 		root := page.Document.Nodes["root"]
 		root.Children = append(root.Children, id)
 		page.Document.Nodes["root"] = root

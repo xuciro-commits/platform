@@ -4,7 +4,7 @@ import "testing"
 
 func TestThreeAIViewsUseOriginalRecordFunctionAndOwnedQuestion(t *testing.T) {
 	p := embeddedTestPage("ai")
-	p.Sections = []Section{{ID: "table", Widget: "table", ConfigVersion: 1}, {ID: "ai", Widget: "ai-assistant", ConfigVersion: 1, RecordVariable: "record", Function: &AssetBinding{Ref: AssetRef{App: "sample", Kind: AssetFunction, Name: "advice"}, SourceVersion: "1.function-1"}, AI: &PageAI{Kind: "analyst"}}}
+	p.Sections = []Section{{ID: "table", Widget: "table", ConfigVersion: 1}, {PageWidgetConfig: PageWidgetConfig{AI: &PageAI{Kind: "analyst"}}, ID: "ai", Widget: "ai-assistant", ConfigVersion: 1, RecordVariable: "record", Function: &AssetBinding{Ref: AssetRef{App: "sample", Kind: AssetFunction, Name: "advice"}, SourceVersion: "1.function-1"}}}
 	p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"table", "ai"}}, "table": {Kind: "widget", Section: "table"}, "ai": {Kind: "widget", Section: "ai"}}
 	p.Document.Variables = map[string]PageVariable{"record": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "table"}}, "question": {Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}}
 	f := RecordAdviceFunction(p.Object.Name, []string{"name"}, []string{"reader"})
@@ -48,7 +48,7 @@ func TestThreeAIViewsUseOriginalRecordFunctionAndOwnedQuestion(t *testing.T) {
 
 func TestAISharedApplicationContextKeepsLocalQuestionAndOriginalObject(t *testing.T) {
 	p := embeddedTestPage("sharedai")
-	p.Sections = []Section{{ID: "ai", Widget: "ai-assistant", ConfigVersion: 1, RecordVariable: "record", Function: &AssetBinding{Ref: AssetRef{App: p.Object.App, Kind: AssetFunction, Name: "advice"}, SourceVersion: "1.function-1"}, AI: &PageAI{Kind: "chatbot", QuestionVariable: "question", ReplyField: "summary"}}}
+	p.Sections = []Section{{PageWidgetConfig: PageWidgetConfig{AI: &PageAI{Kind: "chatbot", QuestionVariable: "question", ReplyField: "summary"}}, ID: "ai", Widget: "ai-assistant", ConfigVersion: 1, RecordVariable: "record", Function: &AssetBinding{Ref: AssetRef{App: p.Object.App, Kind: AssetFunction, Name: "advice"}, SourceVersion: "1.function-1"}}}
 	p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"ai"}}, "ai": {Kind: "widget", Section: "ai"}}
 	p.Document.Variables = map[string]PageVariable{"record": {Scope: "application", Type: "record", Mode: "shared", Source: &PageResourceSource{Kind: "application", Variable: "selection", Object: &p.Object}}, "question": {Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}}
 	f := RecordAdviceFunction(p.Object.Name, []string{"name"}, []string{"reader"})

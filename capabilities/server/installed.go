@@ -450,9 +450,6 @@ func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, 
 	}); err != nil {
 		return err
 	}
-	if err := s.CheckCollectionAnalysis(info); err != nil {
-		return err
-	}
 	if err := s.CheckResourceList(info); err != nil {
 		return err
 	}
@@ -518,9 +515,6 @@ func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, 
 		}
 	}
 
-	if err := s.CheckMetricPresentation(info); err != nil {
-		return err
-	}
 	if s.DetailPresentation != nil && p.Document == nil {
 		return fmt.Errorf("detail presentation requires a document")
 	}
@@ -637,6 +631,9 @@ func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, 
 		}
 		return nil
 	}
+	if err := p.CheckSectionFields(s, info); err != nil {
+		return err
+	}
 	return t.checkWidget(p, s, info, where, parentType, boundParent, field)
 }
 
@@ -659,62 +656,15 @@ func (t *Tenant) checkWidget(p platform.Page, s platform.Section, info platform.
 		if p.Document == nil {
 			return fmt.Errorf("kanban needs a V2 document")
 		}
-		if err := p.CheckKanban(s, info); err != nil {
-			return err
-		}
 		for _, ref := range s.Actions {
 			if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
 				return err
 			}
 		}
-	case "record-leaderboard":
-		if err := s.CheckLeaderboard(info); err != nil {
-			return err
-		}
-	case "histogram":
-		if err := s.CheckHistogram(info); err != nil {
-			return err
-		}
 	case "breadcrumb", "avatar-stack", "static-image", "resource-list", "asset-directory", "graph-explorer", "vertex-graph":
 		// Their finite bindings and original field schema were checked above.
-	case "record-comparison":
-		if err := s.CheckRecordComparison(info); err != nil {
-			return err
-		}
-	case "record-card":
-		if err := s.CheckRecordCard(info); err != nil {
-			return err
-		}
-	case "sparkline-kpi":
-		if err := s.CheckSparkline(info); err != nil {
-			return err
-		}
-	case "term-counts", "treemap", "tag-counts":
-		if err := s.CheckTerms(info); err != nil {
-			return err
-		}
-	case "summary-stats":
-		if err := s.CheckSummary(info); err != nil {
-			return err
-		}
-	case "record-gantt":
-		if err := s.CheckRecordGantt(info); err != nil {
-			return err
-		}
-	case "record-calendar":
-		if err := s.CheckRecordCalendar(info); err != nil {
-			return err
-		}
-	case "record-events":
-		if err := s.CheckRecordEvents(info); err != nil {
-			return err
-		}
 	case "collection-builder":
 		if err := s.CheckCollectionBuilderFields(info); err != nil {
-			return err
-		}
-	case "record-map":
-		if err := s.CheckMap(info); err != nil {
 			return err
 		}
 	case "scene-3d":
@@ -724,31 +674,9 @@ func (t *Tenant) checkWidget(p platform.Page, s platform.Section, info platform.
 		}); err != nil {
 			return err
 		}
-	case "record-scatter":
-		if err := s.CheckScatter(info); err != nil {
-			return err
-		}
-	case "record-chart":
-		if err := s.CheckRecordChart(info); err != nil {
-			return err
-		}
-	case "record-list":
-		if err := s.CheckRecordPicker(info); err != nil {
-			return err
-		}
-		if err := s.CheckRecordList(info); err != nil {
-			return err
-		}
 	case "record-timeline":
 		if p.Document == nil {
 			return fmt.Errorf("record timeline needs a V2 document")
-		}
-		if err := s.CheckTimeline(info); err != nil {
-			return err
-		}
-	case "status-tracker":
-		if err := s.CheckStatusTracker(info); err != nil {
-			return err
 		}
 	case "record-links":
 		if p.Document == nil {

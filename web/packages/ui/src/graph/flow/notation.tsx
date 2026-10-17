@@ -20,10 +20,6 @@ export type FlowNotation =
   | "gateway-exclusive" | "gateway-parallel" | "gateway-inclusive" | "gateway-event"
   | "event-start" | "event-intermediate" | "event-end" | "event-timer" | "event-message" | "event-error" | "event-terminate";
 
-export const flowNotations: FlowNotation[] = ["task", "service-task", "user-task", "script-task", "call-activity", "subprocess", "data-object",
-  "gateway-exclusive", "gateway-parallel", "gateway-inclusive", "gateway-event",
-  "event-start", "event-intermediate", "event-end", "event-timer", "event-message", "event-error", "event-terminate"];
-
 /** An event attached to an activity's border: the timeout it may hit, the error it
  * may escape through. It is a marker on the shape, not a step of its own. */
 export type FlowBoundary = { id: string; notation: "event-timer" | "event-error" | "event-message"; label?: string; tone?: Tone };

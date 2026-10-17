@@ -9,7 +9,7 @@ func TestRecordGanttRequiresOriginalFieldsFixedRangeAndOrderedWindow(t *testing.
 	q := d.Queries[qid]
 	q.Sort = []string{"id"}
 	d.Queries[qid] = q
-	s := Section{ID: "gantt", Widget: "record-gantt", ConfigVersion: 1, CollectionVariable: "window", RecordGantt: &PageRecordGantt{StartField: "begin", EndField: "due", TitleField: "title", StatusField: "status", RangeStart: "2026-09-01", RangeEnd: "2026-11-01", Tones: []PageEventTone{{Value: "done", Tone: "success"}}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordGantt: &PageRecordGantt{StartField: "begin", EndField: "due", TitleField: "title", StatusField: "status", RangeStart: "2026-09-01", RangeEnd: "2026-11-01", Tones: []PageEventTone{{Value: "done", Tone: "success"}}}}, ID: "gantt", Widget: "record-gantt", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

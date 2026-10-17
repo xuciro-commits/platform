@@ -1,10 +1,8 @@
 package platformserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -113,13 +111,8 @@ func decodeAcceptedHostControl(raw []byte) (acceptedHostControl, error) {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return r, fmt.Errorf("host result is empty or too large")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&r); err != nil {
+	if err := decodeAcceptedJSON(raw, &r, "host result"); err != nil {
 		return r, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return r, fmt.Errorf("host result has trailing data")
 	}
 	if err := validateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {
 		return r, err

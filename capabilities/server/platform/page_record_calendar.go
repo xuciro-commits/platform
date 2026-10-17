@@ -39,8 +39,7 @@ func (s Section) CheckRecordCalendar(info EntityInfo) error {
 	}
 	c := s.RecordCalendar
 	date, ok := info.Field(c.DateField)
-	label, labelOK := info.Field(c.LabelField)
-	if !ok || !slices.Contains([]string{"date", "datetime"}, date.Type) || c.LabelField != "id" && (!labelOK || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, label.Type)) {
+	if !ok || !slices.Contains([]string{"date", "datetime"}, date.Type) || !visibleContextField(info, c.LabelField, true) {
 		return fmt.Errorf("calendar needs original visible business date and title fields")
 	}
 	return nil

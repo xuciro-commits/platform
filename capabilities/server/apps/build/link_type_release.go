@@ -3,7 +3,6 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,36 +21,13 @@ func linkTypeReleaseAsset(f LinkType, sourceVersion string) (platform.ReleaseAss
 
 // LinkTypeReleaseAsset resolves only a retained version from this owner.
 func (b *Build) LinkTypeReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
-	ordinalText, found := strings.CutPrefix(sourceVersion, b.Manifest().Version+".link-")
-	version, err := strconv.Atoi(ordinalText)
-	if !found || err != nil || strconv.Itoa(version) != ordinalText {
-		return platform.ReleaseAsset{}, fmt.Errorf("invalid retained link type version %s", sourceVersion)
-	}
-	f, ordinal, ok := b.LinkTypeDefinition(name, version)
-	if !ok || ordinal != version || version < 1 {
-		return platform.ReleaseAsset{}, fmt.Errorf("linkType %s version %d is not retained", name, version)
-	}
-	body, err := json.Marshal(f)
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: name}, ContractVersion: f.Contract(),
-		SourceVersion: b.Manifest().Version + ".link-" + strconv.Itoa(version), Body: body})
+	return retainedDefinitionAsset(b.Manifest().Version, "link", "link type", platform.AssetLinkType, name, sourceVersion, b.LinkTypeDefinition)
 }
 
 func (b *Build) linkTypeAssets() ([]platform.ReleaseAsset, error) {
-	var out []platform.ReleaseAsset
-	// This cache is reconstructed only from validated publications or an
-	// immutable candidate. Draft rows must never replace installed assets.
-	for _, declaration := range b.linkTypeDeclarations() {
-		f := b.linkTypes[declaration.Name]
-		asset, err := linkTypeReleaseAsset(f, b.Manifest().Version)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, asset)
-	}
-	return out, nil
+	return installedDefinitionAssets(b.linkTypes, func(record LinkType) (platform.ReleaseAsset, error) {
+		return linkTypeReleaseAsset(record, b.Manifest().Version)
+	})
 }
 
 // InstallLinkTypeAsset installs one immutable candidate version into a fresh
@@ -74,93 +50,23 @@ func (b *Build) InstallLinkTypeAsset(asset platform.ReleaseAsset) error {
 }
 
 func (b *Build) linkTypeDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = b.ReleaseAssets()
-	if err != nil {
-		return
-	}
-	list, problem := b.linkTypeInventory()
-	if problem != nil {
-		err = problem
-		return
-	}
-	i := slices.IndexFunc(list, func(f LinkType) bool { return f.ID == id && !f.Archived })
-	if i < 0 {
-		err = fmt.Errorf("draft linkType %q not found", id)
-		return
-	}
-	f := list[i]
-	if old, ok := wasPublished[LinkType](f.Published); ok {
-		prior = platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: old.Name}
-		hadPrior = true
-	}
-	next = platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}
-	if err = b.checkLinkType(&f); err != nil {
-		return
-	}
-	if f.Version >= 64 {
-		err = fmt.Errorf("link type version family is full")
-		return
-	}
-	f.Version++
-	asset, problem := linkTypeReleaseAsset(f, b.Manifest().Version)
-	if problem != nil {
-		err = problem
-		return
-	}
-	after = slices.Clone(before)
-	if hadPrior {
-		after = slices.DeleteFunc(after, func(a platform.ReleaseAsset) bool { return a.Ref == prior })
-	}
-	after = append(after, asset)
-	return
+	return draftDefinitionAssets(b, id, platform.AssetLinkType, "link type", b.linkTypeInventory, func(record LinkType) (LinkType, error) {
+		err := b.checkLinkType(&record)
+		return record, err
+	}, func(record LinkType) (platform.ReleaseAsset, error) {
+		record.Version++
+		return linkTypeReleaseAsset(record, b.Manifest().Version)
+	})
 }
 
 // Freeze the immutable candidate beside the mutable editor row. Existing
 // ordinals must match retained bytes; only the next ordinal can publish.
 func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
-	list, err := b.linkTypeInventory()
-	if err != nil {
-		return nil, err
-	}
-	var out []ReleasePublication
-	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetLinkType {
-			continue
-		}
-		ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".link-")
-		version, err := strconv.Atoi(ordinal)
-		if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal {
-			return nil, fmt.Errorf("invalid link type version")
-		}
-		i := slices.IndexFunc(list, func(q LinkType) bool { return !q.Archived && q.Name == asset.Ref.Name })
-		if i < 0 {
-			return nil, fmt.Errorf("link type has no source owner")
-		}
-		record := list[i]
-		if version <= record.Version {
-			prior, err := b.LinkTypeReleaseAsset(asset.Ref.Name, asset.SourceVersion)
-			var retained, candidate any
-			if err != nil || json.Unmarshal(prior.Body, &retained) != nil || json.Unmarshal(asset.Body, &candidate) != nil || !reflect.DeepEqual(retained, candidate) {
-				return nil, fmt.Errorf("link type retained bytes differ")
-			}
-			if len(record.Versions) != record.Version {
-				return nil, fmt.Errorf("retained link type history is unavailable")
-			}
-			selected := record.Versions[version-1]
-			if selected == record.Published {
-				continue
-			}
-			record.Published = selected
-			if version < record.Version {
-				record.State = "draft"
-			}
-			out = append(out, ReleasePublication{Schema: SchemaLinkType, Image: platform.Raw(record)})
-			continue
-		}
+	return prepareDefinitionPublications(b, assets, b.linkTypeInventory, platform.AssetLinkType, "link", SchemaLinkType, "link type", b.LinkTypeReleaseAsset, func(record LinkType, asset platform.ReleaseAsset, version int) (LinkType, error) {
 		prior, _ := wasPublished[LinkType](record.Published)
 		var q platform.LinkType
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Parent.Name != record.Parent || q.Child.Name != record.Child || q.Via != record.Via || !linkKeepsGuarantees(prior, linkTypeFromDeclaration(q)) {
-			return nil, fmt.Errorf("invalid next link type version")
+			return record, fmt.Errorf("invalid next link type version")
 		}
 		frozen := linkTypeFromDeclaration(q)
 		frozen.Record = record.Record
@@ -169,10 +75,8 @@ func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsse
 		record.Required = frozen.Required
 		record.State, record.Version, record.Published = "published", version, published(frozen)
 		record.Versions = append(slices.Clone(record.Versions), record.Published)
-		raw, _ := json.Marshal(record)
-		out = append(out, ReleasePublication{Schema: SchemaLinkType, Image: raw})
-	}
-	return out, nil
+		return record, nil
+	})
 }
 
 func linkTypeFromDeclaration(l platform.LinkType) LinkType {

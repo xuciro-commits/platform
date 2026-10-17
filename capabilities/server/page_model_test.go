@@ -27,7 +27,7 @@ func modelTestPage(object string, sections []platform.Section) platform.Page {
 func modelAuthoringSections(sections []platform.Section) []build.Section {
 	values := make([]build.Section, len(sections))
 	for i, s := range sections {
-		values[i] = build.Section{ID: s.ID, Widget: s.Widget, ConfigVersion: s.ConfigVersion, Title: s.Title, Model: s.Model}
+		values[i] = build.Section{PageWidgetConfig: platform.PageWidgetConfig{Model: s.Model}, ID: s.ID, Widget: s.Widget, ConfigVersion: s.ConfigVersion, Title: s.Title}
 	}
 	return values
 }
@@ -41,7 +41,7 @@ func TestPageDraftRulesUseSavedModelsWithoutPublishingThem(t *testing.T) {
 			const object = "build.draftrules"
 			fields := []build.Field{{Name: "note", Title: "Note", Type: "text"}}
 			decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "OBJECT", map[string]any{"name": "draftrules", "title": "Draft rules", "fields": fields}, at)
-			page := modelTestPage(object, []platform.Section{{ID: "records", Widget: "table", ConfigVersion: 1, Model: &platform.ModelBinding{Type: object}}})
+			page := modelTestPage(object, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: object}}, ID: "records", Widget: "table", ConfigVersion: 1}})
 			if installed {
 				decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{}, at)
 				decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
@@ -123,7 +123,7 @@ func TestPageModelSelectorAndStartShareOneRuleAndRecover(t *testing.T) {
 	}{{"cut", true, false}, {"drill", false, true}, {"zero", false, false}} {
 		decide(t, tn, "user", build.ID, eq+".create", eq, row.id, map[string]any{"name": row.id, "cut": row.cut, "drill": row.drill}, at)
 	}
-	p := modelTestPage(op, []platform.Section{{ID: "operations", Widget: "table", ConfigVersion: 1, Model: &platform.ModelBinding{Type: op}}, {ID: "equipment", Widget: "record-picker", ConfigVersion: 1, Model: &platform.ModelBinding{Type: eq, Options: &platform.OptionsRef{Rule: &platform.ModelRule{Action: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: eq + ".start"}, Inputs: map[string]string{"operation": "operation"}}}}}})
+	p := modelTestPage(op, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: op}}, ID: "operations", Widget: "table", ConfigVersion: 1}, {PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: eq, Options: &platform.OptionsRef{Rule: &platform.ModelRule{Action: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: eq + ".start"}, Inputs: map[string]string{"operation": "operation"}}}}}, ID: "equipment", Widget: "record-picker", ConfigVersion: 1}})
 	p.Document.Variables["operation"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "operations"}}
 	request := PageModelRead{Draft: &p, Section: "equipment", Records: map[string]PageModelRecord{"operation": {Object: op, ID: "operation"}}, Limit: 20, Sort: []string{"id"}}
 	read := func() PageModelResult {
@@ -178,7 +178,7 @@ func TestPageModelDeclaredInverseFilteredAndNamedCollections(t *testing.T) {
 	for i := -1; i < 4; i++ {
 		decide(t, tn, "user", build.ID, child+".create", child, fmt.Sprint("child", i), map[string]any{"parent": "parent", "number": i}, at)
 	}
-	p := modelTestPage(parent, []platform.Section{{ID: "parent", Widget: "table", ConfigVersion: 1, Model: &platform.ModelBinding{Type: parent}}, {ID: "children", Widget: "table", ConfigVersion: 1, Model: &platform.ModelBinding{Type: child, Set: &platform.ModelRecordSet{RecordVariable: "parent", Name: "children"}, Visibility: "mark"}}})
+	p := modelTestPage(parent, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: parent}}, ID: "parent", Widget: "table", ConfigVersion: 1}, {PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: child, Set: &platform.ModelRecordSet{RecordVariable: "parent", Name: "children"}, Visibility: "mark"}}, ID: "children", Widget: "table", ConfigVersion: 1}})
 	p.Document.Variables["parent"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "parent"}}
 	request := PageModelRead{Draft: &p, Section: "children", Records: map[string]PageModelRecord{"parent": {Object: parent, ID: "parent"}}, Offset: 1, Limit: 2, Sort: []string{"number"}}
 	read := func() PageModelResult {
@@ -215,10 +215,11 @@ func TestPageModelDeclaredInverseFilteredAndNamedCollections(t *testing.T) {
 	// A composite consumes these same declarations in the original page
 	// context, including its separate typed parent producer.
 	cell := platform.ExprLiteralValue("boolean", true)
-	p.Sections[1] = platform.Section{ID: "children", Widget: "model-matrix", ConfigVersion: 1, Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{
+	p.Sections[1] = platform.Section{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{
 		"rows":    {Model: platform.ModelBinding{Type: child, Set: &platform.ModelRecordSet{RecordVariable: "parent", Name: "positive"}}},
 		"columns": {Model: platform.ModelBinding{Type: child, Set: &platform.ModelRecordSet{RecordVariable: "parent", Query: &binding}}},
-	}, Value: &cell}}
+	}, Value: &cell}}, ID: "children", Widget: "model-matrix", ConfigVersion: 1,
+	}
 	p.Document.UIProfile = platform.PageCompositeProfile
 	request.Offset = 0
 	out = read()
@@ -291,7 +292,7 @@ func TestPageModelPartialVisibilityIsExplicitAndStrictByDefault(t *testing.T) {
 	for _, who := range []string{"writer", "viewer"} {
 		decide(t, tn, who, "invariants", "invariants.entry.create", owner.entity.Type, who, validConstraintEntry(who), at)
 	}
-	p := modelTestPage(owner.entity.Type, []platform.Section{{ID: "rows", Widget: "table", ConfigVersion: 1, Model: &platform.ModelBinding{Type: owner.entity.Type, Visibility: "mark"}}})
+	p := modelTestPage(owner.entity.Type, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: owner.entity.Type, Visibility: "mark"}}, ID: "rows", Widget: "table", ConfigVersion: 1}})
 	request := PageModelRead{Draft: &p, Section: "rows", Limit: 25}
 	read := func() PageModelResult {
 		tn.mu.Lock()

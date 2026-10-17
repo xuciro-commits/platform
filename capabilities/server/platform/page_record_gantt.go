@@ -61,9 +61,8 @@ func (s Section) CheckRecordGantt(info EntityInfo) error {
 			return fmt.Errorf("gantt needs original visible business start and end fields")
 		}
 	}
-	title, titleOK := info.Field(g.TitleField)
 	status, statusOK := info.Field(g.StatusField)
-	if g.TitleField != "id" && (!titleOK || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, title.Type)) || !statusOK || status.Type != "choice" {
+	if !visibleContextField(info, g.TitleField, true) || !statusOK || status.Type != "choice" {
 		return fmt.Errorf("gantt needs original visible title and choice status")
 	}
 	for _, tone := range g.Tones {

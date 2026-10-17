@@ -216,9 +216,6 @@ func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Dec
 func (a *Agents) AcceptedLedger() *platform.Ledger         { return a.ledger }
 func (a *Agents) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *Agents) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
-func (a *Agents) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
 
 var jsonTypes = map[string]string{"string": "string", "integer": "integer", "number": "number", "boolean": "boolean", "date": "string", "datetime": "string"}
 

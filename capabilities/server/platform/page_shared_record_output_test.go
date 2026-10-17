@@ -20,7 +20,7 @@ func TestAnalyticsSharedRecordProducersAndFrozenIdentity(t *testing.T) {
 		rank.Limit = 8
 		d.Queries["rank"] = rank
 		d.Variables["ranking"] = PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "rank"}}
-		p.Sections = []Section{{ID: "scatter", Widget: "record-scatter", ConfigVersion: 1, CollectionVariable: "window", SelectionVariable: "selected", Scatter: &PageRecordScatter{XField: "qty", YField: "qty", ColorField: "state", LabelField: "id"}}, {ID: "rank", Widget: "record-leaderboard", ConfigVersion: 1, CollectionVariable: "ranking", SelectionVariable: "selected", Leaderboard: &PageLeaderboard{ValueField: "qty", LabelField: "id", Limit: 8}}}
+		p.Sections = []Section{{PageWidgetConfig: PageWidgetConfig{Scatter: &PageRecordScatter{XField: "qty", YField: "qty", ColorField: "state", LabelField: "id"}}, ID: "scatter", Widget: "record-scatter", ConfigVersion: 1, CollectionVariable: "window", SelectionVariable: "selected"}, {PageWidgetConfig: PageWidgetConfig{Leaderboard: &PageLeaderboard{ValueField: "qty", LabelField: "id", Limit: 8}}, ID: "rank", Widget: "record-leaderboard", ConfigVersion: 1, CollectionVariable: "ranking", SelectionVariable: "selected"}}
 		return p
 	}
 	p := makePage()

@@ -10,7 +10,7 @@ func workViewsPage() Page {
 	p := Page{Name: "work-views", Layout: "composed", Object: object, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"table"}}, "table": {Kind: "widget", Section: "table"}}, Variables: map[string]PageVariable{
 		"active": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "table"}}, "enabled": {Scope: "page", Type: "boolean", Mode: "state", Initial: Raw(false)},
 	}}, Sections: []Section{{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"name"}}}}
-	for _, s := range []Section{{ID: "approvals", Widget: "approval-inbox", ConfigVersion: 1}, {ID: "notifications", Widget: "notification-feed", ConfigVersion: 1}, {ID: "history", Widget: "timeline", ConfigVersion: 1, RecordVariable: "active", HistoryLimit: 18}} {
+	for _, s := range []Section{{ID: "approvals", Widget: "approval-inbox", ConfigVersion: 1}, {ID: "notifications", Widget: "notification-feed", ConfigVersion: 1}, {PageWidgetConfig: PageWidgetConfig{HistoryLimit: 18}, ID: "history", Widget: "timeline", ConfigVersion: 1, RecordVariable: "active"}} {
 		p.Sections = append(p.Sections, s)
 		node := PageLayoutNode{Kind: "widget", Section: s.ID}
 		if s.Widget != "timeline" {
@@ -50,7 +50,7 @@ func TestWorkViewsFixedCallerProfileAndBindings(t *testing.T) {
 			p.Sections = p.Sections[:1]
 			delete(p.Document.Nodes, "approvals")
 			delete(p.Document.Nodes, "notifications")
-			p.Sections = append(p.Sections, Section{ID: "history", Widget: "timeline", ConfigVersion: 1, RecordVariable: "active", HistoryLimit: 18})
+			p.Sections = append(p.Sections, Section{PageWidgetConfig: PageWidgetConfig{HistoryLimit: 18}, ID: "history", Widget: "timeline", ConfigVersion: 1, RecordVariable: "active"})
 			p.Document.Nodes["root"] = PageLayoutNode{Kind: "rows", Children: []string{"table", "history"}}
 			p.Document.UIProfile = "platform.page.v2.76"
 		}},

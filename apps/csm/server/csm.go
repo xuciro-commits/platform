@@ -189,14 +189,6 @@ func (a *App) Answer(c platform.Caller, e platform.Effect, out platform.Outcome,
 	return nil
 }
 
-func (a *App) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-
-func (a *App) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

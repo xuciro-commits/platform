@@ -462,24 +462,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 	if len(raw) > 0 && json.Unmarshal(raw, &inputs) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} takes an object of inputs", a.Title)
 	}
-	if !c.Replaying {
-		fields := make([]platform.Field, 0, len(a.Inputs))
-		for _, in := range a.Inputs {
-			fields = append(fields, in.Field())
-		}
-		if issues := platform.InputIssues(fields, inputs); len(issues) > 0 {
-			refusal := c.RefuseFields(issues)
-			if required := slices.IndexFunc(issues, func(issue platform.FieldIssue) bool { return issue.Code == "required" && len(issue.Path) > 0 }); required >= 0 {
-				name := issues[required].Path[0]
-				label := name
-				if input := slices.IndexFunc(a.Inputs, func(in Input) bool { return in.Name == name }); input >= 0 && a.Inputs[input].Title != "" {
-					label = a.Inputs[input].Title
-				}
-				refusal.Message = fmt.Sprintf("%s needs %s", a.Title, label)
-			}
-			return refusal
-		}
-	}
+
 	v := reflect.ValueOf(record).Elem()
 	lookup = ruleLookup(o, lookup)
 	criteria, err := actionCriteria(o, a, lookup)

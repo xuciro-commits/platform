@@ -681,19 +681,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 				ref = page.Object
 			}
 			asset, ok := lookup[ref]
-			var identity struct {
-				Type   string      `json:"type"`
-				App    string      `json:"app"`
-				Entity *EntityInfo `json:"entity"`
-			}
-			err := json.Unmarshal(asset.Body, &identity)
-			owner, typ := identity.App, identity.Type
-			if identity.Entity != nil {
-				owner, typ = identity.Entity.App, identity.Entity.Type
-			} else if owner == "" {
-				owner, _, _ = strings.Cut(typ, ".") // the native builder object descriptor
-			}
-			if !ok || err != nil || identity.Type != typ || typ != ref.Name || owner != ref.App {
+			if !ok || !frozenObjectOwnerMatches(asset, ref) {
 				return fmt.Errorf("frozen history object does not match its actual entity owner")
 			}
 		}
@@ -754,7 +742,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	}
 
 	for _, s := range page.Sections {
-		if s.Widget != "action-table" {
+		if s.Widget != "action-table" && s.Widget != "inline-action" {
 			continue
 		}
 		ref := s.Object
@@ -763,39 +751,21 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 		object, ok := lookup[ref]
 		info, err := queryObjectDescriptor(object.Body)
-		if !ok || err != nil || len(s.Actions) != 1 {
-			return fmt.Errorf("frozen action table object is unavailable")
-		}
-		asset, ok := lookup[s.Actions[0]]
-		a, err := releaseActionDescriptor(asset.Body)
-		if !ok || err != nil {
-			return fmt.Errorf("frozen action table declaration is unavailable")
-		}
-
-		if err := s.CheckActionTable(info, a); err != nil {
-			return fmt.Errorf("frozen action table: %w", err)
-		}
-	}
-	for _, s := range page.Sections {
-		if s.Widget != "inline-action" {
-			continue
-		}
-		ref := s.Object
-		if ref.Name == "" {
-			ref = page.Object
-		}
-		object, ok := lookup[ref]
-		info, err := queryObjectDescriptor(object.Body)
-		if !ok || err != nil || page.Document == nil || len(s.Actions) != 1 {
-			return fmt.Errorf("frozen inline action object is unavailable")
+		if !ok || err != nil || s.Widget == "inline-action" && page.Document == nil || len(s.Actions) != 1 {
+			return fmt.Errorf("frozen %s object is unavailable", s.Widget)
 		}
 		asset, ok := lookup[s.Actions[0]]
 		action, err := releaseActionDescriptor(asset.Body)
 		if !ok || err != nil {
-			return fmt.Errorf("frozen inline action declaration is unavailable")
+			return fmt.Errorf("frozen %s declaration is unavailable", s.Widget)
 		}
-		if err := s.CheckInlineAction(info, action); err != nil {
-			return fmt.Errorf("frozen inline action: %w", err)
+		if s.Widget == "action-table" {
+			err = s.CheckActionTable(info, action)
+		} else {
+			err = s.CheckInlineAction(info, action)
+		}
+		if err != nil {
+			return fmt.Errorf("frozen %s: %w", s.Widget, err)
 		}
 	}
 	for _, s := range page.Sections {
@@ -823,7 +793,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 		asset, ok := lookup[ref]
 		info, err := queryObjectDescriptor(asset.Body)
-		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil || page.CheckKanban(s, info) != nil || s.CheckStatusTracker(info) != nil || s.CheckMetricPresentation(info) != nil || s.CheckRecordList(info) != nil || s.CheckHeatmap(info) != nil || s.CheckScatter(info) != nil || s.CheckMap(info) != nil || s.CheckRecordChart(info) != nil || s.CheckRecordEvents(info) != nil || s.CheckRecordPicker(info) != nil || s.CheckLeaderboard(info) != nil || s.CheckHistogram(info) != nil || s.CheckRecordCard(info) != nil || s.CheckRecordComparison(info) != nil || page.CheckRecordComparisonBinding(s) != nil || s.CheckSparkline(info) != nil || s.CheckTerms(info) != nil || s.CheckCollectionAnalysis(info) != nil || s.CheckSummary(info) != nil || s.CheckRecordGantt(info) != nil || s.CheckRecordCalendar(info) != nil {
+		if !ok || err != nil || page.Document == nil || page.CheckSectionFields(s, info) != nil || page.CheckRecordComparisonBinding(s) != nil {
 			return fmt.Errorf("frozen %s schema is unavailable", s.Widget)
 		}
 	}

@@ -49,11 +49,10 @@ import {LayoutTree} from "./page-editor/LayoutTree";
 import {LayoutProperties,LayoutSizing} from "./page-editor/LayoutProperties";
 import { useDraftSession } from "../session/DraftSession";
 import {copyLayout,copyLayoutIssue,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
-import type {AuthoringSection,PageDraft} from "./page-editor/draft";
+import {previewSection,type AuthoringSection,type PageDraft} from "./page-editor/draft";
 import {ModuleImportDialog,type ImportPackage} from "./module-import/ModuleImportDialog";
 
 type Api = NonNullable<Definition["page"]>;
-type Section = NonNullable<Api["sections"]>[number];
 /** The page as its record holds it: what the builder edits and submits. */
 type PageRecord = {
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
@@ -90,16 +89,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   listFields: [], detailFields: [], actions: [],
   selections: record.selections,
   document,
-  sections: sections.map((s) => ({composite:s.composite,model:s.model,actionDefaults:s.actionDefaults,
-collectionBuilder:s.collectionBuilder,collectionOutputVariable:s.collectionOutputVariable,map:s.map,scene:s.scene,sceneSampleCollectionVariable:s.sceneSampleCollectionVariable,sceneSampleVariable:s.sceneSampleVariable,scenePartVariable:s.scenePartVariable,ai:s.ai,externalFrame:s.externalFrame,embedding:s.embedding,observation:s.observation,observationHistoryVariable:s.observationHistoryVariable,observationContextVariable:s.observationContextVariable,observationSignalVariable:s.observationSignalVariable,observationThresholdVariable:s.observationThresholdVariable,observationRowsVariable:s.observationRowsVariable,observationCountVariable:s.observationCountVariable,observationMeanVariable:s.observationMeanVariable,actionTable:s.actionTable,notepadVariable:s.notepadVariable,analysis:s.analysis,analysisXVariable:s.analysisXVariable,analysisYVariable:s.analysisYVariable,analysisCountVariable:s.analysisCountVariable,analysisMeanVariable:s.analysisMeanVariable,resourceList:s.resourceList,assetDirectory:s.assetDirectory,graphExplorer:s.graphExplorer,vertexGraph:s.vertexGraph,breadcrumb:s.breadcrumb,avatar:s.avatar,image:s.image,historyLimit:s.historyLimit,commentDraftVariable:s.commentDraftVariable,fileVariable:s.fileVariable,pdfPageVariable:s.pdfPageVariable,recordComparison:s.recordComparison,recordSetVariable:s.recordSetVariable,recordCard:s.recordCard,sparkline:s.sparkline,sparklineDecimalVariable:s.sparklineDecimalVariable,sparklineNumberVariable:s.sparklineNumberVariable,groupValueVariable:s.groupValueVariable,groupSetVariable:s.groupSetVariable,rowValueVariable:s.rowValueVariable,rowSetVariable:s.rowSetVariable,columnValueVariable:s.columnValueVariable,columnSetVariable:s.columnSetVariable,scatter:s.scatter,histogram:s.histogram,inputKind:s.inputKind,spacer:s.spacer,separator:s.separator,notice:s.notice,alertValueVariable:s.alertValueVariable,alertBanner:s.alertBanner,pickerValueVariable:s.pickerValueVariable,recordPicker:s.recordPicker,dateKind:s.dateKind,dateOffset:s.dateOffset,dateVariable:s.dateVariable,dateLabel:s.dateLabel,choiceSetVariable:s.choiceSetVariable,choiceVariable:s.choiceVariable,choiceInput:s.choiceInput,booleanVariant:s.booleanVariant,booleanVariable:s.booleanVariable,booleanLabel:s.booleanLabel,rangeInput:s.rangeInput,rangeMinVariable:s.rangeMinVariable,rangeMaxVariable:s.rangeMaxVariable,leaderboard:s.leaderboard,summaryField:s.summaryField,statisticsVariable:s.statisticsVariable,gauge:s.gauge,gaugeValueVariable:s.gaugeValueVariable,progressLabel:s.progressLabel,progressValueVariable:s.progressValueVariable,progressTotalVariable:s.progressTotalVariable,progressTotal:s.progressTotal,recordGantt:s.recordGantt,recordCalendar:s.recordCalendar,recordEvents:s.recordEvents,recordChart:s.recordChart,recordList:s.recordList,headingLevel:s.headingLevel,countVariable:s.countVariable,metricPresentation:s.metricPresentation,statusTracker:s.statusTracker,recordLinks:s.recordLinks,buttons:s.buttons,recordView:s.recordView,detailPresentation:s.detailPresentation,tablePresentation:s.tablePresentation,tableColumns:s.tableColumns,showSearch:s.showSearch,facets:s.facets,filterSearchVariable:s.filterSearchVariable,selectionSetVariable:s.selectionSetVariable,
-    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, mark:s.mark,chartVariant:s.chartVariant, columnGroup: s.columnGroup,timeStart:s.timeStart,timeEnd:s.timeEnd,timeLabel:s.timeLabel,timeGroup:s.timeGroup,cardLabel:s.cardLabel, measure: s.measure, text: s.text,
-    object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
-    query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
-    function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
-    operation: s.operation, inputs: s.inputs,
-    inlineEdit:s.inlineEdit?{...s.inlineEdit,action:{app:s.inlineEdit.action.split(".")[0]??"",kind:"action",name:s.inlineEdit.action}}:undefined,
-    actions: (s.actions ?? []).map((schema) => ({ app: schema.split(".")[0] ?? "", kind: "action", name: schema })),
-  })) as Section[],
+  sections: sections.map(previewSection),
 });
 
 /** The pages of this organisation: open one to compose it. */

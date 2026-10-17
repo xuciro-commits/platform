@@ -146,7 +146,14 @@ func evalRule(e platform.Expr, spec platform.RuleReadSpec, c platform.Caller, re
 }
 
 func actionCriteria(o Object, a Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
-	plan := &platform.RuleCriteria{Reads: ruleSpec(o, a, a.Reads)}
+	reads, conditions := a.Reads, a.Conditions
+	if txn := a.Transaction; txn != nil {
+		reads, conditions = txn.Reads, nil
+		if txn.Guard != nil {
+			conditions = []Condition{{Expr: txn.Guard, Message: txn.Message}}
+		}
+	}
+	plan := &platform.RuleCriteria{Reads: ruleSpec(o, a, reads)}
 	used := map[string]bool{}
 	var visit func(platform.Expr)
 	visit = func(expr platform.Expr) {
@@ -161,7 +168,7 @@ func actionCriteria(o Object, a Action, lookup func(string) (platform.EntityInfo
 			visit(*expr.In)
 		}
 	}
-	for _, condition := range a.Conditions {
+	for _, condition := range conditions {
 		expr, err := conditionExpr(o, a, condition, ruleLookup(o, lookup))
 		if err != nil {
 			return nil, err

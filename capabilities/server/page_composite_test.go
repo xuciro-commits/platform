@@ -47,7 +47,7 @@ func TestPageCompositeMatrixUsesAuthorizedOriginalRuleAndRetainsRelease(t *testi
 		return platform.Expr{Op: "path", Kind: "decimal", Args: []platform.Expr{platform.ExprReference("reference", "input."+root)}, Path: []string{name}}
 	}
 	expr := platform.Expr{Op: ">=", Kind: "boolean", Args: []platform.Expr{path("row", "capacity"), path("column", "minimum")}}
-	p := modelTestPage(row, []platform.Section{{ID: "matrix", Widget: "model-matrix", ConfigVersion: 1, Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: row}}, "columns": {Model: platform.ModelBinding{Type: column}}}, Value: &expr}}})
+	p := modelTestPage(row, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: row}}, "columns": {Model: platform.ModelBinding{Type: column}}}, Value: &expr}}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}})
 	p.Document.UIProfile = platform.PageCompositeProfile
 	result := compositeRead(t, tn, "builder", p, "matrix")
 	if result.Hidden || result.Partial || len(result.Composite.Cells) != 4 {
@@ -67,7 +67,7 @@ func TestPageCompositeMatrixUsesAuthorizedOriginalRuleAndRetainsRelease(t *testi
 			t.Fatalf("stale cell: %+v", cell)
 		}
 	}
-	sections := []build.Section{{ID: "matrix", Widget: "model-matrix", ConfigVersion: 1, Composite: p.Sections[0].Composite}}
+	sections := []build.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: p.Sections[0].Composite}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}}
 	decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": p.Name, "title": p.Title, "object": row, "sections": sections, "document": p.Document}, at)
 	decide(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at)
 	preview, err := tn.PreviewRelease(memberOf(t, tn, "builder"), platform.AssetPage, "PAGE")
@@ -90,11 +90,12 @@ func TestPageCompositeGraphLayersOverlayAndDAG(t *testing.T) {
 	}
 	decide(t, tn, "user", build.ID, edge+".create", edge, "report", map[string]any{"superior": "parent", "subordinate": "child"}, at)
 	decide(t, tn, "user", build.ID, overlay+".create", overlay, "period", map[string]any{"unit": "child", "period": "2026-01 to 2026-12", "current": true}, at)
-	p := modelTestPage(node, []platform.Section{{ID: "graph", Widget: "layered-graph", ConfigVersion: 1, Composite: &platform.PageComposite{Acyclic: true, Bindings: map[string]platform.ModelViewBinding{
+	p := modelTestPage(node, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Acyclic: true, Bindings: map[string]platform.ModelViewBinding{
 		"nodes":  {Model: platform.ModelBinding{Type: node}, Roles: map[string]platform.FieldRef{"layer": {Name: "division"}, "detail": {Path: []string{"division", "name"}}}},
 		"layers": {Model: platform.ModelBinding{Type: layer}}, "edges": {Model: platform.ModelBinding{Type: edge}, Roles: map[string]platform.FieldRef{"from": {Name: "superior"}, "to": {Name: "subordinate"}}},
 		"overlay": {Model: platform.ModelBinding{Type: overlay}, Roles: map[string]platform.FieldRef{"node": {Name: "unit"}, "detail": {Name: "period"}, "current": {Name: "current"}}},
-	}}}})
+	}}}, ID: "graph", Widget: "layered-graph", ConfigVersion: 1,
+	}})
 	p.Document.UIProfile = platform.PageCompositeProfile
 	originalEdges := p.Sections[0].Composite.Bindings["edges"]
 	p.Sections[0].Composite.Bindings["edges"] = platform.ModelViewBinding{Model: originalEdges.Model, Roles: map[string]platform.FieldRef{"to": {Name: "subordinate"}}, Expressions: map[string]platform.Expr{"from": platform.ExprReference("reference", "division")}}
@@ -129,7 +130,7 @@ func TestPageCompositePartialNeverTurnsHiddenCellsIntoFalse(t *testing.T) {
 		decide(t, tn, who, "invariants", "invariants.entry.create", owner.entity.Type, who, validConstraintEntry(who), at)
 	}
 	expr := platform.ExprLiteralValue("boolean", true)
-	p := modelTestPage(owner.entity.Type, []platform.Section{{ID: "matrix", Widget: "model-matrix", ConfigVersion: 1, Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: owner.entity.Type}}, "columns": {Model: platform.ModelBinding{Type: owner.entity.Type}}}, Value: &expr}}})
+	p := modelTestPage(owner.entity.Type, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: owner.entity.Type}}, "columns": {Model: platform.ModelBinding{Type: owner.entity.Type}}}, Value: &expr}}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}})
 	p.Document.UIProfile = platform.PageCompositeProfile
 	result := compositeRead(t, tn, "viewer", p, "matrix")
 	if !result.Hidden || !result.Partial || len(result.Composite.Cells) > 0 || len(result.Composite.Sources) > 0 {
@@ -160,7 +161,7 @@ func TestPageCompositeRefusesAnOversizedCrossProductWithoutWriting(t *testing.T)
 		decide(t, tn, "user", build.ID, typ+".create", typ, fmt.Sprint(i), map[string]any{"name": fmt.Sprint(i)}, at)
 	}
 	expr := platform.ExprLiteralValue("boolean", true)
-	p := modelTestPage(typ, []platform.Section{{ID: "matrix", Widget: "model-matrix", ConfigVersion: 1, Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: typ}}, "columns": {Model: platform.ModelBinding{Type: typ}}}, Value: &expr}}})
+	p := modelTestPage(typ, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: typ}}, "columns": {Model: platform.ModelBinding{Type: typ}}}, Value: &expr}}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}})
 	p.Document.UIProfile = platform.PageCompositeProfile
 	before := txnState(tn)
 	tn.mu.Lock()

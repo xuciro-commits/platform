@@ -3,7 +3,7 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
 import { Fragment, useRef, useState } from "react";
-import { useAdmin, when, type AppInfo, type ProtocolInfo } from "./shared";
+import { when, type AppInfo, type ProtocolInfo } from "./shared";
 
 // Tiers of the protocol graph: an app sits one column right of the providers of
 // the protocols it consumes (providers are enabled before their consumers).
@@ -19,7 +19,7 @@ function tiers(apps: AppInfo[]): AppInfo[][] {
 }
 
 export function Apps() {
-  const { apps } = useAdmin();
+  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
   const { role } = useHost();
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   return (
@@ -192,7 +192,7 @@ function ModuleCard({ app: a }: { app: AppInfo }) {
 }
 
 export function Matrix() {
-  const { apps } = useAdmin();
+  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
   const [q, setQ] = useState("");
   const needle = q.trim().toLocaleLowerCase();
   const shown = apps.filter((a) => !needle || [a.id, a.title, ...a.capabilities.map((c) => c.name + " " + capabilityTitle(c.name)), ...a.provides, ...a.consumes, ...a.roles].join(" ").toLocaleLowerCase().includes(needle));
@@ -213,7 +213,7 @@ export function Matrix() {
 // Protocols (ADR-0011): apps meet through them, not through each other.
 export function Protocols() {
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
-  const { decideOn } = useAdmin();
+  const { decide } = useHost();
   return (
     <>
       <PageHeader title={t("Protocols")} description={t("Interfaces apps provide and consume. A consumer depends on the protocol; new calls go to the chosen provider, and what every provider holds stays readable.")} />
@@ -226,7 +226,7 @@ export function Protocols() {
               {p.bound ? <Tag label={`bound to ${p.bound}`} tone="success" /> : <Tag label={t("not bound")} tone="neutral" />}
               {p.providers.length > 1 && (
                 <Select aria-label={`Provider of ${p.id}`} className="ml-auto w-48" value={p.bound ?? ""}
-                  onChange={(e) => void decideOn("platform.protocol.bind", { type: "platform.protocol", id: p.id }, { provider: e.target.value })}>
+                  onChange={(e) => void decide("platform.protocol.bind", { type: "platform.protocol", id: p.id }, { provider: e.target.value })}>
                   {p.providers.map((x) => <option key={x} value={x}>{t("New calls to")} {x}</option>)}
                 </Select>
               )}

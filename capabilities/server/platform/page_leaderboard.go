@@ -48,8 +48,7 @@ func (s Section) CheckLeaderboard(info EntityInfo) error {
 	}
 	c := s.Leaderboard
 	f, ok := info.Field(c.ValueField)
-	label, labelOK := info.Field(c.LabelField)
-	if !ok || !slices.Contains([]string{"integer", "decimal"}, f.Type) || c.LabelField != "id" && (!labelOK || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, label.Type)) {
+	if !ok || !slices.Contains([]string{"integer", "decimal"}, f.Type) || !visibleContextField(info, c.LabelField, true) {
 		return fmt.Errorf("leaderboard needs original visible numeric and title fields")
 	}
 	return nil

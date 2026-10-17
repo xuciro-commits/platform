@@ -10,7 +10,7 @@ func TestBooleanInputOriginalStateProfileAndEmptyLabel(t *testing.T) {
 	d := p.Document
 	d.Variables["flag"] = PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: Raw(false)}
 	empty := ""
-	s := Section{ID: "switch", Widget: "boolean-input", ConfigVersion: 1, BooleanVariable: "flag", BooleanLabel: &empty}
+	s := Section{PageWidgetConfig: PageWidgetConfig{BooleanVariable: "flag", BooleanLabel: &empty}, ID: "switch", Widget: "boolean-input", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)
@@ -72,7 +72,7 @@ func TestBooleanInputOriginalOverlayAndEnablePort(t *testing.T) {
 	d, sections := overlayScopeDocument()
 	d.Variables["flag"] = PageVariable{Scope: "overlay", Owner: "panel", Type: "boolean", Mode: "state", Initial: Raw(false)}
 	d.Variables["enabled"] = PageVariable{Scope: "overlay", Owner: "panel", Type: "boolean", Mode: "state", Initial: Raw(true)}
-	s := Section{ID: "switch", Widget: "boolean-input", ConfigVersion: 1, BooleanVariable: "flag"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{BooleanVariable: "flag"}, ID: "switch", Widget: "boolean-input", ConfigVersion: 1}
 	sections = append(sections, s)
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID, EnabledWhen: "enabled"}
 	o := d.Overlays["panel"]

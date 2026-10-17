@@ -178,10 +178,6 @@ func (a *App) AcceptedLedger() *platform.Ledger         { return a.ledger }
 func (a *App) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
 
-func (a *App) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

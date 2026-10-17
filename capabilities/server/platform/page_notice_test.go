@@ -9,7 +9,7 @@ func TestNoticeStaticTextProfilesAndBudgets(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	empty := ""
-	s := Section{ID: "note", Widget: "notice", ConfigVersion: 1, Notice: &PageNotice{Title: &empty, Message: "<img src=x> {value} **literal**", Tone: "info"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{Notice: &PageNotice{Title: &empty, Message: "<img src=x> {value} **literal**", Tone: "info"}}, ID: "note", Widget: "notice", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

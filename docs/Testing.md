@@ -4,6 +4,8 @@
 
 ## 检查选择与停止
 
+代码精简（ADR-0124）：`make code-size REVISION=e7b972ee` 与 `make code-size` 分开统计生产、测试、生成物和构建代码。集成编辑器用 `make e2e SPEC=integration-editors`，经正常界面分别创建 Connection / Source / Dataset / Pipeline / Matching / Writeback，确认关联被拒后只创建一次、原键继续使用、Discard 不改已存记录。`make e2e SPEC='application-authoring application-studio workspaces'` 检查建模、应用内草稿、规则发布及原生 PMS 工作区。Go 按 `make test-go PKG='./platform ./apps/build ./internal/rules'` 和宿主 Agent / Protocol / RecordedInput / Legacy / Accepted / Release / Candidate 对应测试检查；`TestPageModelSelectorAndStartShareOneRuleAndRecover` 保留筛选、动作和恢复断言，`TestRuleMigrationRetainsFrozenPublicationBytes` 检查旧条件进入 Transaction.Guard 后的历史字节。新应用模板以原生成器实际生成后执行 vet / test。Web 单元、`make check` 与 `scripts/verify.sh composition` 分别验证公共组件、类型与应用边界；原全根测试曾发现两处既有失败，修复后只重跑直接相关项，不把未重新完成的全根测试写为通过。
+
 首次联合构建（ADR-0124/0108）：`make e2e SPEC=application-authoring` 从空白应用通过原界面创建两对象、引用字段、状态与动作参数，模板绑定未发布模型并一次发布；保存后续字段和页面修改，核对原运行定义未变。`make test-go PKG=. RUN=TestJointDraftsDeliverNewObjectsAndRelationship` 检查关系与新对象同批交付、错误引用拒绝及发布后的关系约束；它不代替浏览器中的引用配置或真实构建者体验。
 
 专业组件配置（ADR-0110）：`make e2e SPEC=professional-components`，同一图 widget 分别装配工艺路线、组织汇报与单据沿革，同一矩阵分别装配能力和费率表达式，工作站沿原共享规则选资源并提交类型化报工。`make test-go PKG=. RUN=TestPageComposite` 检查原规则读数变化、权限隐藏/标记、分层路径、环路拒绝、候选与日志恢复；Catalog 检查包含原生 MES 页面迁入通用库的拒绝反例。Catalog 样例是合成预览，真实读取另走宿主路线。

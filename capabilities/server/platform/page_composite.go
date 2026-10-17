@@ -147,7 +147,7 @@ func (p Page) CheckCompositeBindings(lookup func(string) (EntityInfo, bool), cri
 			}
 			// Validate one source while retaining the original page's producers,
 			// so declared sets can resolve their actual typed record variable.
-			if err := p.checkModelSources([]Section{{ID: s.ID, Widget: "table", Model: &binding.Model}}, lookup, criteria); err != nil {
+			if err := p.checkModelSources([]Section{{PageWidgetConfig: PageWidgetConfig{Model: &binding.Model}, ID: s.ID, Widget: "table"}}, lookup, criteria); err != nil {
 				return err
 			}
 			info, _ := lookup(binding.Model.Type)

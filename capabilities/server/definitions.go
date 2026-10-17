@@ -866,10 +866,6 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		out = append(out, def)
 	}
 	out = filterPageNavigation(out)
-	visible := map[platform.AssetRef]bool{}
-	for _, def := range out {
-		visible[def.Ref] = true
-	}
 
 	// An application is offered to whoever may open one of its pages (ADR-0036).
 	opens := map[platform.AssetRef]bool{}
@@ -889,7 +885,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	}
 	out = filterExplorationAssets(out)
 	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
-	visible = map[platform.AssetRef]bool{}
+	visible := map[platform.AssetRef]bool{}
 	for _, def := range out {
 		visible[def.Ref] = true
 	}
@@ -980,17 +976,6 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 			if (section.Widget == "chart" || section.Widget == "metric" || (section.Widget == "pivot" || section.Widget == "heatmap")) && !checkAggregateSection(section, shown) {
 				continue
 			}
-			if section.Widget == "record-list" && section.CardLabel != "id" {
-				if _, ok := shown.Field(section.CardLabel); !ok {
-					continue
-				}
-			}
-			if section.CheckLeaderboard(shown) != nil {
-				continue
-			}
-			if section.CheckHistogram(shown) != nil {
-				continue
-			}
 			if section.Avatar != nil {
 				avatar := *section.Avatar
 				avatar.DetailFields = slices.DeleteFunc(slices.Clone(avatar.DetailFields), func(name string) bool { _, ok := shown.Field(name); return name != "id" && !ok })
@@ -1019,18 +1004,6 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 			if section.CheckContextViews(shown) != nil {
 				continue
 			}
-			if section.CheckRecordComparison(shown) != nil {
-				continue
-			}
-			if section.CheckRecordCard(shown) != nil {
-				continue
-			}
-			if section.CheckSparkline(shown) != nil {
-				continue
-			}
-			if section.CheckTerms(shown) != nil {
-				continue
-			}
 			if section.Widget == "action-table" {
 				if len(section.Actions) != 1 {
 					continue
@@ -1046,7 +1019,7 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 			}) != nil {
 				continue
 			}
-			if section.CheckCollectionAnalysis(shown) != nil {
+			if page.CheckSectionFields(section, shown) != nil {
 				if section.Analysis != nil && section.Analysis.Kind == "record-axes" && page.Document != nil {
 					doc := *page.Document
 					doc.Variables = maps.Clone(doc.Variables)
@@ -1056,40 +1029,10 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 				}
 				continue
 			}
-			if section.CheckSummary(shown) != nil {
-				continue
-			}
-			if section.CheckRecordGantt(shown) != nil {
-				continue
-			}
-			if section.CheckRecordPicker(shown) != nil {
-				continue
-			}
-			if section.CheckRecordCalendar(shown) != nil {
-				continue
-			}
-			if section.CheckRecordEvents(shown) != nil {
-				continue
-			}
-			if section.CheckCollectionBuilderFields(shown) != nil || section.CheckMap(shown) != nil || page.CheckSceneBinding(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+			if section.CheckCollectionBuilderFields(shown) != nil || page.CheckSceneBinding(section, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
 				actual, ok := entities[ref.Name]
 				return actual, ok && actual.App == ref.App
 			}) != nil {
-				continue
-			}
-			if section.CheckScatter(shown) != nil {
-				continue
-			}
-			if section.CheckRecordChart(shown) != nil {
-				continue
-			}
-			if section.CheckTimeline(shown) != nil {
-				continue
-			}
-			if section.CheckStatusTracker(shown) != nil {
-				continue
-			}
-			if page.CheckKanban(section, shown) != nil {
 				continue
 			}
 			parentType := page.Object.Name
@@ -1184,9 +1127,6 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 				}) {
 					continue
 				}
-			}
-			if _, creates := actions[shown.Type+".create"]; section.Widget == "form" && !creates {
-				continue // a form this member could not submit is not on their page
 			}
 			if section.Operation != nil {
 				op, _, err := t.pageOperation(section.Operation)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -134,25 +133,9 @@ func (b *Build) publishQuery(c platform.Caller, record any, _ json.RawMessage, _
 }
 
 func queryImage(image []byte) (Query, error) {
-	var record Query
-	if err := json.Unmarshal(image, &record); err != nil {
-		return Query{}, err
-	}
-	if !slices.Contains([]string{"draft", "published"}, record.State) || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || !slices.Contains(record.Versions, record.Published) {
-		return Query{}, fmt.Errorf("accepted query has an invalid version family")
-	}
-	var latest, selected Query
-	for i, raw := range record.Versions {
-		f, ok := wasPublished[Query](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object || f.Interface != latest.Interface) {
-			return Query{}, fmt.Errorf("accepted query has a malformed version %d", i+1)
-		}
-		if raw == record.Published {
-			selected = f
-		}
-		latest = f
-	}
-	return selected, nil
+	return definitionImage[Query](image, "query", func(before, after Query) bool {
+		return before.Name == after.Name && before.Object == after.Object && before.Interface == after.Interface
+	})
 }
 
 func (b *Build) queryInventory() ([]Query, error) {
@@ -169,43 +152,9 @@ func (b *Build) installQuery(c platform.Caller, f Query) error {
 }
 
 func (b *Build) QueryDefinition(name string, version int) (platform.NamedQuery, int, bool) {
-	installed, ok := b.queries[name]
-	if ok && (version == 0 || version == installed.Version) {
-		return installed.Definition(), installed.Version, true
-	}
-	if version == 0 {
-		return platform.NamedQuery{}, 0, false
-	}
-	list, err := b.queryInventory()
-	if err != nil {
-		return platform.NamedQuery{}, 0, false
-	}
-	for _, record := range list {
-		if version < 1 || version > len(record.Versions) {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		latest, err := queryImage(raw)
-		if err != nil || latest.Name != name {
-			continue
-		}
-		f, ok := wasPublished[Query](record.Versions[version-1])
-		if ok && f.Version == version {
-			return f.Definition(), version, true
-		}
-	}
-	return platform.NamedQuery{}, 0, false
+	return retainedDefinition(b.queries, b.queryInventory, queryImage, name, version)
 }
 
 func (b *Build) queryDeclarations() []platform.NamedQuery {
-	names := make([]string, 0, len(b.queries))
-	for name := range b.queries {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	out := make([]platform.NamedQuery, 0, len(names))
-	for _, name := range names {
-		out = append(out, b.queries[name].Definition())
-	}
-	return out
+	return definitionDeclarations(b.queries)
 }

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d46e1a50a0a3714c",
+  "revision": "sha256:e72ab223a283ba4c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4428,8 +4428,7 @@
           "type": "boolean",
           "optional": true,
           "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
+          "isSlot": false
         },
         {
           "name": "returnFocus",
@@ -4458,30 +4457,6 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
-        },
-        {
-          "name": "backdrop",
-          "type": "unknown",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        },
-        {
-          "name": "closeOnBackdrop",
-          "type": "unknown",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        },
-        {
-          "name": "closeOnEsc",
-          "type": "unknown",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
         }
       ],
       "slots": [
@@ -4491,8 +4466,12 @@
           "optional": false
         }
       ],
-      "composed": [
-        "ui/input-drafts"
+      "relatedTypes": [
+        {
+          "name": "OverlayProps",
+          "kind": "type",
+          "signature": "type OverlayProps = {\n  open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode;\n  /** For forms with lines: room for a row of columns. */\n  wide?: boolean;\n  /** Hide the global layer while retaining this logical opening's content. */\n  suspended?: boolean;\n  returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;\n} & OverlayPolicy & {width?:number;side?:\"left\"|\"right\"};"
+        }
       ]
     },
     {
@@ -11055,105 +11034,6 @@
       "states": [
         "Open",
         "Closed"
-      ],
-      "props": [
-        {
-          "name": "open",
-          "type": "boolean",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "onOpenChange",
-          "type": "(open: boolean) => void",
-          "optional": false,
-          "isCallback": true,
-          "isSlot": false
-        },
-        {
-          "name": "title",
-          "type": "string",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false,
-          "isCallback": false,
-          "isSlot": true
-        },
-        {
-          "name": "width",
-          "type": "number",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "420"
-        },
-        {
-          "name": "suspended",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
-        },
-        {
-          "name": "returnFocus",
-          "type": "HTMLElement | null",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "fallbackFocus",
-          "type": "HTMLElement | null",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "side",
-          "type": "\"left\"|\"right\"",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "\"right\""
-        },
-        {
-          "name": "backdrop",
-          "type": "unknown",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        },
-        {
-          "name": "closeOnBackdrop",
-          "type": "unknown",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        },
-        {
-          "name": "closeOnEsc",
-          "type": "unknown",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "true"
-        }
-      ],
-      "slots": [
-        {
-          "name": "children",
-          "type": "ReactNode",
-          "optional": false
-        }
       ]
     },
     {
@@ -13174,7 +13054,6 @@
       "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
       "web/packages/csm/src/index.tsx",
-      "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
@@ -13202,8 +13081,7 @@
     "app/generated-form": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/catalog.examples.tsx",
-      "web/packages/app/src/widgets/CreateForm.tsx",
-      "web/packages/erp/src/index.tsx"
+      "web/packages/app/src/widgets/CreateForm.tsx"
     ],
     "app/decision-confirmation": [
       "web/packages/app/src/actions/record-actions.ts",
@@ -13301,6 +13179,7 @@
       "web/packages/build/src/projects/studio-guide.tsx",
       "web/packages/build/src/releases/test-inputs.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/erp/src/index.tsx",
       "web/packages/platform/src/operations.tsx"
     ],
     "ui/data-table": [

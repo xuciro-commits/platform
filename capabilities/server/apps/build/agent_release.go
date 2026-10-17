@@ -81,20 +81,9 @@ func (b *Build) retainedAgentAsset(ref platform.AssetRef, sourceVersion string) 
 }
 
 func (b *Build) agentAssets() ([]platform.ReleaseAsset, error) {
-	names := make([]string, 0, len(b.agents))
-	for name := range b.agents {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	out := make([]platform.ReleaseAsset, 0, len(names))
-	for _, name := range names {
-		asset, err := agentReleaseAsset(b.agents[name], b.Manifest().Version)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, asset)
-	}
-	return out, nil
+	return installedDefinitionAssets(b.agents, func(record Agent) (platform.ReleaseAsset, error) {
+		return agentReleaseAsset(record, b.Manifest().Version)
+	})
 }
 
 func (b *Build) agentDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {

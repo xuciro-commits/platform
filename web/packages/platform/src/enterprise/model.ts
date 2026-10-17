@@ -109,13 +109,6 @@ export function viewpointElements(model: Model, viewpoint: Viewpoint | undefined
 export const childrenOf = (m: Model, id: string, kind: string, day: string) =>
   m.relationships.filter((r) => r.stereotype === PLACEMENT && r.target === id && (!kind || r.kind === kind) && live(r, day)).map((r) => r.source);
 
-/** Roots of a placement kind: parents that are nobody's child in it. */
-export const rootsOf = (m: Model, kind: string, day: string) => {
-  const edges = m.relationships.filter((r) => r.stereotype === PLACEMENT && (!kind || r.kind === kind) && live(r, day));
-  const children = new Set(edges.map((e) => e.source));
-  return [...new Set(edges.map((e) => e.target))].filter((p) => !children.has(p));
-};
-
 /** Which end of a relationship is the parent in the drawing's hierarchy: what an
  * element is part of, who answers for a post, place or system, the post a
  * person fills, the organisation a party belongs to. Other relationships are

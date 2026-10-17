@@ -12,7 +12,7 @@ func TestRecordGallerySharedApplicationPort(t *testing.T) {
 		p.Document.Events = nil
 		p.Document.Variables = map[string]PageVariable{"window": p.Document.Variables["window"], "bucket": p.Document.Variables["bucket"]}
 		p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"cards"}}, "cards": {Kind: "widget", Section: "cards"}}
-		p.Sections = []Section{{ID: "cards", Widget: "record-list", ConfigVersion: 1, CardLabel: "id", CollectionVariable: "window", RecordList: &PageRecordList{Layout: "grid"}, SelectionVariable: "shared"}}
+		p.Sections = []Section{{PageWidgetConfig: PageWidgetConfig{RecordList: &PageRecordList{Layout: "grid"}}, ID: "cards", Widget: "record-list", ConfigVersion: 1, CardLabel: "id", CollectionVariable: "window", SelectionVariable: "shared"}}
 		p.Document.Variables["shared"] = PageVariable{Scope: "application", Mode: "shared", Type: "record", Writable: true, Source: &PageResourceSource{Kind: "application", Variable: "record", Object: &p.Object}}
 		return p
 	}
@@ -60,7 +60,7 @@ func TestRecordGallerySharedApplicationPort(t *testing.T) {
 func TestRecordListProfileAndOriginalProducer(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
-	s := Section{ID: "cards", Widget: "record-list", ConfigVersion: 1, CardLabel: "title", Fields: []string{"qty"}, CollectionVariable: "window", RecordList: &PageRecordList{Layout: "grid"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordList: &PageRecordList{Layout: "grid"}}, ID: "cards", Widget: "record-list", ConfigVersion: 1, CardLabel: "title", Fields: []string{"qty"}, CollectionVariable: "window"}
 	d.Nodes["cards"] = PageLayoutNode{Kind: "widget", Section: "cards"}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, "cards")

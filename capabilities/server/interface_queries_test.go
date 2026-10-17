@@ -114,7 +114,7 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 			"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "coded"}},
 			"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "picker"}},
 		}}
-		sections := []build.Section{{ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", RecordPicker: &platform.PageRecordPicker{LabelField: "name"}}, {ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", Fields: []string{"code", "name"}, RecordCard: &platform.PageRecordCard{LabelField: "name", Tone: "neutral"}}}
+		sections := []build.Section{{PageWidgetConfig: platform.PageWidgetConfig{RecordPicker: &platform.PageRecordPicker{LabelField: "name"}}, ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window"}, {PageWidgetConfig: platform.PageWidgetConfig{RecordCard: &platform.PageRecordCard{LabelField: "name", Tone: "neutral"}}, ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", Fields: []string{"code", "name"}}}
 		decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "INTERFACEPAGE", map[string]any{"name": "interfacepage", "title": "Interface page", "object": "build.alpha", "document": doc, "sections": sections}, at)
 		preview, err := tn.PreviewRelease(builder, platform.AssetPage, "INTERFACEPAGE")
 		if err != nil || preview.Diagnostic != "" {

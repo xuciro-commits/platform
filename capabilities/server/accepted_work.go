@@ -1,10 +1,8 @@
 package platformserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"slices"
 	"time"
 
@@ -261,13 +259,8 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return result, fmt.Errorf("work result is empty or too large")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
+	if err := decodeAcceptedJSON(raw, &result, "work result"); err != nil {
 		return result, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return result, fmt.Errorf("work result has trailing data")
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
 		return result, err

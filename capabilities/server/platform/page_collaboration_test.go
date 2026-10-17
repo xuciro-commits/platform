@@ -11,7 +11,7 @@ func collaborationPage() Page {
 		"active": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "table"}},
 		"draft":  {Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}, "file": {Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}, "page": {Scope: "page", Type: "string", Mode: "state", Initial: Raw("1")},
 	}}, Sections: []Section{{ID: "table", Widget: "table", ConfigVersion: 1}}}
-	for _, s := range []Section{{ID: "comments", Widget: "record-comments", ConfigVersion: 1, RecordVariable: "active", CommentDraftVariable: "draft"}, {ID: "uploader", Widget: "record-uploader", ConfigVersion: 1, RecordVariable: "active", FileVariable: "file"}, {ID: "preview", Widget: "media-preview", ConfigVersion: 1, RecordVariable: "active", FileVariable: "file"}, {ID: "pdf", Widget: "pdf-viewer", ConfigVersion: 1, RecordVariable: "active", FileVariable: "file", PdfPageVariable: "page"}} {
+	for _, s := range []Section{{PageWidgetConfig: PageWidgetConfig{CommentDraftVariable: "draft"}, ID: "comments", Widget: "record-comments", ConfigVersion: 1, RecordVariable: "active"}, {PageWidgetConfig: PageWidgetConfig{FileVariable: "file"}, ID: "uploader", Widget: "record-uploader", ConfigVersion: 1, RecordVariable: "active"}, {PageWidgetConfig: PageWidgetConfig{FileVariable: "file"}, ID: "preview", Widget: "media-preview", ConfigVersion: 1, RecordVariable: "active"}, {PageWidgetConfig: PageWidgetConfig{FileVariable: "file", PdfPageVariable: "page"}, ID: "pdf", Widget: "pdf-viewer", ConfigVersion: 1, RecordVariable: "active"}} {
 		p.Sections = append(p.Sections, s)
 		p.Document.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 		n := p.Document.Nodes[p.Document.Root]
@@ -113,7 +113,7 @@ func TestCollaborationSameProducerAliasesAndRetirement(t *testing.T) {
 		original := p.Sections[pair.index].RecordVariable
 		p.Sections[pair.index].RecordVariable = "other"
 		if pair.scalar == "draft" {
-			p.Sections = append(p.Sections, Section{ID: "otherComments", Widget: "record-comments", ConfigVersion: 1, RecordVariable: "active", CommentDraftVariable: "draft"})
+			p.Sections = append(p.Sections, Section{PageWidgetConfig: PageWidgetConfig{CommentDraftVariable: "draft"}, ID: "otherComments", Widget: "record-comments", ConfigVersion: 1, RecordVariable: "active"})
 			d.Nodes["otherComments"] = PageLayoutNode{Kind: "widget", Section: "otherComments"}
 			n = d.Nodes[d.Root]
 			n.Children = append(n.Children, "otherComments")

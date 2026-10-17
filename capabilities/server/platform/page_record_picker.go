@@ -55,11 +55,8 @@ func (s Section) CheckRecordPicker(info EntityInfo) error {
 	if s.RecordPicker == nil {
 		return fmt.Errorf("record picker fields are missing")
 	}
-	if s.RecordPicker.LabelField != "id" {
-		f, ok := info.Field(s.RecordPicker.LabelField)
-		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) {
-			return fmt.Errorf("record picker title needs an original visible text field")
-		}
+	if !visibleContextField(info, s.RecordPicker.LabelField, true) {
+		return fmt.Errorf("record picker title needs an original visible text field")
 	}
 	return nil
 }

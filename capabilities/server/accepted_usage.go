@@ -1,10 +1,8 @@
 package platformserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"slices"
 	"time"
 
@@ -54,13 +52,8 @@ func decodeAcceptedUsage(raw []byte) (acceptedUsage, error) {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return r, fmt.Errorf("usage result is empty or too large")
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&r); err != nil {
+	if err := decodeAcceptedJSON(raw, &r, "usage result"); err != nil {
 		return r, err
-	}
-	if err := dec.Decode(new(any)); err != io.EOF {
-		return r, fmt.Errorf("usage result has trailing data")
 	}
 	if err := validateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {
 		return r, err

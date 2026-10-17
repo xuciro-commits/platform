@@ -5,7 +5,6 @@ register("zh-CN", {
   "Arrivals per month": "每月到店",
   "Booked": "已预订",
   "By status": "按状态",
-  "Canceled": "已取消",
   "Check-in": "入住",
   "Check-out": "退房",
   "Check-out must be after check-in": "退房须晚于入住",
@@ -20,7 +19,6 @@ register("zh-CN", {
   "PMS": "酒店管理",
   "Pick a date": "请选择日期",
   "Pick a room type": "请选择房型",
-  "Required": "必填",
   "Reservation": "预订",
   "Reservations": "预订",
   "Reservations by arrival month and room type; cancellations apart.": "按到店月份和房型统计的预订；取消的单列。",
@@ -29,6 +27,5 @@ register("zh-CN", {
   "Released": "已释放",
   "Room type": "房型",
   "Room types": "房型",
-  "Status": "状态",
   "Stay": "住宿",
 });

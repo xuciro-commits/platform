@@ -5,7 +5,7 @@ import "testing"
 func treemapPage() Page {
 	p := queryPlanPage()
 	d := p.Document
-	s := Section{ID: "tree", Widget: "treemap", ConfigVersion: 1, CollectionVariable: "window", Group: "state", GroupSetVariable: "chosen"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{GroupSetVariable: "chosen"}, ID: "tree", Widget: "treemap", ConfigVersion: 1, CollectionVariable: "window", Group: "state"}
 	d.Variables["chosen"] = PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: Raw(map[string]any{"kind": "string-set", "values": []string{}})}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]

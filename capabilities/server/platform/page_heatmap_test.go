@@ -4,7 +4,7 @@ import "testing"
 
 func heatmapPage() Page {
 	p := queryPlanPage()
-	s := Section{ID: "heatmap", Widget: "heatmap", ConfigVersion: 1, CollectionVariable: "window", Group: "state", ColumnGroup: "priority", Measure: "count", RowSetVariable: "row", ColumnValueVariable: "column"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RowSetVariable: "row", ColumnValueVariable: "column"}, ID: "heatmap", Widget: "heatmap", ConfigVersion: 1, CollectionVariable: "window", Group: "state", ColumnGroup: "priority", Measure: "count"}
 	d := p.Document
 	d.Variables["row"] = PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: Raw(map[string]any{"kind": "string-set", "values": []string{}})}
 	d.Variables["column"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}
@@ -57,7 +57,7 @@ func TestFrozenAnalysisWidgetsCheckOriginalFieldSchemas(t *testing.T) {
 	for _, tc := range []struct {
 		section Section
 		missing string
-	}{{Section{Widget: "heatmap", Group: "state", ColumnGroup: "priority", Measure: "count"}, "priority"}, {Section{Widget: "record-scatter", Scatter: &PageRecordScatter{XField: "x", YField: "y", ColorField: "state", LabelField: "name"}}, "x"}, {Section{Widget: "histogram", Histogram: &PageHistogram{Field: "amount", Bins: 4}}, "amount"}, {Section{Widget: "term-counts", Group: "name"}, "name"}, {Section{Widget: "treemap", Group: "name"}, "name"}, {Section{Widget: "record-card", RecordCard: &PageRecordCard{LabelField: "name", Tone: "info"}}, "name"}, {Section{Widget: "sparkline-kpi", CollectionVariable: "window", Sparkline: &PageSparkline{Field: "x"}}, "x"}} {
+	}{{Section{Widget: "heatmap", Group: "state", ColumnGroup: "priority", Measure: "count"}, "priority"}, {Section{PageWidgetConfig: PageWidgetConfig{Scatter: &PageRecordScatter{XField: "x", YField: "y", ColorField: "state", LabelField: "name"}}, Widget: "record-scatter"}, "x"}, {Section{PageWidgetConfig: PageWidgetConfig{Histogram: &PageHistogram{Field: "amount", Bins: 4}}, Widget: "histogram"}, "amount"}, {Section{Widget: "term-counts", Group: "name"}, "name"}, {Section{Widget: "treemap", Group: "name"}, "name"}, {Section{PageWidgetConfig: PageWidgetConfig{RecordCard: &PageRecordCard{LabelField: "name", Tone: "info"}}, Widget: "record-card"}, "name"}, {Section{PageWidgetConfig: PageWidgetConfig{Sparkline: &PageSparkline{Field: "x"}}, Widget: "sparkline-kpi", CollectionVariable: "window"}, "x"}} {
 		t.Run(tc.section.Widget, func(t *testing.T) {
 			p := Page{Object: ref, Document: &PageDocument{}, Sections: []Section{tc.section}}
 			lookup := map[AssetRef]ReleaseAsset{ref: {Ref: ref, Body: Raw(EntityInfo{Type: "sample.note", Fields: fields})}}

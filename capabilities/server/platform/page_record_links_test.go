@@ -10,7 +10,7 @@ func TestRecordLinksProfileSchemaAndFrozenDependencies(t *testing.T) {
 	parent := EntityInfo{App: "sample", Type: "sample.parent"}
 	child := EntityInfo{App: "sample", Type: "sample.child", Fields: []FieldInfo{{Name: "parent", Type: "reference", Ref: parent.Type, Inverse: "children"}}}
 	ref := AssetRef{App: child.App, Kind: AssetObject, Name: child.Type}
-	s := Section{ID: "links", Widget: "record-links", ConfigVersion: 1, RecordLinks: []PageRecordLink{{Object: ref, Field: "parent", Title: "Child records"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordLinks: []PageRecordLink{{Object: ref, Field: "parent", Title: "Child records"}}}, ID: "links", Widget: "record-links", ConfigVersion: 1}
 	d := &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"links"}}, "links": {Kind: "widget", Section: "links"}}}
 	lookup := func(typ string) (EntityInfo, bool) { return child, typ == child.Type }
 	if (*PageDocument)(nil).Check([]Section{s}) == nil {

@@ -1,10 +1,8 @@
 package platformserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"time"
 
 	"platformserver/platform"
@@ -36,13 +34,8 @@ func decodeAcceptedAgent(raw []byte) (acceptedAgent, error) {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return r, fmt.Errorf("agent result is empty or too large")
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&r); err != nil {
+	if err := decodeAcceptedJSON(raw, &r, "agent result"); err != nil {
 		return r, err
-	}
-	if err := dec.Decode(new(any)); err != io.EOF {
-		return r, fmt.Errorf("agent result has trailing data")
 	}
 	hash, err := agentHash(r)
 	digest, digestErr := digestAgent(r)

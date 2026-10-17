@@ -9,7 +9,7 @@ import {
   Activity, AlertTriangle, Award, BadgeCheck, BarChart3, Bell, BookOpen, Bookmark, Boxes, Braces, Briefcase, Building, Building2, CalendarDays, ClipboardList, Clock, Cog,
   Crown, Database, DoorOpen, FileSpreadsheet, FileText, Filter, Flag, Folder, FolderTree, Factory, Gauge, GitBranch, Globe2, Handshake, Home, Hotel, IdCard, Landmark, Layers, LayoutGrid,
   ListOrdered, Mail, MapPin, MessageSquare, Network, Package, QrCode, Rocket, Scale, Search, Server, Settings2, ShieldAlert, Smartphone, Sparkles, Store, Table2, Tag,
-  Target, TrendingUp, Truck, UserCheck, UserRound, Users, Warehouse, Workflow, Wrench, Zap,
+  Plug, Target, TrendingUp, Truck, UserCheck, UserRound, Users, Warehouse, Workflow, Wrench, Zap,
 } from "lucide-react";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
@@ -26,7 +26,7 @@ export const iconGlyphs: Record<IconName, ReactNode> = {
   boxes: <Boxes />, package: <Package />, wrench: <Wrench />, cog: <Cog />, "qr-code": <QrCode />, smartphone: <Smartphone />,
   workflow: <Workflow />, "git-branch": <GitBranch />, rocket: <Rocket />, sparkles: <Sparkles />, "settings-2": <Settings2 />,
   chart: <BarChart3 />, database: <Database />, table: <Table2 />, spreadsheet: <FileSpreadsheet />, gauge: <Gauge />, activity: <Activity />,
-  network: <Network />, server: <Server />, search: <Search />, filter: <Filter />, tag: <Tag />,
+  network: <Network />, server: <Server />, plug: <Plug />, search: <Search />, filter: <Filter />, tag: <Tag />,
   "file-text": <FileText />, folder: <Folder />, "folder-tree": <FolderTree />, bookmark: <Bookmark />, "book-open": <BookOpen />, mail: <Mail />,
   "message-square": <MessageSquare />, bell: <Bell />, milestone: <Award />,
   braces: <Braces />, zap: <Zap />,
@@ -45,7 +45,7 @@ export const iconGroups: { id: string; title: string; names: IconName[] }[] = [
   { id: "people", title: "People and posts", names: ["users", "user-round", "user-check", "id-card", "badge", "briefcase", "handshake", "award", "user", "crown"] },
   { id: "work", title: "Work and time", names: ["workflow", "list-ordered", "clipboard-list", "calendar-days", "clock", "target", "trending-up", "flag", "braces", "zap"] },
   { id: "things", title: "Things", names: ["boxes", "package", "wrench", "cog", "qr-code", "smartphone"] },
-  { id: "data", title: "Data and evidence", names: ["chart", "database", "table", "spreadsheet", "gauge", "activity", "network", "server"] },
+  { id: "data", title: "Data and evidence", names: ["chart", "database", "table", "spreadsheet", "gauge", "activity", "network", "server", "plug"] },
   { id: "find", title: "Find and sign", names: ["search", "filter", "tag", "bookmark"] },
   { id: "documents", title: "Documents and messages", names: ["file-text", "folder", "folder-tree", "book-open", "book", "mail", "message-square", "bell"] },
   { id: "change", title: "Change", names: ["git-branch", "rocket", "sparkles", "settings-2"] },

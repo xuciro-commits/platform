@@ -17,11 +17,8 @@ func (s Section) CheckKanban(info EntityInfo) error {
 	if !ok || !slices.Contains([]string{"text", "choice"}, status.Type) {
 		return fmt.Errorf("kanban status field is unavailable")
 	}
-	if s.CardLabel != "id" {
-		label, ok := info.Field(s.CardLabel)
-		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, label.Type) {
-			return fmt.Errorf("kanban card title needs a visible scalar text field")
-		}
+	if !visibleContextField(info, s.CardLabel, true) {
+		return fmt.Errorf("kanban card title needs a visible scalar text field")
 	}
 	if len(s.Fields) > 4 {
 		return fmt.Errorf("kanban has at most four summary fields")

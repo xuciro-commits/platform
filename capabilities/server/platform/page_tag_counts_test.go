@@ -73,7 +73,7 @@ func TestTagCountsOriginalGroupingAndOptionalStringOutput(t *testing.T) {
 func TestTagCountsExactOwnerAndOriginalFrozenField(t *testing.T) {
 	d, sections := overlayResourceDocument()
 	d.Variables["tag"] = PageVariable{Scope: "overlay", Owner: "panel", Type: "string", Mode: "state", Initial: Raw("")}
-	s := Section{ID: "tags", Widget: "tag-counts", ConfigVersion: 1, CollectionVariable: "window", Group: "note", GroupValueVariable: "tag"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{GroupValueVariable: "tag"}, ID: "tags", Widget: "tag-counts", ConfigVersion: 1, CollectionVariable: "window", Group: "note"}
 	sections = append(sections, s)
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	n := d.Nodes["body"]

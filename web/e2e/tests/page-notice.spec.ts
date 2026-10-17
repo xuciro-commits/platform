@@ -1,5 +1,42 @@
 import { expect, runtime, sampleModule, shots, slug, test } from "./kit";
 
+test("Workshop list and board imports retain independent card fields and the original move action", async ({ page, builder, editor }, info) => {
+  const { type } = await builder.object({
+    name: slug("importcards"), title: "Imported card records",
+    fields: [{ name: "name", title: "Name", type: "text" }, { name: "detail", title: "Detail", type: "text" }, { name: "quantity", title: "Quantity", type: "integer" }],
+    states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
+    actions: [{ name: "move", title: "Move original record", from: ["open", "done"], toInput: "status", inputs: [{ name: "status", title: "Destination state", type: "choice", choices: "open,done", required: true }] }],
+  });
+  const m = sampleModule();
+  m.variables = m.variables.filter((variable: any) => variable.id === "notes");
+  m.widgets = {
+    cards: { id: "cards", name: "Imported cards", type: "ObjectList", config: { objectSetVarId: "notes", layout: "grid" } },
+    board: { id: "board", name: "Imported board", type: "KanbanBoard", config: { objectSetVarId: "notes", groupBy: "status", actionId: "updateAssetStatus", actionParam: "status" } },
+  };
+  m.sections = { root: { id: "root", name: "Imported collections", layout: "rows", children: [{ kind: "widget", id: "cards" }, { kind: "widget", id: "board" }] } };
+  const { id } = await builder.page({ title: "Imported card mappings", object: type });
+  await editor.open(builder, id);
+  await editor.importModule(m, async dialog => {
+    await dialog.getByRole("combobox", { name: "Map object Asset", exact: true }).selectOption(type);
+    await dialog.getByRole("combobox", { name: "Map field Asset.status", exact: true }).selectOption("state");
+    const cards = dialog.getByRole("group", { name: "Map record cards Imported cards", exact: true });
+    await cards.getByRole("combobox", { name: "Card title field", exact: true }).selectOption("name");
+    await cards.getByRole("group", { name: "Card summary fields", exact: true }).getByRole("button", { name: "Detail", exact: true }).click();
+    const board = dialog.getByRole("group", { name: "Map board Imported board", exact: true });
+    const move = board.getByRole("group", { name: "Map original board move actions", exact: true }).getByRole("button", { name: /^Move original record →/ });
+    await move.click();
+    await board.getByRole("combobox", { name: "Card title field", exact: true }).selectOption("detail");
+    await board.getByRole("group", { name: "Card summary fields", exact: true }).getByRole("button", { name: "Quantity", exact: true }).click();
+    await expect(move).toHaveAttribute("aria-pressed", "true");
+    await expect(cards.getByRole("combobox", { name: "Card title field", exact: true })).toHaveValue("name");
+    await expect(cards.getByRole("group", { name: "Card summary fields", exact: true }).getByRole("button", { name: "Detail", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await shots(page, dialog, "import-list-board-mappings", info);
+  });
+  const saved = await editor.saveUntil(builder, id, "kanban", 1);
+  expect(saved.sections.find((section: any) => section.widget === "record-list")).toMatchObject({ cardLabel: "name", fields: ["detail"], recordList: { layout: "grid" } });
+  expect(saved.sections.find((section: any) => section.widget === "kanban")).toMatchObject({ cardLabel: "detail", fields: ["quantity"], actions: [`${type}.move`] });
+});
+
 // A Callout imported from Workshop becomes a notice: its text is literal (no
 // markup, no templating), its title is optional, and a released page keeps
 // the frozen copy while the draft moves on. Overlay notices gate independently.

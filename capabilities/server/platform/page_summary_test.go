@@ -7,7 +7,7 @@ func TestSummaryMatchingFiveMeasureSourceAndOriginalField(t *testing.T) {
 	d := p.Document
 	q := d.Variables["window"].Source.Query
 	d.Variables["stats"] = PageVariable{Scope: "page", Type: "statistics", Mode: "aggregate", Source: &PageResourceSource{Kind: "statistics", Query: q, Measure: "qty"}}
-	s := Section{ID: "summary", Widget: "summary-stats", ConfigVersion: 1, CollectionVariable: "window", StatisticsVariable: "stats", SummaryField: "qty"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{StatisticsVariable: "stats", SummaryField: "qty"}, ID: "summary", Widget: "summary-stats", ConfigVersion: 1, CollectionVariable: "window"}
 	p.Sections = append(p.Sections, s)
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]

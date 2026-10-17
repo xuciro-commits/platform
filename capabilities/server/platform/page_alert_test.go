@@ -9,7 +9,7 @@ func TestAlertUsesOriginalDecimalPortAndBoundedConfiguration(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["count"] = PageVariable{Scope: "page", Type: "decimal", Mode: "aggregate", Source: &PageResourceSource{Kind: "count", Query: "read"}}
-	s := Section{ID: "alert", Widget: "alert-banner", ConfigVersion: 1, AlertValueVariable: "count", AlertBanner: &PageAlertBanner{Threshold: "0", Tone: "danger", Message: "{value} affected records"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{AlertValueVariable: "count", AlertBanner: &PageAlertBanner{Threshold: "0", Tone: "danger", Message: "{value} affected records"}}, ID: "alert", Widget: "alert-banner", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)
@@ -67,7 +67,7 @@ func TestAlertCannotConsumeAnotherOverlayValue(t *testing.T) {
 	d.Nodes["panelText"] = PageLayoutNode{Kind: "widget", Section: "panelText"}
 	p.Sections = append(p.Sections, Section{ID: "panelText", Widget: "text", ConfigVersion: 1, Text: "Panel"})
 	d.Overlays = map[string]PageOverlay{"panel": {Root: "panelRoot", Title: "Alert panel", Kind: "drawer", OpenVariable: "open"}}
-	s := Section{ID: "alert", Widget: "alert-banner", ConfigVersion: 1, AlertValueVariable: "local", AlertBanner: &PageAlertBanner{Threshold: "0", Tone: "warning", Message: "{value} affected"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{AlertValueVariable: "local", AlertBanner: &PageAlertBanner{Threshold: "0", Tone: "warning", Message: "{value} affected"}}, ID: "alert", Widget: "alert-banner", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

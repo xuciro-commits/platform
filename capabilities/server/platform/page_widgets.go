@@ -300,3 +300,36 @@ func checkPageWidget(section Section) error {
 	}
 	return fmt.Errorf("widget %q is unavailable", section.Widget)
 }
+
+// CheckSectionFields applies the same original-field rules to installed pages
+// and frozen release descriptors. Binding and action owners check their own edges.
+func (p Page) CheckSectionFields(s Section, info EntityInfo) error {
+	for _, check := range []func(EntityInfo) error{
+		s.CheckTimeline,
+		func(info EntityInfo) error { return p.CheckKanban(s, info) },
+		s.CheckStatusTracker,
+		s.CheckMetricPresentation,
+		s.CheckRecordList,
+		s.CheckHeatmap,
+		s.CheckScatter,
+		s.CheckMap,
+		s.CheckRecordChart,
+		s.CheckRecordEvents,
+		s.CheckRecordPicker,
+		s.CheckLeaderboard,
+		s.CheckHistogram,
+		s.CheckRecordCard,
+		s.CheckRecordComparison,
+		s.CheckSparkline,
+		s.CheckTerms,
+		s.CheckCollectionAnalysis,
+		s.CheckSummary,
+		s.CheckRecordGantt,
+		s.CheckRecordCalendar,
+	} {
+		if err := check(info); err != nil {
+			return err
+		}
+	}
+	return nil
+}

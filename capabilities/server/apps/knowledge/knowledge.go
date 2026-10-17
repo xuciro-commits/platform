@@ -63,13 +63,6 @@ func (k *Knowledge) AcceptedLedger() *platform.Ledger { return k.ledger }
 func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.ledger.Declarations() }
 func (k *Knowledge) Snapshot() (json.RawMessage, error)       { return k.ledger.Snapshot() }
 func (k *Knowledge) Restore(raw json.RawMessage) error        { return k.ledger.Restore(raw) }
-func (k *Knowledge) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-func (k *Knowledge) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if name := s.GetSchema().GetName(); (name == TermType+".create" || name == TermType+".edit") && !c.Replaying {
 		var p struct{ RefersTo *string }

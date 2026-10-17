@@ -198,10 +198,6 @@ func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Decla
 
 func (w *Work) AcceptedLedger() *platform.Ledger { return w.ledger }
 
-func (w *Work) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

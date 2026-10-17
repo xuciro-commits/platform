@@ -33,7 +33,7 @@
 2. **所有应用唯一样式布局：** 每个应用的工程结构高度统一规范为：
    ```
    apps/<id>/server/          Go 模块 <id>
-     <id>.go                  包级自描述文档、应用 ID、角色声明、New 构造器、Manifest 清单、Submit 提交、Read 读取、Input 输入、Snapshot 快照、Restore 恢复
+     <id>.go                  包级自描述文档、应用 ID、角色声明、New 构造器、Manifest 清单、Submit 提交、按清单提供的 Read 读取 / Input 输入、Snapshot 快照、Restore 恢复
      <area>.go                按业务领域划分子文件：实体类型、生命周期、业务规则
      <id>_test.go, <area>_test.go   业务场景测试，最终统一调用 CheckReplay 校验；TestChinese 中文检查
      i18n/zh-CN.json
@@ -76,6 +76,8 @@
 - 应用重命名对本地开发环境的存量测试数据进行了一次性彻底重置。
 
 ## 实际构建（As built）
+
+`platform.App` 只要求 Manifest、Declarations 与 Submit。声明具名读取时实现 `platform.Reader`，声明连接器输入时实现 `platform.InputReceiver`；宿主对缺少实现的请求返回原 NOT_FOUND / UNKNOWN_SCHEMA。`AcceptedInputApp` 仍明确要求 InputReceiver，旧输入日志继续调用原实现。ADR-0124 删除了 22 个空方法和新应用模板中的空方法，不新增 BaseApp 或默认实现继承层。
 
 ### 8a: 核心决策落地，彻底删除 Swift 实现 (#116, #117)
 

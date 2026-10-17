@@ -459,55 +459,13 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	}
 
 	if schema == SchemaPropertyType {
-		l, err := propertyTypeImage(image)
-		if err != nil {
-			return err
-		}
-		var record PropertyType
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		for _, raw := range record.Versions {
-			version, _ := wasPublished[PropertyType](raw)
-			if err := b.installPropertyType(platform.Caller{Replaying: true}, version); err != nil {
-				return err
-			}
-		}
-		return b.installPropertyType(platform.Caller{Replaying: true}, l)
+		return applyDefinitionHistory(image, propertyTypeImage, b.installPropertyType)
 	}
 	if schema == SchemaLinkType {
-		l, err := linkTypeImage(image)
-		if err != nil {
-			return err
-		}
-		var record LinkType
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		for _, raw := range record.Versions {
-			version, _ := wasPublished[LinkType](raw)
-			if err := b.installLinkType(platform.Caller{Replaying: true}, version); err != nil {
-				return err
-			}
-		}
-		return b.installLinkType(platform.Caller{Replaying: true}, l)
+		return applyDefinitionHistory(image, linkTypeImage, b.installLinkType)
 	}
 	if schema == SchemaQuery {
-		q, err := queryImage(image)
-		if err != nil {
-			return err
-		}
-		var record Query
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		for _, raw := range record.Versions {
-			version, _ := wasPublished[Query](raw)
-			if err := b.installQuery(platform.Caller{Replaying: true}, version); err != nil {
-				return err
-			}
-		}
-		return b.installQuery(platform.Caller{Replaying: true}, q)
+		return applyDefinitionHistory(image, queryImage, b.installQuery)
 	}
 	if schema == SchemaCodePublish {
 		code, err := codeImage(image)
@@ -592,10 +550,6 @@ func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
 type ReleaseProfile struct {
 	Profile       string `json:"profile"`
 	DirectInstall bool   `json:"directInstall"`
-}
-
-func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
 // Draft archival never retires installed definitions or retained runtime versions.
@@ -1126,17 +1080,8 @@ func wasPublished[T any](raw string) (T, bool) {
 // of the types they define (ADR-0034 D4). It installs what was published, so a
 // draft written since stays a draft.
 func (b *Build) Reinstall() error {
-	props, problem := b.propertyTypeInventory()
-	if problem != nil {
-		return problem
-	}
-	for _, record := range props {
-		if record.Published != "" {
-			raw, _ := json.Marshal(record)
-			if err := b.ApplyAcceptedPublication(SchemaPropertyType, raw); err != nil {
-				return err
-			}
-		}
+	if err := restoreDefinitionPublications(b, b.propertyTypeInventory, SchemaPropertyType); err != nil {
+		return err
 	}
 
 	objects, pages, applications, err := b.releaseInventory()
@@ -1152,48 +1097,16 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("object %s: %v: %s", was.Name, err, err.Message)
 		}
 	}
-	links, err := b.linkTypeInventory()
-	if err != nil {
+	if err := restoreDefinitionPublications(b, b.linkTypeInventory, SchemaLinkType); err != nil {
 		return err
 	}
-	for _, record := range links {
-		if record.Published != "" {
-			raw, _ := json.Marshal(record)
-			if err := b.ApplyAcceptedPublication(SchemaLinkType, raw); err != nil {
-				return err
-			}
-		}
-	}
-	queries, err := b.queryInventory()
-	if err != nil {
+	if err := restoreDefinitionPublications(b, b.queryInventory, SchemaQuery); err != nil {
 		return err
 	}
-	for _, record := range queries {
-		if record.Published == "" {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		if err := b.ApplyAcceptedPublication(SchemaQuery, raw); err != nil {
-			return err
-		}
-	}
-	functions, err := b.functionInventory()
-	if err != nil {
+	if err := restoreDefinitionPublications(b, b.functionInventory, SchemaFunction); err != nil {
 		return err
 	}
-	for _, record := range functions {
-		if record.Published == "" {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		f, err := functionImage(raw)
-		if err != nil {
-			return err
-		}
-		if err := b.installFunction(platform.Caller{Replaying: true}, f); err != nil {
-			return err
-		}
-	}
+
 	agents, err := b.agentInventory()
 	if err != nil {
 		return err

@@ -211,6 +211,7 @@ type DecisionForkApp interface {
 // answer on retry; it must not run business rules or external calls.
 type AcceptedInputApp interface {
 	App
+	InputReceiver
 	AcceptedInputs() []string
 	DecodeAcceptedInput(json.RawMessage) (any, error)
 }
@@ -471,8 +472,15 @@ type App interface {
 	Manifest() Manifest
 	Declarations() []*pb.AuthorityDeclaration
 	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
-	// Read serves a named read; the app refuses callers it does not show it to.
+}
+
+// Reader serves the named reads declared by an app's manifest.
+type Reader interface {
 	Read(c Caller, name string) (any, *kernel.Error)
+}
+
+// InputReceiver handles the connector inputs declared by an app's manifest.
+type InputReceiver interface {
 	Input(c Caller, name string, body []byte, now time.Time) (any, *kernel.Error)
 }
 

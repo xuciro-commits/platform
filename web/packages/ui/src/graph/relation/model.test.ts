@@ -8,7 +8,7 @@ describe("a relation node's class is what it draws under", () => {
   it("keeps the standing vocabulary in one table — every entry has a title and an icon name", () => {
     const expected = ["connection", "source", "dataset", "pipeline", "object", "writeback",
       "app", "page", "entity", "query", "function", "linktype", "propertytype", "action", "operation",
-      "record", "flow", "run", "effect", "property", "relation"];
+      "record", "flow", "run", "effect", "property", "relation", "interface", "observation", "protocol"];
     expect(Object.keys(relationNodeClasses).sort()).toEqual([...expected].sort());
     for (const [name, decl] of Object.entries(relationNodeClasses)) {
       expect(decl.title, name).toBeTruthy();

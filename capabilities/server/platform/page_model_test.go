@@ -10,7 +10,7 @@ import (
 func TestModelBindingDefaultsMigrationAndDeclaredPaths(t *testing.T) {
 	info := EntityInfo{Type: "sample.item", App: "sample", Display: "name", Fields: []FieldInfo{{Name: "name", Type: "text"}, {Name: "parent", Type: "reference", Ref: "sample.item", Inverse: "children"}, {Name: "state", Type: "choice", ReadOnly: true}}, Lifecycle: &LifecycleInfo{Field: "state", States: []State{{Name: "ready", Title: "Ready"}, {Name: "done", Title: "Done"}}}}
 	lookup := func(typ string) (EntityInfo, bool) { return info, typ == info.Type }
-	p := Page{Name: "model", Object: ModelObject(info.Type), Document: &PageDocument{UIProfile: PageModelProfile}, Sections: []Section{{ID: "list", Widget: "table", Model: &ModelBinding{Type: info.Type}}, {ID: "status", Widget: "status-tracker", Model: &ModelBinding{Type: info.Type}}}}
+	p := Page{Name: "model", Object: ModelObject(info.Type), Document: &PageDocument{UIProfile: PageModelProfile}, Sections: []Section{{PageWidgetConfig: PageWidgetConfig{Model: &ModelBinding{Type: info.Type}}, ID: "list", Widget: "table"}, {PageWidgetConfig: PageWidgetConfig{Model: &ModelBinding{Type: info.Type}}, ID: "status", Widget: "status-tracker"}}}
 	original := Raw(p)
 	effective := p.EffectiveModelPage(lookup)
 	if !slices.Equal(effective.Sections[0].Fields, []string{"name", "parent", "state"}) || effective.Sections[1].StatusTracker.Field != "state" || !slices.Equal(effective.Sections[1].StatusTracker.Stages, []string{"ready", "done"}) {
@@ -76,8 +76,8 @@ func TestModelBindingsFollowOriginalInterfaceQueryAfterEditing(t *testing.T) {
 	named := NamedQuery{Name: "coded", Title: "Coded", Interface: shape.Name, InterfaceShape: &shape, Implementations: []string{root.Name}, Sort: []string{"id"}, Limit: 20}
 	definition := Definition{Ref: binding.Ref, Version: binding.SourceVersion, Query: &named}
 	p := Page{Name: "picker", Object: root, Layout: "composed", Sections: []Section{
-		{ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", Model: &ModelBinding{Type: root.Name, Fields: []FieldRef{{Name: "name", Slot: "recordPicker.labelField"}}}},
-		{ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", RecordCard: &PageRecordCard{Tone: "neutral"}, Model: &ModelBinding{Type: root.Name, Fields: []FieldRef{{Name: "name"}, {Name: "name", Slot: "recordCard.labelField"}}}},
+		{PageWidgetConfig: PageWidgetConfig{Model: &ModelBinding{Type: root.Name, Fields: []FieldRef{{Name: "name", Slot: "recordPicker.labelField"}}}}, ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window"},
+		{PageWidgetConfig: PageWidgetConfig{RecordCard: &PageRecordCard{Tone: "neutral"}, Model: &ModelBinding{Type: root.Name, Fields: []FieldRef{{Name: "name"}, {Name: "name", Slot: "recordCard.labelField"}}}}, ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected"},
 	}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"picker", "card"}}, "picker": {Kind: "widget", Section: "picker"}, "card": {Kind: "widget", Section: "card"}}, Queries: map[string]PageQuery{"coded": {Object: root, Sort: []string{"id"}, Limit: 20}}, Variables: map[string]PageVariable{
 		"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "coded"}},
 		"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "picker"}},

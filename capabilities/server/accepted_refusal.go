@@ -1,12 +1,10 @@
 package platformserver
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"slices"
 	"time"
 
@@ -106,13 +104,8 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return result, nil, fmt.Errorf("refused result is empty or exceeds %d bytes", maxAcceptedResultBytes)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
+	if err := decodeAcceptedJSON(raw, &result, "refused result"); err != nil {
 		return result, nil, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return result, nil, fmt.Errorf("refused result has trailing data")
 	}
 	digest, err := digestRefusedResult(result)
 	if err != nil || result.Digest != digest {
@@ -183,22 +176,7 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 
 func digestRefusedResult(result refusedResult) (string, error) {
 	result.Digest = ""
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return "", err
-	}
-	var normalized any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(&normalized); err != nil {
-		return "", err
-	}
-	canonical, err := json.Marshal(normalized)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(canonical)
-	return hex.EncodeToString(digest[:]), nil
+	return canonicalDigest(result)
 }
 
 func resultRequestHash(raw []byte) (string, error) {

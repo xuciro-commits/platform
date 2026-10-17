@@ -38,19 +38,11 @@ func (s Section) CheckRecordList(info EntityInfo) error {
 	if s.Widget != "record-list" {
 		return nil
 	}
-	if s.CardLabel != "id" {
-		f, ok := info.Field(s.CardLabel)
-		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) {
-			return fmt.Errorf("record list title needs a visible text field")
-		}
+	if !visibleContextField(info, s.CardLabel, true) {
+		return fmt.Errorf("record list title needs a visible text field")
 	}
-	seen := map[string]bool{}
-	for _, name := range s.Fields {
-		f, ok := info.Field(name)
-		if !ok || seen[name] || !slices.Contains([]string{"text", "longtext", "choice", "reference", "integer", "decimal", "money", "date", "datetime", "boolean"}, f.Type) {
-			return fmt.Errorf("record list summary needs unique visible scalar fields")
-		}
-		seen[name] = true
+	if !recordScalarFields(info, s.Fields) {
+		return fmt.Errorf("record list summary needs unique visible scalar fields")
 	}
 	return nil
 }

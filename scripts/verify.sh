@@ -28,10 +28,14 @@ vocabulary() {
       contract --exclude-dir=.build --exclude-dir=.lake --exclude-dir=gen
 }
 
+check_module() {
+  (cd "$1" && go vet ./... && go test -count=1 ./...)
+}
+
 contract() {
   step contract-vocabulary vocabulary
   step contract-schema bash -c 'cd contract/proto && export PATH="$(go env GOPATH)/bin:$PATH" && gen() { find ../go/gen -type f -exec shasum {} + | sort; } && before=$(gen) && buf lint && buf generate && { [ "$before" = "$(gen)" ] || { echo "generated code was stale; buf generate updated contract/go/gen"; exit 1; }; }'
-  step contract-go bash -c 'cd contract/go && go vet ./... && go test -count=1 ./...'
+  step contract-go check_module contract/go
 }
 
 formal() {
@@ -70,7 +74,7 @@ format() {
 }
 
 capabilities() {
-  step capability-server bash -c 'cd capabilities/server && go vet ./... && go test -count=1 ./...'
+  step capability-server check_module capabilities/server
   step app-scaffold scaffold
 }
 
@@ -80,11 +84,11 @@ scaffold() {
   local root=.build/scaffold
   rm -rf "$root" && mkdir -p "$root" && ln -s ../../contract ../../capabilities "$root"/ &&
     (cd capabilities/server && go run ./cmd/new-app -root "../../$root" -id scaffolded -entity request -web=false) &&
-    (cd "$root/apps/scaffolded/server" && go vet ./... && go test -count=1 ./...)
+    check_module "$root/apps/scaffolded/server"
 }
 
 mes() {
-  step mes-server bash -c 'cd apps/mes/server && go vet ./... && go test -count=1 ./...'
+  step mes-server check_module apps/mes/server
 }
 
 # Apps know no other app; they meet through protocols (ADR-0011); and no
@@ -98,15 +102,15 @@ composition() {
   local dir
   composition_static
   for dir in protocols/*; do
-    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-protocol" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
+    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-protocol" check_module "$dir"
   done
   # Every other app, including a new one, is checked as soon as it exists.
   for dir in apps/*/server; do
     [[ -f $dir/go.mod && $dir != apps/pms/* && $dir != apps/mes/* ]] || continue
-    step "$(basename "$(dirname "$dir")")-server" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
+    step "$(basename "$(dirname "$dir")")-server" check_module "$dir"
   done
   for dir in solutions/*; do
-    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-solution" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
+    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-solution" check_module "$dir"
   done
 }
 
@@ -115,7 +119,7 @@ deploy() {
 }
 
 pms() {
-  step pms-server bash -c 'cd apps/pms/server && go vet ./... && go test -count=1 ./...'
+  step pms-server check_module apps/pms/server
   step pms-client-k5 cargo test --manifest-path apps/pms/client/src-tauri/Cargo.toml
   step pms-flows apps/pms/flows.sh
 }

@@ -7,7 +7,6 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import {useDraftInput,useInputDrafts,useUnsavedChanges, Button, Checkbox, Form, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { useEffect, useState } from "react";
-import { useAdmin } from "./shared";
 
 const languageNames: Record<string, string> = { en: "English", "zh-CN": "简体中文", "zh-TW": "繁體中文", ja: "日本語", ko: "한국어", de: "Deutsch", fr: "Français", es: "Español", pt: "Português", th: "ไทย", vi: "Tiếng Việt", id: "Bahasa Indonesia", ms: "Bahasa Melayu", ar: "العربية" };
 const languageName = (tag: string) => languageNames[tag] ? `${languageNames[tag]} (${tag})` : tag;
@@ -15,7 +14,7 @@ const languageName = (tag: string) => languageNames[tag] ? `${languageNames[tag]
 export function Words() {
   const { decide } = useHost(),inputs=useInputDrafts();
   useUnsavedChanges(!!inputs?.dirty,()=>inputs?.clear());
-  const { apps } = useAdmin();
+  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
   const [app, setApp] = useState("build");
   const [lang, setLang] = useState("zh-CN");
   const [adding, setAdding] = useState("");

@@ -6,7 +6,7 @@ func sparklinePage() Page {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["count"] = PageVariable{Scope: "page", Type: "decimal", Mode: "aggregate", Source: &PageResourceSource{Kind: "count", Query: "read"}}
-	s := Section{ID: "spark", Widget: "sparkline-kpi", ConfigVersion: 1, CollectionVariable: "window", SparklineDecimalVariable: "count", Sparkline: &PageSparkline{Field: "amount"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{SparklineDecimalVariable: "count", Sparkline: &PageSparkline{Field: "amount"}}, ID: "spark", Widget: "sparkline-kpi", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

@@ -1,9 +1,9 @@
 // Settings: AI providers, the playground and usage (ADR-0015).
-import { MemberSelect, useReadQuery as useRead } from "@platform/app";
+import { useHost, MemberSelect, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useAdmin, when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
+import { when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
 
 // AI providers (ADR-0015): providers and models are decisions of the ai app;
 // catalogs are read live from each provider; calls go through the host, which
@@ -23,7 +23,7 @@ export function AIProviders() {
   const providers = useRead<Provider[]>("/v1/ai-providers");
   const enabled = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const vendors = useRead<Vendor[]>("/v1/ai/vendors").data ?? [];
-  const { client, decideOn } = useAdmin();
+  const { client, decide } = useHost();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ kind: "vendor", id: "", vendor: "openrouter", baseUrl: "", secret: "" });
   const [open, setOpen] = useState<string>();
@@ -36,7 +36,7 @@ export function AIProviders() {
     setCatalog(r.ok ? { models: r.body } : { error: r.body.error?.detail ?? `HTTP ${r.status}` });
   };
   const enable = (provider: string, model: string, access: string) =>
-    decideOn("ai.model.enable", { type: "ai.model", id: `${provider}/${model}` }, { access });
+    decide("ai.model.enable", { type: "ai.model", id: `${provider}/${model}` }, { access });
   const shown = (catalog.models ?? []).filter((m) => (!freeOnly || m.free) && m.id.toLowerCase().includes(filter.toLowerCase()));
   const columns: ColumnDef<CatalogModel, any>[] = [
     { accessorKey: "id", header: t("Model"), cell: ({ row: { original: m } }) => <span className="flex items-center gap-2"><span className="font-mono text-xs">{m.id}</span>{m.free && <Tag label="free" tone="success" />}</span> },
@@ -45,7 +45,7 @@ export function AIProviders() {
       const on = enabled.find((x) => x.provider === open && x.model === m.id);
       return <span className="flex gap-1">
         {["everyone", "users"].map((a) => <Button key={a} size="sm" variant={on?.access === a ? "primary" : undefined} onClick={() => void enable(open!, m.id, a)}>{a === "users" ? "ai users" : a}</Button>)}
-        {on && <Button size="sm" variant="danger" onClick={() => void decideOn("ai.model.disable", { type: "ai.model", id: `${open}/${m.id}` }, {})}>{t("Off")}</Button>}
+        {on && <Button size="sm" variant="danger" onClick={() => void decide("ai.model.disable", { type: "ai.model", id: `${open}/${m.id}` }, {})}>{t("Off")}</Button>}
       </span>;
     } },
   ];
@@ -63,7 +63,7 @@ export function AIProviders() {
               <span className="text-xs text-muted">{p.secret ? `key “${p.secret}”` : "no key"} · {enabled.filter((m) => m.provider === p.id).length} enabled</span>
               <span className="ml-auto flex gap-1">
                 <Button size="sm" onClick={() => void load(p.id)}>{t("Models")}</Button>
-                <Button size="sm" variant="danger" onClick={() => void decideOn("ai.provider.remove", { type: "ai.provider", id: p.id }, {})}>{t("Remove")}</Button>
+                <Button size="sm" variant="danger" onClick={() => void decide("ai.provider.remove", { type: "ai.provider", id: p.id }, {})}>{t("Remove")}</Button>
               </span>
             </Card>
           ))}
@@ -107,7 +107,7 @@ export function AIProviders() {
             <Button variant="primary" disabled={!draft.id || (draft.kind !== "vendor" && !draft.baseUrl) || (draft.kind !== "local" && !draft.secret)}
               onClick={async () => {
                 const { id, ...payload } = draft;
-                if (await decideOn("ai.provider.add", { type: "ai.provider", id }, payload)) setAdding(false);
+                if (await decide("ai.provider.add", { type: "ai.provider", id }, payload)) setAdding(false);
               }}>{t("Add")}</Button>
           </span>
         </div>
@@ -119,7 +119,7 @@ export function AIProviders() {
 // The playground calls an enabled model as the signed-in member, through the host.
 export function AIPlayground() {
   const models = useRead<AIModel[]>("/v1/ai-models").data ?? [];
-  const { client } = useAdmin();
+  const { client } = useHost();
   const queries = useQueryClient();
   const [model, setModel] = useState("");
   const [system, setSystem] = useState("");
@@ -206,7 +206,7 @@ type Limit = { member: string; dailyTokens?: number; perMinute?: number };
 // A member's, agent's or app's own limits (ADR-0029 D1), for the ai app's
 // administrators: in place of the defaults in App settings → AI.
 function AILimits() {
-  const { decideOn } = useAdmin();
+  const { decide } = useHost();
   const limits = useRead<Limit[]>("/v1/ai-limits");
   const [who, setWho] = useState(""), [daily, setDaily] = useState(""), [minute, setMinute] = useState("");
   if (limits.isError) return null; // not an administrator of the ai app
@@ -215,14 +215,14 @@ function AILimits() {
     { accessorKey: "dailyTokens", header: t("Tokens a day"), meta: { width: 120, align: "right" }, cell: (c) => c.getValue() || t("default") },
     { accessorKey: "perMinute", header: t("Calls a minute"), meta: { width: 120, align: "right" }, cell: (c) => c.getValue() || t("default") },
     { id: "remove", header: "", meta: { width: 90 }, cell: ({ row: { original: l } }) =>
-      <Button size="sm" variant="ghost" onClick={() => void decideOn("ai.limit.remove", { type: "ai.limit", id: l.member }, {})}>{t("Remove")}</Button> },
+      <Button size="sm" variant="ghost" onClick={() => void decide("ai.limit.remove", { type: "ai.limit", id: l.member }, {})}>{t("Remove")}</Button> },
   ];
   return (
     <>
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Limits")}</h2>
       <p className="mb-2 text-xs text-muted">{t("A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.")}</p>
       <Form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={async () => {
-        if(await decideOn("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 })){setWho("");setDaily("");setMinute("");}
+        if(await decide("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 })){setWho("");setDaily("");setMinute("");}
       }}>
         <MemberSelect label={t("Member ID")} empty={t("Choose a member or agent")} agents value={who} onChange={setWho} className="w-72" />
         <Input aria-label={t("Tokens a day")} type="number" min={0} placeholder={t("Tokens a day")} value={daily} onChange={(e) => setDaily(e.target.value)} className="w-36" />

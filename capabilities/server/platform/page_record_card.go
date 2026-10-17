@@ -32,19 +32,11 @@ func (s Section) CheckRecordCard(info EntityInfo) error {
 	if s.RecordCard == nil {
 		return fmt.Errorf("record card configuration is missing")
 	}
-	if s.RecordCard.LabelField != "id" {
-		f, ok := info.Field(s.RecordCard.LabelField)
-		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) {
-			return fmt.Errorf("record card title needs a visible original text field or ID")
-		}
+	if !visibleContextField(info, s.RecordCard.LabelField, true) {
+		return fmt.Errorf("record card title needs a visible original text field or ID")
 	}
-	seen := map[string]bool{}
-	for _, name := range s.Fields {
-		f, ok := info.Field(name)
-		if !ok || seen[name] || !slices.Contains([]string{"text", "longtext", "choice", "reference", "integer", "decimal", "money", "date", "datetime", "boolean"}, f.Type) {
-			return fmt.Errorf("record card properties need unique visible scalar fields")
-		}
-		seen[name] = true
+	if !recordScalarFields(info, s.Fields) {
+		return fmt.Errorf("record card properties need unique visible scalar fields")
 	}
 	return nil
 }

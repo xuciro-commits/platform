@@ -9,7 +9,7 @@ func TestSeparatorStaticLabelsProfilesAndBudgets(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	label := "<img src=x> {value}"
-	s := Section{ID: "line", Widget: "separator", ConfigVersion: 1, Separator: &PageSeparator{Label: &label}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{Separator: &PageSeparator{Label: &label}}, ID: "line", Widget: "separator", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

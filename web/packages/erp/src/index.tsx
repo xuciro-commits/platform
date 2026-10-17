@@ -5,43 +5,19 @@
 // released to the plant, which confirms them through production.orders/1. Lists, pages and forms are generated from the declarations; the
 // host decides who sees and does what.
 import "./i18n";
-import { GeneratedForm, Records, defineApp, newId, useHost, useRead } from "@platform/app";
-import { Button, DataTable, Dialog, Input, PageHeader, t, type ColumnDef } from "@platform/ui";
+import { Records, defineApp, useNewRecord, useHost, useRead } from "@platform/app";
+import { Button, DataTable, Input, PageHeader, t, type ColumnDef } from "@platform/ui";
 import { ArrowLeftRight, Factory, BookOpen, CalendarRange, Handshake, Landmark, ListTree, Package, Plus, Scale, ShoppingCart, Warehouse } from "lucide-react";
 import { useState } from "react";
 
-// Records whose ID is a code people choose: accounts ("1403") and products ("P-100").
-function Coded({ type, label, placeholder }: { type: string; label: string; placeholder: string }) {
-  const { can, decide } = useHost();
-  const [creating, setCreating] = useState(false);
-  const [code, setCode] = useState("");
-  return (
-    <>
-      <Records type={type} covers={[`${type}.create`]} actions={can(`${type}.create`) && <Button variant="primary" onClick={() => setCreating(true)}><Plus />{label}</Button>} />
-      <Dialog open={creating} onOpenChange={setCreating} title={label}>
-        <div className="grid gap-3">
-          <label className="grid gap-1 text-xs font-medium text-muted">{t("Code")} *<Input value={code} onChange={(e) => setCode(e.target.value.trim())} placeholder={placeholder} /></label>
-          <GeneratedForm type={type} submitLabel={t("Create")} onCancel={() => setCreating(false)}
-            onSubmit={async (v) => {const ok=!!code&&await decide(`${type}.create`,{type,id:code},v,{expectedRevision:0});if(ok){setCreating(false);setCode("");}return ok;}} />
-        </div>
-      </Dialog>
-    </>
-  );
-}
-
 // Records people draft in a form and then move along their lifecycle from their page.
-function Drafted({ type, label, prefix, initial, wide }: { type: string; label: string; prefix: string; initial?: object; wide?: boolean }) {
-  const { can, decide } = useHost();
-  const [creating, setCreating] = useState(false),[id,setId]=useState(()=>newId(prefix));
-  return (
-    <>
-      <Records type={type} covers={[`${type}.create`]} actions={can(`${type}.create`) && <Button variant="primary" onClick={() => setCreating(true)}><Plus />{label}</Button>} />
-      <Dialog wide={wide} open={creating} onOpenChange={setCreating} title={label}>
-        <GeneratedForm type={type} record={initial as never} submitLabel={t("Save draft")} onCancel={() => setCreating(false)}
-          onSubmit={async (v) => {const ok=await decide(`${type}.create`,{type,id},v,{expectedRevision:0});if(ok){setCreating(false);setId(newId(prefix));}return ok;}} />
-      </Dialog>
-    </>
-  );
+function Drafted({ type, label, prefix, initial }: { type: string; label: string; prefix: string; initial?: Record<string, unknown> }) {
+  const create = useNewRecord(type, undefined, prefix);
+  const schema = `${type}.create`;
+  return <>
+    <Records type={type} covers={[schema]} actions={create.offered.some(action => action.schema === schema) && <Button variant="primary" onClick={() => create.take(schema, initial)}><Plus />{label}</Button>} />
+    {create.dialog}
+  </>;
 }
 
 type Stock = { product: string; name: string; unit: string; quantity: number; value: number };
@@ -105,13 +81,13 @@ export default defineApp({
   icon: <Landmark />,
   home: { view: "entries" },
   views: [
-    { id: "entries", title: () => t("Journal entries"), render: () => <Drafted type="erp.entry" label={t("New entry")} prefix="JE" wide
+    { id: "entries", title: () => t("Journal entries"), render: () => <Drafted type="erp.entry" label={t("New entry")} prefix="JE"
       initial={{ journal: "general", date: new Date().toISOString().slice(0, 10), lines: [{}, {}] }} /> },
-    { id: "erp-accounts", title: () => t("Accounts"), render: () => <Coded type="erp.account" label={t("New account")} placeholder="1403" /> },
-    { id: "purchases", title: () => t("Purchase orders"), render: () => <Drafted type="erp.purchase" label={t("New purchase order")} prefix="PO" wide
+    { id: "erp-accounts", title: () => t("Accounts"), render: () => <Drafted type="erp.account" label={t("New account")} prefix="" /> },
+    { id: "purchases", title: () => t("Purchase orders"), render: () => <Drafted type="erp.purchase" label={t("New purchase order")} prefix="PO"
       initial={{ date: new Date().toISOString().slice(0, 10), lines: [{}] }} /> },
     { id: "partners", title: () => t("Partners"), render: () => <Drafted type="erp.partner" label={t("New partner")} prefix="BP" /> },
-    { id: "products", title: () => t("Products"), render: () => <Coded type="erp.product" label={t("New product")} placeholder="P-100" /> },
+    { id: "products", title: () => t("Products"), render: () => <Drafted type="erp.product" label={t("New product")} prefix="" /> },
     { id: "moves", title: () => t("Stock moves"), render: () => <Records type="erp.move" /> },
     { id: "production", title: () => t("Production orders"), render: () => <Drafted type="erp.production" label={t("New production order")} prefix="MO" /> },
     { id: "on-hand", title: () => t("On hand"), render: () => <OnHand /> },

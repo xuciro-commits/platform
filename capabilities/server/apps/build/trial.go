@@ -74,52 +74,34 @@ func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 	}
 	// These original owner entities supply only identity. Their own draft
 	// compiler supplies dependencies when the traversal reaches that asset.
-	kinds := map[string]platform.AssetKind{PropertyTypeType: platform.AssetPropertyType, LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent, CodeType: platform.AssetCompute, TestPlanType: platform.AssetEvaluation, SampleSetType: platform.AssetSampleSet, MigrationPlanType: platform.AssetMigration,
-		ConnectionType: platform.AssetConnection, SourceType: platform.AssetSource, DatasetType: platform.AssetDataset, PipelineType: platform.AssetPipeline, WritebackType: platform.AssetWriteback, MatchType: platform.AssetMatching, ObservationType: platform.AssetObservation, TableType: platform.AssetCompute, AlertType: platform.AssetAlert}
 	caller := b.host.Automation(platform.Caller{}, ID)
 	for _, entity := range b.Manifest().Entities {
-		kind, ok := kinds[entity.Type]
-		if !ok {
+		ref, err := draftAssetRef(entity.Type, "")
+		if err != nil || recordKind(ref.Kind) {
 			continue
 		}
-		offset := 0
-		for {
-			rows, total, problem := caller.FindOf(reflect.TypeOf(entity.Model), platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
-			if problem != nil {
-				return nil, problem
+		rows, err := readDefinitionInventoryOf(caller, reflect.TypeOf(entity.Model))
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			var head struct {
+				ID, Name string
+				Archived bool
 			}
-			if total > 1000 {
-				return nil, fmt.Errorf("Builder draft inventory exceeds 1000 definitions")
+			if err := json.Unmarshal(platform.Raw(row), &head); err != nil {
+				return nil, err
 			}
-			for _, row := range rows {
-				var head struct {
-					ID, Name string
-					Archived bool
+			if !head.Archived && head.Name != "" {
+				rowKind := ref.Kind
+				if entity.Type == TestPlanType {
+					rowKind = testPlanKind(row.(TestPlan))
 				}
-				if err := json.Unmarshal(platform.Raw(row), &head); err != nil {
-					return nil, err
-				}
-				if !head.Archived && head.Name != "" {
-					rowKind := kind
-					if entity.Type == TestPlanType {
-						var plan TestPlan
-						if json.Unmarshal(platform.Raw(row), &plan) != nil {
-							return nil, fmt.Errorf("test plan draft is invalid")
-						}
-						rowKind = testPlanKind(plan)
-					}
-					add(rowKind, head.ID, head.Name)
-				}
-			}
-			offset += len(rows)
-			if offset >= total {
-				break
-			}
-			if len(rows) == 0 {
-				return nil, fmt.Errorf("Builder draft inventory is incomplete")
+				add(rowKind, head.ID, head.Name)
 			}
 		}
 	}
+
 	all := make([]JointDraftRef, 0, len(objects))
 	for _, o := range objects {
 		if !o.Archived {

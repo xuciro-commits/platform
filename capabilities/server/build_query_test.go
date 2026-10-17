@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
 	"platformserver/journal"
@@ -38,13 +37,7 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 		defer journal.Pool().Exec(context.Background(), `delete from journal where tenant=$1`, tenant)
 	}
 	compose := func() *Tenant {
-		tn, err := NewTenant(tenant, NewConsole(tenant,
-			Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}},
-			Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: build.User}}}), build.New(tenant))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return tn
+		return composeTenant(t, tenant, []Seat{seatOf("builder", "build:builder"), seatOf("reader", "build:user")}, build.New(tenant))
 	}
 	tn := compose()
 	if journal != nil {
@@ -58,7 +51,6 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 	// sameJournalTime); decide at that precision so the replayed tenant and the
 	// live one are byte-identical.
 	at := time.Now().UTC().Truncate(time.Microsecond)
-	key := 0
 	var entries []Entry
 	fail := false
 	tn.AcceptResult = func(e Entry, appendKey, hash string) ([]byte, error) {
@@ -77,8 +69,7 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 		return e.Body, nil
 	}
 	submit := func(member platform.Member, typ, id, verb string, payload any) *kernel.Error {
-		key++
-		_, err := tn.Submit(member, &pb.Submission{TenantId: tenant, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: fmt.Sprint(key), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + "." + verb, Version: 1}, Payload: platform.Raw(payload)}, at)
+		_, err := tn.Submit(member, submission(tn, member, build.ID, typ+"."+verb, typ, id, payload), at)
 		return err
 	}
 	must := func(typ, id, verb string, payload any) {

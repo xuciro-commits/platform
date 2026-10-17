@@ -8,7 +8,7 @@ import (
 
 func TestMetricPresentationAndFrozenMeasure(t *testing.T) {
 	info := EntityInfo{App: "sample", Type: "sample.item", Fields: []FieldInfo{{Name: "qty", Type: "decimal"}, {Name: "amount", Type: "money"}}}
-	s := Section{ID: "metric", Widget: "metric", ConfigVersion: 1, Measure: "avg:qty", MetricPresentation: &PageMetricPresentation{Suffix: "%", Formatter: "number", Variant: "card", Tone: "success"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{MetricPresentation: &PageMetricPresentation{Suffix: "%", Formatter: "number", Variant: "card", Tone: "success"}}, ID: "metric", Widget: "metric", ConfigVersion: 1, Measure: "avg:qty"}
 	d := &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"metric"}}, "metric": {Kind: "widget", Section: "metric"}}}
 	if d.Check([]Section{s}) != nil || s.CheckMetricPresentation(info) != nil {
 		t.Fatal("valid metric presentation refused")
@@ -55,7 +55,7 @@ func TestMetricPresentationAndFrozenMeasure(t *testing.T) {
 
 func TestMetricStaticAnnotationProfileAndBudget(t *testing.T) {
 	d := &PageDocument{UIProfile: PageUIProfile()}
-	s := Section{Widget: "metric", MetricPresentation: &PageMetricPresentation{Formatter: "number", Variant: "card", Tone: "neutral", Annotation: &PageMetricAnnotation{Direction: "up", Text: "+3"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{MetricPresentation: &PageMetricPresentation{Formatter: "number", Variant: "card", Tone: "neutral", Annotation: &PageMetricAnnotation{Direction: "up", Text: "+3"}}}, Widget: "metric"}
 	if err := d.checkMetricPresentation(s); err != nil {
 		t.Fatal(err)
 	}

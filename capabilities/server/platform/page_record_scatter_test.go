@@ -5,7 +5,7 @@ import "testing"
 func TestScatterOriginalWindowAndSelectionContract(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
-	s := Section{ID: "scatter", Widget: "record-scatter", ConfigVersion: 1, CollectionVariable: "window", Scatter: &PageRecordScatter{XField: "x", YField: "y", ColorField: "state", LabelField: "title"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{Scatter: &PageRecordScatter{XField: "x", YField: "y", ColorField: "state", LabelField: "title"}}, ID: "scatter", Widget: "record-scatter", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

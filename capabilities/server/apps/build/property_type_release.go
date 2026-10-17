@@ -3,7 +3,6 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,36 +21,13 @@ func propertyTypeReleaseAsset(f PropertyType, sourceVersion string) (platform.Re
 
 // PropertyTypeReleaseAsset resolves only a retained version from this owner.
 func (b *Build) PropertyTypeReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
-	ordinalText, found := strings.CutPrefix(sourceVersion, b.Manifest().Version+".property-")
-	version, err := strconv.Atoi(ordinalText)
-	if !found || err != nil || strconv.Itoa(version) != ordinalText {
-		return platform.ReleaseAsset{}, fmt.Errorf("invalid retained property type version %s", sourceVersion)
-	}
-	f, ordinal, ok := b.PropertyTypeDefinition(name, version)
-	if !ok || ordinal != version || version < 1 {
-		return platform.ReleaseAsset{}, fmt.Errorf("propertyType %s version %d is not retained", name, version)
-	}
-	body, err := json.Marshal(f)
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: name}, ContractVersion: 1,
-		SourceVersion: b.Manifest().Version + ".property-" + strconv.Itoa(version), Body: body})
+	return retainedDefinitionAsset(b.Manifest().Version, "property", "property type", platform.AssetPropertyType, name, sourceVersion, b.PropertyTypeDefinition)
 }
 
 func (b *Build) propertyTypeAssets() ([]platform.ReleaseAsset, error) {
-	var out []platform.ReleaseAsset
-	// This cache is reconstructed only from validated publications or an
-	// immutable candidate. Draft rows must never replace installed assets.
-	for _, declaration := range b.propertyTypeDeclarations() {
-		f := b.propertyTypes[declaration.Name]
-		asset, err := propertyTypeReleaseAsset(f, b.Manifest().Version)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, asset)
-	}
-	return out, nil
+	return installedDefinitionAssets(b.propertyTypes, func(record PropertyType) (platform.ReleaseAsset, error) {
+		return propertyTypeReleaseAsset(record, b.Manifest().Version)
+	})
 }
 
 // InstallPropertyTypeAsset installs one immutable candidate version into a fresh
@@ -74,92 +50,22 @@ func (b *Build) InstallPropertyTypeAsset(asset platform.ReleaseAsset) error {
 }
 
 func (b *Build) propertyTypeDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = b.ReleaseAssets()
-	if err != nil {
-		return
-	}
-	list, problem := b.propertyTypeInventory()
-	if problem != nil {
-		err = problem
-		return
-	}
-	i := slices.IndexFunc(list, func(f PropertyType) bool { return f.ID == id && !f.Archived })
-	if i < 0 {
-		err = fmt.Errorf("draft propertyType %q not found", id)
-		return
-	}
-	f := list[i]
-	if old, ok := wasPublished[PropertyType](f.Published); ok {
-		prior = platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: old.Name}
-		hadPrior = true
-	}
-	next = platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: f.Name}
-	if err = b.checkPropertyType(&f); err != nil {
-		return
-	}
-	if f.Version >= 64 {
-		err = fmt.Errorf("property type version family is full")
-		return
-	}
-	f.Version++
-	asset, problem := propertyTypeReleaseAsset(f, b.Manifest().Version)
-	if problem != nil {
-		err = problem
-		return
-	}
-	after = slices.Clone(before)
-	if hadPrior {
-		after = slices.DeleteFunc(after, func(a platform.ReleaseAsset) bool { return a.Ref == prior })
-	}
-	after = append(after, asset)
-	return
+	return draftDefinitionAssets(b, id, platform.AssetPropertyType, "property type", b.propertyTypeInventory, func(record PropertyType) (PropertyType, error) {
+		err := b.checkPropertyType(&record)
+		return record, err
+	}, func(record PropertyType) (platform.ReleaseAsset, error) {
+		record.Version++
+		return propertyTypeReleaseAsset(record, b.Manifest().Version)
+	})
 }
 
 // Freeze the immutable candidate beside the mutable editor row. Existing
 // ordinals must match retained bytes; only the next ordinal can publish.
 func (b *Build) preparePropertyTypeReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
-	list, err := b.propertyTypeInventory()
-	if err != nil {
-		return nil, err
-	}
-	var out []ReleasePublication
-	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetPropertyType {
-			continue
-		}
-		ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".property-")
-		version, err := strconv.Atoi(ordinal)
-		if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal {
-			return nil, fmt.Errorf("invalid property type version")
-		}
-		i := slices.IndexFunc(list, func(q PropertyType) bool { return !q.Archived && q.Name == asset.Ref.Name })
-		if i < 0 {
-			return nil, fmt.Errorf("property type has no source owner")
-		}
-		record := list[i]
-		if version <= record.Version {
-			prior, err := b.PropertyTypeReleaseAsset(asset.Ref.Name, asset.SourceVersion)
-			var retained, candidate any
-			if err != nil || json.Unmarshal(prior.Body, &retained) != nil || json.Unmarshal(asset.Body, &candidate) != nil || !reflect.DeepEqual(retained, candidate) {
-				return nil, fmt.Errorf("property type retained bytes differ")
-			}
-			if len(record.Versions) != record.Version {
-				return nil, fmt.Errorf("retained property type history is unavailable")
-			}
-			selected := record.Versions[version-1]
-			if selected == record.Published {
-				continue
-			}
-			record.Published = selected
-			if version < record.Version {
-				record.State = "draft"
-			}
-			out = append(out, ReleasePublication{Schema: SchemaPropertyType, Image: platform.Raw(record)})
-			continue
-		}
+	return prepareDefinitionPublications(b, assets, b.propertyTypeInventory, platform.AssetPropertyType, "property", SchemaPropertyType, "property type", b.PropertyTypeReleaseAsset, func(record PropertyType, asset platform.ReleaseAsset, version int) (PropertyType, error) {
 		var q platform.PropertyType
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Type != record.Type {
-			return nil, fmt.Errorf("invalid next property type version")
+			return record, fmt.Errorf("invalid next property type version")
 		}
 		frozen := propertyTypeFromDeclaration(q)
 		frozen.Record = record.Record
@@ -167,10 +73,8 @@ func (b *Build) preparePropertyTypeReleasePublications(assets []platform.Release
 		frozen.Version = version
 		record.State, record.Version, record.Published = "published", version, published(frozen)
 		record.Versions = append(slices.Clone(record.Versions), record.Published)
-		raw, _ := json.Marshal(record)
-		out = append(out, ReleasePublication{Schema: SchemaPropertyType, Image: raw})
-	}
-	return out, nil
+		return record, nil
+	})
 }
 
 func propertyTypeFromDeclaration(p platform.PropertyType) PropertyType {

@@ -216,10 +216,6 @@ func (c *Core) Read(caller platform.Caller, name string) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
 
-func (c *Core) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (c *Core) Submit(caller platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if record, err, ok := c.ledger.Generated(caller, s, now, nil, Entities()...); ok {
 		return record, err

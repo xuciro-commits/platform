@@ -4,7 +4,7 @@ import "testing"
 
 func collectionBuilderPage() Page {
 	p := embeddedTestPage("builder")
-	p.Sections = []Section{{ID: "builder", Widget: "collection-builder", ConfigVersion: 1, CollectionVariable: "base", CollectionOutputVariable: "output", CollectionBuilder: &PageCollectionBuilder{Fields: []string{"name", "qty"}}}, {ID: "table", Widget: "table", ConfigVersion: 1, CollectionVariable: "result"}}
+	p.Sections = []Section{{PageWidgetConfig: PageWidgetConfig{CollectionOutputVariable: "output", CollectionBuilder: &PageCollectionBuilder{Fields: []string{"name", "qty"}}}, ID: "builder", Widget: "collection-builder", ConfigVersion: 1, CollectionVariable: "base"}, {ID: "table", Widget: "table", ConfigVersion: 1, CollectionVariable: "result"}}
 	p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"builder", "table"}}, "builder": {Kind: "widget", Section: "builder"}, "table": {Kind: "widget", Section: "table"}}
 	p.Document.Queries = map[string]PageQuery{"base": {Object: p.Object, Sort: []string{"id"}, Limit: 2}, "result": {Object: p.Object, Input: "output", Limit: 3}}
 	p.Document.Variables = map[string]PageVariable{"base": {Scope: "page", Mode: "resource", Type: "object-set", Source: &PageResourceSource{Kind: "plan", Query: "base"}}, "output": {Scope: "page", Mode: "resource", Type: "object-set", Source: &PageResourceSource{Kind: "query", Section: "builder"}}, "result": {Scope: "page", Mode: "resource", Type: "object-set", Source: &PageResourceSource{Kind: "plan", Query: "result"}}}

@@ -276,131 +276,68 @@ func (d *PageDocument) Check(sections []Section) error {
 	if len(sections) == 0 || len(sections) > 128 {
 		return fmt.Errorf("page document needs 1 to 128 sections")
 	}
+	checks := []func(Section) error{
+		d.checkAI,
+		d.checkExternalFrame,
+		d.checkEmbedding,
+		d.checkInputPresentation,
+		d.checkRecordPicker,
+		d.checkDateInput,
+		d.checkChoiceInput,
+		d.checkBooleanInput,
+		d.checkRangeInput,
+		d.checkLeaderboard,
+		d.checkHistogram,
+		d.checkTerms,
+		func(s Section) error { return d.checkObservation(s, sections) },
+		d.checkRecordWork,
+		d.checkCollectionAnalysis,
+		d.checkSummary,
+		d.checkGauge,
+		d.checkSpacer,
+		d.checkSeparator,
+		d.checkNotice,
+		d.checkAlertBanner,
+		d.checkProgress,
+		d.checkRecordGantt,
+		d.checkRecordCalendar,
+		d.checkRecordEvents,
+		d.checkExploration,
+		d.checkContextViews,
+		d.checkWorkViews,
+		d.checkCollaboration,
+		d.checkRecordComparison,
+		d.checkRecordCard,
+		d.checkSparkline,
+		d.checkTreemap,
+		d.checkHeatmap,
+		func(s Section) error { return d.checkCollectionBuilder(s, sections) },
+		d.checkSpatial,
+		d.checkScatter,
+		d.checkRecordChart,
+		d.checkButtonGroup,
+		d.checkRecordList,
+		d.checkTitles,
+		d.checkMetricPresentation,
+		d.checkStatusTracker,
+		d.checkRecordLinks,
+		d.checkRecordView,
+		d.checkDetailPresentation,
+		d.checkTablePresentation,
+		d.checkTableEdit,
+		d.checkFacets,
+		d.checkWidgetPorts,
+	}
 	byID := make(map[string]bool, len(sections))
 	for _, section := range sections {
 		if !pageNodeID.MatchString(section.ID) || byID[section.ID] {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
-		if err := d.checkAI(section); err != nil {
-			return err
-		}
-		if err := d.checkExternalFrame(section); err != nil {
-			return err
-		}
-		if err := d.checkEmbedding(section); err != nil {
-			return err
-		}
-		if err := d.checkInputPresentation(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordPicker(section); err != nil {
-			return err
-		}
-		if err := d.checkDateInput(section); err != nil {
-			return err
-		}
-		if err := d.checkChoiceInput(section); err != nil {
-			return err
-		}
-		if err := d.checkBooleanInput(section); err != nil {
-			return err
-		}
-		if err := d.checkRangeInput(section); err != nil {
-			return err
-		}
-		if err := d.checkLeaderboard(section); err != nil {
-			return err
-		}
-		if err := d.checkHistogram(section); err != nil {
-			return err
-		}
-		if err := d.checkTerms(section); err != nil {
-			return err
-		}
-		if err := d.checkObservation(section, sections); err != nil {
-			return err
-		}
-		if err := d.checkRecordWork(section); err != nil {
-			return err
-		}
-		if err := d.checkCollectionAnalysis(section); err != nil {
-			return err
-		}
-		if err := d.checkSummary(section); err != nil {
-			return err
-		}
-		if err := d.checkGauge(section); err != nil {
-			return err
-		}
-		if err := d.checkSpacer(section); err != nil {
-			return err
-		}
-		if err := d.checkSeparator(section); err != nil {
-			return err
-		}
-		if err := d.checkNotice(section); err != nil {
-			return err
-		}
-		if err := d.checkAlertBanner(section); err != nil {
-			return err
-		}
-		if err := d.checkProgress(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordGantt(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordCalendar(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordEvents(section); err != nil {
-			return err
-		}
-		if err := d.checkExploration(section); err != nil {
-			return err
-		}
-		if err := d.checkContextViews(section); err != nil {
-			return err
-		}
-		if err := d.checkWorkViews(section); err != nil {
-			return err
-		}
-		if err := d.checkCollaboration(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordComparison(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordCard(section); err != nil {
-			return err
-		}
-		if err := d.checkSparkline(section); err != nil {
-			return err
-		}
-		if err := d.checkTreemap(section); err != nil {
-			return err
-		}
-		if err := d.checkHeatmap(section); err != nil {
-			return err
-		}
-		if err := d.checkCollectionBuilder(section, sections); err != nil {
-			return err
-		}
-		if err := d.checkSpatial(section); err != nil {
-			return err
-		}
-		if err := d.checkScatter(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordChart(section); err != nil {
-			return err
-		}
-		if err := d.checkButtonGroup(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordList(section); err != nil {
-			return err
+		for _, check := range checks {
+			if err := check(section); err != nil {
+				return err
+			}
 		}
 		if len(section.ActionDefaults) > 0 {
 			if section.Widget != "inline-action" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.92") || len(section.ActionDefaults) > 16 {
@@ -413,36 +350,6 @@ func (d *PageDocument) Check(sections []Section) error {
 				}
 				seen[m.Parameter] = true
 			}
-		}
-		if err := d.checkTitles(section); err != nil {
-			return err
-		}
-		if err := d.checkMetricPresentation(section); err != nil {
-			return err
-		}
-		if err := d.checkStatusTracker(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordLinks(section); err != nil {
-			return err
-		}
-		if err := d.checkRecordView(section); err != nil {
-			return err
-		}
-		if err := d.checkDetailPresentation(section); err != nil {
-			return err
-		}
-		if err := d.checkTablePresentation(section); err != nil {
-			return err
-		}
-		if err := d.checkTableEdit(section); err != nil {
-			return err
-		}
-		if err := d.checkFacets(section); err != nil {
-			return err
-		}
-		if err := d.checkWidgetPorts(section); err != nil {
-			return err
 		}
 		if section.CollectionVariable != "" {
 			v, ok := d.Variables[section.CollectionVariable]

@@ -16,9 +16,9 @@ func contextViewsPage() Page {
 	caption := ""
 	p := Page{Name: "context", Object: object, Layout: "composed", Sections: []Section{
 		{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"name"}, CollectionVariable: "assets"},
-		{ID: "crumb", Widget: "breadcrumb", ConfigVersion: 1, RecordVariable: "active", Breadcrumb: &PageBreadcrumb{HomeLabel: "Home", PageLabel: "Assets", LabelField: "name"}},
-		{ID: "avatars", Widget: "avatar-stack", ConfigVersion: 1, Object: people, CollectionVariable: "all", Avatar: &PageAvatarStack{LabelField: "name", DetailFields: []string{"shift", "secret"}, ContextVariable: "active", ContextCollectionVariable: "related"}},
-		{ID: "image", Widget: "static-image", ConfigVersion: 1, Image: &PageStaticImage{URL: "/assets/example.png", Caption: &caption, Height: &height}},
+		{PageWidgetConfig: PageWidgetConfig{Breadcrumb: &PageBreadcrumb{HomeLabel: "Home", PageLabel: "Assets", LabelField: "name"}}, ID: "crumb", Widget: "breadcrumb", ConfigVersion: 1, RecordVariable: "active"},
+		{PageWidgetConfig: PageWidgetConfig{Avatar: &PageAvatarStack{LabelField: "name", DetailFields: []string{"shift", "secret"}, ContextVariable: "active", ContextCollectionVariable: "related"}}, ID: "avatars", Widget: "avatar-stack", ConfigVersion: 1, Object: people, CollectionVariable: "all"},
+		{PageWidgetConfig: PageWidgetConfig{Image: &PageStaticImage{URL: "/assets/example.png", Caption: &caption, Height: &height}}, ID: "image", Widget: "static-image", ConfigVersion: 1},
 	}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"table", "crumb", "avatars", "image"}}}, Variables: map[string]PageVariable{
 		"assets":  {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "assets"}},
 		"active":  {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "table"}},

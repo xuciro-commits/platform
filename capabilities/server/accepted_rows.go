@@ -1,10 +1,7 @@
 package platformserver
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"reflect"
 	"time"
 
@@ -53,13 +50,8 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 			}
 		}
 		value := reflect.New(et.info.Go).Elem()
-		decoder := json.NewDecoder(bytes.NewReader(image.Value))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(value.Addr().Interface()); err != nil {
+		if err := decodeAcceptedJSON(image.Value, value.Addr().Interface(), "direct record"); err != nil {
 			return nil, err
-		}
-		if err := decoder.Decode(new(any)); err != io.EOF {
-			return nil, fmt.Errorf("direct record has trailing data")
 		}
 		if err := checkRunApplicationBindings(value.Interface()); err != nil {
 			return nil, err

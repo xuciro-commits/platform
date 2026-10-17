@@ -21,14 +21,7 @@ func (s Section) CheckTimeline(info EntityInfo) error {
 			return fmt.Errorf("timeline end must have the start field's time type")
 		}
 	}
-	label := func(name string) bool {
-		if name == "id" {
-			return true
-		}
-		f, ok := info.Field(name)
-		return ok && slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type)
-	}
-	if !label(s.TimeLabel) || s.TimeGroup != "" && !label(s.TimeGroup) {
+	if !visibleContextField(info, s.TimeLabel, true) || s.TimeGroup != "" && !visibleContextField(info, s.TimeGroup, true) {
 		return fmt.Errorf("timeline label and resource need visible scalar text fields")
 	}
 	return nil

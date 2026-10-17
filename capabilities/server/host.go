@@ -714,7 +714,7 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 		return t.inputAccepted(accepted, m, name, body, now)
 	}
 	defer t.enqueue(now)
-	out, err = a.Input(t.caller(m, a, false), name, body, now)
+	out, err = inputApp(a, t.caller(m, a, false), name, body, now)
 	if err != nil {
 		t.refused(m.ID, name, err, now)
 	}
@@ -743,7 +743,7 @@ func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
 	if refusal := authorizationRefusal(entry); refusal != nil {
 		return nil, refusal
 	}
-	out, err := a.Read(t.caller(m, a, false), name)
+	out, err := readApp(a, t.caller(m, a, false), name)
 	if err != nil {
 		return nil, err
 	}
@@ -976,4 +976,18 @@ func (t *Tenant) Member(id string) (platform.Member, bool) {
 		return platform.Member{}, false
 	}
 	return t.identity.MemberByID(id)
+}
+
+func readApp(app platform.App, c platform.Caller, name string) (any, *kernel.Error) {
+	if reader, ok := app.(platform.Reader); ok {
+		return reader.Read(c, name)
+	}
+	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+}
+
+func inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *kernel.Error) {
+	if receiver, ok := app.(platform.InputReceiver); ok {
+		return receiver.Input(c, name, body, at)
+	}
+	return nil, unknown()
 }

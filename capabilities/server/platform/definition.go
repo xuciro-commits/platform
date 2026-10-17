@@ -126,7 +126,8 @@ type PageInlineEdit struct {
 	Fields []string `json:"fields"`
 }
 
-type Section struct {
+// PageWidgetConfig is the presentation configuration shared by draft and installed sections.
+type PageWidgetConfig struct {
 	Composite                     *PageComposite         `json:"composite,omitempty"`
 	Model                         *ModelBinding          `json:"model,omitempty"`
 	TablePresentation             *PageTablePresentation `json:"tablePresentation,omitempty"`
@@ -228,9 +229,13 @@ type Section struct {
 	TableColumns                 []PageTableColumn       `json:"tableColumns,omitempty"`
 	ShowSearch                   *bool                   `json:"showSearch,omitempty"`
 	SelectionSetVariable         string                  `json:"selectionSetVariable,omitempty"`
-	InlineEdit                   *PageInlineEdit         `json:"inlineEdit,omitempty"`
-	Facets                       []PageFacet             `json:"facets,omitempty"`
-	FilterSearchVariable         string                  `json:"filterSearchVariable,omitempty"`
+}
+
+type Section struct {
+	PageWidgetConfig
+	InlineEdit           *PageInlineEdit `json:"inlineEdit,omitempty"`
+	Facets               []PageFacet     `json:"facets,omitempty"`
+	FilterSearchVariable string          `json:"filterSearchVariable,omitempty"`
 	// ID is required when Document references this section; older pages omit it.
 	ID            string `json:"id,omitempty"`
 	ConfigVersion int    `json:"configVersion,omitempty"`

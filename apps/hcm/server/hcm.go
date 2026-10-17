@@ -132,14 +132,6 @@ func (a *App) Manifest() platform.Manifest {
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 
-func (a *App) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-
-func (a *App) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

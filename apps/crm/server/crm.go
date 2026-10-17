@@ -458,10 +458,6 @@ func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
 	return options, nil
 }
 
-func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
-}
-
 // Assistant is the CRM's assistant (ADR-0021): asked about an account or an
 // opportunity, it reads what the tenant knows and drafts the change — a new
 // opportunity, a plan for rooms, an outcome — that the member confirms.

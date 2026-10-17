@@ -160,10 +160,6 @@ func (r *Relations) ApplyAcceptedState(raw json.RawMessage) error {
 	return nil
 }
 
-func (r *Relations) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 // sees reports whether c holds a role in the app owning entity "<type>/<id>".
 func (r *Relations) sees(c platform.Caller, entity string) bool {
 	class, _, ok := strings.Cut(entity, "/")

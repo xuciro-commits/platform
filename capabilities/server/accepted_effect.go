@@ -1,12 +1,10 @@
 package platformserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
-	"io"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -68,13 +66,8 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return result, fmt.Errorf("effect result is empty or too large")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
+	if err := decodeAcceptedJSON(raw, &result, "effect result"); err != nil {
 		return result, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return result, fmt.Errorf("effect result has trailing data")
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
 		return result, err

@@ -22,20 +22,3 @@ export function cellRuleText(e:Api.Expr):string{
  if(["=","!=","<","<=",">",">="].includes(e.op)&&args[0]?.ref&&args[1]?.lit)return `${e.op} ${text(args[1])}`;
  return JSON.stringify(e);
 }
-
-export function assignmentSugar(e:Api.Expr):string|undefined{
- if(e.ref==="caller.id")return "$me";
- if(e.ref?.startsWith("input."))return e.ref.slice(6);
- if(e.op==="$now"||e.op==="$today")return "$now";
- if(e.lit)return `=${e.lit.value}`;
-}
-export function conditionSugar(e:Api.Expr):{field:string;operator:string;value?:string;valueField?:string}|undefined{
- const a=e.args??[],left=a[0];if(!left)return;
- const subject=(x:Api.Expr)=>x.ref??(x.op==="path"?`${x.args?.[0]?.ref}.${x.path?.join(".")}`:undefined);
- const field=subject(left);if(!field)return;
- if(e.op==="empty"||e.op==="not-empty")return {field,operator:e.op==="not-empty"?"not empty":"empty"};
- if(!["=","!=","<","<=",">",">="].includes(e.op)||!a[1])return;
- if(a[1].ref==="caller.id")return {field,operator:e.op,value:"$me"};
- if(a[1].lit)return {field,operator:e.op,value:String(a[1].lit.value)};
- const valueField=subject(a[1]);if(valueField)return {field,operator:e.op,valueField};
-}

@@ -1,12 +1,11 @@
-import {useInputDrafts} from "@platform/ui";
+import { useIntegrationDraft } from "./integration-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
-import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { joinProjectResource } from "../projects/membership";
+import { useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
-import { useEffect, useRef, useState } from "react";
+
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Input, PageHeader, Panel, Select, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, t } from "@platform/ui";
 
 // Matching rules (ADR-0074): when rows from different systems are one party,
 // material or site, and whose value wins per field. Applied wherever rows land
@@ -31,53 +30,20 @@ export function Matches() {
 }
 
 export function MatchEditor({ id }: { id: string }) {
-  const host = useHost(), { decide, role } = host, { open, close } = useApplicationWorkspace();
-  const application = useApplicationScope(), model = useAuthoringModel();
+  const host = useHost(), { role } = host, { open } = useApplicationWorkspace();
+  const model = useAuthoringModel();
   const entities = role("build") === "builder" ? model.entities : host.entities;
-  const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.match/${encodeURIComponent(id)}`, 5000);
   const pipelineQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.pipeline?limit=200");
   const sourceQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.source?limit=200");
   const pipelines = pipelineQuery.data?.records ?? [], sources = sourceQuery.data?.records ?? [];
-  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
-  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
-  const load = (record: Draft) => { setDraft({ ...empty(), ...record, keys: record.keys ?? [], prefer: record.prefer ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
-  useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
-  const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
-  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (problem) { setError(problem instanceof Error ? problem.message : t("The matching rule could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
-  const save = async (deferNavigation = false): Promise<{ id: string; revision: number } | undefined> => {
-    if (inputs?.invalid) return;
-    const target = draft.id || createID;
-    const { name, title, object, keys, prefer } = draft;
-    let revision = baseRevision.current;
-    if (dirty || !draft.id) {
-      const payload = { name, title, object, keys: keys.map((k) => ({ fields: k.fields.filter(Boolean), normalize: k.normalize ?? "" })), prefer };
-      if (!await decide(`build.match.${draft.id ? "edit" : "create"}`, { type: "build.match", id: target }, payload, { expectedRevision: draft.id ? revision : 0, quiet: true, onRefused: setError })) return;
-      revision += 1; baseRevision.current = revision; loaded.current = `${target}:${revision}`;
-      setDraft((d) => ({ ...d, id: target, revision })); inputs?.clear(); markSaved(); setDirty(false);
-    }
-    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "matching", name });
-    markSaved();
-    if (!deferNavigation) {
-      if (id === "new") { open({ view: "match", params: { id: target } }, { ifCurrent: { view: "match", params: { id } } }); close({ view: "match", params: { id } }); }
-      else await query.refetch();
-    }
-    return { id: target, revision };
-  };
-  const transition = async (name: "publish" | "pause") => {
-    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: baseRevision.current };
-    if (!saved) return;
-    if (!await decide(`build.match.${name}`, { type: "build.match", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) return;
-    markSaved();
-    if (id === "new") { open({ view: "match", params: { id: saved.id } }, { ifCurrent: { view: "match", params: { id } } }); close({ view: "match", params: { id } }); }
-    else { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
-  };
-  const review = async () => {
-    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: baseRevision.current };
-    if (saved) open({ view: "release-review", params: { kind: "matching", id: saved.id } }, { ifCurrent: { view: "match", params: { id: saved.id } } });
-  };
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useIntegrationDraft<Draft>({
+    id, type: "build.match", kind: "matching", view: "match", empty, normalize: record => ({ ...record, keys: record.keys ?? [], prefer: record.prefer ?? [] }),
+    failure: t("The matching rule could not be saved or loaded. Your draft is still here."),
+    payload: draft => {
+      const { name, title, object, keys, prefer } = draft;
+      return { name, title, object, keys: keys.map(key => ({ fields: key.fields.filter(Boolean), normalize: key.normalize ?? "" })), prefer };
+    },
+  });
   if (!integrates(role("build"))) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Matching rules")} description={query.isError ? t("The matching rule could not be loaded.") : t("Loading…")} />;
   const target = entities.find((entity) => entity.type === draft.object);

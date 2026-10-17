@@ -7,7 +7,7 @@ import (
 
 func TestTitlesRequirePlainTextAndMatchingScopedCompleteCount(t *testing.T) {
 	d := &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"heading", "title"}}, "heading": {Kind: "widget", Section: "heading"}, "title": {Kind: "widget", Section: "title"}}, Queries: map[string]PageQuery{"read": {Object: AssetRef{App: "sample", Kind: AssetObject, Name: "sample.item"}, Limit: 1}}, Variables: map[string]PageVariable{"window": {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "read"}}, "count": {Scope: "page", Type: "decimal", Mode: "aggregate", Source: &PageResourceSource{Kind: "count", Query: "read"}}}}
-	sections := []Section{{ID: "heading", Widget: "heading", ConfigVersion: 1, HeadingLevel: "h2", Text: "<b>Literal heading</b>"}, {ID: "title", Widget: "collection-title", ConfigVersion: 1, CollectionVariable: "window", CountVariable: "count", Title: "Permitted items"}}
+	sections := []Section{{PageWidgetConfig: PageWidgetConfig{HeadingLevel: "h2"}, ID: "heading", Widget: "heading", ConfigVersion: 1, Text: "<b>Literal heading</b>"}, {PageWidgetConfig: PageWidgetConfig{CountVariable: "count"}, ID: "title", Widget: "collection-title", ConfigVersion: 1, CollectionVariable: "window", Title: "Permitted items"}}
 	if err := d.Check(sections); err != nil {
 		t.Fatal(err)
 	}

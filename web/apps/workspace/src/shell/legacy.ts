@@ -38,12 +38,6 @@ export const legacyRoute = (route: Route): Route | undefined => {
   return typeof target === "function" ? target(route.params) : target;
 };
 
-/** The projection an old link asked for, by `surface` or by the retired view it named. */
-export function legacyProjection(route?: Route): Projection | undefined {
-  if (!route) return undefined;
-  return projectionOfSurface(route.params?.surface);
-}
-
 /** Only incoming links carry the retired surface projection. */
 export const projectionOfSurface = (surface?: string): Projection | undefined =>
   surface === "studio" || surface === "developer" ? "build" : surface === "tenant" ? "admin" : surface === "work" ? "operations" : undefined;

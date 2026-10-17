@@ -6,7 +6,7 @@ func TestProgressTypedPortsDenominatorAndOldProfile(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["count"] = PageVariable{Scope: "page", Type: "decimal", Mode: "aggregate", Source: &PageResourceSource{Kind: "count", Query: d.Variables["window"].Source.Query}}
-	s := Section{ID: "progress", Widget: "progress", ConfigVersion: 1, ProgressValueVariable: "count", ProgressTotal: "400", ProgressLabel: "Open work orders"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ProgressValueVariable: "count", ProgressTotal: "400", ProgressLabel: "Open work orders"}, ID: "progress", Widget: "progress", ConfigVersion: 1}
 	p.Sections = append(p.Sections, s)
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]

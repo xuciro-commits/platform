@@ -16,7 +16,7 @@ func TestCivilDateAndOriginalInputProfile(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["date"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: Raw("invalid")}
-	s := Section{ID: "date", Widget: "date-input", ConfigVersion: 1, DateVariable: "date"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{DateVariable: "date"}, ID: "date", Widget: "date-input", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)
@@ -76,11 +76,11 @@ func TestOffsetDatetimeProfileAndExclusiveConditions(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["time"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: Raw("invalid draft")}
-	s := Section{ID: "time", Widget: "date-input", ConfigVersion: 1, DateVariable: "time", DateKind: "datetime", DateOffset: "+08:00"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{DateVariable: "time", DateKind: "datetime", DateOffset: "+08:00"}, ID: "time", Widget: "date-input", ConfigVersion: 1}
 	if err := d.checkDateInput(s); err != nil {
 		t.Fatal(err)
 	}
-	for _, invalid := range []Section{{Widget: "date-input", DateVariable: "time", DateKind: "datetime"}, {Widget: "date-input", DateVariable: "time", DateKind: "datetime", DateOffset: "-00:00"}, {Widget: "date-input", DateVariable: "time", DateOffset: "Z"}, {Widget: "text", DateKind: "datetime", DateOffset: "Z"}} {
+	for _, invalid := range []Section{{PageWidgetConfig: PageWidgetConfig{DateVariable: "time", DateKind: "datetime"}, Widget: "date-input"}, {PageWidgetConfig: PageWidgetConfig{DateVariable: "time", DateKind: "datetime", DateOffset: "-00:00"}, Widget: "date-input"}, {PageWidgetConfig: PageWidgetConfig{DateVariable: "time", DateOffset: "Z"}, Widget: "date-input"}, {PageWidgetConfig: PageWidgetConfig{DateKind: "datetime", DateOffset: "Z"}, Widget: "text"}} {
 		if d.checkDateInput(invalid) == nil {
 			t.Fatal("invalid datetime configuration accepted", invalid)
 		}

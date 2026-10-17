@@ -4,7 +4,7 @@ import "testing"
 
 func TestDetailPresentationProfileAndBounds(t *testing.T) {
 	d := &PageDocument{UIProfile: PageUIProfile()}
-	s := Section{Widget: "detail", DetailPresentation: &PageDetailPresentation{Columns: 2, HideNull: true}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{DetailPresentation: &PageDetailPresentation{Columns: 2, HideNull: true}}, Widget: "detail"}
 	if err := d.checkDetailPresentation(s); err != nil {
 		t.Fatal(err)
 	}

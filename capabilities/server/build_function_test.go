@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
@@ -22,14 +21,10 @@ import (
 func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	at := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
-		tn, err := NewTenant("builder-functions", NewConsole("builder-functions",
-			Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder, PlatformApp: Admin, ai.ID: ai.Admin}}},
-			Seat{Subjects: []string{"eli"}, Member: platform.Member{ID: "eli", Roles: map[string]string{build.ID: build.User}}},
-			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{build.ID: build.User}}}), ai.New("builder-functions"), build.New("builder-functions"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return tn
+		return composeTenant(t, "builder-functions", []Seat{
+			seatOf("dana", "build:builder", PlatformApp+":"+Admin, "ai:admin"),
+			seatOf("eli", "build:user"), seatOf("bo", "build:user"),
+		}, ai.New("builder-functions"), build.New("builder-functions"))
 	}
 	tn := compose()
 	var entries []Entry
@@ -42,11 +37,9 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 		entries = append(entries, e)
 		return e.Body, nil
 	}
-	keys := 0
 	submit := func(who, app, schema, typ, id string, payload any) *kernel.Error {
-		keys++
-		member, _ := tn.Member(who)
-		_, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: who, Authority: app, IdempotencyKey: fmt.Sprint(keys), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}, at)
+		member := memberOf(t, tn, who)
+		_, err := tn.Submit(member, submission(tn, member, app, schema, typ, id, payload), at)
 		return err
 	}
 	must := func(who, app, schema, typ, id string, payload any) {

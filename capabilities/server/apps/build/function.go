@@ -84,25 +84,9 @@ func (b *Build) publishFunction(c platform.Caller, record any, _ json.RawMessage
 }
 
 func functionImage(image []byte) (Function, error) {
-	var record Function
-	if err := json.Unmarshal(image, &record); err != nil {
-		return Function{}, err
-	}
-	if !slices.Contains([]string{"draft", "published"}, record.State) || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || !slices.Contains(record.Versions, record.Published) {
-		return Function{}, fmt.Errorf("accepted function has an invalid version family")
-	}
-	var latest, selected Function
-	for i, raw := range record.Versions {
-		f, ok := wasPublished[Function](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Object != latest.Object) {
-			return Function{}, fmt.Errorf("accepted function has a malformed version %d", i+1)
-		}
-		if raw == record.Published {
-			selected = f
-		}
-		latest = f
-	}
-	return selected, nil
+	return definitionImage[Function](image, "function", func(before, after Function) bool {
+		return before.Name == after.Name && before.Object == after.Object
+	})
 }
 
 func (b *Build) functionInventory() ([]Function, error) {
@@ -119,43 +103,9 @@ func (b *Build) installFunction(c platform.Caller, f Function) error {
 }
 
 func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunction, int, bool) {
-	installed, ok := b.functions[name]
-	if ok && (version == 0 || version == installed.Version) {
-		return installed.Definition(), installed.Version, true
-	}
-	if version == 0 {
-		return platform.AIFunction{}, 0, false
-	}
-	list, err := b.functionInventory()
-	if err != nil {
-		return platform.AIFunction{}, 0, false
-	}
-	for _, record := range list {
-		if version < 1 || version > len(record.Versions) {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		latest, err := functionImage(raw)
-		if err != nil || latest.Name != name {
-			continue
-		}
-		f, ok := wasPublished[Function](record.Versions[version-1])
-		if ok && f.Version == version {
-			return f.Definition(), version, true
-		}
-	}
-	return platform.AIFunction{}, 0, false
+	return retainedDefinition(b.functions, b.functionInventory, functionImage, name, version)
 }
 
 func (b *Build) functionDeclarations() []platform.AIFunction {
-	names := make([]string, 0, len(b.functions))
-	for name := range b.functions {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	out := make([]platform.AIFunction, 0, len(names))
-	for _, name := range names {
-		out = append(out, b.functions[name].Definition())
-	}
-	return out
+	return definitionDeclarations(b.functions)
 }

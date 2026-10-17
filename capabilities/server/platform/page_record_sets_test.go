@@ -56,7 +56,7 @@ func TestRecordSetTableProducerAndScope(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["picked"] = PageVariable{Scope: "page", Type: "record-set", Mode: "resource", Source: &PageResourceSource{Kind: "records", Section: "multiTable"}}
-	s := Section{ID: "multiTable", Widget: "table", ConfigVersion: 1, Fields: []string{"note"}, SelectionSetVariable: "picked"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{SelectionSetVariable: "picked"}, ID: "multiTable", Widget: "table", ConfigVersion: 1, Fields: []string{"note"}}
 	d.Nodes["multiTable"] = PageLayoutNode{Kind: "widget", Section: "multiTable"}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, "multiTable")

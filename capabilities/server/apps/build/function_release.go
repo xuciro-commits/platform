@@ -22,36 +22,13 @@ func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAss
 
 // FunctionReleaseAsset resolves only a retained version from this owner.
 func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
-	ordinalText, found := strings.CutPrefix(sourceVersion, b.Manifest().Version+".function-")
-	version, err := strconv.Atoi(ordinalText)
-	if !found || err != nil || strconv.Itoa(version) != ordinalText {
-		return platform.ReleaseAsset{}, fmt.Errorf("invalid retained function version %s", sourceVersion)
-	}
-	f, ordinal, ok := b.FunctionDefinition(name, version)
-	if !ok || ordinal != version || version < 1 {
-		return platform.ReleaseAsset{}, fmt.Errorf("function %s version %d is not retained", name, version)
-	}
-	body, err := json.Marshal(f)
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: name}, ContractVersion: 1,
-		SourceVersion: b.Manifest().Version + ".function-" + strconv.Itoa(version), Body: body})
+	return retainedDefinitionAsset(b.Manifest().Version, "function", "function", platform.AssetFunction, name, sourceVersion, b.FunctionDefinition)
 }
 
 func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
-	var out []platform.ReleaseAsset
-	// This cache is reconstructed only from validated publications or an
-	// immutable candidate. Draft rows must never replace installed assets.
-	for _, declaration := range b.functionDeclarations() {
-		f := b.functions[declaration.Name]
-		asset, err := functionReleaseAsset(f, b.Manifest().Version)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, asset)
-	}
-	return out, nil
+	return installedDefinitionAssets(b.functions, func(record Function) (platform.ReleaseAsset, error) {
+		return functionReleaseAsset(record, b.Manifest().Version)
+	})
 }
 
 // InstallFunctionAsset compiles one immutable candidate version into a fresh
@@ -76,101 +53,26 @@ func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
 }
 
 func (b *Build) functionDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = b.ReleaseAssets()
-	if err != nil {
-		return
-	}
-	list, problem := b.functionInventory()
-	if problem != nil {
-		err = problem
-		return
-	}
-	i := slices.IndexFunc(list, func(f Function) bool { return f.ID == id && !f.Archived })
-	if i < 0 {
-		err = fmt.Errorf("draft function %q not found", id)
-		return
-	}
-	f := list[i]
-	if old, ok := wasPublished[Function](f.Published); ok {
-		prior = platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: old.Name}
-		hadPrior = true
-	}
-	next = platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}
-	if err = b.checkFunction(f); err != nil {
-		return
-	}
-	if f.Version >= 64 {
-		err = fmt.Errorf("function version family is full")
-		return
-	}
-	f.Version++
-	asset, problem := functionReleaseAsset(f, b.Manifest().Version)
-	if problem != nil {
-		err = problem
-		return
-	}
-	after = slices.Clone(before)
-	if hadPrior {
-		after = slices.DeleteFunc(after, func(a platform.ReleaseAsset) bool { return a.Ref == prior })
-	}
-	after = append(after, asset)
-	return
+	return draftDefinitionAssets(b, id, platform.AssetFunction, "function", b.functionInventory, func(record Function) (Function, error) {
+		return record, b.checkFunction(record)
+	}, func(record Function) (platform.ReleaseAsset, error) {
+		record.Version++
+		return functionReleaseAsset(record, b.Manifest().Version)
+	})
 }
 
 func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
-	rows, err := b.functionInventory()
-	if err != nil {
-		return nil, err
-	}
-	var out []ReleasePublication
-	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFunction {
-			continue
-		}
-		text, found := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".function-")
-		version, err := strconv.Atoi(text)
-		if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != text {
-			return nil, fmt.Errorf("invalid function version")
-		}
-		index := slices.IndexFunc(rows, func(r Function) bool { return !r.Archived && r.Name == asset.Ref.Name })
-		if index < 0 {
-			return nil, fmt.Errorf("function has no target owner draft")
-		}
-		record := rows[index]
-		if version <= record.Version {
-			prior, err := b.FunctionReleaseAsset(asset.Ref.Name, asset.SourceVersion)
-			if err != nil || !equalIntegrationAsset(prior, asset) {
-				return nil, fmt.Errorf("function retained bytes differ")
-			}
-			if len(record.Versions) != record.Version {
-				return nil, fmt.Errorf("retained function history is unavailable")
-			}
-			selected := record.Versions[version-1]
-			if selected == record.Published {
-				continue
-			}
-			record.Published = selected
-			if version < record.Version {
-				record.State = "draft"
-			}
-			out = append(out, ReleasePublication{Schema: SchemaFunction, Image: platform.Raw(record)})
-			continue
-		}
+	return prepareDefinitionPublications(b, assets, b.functionInventory, platform.AssetFunction, "function", SchemaFunction, "function", b.FunctionReleaseAsset, func(record Function, asset platform.ReleaseAsset, version int) (Function, error) {
 		var frozen Function
 		if version != record.Version+1 || buildapi.ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
-			return nil, fmt.Errorf("function version requires its retained predecessors and matching target definition")
+			return record, fmt.Errorf("function version requires its retained predecessors and matching target definition")
 		}
 		if asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
-			return nil, fmt.Errorf("function candidate dependencies differ")
+			return record, fmt.Errorf("function candidate dependencies differ")
 		}
 		frozen.Record, frozen.Version, frozen.State = record.Record, version, "published"
 		record.State, record.Version, record.Published = "published", version, published(frozen)
 		record.Versions = append(slices.Clone(record.Versions), record.Published)
-		raw, err := json.Marshal(record)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, ReleasePublication{Schema: SchemaFunction, Image: raw})
-	}
-	return out, nil
+		return record, nil
+	})
 }

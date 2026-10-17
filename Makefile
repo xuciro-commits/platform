@@ -103,6 +103,10 @@ check-local: ## 检查本地运行模式保留与基础服务启动，不操作�
 	python3 -m unittest discover -s deploy/dev -p '*_test.py'
 	bash -n deploy/local/update.sh
 
+.PHONY: code-size
+code-size: ## 分开统计手写生产代码、测试和生成物；REVISION 可指定比较提交（需 cloc）
+	python3 scripts/code-size.py $(if $(REVISION),--revision "$(REVISION)") --output .build/code-size$(if $(REVISION),-$(REVISION)).json
+
 .PHONY: check-go
 check-go: ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./...

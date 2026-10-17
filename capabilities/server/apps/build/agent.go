@@ -247,16 +247,7 @@ func (b *Build) AgentStamp() string {
 
 // agentDeclarations are the installed agents as the host runs them.
 func (b *Build) agentDeclarations() []platform.Agent {
-	names := make([]string, 0, len(b.agents))
-	for name := range b.agents {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	out := make([]platform.Agent, 0, len(names))
-	for _, name := range names {
-		out = append(out, b.agents[name].Definition())
-	}
-	return out
+	return definitionDeclarations(b.agents)
 }
 
 func (a Agent) Definition() platform.Agent {

@@ -274,3 +274,26 @@ func TestWorkspaceSurface(t *testing.T) {
 		t.Errorf("a production host signs in with %s", got)
 	}
 }
+
+// This ordinary app declares neither named reads nor connector inputs.
+type decisionOnlyApp struct {
+	platform.App
+}
+
+func TestAppReadAndInputAreOptional(t *testing.T) {
+	owner := decisionOnlyApp{}
+	if _, err := readApp(owner, platform.Caller{}, "missing"); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		t.Fatalf("missing reader: %v", err)
+	}
+	if _, err := inputApp(owner, platform.Caller{}, "missing", nil, time.Time{}); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA {
+		t.Fatalf("missing receiver: %v", err)
+	}
+	actual := newNotes("optional", "notes")
+	if _, err := inputApp(actual, platform.Caller{}, "feed", []byte("kept"), time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	value, err := readApp(actual, platform.Caller{}, "notes")
+	if err != nil || value.(map[string]string)["feed"] != "kept" {
+		t.Fatalf("existing implementation was not used: %v %v", value, err)
+	}
+}

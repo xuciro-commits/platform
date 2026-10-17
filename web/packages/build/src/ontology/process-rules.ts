@@ -26,4 +26,3 @@ export function setActionDestination<A extends StateAction>(action:A,value:strin
  return {...action,to:undefined,toInput:undefined,transaction:{...transaction,steps}};
 }
 export function ruleInputValid(i:RuleInput,entities:readonly {type:string}[]):boolean{return (i.type==='reference'?!!i.ref&&!i.choices&&entities.some(e=>e.type===i.ref):!i.ref)&&(i.minLength===undefined||['text','longtext'].includes(i.type)&&Number.isInteger(i.minLength)&&i.minLength>=0&&i.minLength<=4096);}
-export function assignmentInputFits(i:RuleInput,f:{type:string;ref?:string},legacyReference=false):boolean{return f.type==='reference'?(i.type==='reference'&&i.ref===f.ref||legacyReference&&['text','longtext','choice'].includes(i.type)):['text','longtext'].includes(f.type)?['text','longtext','choice'].includes(i.type):f.type==='decimal'?['decimal','integer'].includes(i.type):i.type===f.type;}

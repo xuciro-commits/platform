@@ -261,13 +261,8 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if len(raw) == 0 {
 		return result, nil, fmt.Errorf("record batch is empty")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
+	if err := decodeAcceptedJSON(raw, &result, "record batch"); err != nil {
 		return result, nil, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return result, nil, fmt.Errorf("record batch has trailing data")
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
 		return result, nil, err

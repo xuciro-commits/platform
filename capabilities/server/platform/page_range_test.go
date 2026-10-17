@@ -10,7 +10,7 @@ func TestRangeOriginalDraftsProfileAndOwnership(t *testing.T) {
 	d := p.Document
 	d.Variables["lower"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}
 	d.Variables["upper"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}
-	s := Section{ID: "range", Widget: "range-input", ConfigVersion: 1, RangeMinVariable: "lower", RangeMaxVariable: "upper", RangeInput: &PageRangeInput{Min: "0", Max: "45", Step: "1", Label: "Pressure", Unit: "bar"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RangeMinVariable: "lower", RangeMaxVariable: "upper", RangeInput: &PageRangeInput{Min: "0", Max: "45", Step: "1", Label: "Pressure", Unit: "bar"}}, ID: "range", Widget: "range-input", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)
@@ -58,7 +58,7 @@ func TestRangeOriginalDraftsProfileAndOwnership(t *testing.T) {
 func TestRangeOverlayOwnershipCannotEscape(t *testing.T) {
 	d, sections := overlayScopeDocument()
 	d.Variables["upper"] = PageVariable{Scope: "overlay", Owner: "panel", Type: "string", Mode: "state", Initial: Raw("")}
-	s := Section{ID: "range", Widget: "range-input", ConfigVersion: 1, RangeMinVariable: "local", RangeMaxVariable: "upper", RangeInput: &PageRangeInput{Min: "0", Max: "45", Step: "1"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RangeMinVariable: "local", RangeMaxVariable: "upper", RangeInput: &PageRangeInput{Min: "0", Max: "45", Step: "1"}}, ID: "range", Widget: "range-input", ConfigVersion: 1}
 	sections = append(sections, s)
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	overlay := d.Overlays["panel"]

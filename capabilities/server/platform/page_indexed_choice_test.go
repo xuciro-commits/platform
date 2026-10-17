@@ -9,7 +9,7 @@ func indexedChoicePage(variant, mode string) Page {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["index"] = PageVariable{Scope: "page", Type: "string", Mode: mode, Initial: Raw("0")}
-	s := Section{ID: "indexChoice", Widget: "choice-input", ConfigVersion: 1, ChoiceVariable: "index", ChoiceInput: &PageChoiceInput{Variant: variant, Options: []string{"0", "1", "2"}, OptionLabels: []string{"Same", "Same", ""}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ChoiceVariable: "index", ChoiceInput: &PageChoiceInput{Variant: variant, Options: []string{"0", "1", "2"}, OptionLabels: []string{"Same", "Same", ""}}}, ID: "indexChoice", Widget: "choice-input", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	n := d.Nodes[d.Root]
 	n.Children = append(n.Children, s.ID)
@@ -97,7 +97,7 @@ func TestIndexedChoiceExactPresentationOwner(t *testing.T) {
 		d, sections := overlayScopeDocument()
 		v := PageVariable{Scope: "overlay", Owner: "panel", Type: "string", Mode: mode, Initial: Raw("0")}
 		d.Variables["localIndex"] = v
-		s := Section{ID: "tabsChoice", Widget: "choice-input", ConfigVersion: 1, ChoiceVariable: "localIndex", ChoiceInput: &PageChoiceInput{Variant: "tabs", Options: []string{"0", "1"}, OptionLabels: []string{"same", "same"}}}
+		s := Section{PageWidgetConfig: PageWidgetConfig{ChoiceVariable: "localIndex", ChoiceInput: &PageChoiceInput{Variant: "tabs", Options: []string{"0", "1"}, OptionLabels: []string{"same", "same"}}}, ID: "tabsChoice", Widget: "choice-input", ConfigVersion: 1}
 		sections = append(sections, s)
 		d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 		overlay := d.Overlays["panel"]

@@ -1,21 +1,10 @@
-import {timestampParts,validCivilDate} from "../components/date";
+import {timestampNanoseconds,validCivilDate} from "../components/date";
 import {pageUIManifest} from "@platform/kernel";
 import {entityFrom,type EntityInfo,type EntityRecord} from "./Records";
 import {t} from "../i18n";
 
 const titleTypes=["text","longtext","choice","reference"];
 const fieldTypes=[...titleTypes,"integer","decimal","money","date","datetime","boolean"];
-
-/** Whole seconds and nanoseconds are compared without rounding through Date.parse. */
-function timestampIdentity(value:string):bigint|undefined {
- const parts=timestampParts(value);if(!parts)return undefined;
- const [day,time]=parts.local.split("T"),[year,month,date]=day!.split("-").map(Number),[hour,minute,second]=time!.split(":").map(Number);
- const priorYear=year!-1,leap=year!%4===0&&(year!%100!==0||year!%400===0);
- const monthDays=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
- const days=365*priorYear+Math.floor(priorYear/4)-Math.floor(priorYear/100)+Math.floor(priorYear/400)+monthDays.slice(0,month!-1).reduce((sum,n)=>sum+n,0)+date!-1;
- const offset=parts.offset==="Z"?0:(parts.offset[0]==="-"?-1:1)*(Number(parts.offset.slice(1,3))*60+Number(parts.offset.slice(4,6)));
- return BigInt(days*86400+hour!*3600+minute!*60+second!-offset*60)*1000000000n+BigInt(parts.fraction.padEnd(9,"0")||"0");
-}
 
 /** Missing values share one identity; incompatible original values have none. */
 function originalValue(type:string,value:unknown):string|number|boolean|bigint|null|undefined {
@@ -25,7 +14,7 @@ function originalValue(type:string,value:unknown):string|number|boolean|bigint|n
  if(type==="decimal")return typeof value==="number"&&Number.isFinite(value)?value:undefined;
  if(type==="boolean")return typeof value==="boolean"?value:undefined;
  if(type==="date")return typeof value==="string"&&validCivilDate(value)?value:undefined;
- if(type==="datetime")return typeof value==="string"?timestampIdentity(value):undefined;
+ if(type==="datetime")return typeof value==="string"?timestampNanoseconds(value):undefined;
  if(type==="money"&&typeof value==="object"&&!Array.isArray(value)){
   const amount=(value as Record<string,unknown>).amount,currency=(value as Record<string,unknown>).currency;
   return typeof amount==="number"&&Number.isSafeInteger(amount)&&typeof currency==="string"&&/^[A-Z]{3}$/.test(currency)?JSON.stringify([amount,currency]):undefined;

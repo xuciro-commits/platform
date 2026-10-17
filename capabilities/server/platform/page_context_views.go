@@ -171,6 +171,19 @@ func visibleContextField(info EntityInfo, name string, title bool) bool {
 	}
 	return ok && slices.Contains(types, f.Type)
 }
+
+// recordScalarFields checks original properties, excluding the separate ID label.
+func recordScalarFields(info EntityInfo, fields []string) bool {
+	seen := map[string]bool{}
+	for _, name := range fields {
+		f, ok := info.Field(name)
+		if !ok || seen[name] || !slices.Contains([]string{"text", "longtext", "choice", "reference", "integer", "decimal", "money", "date", "datetime", "boolean"}, f.Type) {
+			return false
+		}
+		seen[name] = true
+	}
+	return true
+}
 func (s Section) CheckContextViews(info EntityInfo) error {
 	if s.Widget == "breadcrumb" && s.RecordVariable != "" && (s.Breadcrumb == nil || !visibleContextField(info, s.Breadcrumb.LabelField, true)) {
 		return fmt.Errorf("breadcrumb title needs a visible original title field or ID")

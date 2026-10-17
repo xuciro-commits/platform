@@ -2,10 +2,10 @@
 // localisation defaults every profile inherits, sign-in and governance — and
 // its standing on the host. Each value is a platform setting, decided with
 // platform.setting.set like any app setting, so it is journaled and audited.
-import { useReadQuery as useRead } from "@platform/app";
+import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { useState } from "react";
-import { useAdmin, type AppSettings, type SettingValue } from "./shared";
+import type { AppSettings, SettingValue } from "./shared";
 import type { TenantRecord } from "./account";
 import { timezones } from "./account";
 
@@ -19,9 +19,9 @@ const groups: { title: string; names: string[] }[] = [
 export function Organisation() {
   const tenant = useRead<TenantRecord>("/v1/tenant");
   const settings = useRead<AppSettings[]>("/v1/settings").data?.find((a) => a.app === "platform")?.settings ?? [];
-  const { decideOn } = useAdmin();
+  const { decide } = useHost();
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const set = (s: SettingValue, value: string) => decideOn("platform.setting.set", { type: "platform.setting", id: `platform/${s.name}` }, { value });
+  const set = (s: SettingValue, value: string) => decide("platform.setting.set", { type: "platform.setting", id: `platform/${s.name}` }, { value });
   const byName = Object.fromEntries(settings.map((s) => [s.name, s]));
   const record = tenant.data;
   const field = (s: SettingValue) => {

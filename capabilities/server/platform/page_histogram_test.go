@@ -5,7 +5,7 @@ import "testing"
 func TestHistogramOriginalPlanProfileAndFields(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
-	s := Section{ID: "hist", Widget: "histogram", ConfigVersion: 1, CollectionVariable: "window", Histogram: &PageHistogram{Field: "value", Bins: 12}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{Histogram: &PageHistogram{Field: "value", Bins: 12}}, ID: "hist", Widget: "histogram", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	r := d.Nodes[d.Root]
 	r.Children = append(r.Children, s.ID)

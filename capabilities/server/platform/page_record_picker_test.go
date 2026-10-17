@@ -5,7 +5,7 @@ import "testing"
 func TestRecordPickerOriginalCandidatesAndProducer(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
-	s := Section{ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", RecordPicker: &PageRecordPicker{LabelField: "title"}, Selection: "picker"}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordPicker: &PageRecordPicker{LabelField: "title"}}, ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", Selection: "picker"}
 	p.Selections = []SelectionVariable{{Name: "picker", Object: p.Object}}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
@@ -60,7 +60,7 @@ func TestRecordPickerStableIDStateOwnership(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["personID"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: []byte(`"legacy name"`)}
-	s := Section{ID: "pickerID", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", PickerValueVariable: "personID", RecordPicker: &PageRecordPicker{LabelField: "title"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{PickerValueVariable: "personID", RecordPicker: &PageRecordPicker{LabelField: "title"}}, ID: "pickerID", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

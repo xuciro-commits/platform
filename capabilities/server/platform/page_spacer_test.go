@@ -9,7 +9,7 @@ func TestSpacerFiniteSizesZeroAndOriginalLayoutBudget(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	size := 16.0
-	s := Section{ID: "blank", Widget: "spacer", ConfigVersion: 1, Spacer: &PageSpacer{Size: &size}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{Spacer: &PageSpacer{Size: &size}}, ID: "blank", Widget: "spacer", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

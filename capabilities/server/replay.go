@@ -77,7 +77,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 			t.audit.remember(submitted(m.ID, a, s, e.At))
 			t.enqueue(e.At)
 		} else {
-			_, err = a.Input(t.caller(m, a, true), e.Kind, e.Body, e.At)
+			_, err = inputApp(a, t.caller(m, a, true), e.Kind, e.Body, e.At)
 			t.audit.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + e.Kind})
 			t.enqueue(e.At)
 		}

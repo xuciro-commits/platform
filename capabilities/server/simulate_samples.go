@@ -49,13 +49,6 @@ func (a *sampleOwner) Restore(raw json.RawMessage) error        { return a.ledge
 func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
-func (a *sampleOwner) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-func (a *sampleOwner) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samples []SimulationSample) (simulationEnvironment, error) {
 	environment := simulationEnvironment{Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
 	for _, app := range t.apps {

@@ -96,6 +96,8 @@ type ModelBinding struct {
 
 ## 5. As built
 
+平台与构建器 Section 的前 100 个相同配置字段统一归 `platform.PageWidgetConfig`，后 33 个字段保留各自引用类型与编辑元数据。原 descriptor / pageDraft 直接传递共有配置，保留原切片克隆；前端构建期 Section 引用生成的 Api.Section，只区分 object / query / actions / function / inlineEdit 五种表示。新组件配置不再增加三份手写字段声明和前后端逐项复制清单。原 JSON 字段顺序、扁平形状、组件版本、API 输出和冻结历史不变；此整理不把通用模型绑定等同于全部组件配置规则。
+
 现有 `PageDocument` / `Section` 使用 `platform.page.v2.110`，对象绑定写入 `Section.model`。`FieldRef` 保留原组件端口，组件配置版本与执行 owner 不变；旧字段名只在解码和组件端口投影中出现。Build 保存 V2 时收敛绑定，V1 沿原 `pageDocumentFromSections` 提升后保存；历史发布、候选、接受结果不改写。冻结候选激活及恢复保留模型引用。
 
 - **同一条规则**：`OptionsRef.rule` 引用原动作及页面输入映射。动作与候选读取共用 `RuleCriteria` / `EvaluateRule`；该计划是原动作 owner 的私有执行元数据，不增加 Action 发布字节。规则改动只修改原动作。候选成立不授予执行权限，状态、动作授权、审批及写入仍由原动作处理。

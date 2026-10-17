@@ -119,16 +119,6 @@ func canonicalKind(k string) string {
 	return k
 }
 func same(a, b string) bool { return canonicalKind(a) == canonicalKind(b) }
-func decimalType(a, b string) string {
-	if a == "money" || b == "money" {
-		return "money"
-	}
-	if a == "decimal" || b == "decimal" || a == "number" || b == "number" {
-		return "decimal"
-	}
-	return "integer"
-}
-
 func (e *Expr) UnmarshalJSON(raw []byte) error {
 	if len(raw) > MaxBytes {
 		return fail("budget", "$", "expression byte budget exceeded")

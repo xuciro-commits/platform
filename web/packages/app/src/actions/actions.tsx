@@ -171,10 +171,10 @@ export function DeclaredActionForm({declared,target,revision,onCancel,onComplete
 }
 
 /** One action taken through the existing modal entry point. */
-function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry }) {
+function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, prefix }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; prefix?:string }) {
  const {source}=useHost(),info=source.entity(type);
  const [baseline]=useState(record);
- const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN");
+ const [id,setId]=useState(()=>prefix===""?"":newId(prefix??prefixOf(type))),[submitting,setSubmitting]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN");
  const target={type,id:baseline?.id??id},generated=[`${type}.create`,`${type}.edit`].includes(declared.schema)&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
@@ -219,11 +219,11 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
 /** Create a record of `type` from a menu or command palette: the caller
  * renders the trigger, this hook offers the declared create actions and the
  * dialog that takes the chosen one. */
-export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void) {
+export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void, prefix?: string) {
   const { catalog } = useHost();
   const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown> }>();
   const offered = catalog.filter((a) => a.target === type && a.new);
-  const dialog = taking ? <ActionDialog declared={taking.declared} initial={taking.initial} type={type} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  const dialog = taking ? <ActionDialog declared={taking.declared} initial={taking.initial} type={type} prefix={prefix} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
   return { offered, available: offered.length > 0, take: (schema?: string, initial?: Record<string, unknown>) => {
     const declared = schema ? offered.find(action => action.schema === schema) : offered[0];
     setTaking(declared ? { declared, initial: initial && structuredClone(initial) } : undefined);

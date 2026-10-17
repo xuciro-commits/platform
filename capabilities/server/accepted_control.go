@@ -1,10 +1,8 @@
 package platformserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"maps"
 	"slices"
 	"time"
@@ -84,13 +82,8 @@ func decodeControl(raw []byte, v any) error {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return fmt.Errorf("control image is empty or too large")
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
+	if err := decodeAcceptedJSON(raw, v, "control image"); err != nil {
 		return err
-	}
-	if err := dec.Decode(new(any)); err != io.EOF {
-		return fmt.Errorf("control image has trailing data")
 	}
 	return nil
 }

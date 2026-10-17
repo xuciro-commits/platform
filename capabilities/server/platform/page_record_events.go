@@ -51,9 +51,8 @@ func (s Section) CheckRecordEvents(info EntityInfo) error {
 	if !ok || !slices.Contains([]string{"date", "datetime"}, time.Type) {
 		return fmt.Errorf("events need an original visible business time field")
 	}
-	title, titleOK := info.Field(e.TitleField)
 	severity, severityOK := info.Field(e.SeverityField)
-	if e.TitleField != "id" && (!titleOK || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, title.Type)) || !severityOK || severity.Type != "choice" {
+	if !visibleContextField(info, e.TitleField, true) || !severityOK || severity.Type != "choice" {
 		return fmt.Errorf("events need visible titles and choice severity")
 	}
 	for _, tone := range e.Tones {

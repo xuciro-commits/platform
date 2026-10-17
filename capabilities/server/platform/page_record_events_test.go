@@ -9,7 +9,7 @@ func TestRecordEventsRequireOriginalFieldsTonesAndOrderedPlan(t *testing.T) {
 	q := d.Queries[query]
 	q.Sort = []string{"id"}
 	d.Queries[query] = q
-	s := Section{ID: "events", Widget: "record-events", ConfigVersion: 1, CollectionVariable: "window", RecordEvents: &PageRecordEvents{TimeField: "raised", TitleField: "title", SeverityField: "severity", Tones: []PageEventTone{{Value: "high", Tone: "danger"}}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordEvents: &PageRecordEvents{TimeField: "raised", TitleField: "title", SeverityField: "severity", Tones: []PageEventTone{{Value: "high", Tone: "danger"}}}}, ID: "events", Widget: "record-events", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

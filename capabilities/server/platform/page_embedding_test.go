@@ -15,7 +15,7 @@ func TestEmbeddingFixedContentsInterfacesAndExpandedBudget(t *testing.T) {
 	digest, _ := PageContentVersion(child)
 	e := PageEmbedding{Kind: "module", Page: AssetBinding{Ref: AssetRef{App: "sample", Kind: AssetPage, Name: "child"}, SourceVersion: "1"}, ContentVersion: digest, InterfaceVersion: 1, Inputs: map[string]PageValue{"name": {Literal: Raw("original")}}}
 	parent := embeddedTestPage("parent")
-	parent.Sections = []Section{{ID: "text", Widget: "embedded-page", ConfigVersion: 1, Embedding: &e}}
+	parent.Sections = []Section{{PageWidgetConfig: PageWidgetConfig{Embedding: &e}, ID: "text", Widget: "embedded-page", ConfigVersion: 1}}
 	if err := parent.Document.Check(parent.Sections); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestEmbeddingFixedContentsInterfacesAndExpandedBudget(t *testing.T) {
 	parent.Sections = nil
 	parent.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows"}}
 	for _, id := range []string{"a", "b", "c", "d", "e", "f"} {
-		parent.Sections = append(parent.Sections, Section{ID: id, Widget: "embedded-page", ConfigVersion: 1, Embedding: &e})
+		parent.Sections = append(parent.Sections, Section{PageWidgetConfig: PageWidgetConfig{Embedding: &e}, ID: id, Widget: "embedded-page", ConfigVersion: 1})
 		n := parent.Document.Nodes["root"]
 		n.Children = append(n.Children, id)
 		parent.Document.Nodes["root"] = n

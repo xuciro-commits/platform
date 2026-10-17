@@ -8,7 +8,7 @@ func TestRecordChartKeepsOriginalAxesAndOrderedPlan(t *testing.T) {
 	q := d.Queries[d.Variables["window"].Source.Query]
 	q.Sort = []string{"id"}
 	d.Queries[d.Variables["window"].Source.Query] = q
-	s := Section{ID: "chart", Widget: "record-chart", ConfigVersion: 1, CollectionVariable: "window", RecordChart: &PageRecordChart{Mark: "line", XField: "id", YField: "qty"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordChart: &PageRecordChart{Mark: "line", XField: "id", YField: "qty"}}, ID: "chart", Widget: "record-chart", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

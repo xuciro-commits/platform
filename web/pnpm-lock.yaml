@@ -177,9 +177,6 @@ importers:
       '@platform/catalog':
         specifier: workspace:*
         version: link:../../packages/catalog
-      '@platform/kernel':
-        specifier: workspace:*
-        version: link:../../packages/kernel
       '@platform/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -192,9 +189,6 @@ importers:
       react-dom:
         specifier: ^19.3.0
         version: 19.3.0(react@19.3.0)
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.3
@@ -428,24 +422,15 @@ importers:
       '@platform/app':
         specifier: workspace:*
         version: link:../app
-      '@platform/kernel':
-        specifier: workspace:*
-        version: link:../kernel
       '@platform/ui':
         specifier: workspace:*
         version: link:../ui
-      '@tanstack/react-query':
-        specifier: ^5.103.2
-        version: 5.103.2(react@19.3.0)
       lucide-react:
         specifier: ^1.47.0
         version: 1.47.0(react@19.3.0)
       react:
         specifier: ^19.3.0
         version: 19.3.0
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
     devDependencies:
       '@types/react':
         specifier: ^19.3.0
@@ -459,15 +444,9 @@ importers:
       '@platform/app':
         specifier: workspace:*
         version: link:../app
-      '@platform/kernel':
-        specifier: workspace:*
-        version: link:../kernel
       '@platform/ui':
         specifier: workspace:*
         version: link:../ui
-      '@tanstack/react-query':
-        specifier: ^5.103.2
-        version: 5.103.2(react@19.3.0)
       lucide-react:
         specifier: ^1.47.0
         version: 1.47.0(react@19.3.0)
@@ -490,9 +469,6 @@ importers:
       '@platform/app':
         specifier: workspace:*
         version: link:../app
-      '@platform/kernel':
-        specifier: workspace:*
-        version: link:../kernel
       '@platform/ui':
         specifier: workspace:*
         version: link:../ui
@@ -515,24 +491,15 @@ importers:
       '@platform/app':
         specifier: workspace:*
         version: link:../app
-      '@platform/kernel':
-        specifier: workspace:*
-        version: link:../kernel
       '@platform/ui':
         specifier: workspace:*
         version: link:../ui
-      '@tanstack/react-query':
-        specifier: ^5.103.2
-        version: 5.103.2(react@19.3.0)
       lucide-react:
         specifier: ^1.47.0
         version: 1.47.0(react@19.3.0)
       react:
         specifier: ^19.3.0
         version: 19.3.0
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
     devDependencies:
       '@types/react':
         specifier: ^19.3.0

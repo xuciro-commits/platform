@@ -10,7 +10,7 @@ func TestLeaderboardOriginalTopNOrderingAndIdentity(t *testing.T) {
 	q.Sort = []string{"-qty", "id"}
 	q.Limit = 8
 	d.Queries[qid] = q
-	s := Section{ID: "rank", Widget: "record-leaderboard", ConfigVersion: 1, CollectionVariable: "window", Leaderboard: &PageLeaderboard{ValueField: "qty", LabelField: "title", Limit: 8}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{Leaderboard: &PageLeaderboard{ValueField: "qty", LabelField: "title", Limit: 8}}, ID: "rank", Widget: "record-leaderboard", ConfigVersion: 1, CollectionVariable: "window"}
 	p.Sections = append(p.Sections, s)
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]

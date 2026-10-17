@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -88,25 +87,9 @@ func (b *Build) publishPropertyType(c platform.Caller, record any, _ json.RawMes
 }
 
 func propertyTypeImage(image []byte) (PropertyType, error) {
-	var record PropertyType
-	if err := json.Unmarshal(image, &record); err != nil {
-		return PropertyType{}, err
-	}
-	if !slices.Contains([]string{"draft", "published"}, record.State) || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || !slices.Contains(record.Versions, record.Published) {
-		return PropertyType{}, fmt.Errorf("accepted property type has an invalid version family")
-	}
-	var latest, selected PropertyType
-	for i, raw := range record.Versions {
-		f, ok := wasPublished[PropertyType](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Type != latest.Type) {
-			return PropertyType{}, fmt.Errorf("accepted property type has a malformed version %d", i+1)
-		}
-		if raw == record.Published {
-			selected = f
-		}
-		latest = f
-	}
-	return selected, nil
+	return definitionImage[PropertyType](image, "property type", func(before, after PropertyType) bool {
+		return before.Name == after.Name && before.Type == after.Type
+	})
 }
 
 func (b *Build) propertyTypeInventory() ([]PropertyType, error) {
@@ -123,43 +106,9 @@ func (b *Build) installPropertyType(c platform.Caller, f PropertyType) error {
 }
 
 func (b *Build) PropertyTypeDefinition(name string, version int) (platform.PropertyType, int, bool) {
-	installed, ok := b.propertyTypes[name]
-	if ok && (version == 0 || version == installed.Version) {
-		return installed.Definition(), installed.Version, true
-	}
-	if version == 0 {
-		return platform.PropertyType{}, 0, false
-	}
-	list, err := b.propertyTypeInventory()
-	if err != nil {
-		return platform.PropertyType{}, 0, false
-	}
-	for _, record := range list {
-		if version < 1 || version > len(record.Versions) {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		latest, err := propertyTypeImage(raw)
-		if err != nil || latest.Name != name {
-			continue
-		}
-		f, ok := wasPublished[PropertyType](record.Versions[version-1])
-		if ok && f.Version == version {
-			return f.Definition(), version, true
-		}
-	}
-	return platform.PropertyType{}, 0, false
+	return retainedDefinition(b.propertyTypes, b.propertyTypeInventory, propertyTypeImage, name, version)
 }
 
 func (b *Build) propertyTypeDeclarations() []platform.PropertyType {
-	names := make([]string, 0, len(b.propertyTypes))
-	for name := range b.propertyTypes {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	out := make([]platform.PropertyType, 0, len(names))
-	for _, name := range names {
-		out = append(out, b.propertyTypes[name].Definition())
-	}
-	return out
+	return definitionDeclarations(b.propertyTypes)
 }

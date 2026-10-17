@@ -1,12 +1,11 @@
-import {useInputDrafts} from "@platform/ui";
-import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { joinProjectResource } from "../projects/membership";
+import { useIntegrationDraft } from "./integration-draft";
+import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { useEffect, useId, useRef, useState } from "react";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
 import { MarkingField, integrates } from "./marking";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { ProtocolBindingEditor, ProtocolSamples } from "./ProtocolBindingEditor";
 
 // Connections (ADR-0070): the external systems a tenant reads through - a kind,
@@ -27,58 +26,21 @@ export function Connections() {
 }
 
 export function ConnectionEditor({ id }: { id: string }) {
-  const host = useHost(), { client, decide, role } = host, { open, close } = useApplicationWorkspace();
-  const application = useApplicationScope();
+  const { client, role } = useHost(), { open } = useApplicationWorkspace();
   const fieldID = useId();
-  const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.connection/${encodeURIComponent(id)}`, 5000);
   const kinds = useReadQuery<{ items: Api.ConnectionKind[] }>("/v1/connection-kinds");
-  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition, createID } = useIntegrationDraft<Draft>({
+    id, type: "build.connection", kind: "connection", view: "connection", empty,
+    failure: t("The connection could not be saved or loaded. Your draft is still here."),
+    payload: draft => {
+      const { name, title, kind, address, secret, allowPrivate, marking, protocol } = draft;
+      return { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "", protocol: protocol ?? null };
+    },
+  });
   const [preview, setPreview] = useState<{ check: Api.ConnectionCheck; signature: string }>();
   const previewElement = useRef<HTMLDivElement>(null);
   const signature = JSON.stringify([draft.kind, draft.address, draft.secret, draft.allowPrivate, draft.protocol]);
   useEffect(() => { if (preview) previewElement.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [preview]);
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
-  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
-  const load = (record: Draft) => { setDraft({ ...empty(), ...record }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
-  useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
-  const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
-  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (error) { setError(apiErrorMessage(error) ?? t("The connection could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
-  const save = async (deferNavigation = false): Promise<{ id: string; revision: number } | undefined> => {
-    if (inputs?.invalid) return;
-    const target = draft.id || createID, expected = baseRevision.current;
-    const { name, title, kind, address, secret, allowPrivate, marking, protocol } = draft;
-    let revision = expected;
-    if (dirty || !draft.id) {
-      const payload = { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "", protocol: protocol ?? null };
-      if (!await decide(`build.connection.${draft.id ? "edit" : "create"}`, { type: "build.connection", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
-      revision = expected + 1;
-      baseRevision.current = revision; loaded.current = `${target}:${revision}`;
-      setDraft((d) => ({ ...d, id: target, revision })); inputs?.clear(); markSaved(); setDirty(false);
-    }
-    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "connection", name });
-    markSaved();
-    if (id === "new") {
-      if (!deferNavigation) { open({ view: "connection", params: { id: target } }, { ifCurrent: { view: "connection", params: { id } } }); close({ view: "connection", params: { id } }); }
-    } else await query.refetch();
-    return { id: target, revision };
-  };
-  const transition = async (name: "check" | "retire") => {
-    if (inputs?.invalid) return;
-    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: baseRevision.current };
-    if (!saved) return;
-    if (!await decide(`build.connection.${name}`, { type: "build.connection", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) return;
-    if (id === "new") {
-      markSaved();
-      open({ view: "connection", params: { id: saved.id } }, { ifCurrent: { view: "connection", params: { id } } }); close({ view: "connection", params: { id } });
-    } else { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
-  };
-  const review = async () => {
-    if (inputs?.invalid) return;
-    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: baseRevision.current };
-    if (saved) open({ view: "release-review", params: { kind: "connection", id: saved.id } }, { ifCurrent: { view: "connection", params: { id: saved.id } } });
-  };
   const previewRead = async () => {
     const { kind, address, secret, allowPrivate, protocol } = draft;
     const response = await client.call<Api.ConnectionCheck>("POST", "/v1/connections/preview", { id: draft.id || createID, kind, address, secret, allowPrivate, protocol });

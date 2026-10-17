@@ -100,7 +100,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 			continue // its reads are the host views above
 		}
 		for _, name := range a.Manifest().Reads {
-			out, err := a.Read(t.caller(everyone, a, false), name)
+			out, err := readApp(a, t.caller(everyone, a, false), name)
 			reads[name] = []any{out, err}
 		}
 	}

@@ -99,8 +99,12 @@ func TestRuleMigrationRetainsFrozenPublicationBytes(t *testing.T) {
 	if err := json.Unmarshal(raw, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved.Fields[1].Formula != "" || saved.Fields[1].FormulaExpr == nil || saved.Actions[0].Conditions[0].Expr == nil {
+	if len(saved.Fields) != 2 || saved.Fields[1].Formula != "" || saved.Fields[1].FormulaExpr == nil || len(saved.Actions) != 1 {
 		t.Fatal("legacy object was not saved as Expr")
+	}
+	action := saved.Actions[0]
+	if len(action.Conditions) != 0 || action.Transaction == nil || action.Transaction.Guard == nil || action.Transaction.Guard.Op != ">" || action.Transaction.Message != "Positive base required" {
+		t.Fatal("legacy condition was not moved into the business transaction guard")
 	}
 	table := map[string]any{"name": "cells", "title": "Cells", "inputs": []build.TableColumn{{Name: "qty", Type: "number"}}, "outputs": []build.TableColumn{{Name: "ok", Type: "boolean"}}, "rows": []build.TableRow{{When: []string{"1..5"}, Then: []string{"true"}}}}
 	decide(t, tn, "builder", build.ID, "build.table.create", build.TableType, "CELLS", table, txnAt)
@@ -111,7 +115,7 @@ func TestRuleMigrationRetainsFrozenPublicationBytes(t *testing.T) {
 			t.Fatal(e)
 		}
 		return v.Record
-	}()); json.Unmarshal(raw, &tb) != nil || len(tb.Rows[0].Expressions) != 1 || len(tb.Rows[0].When) != 0 {
+	}()); json.Unmarshal(raw, &tb) != nil || len(tb.Rows) != 1 || len(tb.Rows[0].Expressions) != 1 || len(tb.Rows[0].When) != 0 {
 		t.Fatal("old table cells were not saved as Expr")
 	}
 	CheckReplay(t, tn, entries, func() *Tenant { return builderTenant(t, "rule-language") })

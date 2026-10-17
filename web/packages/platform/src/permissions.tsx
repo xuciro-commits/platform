@@ -5,7 +5,7 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Form, Checkbox, DataTable, type ColumnDef, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
-import { useAdmin, type Member } from "./shared";
+import type { Member } from "./shared";
 
 type AppPermissions = Api.AppPermissions;
 type Explanation = Api.Explanation;
@@ -104,13 +104,13 @@ function Access({ catalog }: { catalog: AppPermissions[] }) {
   const { can } = useHost();
   const access = useRead<AccessConfig>("/v1/access").data;
   const members = useRead<Member[]>("/v1/members").data ?? [];
-  const { decideOn } = useAdmin();
+  const { decide } = useHost();
   const projects = useRead<Api.BuildProject[]>("/v1/projects").data ?? [];
   const [adding, setAdding] = useState<"role" | "policy" | "team" | "project" | null>(null);
   const [editing, setEditing] = useState<Api.BuildProject>();
   if (!access) return null;
   const row = "flex flex-wrap items-center gap-2 text-sm";
-  const remove = (schema: string, type: string, id: string) => can(schema) && <Button size="sm" variant="ghost" aria-label={t("Remove")} onClick={() => void decideOn(schema, { type, id }, {})}>×</Button>;
+  const remove = (schema: string, type: string, id: string) => can(schema) && <Button size="sm" variant="ghost" aria-label={t("Remove")} onClick={() => void decide(schema, { type, id }, {})}>×</Button>;
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Panel title={t("Custom roles")} actions={can("platform.role.save") && <Button size="sm" onClick={() => setAdding("role")}>{t("Define")}</Button>}>
@@ -138,16 +138,16 @@ function Access({ catalog }: { catalog: AppPermissions[] }) {
         </p>)}</div>
       </Panel>
       <Dialog open={adding === "project"} onOpenChange={(o) => !o && setAdding(null)} title={editing ? t("Edit project") : t("Save project")}>
-        <ProjectForm key={editing?.id ?? "new"} members={members} project={editing} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decideOn("platform.project.save", { type: "platform.project", id }, p)) setAdding(null); }} />
+        <ProjectForm key={editing?.id ?? "new"} members={members} project={editing} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.project.save", { type: "platform.project", id }, p)) setAdding(null); }} />
       </Dialog>
       <Dialog open={adding === "role"} onOpenChange={(o) => !o && setAdding(null)} title={t("Define role")}>
-        <RoleForm catalog={catalog} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decideOn("platform.role.save", { type: "platform.role", id }, p)) setAdding(null); }} />
+        <RoleForm catalog={catalog} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.role.save", { type: "platform.role", id }, p)) setAdding(null); }} />
       </Dialog>
       <Dialog open={adding === "policy"} onOpenChange={(o) => !o && setAdding(null)} title={t("Set policy")}>
-        <PolicyForm members={members} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decideOn("platform.policy.save", { type: "platform.policy", id }, p)) setAdding(null); }} />
+        <PolicyForm members={members} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.policy.save", { type: "platform.policy", id }, p)) setAdding(null); }} />
       </Dialog>
       <Dialog open={adding === "team"} onOpenChange={(o) => !o && setAdding(null)} title={t("Save team")}>
-        <TeamForm members={members} catalog={catalog} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decideOn("platform.team.save", { type: "platform.team", id }, p)) setAdding(null); }} />
+        <TeamForm members={members} catalog={catalog} onCancel={() => setAdding(null)} onSubmit={async (id, p) => { if (await decide("platform.team.save", { type: "platform.team", id }, p)) setAdding(null); }} />
       </Dialog>
     </div>
   );

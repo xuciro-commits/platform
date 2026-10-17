@@ -200,10 +200,6 @@ func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ 
 
 func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
 
-func (e *Enterprise) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 // Model is a copy of the model, for seeds and tests.
 func (e *Enterprise) Model() Model {
 	e.mu.Lock()

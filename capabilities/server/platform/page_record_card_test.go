@@ -6,7 +6,7 @@ func recordCardPage() Page {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["chosen"] = PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "table"}}
-	s := Section{ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "chosen", RecordCard: &PageRecordCard{LabelField: "name", Tone: "info"}, Fields: []string{"amount"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordCard: &PageRecordCard{LabelField: "name", Tone: "info"}}, ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "chosen", Fields: []string{"amount"}}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

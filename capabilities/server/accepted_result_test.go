@@ -544,6 +544,29 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 }
 
+func TestAcceptedJSONReadsExactlyOneTypedValue(t *testing.T) {
+	for _, test := range []struct {
+		name, raw, wantError string
+	}{
+		{"valid", ` {"version":2} `, ""},
+		{"unknown field", `{"version":2,"unrecognized":true}`, `json: unknown field "unrecognized"`},
+		{"second value", `{"version":2} {}`, "saved result has trailing data"},
+		{"malformed suffix", `{"version":2} trailing`, "saved result has trailing data"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var value struct{ Version int }
+			err := decodeAcceptedJSON([]byte(test.raw), &value, "saved result")
+			if test.wantError == "" {
+				if err != nil || value.Version != 2 {
+					t.Fatalf("decoded version %d: %v", value.Version, err)
+				}
+			} else if err == nil || err.Error() != test.wantError {
+				t.Fatalf("decode error = %v, want %q", err, test.wantError)
+			}
+		})
+	}
+}
+
 func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 	source := stockTenant(t)
 	app := source.app("stock").(*stock)

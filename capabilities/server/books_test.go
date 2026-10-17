@@ -151,7 +151,7 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 		capture(tn)
 	}
 	tn.Dispatch(at.Add(time.Minute))
-	tb, _ := tn.app(core.ID).Read(c, core.ReadTrialBalance+"/2026-10")
+	tb, _ := readApp(tn.app(core.ID), c, core.ReadTrialBalance+"/2026-10")
 	balance := tb.(core.TrialBalance)
 	if len(balance.Rows) != 2 || balance.Debit != balance.Credit || balance.Rows[0].Account != "1403" || balance.Rows[0].Balance != 80 {
 		t.Fatalf("trial balance %+v", balance)

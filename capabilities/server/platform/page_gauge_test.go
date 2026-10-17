@@ -7,7 +7,7 @@ func TestGaugeOriginalNumberAggregateAndProfile(t *testing.T) {
 	d := p.Document
 	q := d.Variables["window"].Source.Query
 	d.Variables["average"] = PageVariable{Scope: "page", Type: "number", Mode: "aggregate", Source: &PageResourceSource{Kind: "aggregate", Query: q, Measure: "avg:availability"}}
-	s := Section{ID: "gauge", Widget: "gauge", ConfigVersion: 1, GaugeValueVariable: "average", Gauge: &PageGauge{Max: 100, Label: "Availability", Suffix: "%"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{GaugeValueVariable: "average", Gauge: &PageGauge{Max: 100, Label: "Availability", Suffix: "%"}}, ID: "gauge", Widget: "gauge", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

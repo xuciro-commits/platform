@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -258,7 +257,6 @@ func LiteralOf(kind string, value any) Expr {
 	return Expr{Kind: kind, Lit: &Literal{Value: Raw(value)}}
 }
 func RefOf(kind, name string) Expr { return Expr{Kind: kind, Ref: name} }
-func IntText(n int) string         { return strconv.Itoa(n) }
 
 // Preserve every terminating decimal within the numeric bit budget. Division
 // with a recurring fraction uses the language's fixed 18-place precision.

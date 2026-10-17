@@ -526,7 +526,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 			view, err = h.AgentRead(*m, tool.schema)
 		} else {
 			var out any
-			out, err = h.App(d.app).Read(h.Automation(c, d.app), tool.schema)
+			out, err = readApp(h.App(d.app), h.Automation(c, d.app), tool.schema)
 			view.Body, _ = json.Marshal(out)
 			view.Sources = h.AgentSources(out)
 		}

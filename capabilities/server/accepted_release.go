@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
-	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
 	"strings"
@@ -77,13 +76,8 @@ func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if len(raw) == 0 || len(raw) > 24<<20 {
 		return saved, fmt.Errorf("release result is empty or too large")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&saved); err != nil {
+	if err := decodeAcceptedJSON(raw, &saved, "release result"); err != nil {
 		return saved, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return saved, fmt.Errorf("release result has trailing data")
 	}
 	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active, saved.UpgradeID)
 	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3 && saved.Version != 4) || saved.Kind != "release-result" || saved.App != build.ID ||

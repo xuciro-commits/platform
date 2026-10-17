@@ -1,14 +1,13 @@
 import {formulaText} from "../editor/rule-text";
-import {useInputDrafts} from "@platform/ui";
-import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { joinProjectResource } from "../projects/membership";
+import { useIntegrationDraft } from "./integration-draft";
+import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { type Api } from "@platform/kernel";
 import { MarkingTag, integrates } from "./marking";
-import { Button, Checkbox, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
+import { Button, Checkbox, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
 import { useAuthoringModel } from "./authoring-model";
@@ -79,58 +78,21 @@ export function Pipelines() {
 }
 
 export function PipelineEditor({ id }: { id: string }) {
-  const host = useHost(), { decide, role } = host, { open, close } = useApplicationWorkspace();
-  const application = useApplicationScope();
+  const { role } = useHost(), { open } = useApplicationWorkspace();
   const { entities, drafts: objects } = useAuthoringModel();
-  const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.pipeline/${encodeURIComponent(id)}`, 5000);
   const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
   // The enterprise model's own kinds and elements, so a pipeline writing into
   // it chooses them rather than spelling their ids.
   const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
-  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
+  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useIntegrationDraft<Draft>({
+    id, type: "build.pipeline", kind: "pipeline", view: "pipeline", empty, normalize: record => ({ ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }),
+    failure: t("The pipeline could not be saved or loaded. Your draft is still here."),
+    payload: draft => {
+      const { name, title, input, steps, expectations, outputDataset, outputObject, outputEnterprise, key, every } = draft;
+      return { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: key ?? "", every: every ?? "" };
+    },
+  });
   const [picked, setPicked] = useState<string>(); // the step the inspector edits
-  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
-  const load = (record: Draft) => { setDraft({ ...empty(), ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }); baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; };
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
-  useEffect(() => { const record = query.data?.record; if (record && !dirty && !busy && loaded.current !== `${record.id}:${record.revision}`) load(record); }, [query.data, dirty, busy]);
-  const patch = (change: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...change })); setDirty(true); setError(""); };
-  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (error) { setError(apiErrorMessage(error) ?? t("The pipeline could not be saved or loaded. Your draft is still here.")); } finally { lock.current = false; setBusy(false); } };
-  const save = async (deferNavigation = false): Promise<{ id: string; revision: number } | undefined> => {
-    if (inputs?.invalid) return;
-    const target = draft.id || createID, expected = baseRevision.current;
-    const { name, title, input, steps, expectations, outputDataset, outputObject, outputEnterprise, key, every } = draft;
-    let revision = expected;
-    if (dirty || !draft.id) {
-      const payload = { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: key ?? "", every: every ?? "" };
-      if (!await decide(`build.pipeline.${draft.id ? "edit" : "create"}`, { type: "build.pipeline", id: target }, payload, { expectedRevision: draft.id ? expected : 0, quiet: true, onRefused: setError })) return;
-      revision = expected + 1;
-      baseRevision.current = revision; loaded.current = `${target}:${revision}`;
-      setDraft((d) => ({ ...d, id: target, revision })); inputs?.clear(); markSaved(); setDirty(false);
-    }
-    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "pipeline", name });
-    markSaved();
-    if (id === "new") {
-      if (!deferNavigation) { open({ view: "pipeline", params: { id: target } }, { ifCurrent: { view: "pipeline", params: { id } } }); close({ view: "pipeline", params: { id } }); }
-    } else await query.refetch();
-    return { id: target, revision };
-  };
-  const transition = async (name: "publish" | "run" | "pause") => {
-    if (inputs?.invalid) return;
-    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: baseRevision.current };
-    if (!saved) return;
-    if (!await decide(`build.pipeline.${name}`, { type: "build.pipeline", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) return;
-    if (id === "new") {
-      markSaved();
-      open({ view: "pipeline", params: { id: saved.id } }, { ifCurrent: { view: "pipeline", params: { id } } }); close({ view: "pipeline", params: { id } });
-    } else { const result = await query.refetch(); if (result.data?.record) load(result.data.record); }
-  };
-  const review = async () => {
-    if (inputs?.invalid) return;
-    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: baseRevision.current };
-    if (saved) open({ view: "release-review", params: { kind: "pipeline", id: saved.id } }, { ifCurrent: { view: "pipeline", params: { id: saved.id } } });
-  };
   if (!integrates(role("build"))) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Pipelines")} description={query.isError ? t("The pipeline could not be loaded.") : t("Loading…")} />;
   const last = draft.last, input = datasets.find((d) => d.id === draft.input);

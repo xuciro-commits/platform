@@ -51,8 +51,7 @@ func (s Section) CheckScatter(info EntityInfo) error {
 	if !ok || !slices.Contains([]string{"text", "choice"}, color.Type) {
 		return fmt.Errorf("scatter color needs a visible text or choice field")
 	}
-	label, ok := info.Field(s.Scatter.LabelField)
-	if s.Scatter.LabelField != "id" && (!ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, label.Type)) {
+	if !visibleContextField(info, s.Scatter.LabelField, true) {
 		return fmt.Errorf("scatter label needs a visible original title field or ID")
 	}
 	return nil

@@ -9,8 +9,8 @@ import (
 func recordComparisonPage() Page {
 	object := AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}
 	return Page{Name: "compare", Object: object, Layout: "composed", Sections: []Section{
-		{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"name"}, SelectionSetVariable: "picked"},
-		{ID: "comparison", Widget: "record-comparison", ConfigVersion: 1, RecordSetVariable: "picked", RecordComparison: &PageRecordComparison{LabelField: "name"}, Fields: []string{"amount", "active"}},
+		{PageWidgetConfig: PageWidgetConfig{SelectionSetVariable: "picked"}, ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"name"}},
+		{PageWidgetConfig: PageWidgetConfig{RecordSetVariable: "picked", RecordComparison: &PageRecordComparison{LabelField: "name"}}, ID: "comparison", Widget: "record-comparison", ConfigVersion: 1, Fields: []string{"amount", "active"}},
 	}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{
 		"root": {Kind: "rows", Children: []string{"table", "comparison"}}, "table": {Kind: "widget", Section: "table"}, "comparison": {Kind: "widget", Section: "comparison"},
 	}, Variables: map[string]PageVariable{"picked": {Scope: "page", Type: "record-set", Mode: "resource", Source: &PageResourceSource{Kind: "records", Section: "table"}}}}}

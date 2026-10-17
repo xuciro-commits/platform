@@ -6,7 +6,7 @@ func sharedContextPage() Page {
 	p := explorationPage()
 	p.Sections = append(p.Sections[:2], p.Sections[4])
 	p.Sections[0] = Section{ID: "resources", Widget: "kanban", ConfigVersion: 1, CollectionVariable: "assets", SelectionVariable: "active", CardLabel: "name"}
-	p.Sections = append(p.Sections, Section{ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "active", RecordCard: &PageRecordCard{LabelField: "name", Tone: "neutral"}}, Section{ID: "trail", Widget: "breadcrumb", ConfigVersion: 1, RecordVariable: "active", Breadcrumb: &PageBreadcrumb{HomeLabel: "Home", PageLabel: "Maintenance", LabelField: "name"}})
+	p.Sections = append(p.Sections, Section{PageWidgetConfig: PageWidgetConfig{RecordCard: &PageRecordCard{LabelField: "name", Tone: "neutral"}}, ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "active"}, Section{PageWidgetConfig: PageWidgetConfig{Breadcrumb: &PageBreadcrumb{HomeLabel: "Home", PageLabel: "Maintenance", LabelField: "name"}}, ID: "trail", Widget: "breadcrumb", ConfigVersion: 1, RecordVariable: "active"})
 	p.Document.Nodes = map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"resources", "graph", "sensorCard", "card", "trail"}}}
 	for _, s := range p.Sections {
 		p.Document.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}

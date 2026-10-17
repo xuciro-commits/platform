@@ -74,13 +74,6 @@ func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Decl
 func (f *Files) AcceptedLedger() *platform.Ledger         { return f.ledger }
 func (f *Files) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
 func (f *Files) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
-func (f *Files) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-func (f *Files) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

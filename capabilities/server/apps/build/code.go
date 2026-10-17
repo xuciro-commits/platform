@@ -241,24 +241,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 	return platform.Operation{}, 0, false
 }
 func (b *Build) operationDeclarations() []platform.Operation {
-	names := make([]string, 0, len(b.codes))
-	for name := range b.codes {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	out := []platform.Operation{}
-	for _, name := range names {
-		out = append(out, b.codes[name].Definition())
-	}
-	tables := make([]string, 0, len(b.tables))
-	for name := range b.tables {
-		tables = append(tables, name)
-	}
-	slices.Sort(tables)
-	for _, name := range tables {
-		out = append(out, b.tables[name].Definition())
-	}
-	return out
+	return append(definitionDeclarations(b.codes), definitionDeclarations(b.tables)...)
 }
 func codeImage(image []byte) (Code, error) {
 	var code Code

@@ -160,9 +160,6 @@ func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Decl
 func (f *Flows) AcceptedLedger() *platform.Ledger         { return f.ledger }
 func (f *Flows) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
 func (f *Flows) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
-func (f *Flows) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
 
 // Declare registers the flows of the tenant's apps, checking each (NewTenant).
 func (f *Flows) Declare(a platform.App) error {

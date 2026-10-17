@@ -9,7 +9,7 @@ func TestChoiceInputOriginalStateAndStaticOptions(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["choice"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: Raw("retired")}
-	s := Section{ID: "choice", Widget: "choice-input", ConfigVersion: 1, ChoiceVariable: "choice", ChoiceInput: &PageChoiceInput{Variant: "select", Options: []string{"Open", "Closed"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ChoiceVariable: "choice", ChoiceInput: &PageChoiceInput{Variant: "select", Options: []string{"Open", "Closed"}}}, ID: "choice", Widget: "choice-input", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)
@@ -46,7 +46,7 @@ func TestChoiceInputOriginalStateAndStaticOptions(t *testing.T) {
 
 func TestChoiceInputOverlayCannotEscape(t *testing.T) {
 	d, sections := overlayScopeDocument()
-	s := Section{ID: "choice", Widget: "choice-input", ConfigVersion: 1, ChoiceVariable: "local", ChoiceInput: &PageChoiceInput{Variant: "radio", Options: []string{"A", "B"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ChoiceVariable: "local", ChoiceInput: &PageChoiceInput{Variant: "radio", Options: []string{"A", "B"}}}, ID: "choice", Widget: "choice-input", ConfigVersion: 1}
 	sections = append(sections, s)
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID, EnabledWhen: "open"}
 	o := d.Overlays["panel"]
@@ -70,7 +70,7 @@ func TestMultipleChoiceOriginalSetProfileAndPorts(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["pick"] = PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: Raw(map[string]any{"kind": "string-set", "values": []string{"retired"}})}
-	s := Section{ID: "multi", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "pick", ChoiceInput: &PageChoiceInput{Variant: "multiple", Options: []string{"A", "B"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ChoiceSetVariable: "pick", ChoiceInput: &PageChoiceInput{Variant: "multiple", Options: []string{"A", "B"}}}, ID: "multi", Widget: "choice-input", ConfigVersion: 1}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)
@@ -112,7 +112,7 @@ func TestChoiceSetClearRequiresMultipleProfile(t *testing.T) {
 	p := queryPlanPage()
 	d := p.Document
 	d.Variables["pick"] = PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: Raw(map[string]any{"kind": "string-set", "values": []string{"retired", "A"}})}
-	s := Section{ID: "clear", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "pick", ChoiceInput: &PageChoiceInput{Variant: "multiple", Options: []string{"A", "B"}, Clearable: true}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ChoiceSetVariable: "pick", ChoiceInput: &PageChoiceInput{Variant: "multiple", Options: []string{"A", "B"}, Clearable: true}}, ID: "clear", Widget: "choice-input", ConfigVersion: 1}
 	if err := d.checkChoiceInput(s); err != nil {
 		t.Fatal(err)
 	}

@@ -28,58 +28,16 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	if err != nil {
 		return nil, err
 	}
-	functions, err := b.functionAssets()
-	if err != nil {
-		return nil, err
+	for _, read := range []func() ([]platform.ReleaseAsset, error){
+		b.functionAssets, b.agentAssets, b.queryAssets, b.linkTypeAssets, b.propertyTypeAssets,
+		b.CodeReleaseAssets, b.alertAssets, b.integrationAssets, b.migrationPlanAssets, b.testPlanAssets, b.sampleSetAssets,
+	} {
+		owned, err := read()
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, owned...)
 	}
-	assets = append(assets, functions...)
-	agents, err := b.agentAssets()
-	if err != nil {
-		return nil, err
-	}
-	assets = append(assets, agents...)
-	queries, err := b.queryAssets()
-	if err != nil {
-		return nil, err
-	}
-	assets = append(assets, queries...)
-	links, err := b.linkTypeAssets()
-	if err != nil {
-		return nil, err
-	}
-	assets = append(assets, links...)
-	props, err := b.propertyTypeAssets()
-	if err != nil {
-		return nil, err
-	}
-	assets = append(assets, props...)
-	code, err := b.CodeReleaseAssets()
-	if err != nil {
-		return nil, err
-	}
-	assets = append(assets, code...)
-	alerts, err := b.alertAssets()
-	if err != nil {
-		return nil, err
-	}
-	assets = append(assets, alerts...)
-	integrations, err := b.integrationAssets()
-	if err != nil {
-		return nil, err
-	}
-	plans, err := b.migrationPlanAssets()
-	if err != nil {
-		return nil, err
-	}
-	evaluations, err := b.testPlanAssets()
-	if err != nil {
-		return nil, err
-	}
-	samples, err := b.sampleSetAssets()
-	if err != nil {
-		return nil, err
-	}
-	assets = append(append(append(append(assets, integrations...), plans...), evaluations...), samples...)
 	assets, err = b.bindConfirmationAssets(assets)
 	if err != nil {
 		return nil, err

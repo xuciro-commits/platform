@@ -45,7 +45,7 @@ func TestInlineActionRequiresOneOriginalRecordAction(t *testing.T) {
 func TestInlineActionDefaultsKeepOriginalParameterAndReferenceTypes(t *testing.T) {
 	info := EntityInfo{App: "sample", Type: "sample.item", Fields: []FieldInfo{{Name: "state", Type: "choice"}, {Name: "owner", Type: "reference", Ref: "sample.person"}}}
 	action := Action{Schema: "sample.item.update", Target: info.Type, Payload: []Field{{Name: "status", Type: "string"}, {Name: "owner", Type: "string", Ref: "sample.person"}}}
-	s := Section{Widget: "inline-action", Actions: []AssetRef{{App: "sample", Kind: AssetAction, Name: action.Schema}}, ActionDefaults: []PageActionParameter{{Parameter: "status", Field: "state"}, {Parameter: "owner", Field: "owner"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ActionDefaults: []PageActionParameter{{Parameter: "status", Field: "state"}, {Parameter: "owner", Field: "owner"}}}, Widget: "inline-action", Actions: []AssetRef{{App: "sample", Kind: AssetAction, Name: action.Schema}}}
 	if err := s.CheckInlineAction(info, action); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestInlineActionDefaultsKeepOriginalParameterAndReferenceTypes(t *testing.T
 
 func TestActionDefaultDocumentBudgetAndProfile(t *testing.T) {
 	d := &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"action"}}, "action": {Kind: "widget", Section: "action"}}}
-	s := Section{ID: "action", Widget: "inline-action", ConfigVersion: 1, Actions: []AssetRef{{App: "sample", Kind: AssetAction, Name: "sample.item.update"}}, ActionDefaults: []PageActionParameter{{Parameter: "reason", Field: "note"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ActionDefaults: []PageActionParameter{{Parameter: "reason", Field: "note"}}}, ID: "action", Widget: "inline-action", ConfigVersion: 1, Actions: []AssetRef{{App: "sample", Kind: AssetAction, Name: "sample.item.update"}}}
 	if err := d.Check([]Section{s}); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestFrozenInlineDefaultsUseNestedOriginalDeclaration(t *testing.T) {
 	ref := AssetRef{App: "sample", Kind: AssetAction, Name: "sample.item.update"}
 	info := EntityInfo{App: object.App, Type: object.Name, Fields: []FieldInfo{{Name: "note", Type: "text"}}}
 	action := Action{Schema: ref.Name, Target: object.Name, Payload: []Field{{Name: "reason", Type: "string"}}}
-	page := Page{Object: object, Document: &PageDocument{UIProfile: PageUIProfile()}, Sections: []Section{{Widget: "inline-action", Actions: []AssetRef{ref}, ActionDefaults: []PageActionParameter{{Parameter: "reason", Field: "note"}}}}}
+	page := Page{Object: object, Document: &PageDocument{UIProfile: PageUIProfile()}, Sections: []Section{{PageWidgetConfig: PageWidgetConfig{ActionDefaults: []PageActionParameter{{Parameter: "reason", Field: "note"}}}, Widget: "inline-action", Actions: []AssetRef{ref}}}}
 	lookup := map[AssetRef]ReleaseAsset{object: {Body: Raw(info)}, ref: {Body: Raw(map[string]any{"schema": action.Schema, "target": action.Target, "action": action})}}
 	if err := checkFrozenQueries(page, lookup); err != nil {
 		t.Fatal(err)

@@ -43,10 +43,6 @@ func (h hostView) installationView(records *recordStore) *Tenant {
 	return draft
 }
 
-func (h hostView) ValidateInstall(e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
-	return h.installationDraft().Install(h.app, e, actions, pages...)
-}
-
 func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
 	draft := h.installationDraft()
 	if current := draft.records.types[e.Type]; current != nil && current.info.Go != reflect.TypeOf(e.Model) {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"slices"
 	"strconv"
 	"time"
 
@@ -55,8 +54,6 @@ func (f LinkType) Definition() platform.LinkType {
 	}
 	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: storage, Cardinality: cardinality, DeletePolicy: policy, Roles: roles}
 }
-
-func (f LinkType) Declaration() platform.LinkType { return f.Definition() }
 
 func (b *Build) linkTypeEntity() platform.Entity {
 	return platform.Entity{Type: LinkTypeType, Title: "Link type", Plural: "Link types", Model: LinkType{}, Display: "title",
@@ -140,25 +137,9 @@ func (b *Build) publishLinkType(c platform.Caller, record any, _ json.RawMessage
 }
 
 func linkTypeImage(image []byte) (LinkType, error) {
-	var record LinkType
-	if err := json.Unmarshal(image, &record); err != nil {
-		return LinkType{}, err
-	}
-	if !slices.Contains([]string{"draft", "published"}, record.State) || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || !slices.Contains(record.Versions, record.Published) {
-		return LinkType{}, fmt.Errorf("accepted link type has an invalid version family")
-	}
-	var latest, selected LinkType
-	for i, raw := range record.Versions {
-		f, ok := wasPublished[LinkType](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.Definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Parent != latest.Parent || f.Child != latest.Child || f.Via != latest.Via || f.Definition().Storage == "reference" && f.Required != latest.Required || !linkKeepsGuarantees(latest, f)) {
-			return LinkType{}, fmt.Errorf("accepted link type has a malformed version %d", i+1)
-		}
-		if raw == record.Published {
-			selected = f
-		}
-		latest = f
-	}
-	return selected, nil
+	return definitionImage[LinkType](image, "link type", func(before, after LinkType) bool {
+		return before.Name == after.Name && before.Parent == after.Parent && before.Child == after.Child && before.Via == after.Via && (after.Definition().Storage != "reference" || before.Required == after.Required) && linkKeepsGuarantees(before, after)
+	})
 }
 
 func (b *Build) linkTypeInventory() ([]LinkType, error) {
@@ -175,45 +156,11 @@ func (b *Build) installLinkType(c platform.Caller, f LinkType) error {
 }
 
 func (b *Build) LinkTypeDefinition(name string, version int) (platform.LinkType, int, bool) {
-	installed, ok := b.linkTypes[name]
-	if ok && (version == 0 || version == installed.Version) {
-		return installed.Definition(), installed.Version, true
-	}
-	if version == 0 {
-		return platform.LinkType{}, 0, false
-	}
-	list, err := b.linkTypeInventory()
-	if err != nil {
-		return platform.LinkType{}, 0, false
-	}
-	for _, record := range list {
-		if version < 1 || version > len(record.Versions) {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		latest, err := linkTypeImage(raw)
-		if err != nil || latest.Name != name {
-			continue
-		}
-		f, ok := wasPublished[LinkType](record.Versions[version-1])
-		if ok && f.Version == version {
-			return f.Definition(), version, true
-		}
-	}
-	return platform.LinkType{}, 0, false
+	return retainedDefinition(b.linkTypes, b.linkTypeInventory, linkTypeImage, name, version)
 }
 
 func (b *Build) linkTypeDeclarations() []platform.LinkType {
-	names := make([]string, 0, len(b.linkTypes))
-	for name := range b.linkTypes {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	out := make([]platform.LinkType, 0, len(names))
-	for _, name := range names {
-		out = append(out, b.linkTypes[name].Definition())
-	}
-	return out
+	return definitionDeclarations(b.linkTypes)
 }
 
 func linkKeepsGuarantees(old, next LinkType) bool {

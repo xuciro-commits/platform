@@ -1,10 +1,8 @@
 package platformserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -260,7 +258,7 @@ func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m p
 			unsupported = true
 		}
 	}()
-	answer, refusal = draft.stateApp(a).Input(platform.NewCaller(draft, m, a.Manifest().ID, false, false),
+	answer, refusal = inputApp(draft.stateApp(a), platform.NewCaller(draft, m, a.Manifest().ID, false, false),
 		name, slices.Clone(body), at)
 	return answer, refusal, false
 }
@@ -287,13 +285,8 @@ func decodeAcceptedInput(raw []byte) (acceptedInput, error) {
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
 		return result, fmt.Errorf("connector result is empty or oversized")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
+	if err := decodeAcceptedJSON(raw, &result, "connector result"); err != nil {
 		return result, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return result, fmt.Errorf("connector result has trailing data")
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
 		return result, err

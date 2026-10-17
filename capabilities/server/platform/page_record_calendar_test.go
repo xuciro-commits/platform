@@ -9,7 +9,7 @@ func TestRecordCalendarRequiresOriginalDatesMonthAndRecordProducer(t *testing.T)
 	q := d.Queries[qid]
 	q.Sort = []string{"id"}
 	d.Queries[qid] = q
-	s := Section{ID: "calendar", Widget: "record-calendar", ConfigVersion: 1, CollectionVariable: "window", RecordCalendar: &PageRecordCalendar{DateField: "due", LabelField: "title", InitialMonth: "2026-10"}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordCalendar: &PageRecordCalendar{DateField: "due", LabelField: "title", InitialMonth: "2026-10"}}, ID: "calendar", Widget: "record-calendar", ConfigVersion: 1, CollectionVariable: "window"}
 	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
 	root := d.Nodes[d.Root]
 	root.Children = append(root.Children, s.ID)

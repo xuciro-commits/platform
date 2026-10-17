@@ -158,10 +158,6 @@ func (a *AI) Manifest() platform.Manifest {
 
 func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 
-func (a *AI) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 // Provider is a provider the tenant added, by ID.
 func (a *AI) Provider(id string) (Provider, bool) {
 	a.mu.Lock()

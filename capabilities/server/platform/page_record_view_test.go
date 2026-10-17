@@ -4,7 +4,7 @@ import "testing"
 
 func TestRecordViewProfileAndTabs(t *testing.T) {
 	d := &PageDocument{UIProfile: PageUIProfile()}
-	s := Section{Widget: "record-view", RecordView: &PageRecordView{Tabs: []string{"overview", "properties", "links", "history"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{RecordView: &PageRecordView{Tabs: []string{"overview", "properties", "links", "history"}}}, Widget: "record-view"}
 	if err := d.checkRecordView(s); err != nil {
 		t.Fatal(err)
 	}

@@ -3,15 +3,14 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Form, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { z } from "zod";
-import { active, kind, today, useAdmin, type Chart, type Member } from "./shared";
+import { active, kind, today, type Chart, type Member } from "./shared";
 import type { Api } from "@platform/kernel";
 type Grant = Api.Grant;
 import { ProfileForm, type Account, type TenantRecord } from "./account";
 
 export function Members() {
-  const { can } = useHost();
+  const { can, decide } = useHost();
   const members = useRead<Member[]>("/v1/members");
-  const { decide } = useAdmin();
   const { open } = useWorkspace();
   const [adding, setAdding] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -39,14 +38,14 @@ export function Members() {
           defaultValues={{ id: "", subject: "", agent: false }} submitLabel={t("Add")} onCancel={() => setAdding(false)}
           fields={[{ name: "id", label: t("Member ID") }, { name: "subject", label: t("Signs in as (user:<email> or client:<id>)") },
             { name: "agent", label: t("AI agent (what it causes that cannot be recalled waits for a person's approval)"), kind: "checkbox" }]}
-          onSubmit={async (v) => { if (await decide("platform.member.add", v.id, { subject: v.subject, agent: v.agent })) setAdding(false); }} />
+          onSubmit={async (v) => { if (await decide("platform.member.add", { type: "platform.member", id: v.id }, { subject: v.subject, agent: v.agent })) setAdding(false); }} />
       </Dialog>}
       {can("platform.member.invite") && <Dialog open={inviting} onOpenChange={setInviting} title={t("Invite member")}>
         <p className="mb-2 text-xs text-muted">{t("Add a member who has not signed in yet: they stand invited until they first do, and may be granted roles meanwhile.")}</p>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t("Lower case, digits, dashes")), subject: z.string().regex(/^user:.+/, t("user:<email>")) })}
           defaultValues={{ id: "", subject: "" }} submitLabel={t("Invite")} onCancel={() => setInviting(false)}
           fields={[{ name: "id", label: t("Member ID") }, { name: "subject", label: t("Signs in as (user:<email>)") }]}
-          onSubmit={async (v) => { if (await decide("platform.member.invite", v.id, { subject: v.subject })) setInviting(false); }} />
+          onSubmit={async (v) => { if (await decide("platform.member.invite", { type: "platform.member", id: v.id }, { subject: v.subject })) setInviting(false); }} />
       </Dialog>}
     </>
   );
@@ -59,11 +58,11 @@ export function Standing({ status }: { status?: string }) {
 }
 
 export function MemberDetail({ id }: { id: string }) {
-  const { can, role, me } = useHost();
+  const { can, role, me, decide } = useHost();
   const members = useRead<Member[]>("/v1/members").data ?? [];
   const member = members.find((m) => m.id === id);
   const tenant = useRead<TenantRecord>("/v1/tenant").data;
-  const { apps, decide } = useAdmin();
+  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
   const [granting, setGranting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   if (!member) return <p className="text-sm text-muted">{t("No member")} {id}.</p>;
@@ -83,8 +82,8 @@ export function MemberDetail({ id }: { id: string }) {
         <p className="text-xs text-muted">{standing === "suspended" ? t("The member keeps their roles on record but holds nothing and cannot act until resumed; their sessions end.")
           : t("Suspend to pause a member without losing their roles; offboard when they leave for good.")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {standing === "suspended" ? can("platform.member.resume") && <Button size="sm" onClick={() => void decide("platform.member.resume", member.id, {})}>{t("Resume member")}</Button>
-            : can("platform.member.suspend") && <Button size="sm" onClick={() => { const reason = window.prompt(t("Reason (optional)")) ?? ""; void decide("platform.member.suspend", member.id, { reason }); }}>{t("Suspend member")}</Button>}
+          {standing === "suspended" ? can("platform.member.resume") && <Button size="sm" onClick={() => void decide("platform.member.resume", { type: "platform.member", id: member.id }, {})}>{t("Resume member")}</Button>
+            : can("platform.member.suspend") && <Button size="sm" onClick={() => { const reason = window.prompt(t("Reason (optional)")) ?? ""; void decide("platform.member.suspend", { type: "platform.member", id: member.id }, { reason }); }}>{t("Suspend member")}</Button>}
           {can("platform.member.offboard") && <Button size="sm" variant="danger" onClick={() => setLeaving(true)}>{t("Offboard member")}</Button>}
         </div>
       </Panel>}
@@ -94,7 +93,7 @@ export function MemberDetail({ id }: { id: string }) {
           fields={[{ name: "successor", label: t("Successor"), kind: "select", help: t("The member who takes over their delegations and open items"),
             options: [{ value: "", label: t("none") }, ...members.filter((m) => m.id !== member.id && (m.status ?? "active") === "active").map((m) => ({ value: m.id, label: m.profile.displayName ? `${m.profile.displayName} (${m.id})` : m.id }))] },
             { name: "reason", label: t("Reason (optional)") }]}
-          onSubmit={async (v) => { if (await decide("platform.member.offboard", member.id, { reason: v.reason, successor: v.successor })) setLeaving(false); }} />
+          onSubmit={async (v) => { if (await decide("platform.member.offboard", { type: "platform.member", id: member.id }, { reason: v.reason, successor: v.successor })) setLeaving(false); }} />
       </Dialog>}
       <Panel title={t("Roles")} actions={can("platform.member.grant") && <Button size="sm" onClick={() => setGranting(true)}>{t("Add role")}</Button>}>
         {grants.length === 0 && <p className="text-xs text-muted">{t("Holds no role.")}</p>}
@@ -108,7 +107,7 @@ export function MemberDetail({ id }: { id: string }) {
               {g.reason && <span className="text-xs text-muted">· {g.reason}</span>}
               {g.by && <span className="text-xs text-muted">{t("by {who}", { who: g.by })}</span>}
               {can("platform.member.revoke") && <Button size="sm" variant="ghost" aria-label={t("Revoke {role} in {app}", { role: g.role, app: g.app })}
-                onClick={() => void decide("platform.member.revoke", member.id, { app: g.app, role: g.role, unit: g.unit ?? "" })}>×</Button>}
+                onClick={() => void decide("platform.member.revoke", { type: "platform.member", id: member.id }, { app: g.app, role: g.role, unit: g.unit ?? "" })}>×</Button>}
             </p>
           ))}
         </div>
@@ -116,7 +115,7 @@ export function MemberDetail({ id }: { id: string }) {
       </Panel>
       {can("platform.member.grant") && <Dialog open={granting} onOpenChange={setGranting} title={t("Add role")}>
         <GrantForm apps={apps.filter((a) => a.roles.length)} onCancel={() => setGranting(false)}
-          onSubmit={async (g) => { if (await decide("platform.member.grant", member.id, g)) setGranting(false); }} />
+          onSubmit={async (g) => { if (await decide("platform.member.grant", { type: "platform.member", id: member.id }, g)) setGranting(false); }} />
       </Dialog>}
       {(role("enterprise") || role("platform") === "admin") && <MemberUnits member={member.id} />}
       {role("platform") === "admin" && <Panel title={t("Profile")}>

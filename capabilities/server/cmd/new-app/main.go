@@ -270,14 +270,6 @@ func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declar
 func (a *App) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
 
-func (a *App) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-
-func (a *App) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
 // Submit decides the app's actions: here only the generated ones and the
 // lifecycle's; an action with rules of its own is decided below them.
 func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {

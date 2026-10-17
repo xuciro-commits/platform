@@ -159,6 +159,20 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	return encoded, nil
 }
 
+// decodeAcceptedJSON reads exactly one typed value; each result family keeps
+// its own size, version, identity and predecessor checks.
+func decodeAcceptedJSON(raw []byte, target any, name string) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("%s has trailing data", name)
+	}
+	return nil
+}
+
 func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) {
 	var result acceptedResult
 	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {

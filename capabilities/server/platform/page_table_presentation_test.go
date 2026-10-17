@@ -5,7 +5,7 @@ import "testing"
 func TestTablePresentationBoundsAndFieldFormats(t *testing.T) {
 	d := &PageDocument{UIProfile: PageUIProfile()}
 	search := false
-	s := Section{Widget: "table", Fields: []string{"amount", "status", "date"}, ShowSearch: &search, TableColumns: []PageTableColumn{{Field: "id", Title: "Record", Width: 90}, {Field: "amount", Formatter: "numeric"}, {Field: "status", Formatter: "badge"}, {Field: "date", Formatter: "date"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{ShowSearch: &search, TableColumns: []PageTableColumn{{Field: "id", Title: "Record", Width: 90}, {Field: "amount", Formatter: "numeric"}, {Field: "status", Formatter: "badge"}, {Field: "date", Formatter: "date"}}}, Widget: "table", Fields: []string{"amount", "status", "date"}}
 	info := EntityInfo{Fields: []FieldInfo{{Name: "amount", Type: "decimal"}, {Name: "status", Type: "choice"}, {Name: "date", Type: "date"}}}
 	if err := d.checkTablePresentation(s); err != nil {
 		t.Fatal(err)

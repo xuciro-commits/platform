@@ -3,12 +3,13 @@ import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Dialog, Input, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
-import { useAdmin, when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
+import { when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
 
 // Automation: which app reacts to which decisions, the work the host owns
 // (queued and failed deliveries, scheduled jobs), and every delivery attempt.
 export function Automation() {
-  const { apps, decideOn } = useAdmin();
+  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
+  const { decide } = useHost();
   const deliveries = useRead<Delivery[]>("/v1/deliveries");
   const work = useRead<Task[]>("/v1/work");
   const health = useRead<Api.TenantHealth>("/v1/health", 5000).data;
@@ -23,7 +24,7 @@ export function Automation() {
     { accessorKey: "due", header: t("Next"), meta: { width: 170 }, cell: ({ row: { original: t } }) => (t.state === "failed" ? "—" : when(t.due)) },
     { accessorKey: "error", header: t("Last error"), meta: { width: 170 }, cell: (c) => c.getValue() ? <Tag label={c.getValue()} tone="danger" /> : "" },
     { id: "retry", header: "", meta: { width: 90 }, cell: ({ row: { original: w } }) => (w.state === "failed" || w.kind === "job") &&
-      <Button size="sm" onClick={() => void decideOn("platform.work.retry", { type: "platform.work", id: w.id }, {})}>{w.kind === "job" ? t("Run now") : t("Retry")}</Button> },
+      <Button size="sm" onClick={() => void decide("platform.work.retry", { type: "platform.work", id: w.id }, {})}>{w.kind === "job" ? t("Run now") : t("Retry")}</Button> },
   ];
   const subscriptions = apps.flatMap((a) => a.subscribes.map((action) => ({ app: a.id, action })));
   const columns: ColumnDef<Delivery, any>[] = [
@@ -79,7 +80,7 @@ export function Automation() {
 // Integrations: the tenant's connectors (K8) with health, cursor and the last refused input.
 export function Integrations() {
   const connectors = useRead<Connector[]>("/v1/connectors", 5000);
-  const { decideOn } = useAdmin();
+  const { decide } = useHost();
   const tone = (h: string) => (({ ok: "success", stale: "warning", disabled: "neutral" }) as const)[h as "ok"] ?? "danger";
   const columns: ColumnDef<Connector, any>[] = [
     { accessorKey: "id", header: t("Connector"), meta: { width: 130 } },
@@ -92,7 +93,7 @@ export function Integrations() {
     { id: "error", header: t("Last refused input"), accessorFn: (c) => c.lastError ? `${c.lastError.input}: ${c.lastError.error}` : "",
       cell: ({ row: { original: c } }) => c.lastError ? <span className="text-xs"><Tag label={c.lastError.error} tone="danger" /> {c.lastError.input} · {when(c.lastError.at)}</span> : "" },
     { id: "switch", header: "", meta: { width: 90 }, cell: ({ row: { original: c } }) =>
-      <Button size="sm" variant={c.disabled ? "primary" : "default"} onClick={() => void decideOn(c.disabled ? "platform.connector.enable" : "platform.connector.disable", { type: "platform.connector", id: c.id }, {})}>
+      <Button size="sm" variant={c.disabled ? "primary" : "default"} onClick={() => void decide(c.disabled ? "platform.connector.enable" : "platform.connector.disable", { type: "platform.connector", id: c.id }, {})}>
         {c.disabled ? t("Enable") : t("Disable")}</Button> },
   ];
   return (
@@ -112,7 +113,8 @@ function Webhooks() {
   const endpoints = useRead<EndpointView[]>("/v1/endpoints");
   const effects = useRead<Effect[]>("/v1/effects");
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
-  const { apps, decideOn } = useAdmin();
+  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
+  const { decide } = useHost();
   const [adding, setAdding] = useState(false);
   const blank = { kind: "webhook", id: "", url: "", secret: "", from: "", allowPrivate: false, events: [] as string[], effects: [] as string[], notifications: [] as string[] };
   const [draft, setDraft] = useState(blank);
@@ -136,10 +138,10 @@ function Webhooks() {
     { accessorKey: "callbackError", header: t("Receipt refusal"), meta: { width: 240 }, cell: (c) => <span className="text-xs text-danger">{c.getValue() ?? ""}</span> },
     { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
       {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
-      {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decideOn("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
-      {x.state === "held" && <Button size="sm" variant="primary" onClick={() => void decideOn("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
+      {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decide("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
+      {x.state === "held" && <Button size="sm" variant="primary" onClick={() => void decide("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
       {(x.state === "held" || x.state === "pending" || x.state === "retrying") &&
-        <Button size="sm" variant="danger" onClick={() => void decideOn("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>{t("Discard")}</Button>}
+        <Button size="sm" variant="danger" onClick={() => void decide("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>{t("Discard")}</Button>}
     </span> },
   ];
   return (
@@ -159,7 +161,7 @@ function Webhooks() {
             <span className="text-xs text-muted">{ep.kind === "email" ? `from ${ep.from}` : `secret “${ep.secret}”`} · {ep.delivered} {t("delivered ·")} {ep.pending} waiting</span>
             <span className="flex flex-wrap gap-1">{[...(ep.events ?? []), ...(ep.effects ?? []), ...(ep.notifications ?? []).map((a) => `${a} notifications`)]
               .map((e) => <Tag key={e} label={e} tone="info" />)}</span>
-            <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decideOn("platform.endpoint.remove", { type: "platform.endpoint", id: ep.id }, {})}>{t("Remove")}</Button>
+            <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decide("platform.endpoint.remove", { type: "platform.endpoint", id: ep.id }, {})}>{t("Remove")}</Button>
           </Card>
         ))}
       </div>
@@ -210,7 +212,7 @@ function Webhooks() {
                 const { id, ...all } = draft;
                 const payload = email ? { kind: all.kind, url: all.url, from: all.from, secret: all.secret || undefined, notifications: all.notifications, allowPrivate: all.allowPrivate }
                   : { url: all.url, secret: all.secret, events: all.events, effects: all.effects, allowPrivate: all.allowPrivate };
-                if (await decideOn("platform.endpoint.add", { type: "platform.endpoint", id }, payload)) setAdding(false);
+                if (await decide("platform.endpoint.add", { type: "platform.endpoint", id }, payload)) setAdding(false);
               }}>{t("Add")}</Button>
           </span>
         </div>
@@ -222,10 +224,10 @@ function Webhooks() {
 // App settings: typed values each app declares; a change is a platform decision.
 export function AppSettingsView() {
   const settings = useRead<AppSettings[]>("/v1/settings");
-  const { decideOn } = useAdmin();
+  const { decide } = useHost();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const set = (app: string, s: SettingValue, value: string) =>
-    decideOn("platform.setting.set", { type: "platform.setting", id: `${app}/${s.name}` }, { value });
+    decide("platform.setting.set", { type: "platform.setting", id: `${app}/${s.name}` }, { value });
   return (
     <>
       <PageHeader title={t("App settings")} description={t("Values within the rules each app's code defines: thresholds, switches, choices. Rules themselves are code.")} />

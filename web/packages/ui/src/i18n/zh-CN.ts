@@ -1,5 +1,6 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "plug": "协议连接",
   "Observation source": "观测源",
   "Protocol": "协议",
   "Interface": "接口",

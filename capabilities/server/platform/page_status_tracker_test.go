@@ -8,7 +8,7 @@ import (
 
 func TestStatusTrackerProfileOriginalSchemaAndFrozenStates(t *testing.T) {
 	info := EntityInfo{App: "sample", Type: "sample.item", Fields: []FieldInfo{{Name: "state", Type: "choice"}}, Lifecycle: &LifecycleInfo{Field: "state", States: []State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}}}
-	s := Section{ID: "status", Widget: "status-tracker", ConfigVersion: 1, StatusTracker: &PageStatusTracker{Field: "state", Stages: []string{"done", "open"}}}
+	s := Section{PageWidgetConfig: PageWidgetConfig{StatusTracker: &PageStatusTracker{Field: "state", Stages: []string{"done", "open"}}}, ID: "status", Widget: "status-tracker", ConfigVersion: 1}
 	d := &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"status"}}, "status": {Kind: "widget", Section: "status"}}}
 	if d.Check([]Section{s}) != nil || s.CheckStatusTracker(info) != nil {
 		t.Fatal("valid original lifecycle refused")

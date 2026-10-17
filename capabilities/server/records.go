@@ -1798,7 +1798,7 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 		out[i].Records = append(out[i].Records, page.Records[0])
 		out[i].Total++
 	}
-	if notes, err := rel.Read(c, "timeline"); err == nil {
+	if notes, err := readApp(rel, c, "timeline"); err == nil {
 		for _, n := range notes.([]platform.RelationNote) {
 			if n.Entity == entity {
 				activity = append(activity, n)
