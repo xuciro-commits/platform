@@ -2,7 +2,7 @@ import {useInputDrafts} from "@platform/ui";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.
@@ -126,7 +126,7 @@ export function FunctionEditor({ id }: { id: string }) {
         <Button size="sm" disabled={busy || !draft.id} variant="ghost" onClick={() => confirmDiscard(() => void perform(reload))}>{t("Reload saved function")}</Button>
         <Button size="sm" disabled={busy || (!dirty && id !== "new")} onClick={() => void perform(save)}>{t("Save function")}</Button>
         <Button size="sm" variant={testing ? "primary" : "ghost"} aria-pressed={testing} disabled={busy || !draft.id || dirty} onClick={() => setTesting(!testing)}>{t("Test")}</Button>
-        <PublishMenu type="build.function" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "function", params: { id } }} />
+        <ResourceControls type="build.function" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p>
     {testing && draft.id && !dirty && <Card className="p-3"><CandidateTest functionId={draft.id} embedded /></Card>}

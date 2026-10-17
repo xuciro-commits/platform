@@ -3,7 +3,7 @@ import type { Api } from "@platform/kernel";
 import { ObservationRead, SemanticObjectSelect, SemanticPropertySelect, useHost, useProvidedCapabilities, useReadQuery, useRecordInventory, useTransition } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
-import { PublishMenu, ResourceControls } from "../editor/workbench";
+import { ResourceControls } from "../editor/workbench";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 
@@ -65,8 +65,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   return <div className="grid min-w-0 gap-4">
     <PageHeader title={draft.title || t("New observation source")} description={t("The source stores a portable declaration. Connection addresses, credentials and original points stay outside the artifact.")} actions={<>
       <Button variant="ghost" onClick={() => open({ view: "observation-source" })}>{t("Observation sources")}</Button>
-      <ResourceControls type="build.observation" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "observation-source", params: { id } }} />
-      {editable && <PublishMenu type="build.observation" record={draft} dirty={dirty} busy={busy} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(install)} onDiscard={discardChanges} invalid={!!inputDrafts?.invalid} route={{ view: "observation-source", params: { id } }} />}
+      <ResourceControls type="build.observation" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} onSave={editable ? () => void perform(save) : undefined} onReview={editable ? () => void perform(review) : undefined} onInstall={editable ? () => void perform(install) : undefined} invalid={!!inputDrafts?.invalid} route={{ view: "observation-source", params: { id } }} />
       {draft.state === "published" && can("build.observation.retire") && <Button disabled={busy || dirty} onClick={() => transitions.take("build.observation.retire", { ...draft, created: draft.created ?? {}, changed: draft.changed ?? {} })}>{t("Retire source")}</Button>}
     </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

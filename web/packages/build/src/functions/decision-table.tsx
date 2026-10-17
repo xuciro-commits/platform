@@ -3,7 +3,7 @@ import { useApplicationScope, useApplicationWorkspace } from "../projects/applic
 import { joinProjectResource } from "../projects/membership";
 import { kindOfType, resourceRef } from "../projects/resources";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, PublishMenu, ResourceControls } from "../editor/workbench";
+import { DraftStatus, ResourceControls } from "../editor/workbench";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
@@ -84,8 +84,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "decision-table" })}>{t("Decision tables")}</Button>
         <Button disabled={busy || !!inputDrafts?.invalid || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save decision table")}</Button>
-        <PublishMenu type="build.table" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onDiscard={discardChanges} route={{ view: "decision-table", params: { id } }} />
-        <ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />
+        <ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />
         <DraftStatus state={dirty ? "draft" : draft.state} />
       </div>} />
     <p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p>

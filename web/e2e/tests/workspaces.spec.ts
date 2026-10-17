@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { expect, fresh, pageUIProfile, test } from "./kit";
+import { expect, fresh, pageUIProfile, shots, test } from "./kit";
 import { switchWorkspace } from "./host";
 
 test("task workspaces preserve native PMS and hand off a controlled receiving application", async ({ browser, page, builder, operator, editor }, testInfo) => {
@@ -154,6 +154,58 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await page.goto(`/#/project?id=${appID}`); // preserve the supported old deep link
   await editor.release();
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
+
+  // Resource controls share one archive operation and keep discarded edits local.
+  await builder.open(page, `/project?id=${appID}&area=behavior`);
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
+  const cancelledRuleName = `cancelled${suffix}`;
+  await page.getByRole("textbox", { name: "Rule name", exact: true }).fill(cancelledRuleName);
+  await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Cancelled receiving alert");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  const unsaved = page.getByRole("dialog", { name: "Unsaved changes", exact: true });
+  if (await unsaved.isVisible()) await unsaved.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).hash.startsWith("#/project?")).toBe(true);
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${appID}(?:&|$)`));
+  const cancelledRules = await builder.read<{ records: { name: string }[] }>("records/build.alertrule?limit=1000");
+  expect(cancelledRules.records.some(rule => rule.name === cancelledRuleName)).toBe(false);
+
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Behavior", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
+  const ruleName = `receivingalert${suffix}`;
+  await page.getByRole("textbox", { name: "Rule name", exact: true }).fill(ruleName);
+  await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Receiving alert");
+  await page.getByRole("combobox", { name: "Object", exact: true }).selectOption(object.type);
+  await page.getByRole("combobox", { name: "Field", exact: true }).selectOption("number");
+  await page.getByRole("textbox", { name: "Value", exact: true }).fill("FOLLOWUP");
+  await page.getByRole("textbox", { name: "Message", exact: true }).fill("Check the receiving documents.");
+  await page.getByRole("button", { name: "Save alert rule", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.app", appID)).resources)
+    .toContainEqual({ app: "build", kind: "alert", name: ruleName });
+  const rules = await builder.read<{ records: { id: string; name: string }[] }>("records/build.alertrule?limit=1000");
+  const ruleID = rules.records.find(rule => rule.name === ruleName)!.id;
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${ruleID}(?:&|$)`));
+  const savedRule = await builder.record("build.alertrule", ruleID);
+  await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Unsaved receiving alert");
+  await page.getByRole("button", { name: "Publish options", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Archive…", exact: true })).toBeDisabled();
+  await page.getByRole("menuitem", { name: "Discard unsaved changes", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Rule title", exact: true })).toHaveValue("Receiving alert");
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${ruleID}(?:&|$)`));
+  await expect(page.getByRole("button", { name: "Archive", exact: true })).toHaveCount(0);
+  await shots(page, page.locator("body"), "resource-controls", testInfo);
+  await page.getByRole("button", { name: "Publish options", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Archive…", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("menuitem", { name: "Archive…", exact: true })).toBeEnabled();
+  await page.getByRole("menuitem", { name: "Archive…", exact: true }).click();
+  const archive = page.getByRole("dialog");
+  await expect(archive).toHaveCount(1);
+  await expect(archive).toContainText("Archive this saved record?");
+  await archive.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(archive).toHaveCount(0);
+  expect(await builder.record("build.alertrule", ruleID)).toEqual(savedRule);
+  await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "WMS entry probe", exact: true }).click();
 
   // Navigation is retained state, not assumed collapsed. Open it through the
   // original accessible toggle only when needed; retain all owner assertions.

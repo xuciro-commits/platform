@@ -6,7 +6,7 @@ import {useInputDrafts} from "@platform/ui";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useAuthoringModel } from "../ontology/authoring-model";
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t, useUnsavedChanges } from "@platform/ui";
@@ -98,7 +98,7 @@ export function AgentEditor({ id }: { id: string }) {
     actions={<>
       <Button size="sm" disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
       <Button size="sm" disabled={busy || (!dirty && id !== "new")} onClick={() => void perform(save)}>{t("Save agent")}</Button>
-      <PublishMenu type="build.agent" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "agent", params: { id } }} />
+      <ResourceControls type="build.agent" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "agent", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <p className="text-xs text-muted">{t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}</p>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}

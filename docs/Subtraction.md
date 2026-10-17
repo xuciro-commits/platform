@@ -61,6 +61,7 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 - 知识文档和术语的手写新建按钮、`Dialog` / `GeneratedForm`、记录 ID、打开状态与提交回调删除，保留原 `Records` 的唯一声明动作入口；`NewActions` 的独立弹窗状态也删除，列表与菜单共用已有 `useNewRecord`。检索和术语影响说明保留，标准创建的拒绝、纠正和同键确认沿原动作会话。
 - `widgets/FunctionAdvice.tsx` 整个删除，旧 `function` 部件改用已有 `AIWidget` / `createAIReader`，不再独立发起、读取、刷新或维护调用结果状态。旧部件种类与版本不变，仍使用页面所选记录；历史按记录、函数和版本筛选，直接打开正式调用详情，计量信息归该详情，采纳仍走原 `ProposalReview` 与审批事务。
 - `ActionDialog` 的 `create()`、`request/createLock`、`outcome/refusal/issues/draft` 状态及第二份纠正判断删除；它只保留弹窗、自定义 ID 与子表单忙碌/等待通知。创建、编辑、声明参数和内联动作由原 `DeclaredActionForm` 的一份提交实现负责，原 K5 outbox、输入表单和拒绝呈现保留，未新增提交器或会话框架。
+- `PublishMenu` 与 `ResourceControls` 的两份归档会话、对话框和返回计算合为唯一 `ResourceControls`，旧组件及调用退出；告警、决策表和观测源不再同时放两套控件。发布页面的已保存丢弃/归档只在原菜单，新建取消仍丢弃并离开，未提供发布回调的页面保留独立取消与归档。重复返回按钮删除，沿现有应用上下文导航；完整原路由、归档 revision、未保存保护和观测编辑权限保留。
 
 检查沿 Testing 的应用运行任务与构建者验证任务：原正式详情取消、答复丢失后同键重试、编辑器历史查看及正常新建入口已通过；旧操作按钮明确不存在。Web 类型、目录及双语检查通过，不改执行、权限、持久格式或历史版本责任。
 

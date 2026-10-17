@@ -4,7 +4,7 @@ import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges,actionStateInput,setActionDestination} from "./process-rules";
 import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 // The object's process editor (ADR-0037): its states and the actions people
 // take on its records. The main tables and map own selection; the Inspector
 // edits that selection, without a second copy in a structure sidebar.
@@ -151,7 +151,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   return <Workbench storageKey="object-type" crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} title={object.title}
     status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
-    actions={<PublishMenu type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "object-type", params: { id } }} />}
+    actions={<ResourceControls type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "object-type", params: { id } }} />}
     right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}

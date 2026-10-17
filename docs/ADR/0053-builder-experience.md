@@ -355,7 +355,7 @@ P1–P4、P6、P7（前端部分）已落地于一次提交；P5 的自动化契
 | ADR 决策 | 代码 |
 | --- | --- |
 | D7 单一 `Workbench` 容器（标题栏 · 结构 · 主区 · 检查器 · 底栏，尺寸记忆） | `@platform/ui` `layout/Workbench.tsx`（`Workbench`、`StructureRow`、`PanelSection`、`ProblemList`、`WorkbenchProblem`）。侧栏与 Dock 隐藏而不销毁已访问的编辑上下文；Dock 页签只选择/打开，关闭为独立命令，`open` / `onOpenChange` 让 Run / Publish 重新打开同一任务。页签统一复用 `ContentTabs` 的惰性挂载、保留输入与方向键 / Home / End 导航；隐藏拥有面板时 `Dialog` / `Sheet` 撤下全局层而保留逻辑输入。按容器可用空间切换三栏或单面板聚焦，分隔条有边界、键盘及双击复位；不向文档写入面板布局。 |
-| D6 草稿保存、`● Draft`、Publish 菜单 | `build/editor/workbench.tsx`（对象/动作的 Save、其他编辑器的 `useAutoSave`、`savingState`、`DraftStatus`、`PublishMenu`、`WorkbenchMessage`、`ResourceControls`） |
+| D6 草稿保存、`● Draft`、Publish 菜单 | `build/editor/workbench.tsx`（对象/动作的 Save、其他编辑器的 `useAutoSave`、`savingState`、`DraftStatus`、`WorkbenchMessage`、唯一的 `ResourceControls`；原 `PublishMenu` 已合并删除，归档确认与丢弃不再实例化两份） |
 | D1 Projects 取代 Application 编辑器 | `build/projects/project.tsx`（`ProjectsList`、`ProjectHome`：资源树 · 内容/设置 · 未发布变更底栏）、`projects/resources.ts`（资源种类与路由） |
 | D1 Workshop Module = 项目的页面 + 页头 + 导航 | `build/workshop/ModuleWorkbench.tsx`（模块树、页头编辑、分组、变量/查询汇总、模块预览；移除最后一个 Logo 项同时清 URL，关闭页头以显式 `null` 清除保存值）；`PageEditor` 作为模块内的页面视图（`module` 上下文）。Problems 镜像宿主分组拒绝，发布审查按宿主 Go `%q` 的实际引号识别原因，以成员语言显示并返回 Navigation/Header；特定页头规则优先于通用规则，未知拒绝保留原文 |
 | D4 页面编辑器：图层/组件库 · 画布 · 按选中对象切换的检查器 · 问题/变量底栏 · Preview 开关 | `build/workshop/editor.tsx`（`PageEditor({ id, module })`、`widgetInspectorTabs`）、`page-editor/WidgetLibrary.tsx` |

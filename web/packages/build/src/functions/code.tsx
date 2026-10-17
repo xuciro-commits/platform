@@ -1,6 +1,6 @@
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
@@ -111,7 +111,7 @@ export function CodeEditor({ id }: { id: string }) {
     actions={<>
         <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
         <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
-        <PublishMenu type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onDiscard={discardChanges} route={{ view: "code", params: { id } }} />
+        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}

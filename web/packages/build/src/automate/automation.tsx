@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, Brain, Clock, MoreHorizontal, Plus, Trash2, Workflo
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
 import { WorkflowInspector } from "./workflow-inspector";
 import { PERIODS, capabilityKey, initialStep, nextStepName, periodLabel, type Capability, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { WorkflowRuns } from "./workflow-runs";
@@ -149,7 +149,7 @@ export function AutomationEditor({ id }: { id: string }) {
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: session.undo, redo: session.redo }}
     actions={<>
       <ActionMenu label={t("More automation commands")} icon={<MoreHorizontal />} commands={[{ id: "map", label: t("Open on the flow map"), icon: <Workflow />, disabled: !draft.id, run: () => open({ view: "flow", params: { id: draft.id } }) }]} />
-      <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "automation", params: { id } }} />
+      <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={invalid} empty={!effects.length} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "automation", params: { id } }} />
     </>}
     right={{ label: t("Automation inspector"), heading: chosenStep?.title || chosenStep?.name || t(chosen === "condition" ? "If" : "When"), scope:String(chosen),locate:()=>setChosen(chosen), content: <div className="p-2">
       {chosen === "trigger" && <div className="grid gap-3">

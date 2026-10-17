@@ -5,7 +5,7 @@ import { useApplicationScope, useApplicationWorkspace } from "../projects/applic
 import { joinProjectResource } from "../projects/membership";
 import { kindOfType, resourceRef } from "../projects/resources";
 import { ResourceList } from "../editor/ResourceList";
-import { DraftStatus, PublishMenu, ResourceControls } from "../editor/workbench";
+import { DraftStatus, ResourceControls } from "../editor/workbench";
 import type { WorkflowObject } from "../automate/workflow-model";
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
@@ -81,8 +81,7 @@ export function AlertEditor({ id }: { id: string }) {
       actions={<div className="flex flex-wrap gap-2">
         <Button variant="ghost" onClick={() => open({ view: "alert" })}>{t("Alert rules")}</Button>
         <Button disabled={busy || !!inputs?.invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save alert rule")}</Button>
-        <PublishMenu type="build.alertrule" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onDiscard={discardChanges} route={{ view: "alert", params: { id } }} />
-        <ResourceControls type="build.alertrule" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "alert", params: { id } }} />
+        <ResourceControls type="build.alertrule" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "alert", params: { id } }} />
         <DraftStatus state={dirty ? "draft" : draft.state} />
       </div>} />
     <p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p>

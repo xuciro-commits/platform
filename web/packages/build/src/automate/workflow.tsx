@@ -2,7 +2,7 @@ import {useInputBuffers} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import {DraftInputs,useDraftSession} from "../session/DraftSession";
 import {workflowInputs,workflowRunMatches} from "./workflow-session";
 // Logic Studio edits the one build.process definition. Its native Flow owner
@@ -353,7 +353,7 @@ export function FlowEditor({ id }: { id: string }) {
           { id: "import", label: t("Import Workshop flow…"), disabled: busy || !!draft.id, run: () => setImportingFlow(true) },
           ...(draft.id ? [{ id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess && fresh.data?.record) { markSaved(); session.load(fresh.data.record); baseRevision.current = fresh.data.record.revision; loaded.current = `${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } })) }] : []),
         ]} />
-        <PublishMenu type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onDiscard={discardChanges} route={{ view: "flow", params: { id } }} />
+        <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "flow", params: { id } }} />
       </>}
       onKeyDown={(event) => { if (!(event.metaKey || event.ctrlKey)) return; if (event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy && !importingFlow && !brokenForm.length) void perform(save); } }}
       left={{ label: t("Flow structure"), tabs: [

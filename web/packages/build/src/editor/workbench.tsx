@@ -34,10 +34,10 @@ export function DraftStatus({ state, problems = 0, archived }: { state?: string;
   </>;
 }
 
-/** Publish ▾: review the release, install directly where the tenant allows it, discard the draft, archive. */
-export function PublishMenu({ type, record, dirty, busy = false, invalid = false, empty = false, onReview, onInstall, onSave, onDiscard, route, extra = [] }: {
-  type: string; record?: { id?: string; revision?: number; archived?: boolean; state?: string }; dirty: boolean; busy?: boolean; invalid?: boolean; empty?: boolean;
-  onReview: () => void; onInstall?: () => void; onSave?: () => void; onDiscard?: () => void; route?: Route; extra?: ContextCommand[];
+/** One resource lifecycle: cancel, optional release review, and original archive confirmation. */
+export function ResourceControls({ type, record, dirty = false, busy = false, invalid = false, empty = false, onReview, onInstall, onSave, onCancel, route, extra = [] }: {
+  type: string; record?: { id?: string; revision?: number; archived?: boolean; state?: string }; dirty?: boolean; busy?: boolean; invalid?: boolean; empty?: boolean;
+  onReview?: () => void; onInstall?: () => void; onSave?: () => void; onCancel?: () => void; route?: Route; extra?: ContextCommand[];
 }) {
   const inputs=useInputDrafts();invalid ||=!!inputs?.invalid;busy ||=!!inputs?.busy;
   const { open, close } = useWorkspace();
@@ -46,20 +46,21 @@ export function PublishMenu({ type, record, dirty, busy = false, invalid = false
   const archive = useRecordArchive(type);
   const home: Route = application ? { view: "project", params: { id: application } } : { view: "projects" };
   const tab: Route | undefined = route && application ? { view: route.view, params: { ...(route.params ?? {}), application } } : route;
-  const leave = () => { open(home); if (tab) close(tab); };
+  const leave = () => { onCancel?.(); open(home); if (tab) close(tab); };
   const commands: ContextCommand[] = [
-    { id: "review", label: t("Review and publish…"), icon: <Rocket />, disabled: busy || invalid || empty, run: onReview },
+    ...(onReview ? [{ id: "review", label: t("Review and publish…"), icon: <Rocket />, disabled: busy || invalid || empty, run: onReview }] : []),
     ...(directInstall && onInstall ? [{ id: "install", label: t("Install directly (no release)"), disabled: dirty || busy || invalid || empty, run: onInstall }] : []),
     ...extra,
-    ...(onDiscard ? [{ id: "discard", label: t("Discard unsaved changes"), disabled: !dirty || busy, separatorBefore: true, run: onDiscard }] : []),
+    ...(onCancel && record?.id ? [{ id: "discard", label: t("Discard unsaved changes"), disabled: !dirty || busy, separatorBefore: true, run: onCancel }] : []),
     ...(record?.id && !record.archived && archive.available ? [{ id: "archive", label: t("Archive…"), danger: true, disabled: dirty || busy, run: () => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave) }] : []),
   ];
   return <>
+    {onCancel && (!onReview || !record?.id) && <Button variant="ghost" disabled={busy || (!dirty && !!record?.id)} onClick={() => record?.id ? onCancel() : leave()}>{t(record?.id ? "Cancel changes" : "Cancel")}</Button>}
     {onSave && <Button size="sm" disabled={busy || !dirty||invalid} onClick={onSave}>{t("Save")}</Button>}
-    <div className="flex items-center">
+    {onReview ? <div className="flex items-center">
       <Button variant="primary" size="sm" className="rounded-r-none" disabled={busy || invalid || empty} onClick={onReview} title={invalid ? t("Fix the problems first.") : empty ? t("Nothing to publish yet.") : undefined}>{t("Publish")}</Button>
       <ActionMenu label={t("Publish options")} variant="primary" icon={<ChevronDown />} commands={commands} />
-    </div>
+    </div> : record?.id && !record.archived && archive.available && <Button variant="danger" disabled={dirty || busy} onClick={() => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave)}>{t("Archive")}</Button>}
     {archive.dialog}
   </>;
 }
@@ -67,23 +68,4 @@ export function PublishMenu({ type, record, dirty, busy = false, invalid = false
 /** The main area of a Workbench while its record loads or is missing. */
 export function WorkbenchMessage({ children }: { children: ReactNode }) {
   return <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted">{children}</div>;
-}
-
-/** Back-to-project, cancel and archive for the small resource editors that keep a plain header (link types, shared properties, queries, test plans). */
-export function ResourceControls({ type, record, dirty = false, busy = false, onCancel, route }: {
-  type: string; record?: { id?: string; revision?: number; archived?: boolean }; dirty?: boolean; busy?: boolean;
-  onCancel?: () => void; route?: Route;
-}) {
-  const { open, close } = useWorkspace();
-  const application = useApplicationScope();
-  const archive = useRecordArchive(type);
-  const home: Route = application ? { view: "project", params: { id: application } } : { view: "projects" };
-  const tab: Route | undefined = route && application ? { view: route.view, params: { ...(route.params ?? {}), application } } : route;
-  const leave = () => { onCancel?.(); open(home); if (tab) close(tab); };
-  return <>
-    {application && <Button variant="ghost" disabled={busy} onClick={() => open(home)}>{t("Back to project")}</Button>}
-    {onCancel && <Button variant="ghost" disabled={busy || (!dirty && !!record?.id)} onClick={() => record?.id ? onCancel() : leave()}>{t(record?.id ? "Cancel changes" : "Cancel")}</Button>}
-    {record?.id && !record.archived && archive.available && <Button variant="danger" disabled={busy} onClick={() => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave)}>{t("Archive")}</Button>}
-    {archive.dialog}
-  </>;
 }

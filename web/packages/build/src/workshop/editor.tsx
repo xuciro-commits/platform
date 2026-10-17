@@ -33,7 +33,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
 import { WidgetLibrary } from "./page-editor/WidgetLibrary";
-import { DraftStatus, PublishMenu, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
 import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
 import { BindingEditor } from "../automate/workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
@@ -461,7 +461,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
           { id: "compatibility", label: t("Review page compatibility…"), disabled: busy, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
         ]} />
-        <PublishMenu type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} onReview={() => void review()} onInstall={() => void publish()} onDiscard={discardChanges} route={canvasRoute} />
+        <ResourceControls type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} onReview={() => void review()} onInstall={() => void publish()} onCancel={discardChanges} route={canvasRoute} />
       </>}
       onKeyDown={(event) => {
         const command = event.metaKey || event.ctrlKey;
