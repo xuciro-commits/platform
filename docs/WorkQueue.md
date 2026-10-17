@@ -2,17 +2,18 @@
 
 只放当前要交付的工作。整个项目的收敛范围与文档分工归 [ADR-0124](ADR/0124-platform-consolidation.md)；产品宗旨归 [Intent](Intent.md)，应用构建方向与边界归 [ADR-0098](ADR/0098-build-the-capability-to-build.md)，第一次真实交付归 [ADR-0122](ADR/0122-first-real-delivery.md)，能力现状归 [Platform](Platform.md)。本队列不复制各 ADR 的实现记录，不保存完成记录。
 
-## 当前：平台整体收敛——连续应用构建与资产演进
+## 当前：XXXL 平台架构减负与代码收敛
 
-沿 [ADR-0124](ADR/0124-platform-consolidation.md) 的整个项目范围，围绕实际应用继续检查建模、装配、规则、验证、发布后修改与运行的一致性，不限于 ADR-0098 的后续功能。按实际阻断选择下一整块；现行职责、已移除的重复实现与检查范围归该 ADR 和相关能力的 As built，不另列完成清单。
+总体决定、生产代码基线和 1/3 挑战目标归 [ADR-0125](ADR/0125-xxxl-radical-simplification.md)。本队列只记录施工顺序；每个主题以删除旧实现、迁移消费者、验证不变量和复算代码量为一个完成单元。**当前不是只做文档或调查，下一步沿 XXL-1 记录运行时落地。**
 
-- 从空白应用连续完成对象/关系、事务与规则、页面、流程/集成/AI、试跑、发布和后续修改，修复实际阻断；复杂操作沿原类型化编辑器，不以手写底层定义或预改生产状态绕过。
-- 检查主要功能的自然入口、引用与错误定位，以及查看/选择/编辑/执行/管理的打开方式；切换应用和资源时保留草稿、返回位置与权限范围。
-- 对发现的重复职责、不同入口授权或结果显示不一致，在原归属方合并或修复；保留历史版本和运行语义，不为了界面统一降低已有表达能力。
+1. **XXL-1 记录 runtime** — [ADR-0126](ADR/0126-record-runtime-consolidation.md)：梳理 store/query/授权 projection owner；删除重复编码、复制和转换；检查记录读写、字段遮蔽、历史恢复与基准。
+2. **XXL-2 定义发布生命周期** — [ADR-0127](ADR/0127-definition-publication-lifecycle.md)：建立 schema/image 到 validate/apply/restore 的全量表；统一同一解码与身份校验；迁移全部资产 consumer 后删除分散分支。
+3. **XXL-3 持久执行** — [ADR-0128](ADR/0128-durable-execution-ownership.md)：以责任矩阵审查 flow/work/transaction/effects；逐一合并重复状态和执行器，不合并不同的原子边界。
+4. **XXL-4 工作区与页面** — [ADR-0129](ADR/0129-workspace-page-architecture.md)：从导航、Records、Workspace、Inspector 与 Page renderer 的实际任务入手，删除竞争状态/入口，验证构建者端到端工作。
+5. **XXL-5 应用与包边界** — [ADR-0130](ADR/0130-application-and-package-boundaries.md)：确认各原生应用/平台包/行业包的等价替代和历史责任，逐个迁移 consumers 后退出重复业务实现。
+6. **XXL-6 性能** — [ADR-0131](ADR/0131-measurable-performance.md)：对固定 workloads 做基线；先删除重复工作，再做收益可测的算法优化。
 
-每块整合同时清退被取代的普通实现，并说明删除路径、唯一归属与保留能力的检查；只补入口和连接不算代码收敛完成，As built 不作为进度或复杂性下降的替代证据。
-
-每次完成一个实际任务涉及的整块修改，再统一检查。完成条件是构建者与业务成员能够沿正常入口完成这项任务，保存/拒绝/发布/运行结果可理解，原数据与权限保证保留。其余收敛范围仍按 ADR-0124 和真实依赖选择下一块，不在此复制完整工程目标。
+一次完成一块，并立即按 ADR-0125 相同口径复算。不得将拆文件、生成目录变化、删除断言、补文档或单独通过 typecheck 报作生产代码收敛。每个主题结束后回到本队列顺序；只有新证据能调整顺序。
 
 ## 之后：第一次真实交付（楼宇供暖）
 

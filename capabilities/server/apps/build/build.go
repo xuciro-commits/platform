@@ -251,72 +251,79 @@ func (*Build) AcceptedPublicationSchemas() []string {
 	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
-// publicationImage reads and verifies the already committed record image
-// without rerunning builder action rules or publishing a second decision.
-func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
+type acceptedPublication struct {
+	entity      platform.Entity
+	actions     []platform.Action
+	pages       []platform.Page
+	application *platform.Application
+	object      *Object
+}
+
+// publicationImage decodes one committed image into the exact installation
+// inputs. Validation and replay consume this projection instead of decoding
+// the object a second time.
+func (b *Build) publicationImage(schema string, image []byte) (acceptedPublication, error) {
 	switch schema {
 	case SchemaEvaluationSetPublish:
 		_, _, err := b.testPlanImage(image)
-		return b.testPlanEntity(), nil, nil, nil, err
+		return acceptedPublication{entity: b.testPlanEntity()}, err
 	case SchemaAgentPublish:
 		var record Agent
 		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return acceptedPublication{}, err
 		}
 		if _, ok := wasPublished[Agent](record.Published); !ok {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted agent has no published definition")
+			return acceptedPublication{}, fmt.Errorf("accepted agent has no published definition")
 		}
-		return b.agentEntity(), nil, nil, nil, nil
+		return acceptedPublication{entity: b.agentEntity()}, nil
 	case SchemaPublish:
 		var record Object
 		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return acceptedPublication{}, err
 		}
 		published, ok := wasPublished[Object](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
 			record.Name != published.Name || record.Installed != buildapi.TypeOf(published.Name) {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted object has no matching published definition")
+			return acceptedPublication{}, fmt.Errorf("accepted object has no matching published definition")
 		}
 		if published.ExtensionSource != nil {
 			if err := published.ExtensionSource.Check(published.Extends); err != nil {
-				return platform.Entity{}, nil, nil, nil, err
+				return acceptedPublication{}, err
 			}
 		}
 		entity := b.entity(published)
 		portable, err := b.dispatchSchemaObject(published)
 		if err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return acceptedPublication{}, err
 		}
 		if err := checkObjectSchemas(portable); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return acceptedPublication{}, err
 		}
 		actions := objectActions(published, entity)
-		return entity, actions, []platform.Page{page(published)}, nil, nil
+		return acceptedPublication{entity: entity, actions: actions, pages: []platform.Page{page(published)}, object: &published}, nil
 	case SchemaRelease:
 		var record Page
 		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return acceptedPublication{}, err
 		}
 		published, ok := wasPublished[Page](record.Published)
-		if !ok || record.State != "published" || record.ID != published.ID ||
-			record.Name != published.Name {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted page has no published definition")
+		if !ok || record.State != "published" || record.ID != published.ID || record.Name != published.Name {
+			return acceptedPublication{}, fmt.Errorf("accepted page has no published definition")
 		}
-		return platform.Entity{}, nil, []platform.Page{descriptor(published)}, nil, nil
+		return acceptedPublication{pages: []platform.Page{descriptor(published)}}, nil
 	case SchemaHandOver:
 		var record Application
 		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, nil, err
+			return acceptedPublication{}, err
 		}
 		published, ok := wasPublished[Application](record.Published)
-		if !ok || record.State != "published" || record.ID != published.ID ||
-			record.Name != published.Name {
-			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted application has no published definition")
+		if !ok || record.State != "published" || record.ID != published.ID || record.Name != published.Name {
+			return acceptedPublication{}, fmt.Errorf("accepted application has no published definition")
 		}
 		app := applicationDescriptor(published)
-		return platform.Entity{}, nil, nil, &app, nil
+		return acceptedPublication{application: &app}, nil
 	}
-	return platform.Entity{}, nil, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
+	return acceptedPublication{}, fmt.Errorf("not an accepted builder publication: %s", schema)
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
@@ -399,25 +406,17 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.BuildProcesses().Validate(b, b.flowOf(p))
 	}
-	_, _, pages, app, err := b.publicationImage(schema, image)
+	accepted, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
 	}
 	switch schema {
 	case SchemaPublish:
-		var record Object
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		published, ok := wasPublished[Object](record.Published)
-		if !ok {
-			return fmt.Errorf("accepted object has no published definition")
-		}
-		return b.validateObjectInstallation(published)
+		return b.validateObjectInstallation(*accepted.object)
 	case SchemaRelease:
-		return b.host.ValidateInstallPage(pages[0])
+		return b.host.ValidateInstallPage(accepted.pages[0])
 	case SchemaHandOver:
-		return b.host.ValidateInstallApplication(*app)
+		return b.host.ValidateInstallApplication(*accepted.application)
 	}
 	return fmt.Errorf("unknown builder publication: %s", schema)
 }
@@ -491,38 +490,30 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.BuildProcesses().Install(b, b.flowOf(p))
 	}
-	entity, actions, pages, app, err := b.publicationImage(schema, image)
+	accepted, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
 	}
 	switch schema {
 	case SchemaPublish:
-		var record Object
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		published, ok := wasPublished[Object](record.Published)
-		if !ok {
-			return fmt.Errorf("accepted object has no published definition")
-		}
-		pages, _, err = b.objectInstallationPages(published)
+		pages, _, err := b.objectInstallationPages(*accepted.object)
 		if err != nil {
 			return err
 		}
-		if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
+		if err := b.ledger.Extend([]string{accepted.entity.Type}, accepted.actions); err != nil {
 			return fmt.Errorf("extend accepted object: %w", err)
 		}
-		b.ledger.Catalog.ReplaceTarget(entity.Type, actions)
-		if err := b.host.Install(platform.Caller{Replaying: true}, entity, actions, pages...); err != nil {
+		b.ledger.Catalog.ReplaceTarget(accepted.entity.Type, accepted.actions)
+		if err := b.host.Install(platform.Caller{Replaying: true}, accepted.entity, accepted.actions, pages...); err != nil {
 			return fmt.Errorf("install accepted object: %w", err)
 		}
-		b.installed[entity.Type] = entity
+		b.installed[accepted.entity.Type] = accepted.entity
 	case SchemaRelease:
-		if err := b.host.InstallPage(platform.Caller{Replaying: true}, pages[0]); err != nil {
+		if err := b.host.InstallPage(platform.Caller{Replaying: true}, accepted.pages[0]); err != nil {
 			return fmt.Errorf("install accepted page: %w", err)
 		}
 	case SchemaHandOver:
-		if err := b.host.InstallApplication(platform.Caller{Replaying: true}, *app); err != nil {
+		if err := b.host.InstallApplication(platform.Caller{Replaying: true}, *accepted.application); err != nil {
 			return fmt.Errorf("install accepted application: %w", err)
 		}
 	}

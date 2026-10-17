@@ -1,6 +1,7 @@
-import { createWidgetDefinitions } from "@platform/app";
+import type { WidgetID } from "@platform/app";
 import {lazyInspector} from "./lazy-inspector";
 import type {ComponentType} from "react";
+import type {ButtonInspectorPorts} from "./ButtonInspector";
 import type {Api} from "@platform/kernel";
 import type {EntityInfo} from "@platform/ui";
 import type {AuthoringSection} from "../draft";
@@ -74,8 +75,10 @@ const TableInspector=lazyInspector(()=>import("./TableInspector").then(module=>m
 const TableSelectionInspector=lazyInspector(()=>import("./TableInspector").then(module=>module.TableSelectionInspector));
 const ButtonInspector=lazyInspector(()=>import("./ButtonInspector").then(module=>module.ButtonInspector));
 
+type Inspector = {configVersion:number;bindings?:ComponentType<WidgetBindingInspectorPorts>;events?:ComponentType<ButtonInspectorPorts>};
+
 /** Build owns editor implementations, keyed by the shared runtime identity. */
-const inspectors = createWidgetDefinitions({
+const inspectors:Record<WidgetID,Inspector> = {
  "layered-graph":{configVersion:1},
  "model-matrix":{configVersion:1},
  text:{configVersion:1},
@@ -153,13 +156,11 @@ const inspectors = createWidgetDefinitions({
   pivot: {configVersion:1,bindings:PivotInspector},
   table: { configVersion:1, bindings:TableInspector,events:TableSelectionInspector },
   button: { configVersion:1, events:ButtonInspector },
-});
+};
 export function widgetInspector(id:string,version:number) {
-  const implementation=inspectors.resolve(id,version);
-  return implementation?.configVersion===version?{
-    bindings:"bindings" in implementation?implementation.bindings:undefined,
-    events:"events" in implementation?implementation.events:undefined,
-  }:undefined;
+  const implementation = Object.hasOwn(inspectors,id) ? inspectors[id as WidgetID] : undefined;
+  if (!implementation || implementation.configVersion !== version) return undefined;
+  return {bindings:implementation.bindings,events:implementation.events};
 }
 
 /** Bindings receive one owner context; the registry retains per-widget props

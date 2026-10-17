@@ -77,10 +77,14 @@ func (t *Tenant) Held(ref string) (any, bool) {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	et := t.records.types[typ]
-	if et == nil || et.rows.get(id) == nil {
+	if et == nil {
 		return nil, false
 	}
-	return copyOf(et.info.Go, et.rows.get(id).value.Interface()).Interface(), true
+	row := et.rows.get(id)
+	if row == nil {
+		return nil, false
+	}
+	return copyOf(et.info.Go, row.value.Interface()).Interface(), true
 }
 
 type entityType struct {
@@ -591,10 +595,14 @@ func (s *recordStore) get(c platform.Caller, t reflect.Type, id string) (any, bo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	et := s.of(c, t)
-	if et == nil || et.rows.get(id) == nil {
+	if et == nil {
 		return nil, false
 	}
-	return copyOf(t, et.rows.get(id).value.Interface()).Interface(), true
+	row := et.rows.get(id)
+	if row == nil {
+		return nil, false
+	}
+	return copyOf(t, row.value.Interface()).Interface(), true
 }
 
 // check validates an entity against its declaration (Caller.Check).
@@ -1657,6 +1665,16 @@ type Related struct {
 	Total    int    `json:"total"`
 }
 
+// detailRecords loads an optional, authorized record slice for a record detail view.
+func (t *Tenant) detailRecords(m platform.Member, typ string, clauses [][]any, sort []string, limit int, archived bool, now time.Time) []any {
+	domain, _ := json.Marshal(clauses)
+	page, err := t.Records(m, typ, platform.Query{Domain: domain, Sort: sort, Limit: limit, Archived: archived}, now)
+	if err != nil {
+		return []any{}
+	}
+	return page.Records
+}
+
 func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
 	m = t.authorizationMember(m)
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -1696,10 +1714,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		view.Effective = &active
 	}
 	if c := t.app(platform.RelationsApp); c != nil && typ != platform.CommentType && typ != platform.FollowType {
-		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
-			view.Comments = t.narrowed(m, page.Records, now, false).([]any)
-		}
+		view.Comments = t.narrowed(m, t.detailRecords(m, platform.CommentType, [][]any{{"target", "=", typ + "/" + id}}, []string{"created"}, 200, false, now), now, false).([]any)
 		if f, ok := platform.Get[platform.RecordFollow](t.automation(platform.RelationsApp, false), platform.FollowID(m.ID, typ+"/"+id)); ok && !f.Archived {
 			view.Following = true
 		}
@@ -1707,28 +1722,16 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	t.readPersonal(m, seen, []string{id}, now)
 	if typ != platform.FileType && t.app(platform.FileApp) != nil {
-		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.FileType, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 100}, now); err == nil {
-			view.Files = page.Records
-		}
+		view.Files = t.detailRecords(m, platform.FileType, [][]any{{"target", "=", typ + "/" + id}}, []string{"id"}, 100, false, now)
 	}
 	if t.procs != nil {
-		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.FlowInstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
-			view.Processes = page.Records
-		}
+		view.Processes = t.detailRecords(m, platform.FlowInstanceType, [][]any{{"subject", "=", typ + "/" + id}}, []string{"-id"}, 20, true, now)
 	}
 	if typ != platform.WorkTaskType && t.app(platform.WorkApp) != nil {
-		domain, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}, []any{"state", "=", "open"}})
-		if page, err := t.Records(m, platform.WorkTaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now); err == nil {
-			view.Tasks = page.Records
-		}
+		view.Tasks = t.detailRecords(m, platform.WorkTaskType, [][]any{{"ref", "=", typ + "/" + id}, {"state", "=", "open"}}, []string{"due"}, 20, false, now)
 	}
 	if typ != platform.WorkApprovalType && t.app(platform.WorkApp) != nil {
-		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.WorkApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now); err == nil {
-			view.Approvals = page.Records
-		}
+		view.Approvals = t.detailRecords(m, platform.WorkApprovalType, [][]any{{"target", "=", typ + "/" + id}}, []string{"-created"}, 20, false, now)
 	}
 	history := maskedHistory(copyHistory(r.history), hidden)
 	for i := len(history) - 1; i >= 0; i-- {

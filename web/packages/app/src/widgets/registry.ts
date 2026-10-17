@@ -11,7 +11,7 @@ export type WidgetImplementation<Context> = { contract: WidgetContract; Renderer
 export const widgetContract = (id: string): WidgetContract | undefined => widgetContracts.find((contract) => contract.componentID === id);
 
 export type WidgetDefinition={configVersion:number};
-/** Runtime and authoring registrations consume the same complete contract set. */
+/** Public metadata registry for editor extensions; runtime renderers use WidgetRegistry. */
 export function createWidgetDefinitions<T extends Record<WidgetID,WidgetDefinition>>(definitions:T){
  for(const id of Object.keys(definitions))if(!widgetContract(id))throw new Error(`Undeclared widget implementation: ${id}`);
  for(const contract of widgetContracts){
@@ -29,29 +29,35 @@ export function createWidgetDefinitions<T extends Record<WidgetID,WidgetDefiniti
  return Object.freeze({entries,resolve:(id:string,version:number):T[WidgetID]|undefined=>{const contract=widgetContract(id);return contract?.configVersion===version?entries[contract.componentID]:undefined;}});
 }
 
-/** Controlled build-time registration. Implementations must cover the shared
- * contract exactly; adding a manifest alone does not make a widget runnable.
- * There is no tenant script loading or permission policy in this registry.
- */
+/** Runtime renderers are the only registry. The editor uses the same manifest
+ * as a compile-time keyed table, so it does not need a second runtime registry. */
 export class WidgetRegistry<Context> {
   private readonly implementations: Readonly<Record<WidgetID, WidgetImplementation<Context>>>;
-  constructor(implementations: Record<WidgetID, ComponentType<Context>|WidgetImplementation<Context>>) {
-    const entries=Object.fromEntries(Object.entries(implementations).map(([id,implementation])=>{
-      if(!implementation)throw new Error(`Missing widget implementation: ${id}`);
-      const plugin=typeof implementation==='object'&&'Renderer' in implementation?implementation:undefined;
-      if(plugin&&plugin.contract.componentID!==id)throw new Error(`Mismatched widget plugin: ${id}`);
-      return [id,{configVersion:plugin?.contract.configVersion??1,Renderer:plugin?.Renderer??implementation as ComponentType<Context>}];
-    })) as Record<WidgetID,WidgetDefinition&{Renderer:ComponentType<Context>}>;
-    createWidgetDefinitions(entries);
-    this.implementations = Object.freeze(Object.fromEntries(widgetContracts.map(contract=>[contract.componentID,Object.freeze({contract,Renderer:entries[contract.componentID].Renderer})])) as Record<WidgetID,WidgetImplementation<Context>>);
+
+  constructor(implementations: Record<WidgetID, ComponentType<Context> | WidgetImplementation<Context>>) {
+    for (const id of Object.keys(implementations)) {
+      if (!widgetContract(id)) throw new Error(`Undeclared widget implementation: ${id}`);
+    }
+
+    this.implementations = Object.freeze(Object.fromEntries(widgetContracts.map((contract) => {
+      const implementation = implementations[contract.componentID];
+      if (!implementation) throw new Error(`Missing widget implementation: ${contract.componentID}`);
+      const plugin = typeof implementation === "object" && "Renderer" in implementation ? implementation : undefined;
+      if (plugin && plugin.contract.componentID !== contract.componentID) throw new Error(`Mismatched widget plugin: ${contract.componentID}`);
+      const version = plugin?.contract.configVersion ?? 1;
+      if (version !== contract.configVersion) throw new Error(`Unsupported widget configuration: ${contract.componentID}`);
+      return [contract.componentID, Object.freeze({ contract, Renderer: plugin?.Renderer ?? implementation as ComponentType<Context> })];
+    })) as Record<WidgetID, WidgetImplementation<Context>>);
   }
+
   resolve(id: string, version = 1): ComponentType<Context> | undefined {
-    return this.resolveDefinition(id,version)?.Renderer;
+    return this.resolveDefinition(id, version)?.Renderer;
   }
-  resolveDefinition(id:string,version:number):WidgetImplementation<Context>|undefined {
-    const contract = widgetContract(id);
-    return contract?.configVersion === version ? this.implementations[contract.componentID] : undefined;
+
+  resolveDefinition(id: string, version: number): WidgetImplementation<Context> | undefined {
+    const implementation = this.implementations[id as WidgetID];
+    return implementation?.contract.configVersion === version ? implementation : undefined;
   }
 }
 
-export const createWidgetRegistry = <Context,>(implementations: Record<WidgetID, ComponentType<Context>|WidgetImplementation<Context>>) => new WidgetRegistry<Context>(implementations);
+export const createWidgetRegistry = <Context,>(implementations: Record<WidgetID, ComponentType<Context> | WidgetImplementation<Context>>) => new WidgetRegistry<Context>(implementations);

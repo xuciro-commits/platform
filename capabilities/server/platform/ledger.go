@@ -366,6 +366,35 @@ func approvalMove(t Transition, suffix string) Transition {
 	return Transition{Name: t.Name + suffix, From: []string{t.Approval.Pending}, To: []string{back}}
 }
 
+// prepareEntity is the one business validation path for generated actions.
+func prepareEntity(c Caller, e Entity, value any, now time.Time, check bool) error {
+	if err := c.PrepareBusinessVersions(value, now); err != nil {
+		return err
+	}
+	if e.ComputeAt != nil {
+		if err := e.ComputeAt(c, value, now); err != nil {
+			return err
+		}
+	}
+	if e.Compute != nil {
+		e.Compute(value)
+	}
+	if e.Validate != nil {
+		if err := e.Validate(c, value); err != nil {
+			return err
+		}
+	}
+	if e.ValidateAt != nil {
+		if err := e.ValidateAt(c, value, now); err != nil {
+			return err
+		}
+	}
+	if check {
+		return c.rt.Check(c, value)
+	}
+	return nil
+}
+
 // transition moves a record along its lifecycle, through the transition's Do.
 // A transition that waits in a pending state also leaves it, once approved.
 func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
@@ -404,29 +433,8 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	} else if !slices.Contains(t.To, to) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // Do chose a status the transition does not reach
 	}
-	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
-		return nil, err
-	}
-	if e.ComputeAt != nil {
-		if err := e.ComputeAt(c, v.Interface(), now); err != nil {
-			return nil, err
-		}
-	}
-	if e.Compute != nil {
-		e.Compute(v.Interface())
-	}
-	if e.Validate != nil {
-		if err := e.Validate(c, v.Interface()); err != nil {
-			return nil, err
-		}
-	}
-	if e.ValidateAt != nil {
-		if err := e.ValidateAt(c, v.Interface(), now); err != nil {
-			return nil, err
-		}
-	}
 	value := v.Elem().Interface()
-	if err := c.rt.Check(c, value); err != nil {
+	if err := prepareEntity(c, e, value, now, true); err != nil {
 		return nil, err
 	}
 	return func(r *pb.ChangeRecord) {
@@ -494,32 +502,10 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 		}
 		v.Elem().Field(0).Addr().Interface().(*Record).ID = id
 	}
-	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
-		return nil, err
-	}
-	if e.ComputeAt != nil {
-		if err := e.ComputeAt(c, v.Interface(), now); err != nil {
-			return nil, err
-		}
-	}
-	if e.Compute != nil {
-		e.Compute(v.Interface())
-	}
-	if e.Validate != nil {
-		if err := e.Validate(c, v.Interface()); err != nil {
-			return nil, err
-		}
-	}
-	if e.ValidateAt != nil {
-		if err := e.ValidateAt(c, v.Interface(), now); err != nil {
-			return nil, err
-		}
-	}
 	value := v.Elem().Interface()
-	if verb != "create" || e.CreateTxn == nil || c.Replaying {
-		if err := c.rt.Check(c, value); err != nil {
-			return nil, err
-		}
+	check := verb != "create" || e.CreateTxn == nil || c.Replaying
+	if err := prepareEntity(c, e, value, now, check); err != nil {
+		return nil, err
 	}
 	return func(r *pb.ChangeRecord) {
 		c.rt.Put(c, r, value)
