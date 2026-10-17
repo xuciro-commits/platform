@@ -1,15 +1,13 @@
 // Alert rules (ADR-0077): when a record of an object comes to match a
 // condition, a role is told - once per record or every time. The operations
 // face's "situation": nobody has to keep a page open to see it.
-import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { joinProjectResource } from "../projects/membership";
-import { kindOfType, resourceRef } from "../projects/resources";
+import { useApplicationWorkspace } from "../projects/application-scope";
+import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls } from "../editor/workbench";
 import type { WorkflowObject } from "../automate/workflow-model";
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
-import { useEffect, useRef, useState } from "react";
+import { useHost, useRecordInventory } from "@platform/app";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, t } from "@platform/ui";
 import { operators } from "../ontology/object-model";
 
 type Draft = { id: string; revision: number; name: string; title: string; object: string; field: string; operator: string; value?: string; message: string; role?: string; every?: boolean; active: boolean; state?: string; version?: number };
@@ -28,52 +26,20 @@ export function Alerts() {
 }
 
 export function AlertEditor({ id }: { id: string }) {
-  const host = useHost(), { decide, role } = host, { open, close } = useApplicationWorkspace();
-  const application = useApplicationScope(), joining = useRef(false);
-  const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.alertrule/${encodeURIComponent(id)}`);
+  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { draft, query, dirty, joining, busy, error, inputs, patch: change, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
+    id, type: "build.alertrule", kind: "alert", view: "alert", empty,
+    failure: t("The alert rule could not be saved. Your draft is still here."),
+    payload: ({ name, title, object, field, operator, value, message, role, every, active }) => ({
+      name, title, object, field, operator, value: operator === "empty" || operator === "not empty" ? "" : value ?? "", message, role: role ?? "", every: !!every, active,
+    }),
+  });
   const inventory = useRecordInventory<Source>("build.object");
   const objects = (inventory.data?.records ?? []).filter(object => !object.archived);
-  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [createID] = useState(() => crypto.randomUUID());
-  const inputs = useInputDrafts(), dirty = edited || !!inputs?.dirty || joining.current;
-  const loaded = useRef(""), lock = useRef(false);
-  const load = (record: Draft) => { setDraft({ ...empty(), ...record }); loaded.current = `${record.id}:${record.revision}`; };
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { joining.current = false; if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
-  useEffect(() => { const r = query.data?.record; if (r && !dirty && !busy && loaded.current !== `${r.id}:${r.revision}`) load(r); }, [query.data, dirty, busy]);
-  const change = (patch: Partial<Draft>) => { if (lock.current) return; setDraft((d) => ({ ...d, ...patch })); setDirty(true); setError(""); };
   const object = objects.find((o) => `build.${o.name}` === draft.object);
   const fields = object?.fields ?? [];
   const roles = [...new Set(["builder", ...objects.flatMap((o) => (o.access ?? []).map((a) => a.role))])];
   const noValue = draft.operator === "empty" || draft.operator === "not empty";
-  const perform = async (action: () => Promise<unknown>) => {
-    if (lock.current) return;
-    lock.current = true; setBusy(true); setError("");
-    try { await action(); }
-    catch (problem) { setError(problem instanceof Error ? problem.message : t("The alert rule could not be saved. Your draft is still here.")); }
-    finally { lock.current = false; setBusy(false); }
-  };
-  const save = async (): Promise<string | undefined> => {
-    if (inputs?.invalid) return;
-    const target = draft.id || createID;
-    const { name, title, object, field, operator, value, message, role, every, active } = draft;
-    if (!joining.current) {
-      if (!await decide(`build.alertrule.${draft.id ? "edit" : "create"}`, { type: "build.alertrule", id: target }, { name, title, object, field, operator, value: noValue ? "" : value ?? "", message, role: role ?? "", every: !!every, active },
-        { expectedRevision: draft.id ? draft.revision : 0, quiet: true, onRefused: setError })) return;
-      const revision = draft.revision + 1;
-      loaded.current = `${target}:${revision}`;
-      joining.current = !!application && !draft.id;
-      setDraft(saved => ({ ...saved, id: target, revision, state: "draft" }));
-    }
-    if (joining.current && application) await joinProjectResource(host, application, resourceRef(kindOfType("build.alertrule")!, draft.name));
-    joining.current = false; markSaved(); setDirty(false);
-    if (id === "new") { open({ view: "alert", params: { id: target } }, { ifCurrent: { view: "alert", params: { id } } }); close({ view: "alert", params: { id } }); }
-    else { const r = await query.refetch(); if (r.data?.record) load(r.data.record); }
-    return target;
-  };
-  const review = async () => {
-    const target = dirty || !draft.id ? await save() : draft.id;
-    if (target) open({ view: "release-review", params: { kind: "alert", id: target } });
-  };
   if (role("build") !== "builder") return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Alert rules")} description={query.isError ? t("The alert rule could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 gap-3">
@@ -86,7 +52,7 @@ export function AlertEditor({ id }: { id: string }) {
       </div>} />
     <p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    <fieldset disabled={busy || joining.current} className="grid min-w-0 gap-3 lg:grid-cols-2">
+    <fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Rule")} className="grid content-start gap-3">
         <label className={fieldClass}>{t("Rule name")}<Input disabled={!!draft.version} value={draft.name} placeholder="lateorder" onChange={(e) => change({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Rule title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>

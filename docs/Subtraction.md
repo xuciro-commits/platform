@@ -43,7 +43,7 @@ apps/crm、csm、erp、hcm、mes、pms 仍有有效业务与历史责任。ERP �
 | 页面变量底栏和决策表的手写表格 | 原 DataTable；字段编辑、增删、重排和首个命中顺序保留 |
 | 四类定义的版本家族维护 | apps/build/definition_history.go；各类型校验、保留字节与关系约束仍归原定义 |
 | Section 的重复公共声明与逐字段复制 | 原 PageWidgetConfig 与生成 Api.Section；五类构建期引用单独转换，扁平 JSON/API 与原切片复制保留 |
-| 十一个编辑器各自管理保存/修订/丢弃 | build/session/definition-draft.ts；字段、载荷、发布诊断、关系迁移与应用成员重试仍归原功能 |
+| 定义编辑器各自管理保存/修订/丢弃，包括告警与决策表 | build/session/definition-draft.ts；共享已接受修订与应用成员重试，字段、载荷、发布诊断和关系迁移仍归原功能 |
 | 三处直接记录捕获与重复任务快照编码 | accepted_rows.captureDirectRows 与 stateOfTask；锁、排序、前驱、历史内容及错误语义保留，callback 只读取指定记录 |
 | 页面变量访问与作用域的重复清单 | Section.variablePorts/variableReferences 与原组件检查；嵌入、观测及权限例外保留 |
 | ERP 六处创建表单、Dialog/Sheet 生命周期、管理页第二套宿主接口 | 原 useNewRecord/DeclaredActionForm、OverlayFrame、useHost；ID、输入、焦点、隐藏草稿和权限保留 |

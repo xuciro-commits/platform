@@ -191,6 +191,15 @@ test("decision tables and alerts remain application members through editing and 
   const add = page.getByRole("combobox", { name: "Add existing resource", exact: true });
   await add.selectOption(JSON.stringify({ kind: "table", id: tableID }));
   await expect.poll(async () => (await builder.record("build.app", application.id)).resources?.length).toBe(2);
+  const declarationWrites: { schema: string; id: string }[] = [], joins = { alert: 0, table: 0 };
+  let joining: keyof typeof joins = "alert";
+  await page.route("**/v1/submissions", async route => {
+    const input = route.request().postDataJSON(), schema = input.schema?.name;
+    if (["build.alertrule.create", "build.alertrule.edit", "build.table.create", "build.table.edit"].includes(schema)) declarationWrites.push({ schema, id: input.target.id });
+    if (schema === "build.app.edit" && input.target?.id === application.id && ++joins[joining] === 1)
+      return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { code: "ERROR_CODE_CONFLICT", message: "Application membership refused" } }) });
+    await route.continue();
+  });
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
   await page.getByRole("textbox", { name: "Rule name", exact: true }).fill(alertName);
@@ -201,9 +210,41 @@ test("decision tables and alerts remain application members through editing and 
   await page.getByRole("textbox", { name: "Value", exact: true }).fill("15");
   await page.getByRole("textbox", { name: "Message", exact: true }).fill("The zone needs attention.");
   await page.getByRole("button", { name: "Save alert rule", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Application membership refused" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Rule title", exact: true })).toHaveValue("Low temperature");
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue("The zone needs attention.");
+  await expect(page.getByRole("textbox", { name: "Rule title", exact: true })).toBeDisabled();
+  expect((await builder.record("build.app", application.id)).resources).not.toContainEqual({ app: "build", kind: "alert", name: alertName });
+  await page.getByRole("button", { name: "Save alert rule", exact: true }).click();
   await expect.poll(async () => (await builder.record("build.app", application.id)).resources?.length).toBe(3);
   const rules = await builder.read<{ records: { id: string; name: string }[] }>("records/build.alertrule?limit=1000");
   const alertID = rules.records.find(rule => rule.name === alertName)!.id;
+  expect(declarationWrites).toEqual([{ schema: "build.alertrule.create", id: alertID }]);
+  expect((await builder.record("build.app", application.id)).resources).toContainEqual({ app: "build", kind: "alert", name: alertName });
+
+  joining = "table";
+  await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Heating control", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Decision table", exact: true }).click();
+  const retryTableName = slug("retrydecision"), retryTitle = page.getByRole("textbox", { name: "Table title", exact: true });
+  await page.getByRole("textbox", { name: "Table name", exact: true }).fill(retryTableName);
+  await retryTitle.fill("Membership retry decision");
+  const retryResult = page.getByRole("row").filter({ has: page.getByRole("button", { name: "Move up", exact: true }) }).getByRole("textbox").nth(1);
+  await retryResult.fill("Keep");
+  await page.getByRole("button", { name: "Save decision table", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Application membership refused" })).toBeVisible();
+  await expect(retryTitle).toHaveValue("Membership retry decision");
+  await expect(retryTitle).toBeDisabled();
+  await expect(retryResult).toHaveValue("Keep");
+  await expect(retryResult).toBeDisabled();
+  expect((await builder.record("build.app", application.id)).resources).not.toContainEqual({ app: "build", kind: "compute", name: retryTableName });
+  await page.getByRole("button", { name: "Save decision table", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.app", application.id)).resources).toContainEqual({ app: "build", kind: "compute", name: retryTableName });
+  expect(declarationWrites.map(write => write.schema)).toEqual(["build.alertrule.create", "build.table.create"]);
+  expect(await builder.record("build.table", declarationWrites[1]!.id)).toMatchObject({ name: retryTableName, title: "Membership retry decision", revision: 1 });
+  expect((await builder.record("build.app", application.id)).resources).not.toContainEqual({ app: "build", kind: "table", name: retryTableName });
+  expect(joins).toEqual({ alert: 2, table: 2 });
+  await page.unroute("**/v1/submissions");
 
   const navigation = page.getByRole("navigation", { name: "Main", exact: true });
   const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });

@@ -10,6 +10,8 @@ test("definition editors retain accepted revisions through refusal, stale reads 
     { view: "property-type", type: "build.propertytype", title: "Shared property title", save: "Save shared property", payload: { type: "text" } },
     { view: "agent", type: "build.agent", title: "Agent title", save: "Save agent", payload: { instructions: "Review the note through its declared action", tools: [model.type + ".edit"] } },
     { view: "function", type: "build.function", title: "Function title", save: "Save function", payload: { object: model.type, fields: ["note"], instructions: "Summarize the note", output: [{ name: "summary", type: "string", required: true, description: "Summary" }], maxInputBytes: 4096, maxOutputBytes: 1024, maxTokens: 256, roles: ["builder", "user"] } },
+    { view: "alert", type: "build.alertrule", title: "Rule title", save: "Save alert rule", payload: { description: undefined, object: model.type, field: "note", operator: "=", value: "ready", message: "Check the note", role: "builder", active: true } },
+    { view: "decision-table", type: "build.table", title: "Table title", save: "Save decision table", payload: { inputs: [{ name: "note", type: "text" }], outputs: [{ name: "result", type: "text" }], rows: [{ when: ["*"], then: ["ready"] }], default: [] } },
   ];
   for (const item of cases) {
     const id = fresh("DEFINITION");
@@ -59,7 +61,7 @@ test("definition editors retain accepted revisions through refusal, stale reads 
     await expect(page.getByRole("alert").filter({ hasText: /could not be reloaded|Reload the saved function/ })).toBeVisible();
     expect(await builder.record(item.type, id)).toMatchObject({ title: "Accepted definition", revision: before.revision + 1 });
     await title.fill("Discard this definition");
-    if (item.view === "function") {
+    if (["function", "alert", "decision-table"].includes(item.view)) {
       await page.getByRole("button", { name: "Publish options", exact: true }).click();
       await page.getByRole("menuitem", { name: "Discard unsaved changes", exact: true }).click();
     } else await page.getByRole("button", { name: item.view === "agent" ? "Discard" : "Cancel changes", exact: true }).click();

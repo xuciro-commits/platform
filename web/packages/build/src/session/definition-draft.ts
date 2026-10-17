@@ -4,6 +4,7 @@ import { t, useInputDrafts, useUnsavedChanges, type EntityRecord } from "@platfo
 import { useEffect, useRef, useState } from "react";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
+import { kindOfType, resourceRef } from "../projects/resources";
 
 type DefinitionDraft = { id: string; revision: number; name: string };
 type Saved = { id: string; revision: number; reloaded?: boolean };
@@ -19,8 +20,9 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
   const query = useReadQuery<{ record?: T & EntityRecord }>("/v1/records/" + type + "/" + encodeURIComponent(id), 5000);
   const [draft, setDraft] = useState(empty), [edited, setDirty] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [joining, setJoining] = useState(false);
   const [createID] = useState(() => crypto.randomUUID());
-  const inputs = useInputDrafts(), dirty = edited || !!inputs?.dirty;
+  const inputs = useInputDrafts(), changed = edited || !!inputs?.dirty, dirty = changed || joining;
   const loaded = useRef(""), confirmed = useRef(draft), lock = useRef(false);
   const load = (record: T) => {
     if (record.revision < confirmed.current.revision) return;
@@ -30,7 +32,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
   const { markSaved, discardChanges, confirmDiscard } = useUnsavedChanges(dirty, () => {
     if (query.data?.record && query.data.record.revision >= confirmed.current.revision) load(query.data.record);
     else setDraft(structuredClone(confirmed.current));
-    setDirty(false); setError(""); onDiscard?.();
+    setDirty(false); setJoining(false); setError(""); onDiscard?.();
   }, busy);
   useEffect(() => {
     const record = query.data?.record;
@@ -43,7 +45,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
   const perform = async (action: () => Promise<unknown>) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError("");
-    try { await action(); } catch (problem) { setError(apiErrorMessage(problem) ?? failure); }
+    try { await action(); } catch (problem) { setError(apiErrorMessage(problem) ?? (problem instanceof Error ? problem.message : failure)); }
     finally { lock.current = false; setBusy(false); }
   };
   const reload = async (message: string, expected?: number) => {
@@ -63,13 +65,17 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     if (inputs?.invalid) return;
     const submitted = structuredClone(draft), target = submitted.id || createID;
     let revision = confirmed.current.revision;
-    if (dirty || !submitted.id) {
+    if (changed || !submitted.id) {
       if (!await host.decide(type + "." + (submitted.id ? "edit" : "create"), { type, id: target }, payload(submitted),
         { expectedRevision: submitted.id ? revision : 0, quiet: true, onRefused: setError })) return;
       revision += 1; load({ ...submitted, id: target, revision });
       inputs?.clear(); markSaved(); setDirty(false);
     }
-    if (joinApplication && application && id === "new") await joinProjectResource(host, application, { app: "build", kind, name: submitted.name });
+    if (joinApplication && application && id === "new") {
+      setJoining(true);
+      await joinProjectResource(host, application, resourceRef(kindOfType(type)!, submitted.name));
+      setJoining(false);
+    }
     markSaved();
     let reloaded: boolean | undefined;
     if (!deferNavigation) {
@@ -92,5 +98,5 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     const saved = dirty || id === "new" ? await save() : confirmed.current;
     if (saved?.id) open({ view: "release-review", params: { kind, id: saved.id } }, { ifCurrent: { view, params: { id: saved.id } } });
   };
-  return { draft, createID, query, dirty, busy, error, setError, inputs, patch, perform, save, transition, review, reload, discardChanges, confirmDiscard };
+  return { draft, createID, query, dirty, joining, busy, error, setError, inputs, patch, perform, save, transition, review, reload, discardChanges, confirmDiscard };
 }
