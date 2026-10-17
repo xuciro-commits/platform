@@ -14,18 +14,8 @@ import (
 )
 
 func (t *Tenant) recordSetBinding(binding platform.AssetBinding) (*platform.Definition, bool) {
-	for _, definition := range t.definitions {
-		if definition.Ref != binding.Ref {
-			continue
-		}
-		if binding.Ref.Kind == platform.AssetLinkType {
-			selected := definition.LinkVersion(binding.SourceVersion)
-			return selected, selected != nil
-		}
-		selected := definition.QueryVersion(binding.SourceVersion)
-		return selected, selected != nil
-	}
-	return nil, false
+	selected := querySourceDefinition(t.definitions, &binding)
+	return selected, selected != nil
 }
 
 func (h hostView) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {

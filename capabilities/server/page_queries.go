@@ -5,7 +5,9 @@ import (
 	"platformserver/platform"
 )
 
-func pageNamedQuery(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
+// The caller supplies either its complete registry or member-filtered definitions.
+// Exact query and relationship bindings never fall back to the current version.
+func querySourceDefinition(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
 	if binding != nil {
 		for i := range definitions {
 			if definitions[i].Ref == binding.Ref {
@@ -17,7 +19,7 @@ func pageNamedQuery(definitions []platform.Definition, binding *platform.AssetBi
 }
 
 func visiblePageInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[string]platform.EntityInfo, definitions []platform.Definition) *platform.Definition {
-	named := pageNamedQuery(definitions, q.Query)
+	named := querySourceDefinition(definitions, q.Query)
 	if named == nil || named.Query == nil {
 		return nil
 	}
@@ -94,7 +96,7 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		}
 	}
 	for id, q := range p.Document.Queries {
-		named := pageNamedQuery(t.definitions, q.Query)
+		named := querySourceDefinition(t.definitions, q.Query)
 		if q.Interface != "" {
 			if err := p.CheckInterfaceQuery(q, named); err != nil {
 				return fmt.Errorf("page query %s: %w", id, err)
@@ -146,7 +148,7 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 	}
 	for _, s := range p.Sections {
 		if q, ok := p.InterfaceQueryForSection(s); ok {
-			if err := p.CheckInterfaceSection(s, pageNamedQuery(t.definitions, q.Query)); err != nil {
+			if err := p.CheckInterfaceSection(s, querySourceDefinition(t.definitions, q.Query)); err != nil {
 				return err
 			}
 		}

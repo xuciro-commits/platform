@@ -1,9 +1,7 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"fmt"
-	"maps"
 	"platformserver/platform"
 	"slices"
 	"strconv"
@@ -83,12 +81,10 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 		if old.Source != "tenant" {
 			return fmt.Errorf("query %s is owned by code", ref)
 		}
-		def.QueryVersions = maps.Clone(old.QueryVersions)
-		if def.QueryVersions == nil {
-			def.QueryVersions = map[string]platform.NamedQuery{}
-		}
-		def.QueryVersions[old.Version] = *old.Query
-		if retained, ok := def.QueryVersions[def.Version]; ok && !sameQuery(retained, q) {
+		previous := *old.Query
+		var ok bool
+		def.QueryVersions, ok = retainedDefinitionVersions(old.QueryVersions, old.Version, &previous, def.Version, q)
+		if !ok {
 			return fmt.Errorf("query version bytes cannot change")
 		}
 	} else {
@@ -97,10 +93,4 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 	def.QueryVersions[def.Version] = q
 	h.t.storeDefinition(i, def)
 	return nil
-}
-
-func sameQuery(a, b platform.NamedQuery) bool {
-	x, _ := json.Marshal(a)
-	y, _ := json.Marshal(b)
-	return string(x) == string(y)
 }

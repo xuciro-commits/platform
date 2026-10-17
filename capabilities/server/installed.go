@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -108,6 +109,22 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	s.types[info.Type], s.byGo[info.Go] = et, et
 	s.generation++
 	return nil
+}
+
+// retainedDefinitionVersions leaves the original history untouched; callers
+// publish the current version only after their installation checks succeed.
+func retainedDefinitionVersions[T any](history map[string]T, previousVersion string, previous *T, version string, current T) (map[string]T, bool) {
+	versions := maps.Clone(history)
+	if versions == nil {
+		versions = map[string]T{}
+	}
+	if previous != nil {
+		versions[previousVersion] = *previous
+	}
+	if prior, ok := versions[version]; ok && string(platform.Raw(prior)) != string(platform.Raw(current)) {
+		return nil, false
+	}
+	return versions, true
 }
 
 // storeDefinition updates the existing discovery registry; callers own
@@ -336,7 +353,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, s platform.Section, selections, parentBindings map[string]string) error {
 	where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
 	if q, ok := p.InterfaceQueryForSection(s); ok {
-		return p.CheckInterfaceSection(s, pageNamedQuery(t.definitions, q.Query))
+		return p.CheckInterfaceSection(s, querySourceDefinition(t.definitions, q.Query))
 	}
 	if owner, read := s.WorkViewRead(); read != "" {
 		app := t.owner["read:"+read]

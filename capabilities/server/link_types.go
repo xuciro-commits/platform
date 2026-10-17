@@ -3,7 +3,6 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -70,14 +69,9 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 		if old.Source != "tenant" {
 			return fmt.Errorf("link type is owned by code")
 		}
-		def.LinkVersions = maps.Clone(old.LinkVersions)
-		if def.LinkVersions == nil {
-			def.LinkVersions = map[string]platform.LinkType{}
-		}
-		if old.LinkType != nil {
-			def.LinkVersions[old.Version] = *old.LinkType
-		}
-		if prior, ok := def.LinkVersions[def.Version]; ok && string(platform.Raw(prior)) != string(platform.Raw(l)) {
+		var ok bool
+		def.LinkVersions, ok = retainedDefinitionVersions(old.LinkVersions, old.Version, old.LinkType, def.Version, l)
+		if !ok {
 			return fmt.Errorf("link version bytes cannot change")
 		}
 	}
@@ -91,13 +85,8 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 
 // Shared normalization keeps list and aggregate traversal on the original reader.
 func (t *Tenant) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {
-	for _, d := range t.Definitions(m) {
-		if d.Ref == binding.Ref {
-			if selected := d.LinkVersion(binding.SourceVersion); selected != nil {
-				return selected.LinkType
-			}
-			break
-		}
+	if selected := querySourceDefinition(t.Definitions(m), &binding); selected != nil {
+		return selected.LinkType
 	}
 	return nil
 }

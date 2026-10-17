@@ -66,7 +66,7 @@ func (t *Tenant) checkModelQueries(page platform.Page) error {
 				if set == nil || set.Query == nil {
 					continue
 				}
-				named := pageNamedQuery(t.definitions, set.Query)
+				named := querySourceDefinition(t.definitions, set.Query)
 				if named == nil || named.Query == nil || named.Query.Object != m.Type {
 					return fmt.Errorf("section %s: retained model query type or version is unavailable", section.ID)
 				}
@@ -253,7 +253,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 		set = model.Options.Set
 	}
 	if set != nil && set.Query != nil {
-		if named := pageNamedQuery(t.definitions, set.Query); named != nil && named.Query != nil && len(named.Query.Sort) > 0 {
+		if named := querySourceDefinition(t.definitions, set.Query); named != nil && named.Query != nil && len(named.Query.Sort) > 0 {
 			result.Sort = slices.Clone(named.Query.Sort)
 			result.SortLocked = true
 		}

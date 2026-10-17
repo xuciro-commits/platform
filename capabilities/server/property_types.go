@@ -2,7 +2,6 @@ package platformserver
 
 import (
 	"fmt"
-	"maps"
 	"platformserver/platform"
 	"slices"
 	"strconv"
@@ -45,14 +44,9 @@ func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType
 		if old.Source != "tenant" {
 			return fmt.Errorf("property type is owned by code")
 		}
-		d.PropertyVersions = maps.Clone(old.PropertyVersions)
-		if d.PropertyVersions == nil {
-			d.PropertyVersions = map[string]platform.PropertyType{}
-		}
-		if old.PropertyType != nil {
-			d.PropertyVersions[old.Version] = *old.PropertyType
-		}
-		if prior, ok := d.PropertyVersions[d.Version]; ok && string(platform.Raw(prior)) != string(platform.Raw(p)) {
+		var ok bool
+		d.PropertyVersions, ok = retainedDefinitionVersions(old.PropertyVersions, old.Version, old.PropertyType, d.Version, p)
+		if !ok {
 			return fmt.Errorf("property version bytes cannot change")
 		}
 	}
