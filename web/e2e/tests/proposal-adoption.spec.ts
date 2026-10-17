@@ -176,6 +176,17 @@ test("an application agent needs a passing candidate evaluation before activatio
     await page.getByRole("button",{name:"Activate release",exact:true}).click();
     await expect(page.getByText("Release active for operators.",{exact:false})).toBeVisible();
     await shots(page,page.getByRole("region",{name:"Agent candidate evaluations",exact:true}),"agent-candidate-evaluation",info);
+
+    const runID=fresh("RUN");
+    await builder.decide("agent.run.start",{type:"agent.run",id:runID},{agent:`build.${name}`,goal:"Read this run directly."},"agent");
+    let listReads=0;
+    await page.route("**/v1/runs",route=>{listReads++;return route.abort();});
+    await builder.open(page,`/run?id=${runID}`);
+    const run=page.getByRole("region",{name:runID,exact:true});
+    await expect(run.getByRole("heading",{name:"Read this run directly.",exact:true})).toBeVisible();
+    await expect(run.getByText("Ready",{exact:true})).toBeVisible();
+    expect(listReads).toBe(0);
+    await shots(page,run,"agent-original-record",info);
   } finally {
     provider.closeAllConnections();
     await new Promise<void>((resolve,reject)=>provider.close(error=>error?reject(error):resolve()));

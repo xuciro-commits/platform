@@ -28,13 +28,6 @@ export const runStates = defineStatuses({ running: { label: t("Working"), tone: 
 const signalTones = { confirmed: "success", accepted: "success", approved: "success", changed: "warning", corrected: "warning", bypassed: "neutral",
   rejected: "danger", discarded: "danger", undone: "danger" } as const;
 
-/** One run: read from the member's own runs, or as an administrator of the agent app. */
-function useRun(id: string) {
-  const mine=useReadQuery<AgentRun[]>("/v1/runs");
-  const record=useReadQuery<{record:AgentRun}>(`/v1/records/agent.run/${encodeURIComponent(id)}`);
-  return {run:mine.data?.find(run=>run.id===id)??record.data?.record,error:record.isError};
-}
-
 /** The draft an agent made for the member: its fields, changeable, then confirm or reject. */
 function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
   const { decide, action } = useHost();
@@ -70,10 +63,11 @@ export function RunView({ id, compact, application, project }: { id: string; com
   const { me, can, role } = useHost();
   const control = useRunControl("agent.run", id);
   const openRecord = useOpenRecord();
-  const {run,error}=useRun(id);
+  const record=useReadQuery<{record:AgentRun}>(`/v1/records/agent.run/${encodeURIComponent(id)}`);
+  const run=record.data?.record;
   const {open:openWorkspace}=useWorkspace();
   const [open, setOpen] = useState<number>();
-  if(error)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
+  if(record.isError)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
   if (!run) return <p className="text-sm text-muted">{t("Loading run")} {id}…</p>;
   const mine = run.onBehalf === me.principalId;
   const live = run.state === "running" || run.state === "waiting";
