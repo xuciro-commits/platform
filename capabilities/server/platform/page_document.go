@@ -734,61 +734,14 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if node.Kind == "widget" {
 			for _, s := range sections {
 
-				if s.ID == node.Section {
-					for _, id := range s.ExplorationVariables() {
-						if id != "" {
-							if _, ok := variables[id]; !ok {
-								return false
-							}
-						}
-					}
-					for _, id := range append(append(s.ContextViewVariables(), s.ObservationVariables()...), append(append(s.EmbeddingVariables(), s.AIVariables()...), s.SpatialVariables()...)...) {
-						if id != "" {
-							if _, ok := variables[id]; !ok {
-								return false
-							}
-						}
-					}
-					for _, id := range []string{s.NotepadVariable, s.AnalysisXVariable, s.AnalysisYVariable, s.AnalysisCountVariable, s.AnalysisMeanVariable, s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable, s.RecordSetVariable, s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
-						if id != "" {
-							if _, ok := variables[id]; !ok {
-								return false
-							}
-						}
-					}
-					if s.CountVariable != "" {
-						if _, ok := variables[s.CountVariable]; !ok {
-							return false
-						}
-					}
-					if s.SelectionSetVariable != "" {
-						if _, ok := variables[s.SelectionSetVariable]; !ok {
-							return false
-						}
-					}
-					for _, facet := range s.Facets {
-						if _, ok := variables[facet.Variable]; !ok {
-							return false
-						}
-					}
-					if s.FilterSearchVariable != "" {
-						if _, ok := variables[s.FilterSearchVariable]; !ok {
-							return false
-						}
-					}
+				if s.ID != node.Section {
+					continue
 				}
-				if s.ID == node.Section && (s.CollectionVariable != "" || s.RecordVariable != "" || s.SelectionVariable != "" || s.FilterVariable != "") {
-					if _, ok := variables[s.CollectionVariable]; s.CollectionVariable != "" && !ok {
-						return false
-					}
-					if _, ok := variables[s.FilterVariable]; s.FilterVariable != "" && !ok {
-						return false
-					}
-					if _, ok := variables[s.SelectionVariable]; s.SelectionVariable != "" && !ok {
-						return false
-					}
-					if _, ok := variables[s.RecordVariable]; s.RecordVariable != "" && !ok {
-						return false
+				for _, id := range s.variableReferences() {
+					if id != "" {
+						if _, ok := variables[id]; !ok {
+							return false
+						}
 					}
 				}
 			}

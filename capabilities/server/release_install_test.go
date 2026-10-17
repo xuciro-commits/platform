@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
@@ -44,16 +43,11 @@ func TestJournalAcceptedSavedReleaseInstallation(t *testing.T) {
 
 func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id string, v2 bool) {
 	compose := func() *Tenant {
-		tn, err := NewTenant(id, NewConsole(id, Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}},
-			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}), build.New(id))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return tn
+		return composeTenant(t, id, []Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:user")}, build.New(id))
 	}
 	live := compose()
-	builder, _ := live.Member("builder")
-	operator, _ := live.Member("operator")
+	builder := memberOf(t, live, "builder")
+	operator := memberOf(t, live, "operator")
 	at := time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC)
 	var entries []Entry
 	committed := map[string]Entry{}
@@ -84,15 +78,9 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		return entry.Body, nil
 	}
 	live.AcceptResult = persist
-	keys := 0
 	do := func(member platform.Member, typ, target, schema, payload string) {
 		t.Helper()
-		keys++
-		if _, refusal := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-			Authority: build.ID, IdempotencyKey: fmt.Sprint("step-", keys), Target: &pb.EntityRef{Type: typ, Id: target},
-			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at); refusal != nil {
-			t.Fatal(refusal)
-		}
+		decide(t, live, member.ID, build.ID, schema, typ, target, json.RawMessage(payload), at)
 	}
 	save := func(kind platform.AssetKind, target string) string {
 		t.Helper()
@@ -100,7 +88,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("preview: %+v, %v", preview, err)
 		}
-		if _, err := live.SaveReleaseCandidate(builder, kind, target, preview.CandidateID, fmt.Sprint("save-", keys), at); err != nil {
+		if _, err := live.SaveReleaseCandidate(builder, kind, target, preview.CandidateID, "save-"+preview.CandidateID, at); err != nil {
 			t.Fatal(err)
 		}
 		return preview.CandidateID

@@ -102,6 +102,40 @@ func TestPageLoopMemberFilteringPrunesTypedItemConsumers(t *testing.T) {
 	}
 }
 
+func TestPageWidgetOwnerChecksRetainLocalScopeAndEmbeddingInputs(t *testing.T) {
+	for _, widget := range []string{"resource-list", "asset-directory", "action-table", "notepad", "scene-3d", "ai-assistant", "collection-analysis", "breadcrumb", "avatar-stack", "static-image"} {
+		t.Run(widget, func(t *testing.T) {
+			d := &PageDocument{UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{
+				"root": {Kind: "rows"}, "overlay": {Kind: "rows", Children: []string{"consumer"}}, "consumer": {Kind: "widget", Section: "consumer"},
+			}, Overlays: map[string]PageOverlay{"dialog": {Root: "overlay"}}, Variables: map[string]PageVariable{"value": {Scope: "page", Type: "record", Mode: "state"}}}
+			s := Section{ID: "consumer", Widget: widget, CollectionVariable: "value", RecordVariable: "value", NotepadVariable: "value"}
+			if widget == "asset-directory" || widget == "static-image" {
+				d.Nodes["root"] = PageLayoutNode{Kind: "rows", Children: []string{"loop"}}
+				d.Nodes["loop"] = PageLayoutNode{Kind: "loop", Children: []string{"consumer"}, Loop: &PageLoop{Collection: "window", ItemVariable: "item", Limit: 1}}
+				delete(d.Overlays, "dialog")
+				d.Variables["window"] = PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "source"}}
+				d.Variables["item"] = PageVariable{Scope: "loop-item", Owner: "loop", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "item", Node: "loop"}}
+			}
+			if widget == "ai-assistant" {
+				s.AI = &PageAI{QuestionVariable: "value"}
+			}
+			if widget == "avatar-stack" {
+				s.Avatar = &PageAvatarStack{ContextVariable: "value"}
+			}
+			if err := d.checkLoops([]Section{s}); err == nil {
+				t.Fatal("widget escaped its original owner")
+			}
+		})
+	}
+	d := &PageDocument{UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{
+		"root": {Kind: "rows"}, "overlay": {Kind: "rows", Children: []string{"consumer"}}, "consumer": {Kind: "widget", Section: "consumer"},
+	}, Overlays: map[string]PageOverlay{"dialog": {Root: "overlay"}}, Variables: map[string]PageVariable{"value": {Scope: "page", Type: "string", Mode: "state"}}}
+	s := Section{ID: "consumer", Widget: "embedded-page", Embedding: &PageEmbedding{Inputs: map[string]PageValue{"input": {Variable: "value"}}}}
+	if err := d.checkLoops([]Section{s}); err != nil {
+		t.Fatalf("embedding lost access to its page input: %v", err)
+	}
+}
+
 func TestPageLoopRejectsNestedAndMultipliedBudgets(t *testing.T) {
 	for _, test := range []struct {
 		name         string

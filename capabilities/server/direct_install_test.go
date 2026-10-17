@@ -1,13 +1,10 @@
 package platformserver
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
@@ -22,34 +19,17 @@ import (
 func TestProductionProfileRefusesDirectInstallAndKeepsDelivery(t *testing.T) {
 	at := time.Date(2026, 10, 5, 11, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
-		tn, err := NewTenant("release-profile", NewConsole("release-profile",
-			Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, PlatformApp: Admin}}},
-			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User, flow.ID: "member"}}}),
+		return composeTenant(t, "release-profile", []Seat{seatOf("builder", "build:builder", "platform:admin"), seatOf("operator", "build:user", "flow:member")},
 			work.New("release-profile"), flow.New("release-profile"), build.New("release-profile"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return tn
 	}
 	tn := compose()
 	var entries []Entry
 	tn.Record = func(e Entry) { entries = append(entries, e) }
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	member, _ := tn.Member("builder")
-	keys := 0
-	submit := func(authority, schema, typ, id string, payload any) *kernel.Error {
-		t.Helper()
-		keys++
-		_, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: authority,
-			IdempotencyKey: fmt.Sprint(keys), Schema: &pb.SchemaRef{Name: schema, Version: 1},
-			Target: &pb.EntityRef{Type: typ, Id: id}, Payload: platform.Raw(payload)}, at)
-		return err
-	}
+	member := memberOf(t, tn, "builder")
 	must := func(authority, schema, typ, id string, payload any) {
 		t.Helper()
-		if err := submit(authority, schema, typ, id, payload); err != nil {
-			t.Fatalf("%s: %v: %s", schema, err, err.Message)
-		}
+		decide(t, tn, member.ID, authority, schema, typ, id, payload, at)
 	}
 	profile := func(value string) {
 		t.Helper()
@@ -81,7 +61,7 @@ func TestProductionProfileRefusesDirectInstallAndKeepsDelivery(t *testing.T) {
 	if out, err := tn.Read(member, build.ReadReleaseProfile); err != nil || out.(build.ReleaseProfile).DirectInstall {
 		t.Fatalf("production profile read: %+v %v", out, err)
 	}
-	refused := submit(build.ID, build.SchemaPublish, build.ObjectType, "O", struct{}{})
+	_, refused := tn.Submit(member, submission(tn, member, build.ID, build.SchemaPublish, build.ObjectType, "O", struct{}{}), at)
 	if refused == nil || refused.Message == "" {
 		t.Fatalf("production accepted a direct install: %v", refused)
 	}
@@ -106,15 +86,13 @@ func TestProductionProfileRefusesDirectInstallAndKeepsDelivery(t *testing.T) {
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
 		t.Fatalf("production joint preview: %+v %v", preview, err)
 	}
-	keys++
-	if _, err := tn.SaveReleaseCandidates(member, preview.Drafts, preview.CandidateID, fmt.Sprint(keys), at); err != nil {
+	if _, err := tn.SaveReleaseCandidates(member, preview.Drafts, preview.CandidateID, "save-production", at); err != nil {
 		t.Fatalf("production save: %v", err)
 	}
-	keys++
-	if _, err := tn.ActivateRelease(member, preview.CandidateID, fmt.Sprint(keys), at); err != nil {
+	if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate-production", at); err != nil {
 		t.Fatalf("production activation: %v", err)
 	}
-	reader := platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User, flow.ID: "member"}}
+	reader := memberOf(t, tn, "operator")
 	delivered := false
 	for _, definition := range tn.Definitions(reader) {
 		if definition.Ref.Kind == platform.AssetObject && definition.Ref.Name == "build.prodintake" {

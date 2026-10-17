@@ -32,7 +32,7 @@ func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]accepte
 		if !ok {
 			return nil, fmt.Errorf("batch event omits a written record outside an effect callback")
 		}
-		direct, err := captureDirectEffectRows(d, callback.Source.App, publishedOnly(d.records.writes, ref))
+		direct, err := captureDirectRows(d, callback.Source.App, []string{ref}, nil, "effect answer")
 		if err != nil || len(direct) != 1 {
 			return nil, fmt.Errorf("callback row cannot be captured: %v", err)
 		}
@@ -45,12 +45,6 @@ func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]accepte
 		rows = append(rows, acceptedCallbackRow{Row: direct[0], Source: callback.Source})
 	}
 	return rows, nil
-}
-
-func publishedOnly(writes map[string]bool, ref string) map[string]bool {
-	ignored := maps.Clone(writes)
-	delete(ignored, ref)
-	return ignored
 }
 
 // Validate sources and direct rows in private views before any ledger or

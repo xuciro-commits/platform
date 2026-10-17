@@ -8,6 +8,7 @@ test("definition editors retain accepted revisions through refusal, stale reads 
     { view: "query", type: "build.query", title: "Query title", save: "Save query", payload: { object: model.type, domain: [], sort: ["id"], limit: 50 } },
     { view: "link-type", type: "build.linktype", title: "Relationship title", save: "Save relationship", payload: { parent: model.type, child: model.type, forward: "children", reverse: "parent", cardinality: "one-to-many", deletePolicy: "owner", storage: "edge", roles: ["builder", "user"] } },
     { view: "property-type", type: "build.propertytype", title: "Shared property title", save: "Save shared property", payload: { type: "text" } },
+    { view: "agent", type: "build.agent", title: "Agent title", save: "Save agent", payload: { instructions: "Review the note through its declared action", tools: [model.type + ".edit"] } },
     { view: "function", type: "build.function", title: "Function title", save: "Save function", payload: { object: model.type, fields: ["note"], instructions: "Summarize the note", output: [{ name: "summary", type: "string", required: true, description: "Summary" }], maxInputBytes: 4096, maxOutputBytes: 1024, maxTokens: 256, roles: ["builder", "user"] } },
   ];
   for (const item of cases) {
@@ -33,7 +34,15 @@ test("definition editors retain accepted revisions through refusal, stale reads 
       }
       await route.continue();
     });
-    const recordURL = "**/v1/records/" + item.type + "/" + id;
+    const recordPath = "/v1/records/" + item.type + "/" + id, recordURL = "**" + recordPath;
+    // This test controls the record through HTTP. A current live snapshot
+    // otherwise overrides the deliberately stale response in EdgeClient.get.
+    await page.route("**/v1/changes?watch=**", async route => {
+      const url = new URL(route.request().url());
+      const paths = JSON.parse(url.searchParams.get("watch")!) as string[];
+      url.searchParams.set("watch", JSON.stringify(paths.filter(path => path !== recordPath)));
+      await route.continue({ url: url.toString() });
+    });
     await page.route(recordURL, async route => stale
       ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: before }) })
       : route.continue());
@@ -53,7 +62,7 @@ test("definition editors retain accepted revisions through refusal, stale reads 
     if (item.view === "function") {
       await page.getByRole("button", { name: "Publish options", exact: true }).click();
       await page.getByRole("menuitem", { name: "Discard unsaved changes", exact: true }).click();
-    } else await page.getByRole("button", { name: "Cancel changes", exact: true }).click();
+    } else await page.getByRole("button", { name: item.view === "agent" ? "Discard" : "Cancel changes", exact: true }).click();
     await expect(title).toHaveValue("Accepted definition");
     stale = false;
     await title.fill("Final definition");
@@ -78,5 +87,6 @@ test("definition editors retain accepted revisions through refusal, stale reads 
     }
     await page.unroute("**/v1/submissions");
     await page.unroute(recordURL);
+    await page.unroute("**/v1/changes?watch=**");
   }
 });

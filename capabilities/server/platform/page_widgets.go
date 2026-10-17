@@ -209,6 +209,36 @@ func widgetEvent(id, event string) *pageWidgetEvent {
 	}
 	return nil
 }
+func (s Section) variablePorts() map[string]string {
+	ports := map[string]string{"collectionOutputVariable": s.CollectionOutputVariable, "sceneSampleCollectionVariable": s.SceneSampleCollectionVariable, "sceneSampleVariable": s.SceneSampleVariable, "scenePartVariable": s.ScenePartVariable, "observationHistoryVariable": s.ObservationHistoryVariable, "observationContextVariable": s.ObservationContextVariable, "observationSignalVariable": s.ObservationSignalVariable, "observationThresholdVariable": s.ObservationThresholdVariable, "observationRowsVariable": s.ObservationRowsVariable, "observationCountVariable": s.ObservationCountVariable, "observationMeanVariable": s.ObservationMeanVariable, "notepadVariable": s.NotepadVariable, "analysisXVariable": s.AnalysisXVariable, "analysisYVariable": s.AnalysisYVariable, "analysisCountVariable": s.AnalysisCountVariable, "analysisMeanVariable": s.AnalysisMeanVariable, "commentDraftVariable": s.CommentDraftVariable, "fileVariable": s.FileVariable, "pdfPageVariable": s.PdfPageVariable, "recordSetVariable": s.RecordSetVariable, "sparklineDecimalVariable": s.SparklineDecimalVariable, "sparklineNumberVariable": s.SparklineNumberVariable, "groupValueVariable": s.GroupValueVariable, "groupSetVariable": s.GroupSetVariable, "rowValueVariable": s.RowValueVariable, "rowSetVariable": s.RowSetVariable, "columnValueVariable": s.ColumnValueVariable, "columnSetVariable": s.ColumnSetVariable, "pickerValueVariable": s.PickerValueVariable, "alertValueVariable": s.AlertValueVariable, "dateVariable": s.DateVariable, "choiceSetVariable": s.ChoiceSetVariable, "choiceVariable": s.ChoiceVariable, "booleanVariable": s.BooleanVariable, "rangeMinVariable": s.RangeMinVariable, "rangeMaxVariable": s.RangeMaxVariable, "statisticsVariable": s.StatisticsVariable, "gaugeValueVariable": s.GaugeValueVariable, "progressValueVariable": s.ProgressValueVariable, "progressTotalVariable": s.ProgressTotalVariable, "countVariable": s.CountVariable, "recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable, "selectionSetVariable": s.SelectionSetVariable}
+	if s.Avatar != nil {
+		ports["avatar.contextVariable"] = s.Avatar.ContextVariable
+		ports["avatar.contextCollectionVariable"] = s.Avatar.ContextCollectionVariable
+	}
+	return ports
+}
+
+// The same Section references drive member visibility and port validation.
+// Nested inputs remain owned by their original widget declarations.
+func (s Section) variableReferences() []string {
+	ports := s.variablePorts()
+	ids := make([]string, 0, len(ports))
+	for _, id := range ports {
+		ids = append(ids, id)
+	}
+	ids = append(ids, s.EmbeddingVariables()...)
+	if s.AI != nil {
+		ids = append(ids, s.AI.QuestionVariable)
+	}
+	if s.Widget == "observation" && s.Observation != nil {
+		ids = append(ids, s.Observation.RowOutput, s.Observation.AssetOutput)
+	}
+	for _, facet := range s.Facets {
+		ids = append(ids, facet.Variable)
+	}
+	return append(ids, s.FilterSearchVariable)
+}
+
 func (d *PageDocument) checkWidgetPorts(s Section) error {
 	if s.ChartVariant != "" && (s.Widget != "chart" || s.Mark != "arc" || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.ChartPresentation.RequiredUIProfile) || !slices.Contains(pageWidgets.Runtime.ChartPresentation.Variants, s.ChartVariant)) {
 		return fmt.Errorf("chart variant needs its pie profile and mark")
@@ -219,11 +249,7 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 	if w := pageWidget(s.Widget); w != nil && !PageUIProfileSupports(d.UIProfile, w.RequiredUIProfile) {
 		return fmt.Errorf("widget %s requires UI profile %s", s.Widget, w.RequiredUIProfile)
 	}
-	ports := map[string]string{"collectionOutputVariable": s.CollectionOutputVariable, "sceneSampleCollectionVariable": s.SceneSampleCollectionVariable, "sceneSampleVariable": s.SceneSampleVariable, "scenePartVariable": s.ScenePartVariable, "observationHistoryVariable": s.ObservationHistoryVariable, "observationContextVariable": s.ObservationContextVariable, "observationSignalVariable": s.ObservationSignalVariable, "observationThresholdVariable": s.ObservationThresholdVariable, "observationRowsVariable": s.ObservationRowsVariable, "observationCountVariable": s.ObservationCountVariable, "observationMeanVariable": s.ObservationMeanVariable, "notepadVariable": s.NotepadVariable, "analysisXVariable": s.AnalysisXVariable, "analysisYVariable": s.AnalysisYVariable, "analysisCountVariable": s.AnalysisCountVariable, "analysisMeanVariable": s.AnalysisMeanVariable, "commentDraftVariable": s.CommentDraftVariable, "fileVariable": s.FileVariable, "pdfPageVariable": s.PdfPageVariable, "recordSetVariable": s.RecordSetVariable, "sparklineDecimalVariable": s.SparklineDecimalVariable, "sparklineNumberVariable": s.SparklineNumberVariable, "groupValueVariable": s.GroupValueVariable, "groupSetVariable": s.GroupSetVariable, "rowValueVariable": s.RowValueVariable, "rowSetVariable": s.RowSetVariable, "columnValueVariable": s.ColumnValueVariable, "columnSetVariable": s.ColumnSetVariable, "pickerValueVariable": s.PickerValueVariable, "alertValueVariable": s.AlertValueVariable, "dateVariable": s.DateVariable, "choiceSetVariable": s.ChoiceSetVariable, "choiceVariable": s.ChoiceVariable, "booleanVariable": s.BooleanVariable, "rangeMinVariable": s.RangeMinVariable, "rangeMaxVariable": s.RangeMaxVariable, "statisticsVariable": s.StatisticsVariable, "gaugeValueVariable": s.GaugeValueVariable, "progressValueVariable": s.ProgressValueVariable, "progressTotalVariable": s.ProgressTotalVariable, "countVariable": s.CountVariable, "recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable, "selectionSetVariable": s.SelectionSetVariable}
-	if s.Avatar != nil {
-		ports["avatar.contextVariable"] = s.Avatar.ContextVariable
-		ports["avatar.contextCollectionVariable"] = s.Avatar.ContextCollectionVariable
-	}
+	ports := s.variablePorts()
 	for field, id := range ports {
 		if id == "" {
 			continue

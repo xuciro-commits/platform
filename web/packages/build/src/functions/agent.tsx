@@ -1,17 +1,15 @@
-import {useInputDrafts} from "@platform/ui";
+import { useDefinitionDraft } from "../session/definition-draft";
 // Agents a builder declares over the ontology (ADR-0077): instructions, the
 // published actions and queries they may use, a budget, checkpoints and the
 // cases they must pass. Publishing installs one as build.<name>; the host runs
 // it like any agent - every step journaled, drafts confirmed by a person.
-import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { joinProjectResource } from "../projects/membership";
+import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useAuthoringModel } from "../ontology/authoring-model";
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t, useUnsavedChanges } from "@platform/ui";
+import { useHost, useRecordInventory } from "@platform/app";
+import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 
 type Case = { name: string; goal: string; ref?: string; expect?: string; asks?: boolean; takes?: string[]; avoids?: string[] };
 type Draft = { id: string; revision: number; name: string; title: string; description: string; instructions: string; tools: string[]; steps?: number; tokens?: number; actions?: number; cost?: number;
@@ -31,9 +29,7 @@ export function Agents() {
 }
 
 export function AgentEditor({ id }: { id: string }) {
-  const host = useHost(), { decide, role } = host, { open, close } = useApplicationWorkspace();
-  const application = useApplicationScope();
-  const query = useReadQuery<{ record?: Draft }>(`/v1/records/build.agent/${encodeURIComponent(id)}`);
+  const { role } = useHost(), { open } = useApplicationWorkspace();
   const model = useAuthoringModel(), queries = useRecordInventory<QueryRecord>("build.query");
   const objects = (model.drafts.data?.records ?? []).filter(object => !object.archived);
   const objectTitles = new Map(objects.map(object => [`build.${object.name}`, object.title]));
@@ -42,40 +38,18 @@ export function AgentEditor({ id }: { id: string }) {
     ...(queries.data?.records ?? []).filter(query => !query.archived).map(query => ({ value: `query:${query.name}`, label: t("Query: {name}", { name: query.title }) })),
   ];
   const roles = [...new Set(["builder", ...objects.flatMap((o) => (o.access ?? []).map((a) => a.role))])];
-  const [draft, setDraft] = useState<Draft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
- const [createID]=useState(()=>crypto.randomUUID());
- const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
-  const loaded = useRef("");
-  const load = (record: Draft) => { setDraft({ ...empty(), ...record, tools: record.tools ?? [], cases: record.cases ?? [] }); loaded.current = `${record.id}:${record.revision}`; };
-  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { if (query.data?.record) load(query.data.record); else setDraft(empty()); setDirty(false); setError(""); }, busy);
-  useEffect(() => { const r = query.data?.record; if (r && !dirty && !busy && loaded.current !== `${r.id}:${r.revision}`) load(r); }, [query.data, dirty, busy]);
-  const change = (patch: Partial<Draft>) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setError(""); };
+  const editor = useDefinitionDraft<Draft>({
+    id, type: "build.agent", kind: "agent", view: "agent", empty,
+    normalize: record => ({ ...record, tools: record.tools ?? [], cases: record.cases ?? [] }),
+    failure: t("The agent could not be saved. Your draft is still here."),
+    payload: ({ name, title, description, instructions, tools, steps, tokens, actions, cost, checkpoints, handoffRole, cases }) =>
+      ({ name, title, description, instructions, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] }),
+  });
+  const { draft, query, dirty, busy, error, setError, patch: change, perform, save, discardChanges } = editor;
   const issues: string[] = [];
   if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !draft.title.trim() || !draft.description.trim()) issues.push(t("Give the agent a lower-case name, a title and a description."));
   if (!draft.instructions.trim()) issues.push(t("Write its instructions."));
   if (!draft.tools.length) issues.push(t("Give it at least one action or query."));
-  const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch (problem) { setError(problem instanceof Error ? problem.message : t("The agent could not be saved. Your draft is still here.")); } finally { setBusy(false); } };
-  const payload = () => {
-    const { name, title, description, instructions, tools, steps, tokens, actions, cost, checkpoints, handoffRole, cases } = draft;
-    return { name, title, description, instructions, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] };
-  };
-  const save = async (): Promise<{ id: string; revision: number } | undefined> => {
-    if (inputs?.invalid) return;
-    const target = draft.id || createID;
-    let revision = draft.revision;
-    if (dirty || !draft.id) {
-      if (!await decide(`build.agent.${draft.id ? "edit" : "create"}`, { type: "build.agent", id: target }, payload(), { expectedRevision: draft.id ? draft.revision : 0, quiet: true, onRefused: setError })) return;
-      revision = draft.id ? draft.revision + 1 : 1;
-      load({ ...draft, id: target, revision });
-      inputs?.clear();
-      markSaved(); setDirty(false);
-    }
-    if (application && id === "new") await joinProjectResource(host, application, { app: "build", kind: "agent", name: draft.name });
-    markSaved();
-    if (id === "new") { open({ view: "agent", params: { id: target } }, { ifCurrent: { view: "agent", params: { id } } }); close({ view: "agent", params: { id } }); }
-    else { const r = await query.refetch(); if (r.data?.record) load(r.data.record); }
-    return { id: target, revision };
-  };
   const review = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
     const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
@@ -84,10 +58,7 @@ export function AgentEditor({ id }: { id: string }) {
   const publish = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
     const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
-    if (!saved) return;
-    if (await decide("build.agent.publish", { type: "build.agent", id: saved.id }, {}, { expectedRevision: saved.revision, quiet: true, onRefused: setError })) {
-      const r = await query.refetch(); if (r.data?.record) load(r.data.record);
-    }
+    if (saved) await editor.transition("publish", saved);
   };
   if (role("build") !== "builder") return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{t("Only a builder can edit agents.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{query.isError ? t("The agent could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;

@@ -137,58 +137,42 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
-		if explorationWidget(section.Widget) {
-			if sectionOwners[section.ID] != "" {
-				return fmt.Errorf("exploration does not enter a loop")
-			}
-			for _, id := range section.ExplorationVariables() {
+		overlay := sectionOverlays[section.ID]
+		exactOwner := func(ids ...string) bool {
+			for _, id := range ids {
 				v := d.Variables[id]
-				if v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
-					return fmt.Errorf("exploration needs its exact original page or overlay owner")
+				if id != "" && (!accessible(id, "", overlay) || v.Scope == "page" && overlay != "" || v.Scope == "overlay" && v.Owner != overlay) {
+					return false
 				}
 			}
+			return true
 		}
-		if section.Widget == "action-table" || section.Widget == "notepad" || section.RecordList != nil && section.RecordList.Layout == "tiles" {
-			if sectionOwners[section.ID] != "" {
-				return fmt.Errorf("record work does not enter a loop")
-			}
-			id := section.CollectionVariable
-			if section.Widget == "notepad" {
-				id = section.NotepadVariable
-			}
-			v := d.Variables[id]
-			if !accessible(id, "", sectionOverlays[section.ID]) || v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
-				return fmt.Errorf("record work needs its exact original page or overlay owner")
-			}
+		var local []string
+		switch {
+		case explorationWidget(section.Widget):
+			local = append([]string{}, section.ExplorationVariables()...)
+		case section.Widget == "action-table" || section.RecordList != nil && section.RecordList.Layout == "tiles":
+			local = []string{section.CollectionVariable}
+		case section.Widget == "notepad":
+			local = []string{section.NotepadVariable}
+		case section.Widget == "scene-3d":
+			local = section.SpatialVariables()
+		case section.Widget == "ai-assistant":
+			local = append([]string{}, section.AIVariables()...)
+		case section.Widget == "collection-analysis":
+			local = section.AnalysisVariables()
+		case contextView(section.Widget):
+			local = section.ContextViewVariables()
 		}
-		if len(section.SpatialVariables()) > 0 {
-			if sectionOwners[section.ID] != "" {
-				return fmt.Errorf("scene does not enter a loop")
-			}
-			for _, id := range section.SpatialVariables() {
-				v := d.Variables[id]
-				if id != "" && (!accessible(id, "", sectionOverlays[section.ID]) || v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID]) {
-					return fmt.Errorf("scene needs its exact original owner")
-				}
-			}
-		}
-		if section.Widget == "ai-assistant" {
-			if sectionOwners[section.ID] != "" {
-				return fmt.Errorf("AI view does not enter a loop")
-			}
-			for _, id := range section.AIVariables() {
-				v := d.Variables[id]
-				if id != "" && (!accessible(id, "", sectionOverlays[section.ID]) || v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID]) {
-					return fmt.Errorf("AI view needs its exact original owner")
-				}
-			}
+		if local != nil && (sectionOwners[section.ID] != "" || !exactOwner(local...)) {
+			return fmt.Errorf("%s requires its exact original page or overlay owner and does not enter a loop", section.Widget)
 		}
 		if section.Widget == "embedded-page" || section.Widget == "external-frame" {
 			if sectionOwners[section.ID] != "" {
 				return fmt.Errorf("embedding does not enter a loop")
 			}
 			for _, id := range section.EmbeddingVariables() {
-				if !accessible(id, "", sectionOverlays[section.ID]) {
+				if !accessible(id, "", overlay) {
 					return fmt.Errorf("embedding binding escapes its original owner")
 				}
 			}
@@ -198,40 +182,8 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 				return fmt.Errorf("observation does not enter a loop")
 			}
 			for _, id := range section.ObservationVariables() {
-				if id == "" {
-					continue
-				}
-				v := d.Variables[id]
-				if !accessible(id, "", sectionOverlays[section.ID]) || id != section.RecordVariable && (v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID]) {
+				if !accessible(id, "", overlay) || id != section.RecordVariable && !exactOwner(id) {
 					return fmt.Errorf("observation needs its original page or overlay owner")
-				}
-			}
-		}
-		if section.Widget == "collection-analysis" {
-			if sectionOwners[section.ID] != "" {
-				return fmt.Errorf("collection analysis does not enter a loop")
-			}
-			for _, id := range section.AnalysisVariables() {
-				if id == "" {
-					continue
-				}
-				v := d.Variables[id]
-				if !accessible(id, "", sectionOverlays[section.ID]) || v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
-					return fmt.Errorf("analysis requires its exact original page or overlay owner")
-				}
-			}
-		}
-		if contextView(section.Widget) {
-			if sectionOwners[section.ID] != "" {
-				return fmt.Errorf("context views do not enter a loop")
-			}
-			for _, id := range section.ContextViewVariables() {
-				if id == "" {
-					continue
-				}
-				v := d.Variables[id]
-				if v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
-					return fmt.Errorf("context view requires its exact page or overlay owner")
 				}
 			}
 		}

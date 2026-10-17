@@ -3,9 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -115,32 +113,9 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if err != nil {
 		return nil, err
 	}
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
-	d.records.parent.mu.Lock()
-	defer d.records.parent.mu.Unlock()
-	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
-		typ, id, ok := strings.Cut(ref, "/")
-		et := d.records.types[typ]
-		if !ok || et == nil || et.info.App != app || et.rows.get(id) == nil {
-			return nil, fmt.Errorf("connector input writes a foreign or undeclared record")
-		}
-		row, err := acceptedRowOf(typ, id, et.rows.get(id))
-		if err != nil {
-			return nil, err
-		}
-		saved := acceptedInputRow{acceptedRow: row, App: app}
-		if prior := d.records.parent.types[typ]; prior != nil && prior.rows.get(id) != nil {
-			before, err := acceptedRowOf(typ, id, prior.rows.get(id))
-			if err != nil {
-				return nil, err
-			}
-			saved.Before, err = canonicalDigest(before)
-			if err != nil {
-				return nil, err
-			}
-		}
-		result.Rows = append(result.Rows, saved)
+	result.Rows, err = captureDirectRows(d, app, nil, nil, "connector input")
+	if err != nil {
+		return nil, err
 	}
 	result.Digest, err = digestAcceptedInput(result)
 	if err != nil {

@@ -2,11 +2,54 @@ package platformserver
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
+	"strings"
 	"time"
 
 	"platformserver/platform"
 )
+
+// Capture the same full record image and predecessor for connector inputs,
+// effect answers and callback observations, in the supplied stable order.
+func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]acceptedInputRow, error) {
+	d.records.mu.Lock()
+	defer d.records.mu.Unlock()
+	d.records.parent.mu.Lock()
+	defer d.records.parent.mu.Unlock()
+	if refs == nil {
+		refs = slices.Sorted(maps.Keys(d.records.writes))
+	}
+	var rows []acceptedInputRow
+	for _, ref := range refs {
+		if exclude[ref] {
+			continue
+		}
+		typ, id, ok := strings.Cut(ref, "/")
+		et := d.records.types[typ]
+		if !ok || et == nil || et.info.App != owner || et.rows.get(id) == nil {
+			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
+		}
+		image, err := acceptedRowOf(typ, id, et.rows.get(id))
+		if err != nil {
+			return nil, err
+		}
+		row := acceptedInputRow{acceptedRow: image, App: owner}
+		if prior := d.records.parent.types[typ]; prior != nil && prior.rows.get(id) != nil {
+			old, err := acceptedRowOf(typ, id, prior.rows.get(id))
+			if err != nil {
+				return nil, err
+			}
+			row.Before, err = canonicalDigest(old)
+			if err != nil {
+				return nil, err
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
 
 // prepareAcceptedDirectRows verifies and forks record changes caused by a
 // top-level input without a child ledger decision (connector facts or an

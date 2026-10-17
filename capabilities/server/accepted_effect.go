@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
-	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"reflect"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"platformserver/internal/host"
@@ -369,7 +367,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 				eventRows[ref] = true
 			}
 		}
-		result.Rows, err = captureDirectEffectRows(draft, before.App, eventRows)
+		result.Rows, err = captureDirectRows(draft, before.App, nil, eventRows, "effect answer")
 		if len(result.Rows) > 0 {
 			result.Member = "app:" + before.App
 		}
@@ -442,41 +440,6 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	} else {
 		t.changedOwner(saved.App)
 	}
-}
-
-func captureDirectEffectRows(d *stagedDecision, owner string, eventRows map[string]bool) ([]acceptedInputRow, error) {
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
-	d.records.parent.mu.Lock()
-	defer d.records.parent.mu.Unlock()
-	var rows []acceptedInputRow
-	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
-		if eventRows[ref] {
-			continue
-		}
-		typ, id, ok := strings.Cut(ref, "/")
-		et := d.records.types[typ]
-		if !ok || et == nil || et.info.App != owner || et.rows.get(id) == nil {
-			return nil, fmt.Errorf("effect answer writes a foreign or undeclared record")
-		}
-		image, err := acceptedRowOf(typ, id, et.rows.get(id))
-		if err != nil {
-			return nil, err
-		}
-		row := acceptedInputRow{acceptedRow: image, App: owner}
-		if prior := d.records.parent.types[typ]; prior != nil && prior.rows.get(id) != nil {
-			old, err := acceptedRowOf(typ, id, prior.rows.get(id))
-			if err != nil {
-				return nil, err
-			}
-			row.Before, err = canonicalDigest(old)
-			if err != nil {
-				return nil, err
-			}
-		}
-		rows = append(rows, row)
-	}
-	return rows, nil
 }
 
 func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (err error) {

@@ -101,15 +101,9 @@ func (b *workBoard) snapshot(s *tenantState) error {
 		s.Failed, tasks[x.ID] = append(s.Failed, x.ID), x
 	}
 	for _, id := range slices.Sorted(maps.Keys(tasks)) {
-		x := tasks[id]
-		state := taskState{Task: *x, Since: x.since}
-		if x.event != nil {
-			var err error
-			state.EventApp, state.Hops, state.Changed = x.event.App, x.event.hops, x.event.Changed
-			state.Plan = x.event.plan
-			if state.Event, err = platform.Protos([]*pb.ChangeRecord{x.event.Record}); err != nil {
-				return err
-			}
+		state, err := stateOfTask(tasks[id])
+		if err != nil {
+			return err
 		}
 		s.Tasks = append(s.Tasks, state)
 	}
