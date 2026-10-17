@@ -62,3 +62,7 @@ ADR-0070–0075 提供了 Connection / Source / Dataset / Pipeline / Writeback /
 - `widgets/FunctionAdvice.tsx` 整个删除，旧 `function` 部件改用已有 `AIWidget` / `createAIReader`，不再独立发起、读取、刷新或维护调用结果状态。旧部件种类与版本不变，仍使用页面所选记录；历史按记录、函数和版本筛选，直接打开正式调用详情，计量信息归该详情，采纳仍走原 `ProposalReview` 与审批事务。
 
 检查沿 Testing 的应用运行任务与构建者验证任务：原正式详情取消、答复丢失后同键重试、编辑器历史查看及正常新建入口已通过；旧操作按钮明确不存在。Web 类型、目录及双语检查通过，不改执行、权限、持久格式或历史版本责任。
+
+## 10. 集成资产的重复目录读取与安装解码（ADR-0124，已替换）
+
+`Build.integrationInventory` 的七份分页读取、类型转换与归档过滤退出，改用原 `readDefinitionInventoryOf` 和一份归档过滤；500 条分页、1000 条上限和原 Build 读取主体不变。`DecodeAssetInstallation` 的独立七类分配/解引用分支删除，与安装校验、升级校验共用 `integrationInstallationRecord`；目录和解码只在 `integrationRecordType` 维护一次记录类型。严格解码、安装身份、保留版本族、描述与权限检查及保存图像字节继续保留，没有新注册表或历史格式。原 `asset_lifecycle_test.go` 检查七类记录、错误图像、跨页读取、归档过滤与数量上限；其余原安装、升级和恢复测试继续使用同一实现。

@@ -132,81 +132,41 @@ saved:
 }
 
 func (b *Build) integrationInventory(kind platform.AssetKind) ([]any, error) {
+	typ := integrationRecordType(kind)
+	if typ == nil {
+		return nil, nil
+	}
 	c := b.host.Automation(platform.Caller{}, ID)
+	rows, err := readDefinitionInventoryOf(c, typ)
+	if err != nil {
+		return nil, err
+	}
 	var out []any
-	switch kind {
-	case platform.AssetConnection:
-		list, err := readDefinitionInventory[Connection](c)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range list {
-			if !r.Archived {
-				out = append(out, r)
-			}
-		}
-	case platform.AssetSource:
-		list, err := readDefinitionInventory[Source](c)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range list {
-			if !r.Archived {
-				out = append(out, r)
-			}
-		}
-	case platform.AssetDataset:
-		list, err := readDefinitionInventory[Dataset](c)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range list {
-			if !r.Archived {
-				out = append(out, r)
-			}
-		}
-	case platform.AssetPipeline:
-		list, err := readDefinitionInventory[Pipeline](c)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range list {
-			if !r.Archived {
-				out = append(out, r)
-			}
-		}
-	case platform.AssetWriteback:
-		list, err := readDefinitionInventory[Writeback](c)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range list {
-			if !r.Archived {
-				out = append(out, r)
-			}
-		}
-	case platform.AssetObservation:
-		list, err := readDefinitionInventory[Observation](c)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range list {
-			if !r.Archived {
-				out = append(out, r)
-			}
-		}
-	case platform.AssetMatching:
-		list, err := readDefinitionInventory[Match](c)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range list {
-			if !r.Archived {
-				out = append(out, r)
-			}
+	for _, record := range rows {
+		if !integrationRecord(record).Archived {
+			out = append(out, record)
 		}
 	}
 	return out, nil
+}
+func integrationRecordType(kind platform.AssetKind) reflect.Type {
+	switch kind {
+	case platform.AssetConnection:
+		return reflect.TypeFor[Connection]()
+	case platform.AssetSource:
+		return reflect.TypeFor[Source]()
+	case platform.AssetDataset:
+		return reflect.TypeFor[Dataset]()
+	case platform.AssetPipeline:
+		return reflect.TypeFor[Pipeline]()
+	case platform.AssetWriteback:
+		return reflect.TypeFor[Writeback]()
+	case platform.AssetObservation:
+		return reflect.TypeFor[Observation]()
+	case platform.AssetMatching:
+		return reflect.TypeFor[Match]()
+	}
+	return nil
 }
 func integrationRecord(record any) platform.Record {
 	switch r := record.(type) {

@@ -5,6 +5,7 @@ import (
 	buildapi "platformserver/internal/host/buildapi"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -66,6 +67,96 @@ func lifecycleBuild() (*Build, *lifecycleRows) {
 	b.host = lifecycleHost{runtime: rows, member: platform.Member{ID: "target-builder", Tenant: "target", Roles: map[string]string{ID: Builder}}, info: platform.EntityInfo{App: ID, Type: "build.receipt", Fields: []platform.FieldInfo{{Name: "item", Type: "text"}, {Name: "document", Type: "text"}}}}
 	return b, rows
 }
+
+func TestIntegrationInstallationDecodePreservesImagesAndRejectsMalformedRecords(t *testing.T) {
+	b, rows := lifecycleBuild()
+	connection := Connection{Record: platform.Record{ID: "connection"}, Name: "erp", Title: "ERP", Kind: "http", State: "ready"}
+	dataset := Dataset{Record: platform.Record{ID: "dataset"}, Name: "raw", Title: "Raw"}
+	rows.rows[reflect.TypeFor[Connection]()] = []any{connection}
+	rows.rows[reflect.TypeFor[Dataset]()] = []any{dataset}
+	for _, tc := range []struct {
+		kind   platform.AssetKind
+		record any
+	}{
+		{platform.AssetConnection, connection},
+		{platform.AssetSource, Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: connection.ID, Dataset: dataset.ID, URL: "rows"}},
+		{platform.AssetDataset, dataset},
+		{platform.AssetPipeline, Pipeline{Record: platform.Record{ID: "pipeline"}, Name: "landing", Title: "Landing", Input: dataset.ID, OutputObject: "build.receipt", Key: "id"}},
+		{platform.AssetWriteback, Writeback{Record: platform.Record{ID: "writeback"}, Name: "delivery", Title: "Delivery", Connection: connection.ID, Object: "build.receipt", On: "create", Path: "receipts"}},
+		{platform.AssetObservation, Observation{Record: platform.Record{ID: "observation"}, Name: "temperature", Title: "Temperature", Connection: connection.ID, Object: "build.receipt", DeviceField: "item", Signal: "temperature", Unit: "C", Path: "/observations", WindowSeconds: 60, ExpectedRetentionSeconds: 3600, ExpectedGranularitySeconds: 1, Roles: []string{Builder}}},
+		{platform.AssetMatching, Match{Record: platform.Record{ID: "matching"}, Name: "identity", Title: "Identity", Object: "build.receipt", Keys: []MatchKey{{Fields: []string{"item"}}}}},
+	} {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			rows.rows[reflect.TypeOf(tc.record)] = []any{tc.record}
+			inventory, err := b.integrationInventory(tc.kind)
+			if err != nil || !reflect.DeepEqual(inventory, []any{tc.record}) {
+				t.Fatal("integration inventory changed its record type or value", inventory, err)
+			}
+			asset, err := b.integrationAsset(tc.kind, tc.record, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			saved, err := retainIntegration(tc.record, asset)
+			if err != nil {
+				t.Fatal(err)
+			}
+			image := platform.Raw(saved)
+			schema := integrationType(tc.kind) + ".publish"
+			decoded, err := b.DecodeAssetInstallation(schema, image)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if decoded.Ref != asset.Ref || decoded.Schema != schema || decoded.Record != integrationType(tc.kind)+"/"+integrationRecord(tc.record).ID || !slices.Equal(decoded.Image, image) {
+				t.Fatal("decoded installation changed its identity or saved image", decoded)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(image, &fields); err != nil {
+				t.Fatal(err)
+			}
+			fields["unknownInstallationField"] = json.RawMessage(`true`)
+			if _, err := b.DecodeAssetInstallation(schema, platform.Raw(fields)); err == nil {
+				t.Fatal("installation accepted an unknown record field")
+			}
+			delete(fields, "unknownInstallationField")
+			_, _, published, _ := integrationMetadata(saved)
+			fields["definitionVersions"] = platform.Raw([]string{published, published})
+			if _, err := b.DecodeAssetInstallation(schema, platform.Raw(fields)); err == nil {
+				t.Fatal("installation accepted a duplicate retained version family")
+			}
+			image[0] = ' '
+			if decoded.Image[0] != '{' {
+				t.Fatal("decoded installation retained the caller's mutable image buffer")
+			}
+		})
+	}
+}
+
+func TestIntegrationInventoryReadsSecondPageFiltersArchivedAndKeepsLimit(t *testing.T) {
+	b, rows := lifecycleBuild()
+	records := make([]any, 1001)
+	for i := range records {
+		records[i] = Source{Record: platform.Record{ID: "source-" + strconv.Itoa(i), Archived: i == 0 || i == 499 || i >= 501}, Name: "feed" + strconv.Itoa(i)}
+	}
+	rows.rows[reflect.TypeFor[Source]()] = records[:501]
+	inventory, err := b.integrationInventory(platform.AssetSource)
+	if err != nil || len(inventory) != 499 {
+		t.Fatal("integration inventory omitted a page or exposed archived records", len(inventory), err)
+	}
+	for i, record := range inventory {
+		want := i + 1
+		if want >= 499 {
+			want++
+		}
+		if !reflect.DeepEqual(record, records[want]) {
+			t.Fatal("integration inventory changed record order or included an archived record", record)
+		}
+	}
+	rows.rows[reflect.TypeFor[Source]()] = records
+	if _, err := b.integrationInventory(platform.AssetSource); err == nil {
+		t.Fatal("integration inventory accepted more than 1000 saved definitions")
+	}
+}
+
 func TestMatchingReleaseClosureAndPrivateInstallation(t *testing.T) {
 	b, rows := lifecycleBuild()
 	rows.rows[reflect.TypeFor[Source]()] = []any{Source{Record: platform.Record{ID: "local-source"}, Name: "feed", State: "draft"}}

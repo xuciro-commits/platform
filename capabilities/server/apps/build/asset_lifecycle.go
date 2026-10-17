@@ -430,41 +430,9 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		return platform.AssetInstallation{}, fmt.Errorf("invalid publication schema")
 	}
 	if kind := integrationKindOf(typ); kind != "" {
-		var record any
-		switch kind {
-		case platform.AssetConnection:
-			record = new(Connection)
-		case platform.AssetSource:
-			record = new(Source)
-		case platform.AssetDataset:
-			record = new(Dataset)
-		case platform.AssetPipeline:
-			record = new(Pipeline)
-		case platform.AssetWriteback:
-			record = new(Writeback)
-		case platform.AssetObservation:
-			record = new(Observation)
-		case platform.AssetMatching:
-			record = new(Match)
-		}
-		if err := buildapi.ValueDecodeIntegration(image, record); err != nil {
+		record, err := integrationInstallationRecord(kind, image)
+		if err != nil {
 			return platform.AssetInstallation{}, err
-		}
-		switch r := record.(type) {
-		case *Connection:
-			record = *r
-		case *Source:
-			record = *r
-		case *Dataset:
-			record = *r
-		case *Pipeline:
-			record = *r
-		case *Writeback:
-			record = *r
-		case *Observation:
-			record = *r
-		case *Match:
-			record = *r
 		}
 		name, version, raw, _ := integrationMetadata(record)
 		var asset platform.ReleaseAsset
@@ -669,29 +637,15 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	return err
 }
 func integrationInstallationRecord(kind platform.AssetKind, raw []byte) (any, error) {
-	var ptr any
-	switch kind {
-	case platform.AssetConnection:
-		ptr = new(Connection)
-	case platform.AssetSource:
-		ptr = new(Source)
-	case platform.AssetDataset:
-		ptr = new(Dataset)
-	case platform.AssetPipeline:
-		ptr = new(Pipeline)
-	case platform.AssetWriteback:
-		ptr = new(Writeback)
-	case platform.AssetObservation:
-		ptr = new(Observation)
-	case platform.AssetMatching:
-		ptr = new(Match)
-	default:
+	typ := integrationRecordType(kind)
+	if typ == nil {
 		return nil, fmt.Errorf("unknown integration kind")
 	}
-	if err := buildapi.ValueDecodeIntegration(raw, ptr); err != nil {
+	ptr := reflect.New(typ)
+	if err := buildapi.ValueDecodeIntegration(raw, ptr.Interface()); err != nil {
 		return nil, err
 	}
-	return reflect.ValueOf(ptr).Elem().Interface(), nil
+	return ptr.Elem().Interface(), nil
 }
 func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx platform.AssetApplyContext) error {
 	if ctx.Validate {
