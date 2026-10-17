@@ -30,112 +30,6 @@ type Flow struct {
 	// From moves running instances of the previous version to this one: their
 	// step there → the step here (a decision, taken by an administrator).
 	From map[string]string
-	// Continuous declares a flow an arriving batch advances, instead of one
-	// decision starting one instance (ADR-0047 §13, plan A).
-	Continuous *Continuous
-}
-
-// Continuous is a flow's declared batch contract (ADR-0047 §13.3): the real
-// source it consumes, the batch and state budgets, and whether dead letters are
-// kept. The batch identity, predecessor and watermark travel with each batch;
-// the instance's frame keeps what was consumed.
-type Continuous struct {
-	// Source names the connector or protocol the batches arrive from.
-	Source string
-	// Entry is the retained Compute step that receives one ready event-time
-	// window. Empty keeps the original fold-only delivery contract.
-	Entry string `json:"entry,omitempty"`
-	// Batch is the most signals one batch may carry; 0 keeps the flow's own
-	// budget. A batch over it is refused, never trimmed.
-	Batch int
-	// State is the most bytes one node's state may hold; 0: no extra bound.
-	State int
-	// FrameBytes bounds the complete accepted frame, including dead letters
-	// and its cursor. Zero retains the historical declaration's budget.
-	FrameBytes int
-	// CheckpointEvery retains a full sealed checkpoint after this many accepted
-	// source batches; zero disables periodic checkpoint snapshots.
-	CheckpointEvery int `json:"checkpointEvery,omitempty"`
-	// Window declares the native event-time profile. Nil preserves the older
-	// scalar fold; a published streaming graph explicitly freezes this rule.
-	Window *StreamWindow
-	// Intake binds a controlled source record and its event columns. Nil keeps
-	// the existing native batch delivery contract.
-	Intake *StreamIntake `json:"Intake,omitempty"`
-	// DeadLetter keeps signals that could not be folded, with the reason.
-	DeadLetter bool
-	// DeadLetterMaxRecords and DeadLetterTTLMs bound the retained replay view.
-	DeadLetterMaxRecords int `json:"deadLetterMaxRecords,omitempty"`
-	DeadLetterTTLMs      int `json:"deadLetterTtlMs,omitempty"`
-	// Concurrency bounds actual partition work on the outside preparation lane.
-	// Zero preserves sequential historical declarations; at most eight workers.
-	Concurrency     int              `json:"concurrency,omitempty"`
-	Aggregate       *StreamAggregate `json:"aggregate,omitempty"`
-	Threshold       *StreamThreshold `json:"threshold,omitempty"`
-	Output          *StreamOutput    `json:"output,omitempty"`
-	ErrorPolicy     string           `json:"errorPolicy,omitempty"`
-	DeadLetterRetry bool             `json:"deadLetterRetry,omitempty"`
-}
-
-type StreamAggregate struct {
-	Node     string   `json:"node"`
-	Kernel   string   `json:"kernel,omitempty"`
-	Above    float64  `json:"above,omitempty"`
-	Signal   string   `json:"signal,omitempty"`
-	Group    []string `json:"group,omitempty"`
-	Measures []string `json:"measures"`
-}
-
-type StreamThreshold struct {
-	Node       string  `json:"node"`
-	Field      string  `json:"field"`
-	High       float64 `json:"high"`
-	Low        float64 `json:"low"`
-	DebounceMS int     `json:"debounceMs"`
-	Severity   string  `json:"severity,omitempty"`
-}
-
-type StreamOutput struct {
-	Node string `json:"node"`
-	Name string `json:"name"`
-	Mode string `json:"mode"`
-}
-
-type StreamIntake struct {
-	SourceRecord string                  `json:"sourceRecord"`
-	Key          string                  `json:"key"`
-	Partition    []string                `json:"partition"`
-	EventTime    string                  `json:"eventTime"`
-	Value        string                  `json:"value"`
-	Offset       string                  `json:"offset,omitempty" enum:"latest,earliest"`
-	Fields       []string                `json:"fields,omitempty"`
-	Retry        *StreamPreparationRetry `json:"retry,omitempty"`
-}
-
-// StreamWindow is a bounded state rule owned by the existing Flow frame.
-// Millisecond settings retain the source graph's timing contract.
-type StreamWindow struct {
-	Node     string `json:"node"`
-	WindowMS int    `json:"windowMs"`
-	SlideMS  int    `json:"slideMs"`
-	// WatermarkMS is the event-time grace held back from the observed
-	// high-water mark before a slide closes and expired rows are evicted.
-	WatermarkMS int                     `json:"watermarkMs"`
-	MaxRecords  int                     `json:"maxRecords"`
-	Retry       *StreamPreparationRetry `json:"retry,omitempty"`
-	LateEvents  string                  `json:"lateEvents"` // sideOutput, accept or reject beyond the retained window and grace
-}
-
-// FlowStateArtifact identifies a frozen frame in the original file store.
-// The host chooses Ticket and derives the storage key; no path or URL is
-// accepted from a source, member or worker.
-type FlowStateArtifact struct {
-	Tenant   string `json:"tenant"`
-	Instance string `json:"instance"`
-	Version  int    `json:"version"`
-	Ticket   string `json:"ticket"`
-	Digest   string `json:"digest"`
-	Size     int    `json:"size"`
 }
 
 // Start is what starts an instance: events (actions of the app, or protocol
@@ -146,13 +40,8 @@ type Start struct {
 	// Manual is a typed, explicitly submitted entry point. It shares the
 	// same instance, tokens and accepted-result path as state/event starts.
 	Manual bool
-	// Continuous starts one stable, long-lived instance for a controlled stream.
-	// Enabled binds that start to its current published owner; ending the instance
-	// is durable and does not silently create a replacement.
-	Continuous bool
-	Enabled    func(Caller) bool
-	On         []string
-	Begin      func(c Caller, e Event) (key string, data any, ok bool)
+	On     []string
+	Begin  func(c Caller, e Event) (key string, data any, ok bool)
 	// Type and When start an instance the first time a decision brings a
 	// record of Type into a state When accepts, whichever record the decision
 	// named (ADR-0028 D8); its key is the record's ID. Either this or On.
@@ -161,7 +50,7 @@ type Start struct {
 	// Every starts an instance once per period (ADR-0057 E1, a tenant's
 	// scheduled automation): its key is the period's start time, so a tick
 	// never starts the same period twice. At least a minute. OnBehalf is the
-	// member its steps act as — the one who published the schedule or stream.
+	// member its steps act as — the one who published the schedule.
 	Every    time.Duration
 	OnBehalf string
 }

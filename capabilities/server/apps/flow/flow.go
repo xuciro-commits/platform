@@ -23,21 +23,16 @@ import (
 // takes it again. Acts are submitted as the declaring app's automation
 // principal; people are asked through that app's tasks (ADR-0017).
 const (
-	ID                        = platform.FlowApp
-	InstanceType              = platform.FlowInstanceType
-	Admin                     = "admin"
-	SchemaFlowStart           = "flow.instance.start"
-	SchemaFlowStep            = "flow.instance.step"
-	SchemaFlowBatch           = "flow.instance.batch"
-	SchemaFlowRetry           = "flow.instance.retry"
-	SchemaFlowSkip            = "flow.instance.skip"
-	SchemaFlowStop            = "flow.instance.cancel"
-	SchemaFlowResume          = "flow.instance.resume"
-	SchemaFlowRetire          = "flow.instance.retire"
-	SchemaFlowReplay          = "flow.dead-letter.replay"
-	SchemaFlowMove            = "flow.instance.move"
-	SchemaFlowArtifactCleanup = "flow.instance.artifact-cleanup"
-	stepAttempts              = 5
+	ID              = platform.FlowApp
+	InstanceType    = platform.FlowInstanceType
+	Admin           = "admin"
+	SchemaFlowStart = "flow.instance.start"
+	SchemaFlowStep  = "flow.instance.step"
+	SchemaFlowRetry = "flow.instance.retry"
+	SchemaFlowSkip  = "flow.instance.skip"
+	SchemaFlowStop  = "flow.instance.cancel"
+	SchemaFlowMove  = "flow.instance.move"
+	stepAttempts    = 5
 	// Compensate as a next step undoes the completed acts, newest first.
 	Compensate = platform.Compensate
 )
@@ -76,7 +71,6 @@ type Flows struct {
 	chosen, pins map[string]int
 }
 
-var _ platform.ContinuousFlowOwner = (*Flows)(nil)
 var _ host.AttachedFlow = (*Flows)(nil)
 
 // version is the one a new instance of flow takes: the highest declared, or
@@ -117,37 +111,21 @@ func New(tenant string) *Flows {
 	actions = append(actions,
 		platform.Action{Schema: SchemaFlowStart, Target: InstanceType, Capability: "flows", Title: "Start flow", Description: byHost, Payload: []platform.Field{}, Roles: admin},
 		platform.Action{Schema: SchemaFlowStep, Target: InstanceType, Capability: "flows", Title: "Take step", Description: byHost, Payload: []platform.Field{}, Roles: admin},
-		platform.Action{Schema: SchemaFlowBatch, Target: InstanceType, Capability: "flows", Title: "Accept source batch", Description: byHost, Automation: true,
-			Payload: []platform.Field{{Name: "batch", Type: "text", Required: true}, {Name: "digest", Type: "text", Required: true}}},
 		platform.Action{Schema: SchemaFlowRetry, Target: InstanceType, Capability: "flows", Title: "Retry", Payload: []platform.Field{}, Roles: admin,
 			Description: "Try a stuck or waiting instance's steps again, with fresh attempts."},
 		platform.Action{Schema: SchemaFlowSkip, Target: InstanceType, Capability: "flows", Title: "Skip step", Roles: admin,
 			Description: "Leave the step a stuck path is at, as if it had ended, and go on.", Payload: []platform.Field{{Name: "token", Type: "integer", Required: true, Description: "The path"}}},
 		platform.Action{Schema: SchemaFlowStop, Target: InstanceType, Capability: "flows", Title: "Cancel", Payload: []platform.Field{}, Roles: admin,
 			Description: "Stop a running instance; its open tasks close. Nothing is undone."},
-		platform.Action{Schema: SchemaFlowResume, Target: InstanceType, Capability: "flows", Title: "Resume continuous flow", Payload: []platform.Field{}, Roles: admin,
-			Description: "Continue a stopped stream from its accepted source checkpoint and retained version."},
-		platform.Action{Schema: SchemaFlowRetire, Target: InstanceType, Capability: "flows", Title: "Retire continuous state", Payload: []platform.Field{}, Roles: admin,
-			Description: "Release a terminal stream's frame and checkpoint; this permanently ends same-version resumption."},
-		platform.Action{Schema: SchemaFlowReplay, Target: "flow.dead-letter", Capability: "flows", Title: "Replay dead letter", Payload: []platform.Field{}, Roles: admin,
-			Description: "Retry the original rejected action under current authorization and its original logical key."},
 		platform.Action{Schema: SchemaFlowMove, Target: InstanceType, Capability: "flows", Title: "Move to the next version", Payload: []platform.Field{}, Roles: admin,
-			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
-		platform.Action{Schema: SchemaFlowArtifactCleanup, Target: InstanceType, Capability: "flows", Title: "Retire superseded Flow artifacts", Payload: []platform.Field{{Name: "digest", Type: "text", Required: true}}, Automation: true,
-			Description: "Acknowledge host deletion of already-superseded frame and checkpoint artifacts."})
-	return &Flows{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), InstanceType, "flow.output", "flow.dead-letter"), defs: map[string][]*flowDef{}}
+			Description: "Move a running instance to its flow's next version, as that version's mapping says."})
+	return &Flows{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), InstanceType), defs: map[string][]*flowDef{}}
 }
 
 func flowEntities() []platform.Entity {
 	return []platform.Entity{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title",
 		Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(FlowInstance).OnBehalf} }},
-		Derived: []platform.Derivation{{From: "sources", Fields: []string{"data", "outputs", "tokens", "trace", "answer", "batch"}}}, Withheld: "withheld"},
-		{Type: "flow.output", Title: "Flow output", Model: platform.FlowOutput{}, Display: "name",
-			Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(platform.FlowOutput).OnBehalf} }},
-			Derived: []platform.Derivation{{From: "sources", Fields: []string{"value"}}}, Withheld: "withheld"},
-		{Type: "flow.dead-letter", Title: "Flow dead letter", Model: platform.FlowDeadLetterAsset{}, Display: "instance",
-			Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(platform.FlowDeadLetterAsset).OnBehalf} }},
-			Derived: []platform.Derivation{{From: "sources", Fields: []string{"letter", "payload", "target"}}}, Withheld: "withheld"}}
+		Derived: []platform.Derivation{{From: "sources", Fields: []string{"data", "outputs", "tokens", "trace", "answer"}}}, Withheld: "withheld"}}
 }
 
 func (f *Flows) Manifest() platform.Manifest {
@@ -210,58 +188,15 @@ func (f *Flows) InstallationDraft() host.Processes {
 func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	id := m.ID + "." + fl.Name
 	d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
-	byEvent, byState, byClock, byContinuous := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil, fl.Start.Every > 0, fl.Start.Continuous
-	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || boolCount(byEvent, byState, fl.Start.Manual, byClock, byContinuous) != 1 {
-		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, on a record state, by hand, on a schedule or from a continuous source — are required", id)
-	}
-	if byContinuous && (fl.Continuous == nil || fl.Continuous.Intake == nil || fl.Start.OnBehalf == "" || fl.Start.Enabled == nil) {
-		return nil, fmt.Errorf("flow %s: an automatic continuous start needs a controlled intake, publisher and active-owner check", id)
-	}
-	if !byContinuous && fl.Start.Enabled != nil {
-		return nil, fmt.Errorf("flow %s: an active-owner check is only valid for a continuous start", id)
+	byEvent, byState, byClock := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil, fl.Start.Every > 0
+	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || boolCount(byEvent, byState, fl.Start.Manual, byClock) != 1 {
+		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, on a record state, by hand or on a schedule — are required", id)
 	}
 	if byClock && fl.Start.Every < time.Minute {
 		return nil, fmt.Errorf("flow %s: a schedule repeats at least every minute", id)
 	}
 	if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) && (m.ID != "build" || f.host == nil || !f.host.Declares(fl.Start.Type)) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
-	}
-	if fl.Continuous != nil {
-		if fl.Continuous.ErrorPolicy != "" && fl.Continuous.ErrorPolicy != "stop" && fl.Continuous.ErrorPolicy != "deadLetter" {
-			return nil, fmt.Errorf("flow %s: a continuous error policy is stop or deadLetter", id)
-		}
-		if err := checkOperators(*fl.Continuous); err != nil {
-			return nil, fmt.Errorf("flow %s: %w", id, err)
-		}
-		if fl.Continuous.Source == "" || fl.Continuous.Batch < 0 || fl.Continuous.State < 0 || fl.Continuous.FrameBytes < 0 || fl.Continuous.CheckpointEvery < 0 || fl.Continuous.CheckpointEvery > 1_000_000 || fl.Continuous.DeadLetterMaxRecords < 0 || fl.Continuous.DeadLetterMaxRecords > 1_000_000 || fl.Continuous.DeadLetterTTLMs < 0 || fl.Continuous.DeadLetterTTLMs > int((366*24*time.Hour)/time.Millisecond) || !fl.Continuous.DeadLetter {
-			return nil, fmt.Errorf("flow %s: a continuous flow names its source, bounded budgets and dead-letter retention", id)
-		}
-		if fl.Continuous.Window != nil {
-			if err := checkWindow(*fl.Continuous.Window); err != nil {
-				return nil, fmt.Errorf("flow %s: %w", id, err)
-			}
-		}
-		if intake := fl.Continuous.Intake; intake != nil {
-			if intake.SourceRecord == "" || intake.Key == "" || len(intake.Partition) < 1 || len(intake.Partition) > 8 || intake.EventTime == "" || intake.Value == "" || fl.Continuous.Window == nil || fl.Continuous.Batch < 1 || intake.Offset != "" && intake.Offset != "latest" && intake.Offset != "earliest" {
-				return nil, fmt.Errorf("flow %s: an intake needs a source record, event columns, window and positive batch budget", id)
-			}
-			if len(intake.Fields) > 32 {
-				return nil, fmt.Errorf("flow %s: intake metadata has at most 32 declared fields", id)
-			}
-			columns := append(append([]string{intake.Key, intake.EventTime, intake.Value}, intake.Partition...), intake.Fields...)
-			for _, column := range columns {
-				if len(column) == 0 || len(column) > 128 || strings.IndexFunc(column, func(r rune) bool {
-					return r != '_' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9')
-				}) >= 0 || column[0] >= '0' && column[0] <= '9' {
-					return nil, fmt.Errorf("flow %s: intake columns must be plain identifiers", id)
-				}
-			}
-			partitions := slices.Clone(intake.Partition)
-			slices.Sort(partitions)
-			if len(slices.Compact(partitions)) != len(intake.Partition) {
-				return nil, fmt.Errorf("flow %s: intake partition columns must be unique", id)
-			}
-		}
 	}
 	versions := f.defs[id]
 	if len(versions) > 0 && versions[len(versions)-1].Version >= fl.Version {
@@ -293,12 +228,6 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		}
 		if s.Retry != nil && (s.Retry.Attempts < 0 || s.Retry.Attempts > 20 || s.Retry.Backoff < 0 || s.Retry.Backoff > 5*time.Minute) {
 			return nil, fmt.Errorf("flow %s: step %s has a retry schedule outside its bounds", id, s.Name)
-		}
-	}
-	if fl.Continuous != nil && fl.Continuous.Entry != "" {
-		step := d.steps[fl.Continuous.Entry]
-		if (!fl.Start.Manual && !fl.Start.Continuous) || fl.Continuous.Window == nil || fl.Steps[0].Name != fl.Continuous.Entry || step == nil || step.Operation == nil && (fl.Continuous.Aggregate == nil || step.Evaluate == nil && step.Loop == nil) {
-			return nil, fmt.Errorf("flow %s: a window Compute entry is the first step of a manually or source-started event-time flow", id)
 		}
 	}
 	for _, s := range fl.Steps {
@@ -607,9 +536,6 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			run.Outputs = maps.Clone(tok.Outputs)
 			run.Frames = slices.Clone(tok.Frames)
 			step := d.steps[tok.Step]
-			if d.Continuous != nil && d.Continuous.Entry != "" && tok.Step == d.Continuous.Entry && tok.Waits == "retry" {
-				continue // the outside source lane reconstructs this step from its sealed window
-			}
 			due := !tok.Due.IsZero() && !tok.Due.After(now)
 			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.host.Automation(c, d.app), run)
 			if tok.Waits == "operation" || tok.Waits == "invocation" || tok.Waits == "approval" {
@@ -653,10 +579,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			break // one step per instance per run: the next run sees its new state
 		}
 	}
-	// Business timers and resumptions run before the single bounded archive
-	// batch, so a retention backlog cannot occupy every ordinary Flow pass.
-	_, retentionErr := f.retainExpiredDeadLetters(c, now)
-	return retentionErr
+	return nil
 }
 
 func (f *Flows) run(x *FlowInstance) *platform.Run {
@@ -685,9 +608,6 @@ func flowDefinitionOf(d *flowDef) FlowDefinition {
 	v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: append([]string{}, d.Start.On...), Steps: []FlowStep{}}
 	if d.Start.Type != "" { // started by a record's state, not an event (ADR-0028 D8)
 		v.Start = append(v.Start, "state of "+d.Start.Type)
-	}
-	if d.Start.Continuous {
-		v.Start = append(v.Start, "continuous source")
 	}
 	for _, s := range d.Steps {
 		sv := FlowStep{Name: s.Name, Title: cmp.Or(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}

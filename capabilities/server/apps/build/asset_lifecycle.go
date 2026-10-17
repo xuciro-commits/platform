@@ -354,9 +354,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 				if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
 					return nil, err
 				}
-				if !d.Stream {
-					r.Requested = true
-				}
+				r.Requested = true
 			}
 			r.State, r.Puller = "published", ctx.Member.ID
 			record = r
@@ -642,7 +640,7 @@ func (b *Build) validateIntegrationUpgrade(plan platform.AssetInstallation) erro
 		if e != nil {
 			return e
 		}
-		if (old.Cursor != "" || old.Last != nil) && (prior.Connection != next.Connection || prior.Profile != next.Profile || prior.URL != next.URL || prior.Filter != next.Filter || prior.Path != next.Path || prior.Stream != next.Stream || prior.Entity != next.Entity || prior.Since != next.Since || prior.Dataset != next.Dataset || prior.Object != next.Object || prior.Key != next.Key || !reflect.DeepEqual(prior.Mapping, next.Mapping)) {
+		if (old.Cursor != "" || old.Last != nil) && (prior.Connection != next.Connection || prior.Profile != next.Profile || prior.URL != next.URL || prior.Filter != next.Filter || prior.Path != next.Path || prior.Entity != next.Entity || prior.Since != next.Since || prior.Dataset != next.Dataset || prior.Object != next.Object || prior.Key != next.Key || !reflect.DeepEqual(prior.Mapping, next.Mapping)) {
 			return fmt.Errorf("source with accepted data or cursor needs an explicit migration before changing its target or identity mapping")
 		}
 	case Pipeline:

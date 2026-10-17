@@ -46,22 +46,18 @@ func (f *Flows) NativeFlowAsset(manifest platform.Manifest, name string, version
 			OnBehalf string        `json:"onBehalf,omitempty"`
 			Begin    bool          `json:"begin,omitempty"`
 			When     bool          `json:"when,omitempty"`
-			Enabled  bool          `json:"enabled,omitempty"`
 		} `json:"startDeclaration"`
-		Continuous *platform.Continuous `json:"continuous,omitempty"`
-		Mode       string               `json:"mode"`
-		Policies   []nativeStepPolicy   `json:"policies"`
-	}{FlowDefinition: flowDefinitionOf(d), Owners: slices.Clone(d.Owners), From: d.From, Continuous: d.Continuous}
+		Mode     string             `json:"mode"`
+		Policies []nativeStepPolicy `json:"policies"`
+	}{FlowDefinition: flowDefinitionOf(d), Owners: slices.Clone(d.Owners), From: d.From}
 	definition.Start.On, definition.Start.Type, definition.Start.Every, definition.Start.OnBehalf = slices.Clone(d.Start.On), d.Start.Type, d.Start.Every, d.Start.OnBehalf
-	definition.Start.Begin, definition.Start.When, definition.Start.Enabled = d.Start.Begin != nil, d.Start.When != nil, d.Start.Enabled != nil
+	definition.Start.Begin, definition.Start.When = d.Start.Begin != nil, d.Start.When != nil
 	for _, step := range d.Steps {
 		definition.Policies = append(definition.Policies, nativeStepPolicy{Name: step.Name, Retry: step.Retry, Timeout: step.Timeout, WorkingDays: step.WorkingDays, OnTimeout: step.OnTimeout, Fault: step.Fault, NoRetry: step.NoRetry, All: slices.Clone(step.All), Any: slices.Clone(step.Any), Next: step.Next, Output: step.Output != nil, Choose: step.Choose != nil, Undo: step.Undo != nil, End: step.End, LoopControl: step.LoopControl})
 	}
 	switch {
 	case d.Start.Manual:
 		definition.Mode = "manual"
-	case d.Start.Continuous:
-		definition.Mode = "continuous"
 	case d.Start.Every > 0:
 		definition.Mode = "scheduled"
 	case d.Start.Type != "":

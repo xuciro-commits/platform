@@ -267,7 +267,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			err = fmt.Errorf("this tenant runs no processes")
 		} else {
 			record.Version++
-			if record.Every != "" || record.Continuous != nil && record.Continuous.Intake != nil {
+			if record.Every != "" {
 				record.Scheduler = member.ID
 			} else {
 				record.Scheduler = ""

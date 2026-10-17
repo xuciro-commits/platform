@@ -41,7 +41,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			err = fmt.Errorf("tenant %s recovery panicked: %v", id, failure)
 		}
 	}()
-	recoveryStarted := time.Now().UTC()
 	fresh, err := d.rebuildTenant(id)
 	if err != nil {
 		return fmt.Errorf("compose tenant %s: %w", id, err)
@@ -87,7 +86,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			return fmt.Errorf("write repaired tenant %s checkpoint: %w", id, err)
 		}
 	}
-	fresh.flowArtifactRecoveryComplete(recoveryStarted)
 	fresh.attachJournal(context.Background(), journal)
 	if err := registry.replace(id, old, fresh); err != nil {
 		return err

@@ -55,9 +55,6 @@ func requestPull(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) 
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if s.Stream {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source is consumed through its Flow instance")
-	}
 	s.Requested = true
 	return nil
 }
@@ -66,9 +63,6 @@ func resetCursor(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) 
 	s, ok := record.(*Source)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	if s.Stream {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source cursor belongs to its Flow instance")
 	}
 	s.Cursor, s.Requested = "", true
 	return nil
@@ -82,16 +76,13 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 	if err := b.checkSource(c, *s); err != nil {
 		return err
 	}
-	s.Puller, s.Requested = c.ID, !s.Stream
+	s.Puller, s.Requested = c.ID, true
 	if !c.Replaying {
 		fixed, err := b.freezeDirectIntegration(platform.AssetSource, *s)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		*s = fixed.(Source)
-	}
-	if s.Stream {
-		s.Cursor, s.Last = "", nil
 	}
 	return nil
 }
@@ -111,12 +102,6 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 	}
 	if s.Since != "" && !identifier(s.Since) {
 		return refuse("The incremental column is a plain identifier")
-	}
-	if s.Stream {
-		if s.Profile != "table" || s.Since == "" || s.Object != "" || s.Dataset != "" || s.Key != "" || len(s.Mapping) != 0 || s.Every != "" {
-			return refuse("A continuous source uses an incremental PostgreSQL table, without a materialization target or import schedule")
-		}
-		return nil
 	}
 	if s.Dataset != "" {
 		if s.Object != "" {
@@ -298,9 +283,6 @@ type Source struct {
 	Object  string        `json:"object,omitempty" title:"Target object"`
 	Key     string        `json:"key,omitempty" title:"Row id field"`
 	Mapping []SourceField `json:"mapping,omitempty" title:"Field mapping"`
-	// Stream sources are read by the original continuous instance. They never
-	// materialize machine-rate rows into ordinary object or dataset records.
-	Stream bool `json:"stream,omitempty" title:"Continuous Flow source"`
 	// Every is a period such as 15m or 24h; empty: pulled only when asked.
 	Every string `json:"every,omitempty" title:"Pull every" help:"A period such as 15m, 1h or 24h; empty: only when asked"`
 	State string `json:"state" field:"readonly"`
@@ -343,7 +325,7 @@ type SourceFailure struct {
 // Due is whether a published source should be pulled at now: asked for, or
 // its period has passed since the last pull.
 func (s Source) Due(now time.Time) bool {
-	if s.State != "published" || s.Stream {
+	if s.State != "published" {
 		return false
 	}
 	if s.Requested {

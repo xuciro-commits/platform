@@ -55,23 +55,21 @@ type Tenant struct {
 	AcceptResult func(Entry, string, string) ([]byte, error)
 	// Store keeps what is derived outside the journal: vectors and transcripts
 	// (ADR-0022); without one they stay in memory.
-	Store         Store
-	memStore      journal.Memory // the Store without one
-	knowledge     host.Glossary  // the knowledge app: documents are searched, terms read (ADR-0022)
-	index         index          // passages cut from documents and knowledge fields
-	i18n          translator     // says declarations and messages in a language (ADR-0023)
-	agentRun      string         // the run whose agent is submitting, under mu: its effects name it
-	mu            sync.Mutex
-	streamMu      sync.Mutex                  // one outside-lane source intake pass per tenant
-	flowArtifacts flowArtifactGC              // transient preparation/collection exclusion; no authoritative state
-	fault         atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
-	apps          []platform.App
-	committed     committed               // answers by idempotency key (committed.go)
-	releases      releaseStore            // release_store.go
-	console       hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
-	staged        stagedChannel           // the per-call result channel (compute_channel.go)
-	definitions   []platform.Definition   // installed code assets; member views are derived on read
-	owner         map[string]platform.App // "action:", "read:" and "input:" names → app
+	Store       Store
+	memStore    journal.Memory // the Store without one
+	knowledge   host.Glossary  // the knowledge app: documents are searched, terms read (ADR-0022)
+	index       index          // passages cut from documents and knowledge fields
+	i18n        translator     // says declarations and messages in a language (ADR-0023)
+	agentRun    string         // the run whose agent is submitting, under mu: its effects name it
+	mu          sync.Mutex
+	fault       atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
+	apps        []platform.App
+	committed   committed               // answers by idempotency key (committed.go)
+	releases    releaseStore            // release_store.go
+	console     hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
+	staged      stagedChannel           // the per-call result channel (compute_channel.go)
+	definitions []platform.Definition   // installed code assets; member views are derived on read
+	owner       map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	audit     auditLog // recent inputs, deliveries, personal reads (audit_log.go)
@@ -340,11 +338,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 		a = t.app(s.GetAuthority())
 		if a == nil {
 			return nil, unknown()
-		}
-	}
-	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
-		if record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, contentVersion...); handled {
-			return record, refusal
 		}
 	}
 	t.mu.Lock()

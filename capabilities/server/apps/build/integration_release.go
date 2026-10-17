@@ -269,7 +269,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		if err != nil {
 			return asset, err
 		}
-		body = SourceDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Profile: r.Profile, URL: r.URL, Entity: r.Entity, Filter: r.Filter, Since: r.Since, Path: r.Path, Dataset: dataset, Object: r.Object, Key: r.Key, Mapping: r.Mapping, Stream: r.Stream, Every: r.Every}
+		body = SourceDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Profile: r.Profile, URL: r.URL, Entity: r.Entity, Filter: r.Filter, Since: r.Since, Path: r.Path, Dataset: dataset, Object: r.Object, Key: r.Key, Mapping: r.Mapping, Every: r.Every}
 	case Dataset:
 		body = DatasetDefinition{Name: r.Name, Title: r.Title, Keep: r.Keep, Marking: r.Marking}
 	case Pipeline:
@@ -604,7 +604,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if err != nil {
 			return nil, err
 		}
-		record = Source{Name: d.Name, Title: d.Title, Connection: conn, Profile: d.Profile, URL: d.URL, Entity: d.Entity, Filter: d.Filter, Since: d.Since, Path: d.Path, Dataset: dataset, Object: d.Object, Key: d.Key, Mapping: d.Mapping, Stream: d.Stream, Every: d.Every}
+		record = Source{Name: d.Name, Title: d.Title, Connection: conn, Profile: d.Profile, URL: d.URL, Entity: d.Entity, Filter: d.Filter, Since: d.Since, Path: d.Path, Dataset: dataset, Object: d.Object, Key: d.Key, Mapping: d.Mapping, Every: d.Every}
 	case platform.AssetDataset:
 		var d DatasetDefinition
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -987,7 +987,6 @@ type SourceDefinition struct {
 	Object         string                       `json:"object,omitempty"`
 	Key            string                       `json:"key,omitempty"`
 	Mapping        []SourceField                `json:"mapping,omitempty"`
-	Stream         bool                         `json:"stream,omitempty"`
 	Every          string                       `json:"every,omitempty"`
 }
 

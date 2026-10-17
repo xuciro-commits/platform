@@ -170,7 +170,6 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error)
 // replays and a damaged journal quarantines exactly as it does on PostgreSQL.
 func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
 	for _, t := range tenants {
-		recoveryStarted := time.Now().UTC()
 		var after int64
 		if d.SnapshotEvery > 0 {
 			seq, state, ok, err := journal.Snapshot(ctx, t.ID, code)
@@ -215,7 +214,6 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 				continue
 			}
 		}
-		t.flowArtifactRecoveryComplete(recoveryStarted)
 		if after > 0 {
 			log.Printf("restored %s from the snapshot at %d, then replayed %d entries", t.ID, after, len(entries))
 		} else {
@@ -593,7 +591,6 @@ func runWorkFrom(current func() []*Tenant) {
 			var outside []func()
 			for _, t := range tenants {
 				outside = append(append(outside, t.dispatches(Now())...), t.turns(Now())...)
-				outside = append(outside, t.continuousSources(Now())...)
 			}
 			go onLane(outside)
 		}

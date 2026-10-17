@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,38 @@ import (
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
+
+type frameDataSource struct {
+	*notes
+	module       []byte
+	moduleDigest string
+}
+
+func newFrameDataComputeSource(tenant string, _ int) *frameDataSource {
+	module := []byte("fixture-wasm-module")
+	return &frameDataSource{
+		notes:        newNotes(tenant, "frames"),
+		module:       module,
+		moduleDigest: fmt.Sprintf("%x", sha256.Sum256(module)),
+	}
+}
+
+func (s *frameDataSource) Manifest() platform.Manifest {
+	return platform.Manifest{
+		ID:      "frames",
+		Version: "1",
+		Actions: platform.NewCatalog(),
+		Operations: []platform.Operation{{
+			Name:    "aggregate",
+			Title:   "Aggregate window",
+			Roles:   []string{"operator"},
+			Input:   platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"payload": {Type: "string", MaxLength: 200000}}, Required: []string{"payload"}},
+			Output:  platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"bytes": {Type: "integer"}}, Required: []string{"bytes"}},
+			Binding: platform.OperationBinding{Kind: "wasm", Module: s.moduleDigest, ABI: platform.WasmDataABI},
+			Limits:  platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 64, MaxInputBytes: 4096, MaxOutputBytes: 4096, StagedOutputBytes: 8192, DataInputBytes: 256 << 10},
+		}},
+	}
+}
 
 func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 	for _, outcome := range []string{"accepted", "refused", "panic", "probe"} {

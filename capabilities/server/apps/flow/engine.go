@@ -168,11 +168,6 @@ func (f *Flows) RunEnded(c platform.Caller, run host.RunEnd, now time.Time) {
 
 func (ss *session) trace(x *FlowInstance, step, what, detail, by string) {
 	x.Trace = append(x.Trace, TraceLine{At: ss.now, Step: step, What: what, Detail: detail, By: by})
-	if x.Batch != nil && len(x.Trace) > 128 {
-		// A continuous record shows recent progress; the accepted record history
-		// retains earlier trace changes without copying them into every result.
-		x.Trace = slices.Clone(x.Trace[len(x.Trace)-128:])
-	}
 }
 
 func (ss *session) token(x *FlowInstance, id int) *Token {
@@ -233,9 +228,6 @@ func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time,
 		if err := build(ss); err != nil {
 			return nil, err
 		}
-		if err := ss.retainDeadLetters(); err != nil {
-			return nil, err
-		}
 		return ss.apply, nil
 	})
 }
@@ -292,12 +284,8 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 		x := ss.create(d, id, key, data, onBehalf, parent)
 		x.Dependencies, x.Release, x.Applications = bound.Dependencies, bound.Release, bound.Applications
 		if len(deferAdvance) > 0 && deferAdvance[0] {
-			if d.Continuous != nil {
-				x.Tokens[0].Waits = "stream"
-			} else {
-				x.Tokens[0].Waits = "yield"
-				x.Tokens[0].Due = now
-			}
+			x.Tokens[0].Waits = "yield"
+			x.Tokens[0].Due = now
 			x.State = "waiting"
 		} else {
 			ss.advance(x)
@@ -504,7 +492,6 @@ func (ss *session) take(x *FlowInstance, token int) {
 		}
 		ref, err := ss.act(x, d.app, step.Act.Protocol, step.Act.Action, target, payload, fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq), member)
 		if err != nil {
-			ss.deadLetterAct(x, tok, step, target, payload, err.Error())
 			ss.failed(x, token, step, err.Error())
 			return
 		}
@@ -707,10 +694,6 @@ func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why s
 		}
 		tok.Waits, tok.Due = "retry", ss.now.Add(delay)
 		ss.trace(x, tok.Step, "retry", why, "")
-	case step.Act != nil && ss.def(x).Continuous != nil && ss.def(x).Continuous.ErrorPolicy == "deadLetter":
-		ss.output(x, token, platform.Raw(map[string]string{"error": why}))
-		ss.trace(x, tok.Step, "dead letter", why, "")
-		ss.next(x, token, "")
 	case step.Fault != "":
 		ss.output(x, token, platform.Raw(map[string]string{"error": why}))
 		ss.trace(x, tok.Step, "fault", why, "")
@@ -1061,24 +1044,21 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	defer f.mu.Unlock()
 	id := s.GetTarget().GetId()
 	schema := s.GetSchema().GetName()
-	if schema == SchemaFlowStart || schema == SchemaFlowStep || schema == SchemaFlowBatch || schema == SchemaFlowArtifactCleanup {
+	if schema == SchemaFlowStart || schema == SchemaFlowStep {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	var p struct{ Token int }
 	json.Unmarshal(s.GetPayload(), &p)
-	if schema == SchemaFlowReplay {
-		return f.replayDeadLetter(c, s, now)
-	}
 	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		ss := f.session(f.host.Automation(c, ID), now)
 		x := ss.load(id)
 		if x == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		if ended(x.State) && schema != SchemaFlowResume && schema != SchemaFlowRetire {
+		if ended(x.State) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		if schema != SchemaFlowStop && schema != SchemaFlowRetire {
+		if schema != SchemaFlowStop {
 			if err := f.checkBinding(*x); err != nil {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 			}
@@ -1090,20 +1070,11 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 					if t.Task != "" && t.Waits == "stuck" {
 						ss.close = append(ss.close, t.Task)
 					}
-					if d := ss.def(x); d.Continuous != nil && d.Continuous.Entry != "" && t.Step == d.Continuous.Entry && (t.Waits == "stuck" || t.Waits == "retry") {
-						t.Waits, t.Attempts, t.Due, t.Task = "retry", 0, now, ""
-						continue // the outside source lane rebuilds the exact sealed window input
-					}
 					t.Waits, t.Attempts, t.Due, t.Task = "ready", 0, time.Time{}, ""
 				}
 			}
 			if x.State == "stuck" {
-				d := ss.def(x)
-				if d.Continuous != nil && d.Continuous.Entry != "" && slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Step == d.Continuous.Entry && t.Waits == "retry" }) {
-					x.State = "waiting"
-				} else {
-					x.State = map[bool]string{true: "compensating", false: "running"}[slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Step == "@undo" })]
-				}
+				x.State = map[bool]string{true: "compensating", false: "running"}[slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Step == "@undo" })]
 			}
 			ss.trace(x, "", "retried", "", c.ID)
 		case SchemaFlowSkip:
@@ -1126,34 +1097,9 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				}
 			}
 		case SchemaFlowStop:
-			x.Resumable = ss.def(x) != nil && ss.def(x).Continuous != nil && len(x.Tokens) == 1 && x.Tokens[0].Waits == "stream"
 			ss.stopPaths(x)
 			x.State, x.Tokens = "canceled", nil
 			ss.trace(x, "", "canceled", "", c.ID)
-			return ss.apply, nil
-		case SchemaFlowResume:
-			d := ss.def(x)
-			if x.State != "canceled" || !x.Resumable || d == nil || d.Continuous == nil || d.Start.Enabled != nil && !d.Start.Enabled(ss.c) {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a stopped continuous Flow without canceled in-flight work can resume its retained version")
-			}
-			x.Resumable, x.State = false, "waiting"
-			x.Tokens = []Token{{ID: ss.tokenID(x), Step: d.Steps[0].Name, Waits: "stream"}}
-			ss.trace(x, "", "resumed", "accepted source checkpoint retained", c.ID)
-			return ss.apply, nil
-		case SchemaFlowRetire:
-			if !ended(x.State) || x.CleanupPending || x.Batch == nil || x.Batch.Sealed == nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a terminal continuous frame without pending cleanup can be retired")
-			}
-			refs := []platform.FlowStateArtifact{*x.Batch.Sealed}
-			if x.Batch.CheckpointArtifact != nil {
-				refs = append(refs, *x.Batch.CheckpointArtifact)
-			}
-			x.Batch, x.Outputs, x.Resumable = nil, nil, false
-			x.ArtifactCleanup, x.CleanupPending = refs, true
-			if err := validateArtifactCleanup(*x); err != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-			}
-			ss.trace(x, "", "state retired", "terminal frame and checkpoint released", c.ID)
 			return ss.apply, nil
 		case SchemaFlowMove:
 			versions := f.defs[x.Flow]

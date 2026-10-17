@@ -42,8 +42,8 @@ export function DataSourceEditor({ id }: { id: string }) {
     id, type: "build.source", kind: "source", view: "data-source", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
     failure: t("The data source could not be saved or loaded. Your draft is still here."),
     payload: draft => {
-      const { name, title, url, object, key, mapping, every, allowPrivate, header, path, connection, profile, entity, filter, since, dataset, stream } = draft;
-      return { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", stream: !!stream, object: dataset || stream ? "" : object, key: dataset || stream ? "" : key, mapping: dataset || stream ? [] : mapping, every: stream ? "" : every ?? "", dataset: stream ? "" : dataset ?? "",
+      const { name, title, url, object, key, mapping, every, allowPrivate, header, path, connection, profile, entity, filter, since, dataset } = draft;
+      return { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", object: dataset ? "" : object, key: dataset ? "" : key, mapping: dataset ? [] : mapping, every: every ?? "", dataset: dataset ?? "",
         connection: connection ?? "", profile: profile ?? "json", entity: entity ?? "", filter: filter ?? "", since: since ?? "" };
     },
   });
@@ -55,15 +55,15 @@ export function DataSourceEditor({ id }: { id: string }) {
   const last = draft.last;
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New data source")} description={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Endpoint → rows → mapping → period. Publish lets the host pull it; Pull now asks for one pull within seconds.")}
+    <PageHeader title={draft.title || t("New data source")} description={t("Endpoint → rows → mapping → period. Publish lets the host pull it; Pull now asks for one pull within seconds.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "data-source" })}>{t("Data sources")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save data source")}</Button>
         {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
-        {draft.state === "published" && !draft.stream && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("pull"))}>{draft.requested ? t("Pull requested…") : t("Pull now")}</Button>}
-        {draft.state === "published" && !draft.stream && !!draft.since && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("reset"))}>{t("Reset cursor")}</Button>}
+        {draft.state === "published" && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("pull"))}>{draft.requested ? t("Pull requested…") : t("Pull now")}</Button>}
+        {draft.state === "published" && !!draft.since && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("reset"))}>{t("Reset cursor")}</Button>}
         {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
@@ -87,12 +87,12 @@ export function DataSourceEditor({ id }: { id: string }) {
         {!conn && <label className={fieldClass}>{t("Request header")}<Input value={draft.header ?? ""} placeholder="Authorization: Bearer …" onChange={(e) => patch({ header: e.target.value })} /></label>}
         {!conn && <Checkbox checked={!!draft.allowPrivate} onChange={(allowPrivate) => patch({ allowPrivate })}>{t("Allow http and private addresses (on-premise systems)")}</Checkbox>}
         {profile === "json" && <label className={fieldClass}>{t("Rows at")}<Input value={draft.path ?? ""} placeholder="data.items" onChange={(e) => patch({ path: e.target.value })} /><span className="text-[11px] text-muted">{t("Dotted path to the array inside the answer; empty when the answer is the array.")}</span></label>}
-        {!draft.stream && <label className={fieldClass}>{t("Pull every")}<Select value={draft.every ?? ""} onChange={(e) => patch({ every: e.target.value })}><option value="">{t("Only when asked")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>}
+        <label className={fieldClass}>{t("Pull every")}<Select value={draft.every ?? ""} onChange={(e) => patch({ every: e.target.value })}><option value="">{t("Only when asked")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
       </Panel>
       <Panel title={t("Target and mapping")} className="grid min-w-0 content-start gap-3">
-        <label className={fieldClass}>{t("Rows go to")}<Select value={draft.stream ? "stream" : draft.dataset ? "dataset" : "object"} onChange={(e) => e.target.value === "stream" ? patch({ stream: true, dataset: "", object: "", key: "", mapping: [], every: "" }) : e.target.value === "dataset" ? patch({ stream: false, dataset: datasets[0]?.id ?? "", object: "", mapping: [] }) : patch({ stream: false, dataset: "" })}>
-          <option value="object">{t("An object, mapped here")}</option><option value="dataset" disabled={!datasets.length}>{t("A dataset, as they came")}</option><option value="stream" disabled={profile !== "table"}>{t("A continuous Flow")}</option></Select></label>
-        {draft.stream ? <p className="text-xs text-muted">{t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.")}</p> : draft.dataset ? <label className={fieldClass}>{t("Target dataset")}<Select value={draft.dataset} onChange={(e) => patch({ dataset: e.target.value })}>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
+        <label className={fieldClass}>{t("Rows go to")}<Select value={draft.dataset ? "dataset" : "object"} onChange={(e) => e.target.value === "dataset" ? patch({ dataset: datasets[0]?.id ?? "", object: "", mapping: [] }) : patch({ dataset: "" })}>
+          <option value="object">{t("An object, mapped here")}</option><option value="dataset" disabled={!datasets.length}>{t("A dataset, as they came")}</option></Select></label>
+        {draft.dataset ? <label className={fieldClass}>{t("Target dataset")}<Select value={draft.dataset} onChange={(e) => patch({ dataset: e.target.value })}>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
           <span className="text-[11px] text-muted">{t("Each pull becomes a new version; a pipeline maps the rows to an object later.")}</span></label> : <>
         <label className={fieldClass}>{t("Target object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, mapping: [] })}><option value="">{t("Choose an object type")}</option>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
         <label className={fieldClass}>{t("Row id field")}<Input value={draft.key} placeholder="id" onChange={(e) => patch({ key: e.target.value })} /><span className="text-[11px] text-muted">{t("The row field whose value becomes the record id; the same id edits the existing record.")}</span></label>
@@ -107,14 +107,14 @@ export function DataSourceEditor({ id }: { id: string }) {
           <div><Button size="sm" disabled={!draft.object} onClick={() => setMapping([...draft.mapping, { from: "", to: writable.find((f) => !draft.mapping.some((m) => m.to === f.name))?.name ?? "", convert: "" }])}>{t("Add mapping")}</Button></div>
         </div></>}
       </Panel>
-      {!draft.stream && <Panel title={t("Last pull")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
+      <Panel title={t("Last pull")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not pulled yet.")}</p> : <>
           <p className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.failed ? t("Partly applied") : t("Applied")} tone={last.error ? "danger" : last.failed ? "warning" : "success"} />
             <span>{new Date(last.at).toLocaleString()}</span><span>{t("{rows} rows · {applied} applied · {failed} failed", { rows: last.rows, applied: last.applied, failed: last.failed })}</span></p>
           {last.error && <p className="text-xs text-danger">{last.error}</p>}
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}
         </>}
-      </Panel>}
+      </Panel>
     </fieldset>
   </div>;
 }
