@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./kit";
 import { decide, fresh, open } from "./host";
 
 test("business forms keep refused input and a separate supervisor approves without builder access", async ({ browser, page, request }) => {
@@ -22,12 +22,42 @@ test("business forms keep refused input and a separate supervisor approves witho
   await expect(create.getByLabel("Protected value", { exact: true })).toHaveCount(0);
   await create.getByRole("textbox", { name: "ID *", exact: true }).fill(taken);
   await create.getByRole("textbox", { name: "Note", exact: true }).fill("Keep my input");
+  const creates: {
+    body: { idempotencyKey: string; target: { type: string; id: string }; payload: string };
+    correction?: string;
+  }[] = [];
+  page.on("request", request => {
+    if (request.method() !== "POST" || !request.url().endsWith("/v1/submissions")) return;
+    const body = request.postDataJSON();
+    if (body.schema?.name === `${type}.create`) {
+      creates.push({ body, correction: request.headers()["platform-correction-of"] });
+    }
+  });
   await create.getByRole("button", { name: "Create", exact: true }).click();
   await expect(create.getByRole("alert")).toBeVisible();
   await expect(create.getByRole("textbox", { name: "Note", exact: true })).toHaveValue("Keep my input");
   await create.getByRole("textbox", { name: "ID *", exact: true }).fill(id);
+  await create.getByRole("textbox", { name: "Note", exact: true }).fill("Corrected request");
+  await create.getByRole("button", { name: "Retry original inputs", exact: true }).click();
+  await expect.poll(() => creates.length).toBe(2);
+  await expect(create.getByRole("button", { name: "Retry original inputs", exact: true })).toBeEnabled();
+  expect(creates[1]!.body).toEqual(creates[0]!.body);
+  expect(creates[1]!.body.target).toEqual({ type, id: taken });
+  expect(JSON.parse(Buffer.from(creates[1]!.body.payload, "base64").toString()))
+    .toMatchObject({ note: "Keep my input" });
+  expect(creates[1]!.correction).toBeUndefined();
+  await expect(create.getByRole("textbox", { name: "ID *", exact: true })).toHaveValue(id);
+  await expect(create.getByRole("textbox", { name: "Note", exact: true })).toHaveValue("Corrected request");
   await create.getByRole("button", { name: "Create", exact: true }).click();
   await expect(create).toHaveCount(0);
+  expect(creates).toHaveLength(3);
+  expect(creates[2]!.body.idempotencyKey).not.toBe(creates[0]!.body.idempotencyKey);
+  expect(creates[2]!.body.target).toEqual({ type, id });
+  expect(JSON.parse(Buffer.from(creates[2]!.body.payload, "base64").toString()))
+    .toMatchObject({ note: "Corrected request" });
+  expect(creates[2]!.correction).toBeUndefined();
+  const created = await (await request.get(`/v1/records/${type}/${id}`, { headers: { Authorization: "Bearer desk" } })).json();
+  expect(created.record).toMatchObject({ note: "Corrected request", revision: 1 });
   await decide(request, "manager", "build", `${type}.edit`, { type, id }, { value: 7 });
   await page.getByRole("row").filter({ hasText: id }).click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();

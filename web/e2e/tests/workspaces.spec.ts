@@ -119,6 +119,17 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await term.getByRole("textbox", { name: "Refers to", exact: true }).fill(missingDeclaration);
   await term.getByRole("textbox", { name: "Read by members of", exact: true }).fill("pms");
   await term.getByRole("textbox", { name: "Read by members of", exact: true }).press("Enter");
+  const termRequests: {
+    body: { idempotencyKey: string; target: { type: string; id: string } };
+    correction?: string;
+  }[] = [];
+  page.on("request", request => {
+    if (request.method() !== "POST" || !request.url().endsWith("/v1/submissions")) return;
+    const body = request.postDataJSON();
+    if (body.schema?.name === "knowledge.term.create" && body.target?.id === termID) {
+      termRequests.push({ body, correction: request.headers()["platform-correction-of"] });
+    }
+  });
   await term.getByRole("button", { name: "Create", exact: true }).click();
   await expect(term.getByText("ERROR_CODE_INVALID_ARGUMENT", { exact: true })).toBeVisible();
   await expect(term.getByRole("textbox", { name: "ID *", exact: true })).toHaveValue(termID);
@@ -131,6 +142,10 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await term.getByRole("textbox", { name: "Refers to", exact: true }).fill(object.type);
   await term.getByRole("button", { name: "Submit corrected inputs", exact: true }).click();
   await expect(term).toHaveCount(0);
+  expect(termRequests).toHaveLength(2);
+  expect(termRequests[1]!.body.target).toEqual(termRequests[0]!.body.target);
+  expect(termRequests[1]!.body.idempotencyKey).not.toBe(termRequests[0]!.body.idempotencyKey);
+  expect(termRequests[1]!.correction).toBe(termRequests[0]!.body.idempotencyKey);
   expect(await builder.record("knowledge.term", termID)).toMatchObject({ term: termName, meaning: "Accepting an incoming delivery", synonyms: "Goods receipt, delivery acceptance", refersTo: object.type, apps: ["pms"] });
   await expect(page.getByRole("row").filter({ hasText: termName })).toBeVisible();
 

@@ -34,7 +34,7 @@ test("business refusals preserve inputs, repeat one intent and expose flagged an
   }];
   await builder.decide("build.object.edit",{type:"build.object",id:object.id},{actions});
   await builder.open(page,`/action-type?id=${object.id}&action=apply`);
-  await page.getByRole("button",{name:"Transaction",exact:true}).click();
+  await page.getByRole("button",{name:/^Transaction(?: \d+)?$/}).first().click();
   await expect(page.getByText("Business refusal exits",{exact:true})).toBeVisible();
   await page.getByRole("textbox",{name:"Stable refusal code",exact:true}).first().fill("capacityblocked");
   await page.getByRole("button",{name:"Save",exact:true}).click();
