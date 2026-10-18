@@ -10,7 +10,7 @@ import { useDraftSession } from "../session/DraftSession";
 import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
 import { useAuthoringModel } from "./authoring-model";
 
-const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], createTransaction: record.createTransaction, dispatchCommands: record.dispatchCommands ?? [], protocols: record.protocols ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [] });
+const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], createTransaction: record.createTransaction, dispatchCommands: record.dispatchCommands ?? [], protocols: record.protocols ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [], enterpriseUse:record.enterpriseUse });
 
 export function useObjectDraft(id: string, onReset?: () => void) {
   const { decide, definitions } = useHost();

@@ -14,6 +14,16 @@ type runtime struct{ t *Tenant }
 
 var _ platform.Runtime = runtime{}
 
+func (r runtime) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
+	return r.t.checkEnterpriseUsage(c, r.t.records, id, until, deleting, now)
+}
+func (r runtime) CheckEnterpriseTenantLink(c platform.Caller, id string, revision uint32, now time.Time) *kernel.Error {
+	return r.t.checkTenantLink(c, id, revision, now)
+}
+func (r runtime) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
+	return r.t.checkTenantConnection(c, id, now)
+}
+
 // Decide and Attempt explicitly retain the legacy caller's direct semantics,
 // including historical input replay and entries not yet migrated to results.
 // They offer no savepoint or atomic-result guarantee. Accepted entry points

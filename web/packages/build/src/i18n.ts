@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Enterprise element types": "企业元素类型",
+  "Choose the enterprise families this reference accepts. No selection accepts every readable enterprise element.": "选择此引用接受的企业元素类型；不选则允许所有可读取的企业元素。",
+  "Enterprise element types could not be loaded.": "无法读取企业元素类型。",
+  "Declare when records currently use enterprise elements": "声明记录何时仍在使用企业元素",
+  "A true result marks the current record as active use. Without a rule, every unarchived record counts. Only this record's fields are available.": "规则为真时，此记录仍在使用企业元素；未设规则时，所有未归档记录均视为仍在使用。规则只读取本记录字段。",
   "Show system definitions": "显示系统自带内容",
   "System definitions": "系统自带内容",
   "System definition": "系统自带",

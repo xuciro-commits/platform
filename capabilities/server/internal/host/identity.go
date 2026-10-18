@@ -22,7 +22,14 @@ type IdentityDirectory interface {
 	MemberBySubject(subject string) (platform.Member, bool)
 	Holding(app, role string) []string
 	AgentMembers() []platform.Member
+	UnitGrantUsage(unit, until string) []UnitGrantUsage
 	Language(member string) string
+}
+
+// UnitGrantUsage names a member whose current or retained grants use a unit.
+type UnitGrantUsage struct {
+	Member  string
+	Current bool
 }
 
 // AppCatalog is the compiled declaration set used by governance and agents.

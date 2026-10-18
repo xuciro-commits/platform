@@ -82,6 +82,8 @@ type Input struct {
 	Range       *platform.DateRange        `json:"range,omitempty"`
 	Group       string                     `json:"group,omitempty"`
 	Ref         string                     `json:"ref,omitempty" title:"Reference object"`
+	Stereotype  string                     `json:"stereotype,omitempty" title:"Enterprise element type"`
+	Stereotypes []string                   `json:"stereotypes,omitempty" title:"Enterprise element types"`
 	MinLength   *int                       `json:"minLength,omitempty" title:"Minimum length"`
 	Name        string                     `json:"name" field:"required" example:"to"`
 	Title       string                     `json:"title" field:"required" title:"Label" example:"Handed to"`
@@ -98,7 +100,7 @@ func (in Input) Field() platform.Field {
 	if in.MinLength != nil {
 		c.MinLength = in.MinLength
 	}
-	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, Required: in.Required, Description: in.Title, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
+	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, Stereotype: in.Stereotype, Stereotypes: in.Stereotypes, Required: in.Required, Description: in.Title, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
 }
 
 // Set is a field of the record an action sets, from an input, a fixed value,

@@ -135,6 +135,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 	}
 	addObject := func(name string) {
+		if name == "enterprise.element" {
+			return
+		}
 		if asset.Ref.Kind == AssetObject && name == asset.Ref.Name {
 			return
 		}
@@ -198,7 +201,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			if field.Property != nil {
 				add(field.Property.Ref)
 			}
-			if !historical && field.Ref != "" {
+			if !historical && field.Ref != "" && field.Ref != "enterprise.element" {
 				add(object(field.Ref))
 			}
 		}

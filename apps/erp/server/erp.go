@@ -105,7 +105,7 @@ func accounting() []platform.Entity {
 		{Type: AccountType, Title: "Account", Model: Account{}, Synonyms: "ledger account, GL account",
 			Description: "An account of the chart of accounts; its ID is its code. Its balance is the sum of its postings.",
 			Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Controller}}},
-		{Type: EntryType, Title: "Journal entry", Plural: "Journal entries", Model: Entry{}, Synonyms: "voucher, journal voucher",
+		{Type: EntryType, Title: "Journal entry", EnterpriseUse: &platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("choice", "state"), platform.ExprLiteralValue("choice", "draft")}}, Plural: "Journal entries", Model: Entry{}, Synonyms: "voucher, journal voucher",
 			Description: "A journal entry: debits and credits that balance. Posting makes it final and numbers it; a mistake is corrected by reversing it.",
 			Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: both},
 			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",

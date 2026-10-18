@@ -3,9 +3,12 @@
 import type { Api } from "@platform/kernel";
 import { relationLayout } from "@platform/ui";
 
-export type Model = Api.EnterpriseModel;
+export type ElementPeriod = Api.Period;
 export type Element = Api.Element;
+export type TenantLink = Api.TenantLink;
+export type Model = Api.EnterpriseModel;
 export type Relationship = Api.Relationship;
+export const sourceRelationship = (relationship: Relationship) => relationship.id.startsWith("sync:") || relationship.id.startsWith("fed:");
 export type Metamodel = Api.Metamodel;
 /** One description view of the model: who and where, what it holds, what it can
  * do, what it offers, how it is run (ADR-0031). */
@@ -80,7 +83,10 @@ export function nextTo(layout: Record<string, [number, number]>, anchor: string,
 }
 
 export const today = () => new Date().toISOString().slice(0, 10);
-export const live = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);
+export const live = (x: { from?: string; until?: string; periods?: ElementPeriod[]; deleted?: string | boolean }, day: string) => !x.deleted && (x.periods
+  ? x.periods.some(period => (period.from ?? "") <= day && (!period.until || day < period.until))
+  : (x.from ?? "") <= day && (!x.until || day < x.until));
+export const elementStatus = (element: Element, day: string) => live(element, day) ? "Active" : (element.periods ?? [{ from: element.from ?? "", until: element.until }]).some(period => (period.from ?? "") > day) ? "Future" : "Inactive";
 
 /** The elements a viewpoint draws (ADR-0031): its own slice, plus the context
  * stereotypes — every one of them drawn only when a relationship puts it beside

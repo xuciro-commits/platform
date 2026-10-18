@@ -12,6 +12,7 @@ package core
 import (
 	"embed"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ const (
 // is Member; their place in the organisation is org's business.
 type Person struct {
 	platform.Record
+	Element string                `json:"element,omitempty" ref:"enterprise.element" stereo:"ActualPerson" title:"Person in the model"`
 	Name    string                `json:"name" field:"required,search" title:"Full name"`
 	Code    string                `json:"code,omitempty" field:"search" title:"Personnel number" help:"Employee or badge number, unique when given"`
 	Kind    string                `json:"kind" field:"required" choices:"employee,contractor,contact,other"`
@@ -90,6 +92,7 @@ type Site struct {
 // aisle, a bin, a line, a work centre, a dock. Locations nest.
 type Location struct {
 	platform.Record
+	Place  string                 `json:"place,omitempty" ref:"enterprise.element" stereo:"ActualLocation" title:"Place in the model"`
 	Name   string                 `json:"name" field:"required,search"`
 	Code   string                 `json:"code" field:"required,search" help:"Unique within the site, e.g. A-01-03"`
 	Kind   string                 `json:"kind" field:"required" choices:"zone,aisle,rack,bin,dock,staging,line,workcenter,other"`
@@ -155,6 +158,7 @@ func standard() platform.Standard {
 
 // Entities are the shared master data types.
 func Entities() []platform.Entity {
+	active := platform.ExprReference("boolean", "active")
 	out := []platform.Entity{
 		{Type: PersonType, Title: "Person", Model: Person{}, Display: "name", Synonyms: "employee,staff,contact,worker",
 			Description: "A human the organisation works with: an employee, a contractor, a contact at a partner.", Standard: standard()},
@@ -180,6 +184,11 @@ func Entities() []platform.Entity {
 			// A seed is a replay baseline, so its year cannot follow the wall clock.
 			// Later fiscal periods are created by an accountant's journaled decisions.
 			entities[i].Seed = DefaultPeriods(2026)
+		}
+	}
+	for i := range entities {
+		if slices.Contains([]string{PersonType, SiteType, LocationType}, entities[i].Type) {
+			entities[i].EnterpriseUse = &active
 		}
 	}
 	return entities

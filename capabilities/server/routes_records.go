@@ -26,6 +26,14 @@ func enterpriseApp(t *Tenant) host.EnterpriseQueries {
 
 // routesRecords serves records, files, links, aggregates, search, knowledge and transcripts.
 func (h *Host) routesRecords(rt *routes) {
+	rt.handle(Route{Pattern: "POST /v1/enterprise-links/{id}/preview", Summary: "Preview an authorized tenant source through its original ready connection without importing it", Answer: EnterpriseLinkPreview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		preview, err := t.PreviewEnterpriseLink(r.Context(), m, r.PathValue("id"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, preview)
+	})
 	rt.handle(Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request *PageModelRead
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
@@ -244,6 +252,17 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
+	rt.handle(Route{Pattern: "GET /v1/enterprise-usage", Summary: "Uses preventing removal or closure of an enterprise element", Answer: EnterpriseUsage{}, Query: []Param{{"element", "The enterprise element"}, {"until", "Proposed closure day"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		t.mu.Lock()
+		answer, err := t.EnterpriseUsage(m, r.URL.Query().Get("element"), r.URL.Query().Get("until"), h.Now())
+		t.mu.Unlock()
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+
 	rt.handle(Route{Pattern: "GET /v1/enterprise-references", Summary: "Records that name an enterprise element, at any nesting depth, by entity type and page (ADR-0031 D4)", Answer: []EnterpriseReferenceGroup{}, Query: []Param{{"element", "The element's id"}, {"offset", "Records to skip, by column"}, {"limit", "Records per column (default 50, at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := pageBounds(r, 0, 50)
 		if offset < 0 || limit < 0 {

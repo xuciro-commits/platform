@@ -611,7 +611,7 @@ func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Tim
 	return func(*pb.ChangeRecord) { t.opsMu.Lock(); d.Disabled = off; t.opsMu.Unlock() }, nil
 }
 
-func (t *Tenant) decideSetting(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	var p struct{ Value string }
 	json.Unmarshal(s.GetPayload(), &p)
@@ -626,6 +626,12 @@ func (t *Tenant) decideSetting(_ platform.Caller, s *pb.Submission, _ time.Time)
 	}
 	if !a.Manifest().Settings[i].Accepts(p.Value) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	if !c.Replaying && id == "platform/enterpriseRoot" && p.Value != "" {
+		element, ok := c.Enterprise().Element(p.Value, now)
+		if !ok || element.Stereotype != "ActualOrganization" || element.Owner != "" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an active local organization for this tenant")
+		}
 	}
 	return func(*pb.ChangeRecord) { t.settings.set(id, p.Value) }, nil
 }

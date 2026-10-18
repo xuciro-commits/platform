@@ -2,7 +2,7 @@
 
 <a id="adr-0031"></a>
 
-状态：已落地（2026-10-08）；在 ADR-0031 的统一模型上完成视图、画布与业务引用重构。
+状态：有界实现；统一模型与来源责任归 ADR-0022，query/ref/write 契约归 ADR-0034。本文定义当前视图身份、交互和业务使用边界，不承诺完整 UAF 约束执行。
 
 ## 背景
 
@@ -52,6 +52,13 @@
 - `enterprise.relationship.change` 是一次原子替换：在模型副本中结束旧关系并验证新关系，全部成功后才应用。拒绝不改变原关系；当天创建的关系可以当天改接或结束，历史区间保留。
 - 检查器与新建/编辑表单读取 UAF 的继承属性，支持标量、枚举、有效元素引用和日期。项目、里程碑编辑 `startDate` / `endDate`，项目的 `milestone` 与里程碑的 `actualResource` 使用标准属性，画布用只读虚线表达属性引用；时间轴从相同元素与日期投影，不新增项目事实、调度器或另一张业务表。日期需有时区且结束不早于开始；旧日志重放不追加这一新验证。
 
+### D6 模型管理与图上显示分别操作
+
+- **Hide / 隐藏**只改当前视图；**Close / 关闭**结束当前有效期；**Reopen / 重新启用**建立新一期并保留停用区间；**Reinstate / 撤销误关闭**只纠正最近关闭；**Delete unused element / 删除未使用元素**只删无使用的本地元素并保留已删除身份。每项沿原动作显示获权状态、日期或原因；来源元素/关系仍只读。
+- **Move to / 移动到**提交原关系 add/change，修改的是所选结构中的父级，不是画布坐标。同一非矩阵结构的重叠父级、有效期不覆盖和循环均由原企业关系校验拒绝；拒绝保留原模型和输入。关系结构可沿原 `enterprise.kind.edit` 改名，不重建结构身份。
+- `GET /v1/enterprise-usage?element=<id>&until=<date>` 提供当前与历史使用及关闭/删除是否允许。当前引用、授权、代表组织、关系和来源关联阻止不适用的关闭；纯历史引用继续阻止删除。宿主检查全部实际使用，返回细节仍按原记录/字段授权裁剪，只读不到的使用不泄露其名与数量。历史字段路径取自保留发布描述，移除、改名或改型不能使旧 before/after 引用消失。
+- `#/enterprise?element=<id>&section=organization|usage|tenant-links` 从租户设置、成员、业务引用和来源关联返回同一模型上下文。深链不创建或复制元素；未保存的视图、元素和表单输入继续归原草稿会话。
+
 ## 后果
 
 - 视图可以安全地新建、改名、另存、删除：任何一条路径都不会再覆盖别的视图。
@@ -64,14 +71,18 @@
 
 图标名称、字形、分组和翻译由 UI 的 `IconPicker`/`IconGlyph` 唯一提供；宿主只检查 IconName 的形状。历史图标名保留别名。UAF stereotype 图标来自宿主 profile，kind 细化用同一图标词汇的数据表，不在站点重复维护 lucide 映射。
 
-图上节点与连线可选中、编辑和改接；Hide 只移出当前图，Close/End 结束模型有效期，Delete view 只删视图。当前使用 `RelationCanvas`/`CanvasAction`，不恢复旧 DiagramCanvas/BlockCanvas 别名。账号、模型人员、岗位、任职分开管理。业务字段只存企业元素 id，提交检查有效期与 stereotype，关闭的当前引用仍显示原名称及关闭日期；不自动清除历史引用。
+图上节点与连线可选中、编辑和改接；Hide 只移出当前图，Close/End 结束模型有效期，Delete view 只删视图，元素的其他生命周期操作按 D6 区分。当前使用 `RelationCanvas`/`CanvasAction`，不恢复旧 DiagramCanvas/BlockCanvas 别名。账号、模型人员、岗位、任职分开管理。业务字段只存企业元素 id，提交检查有效期与 stereotype，关闭的当前引用仍显示原名称及关闭日期；不自动清除历史引用。
 
-Core 的 site/place/unit、location/site/parent 与 ERP plant 表达现有工厂/场所引用；没有独立原生 WMS 不等于不能构建 WMS，也不把所有未来仓库模型强制归为既有种类。术语的 RefersTo、搜索同义名和 AI 上下文分别说明用途；纯文档术语不冒充运行查询。声明血缘与运行证据分开展示，来源归 ADR-0056、ADR-0024。
+Core 的 site/place/unit、person/element、location/place 与 location/site/parent 表达业务资料及企业图的可选关联，ERP plant/costCentre 沿用同一企业引用。没有独立原生 WMS 不等于不能构建 WMS，也不把所有未来仓库模型强制归为既有种类。术语的 RefersTo、搜索同义名和 AI 上下文分别说明用途；纯文档术语不冒充运行查询。声明血缘与运行证据分开展示，来源归 ADR-0056、ADR-0024。
 
 ## 当前视角与信息组织
 
 当前 `profile.go` 以 Viewpoint（Elements、Context、Relationships）声明五种视角：organization（组织/场所/人/岗/资源）、data（InformationElement）、function（能力/目标/系统）、output（Service）、control（活动/项目/里程碑/规则/风险）。每种元素只属一个主体视角，关系从同一端点契约派生；Context 只包含与主体相邻的有效元素，显式加入的跨域上下文保留。旧八格不是当前选择或权限限制，本文早期 GridCell 描述由本节替代。
 
-左栏为 Viewpoints / Patterns / Model；Add 是画布工具，视图列表与视角同处。画布/树/表/时间轴读取同一模型，不复制数据。新写入使用 `viewpoint`；旧日志和快照由 `legacy_views.go` 映射原八格，保留视图 id、日期、位置、元素与标记，未知格号不猜测。query/ref/write 消费端归 ADR-0034。
+左栏为 Viewpoints / Patterns / Model；Add 是画布工具，视图列表与视角同处。Enterprise 的组织管理表按类型、状态和搜索筛选同一模型，可查看父级、子级、岗位/人员和业务使用，并打开获权的移动、关闭、重开、纠错与删除动作。业务使用与租户来源分别进入同一工作区的 usage、tenant-links 区域。画布/树/表/时间轴读取同一模型，不复制数据。新写入使用 `viewpoint`；旧日志和快照由 `legacy_views.go` 映射原八格，保留视图 id、日期、位置、元素与标记，未知格号不猜测。query/ref/write 消费端归 ADR-0034。
 
 完整 EPC、未覆盖的 OCL 条件对与多重性不是当前实现；取消无具体需求的后续施工承诺。标准与扩展理由仍须准确展示，不以加载元模型声称完整执行标准。
+
+## As built
+
+`enterprise` 负责模型生命周期与关系；宿主复用原记录和保留发布历史检查使用，UI 复用现有画布、表格、表单与草稿机制。Go 定向测试覆盖有效期间隔、误关闭纠正、来源只读、父级变化、Core 与 Build 引用、隐藏与历史使用；来源预览有真实 HTTP 测试。Enterprise 浏览器路线与中英文、窄屏观察的具体结果归 Testing，不能把仅有类型检查当成已观察的界面。后续 UAF 方向只指向 ADR-0022 的标准边界，不增加第二份实施顺序。

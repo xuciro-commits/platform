@@ -10,17 +10,20 @@ import { assetBindingKey, semanticModelView, semanticPropertyTypes, type Propert
  * delivery releases them together (ADR-0011), so a binding to one is a
  * candidate input rather than a missing definition.
  */
-export function SemanticObjectSelect({ value, onChange, label, disabled, filter, drafts }: {
+export function SemanticObjectSelect({ value, onChange, label, disabled, filter, drafts, enterprise = false }: {
   value?: string; onChange: (ref?: Api.AssetRef) => void; label: string; disabled?: boolean;
   filter?: (definition: Api.Definition) => boolean;
   drafts?: { name: string; title?: string }[];
+  enterprise?: boolean;
 }) {
   const { definitions } = useHost();
   const objects = semanticModelView(definitions).objects.filter((definition) => !filter || filter(definition));
   const saved = (drafts ?? []).filter((draft) => !objects.some((definition) => definition.ref.name === draft.name));
-  const chosen = objects.find((definition) => definition.ref.name === value)?.ref ?? (saved.some((draft) => draft.name === value) ? { app: "build", kind: "object" as const, name: value } : undefined);
-  return <Select aria-label={label} value={value ?? ""} disabled={disabled} onChange={(event) => onChange(objects.find((definition) => definition.ref.name === event.target.value)?.ref ?? (saved.some((draft) => draft.name === event.target.value) ? { app: "build", kind: "object", name: event.target.value } : undefined))}>
+  const enterpriseRef = enterprise ? { app: "enterprise", kind: "object" as const, name: "enterprise.element" } : undefined;
+  const chosen = objects.find((definition) => definition.ref.name === value)?.ref ?? (enterpriseRef?.name === value ? enterpriseRef : undefined) ?? (saved.some((draft) => draft.name === value) ? { app: "build", kind: "object" as const, name: value } : undefined);
+  return <Select aria-label={label} value={value ?? ""} disabled={disabled} onChange={(event) => onChange(objects.find((definition) => definition.ref.name === event.target.value)?.ref ?? (enterpriseRef?.name === event.target.value ? enterpriseRef : undefined) ?? (saved.some((draft) => draft.name === event.target.value) ? { app: "build", kind: "object", name: event.target.value } : undefined))}>
     <option value="">{t("Choose an object")}</option>
+    {enterpriseRef && <option value={enterpriseRef.name}>{t("Enterprise model")} · {enterpriseRef.name}</option>}
     {value && !chosen && <option value={value}>{t("Unavailable object: {name}", { name: value })}</option>}
     {objects.map((definition) => <option key={definition.ref.name} value={definition.ref.name}>{definition.entity!.title} · {definition.ref.name}</option>)}
     {saved.map((draft) => <option key={draft.name} value={draft.name}>{draft.title || draft.name} · {draft.name} · {t("Saved draft, delivered with the application release")}</option>)}

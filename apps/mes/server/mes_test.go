@@ -225,6 +225,30 @@ func TestPolicyScopedByLine(t *testing.T) {
 	expect(t, submit(p, l2only, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ERROR_CODE_POLICY_DENIED")
 }
 
+func TestShopOrderEnterpriseUseFollowsItsOriginalCompletionState(t *testing.T) {
+	p := newPlant(t)
+	for _, info := range p.tenant.Entities(sup.Member) {
+		if info.Type != OrderType {
+			continue
+		}
+		program, err := info.CompileEnterpriseUse()
+		if err != nil || program == nil {
+			t.Fatalf("shop-order use declaration: %v", err)
+		}
+		for _, tc := range []struct {
+			status  string
+			current bool
+		}{{"released", true}, {"completed", false}} {
+			result, err := program.Eval(platform.ExprContext{Refs: map[string]platform.ExprValue{"status": {Kind: "choice", Status: "value", Data: platform.Raw(tc.status)}}})
+			if err != nil || string(result.Value.Data) != fmt.Sprint(tc.current) {
+				t.Fatalf("shop order %s current use: %s %v", tc.status, result.Value.Data, err)
+			}
+		}
+		return
+	}
+	t.Fatal("original shop-order declaration is unavailable")
+}
+
 // F-7 refuted: a two-signature disposition is a domain workflow over single decisions.
 func TestDispositionNeedsTwoSignatures(t *testing.T) {
 	p := newPlant(t)

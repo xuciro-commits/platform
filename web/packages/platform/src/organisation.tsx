@@ -3,7 +3,9 @@
 // its standing on the host. Each value is a platform setting, decided with
 // platform.setting.set like any app setting, so it is journaled and audited.
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
+import { useQuery } from "@tanstack/react-query";
+import { queryElements, resolveElements } from "@platform/kernel";
 import { useState } from "react";
 import type { AppSettings, SettingValue } from "./shared";
 import type { TenantRecord } from "./account";
@@ -19,11 +21,16 @@ const groups: { title: string; names: string[] }[] = [
 export function Organisation() {
   const tenant = useRead<TenantRecord>("/v1/tenant");
   const settings = useRead<AppSettings[]>("/v1/settings").data?.find((a) => a.app === "platform")?.settings ?? [];
-  const { decide } = useHost();
+  const { decide, can, client, source } = useHost();
+  const { open } = useWorkspace();
   const [draft, setDraft] = useState<Record<string, string>>({});
+  useUnsavedChanges(Object.keys(draft).length > 0, () => setDraft({}));
+  const organisations = useQuery({ queryKey: [client.connection.token, client.connection.tenant, source.scope, "representative-organisations"], queryFn: () => queryElements(client.get.bind(client), { stereotype: "ActualOrganization", limit: 200 }), enabled: !!bySetting(settings, "enterpriseRoot") });
   const set = (s: SettingValue, value: string) => decide("platform.setting.set", { type: "platform.setting", id: `platform/${s.name}` }, { value });
   const byName = Object.fromEntries(settings.map((s) => [s.name, s]));
   const record = tenant.data;
+  const root = draft.enterpriseRoot ?? byName.enterpriseRoot?.value ?? "";
+  const chosenRoot = useQuery({ queryKey: [client.connection.token, client.connection.tenant, source.scope, "representative-root", root], queryFn: () => resolveElements(client.get.bind(client), [root]), enabled: !!root && !organisations.data?.elements.some(element => element.id === root) });
   const field = (s: SettingValue) => {
     if (s.type === "boolean" || s.type === "choice") {
       return <Select aria-label={s.title} value={s.value} onChange={(e) => void set(s, e.target.value)}>
@@ -43,6 +50,11 @@ export function Organisation() {
         actions={record && <span className="flex gap-1"><Tag label={record.id} /><Tag label={t(record.status)} tone={record.status === "active" ? "success" : "warning"} /></span>} />
       <datalist id="platform-tenant-timezones">{timezones().map((z) => <option key={z} value={z} />)}</datalist>
       <div className="grid max-w-3xl gap-3">
+        {byName.enterpriseRoot && <Panel title={t("Representative organization")}><div className="grid gap-3">
+          <p className="text-xs text-muted">{t("Choose the enterprise organisation represented by this tenant. Changing the tenant name does not rename the model.")}</p>
+          {organisations.isError ? <p role="alert">{t("Organisation choices could not be loaded.")}</p> : <Select aria-label={t("Representative organization")} value={root} disabled={!can("platform.setting.set")} onChange={event => setDraft({ ...draft, enterpriseRoot: event.target.value })}><option value="">{t("Not linked")}</option>{organisations.data?.elements.map(element => <option key={element.id} value={element.id}>{element.name}</option>)}{root && !organisations.data?.elements.some(element => element.id === root) && <option value={root}>{chosenRoot.data?.elements[0]?.name ?? root}</option>}</Select>}
+          <div className="flex flex-wrap gap-2"><Button disabled={!can("platform.setting.set") || root === byName.enterpriseRoot.value} onClick={async () => { if (await set(byName.enterpriseRoot!, root)) setDraft(({ enterpriseRoot: _, ...rest }) => rest); }}>{t("Save")}</Button><Button disabled={!root} onClick={() => open({ view: "enterprise", params: { element: root, section: "organization" } })}>{t("Open organisation node")}</Button></div>
+        </div></Panel>}
         {settings.length === 0 && <p className="text-sm text-muted">{t("— administrators only.")}</p>}
         {groups.map((g) => (
           <Panel key={g.title} title={t(g.title)}>
@@ -72,3 +84,5 @@ export function Organisation() {
     </>
   );
 }
+
+const bySetting = (settings: SettingValue[], name: string) => settings.find(setting => setting.name === name);

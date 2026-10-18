@@ -18,6 +18,7 @@
 | 策略有"表达式变量" | 策略是 deny/allow × 权限或前缀 × `where{member, app, agent, target}` **精确匹配** × 起止日。没有表达式语言、没有记录属性条件（`Policy.When` 只是 Go 内部钩子，租户无法写）。 |
 | 角色可由企业模型岗位推出 | 未做。角色只来自授予（直接、团队、委托）。 |
 | 模板建租户 | 已做：`deploy/templates/{blank,hospitality,manufacturing}.json`、`GET /v1/host/templates`、`POST /v1/host/tenants`、宿主控制台入口。 |
+| 租户代表组织与来源关联 | `platform.setting.enterpriseRoot` 可选引用本租户有效组织，只说明租户代表谁，不自动改名、建子租户或授予。Enterprise TenantLink 用明确来源 tenant/root/Connection 预览并导入只读结构，来源、凭据与模型历史仍由原归属负责。 |
 | 自定义角色 / 策略 / 团队 / 委托 / explain | 已做，具体声明与管理动作见下文。 |
 
 入口实现和检查范围归 ADR-0044 As built；单位范围已按上表生效，不把指定入口与反例的检查外推为所有未来实现或生产环境的证明。
@@ -28,9 +29,13 @@ Tenant 是身份、账本、密钥、审计和运维隔离单位；Enterprise �
 
 跨租户不共享存储或做联合事务。授权支持会话和企业模型的显式只读切片各沿原受控入口，不形成租户父子权限或集团直接写子公司模型。企业模型的单位与 Scope 的有效结构提供 unit/below 范围，不自动产生角色。
 
+同一集团的子组织默认在同租户模型内表达；有独立数据、身份或运维责任时，仍由 Host Console 显式创建独立租户。创建租户不会复制 Enterprise 子树、成员、岗位或授权。需要集团视图时，由来源显式共享元素，接收方用 TenantLink 的 ready HTTP Connection 预览结构，再提交原导入动作。代表组织、来源关联与租户 id 是三个不同引用，不能推断彼此的权限或生命周期。来源连接与手动预览/确认的实际边界见 ADR-0022、ADR-0034。
+
 ## 2. 租户生命周期与设置
 
 租户视图由 platform.setting 投影成 TenantRecord，没有第二张 tenant 实体。语言/时区/币种仍从原设置读取，SettingLanguage 保留为账户有效语言的默认回退。应用自身的 Settings 继续由 Manifest 声明，不能扩成任意代码。
+
+Control Panel → Organisation 的 Representative organization 保存原 `enterpriseRoot` 设置，可打开 `enterprise?element=<id>&section=organization`。设置改变不重命名企业节点，节点改名不重命名租户；该引用参加企业元素的关闭/删除使用检查。People and places 的 Core 记录、成员授权和企业人员/任职仍分别维护，新增显式引用不构成自动同步。
 
 原 Host Console 的模板目录、POST /v1/host/tenants、显式 -host-admins 与 lifecycle 管理共同负责租户创建/停用/退役；宿主管理主体与租户 admin 分开。模板含应用、组织种子、默认设置与首位管理员，持久目录取代旧 directory.json，重启沿原日志恢复。不存在自动按组织层级复制权限或无条件按保留天数删客户数据的机制。
 

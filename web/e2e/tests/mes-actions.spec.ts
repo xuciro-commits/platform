@@ -51,6 +51,9 @@ test("MES shop orders move to a published editable page while retaining the orig
   await lots.fill("3");
   const place = form.getByRole("combobox", { name: /^The place in the enterprise model/ });
   await expect(place.locator('option[value="L1"]')).toHaveCount(1);
+  await expect(place.locator('option[value="plant-sz"]')).toHaveCount(1);
+  await place.selectOption("plant-sz");
+  await expect(place).toHaveValue("plant-sz");
   await place.selectOption("L1");
   await shots(page, form, "mes-editable-order-form", info);
   await form.getByRole("button", { name: "Release shop order", exact: true }).click();

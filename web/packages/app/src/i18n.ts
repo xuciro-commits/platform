@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Enterprise model": "企业模型",
   "Time": "时间",
   "Attempt": "尝试",
   "Device dispatch": "设备派发",

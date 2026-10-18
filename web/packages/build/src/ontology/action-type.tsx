@@ -8,7 +8,7 @@ import {RefusalEditor} from "./RefusalEditor";
 // object's actions and this action's sections. Main: the section as a table or
 // preview. Right: the row in hand. Dock: this action's problems. The action
 // still lives in its object's record: the object draft session is shared.
-import { PayloadFields, assetKey, useHost, useRecordInventory, type Definition } from "@platform/app";
+import { PayloadFields, SemanticObjectSelect, assetKey, useHost, useRecordInventory, type Definition } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { projectGroup, useProjectIndex } from "../projects/membership";
 import { Button, Card, Checkbox, GroupedList, Input, PageHeader, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Toggles, Workbench, cn, t, type EntityInfo, type WorkbenchProblem } from "@platform/ui";
@@ -18,7 +18,7 @@ import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../edit
 import { Boxes, FileInput, ListChecks, Plus, Shield, Trash2, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
-import { Label } from "./process";
+import { EnterpriseReferenceTypes, Label } from "./process";
 import { actionInputFields, conditionSubjects, inputTypes, nameOf, type Action, type ApproverLevel, type Input_ } from "./object-model";
 import { actionResultEdges } from "./process-rules";
 import { useObjectDraft } from "./object-draft";
@@ -179,9 +179,10 @@ function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_;
   return <>
     <Label text={t("Label")}><Input value={input.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
     <Label text={t("Name")}><Input className="font-mono" value={input.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
-    <Label text={t("Type")}><Select value={input.type} onChange={(e) => onChange({ type: e.target.value, ref: undefined, choices: undefined, minLength: undefined, constraints:undefined,range:undefined })}>{inputTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    <Label text={t("Type")}><Select value={input.type} onChange={(e) => onChange({ type: e.target.value, ref: undefined, stereotype:undefined, stereotypes:undefined, choices: undefined, minLength: undefined, constraints:undefined,range:undefined })}>{inputTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {input.type === "choice" && <Label text={t("Choices")}><Input placeholder="a, b, c" value={input.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
-    {input.type === "reference" && <Label text={t("Reference object")}><Select value={input.ref ?? ""} onChange={(e) => onChange({ ref: e.target.value || undefined })}><option value="">{t("Choose an object")}</option>{entities.map((e) => <option key={e.type} value={e.type}>{e.title} · {e.type}</option>)}</Select></Label>}
+    {input.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect enterprise value={input.ref} label={t("Reference object")} drafts={entities.map(entity => ({name:entity.type,title:entity.title}))} onChange={ref => onChange({ ref:ref?.name, stereotype:undefined, stereotypes:undefined })} /></Label>}
+    {input.type === "reference" && input.ref === "enterprise.element" && <EnterpriseReferenceTypes value={input} onChange={onChange} />}
     {["text", "longtext"].includes(input.type) && <Label text={t("Minimum length")}><Input type="number" min={0} max={4096} value={input.minLength ?? ""} onChange={(e) => onChange({ minLength: e.target.value === "" ? undefined : e.target.valueAsNumber })} /></Label>}
     <Label text={t("Group")}><Input value={input.group??""} onChange={e=>onChange({group:e.target.value||undefined})}/></Label>
     {["integer","decimal"].includes(input.type)&&(["min","max"] as const).map(bound=><Label key={bound} text={bound==="min"?t("Minimum"):t("Maximum")}><Input type="number" value={input.constraints?.[bound]??""} onChange={e=>onChange({constraints:{...input.constraints,[bound]:e.target.value===""?undefined:e.target.valueAsNumber}})}/><Checkbox checked={!!input.constraints?.[bound==="min"?"exclusiveMin":"exclusiveMax"]} onChange={exclusive=>onChange({constraints:{...input.constraints,[bound==="min"?"exclusiveMin":"exclusiveMax"]:exclusive}})}>{t("Exclusive bound")}</Checkbox></Label>)}

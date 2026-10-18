@@ -47,7 +47,7 @@ MES 工单界面使用 `make packages` 分发的 `industry.mes-workspace@0.1.0`�
 | Data Connection / 数据连接 | Connections / 连接：`connection`、`integrations`、`endpoints`；Data sources / 来源：`observation-source`、`data-source`、`dataset`；Processing / 处理：`pipeline`、`match`、`writeback`；Monitoring / 监测：`observations`、`lineage`、`effects`、`integration-health` |
 | Agents / 智能体 | Design / 设计：定义 `agent`；可用智能体 `agents`、运行 `agent-runs`、记忆 `agent-memories`、评测 `evaluations`；Assistant / 助手 `assistant` 仅在可执行 `agent.run.start` 时显示 |
 | AI assistance / AI 助手 | Playground / 体验 `ai-playground`、Usage / 用量 `ai-usage`、Providers and models / 供应商与模型 `ai-providers` |
-| Enterprise / 企业模型 | 企业人员、场所、能力与关系 → `enterprise` |
+| Enterprise / 企业模型 | 企业人员、场所、能力与关系 → `enterprise`；组织管理 → `enterprise?section=organization`；业务使用 → `enterprise?section=usage`；租户来源 → `enterprise?section=tenant-links`；指定节点可附加 `element=<id>` |
 | Master data / 主数据 | People and places / 人员与场所、Materials and units / 物料与单位、Accounting / 会计资料 → `master-data`（`type` 选择当前成员可见的 `core` 类型）；Object Explorer / 对象浏览器 → `explorer`；Saved views / 保存的视图 → `saved`，不再复制到其他应用菜单；没有 core 角色但有可读实体时只提供对象浏览器，并以其为主页，不开放受限 core 资料 |
 | Knowledge / 知识 | Documents / 文档 `knowledge`；Glossary / 术语 `glossary` |
 | Control Panel / 控制面板 | Overview and identity / 总览与身份：`control-panel`、`account`、`organisation`、`members`；Access and packages / 权限与安装：`permissions`、`apps`、`matrix`、`protocols`；Settings and audit / 设置与审计：`app-settings`、`words`、`audit` |
@@ -578,6 +578,14 @@ go run ./cmd/<id>-server -web ../../../web/apps/workspace/dist
 
 固定页面内容：GET /v1/definitions的页面Definition.contentVersion为完整原页面描述的page.sha256.<64位摘要>，独立于原Version。沿GET /v1/pages/{app}/{name}/{contentVersion}或EdgeClient.pageContent(ref, contentVersion)读取该已发布内容的当前成员投影；不要对裁剪/翻译后的响应重新算摘要，也不要在403/未知版本时改读当前页。Build原Page记录最多保留64份不同已发布内容，相同描述重复发布只保留一份；保存候选未激活时不能当公开版本读取，历史不授予旧字段/动作权限。代码页只提供当前部署内容。此API尚不等于已具备父子页面嵌入，绑定和运行继续见[ADR-0015 §6.79](ADR/0015-application-studio-fusion.md#679-受控嵌入与组合页面)。
 
-控制面板 → 企业 → Patterns / 模式：选择集团、公司、工厂、酒店、配送中心、办公点、部门、共享服务、产线或团队，查看默认预览大纲，填写名称与整数参数，作为独立根节点加入或嫁接到任意已有组织。选中组织后打开模式默认嫁接其下；空模型也可从“从一个单元开始”入口创建。酒店模式建立酒店部门、楼层和房间，不带制造车间。模式追加到当前租户的企业模型，可继续改名、连线和保存布局；模型读取权限与 enterprise 管理员写入权限沿用原规则。API：`GET /v1/enterprise-patterns` 读取目录和默认预览，`enterprise.pattern.apply {pattern, name, under?, params?}` 应用模式。画布支持滚轮缩放、拖动平移、适应、四种排布与 Link 拖动连线。
+**企业模型。** 从应用切换器进入 **Enterprise / 企业模型**，在 Patterns / 模式选择集团、公司、工厂、酒店、配送中心、办公点、部门、共享服务、产线或团队，查看预览，填写名称与整数参数，作为独立根加入或嫁接到已有组织。选中组织后打开模式默认嫁接其下；空模型也可从“从一个单元开始”创建。酒店模式建立酒店部门、楼层和房间，不带制造车间。API 为 `GET /v1/enterprise-patterns` 与原 `enterprise.pattern.apply {pattern,name,under?,params?}`。画布、树、表与时间轴读取同一模型，布局移动不改变组织父级。
+
+**组织管理与有效期。** Organisation management / 组织管理按类型、状态和关键词筛选；选中元素看父级、子级、岗位/人员、原业务记录和使用影响。Move to / 移动到选择结构、新父级及生效日，提交原关系变化；重叠父级或循环会拒绝并保留输入。Hide / 隐藏只改当前图；Close / 关闭结束当前区间；Reopen / 重新启用从新日期开始并保留停用区间；Reinstate / 撤销误关闭只纠正最后一次关闭；Delete unused element / 删除未使用元素只允许无使用的本地元素，并保留其身份。关闭/删除前读取使用影响，失败可重试；隐藏使用只提示存在，不列私密记录。来源元素及关系由来源维护，接收方只读。
+
+**业务资料与原引用。** Core 人员的 Person in the model、库位的 Place in the model 是可选企业引用；原成员 id、人员档案、站点/库位和模型元素仍分别维护，不批量迁移或复制。通用引用选择器按原 query/resolve 选择有效候选，已有关闭引用显示原名称及关闭状态，改其他字段不清除旧值，新改引用仍需有效。Builder 对象属性和动作参数选择 **Enterprise model / 企业模型** 后，可勾选组织、人员、岗位或位置类型；企业引用不设置反向记录关系。在对象 Overview 开启当前用途规则，以原 ExpressionEditor 配置当前记录上的布尔表达式；为真表示仍在使用，未设规则时所有未归档记录均算当前使用。保存和发布沿原对象动作；旧字段改名、移除或改型不抹掉历史使用。
+
+**租户代表组织。** Control Panel → Organisation 的 Representative organization 选择本租户的代表组织并保存原 `enterpriseRoot` 设置，Open organisation node 打开原模型节点。成员详情的组织入口、Core 企业引用及 `#/enterprise?element=<id>&section=organization|usage|tenant-links` 都返回相同模型。改租户名称不会改模型名称，建组织不会自动建租户或授予岗位权限。独立租户仍由 Host Console 按模板及首位管理员显式创建。
+
+**来源租户。** 先由来源显式标记共享元素；在 Data Connection 创建并检查 ready HTTP Connection，地址为来源服务根，凭据只填宿主密钥名。同宿主也使用显式凭据。Enterprise → Tenant links / 租户来源保存本地组织、来源租户 id、共享根组织 id 与连接记录 id，再选择 Preview import / 预览导入。宿主固定读取该连接的 `v1/enterprise-published`，校验来源租户、UAF 和根组织，展示 added/changed/closed；预览不写模型。Confirm import / 确认导入沿原 `enterprise.slice.import` 提交返回的 `{link,base,content,connectionRevision,slice}`，不再次读取来源；模型、连接或内容变化则重新预览。撤回来源关闭镜像的当前有效期，重新出现保留中间停用区间；旧业务记录和本地关系不随之删除。移除关联保留已导入历史，不提供定时或双向同步、自动角色继承或集团直接写子租户。Go 真实 HTTP 验证范围与 API 边界见 ADR-0022/0034；浏览器实际观察归 Testing。
 
 数据分发沿原机制：推送由已发布 Writeback/Flow 声明外发；看板和报表由模型页面、图表与聚合装配；读取 API 与 CSV 导出共用原记录权限。记录浏览器与业务页面表格的导出共用当前完整查询，包括搜索、过滤、排序和归档设置；完整集合条件走同一 `POST /v1/export/{type}`，旧 GET 导出地址继续可读。

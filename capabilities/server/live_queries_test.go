@@ -496,8 +496,12 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 	if pins := model("admin").Views[0].Pins; len(pins) != 1 || pins[0].Label == "Cached private text" {
 		t.Fatal("pin label bypassed the current scoped record")
 	}
-	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "viewpoint": "organization", "elements": []string{"a"}}, at); got == "ok" {
-		t.Fatal("a partially visible view silently lost another member's pins")
+	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "viewpoint": "organization", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a"}}}, at); got == "ok" {
+		t.Fatal("a submitted unreadable pin bypassed its original record permission")
+	}
+	decide(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "Unpinned", "viewpoint": "organization", "elements": []string{"a"}, "pins": []any{}}, at)
+	if len(model("admin").Views[0].Pins) != 0 {
+		t.Fatal("the final submitted pins did not remove the unreadable old pin")
 	}
 	CheckReplay(t, tn, entries, compose)
 }

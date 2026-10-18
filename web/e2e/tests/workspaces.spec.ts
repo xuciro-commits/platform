@@ -228,7 +228,9 @@ test("platform apps expose their own primary functions and keep one menu owner",
   await choose("AI assistance");
   await entries(["Playground", "Usage", "Providers and models"]);
   await choose("Enterprise");
-  await entries(["Enterprise"]);
+  await entries(["Enterprise", "Organisation management", "Business usage", "Tenant links"]);
+  await navigation.getByRole("button", { name: "Organisation management", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Element status", exact: true })).toBeVisible();
   await choose("Master data");
   await entries(["Object Explorer", savedTitle]);
   await expect(page).toHaveURL(/#\/explorer$/);

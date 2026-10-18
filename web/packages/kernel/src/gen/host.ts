@@ -1479,6 +1479,7 @@ export type DriverTarget = {
 };
 
 export type Edge = {
+  periods?: Period[];
   structure: string;
   unit: string;
   parent: string;
@@ -1536,6 +1537,8 @@ export type Element = {
   owner?: string;
   published?: boolean;
   properties?: Record<string, unknown>;
+  periods?: Period[];
+  deleted?: boolean;
 };
 
 export type EndpointView = {
@@ -1555,6 +1558,21 @@ export type EndpointView = {
   delivered: number;
 };
 
+export type EnterpriseLinkChange = {
+  kind: string;
+  id: string;
+  name: string;
+};
+
+export type EnterpriseLinkPreview = {
+  link: string;
+  base: string;
+  content: string;
+  connectionRevision: number;
+  slice: Slice;
+  changes: EnterpriseLinkChange[];
+};
+
 export type EnterpriseModel = {
   uaf: string;
   scale?: string;
@@ -1563,6 +1581,7 @@ export type EnterpriseModel = {
   relationships: Relationship[];
   views: View[];
   calendars?: Calendar[];
+  tenantLinks?: TenantLink[];
 };
 
 export type EnterpriseQueryElement = {
@@ -1574,6 +1593,7 @@ export type EnterpriseQueryElement = {
   legal?: boolean;
   from?: string;
   until?: string;
+  periods?: Period[];
   closed?: boolean;
 };
 
@@ -1618,7 +1638,23 @@ export type EnterpriseTarget = {
   properties?: string[];
 };
 
+export type EnterpriseUsage = {
+  canDelete: boolean;
+  canClose: boolean;
+  hasRestrictedUsage: boolean;
+  items: EnterpriseUsageItem[];
+};
+
+export type EnterpriseUsageItem = {
+  kind: string;
+  title: string;
+  ref?: string;
+  field?: string;
+  current: boolean;
+};
+
 export type EntityInfo = {
+  enterpriseUse?: Expr;
   versioning?: Versioning;
   versionPins?: VersionPinBinding[];
   sets?: RecordSet[];
@@ -1751,6 +1787,7 @@ export type FieldInfo = {
   choiceTitles?: string[];
   ref?: string;
   stereotype?: string;
+  stereotypes?: string[];
   inverse?: string;
   knowledge?: boolean;
   read?: string[];
@@ -2091,6 +2128,7 @@ export type Kind = {
   name: string;
   kind: string;
   matrix?: boolean;
+  owner?: string;
 };
 
 export type Layer = {
@@ -2220,6 +2258,7 @@ export type MemberView = {
 };
 
 export type Membership = {
+  periods?: Period[];
   party: string;
   unit: string;
   role: string;
@@ -3316,6 +3355,11 @@ export type PatternInfo = {
   preview: Preview;
 };
 
+export type Period = {
+  from?: string;
+  until?: string;
+};
+
 export type PermissionAction = {
   id: string;
   title: string;
@@ -3822,6 +3866,7 @@ export type Relationship = {
   primary?: boolean;
   from?: string;
   until?: string;
+  periods?: Period[];
 };
 
 export type ReleaseActivateRequest = {
@@ -4295,6 +4340,14 @@ export type SimulationStep = {
   compute?: ComputeFixture;
 };
 
+export type Slice = {
+  tenant: string;
+  uaf: string;
+  elements: Element[];
+  relationships: Relationship[];
+  kinds?: Kind[];
+};
+
 export type Source = {
   id: string;
   revision: number;
@@ -4565,6 +4618,16 @@ export type TenantHealth = {
   endpointsFailing: number;
 };
 
+export type TenantLink = {
+  id: string;
+  organization: string;
+  tenant: string;
+  root: string;
+  connection: string;
+  updatedAt?: string;
+  content?: string;
+};
+
 export type TenantRecord = {
   id: string;
   name: string;
@@ -4792,6 +4855,7 @@ export type Type = {
 };
 
 export type Unit = {
+  periods?: Period[];
   id: string;
   name: string;
   kind: string;

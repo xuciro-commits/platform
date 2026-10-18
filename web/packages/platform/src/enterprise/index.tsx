@@ -12,11 +12,13 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, t, type ColumnDef, type CanvasAction, type WorkbenchTab } from "@platform/ui";
+import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, useWorkspace, t, type ColumnDef, type CanvasAction, type WorkbenchTab } from "@platform/ui";
 import { Copy, Link2, Network, Pencil, Pin as PinIcon, PinOff, Plus, Puzzle, Save, Table2, Trash2, Workflow, CalendarDays } from "lucide-react";
 import { Canvas, STEREOTYPE_DROP, elementIconName, type CanvasPin, type Positions } from "./canvas";
 import { ElementProperties, type ElementEdit } from "./properties";
-import { allowedRelationships, autoLayout, childrenOf, contractNote, viewpointElements, live, nextTo, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PERSON, PLACEMENT, POST, RELATIONSHIP, RESPONSIBLE_FOR, VIEW, type Element, type Viewpoint, type Metamodel, type Model, type PatternInfo, type Pin, type Relationship } from "./model";
+import { LifecycleDialog, MoveElementDialog, Usage } from "./lifecycle";
+import { TenantLinks } from "./TenantLinks";
+import { allowedRelationships, autoLayout, childrenOf, contractNote, viewpointElements, live, elementStatus, sourceRelationship, nextTo, today, ELEMENT, FILLS_POST, MEMBERSHIP, MODEL, ORGANIZATION, PERSON, PLACEMENT, POST, RELATIONSHIP, RESPONSIBLE_FOR, VIEW, type Element, type Viewpoint, type Metamodel, type Model, type PatternInfo, type Pin, type Relationship } from "./model";
 
 type Decide = (schema: string, target: { type: string; id: string }, payload: unknown) => Promise<boolean>;
 
@@ -32,16 +34,16 @@ const relationshipTitles: Record<string, string> = {
 };
 const field = (label: string, control: ReactNode) => <label className="grid gap-1 text-xs text-muted">{label}{control}</label>;
 
-export function Enterprise() {
+export function Enterprise({ element, section }: { element?: string; section?: string }) {
   const host = useHost();
   const model = useRead<Model>("/v1/enterprise");
   const meta = useRead<Metamodel>("/v1/enterprise-metamodel").data;
-  const admin = host.role("enterprise") === "admin" || host.role("platform") === "admin";
+  const admin = host.catalog.some(action => action.schema.startsWith("enterprise."));
   const decide: Decide = (schema, target, payload) => host.decide(schema, target, payload);
   if (model.error) return <p className="text-sm text-[var(--tone-danger)]">{String(model.error)}</p>;
   if (!model.data || !meta) return null;
   if (model.data.elements.length === 0) return <SeedWizard decide={decide} admin={admin} />;
-  return <Modeler model={model.data} meta={meta} decide={decide} admin={admin} />;
+  return <Modeler model={model.data} meta={meta} decide={decide} admin={admin} initialElement={element} initialSection={section} />;
 }
 
 // --- The wizard: three to five questions, then a template (ADR-0022 D6).
@@ -77,12 +79,18 @@ function SeedWizard({ decide, admin }: { decide: Decide; admin: boolean }) {
 }
 
 // --- The modeler proper.
-function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamodel; decide: Decide; admin: boolean }) {
+function Modeler({ model: m, meta, decide, admin, initialElement, initialSection }: { model: Model; meta: Metamodel; decide: Decide; admin: boolean; initialElement?: string; initialSection?: string }) {
   const host = useHost();
   const viewKey = `platform.enterprise.view.${host.client.connection.tenant}.${host.me.principalId}`;
   const [viewId, setViewId] = useState<string | undefined>(() => sessionStorage.getItem(viewKey) || undefined);
-  const [mode, setMode] = useState<"canvas" | "tree" | "table" | "timeline">("canvas");
-  const [selected, setSelected] = useState<string>();
+  type Mode = "canvas" | "tree" | "table" | "timeline" | "manage" | "usage" | "tenant-links";
+  const sectionMode = (section?: string): Mode => section === "organization" ? "manage" : section === "usage" ? "usage" : section === "tenant-links" ? "tenant-links" : "canvas";
+  const [mode, setMode] = useState<Mode>(sectionMode(initialSection));
+  const drawing = ["canvas", "tree", "table", "timeline"].includes(mode);
+  const [selected, setSelected] = useState<string | undefined>(initialElement);
+  useEffect(() => { if (initialElement) setSelected(initialElement); if (initialSection) setMode(sectionMode(initialSection)); }, [initialElement, initialSection]);
+  const [status, setStatus] = useState(initialElement ? "All" : "Active");
+  useEffect(() => { if (initialElement) setStatus("All"); }, [initialElement]);
   const [linking, setLinking] = useState(false);
   const [addPalette, setAddPalette] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -91,7 +99,8 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
     | { kind: "link"; source: string; target: string }
     | { kind: "relink"; id: string; source: string; target: string }
     | { kind: "edit"; id: string }
-    | { kind: "close"; id: string }
+    | { kind: "close" | "reopen" | "reinstate" | "delete" | "move"; id: string }
+    | { kind: "kind"; id: string; name: string }
     | { kind: "end"; id: string }
     | { kind: "view"; mode: "create" | "saveAs" }
     | { kind: "rename"; id: string; name: string }
@@ -143,17 +152,17 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   const viewpoint = meta.views.find((v) => v.id === working.viewpoint) ?? meta.views[0];
   const kinds = m.kinds;
   const day = working.asOf, placementKind = working.kind;
-  const setWorking = (next: Partial<Draft>) => setDrafts((all) => ({ ...all, [activeId]: { ...(all[activeId] ?? working), ...next, dirty: admin } }));
+  const setWorking = (next: Partial<Draft>) => setDrafts((all) => ({ ...all, [activeId]: { ...(all[activeId] ?? working), ...next, dirty: host.can("enterprise.view.save") } }));
   const clearDraft = (id: string, captured?: Draft) => setDrafts((all) => {
     if (captured && all[id] && all[id] !== captured) return all;
     const next = { ...all }; delete next[id]; return next;
   });
   useUnsavedChanges(Object.values(drafts).some((v) => v.dirty), () => setDrafts({}));
-  const openView = (id: string) => { sessionStorage.setItem(viewKey, id); setViewId(id); setSelected(undefined); setDialog(undefined); setLinking(false); };
+  const openView = (id: string) => { sessionStorage.setItem(viewKey, id); setViewId(id); setSelected(initialElement); setDialog(undefined); setLinking(false); };
   const matchingElements = (id: string) => viewpointElements(m, meta.views.find((v) => v.id === id), day);
   const changeViewpoint = (id: string) => setWorking({ viewpoint: id, elements: Array.from(new Set([...matchingElements(id), ...working.context])) });
 
-  const byId = (id: string) => m.elements.find((e) => e.id === id);
+  const byId = (id: string) => m.elements.find((e) => e.id === id && !e.deleted);
   const scope = new Set(matchingElements(working.viewpoint));
   const shownElements = working.elements.map(byId).filter((e): e is Element => !!e && live(e, day) && (scope.has(e.id) || working.context.includes(e.id)));
   const preparedKey = [viewKey, activeId, working.viewpoint, placementKind, day].join(":");
@@ -227,22 +236,28 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
   // The selected element's operations, on the canvas (ADR-0031). Hiding is a
   // view decision; closing and ending are model decisions with a date.
   const nodeActions = (id: string): CanvasAction[] => {
-    if (id.startsWith("record:")) return admin ? [{ id: "unpin", label: t("Unpin"), run: () => unpinRecord(id) }] : [];
+    if (id.startsWith("record:")) return host.can("enterprise.view.save") ? [{ id: "unpin", label: t("Unpin"), run: () => unpinRecord(id) }] : [];
     const el = byId(id);
-    if (!el || !admin) return [];
-    return [
-      { id: "edit", label: t("Edit"), run: () => setDialog({ kind: "edit", id }) },
-      { id: "relate", label: t("Relate"), hint: t("Then drag from this element to the one it relates to."), run: () => { setSelected(id); setLinking(true); } },
-      { id: "hide", label: t("Hide in this view"), hint: t("Only this view changes. The element and its relationships stay in the model."), run: () => { setWorking({ elements: working.elements.filter((x) => x !== id), context: working.context.filter((x) => x !== id), pins: working.pins.filter((p) => p.anchor !== id) }); setSelected(undefined); } },
-      { id: "close", label: t("Close…"), tone: "danger", hint: t("Ends its validity from a date: no view shows it as live; history keeps it."), run: () => setDialog({ kind: "close", id }), disabled: !!el.until },
-    ];
+    if (!el) return [];
+    const editable = !el.owner && !el.deleted;
+    const end = el.periods ? el.periods.at(-1)?.until : el.until;
+    const actions: CanvasAction[] = [];
+    if (editable && host.can("enterprise.element.edit")) actions.push({ id: "edit", label: t("Edit"), run: () => setDialog({ kind: "edit", id }) });
+    if (editable && live(el, day) && host.can("enterprise.relationship.add")) actions.push({ id: "relate", label: t("Relate"), run: () => { setSelected(id); setLinking(true); } });
+    if (editable && live(el, day) && m.elements.some(parent => parent.id !== el.id && live(parent, day) && allowedRelationships(meta, el.stereotype, parent.stereotype).includes(PLACEMENT)) && (host.can("enterprise.relationship.change") || host.can("enterprise.relationship.add"))) actions.push({ id: "move", label: t("Move to"), run: () => setDialog({ kind: "move", id }) });
+    if (editable && live(el, day) && host.can("enterprise.element.close")) actions.push({ id: "close", label: t("Close…"), tone: "danger", run: () => setDialog({ kind: "close", id }) });
+    if (editable && !live(el, day) && end && host.can("enterprise.element.reopen")) actions.push({ id: "reopen", label: t("Reopen element"), run: () => setDialog({ kind: "reopen", id }) });
+    if (editable && end && host.can("enterprise.element.reinstate")) actions.push({ id: "reinstate", label: t("Reinstate element"), run: () => setDialog({ kind: "reinstate", id }) });
+    if (editable && host.can("enterprise.element.delete")) actions.push({ id: "delete", label: t("Delete unused element"), tone: "danger", run: () => setDialog({ kind: "delete", id }) });
+    actions.push({ id: "hide", label: t("Hide in this view"), hint: t("Only this view changes. The element and its relationships stay in the model."), run: () => { setWorking({ elements: working.elements.filter(x => x !== id), context: working.context.filter(x => x !== id), pins: working.pins.filter(p => p.anchor !== id) }); setSelected(undefined); } });
+    return actions;
   };
   const edgeActions = (id: string): CanvasAction[] => {
     const r = m.relationships.find((x) => x.id === id);
-    if (!r || !admin || r.until) return [];
+    if (!r || sourceRelationship(r) || !live(r, day)) return [];
     return [
-      { id: "change", label: t("Change…"), hint: t("Ends this relationship on {day} and adds the one you choose.", { day }), run: () => setDialog({ kind: "relink", id, source: r.source, target: r.target }) },
-      { id: "end", label: t("End…"), tone: "danger", hint: t("Ends the relationship on a date: the elements themselves stay."), run: () => setDialog({ kind: "end", id }) },
+      { id: "change", disabled: !host.can("enterprise.relationship.change"), label: t("Change…"), hint: t("Ends this relationship on {day} and adds the one you choose.", { day }), run: () => setDialog({ kind: "relink", id, source: r.source, target: r.target }) },
+      { id: "end", disabled: !host.can("enterprise.relationship.end"), label: t("End…"), tone: "danger", hint: t("Ends the relationship on a date: the elements themselves stay."), run: () => setDialog({ kind: "end", id }) },
     ];
   };
   const factsFor = (el: Element) => {
@@ -283,14 +298,14 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
           <span className="truncate">{v.name}</span>
           {drafts[v.id]?.dirty && <Tag label={t("unsaved")} tone="warning" />}
           <span className="ml-auto text-[10px] text-muted">{t(meta.views.find((g) => g.id === v.viewpoint)?.title ?? v.viewpoint)}</span></Button>
-        {admin && <div className="flex flex-wrap gap-1 pl-1">
+        {host.can("enterprise.view.save") && <div className="flex flex-wrap gap-1 pl-1">
             <Button size="sm" variant="ghost" title={t("Open this view")} onClick={() => openView(v.id)}>{t("Open view")}</Button>
           <Button size="sm" variant="ghost" title={t("Change the name; the drawing stays")} onClick={() => setDialog({ kind: "rename", id: v.id, name: v.name })}><Pencil />{t("Rename…")}</Button>
           <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} disabled={v.id !== activeId} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>
-          <Button size="sm" variant="ghost" className="text-[var(--tone-danger)]" title={t("Discard this drawing; the model stays")} onClick={() => setDialog({ kind: "deleteView", id: v.id, name: v.name })}><Trash2 />{t("Delete")}</Button>
+          {host.can("enterprise.view.delete") && <Button size="sm" variant="ghost" className="text-[var(--tone-danger)]" title={t("Discard this drawing; the model stays")} onClick={() => setDialog({ kind: "deleteView", id: v.id, name: v.name })}><Trash2 />{t("Delete")}</Button>}
         </div>}
       </div>)}
-      {admin && <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "view", mode: "create" })}><Plus />{t("New view")}</Button>}
+      {host.can("enterprise.view.save") && <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "view", mode: "create" })}><Plus />{t("New view")}</Button>}
       <p className="px-1 text-[11px] text-muted">{t("Deleting a view discards a picture, not a fact: the elements, their relationships and the records that name them stay as they are.")}</p>
       <RegistryPane meta={meta} />
     </div> },
@@ -300,7 +315,7 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         const list = patterns.filter((p) => p.level === level);
         return list.length === 0 ? null : <div key={level} className="grid gap-1">
           <p className="px-1 pt-1 text-[11px] font-semibold text-muted">{level} · {t(list[0]!.levelName)}</p>
-          {list.map((p) => <Button key={p.id} variant="row" disabled={!admin} onClick={() => setPattern(p)} className="justify-between border border-border" title={t(p.description)}>
+          {list.map((p) => <Button key={p.id} variant="row" disabled={!host.can("enterprise.pattern.apply")} onClick={() => setPattern(p)} className="justify-between border border-border" title={t(p.description)}>
             <span className="flex items-center gap-1"><Puzzle className="size-3" />{t(p.title)}</span><span className="text-[10px] text-muted">{p.industry ? `${t(p.industry)} · ` : ""}{t("{n} elements", { n: p.preview.elements })}</span>
           </Button>)}
         </div>;
@@ -333,28 +348,39 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
         <Input aria-label={t("As of")} type="date" value={day} onChange={(e) => setWorking({ asOf: e.target.value || today() })} className="w-36" />
       </span>}
       actions={<>
-        <Select aria-label={t("Viewpoint")} title={t("Which question this drawing answers")} value={viewpoint?.id ?? ""} onChange={(e) => changeViewpoint(e.target.value)} className="w-44">
+        <Button size="sm" variant={mode === "manage" ? "primary" : "ghost"} onClick={() => setMode("manage")}>{t("Organisation management")}</Button>
+        <Button size="sm" variant={mode === "usage" ? "primary" : "ghost"} onClick={() => setMode("usage")}>{t("Business usage")}</Button>
+        <Button size="sm" variant={mode === "tenant-links" ? "primary" : "ghost"} onClick={() => setMode("tenant-links")}>{t("Tenant links")}</Button>
+        {drawing && <Select aria-label={t("Viewpoint")} title={t("Which question this drawing answers")} value={viewpoint?.id ?? ""} onChange={(e) => changeViewpoint(e.target.value)} className="w-44">
           {meta.views.map((v) => <option key={v.id} value={v.id}>{t(v.title)}</option>)}
-        </Select>
+        </Select>}
         <Button size="sm" variant={mode === "canvas" ? "default" : "ghost"} onClick={() => setMode("canvas")} title={t("Canvas")}><Workflow /></Button>
-        <Button size="sm" variant={mode === "tree" ? "default" : "ghost"} onClick={() => setMode("tree")} title={t("Tree")}><Network /></Button>
-        <Button size="sm" variant={mode === "table" ? "default" : "ghost"} onClick={() => setMode("table")} title={t("Table")}><Table2 /></Button>
-        <Button size="sm" variant={mode === "timeline" ? "default" : "ghost"} onClick={() => setMode("timeline")} title={t("Roadmap")}><CalendarDays /></Button>
-        {admin && <Button size="sm" variant={addPalette ? "default" : "ghost"} aria-pressed={addPalette} onClick={() => setAddPalette(!addPalette)} title={t("Drag one onto the canvas, or click to add it.")}><Plus />{t("Add")}</Button>}
-        {admin && <Button size="sm" variant={linking ? "default" : "ghost"} aria-pressed={linking} onClick={() => setLinking(!linking)} title={t("Then drag from one element to the other.")}><Link2 />{t("Relate")}</Button>}
-        {admin && <Button size="sm" disabled={!working.dirty || !!saving} title={t("Writes this view under its own id; it never writes another view")} onClick={() => void saveView()}><Save />{t("Save view")}</Button>}
-        {admin && <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>}
+        {drawing && <Button size="sm" variant={mode === "tree" ? "default" : "ghost"} onClick={() => setMode("tree")} title={t("Tree")}><Network /></Button>}
+        {drawing && <Button size="sm" variant={mode === "table" ? "default" : "ghost"} onClick={() => setMode("table")} title={t("Table")}><Table2 /></Button>}
+        {drawing && <Button size="sm" variant={mode === "timeline" ? "default" : "ghost"} onClick={() => setMode("timeline")} title={t("Roadmap")}><CalendarDays /></Button>}
+        {host.can("enterprise.element.add") && <Button size="sm" variant={addPalette ? "default" : "ghost"} aria-pressed={addPalette} onClick={() => { if (mode !== "canvas") setMode("canvas"); setAddPalette(!addPalette); }} title={t("Drag one onto the canvas, or click to add it.")}><Plus />{t("Add")}</Button>}
+        {drawing && host.can("enterprise.relationship.add") && <Button size="sm" variant={linking ? "default" : "ghost"} aria-pressed={linking} onClick={() => setLinking(!linking)} title={t("Then drag from one element to the other.")}><Link2 />{t("Relate")}</Button>}
+        {host.can("enterprise.view.save") && <Button size="sm" disabled={!working.dirty || !!saving} title={t("Writes this view under its own id; it never writes another view")} onClick={() => void saveView()}><Save />{t("Save view")}</Button>}
+        {drawing && host.can("enterprise.view.save") && <Button size="sm" variant="ghost" title={t("A new view from what is drawn now")} onClick={() => setDialog({ kind: "view", mode: "saveAs" })}><Copy />{t("Save as…")}</Button>}
       </>}
-      left={{ label: t("Model"), tabs, value: left, onChange: setLeft }}
+      left={drawing ? { label: t("Model"), tabs, value: left, onChange: setLeft } : undefined}
       right={{ label: t("Inspector"),scope:selected??"",locate:()=>setSelected(selected), content: <>{selectedPin ? <div className="grid gap-3 p-3 text-sm">
         <p className="font-medium">{selectedPin.label}</p><p className="break-all text-xs text-muted">{selectedPin.ref}</p>
         <p className="text-xs text-muted">{t("Names")}: {byId(selectedPin.anchor)?.name ?? selectedPin.anchor}</p>
         <Button size="sm" onClick={() => openRecord(selectedPin.ref.slice(7))}>{t("Open record")}</Button>
         {admin && <Button size="sm" variant="ghost" onClick={() => { unpinRecord(selectedPin.ref); setSelected(undefined); }}>{t("Unpin")}</Button>}
       </div> : null}<div className={selectedPin ? "hidden" : ""}><Inspector element={sel} model={m} view={{ pins: readablePins }} meta={meta} day={day} admin={admin} decide={decide} title={title} relLabel={relLabel}
-        onPin={pinRecord} onUnpin={unpinRecord}
+        onPin={pinRecord} onUnpin={unpinRecord} actions={sel ? nodeActions(sel.id) : []}
         onRemove={() => { if (!sel) return; setWorking({ elements: working.elements.filter((id) => id !== sel.id), context: working.context.filter((id) => id !== sel.id), pins: working.pins.filter((p) => p.anchor !== sel.id) }); setSelected(undefined); }} /></div></> }}>
-      <p className="px-3 py-1 text-xs text-muted">{t("{view}: {n} elements, {context} from other viewpoints", { view: t(viewpoint?.title ?? "View"), n: shownElements.length, context: shownElements.filter((e) => working.context.includes(e.id)).length })}</p>
+      {drawing && <p className="px-3 py-1 text-xs text-muted">{t("{view}: {n} elements, {context} from other viewpoints", { view: t(viewpoint?.title ?? "View"), n: shownElements.length, context: shownElements.filter((e) => working.context.includes(e.id)).length })}</p>}
+      {mode === "manage" && <div className="grid min-h-0 flex-1 content-start gap-3 overflow-auto p-3">
+        <div className="flex flex-wrap gap-2"><Input aria-label={t("Find an enterprise element")} placeholder={t("Find an enterprise element")} value={filter} onChange={event => setFilter(event.target.value)} /><Select aria-label={t("Element status")} value={status} onChange={event => setStatus(event.target.value)}>{["Active", "Future", "Inactive", "All"].map(value => <option key={value} value={value}>{t(value)}</option>)}</Select></div>
+        <DataTable data={m.elements.filter(element => !element.deleted && (status === "All" || elementStatus(element, day) === status) && `${element.name} ${element.id}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase()))} columns={[...tableColumns, { id: "status", header: t("Status"), accessorFn: element => t(elementStatus(element, day)) }]} selectedId={selected} getRowId={element => element.id} onRowClick={element => setSelected(element.id)} searchable={false} height={460} />
+        {sel && <ElementContext element={sel} model={m} day={day} onSelect={setSelected} />}
+        {host.can("enterprise.kind.edit") && <Disclosure summary={t("Relationship kinds")}>{m.kinds.map(kind => <div key={kind.id} className="flex justify-between gap-2 py-1 text-sm"><span>{kind.name}</span><Button size="sm" disabled={!!kind.owner} onClick={() => setDialog({ kind: "kind", id: kind.id, name: kind.name })}>{t("Rename…")}</Button></div>)}</Disclosure>}
+      </div>}
+      {mode === "usage" && <div className="grid content-start gap-4 p-4">{sel ? <><h2 className="text-base font-semibold">{sel.name}</h2><ElementContext element={sel} model={m} day={day} onSelect={setSelected} /><Usage element={sel.id} /><UsedBy element={sel} onPin={host.can("enterprise.view.save") ? (ref, label) => pinRecord(ref, sel.id, label) : undefined} /></> : <p className="text-sm text-muted">{t("Select an element to inspect its business usage.")}</p>}</div>}
+      {mode === "tenant-links" && <TenantLinks model={m} day={day} />}
       {mode === "canvas" && <div className="relative h-full min-h-[480px]">
         {addPalette && admin && <div className="absolute left-2 top-2 z-20 max-h-[calc(100%-1rem)] w-80 overflow-auto rounded border border-border bg-background shadow-lg">
           <AddPane meta={meta} viewpoint={viewpoint} admin={admin} onAdd={(stereotype) => { setAddPalette(false); setDialog({ kind: "element", stereotype }); }} /></div>}
@@ -392,10 +418,9 @@ function Modeler({ model: m, meta, decide, admin }: { model: Model; meta: Metamo
       }} />}
     {dialog?.kind === "edit" && byId(dialog.id) && <EditElementDialog key={dialog.id} element={byId(dialog.id)!} meta={meta} model={m} day={day} onClose={() => setDialog(undefined)}
       onSubmit={async (v) => { if (await decide("enterprise.element.edit", { type: ELEMENT, id: dialog.id }, v)) setDialog(undefined); }} />}
-    {dialog?.kind === "close" && byId(dialog.id) && <DateDialog title={t("Close {name}", { name: byId(dialog.id)!.name })} defaultDay={day}
-      note={t("Closing ends its validity from a date: no view or query treats it as live after that day, and everything before stays as it was. Records that point at it keep their history; new decisions naming it are refused after that day.")}
-      confirm={t("Close")} onClose={() => setDialog(undefined)}
-      onSubmit={async (until) => { if (await decide("enterprise.element.close", { type: ELEMENT, id: dialog.id }, { until })) setDialog(undefined); }} />}
+    {dialog && ["close", "reopen", "reinstate", "delete"].includes(dialog.kind) && "id" in dialog && byId(dialog.id) && <LifecycleDialog key={`${dialog.kind}:${dialog.id}`} operation={dialog.kind as "close" | "reopen" | "reinstate" | "delete"} element={byId(dialog.id)!} day={day} onClose={() => setDialog(undefined)} />}
+    {dialog?.kind === "move" && byId(dialog.id) && <MoveElementDialog element={byId(dialog.id)!} model={m} meta={meta} day={day} kind={placementKind} onClose={() => setDialog(undefined)} />}
+    {dialog?.kind === "kind" && <NameDialog title={t("Rename relationship kind")} note={t("The kind identity and its relationships stay unchanged.")} initial={dialog.name} onClose={() => setDialog(undefined)} onSubmit={async name => { if (await decide("enterprise.kind.edit", { type: MODEL, id: dialog.id }, { name })) setDialog(undefined); }} />}
     {dialog?.kind === "end" && <DateDialog title={t("End relationship")} defaultDay={day}
       note={t("Ending is the model's version of deletion: the relationship stops being live from that date, both elements stay, and every earlier view still shows it joined.")}
       confirm={t("End")} onClose={() => setDialog(undefined)}
@@ -556,6 +581,19 @@ function People({ element: el, model: m, day, admin, decide, post, setPost, hold
 // new decisions from naming it while history still resolves. The list is built
 // by asking the entity types that declare such a reference, so nothing else has
 // to keep a second index of who refers to whom.
+function ElementContext({ element, model, day, onSelect }: { element: Element; model: Model; day: string; onSelect: (id: string) => void }) {
+  const { open } = useWorkspace();
+  const related = model.relationships.filter(relation => live(relation, day) && (relation.source === element.id || relation.target === element.id));
+  const other = (relation: Relationship) => model.elements.find(candidate => candidate.id === (relation.source === element.id ? relation.target : relation.source));
+  const groups = [
+    { title: "Parent organisations", matches: (relation: Relationship) => relation.stereotype === PLACEMENT && relation.source === element.id },
+    { title: "Child organisations", matches: (relation: Relationship) => relation.stereotype === PLACEMENT && relation.target === element.id },
+    { title: "Members and posts", matches: (relation: Relationship) => [MEMBERSHIP, FILLS_POST].includes(relation.stereotype) || [POST, PERSON].includes(other(relation)?.stereotype ?? "") },
+    { title: "Locations and resources", matches: (relation: Relationship) => ![PLACEMENT, MEMBERSHIP, FILLS_POST].includes(relation.stereotype) && ![POST, PERSON].includes(other(relation)?.stereotype ?? "") },
+  ];
+  return <div className="grid gap-3 sm:grid-cols-2">{groups.map(group => <div key={group.title} className="grid content-start gap-1 text-xs"><h3 className="font-semibold">{t(group.title)}</h3>{related.filter(group.matches).map(relation => { const id = relation.source === element.id ? relation.target : relation.source; const other = model.elements.find(candidate => candidate.id === id && !candidate.deleted); return other ? <Button key={relation.id} size="sm" variant="ghost" className="justify-start" onClick={() => onSelect(id)}>{other.name} · {relation.role || relation.relation || relation.stereotype}</Button> : id.startsWith("member:") ? <Button key={relation.id} size="sm" variant="ghost" className="justify-start" onClick={() => open({ view: "member", params: { id: id.slice(7) } })}>{id.slice(7)} · {relation.role}</Button> : <span key={relation.id}>{id} · {relation.role}</span>; })}{!related.some(group.matches) && <p className="text-muted">{t("none")}</p>}</div>)}</div>;
+}
+
 function UsedBy({ element: el, onPin }: { element: Element; onPin?: (ref: string, label: string) => void }) {
   const openRecord = useOpenRecord();
   const [paging, setPaging] = useState({ element: el.id, offset: 0 });
@@ -607,13 +645,14 @@ function EditElementDialog({ element: el, meta, model, day, onClose, onSubmit }:
   onSubmit: (v: ElementEdit) => Promise<void>;
 }) {
   const entry = meta.profile.find((p) => p.stereotype === el.stereotype);
-  const [v, setV] = useState<ElementEdit>({ name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "", properties: el.properties ?? {} });
+  const [v, setV] = useState<ElementEdit>({ name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "", calendar: el.calendar ?? "", properties: el.properties ?? {} });
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("Edit {name}", { name: el.name })}>
     <Form className="grid gap-3" onSubmit={() => onSubmit(v)}>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })} />
         <datalist id={`kinds-${el.stereotype}`}>{(entry?.kinds ?? []).map((k) => <option key={k} value={k} />)}</datalist></>)}
       {field(t("Short name"), <Input value={v.shortName} onChange={(e) => setV({ ...v, shortName: e.target.value })} />)}
+      {field(t("Working calendar"), <Input value={v.calendar} onChange={event => setV({ ...v, calendar: event.target.value })} />)}
       <ElementProperties stereotype={el.stereotype} meta={meta} model={model} day={day} value={v.properties} onChange={(properties) => setV({ ...v, properties })} />
       <p className="text-xs text-muted">{t("Editing changes the model, not just this view: every view and every record that refers to it reads the new name.")}</p>
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Save")}</Button></div>
@@ -747,9 +786,9 @@ function ConfirmDialog({ title, note, confirm, onClose, onSubmit }: {
   </Dialog>;
 }
 
-function Inspector({ element: el, model: m, view, meta, day, admin, decide, title, relLabel, onRemove, onPin, onUnpin }: {
+function Inspector({ element: el, model: m, view, meta, day, admin, decide, title, relLabel, onRemove, onPin, onUnpin, actions = [] }: {
   element?: Element; model: Model; view: { pins: Pin[] }; meta: Metamodel; day: string; admin: boolean; decide: Decide; title: (st: string) => string; relLabel: (r: Relationship) => string; onRemove: () => void;
-  onPin?: (ref: string, anchor: string, label: string) => void; onUnpin?: (ref: string) => void;
+  onPin?: (ref: string, anchor: string, label: string) => void; onUnpin?: (ref: string) => void; actions?: CanvasAction[];
 }) {
   type Slots = { edit?: ElementEdit; member?: { id: string; role: string }; post?: { name: string; kind: string }; holder?: { person: string; post: string } };
   const [drafts, setDrafts] = useState<Record<string, Slots>>({});
@@ -764,39 +803,43 @@ function Inspector({ element: el, model: m, view, meta, day, admin, decide, titl
   const { edit, member, post, holder } = current;
   const setEdit = setter("edit"), setMember = setter("member"), setPost = setter("post"), setHolder = setter("holder");
   useUnsavedChanges(Object.values(drafts).some((v) => Object.values(v).some(Boolean)), () => setDrafts({}));
+  const host = useHost();
+  const editable = !el?.owner && host.can("enterprise.element.edit");
   const members = useRead<Api.MemberView[]>("/v1/members", undefined, el?.stereotype === ORGANIZATION && admin).data ?? [];
   if (!el) return <p className="p-3 text-sm text-muted">{t("Select an element to see its details, or add one from the element list.")}</p>;
   const st = meta.stereotypes[el.stereotype];
   const rels = m.relationships.filter((r) => (r.source === el.id || r.target === el.id) && live(r, day));
   const name = (id: string) => m.elements.find((e) => e.id === id)?.name ?? id.replace(/^member:/, "");
-  const e: ElementEdit = edit ?? { name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "", properties: el.properties ?? {} };
+  const e: ElementEdit = edit ?? { name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "", calendar: el.calendar ?? "", properties: el.properties ?? {} };
   return <div className="grid gap-3 p-3 text-sm">
     <div><p className="text-xs text-muted">{title(el.stereotype)} · <span className="font-mono">{el.stereotype}</span></p>
       <p className="text-[11px] text-muted">{t(st?.domain ?? "Enterprise")}{st?.aspect ? ` · ${t(st.aspect)}` : ""}</p>
       <p className="font-mono text-[10px] text-muted">{el.id}</p></div>
-    {field(t("Name"), <Input value={e.name} disabled={!admin} onChange={(x) => setEdit({ ...e, name: x.target.value })} />)}
-    {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={e.kind} disabled={!admin} onChange={(x) => setEdit({ ...e, kind: x.target.value })} />
+    {field(t("Name"), <Input value={e.name} disabled={!editable} onChange={(x) => setEdit({ ...e, name: x.target.value })} />)}
+    {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={e.kind} disabled={!editable} onChange={(x) => setEdit({ ...e, kind: x.target.value })} />
       <datalist id={`kinds-${el.stereotype}`}>{(meta.profile.find((p) => p.stereotype === el.stereotype)?.kinds ?? []).map((k) => <option key={k} value={k} />)}</datalist></>)}
-    {field(t("Short name"), <Input value={e.shortName} disabled={!admin} onChange={(x) => setEdit({ ...e, shortName: x.target.value })} />)}
+    {field(t("Short name"), <Input value={e.shortName} disabled={!editable} onChange={(x) => setEdit({ ...e, shortName: x.target.value })} />)}
+    {field(t("Working calendar"), <Input value={e.calendar} disabled={!editable} onChange={event => setEdit({ ...e, calendar: event.target.value })} />)}
 
     <p className="flex flex-wrap gap-1">{el.legal && <Tag label={t("legal entity")} tone="info" />}{el.external && <Tag label="external" tone="warning" />}{el.owner && <Tag label={t("owned by {tenant}", { tenant: el.owner.replace(/^tenant:/, "") })} tone="warning" />}{el.from && <Tag label={`${t("from")} ${el.from}`} />}{el.until && <Tag label={`${t("until")} ${el.until}`} tone="warning" />}</p>
-    {admin && !el.owner && <Checkbox className="text-xs" checked={!!el.published} onChange={(published) => void decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, { published })}>{t("Shared with federated tenants (group, subsidiaries, partners)")}</Checkbox>}
-    <ElementProperties stereotype={el.stereotype} meta={meta} model={m} day={day} value={e.properties} disabled={!admin || !!el.owner} onChange={(properties) => setEdit({ ...e, properties })} />
-    {edit && <div className="flex gap-2"><Button size="sm" onClick={async () => { if (await decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, e)) setEdit(undefined); }}>{t("Save")}</Button><Button size="sm" variant="ghost" onClick={() => setEdit(undefined)}>{t("Cancel")}</Button></div>}
+    {editable && <Checkbox className="text-xs" checked={!!el.published} onChange={(published) => void decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, { published })}>{t("Shared with federated tenants (group, subsidiaries, partners)")}</Checkbox>}
+    <ElementProperties stereotype={el.stereotype} meta={meta} model={m} day={day} value={e.properties} disabled={!editable} onChange={(properties) => setEdit({ ...e, properties })} />
+    {edit && editable && <div className="flex gap-2"><Button size="sm" onClick={async () => { if (await decide("enterprise.element.edit", { type: ELEMENT, id: el.id }, e)) setEdit(undefined); }}>{t("Save")}</Button><Button size="sm" variant="ghost" onClick={() => setEdit(undefined)}>{t("Cancel")}</Button></div>}
+    <div className="flex flex-wrap gap-1">{actions.filter(action => action.id !== "hide").map(action => <Button size="sm" key={action.id} variant={action.tone === "danger" ? "danger" : "ghost"} disabled={action.disabled} onClick={action.run}>{action.label}</Button>)}</div>
     <div>
       <p className="mb-1 text-xs font-semibold text-muted">{t("Relationships")} ({rels.length})</p>
       <div className="grid gap-1">{rels.map((r) => <p key={r.id} className="flex items-center gap-1 text-xs">
         <span className="text-muted">{r.source === el.id ? "→" : "←"}</span><span className="truncate">{name(r.source === el.id ? r.target : r.source)}</span><span className="text-muted">{relLabel(r)}{r.kind ? ` · ${r.kind}` : ""}</span>
-        {admin && <Button size="sm" variant="ghost" className="ml-auto" title={t("Ending is the model's version of deletion: it stops being live on a date; both elements stay.")} onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End…")}</Button>}
+        {!sourceRelationship(r) && host.can("enterprise.relationship.end") && <Button size="sm" variant="ghost" className="ml-auto" title={t("Ending is the model's version of deletion: it stops being live on a date; both elements stay.")} onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End…")}</Button>}
       </p>)}</div>
     </div>
     {el.stereotype === ORGANIZATION && <div>
       <p className="mb-1 text-xs font-semibold text-muted">{t("Members")}</p>
       <div className="grid gap-1">{m.relationships.filter((r) => r.stereotype === MEMBERSHIP && r.target === el.id && r.source.startsWith("member:") && live(r, day)).map((r) => <p key={r.id} className="flex items-center gap-1 text-xs">
         <span className="font-mono">{r.source.slice(7)}</span><span className="text-muted">{r.role}</span>{r.primary && <Tag label="primary" tone="info" />}
-        {admin && <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End")}</Button>}
+        {!sourceRelationship(r) && host.can("enterprise.relationship.end") && <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void decide("enterprise.relationship.end", { type: RELATIONSHIP, id: r.id }, { until: day })}>{t("End")}</Button>}
       </p>)}</div>
-      {admin && (member ? <Form className="mt-1 grid gap-1" onSubmit={async () => { if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("mem", member.id) }, { stereotype: MEMBERSHIP, source: `member:${member.id}`, target: el.id, role: member.role, from: day })) setMember(undefined); }}>
+      {host.can("enterprise.relationship.add") && !el.owner && live(el, day) && (member ? <Form className="mt-1 grid gap-1" onSubmit={async () => { if (await decide("enterprise.relationship.add", { type: RELATIONSHIP, id: fresh("mem", member.id) }, { stereotype: MEMBERSHIP, source: `member:${member.id}`, target: el.id, role: member.role, from: day })) setMember(undefined); }}>
           <Select aria-label={t("Member")} value={member.id} onChange={(x) => setMember({ ...member, id: x.target.value })}><option value="">{t("— member")}</option>{members.map((x) => <option key={x.id} value={x.id}>{x.id}</option>)}</Select>
           <Input aria-label={t("Role")} placeholder={t("Role (employee, chair, volunteer …)")} value={member.role} onChange={(x) => setMember({ ...member, role: x.target.value })} />
           <div className="flex gap-1"><Button size="sm" type="submit" disabled={!member.id || !member.role}>{t("Add")}</Button><Button size="sm" variant="ghost" onClick={() => setMember(undefined)}>{t("Cancel")}</Button></div>
@@ -804,7 +847,7 @@ function Inspector({ element: el, model: m, view, meta, day, admin, decide, titl
         : <Button size="sm" variant="ghost" className="mt-1" onClick={() => setMember({ id: "", role: "" })}><Plus />{t("Add member")}</Button>)}
     </div>}
     <UsedBy element={el} onPin={admin && onPin ? (ref, label) => onPin(ref, el.id, label) : undefined} />
-    {(el.stereotype === ORGANIZATION || el.stereotype === POST) && <People element={el} model={m} day={day} admin={admin} decide={decide} post={post} setPost={setPost} holder={holder} setHolder={setHolder} />}
+    {(el.stereotype === ORGANIZATION || el.stereotype === POST) && <People element={el} model={m} day={day} admin={!el.owner && live(el, day) && host.can("enterprise.element.add") && host.can("enterprise.relationship.add")} decide={decide} post={post} setPost={setPost} holder={holder} setHolder={setHolder} />}
     <PinnedRecords element={el} view={view} onUnpin={onUnpin} />
     <p className="text-xs text-muted">{st?.description}</p>
     <div className="grid gap-1">

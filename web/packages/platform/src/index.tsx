@@ -248,8 +248,13 @@ export const enterprise = defineApp({
   description: t("The organisation's people, places, capabilities and relationships."),
   for: (host) => admin(host) || ["admin", "viewer"].includes(host.role("enterprise") ?? ""),
   home: { view: "enterprise" },
-  views: [{ id: "enterprise", title: () => t("Enterprise"), render: () => <Enterprise /> }],
-  nav: () => [{ label: t("Enterprise"), items: [{ label: t("Enterprise"), icon: <Network />, route: { view: "enterprise" } }] }],
+  views: [{ id: "enterprise", title: () => t("Enterprise"), render: params => <Enterprise element={params.element} section={params.section} /> }],
+  nav: () => [{ label: t("Enterprise"), items: [
+    { label: t("Enterprise"), icon: <Network />, route: { view: "enterprise" } },
+    { label: t("Organisation management"), icon: <Building2 />, route: { view: "enterprise", params: { section: "organization" } } },
+    { label: t("Business usage"), icon: <Blocks />, route: { view: "enterprise", params: { section: "usage" } } },
+    { label: t("Tenant links"), icon: <ArrowLeftRight />, route: { view: "enterprise", params: { section: "tenant-links" } } },
+  ] }],
 });
 
 export const contributions: AppUI[] = [runs, dataConnection, agents, ai, knowledge, hostConsole, masterData, enterprise];

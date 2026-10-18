@@ -129,7 +129,7 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 				if !ok || in.Choices != "" || (platform.AssetRef{App: app, Kind: platform.AssetObject, Name: in.Ref}).Check() != nil {
 					return fmt.Errorf("%s needs a declared reference object for %s", where, in.Name)
 				}
-				if lookup != nil {
+				if lookup != nil && in.Ref != "enterprise.element" {
 					info, known := lookup(in.Ref)
 					if !known || info.App != app || info.Type != in.Ref {
 						return fmt.Errorf("%s reference object %s is unavailable", where, in.Ref)
@@ -137,6 +137,9 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 				}
 			} else if in.Ref != "" {
 				return fmt.Errorf("%s non-reference input cannot name a reference object", where)
+			}
+			if err := checkEnterpriseReference(in.Type, in.Ref, in.Stereotype, in.Stereotypes); err != nil {
+				return fmt.Errorf("%s: %w", where, err)
 			}
 			if in.MinLength != nil && (!slices.Contains([]string{"text", "longtext"}, in.Type) || *in.MinLength < 0 || *in.MinLength > 4096) {
 				return fmt.Errorf("%s input minimum length is not supported", where)

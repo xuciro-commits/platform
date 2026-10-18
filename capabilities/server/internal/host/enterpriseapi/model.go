@@ -37,6 +37,8 @@ const (
 
 type Date = platform.Date
 
+type Period = platform.Period
+
 // Kind is a way organisations relate (ADR-0022's Structure): legal,
 // management, finance, site, project, governance, community, custom.
 type Kind struct {
@@ -44,6 +46,7 @@ type Kind struct {
 	Name   string `json:"name"`
 	Kind   string `json:"kind"`
 	Matrix bool   `json:"matrix,omitempty"`
+	Owner  string `json:"owner,omitempty"`
 }
 
 // Element is one thing in the enterprise, typed by a UAF stereotype.
@@ -62,22 +65,35 @@ type Element struct {
 	Owner      string         `json:"owner,omitempty"`     // "tenant:<id>" when federated in from another tenant (read-only here)
 	Published  bool           `json:"published,omitempty"` // shared with the tenants this one federates with (ADR-0022 D5)
 	Properties map[string]any `json:"properties,omitempty"`
+	Periods    []Period       `json:"periods,omitempty"`
+	Deleted    bool           `json:"deleted,omitempty"`
 }
 
 // Relationship joins two things; Source and Target are element ids, or for a
 // Membership the source may be a party "member:<id>".
 type Relationship struct {
-	ID         string  `json:"id"`
-	Stereotype string  `json:"stereotype"`
-	Kind       string  `json:"kind,omitempty"` // for a Placement: the Kind.ID it sits in
-	Source     string  `json:"source"`
-	Target     string  `json:"target"`
-	Role       string  `json:"role,omitempty"`     // for a Membership: employee, chair, volunteer …
-	Relation   string  `json:"relation,omitempty"` // for a Placement: part of, owned by, reports to …
-	Share      float64 `json:"share,omitempty"`
-	Primary    bool    `json:"primary,omitempty"`
-	From       Date    `json:"from,omitempty"`
-	Until      Date    `json:"until,omitempty"`
+	ID         string   `json:"id"`
+	Stereotype string   `json:"stereotype"`
+	Kind       string   `json:"kind,omitempty"` // for a Placement: the Kind.ID it sits in
+	Source     string   `json:"source"`
+	Target     string   `json:"target"`
+	Role       string   `json:"role,omitempty"`     // for a Membership: employee, chair, volunteer …
+	Relation   string   `json:"relation,omitempty"` // for a Placement: part of, owned by, reports to …
+	Share      float64  `json:"share,omitempty"`
+	Primary    bool     `json:"primary,omitempty"`
+	From       Date     `json:"from,omitempty"`
+	Until      Date     `json:"until,omitempty"`
+	Periods    []Period `json:"periods,omitempty"`
+}
+
+type TenantLink struct {
+	ID           string `json:"id"`
+	Organization string `json:"organization"`
+	Tenant       string `json:"tenant"`
+	Root         string `json:"root"`
+	Connection   string `json:"connection"`
+	UpdatedAt    string `json:"updatedAt,omitempty"`
+	Content      string `json:"content,omitempty"`
 }
 
 // View is a drawing over the model: which elements, where, from which viewpoint (ADR-0031).
@@ -114,6 +130,7 @@ type Model struct {
 	Relationships []Relationship      `json:"relationships"`
 	Views         []View              `json:"views"`
 	Calendars     []platform.Calendar `json:"calendars,omitempty"`
+	TenantLinks   []TenantLink        `json:"tenantLinks,omitempty"`
 }
 
 func ActiveOn(from, until, day Date) bool { return platform.ActiveOn(from, until, day) }
@@ -160,22 +177,29 @@ func (m *Model) RelationshipOf(id string) *Relationship {
 // live says the element exists on day: open, or not yet closed.
 func (m Model) LiveOn(id string, day Date) bool {
 	e := m.ElementOf(id)
-	return e != nil && ActiveOn(e.From, e.Until, day)
+	return e != nil && e.ActiveOn(day)
 }
 
 // below reports whether unit sits (transitively) under ancestor in kind on day.
 func (m Model) BelowIn(kind, ancestor, unit string, day Date) bool {
-	for seen := map[string]bool{}; unit != "" && !seen[unit]; {
-		seen[unit] = true
-		i := slices.IndexFunc(m.Relationships, func(r Relationship) bool {
-			return r.Stereotype == Placement && r.Kind == kind && r.Source == unit && ActiveOn(r.From, r.Until, day)
-		})
-		if i < 0 {
-			return false
+	if !m.LiveOn(unit, day) || !m.LiveOn(ancestor, day) {
+		return false
+	}
+	queue, seen := []string{unit}, map[string]bool{}
+	for len(queue) > 0 {
+		unit = queue[0]
+		queue = queue[1:]
+		if seen[unit] {
+			continue
 		}
-		unit = m.Relationships[i].Target
-		if unit == ancestor {
-			return true
+		seen[unit] = true
+		for _, r := range m.Relationships {
+			if r.Stereotype == Placement && r.Kind == kind && r.Source == unit && r.ActiveOn(day) && m.LiveOn(r.Target, day) {
+				if r.Target == ancestor {
+					return true
+				}
+				queue = append(queue, r.Target)
+			}
 		}
 	}
 	return false
@@ -197,7 +221,7 @@ func (m Model) UnitsIn(party, kind string, day Date) []string {
 		p := parties[0]
 		parties = parties[1:]
 		for _, r := range m.Relationships {
-			if r.Stereotype == Membership && r.Source == p && ActiveOn(r.From, r.Until, day) && m.LiveOn(r.Target, day) && add(r.Target) {
+			if r.Stereotype == Membership && r.Source == p && r.ActiveOn(day) && m.LiveOn(r.Target, day) && add(r.Target) {
 				parties = append(parties, r.Target)
 			}
 		}
@@ -221,7 +245,7 @@ func (m Model) Descendants(units []string, kind string, day Date) []string {
 	}
 	for i := 0; i < len(out); i++ {
 		for _, r := range m.Relationships {
-			if r.Stereotype == Placement && r.Kind == kind && r.Target == out[i] && ActiveOn(r.From, r.Until, day) {
+			if r.Stereotype == Placement && r.Kind == kind && r.Target == out[i] && r.ActiveOn(day) {
 				add(r.Source)
 			}
 		}
@@ -234,7 +258,10 @@ func (m Model) Descendants(units []string, kind string, day Date) []string {
 func (m Model) Of(id, stereotype string, out bool, day Date) []string {
 	var found []string
 	for _, r := range m.Relationships {
-		if r.Stereotype != stereotype || !ActiveOn(r.From, r.Until, day) {
+		if r.Stereotype != stereotype || !r.ActiveOn(day) {
+			continue
+		}
+		if !m.LiveOn(r.Target, day) || !strings.HasPrefix(r.Source, "member:") && !m.LiveOn(r.Source, day) {
 			continue
 		}
 		if out && r.Source == id && !slices.Contains(found, r.Target) {
@@ -255,17 +282,17 @@ func FromOrgSeed(seed platform.OrgSeed) Model {
 		m.Kinds = append(m.Kinds, Kind{ID: s.ID, Name: s.Name, Kind: s.Kind, Matrix: s.Matrix})
 	}
 	for _, u := range seed.Units {
-		m.Elements = append(m.Elements, Element{ID: u.ID, Stereotype: Organization, Name: u.Name, Kind: u.Kind, Legal: u.Legal, External: u.External, From: u.From, Until: u.Until, Closed: u.Closed, Calendar: u.Calendar})
+		m.Elements = append(m.Elements, Element{ID: u.ID, Stereotype: Organization, Name: u.Name, Kind: u.Kind, Legal: u.Legal, External: u.External, From: u.From, Until: u.Until, Closed: u.Closed, Calendar: u.Calendar, Periods: slices.Clone(u.Periods)})
 	}
 	for i, e := range seed.Edges {
-		m.Relationships = append(m.Relationships, Relationship{ID: RelID("pl", i), Stereotype: Placement, Kind: e.Structure, Source: e.Unit, Target: e.Parent, Relation: e.Relation, Share: e.Share, From: e.From, Until: e.Until})
+		m.Relationships = append(m.Relationships, Relationship{ID: RelID("pl", i), Stereotype: Placement, Kind: e.Structure, Source: e.Unit, Target: e.Parent, Relation: e.Relation, Share: e.Share, From: e.From, Until: e.Until, Periods: slices.Clone(e.Periods)})
 	}
 	for i, ms := range seed.Memberships {
 		source := ms.Party
 		if id, ok := CutPrefix(ms.Party, "unit:"); ok {
 			source = id
 		}
-		m.Relationships = append(m.Relationships, Relationship{ID: RelID("mb", i), Stereotype: Membership, Source: source, Target: ms.Unit, Role: ms.Role, Primary: ms.Primary, From: ms.From, Until: ms.Until})
+		m.Relationships = append(m.Relationships, Relationship{ID: RelID("mb", i), Stereotype: Membership, Source: source, Target: ms.Unit, Role: ms.Role, Primary: ms.Primary, From: ms.From, Until: ms.Until, Periods: slices.Clone(ms.Periods)})
 	}
 	return m
 }
@@ -277,20 +304,20 @@ func (m Model) OrgSeed() platform.OrgSeed {
 		out.Structures = append(out.Structures, platform.Structure{ID: k.ID, Name: k.Name, Kind: k.Kind, Matrix: k.Matrix})
 	}
 	for _, e := range m.Elements {
-		if e.Stereotype == Organization {
-			out.Units = append(out.Units, platform.Unit{ID: e.ID, Name: e.Name, Kind: e.Kind, Legal: e.Legal, External: e.External, From: e.From, Until: e.Until, Closed: e.Closed, Calendar: e.Calendar})
+		if e.Stereotype == Organization && !e.Deleted {
+			out.Units = append(out.Units, platform.Unit{ID: e.ID, Name: e.Name, Kind: e.Kind, Legal: e.Legal, External: e.External, From: e.From, Until: e.Until, Closed: e.Closed, Calendar: e.Calendar, Periods: slices.Clone(e.Periods)})
 		}
 	}
 	for _, r := range m.Relationships {
 		switch r.Stereotype {
 		case Placement:
-			out.Edges = append(out.Edges, platform.Edge{Structure: r.Kind, Unit: r.Source, Parent: r.Target, Relation: r.Relation, Share: r.Share, From: r.From, Until: r.Until})
+			out.Edges = append(out.Edges, platform.Edge{Structure: r.Kind, Unit: r.Source, Parent: r.Target, Relation: r.Relation, Share: r.Share, From: r.From, Until: r.Until, Periods: slices.Clone(r.Periods)})
 		case Membership:
 			party := r.Source
 			if m.ElementOf(party) != nil {
 				party = "unit:" + party
 			}
-			out.Memberships = append(out.Memberships, platform.Membership{Party: party, Unit: r.Target, Role: r.Role, Primary: r.Primary, From: r.From, Until: r.Until})
+			out.Memberships = append(out.Memberships, platform.Membership{Party: party, Unit: r.Target, Role: r.Role, Primary: r.Primary, From: r.From, Until: r.Until, Periods: slices.Clone(r.Periods)})
 		}
 	}
 	return out
@@ -319,6 +346,7 @@ type Slice struct {
 	UAF           string         `json:"uaf"`
 	Elements      []Element      `json:"elements"`
 	Relationships []Relationship `json:"relationships"`
+	Kinds         []Kind         `json:"kinds,omitempty"`
 }
 
 // Published is the slice this model offers.
@@ -326,7 +354,7 @@ func (m Model) Published(tenant string) Slice {
 	out := Slice{Tenant: tenant, UAF: m.UAF, Elements: []Element{}, Relationships: []Relationship{}}
 	in := map[string]bool{}
 	for _, e := range m.Elements {
-		if e.Published && e.Owner == "" {
+		if e.Published && e.Owner == "" && !e.Deleted {
 			e.Owner, e.Published = "tenant:"+tenant, false
 			out.Elements = append(out.Elements, e)
 			in[e.ID] = true
@@ -336,6 +364,11 @@ func (m Model) Published(tenant string) Slice {
 		if in[r.Source] && in[r.Target] {
 			r.ID = "fed:" + tenant + ":" + r.ID
 			out.Relationships = append(out.Relationships, r)
+			if r.Kind != "" && !slices.ContainsFunc(out.Kinds, func(k Kind) bool { return k.ID == r.Kind }) {
+				if kind := m.KindOf(r.Kind); kind != nil {
+					out.Kinds = append(out.Kinds, *kind)
+				}
+			}
 		}
 	}
 	return out
@@ -344,8 +377,77 @@ func (m Model) Published(tenant string) Slice {
 // Import replaces what this model mirrors from a tenant with the slice:
 // elements and relationships owned there; the tenant's own relationships to
 // mirrored elements are kept while their ends still exist.
-func (m *Model) Import(s Slice) {
+func (m *Model) Import(s Slice) { m.ImportOn(s, "") }
+
+func (m *Model) ImportOn(s Slice, today Date) {
 	owner := "tenant:" + s.Tenant
+	if today != "" {
+		for _, kind := range s.Kinds {
+			kind.Owner = owner
+			if old := m.KindOf(kind.ID); old != nil {
+				*old = kind
+			} else {
+				m.Kinds = append(m.Kinds, kind)
+			}
+		}
+		seen := map[string]bool{}
+		for _, in := range s.Elements {
+			seen[in.ID] = true
+			in.Owner, in.Published = owner, false
+			if old := m.ElementOf(in.ID); old != nil {
+				incomingUntil := in.Until
+				if old.Until != "" && old.Closed == SyncClosed(owner) {
+					_ = old.ReopenOn(today)
+				}
+				if len(old.Periods) > 0 {
+					in.Periods = slices.Clone(old.Periods)
+					in.From, in.Until = old.From, old.Until
+					if incomingUntil != "" {
+						in.Until = incomingUntil
+						in.Periods[len(in.Periods)-1].Until = incomingUntil
+					}
+				}
+				*old = in
+			} else {
+				m.Elements = append(m.Elements, in)
+			}
+		}
+		for i := range m.Elements {
+			el := &m.Elements[i]
+			if el.Owner == owner && !seen[el.ID] && el.Until == "" {
+				closeSourceElement(el, today, SyncClosed(owner))
+			}
+		}
+		incoming := map[string]bool{}
+		prefix := "fed:" + s.Tenant + ":"
+		for _, in := range s.Relationships {
+			if !strings.HasPrefix(in.ID, prefix) {
+				in.ID = prefix + in.ID
+			}
+			incoming[in.ID] = true
+			if old := m.RelationshipOf(in.ID); old != nil {
+				if old.Until != "" {
+					old.ReopenOn(today)
+				}
+				old.Kind, old.Role, old.Relation, old.Share, old.Primary = in.Kind, in.Role, in.Relation, in.Share, in.Primary
+				if in.Until != "" {
+					old.Until = in.Until
+					if len(old.Periods) > 0 {
+						old.Periods[len(old.Periods)-1].Until = in.Until
+					}
+				}
+			} else {
+				m.Relationships = append(m.Relationships, in)
+			}
+		}
+		for i := range m.Relationships {
+			r := &m.Relationships[i]
+			if strings.HasPrefix(r.ID, prefix) && !incoming[r.ID] && r.Until == "" {
+				_ = r.EndOn(today)
+			}
+		}
+		return
+	}
 	kept := m.Elements[:0]
 	for _, e := range m.Elements {
 		if e.Owner != owner {
@@ -379,6 +481,15 @@ type SyncResult struct {
 }
 
 func (m *Model) Sync(source string, elements []Element, relationships []Relationship, today Date) SyncResult {
+	return m.sync(source, elements, relationships, today, false)
+}
+
+// ReplaySync preserves already accepted single-window source semantics.
+func (m *Model) ReplaySync(source string, elements []Element, relationships []Relationship, today Date) SyncResult {
+	return m.sync(source, elements, relationships, today, true)
+}
+
+func (m *Model) sync(source string, elements []Element, relationships []Relationship, today Date, replay bool) SyncResult {
 	owner, res := "source:"+source, SyncResult{}
 	seen := map[string]bool{}
 	for _, in := range elements {
@@ -386,7 +497,11 @@ func (m *Model) Sync(source string, elements []Element, relationships []Relation
 		if cur := m.ElementOf(in.ID); cur != nil {
 			changed := cur.Name != in.Name || cur.ShortName != in.ShortName || cur.Kind != in.Kind || cur.Legal != in.Legal || cur.External != in.External || !SameProperties(cur.Properties, in.Properties)
 			if cur.Until != "" && cur.Closed == SyncClosed(source) {
-				cur.Until, cur.Closed = "", ""
+				if replay {
+					cur.Until, cur.Closed = "", ""
+				} else {
+					_ = cur.ReopenOn(today)
+				}
 				res.Reopened++
 			} else if changed {
 				res.Changed++
@@ -394,6 +509,9 @@ func (m *Model) Sync(source string, elements []Element, relationships []Relation
 			cur.Name, cur.ShortName, cur.Kind, cur.Legal, cur.External, cur.Properties = in.Name, in.ShortName, in.Kind, in.Legal, in.External, in.Properties
 			if in.Until != "" {
 				cur.Until = in.Until
+				if len(cur.Periods) > 0 {
+					cur.Periods[len(cur.Periods)-1].Until = in.Until
+				}
 			}
 			continue
 		}
@@ -407,7 +525,11 @@ func (m *Model) Sync(source string, elements []Element, relationships []Relation
 	for i := range m.Elements {
 		e := &m.Elements[i]
 		if e.Owner == owner && !seen[e.ID] && e.Until == "" {
-			e.Until, e.Closed = today, SyncClosed(source)
+			if replay {
+				e.Until, e.Closed = today, SyncClosed(source)
+			} else {
+				closeSourceElement(e, today, SyncClosed(source))
+			}
 			res.Closed++
 		}
 	}
@@ -420,12 +542,19 @@ func (m *Model) Sync(source string, elements []Element, relationships []Relation
 		seenRel[in.ID] = true
 		if cur := m.RelationshipOf(in.ID); cur != nil {
 			if cur.Until != "" && in.Until == "" {
-				cur.Until = ""
+				if replay {
+					cur.Until = ""
+				} else {
+					cur.ReopenOn(today)
+				}
 				res.Reopened++
 			}
 			cur.Kind, cur.Role, cur.Relation, cur.Share, cur.Primary = in.Kind, in.Role, in.Relation, in.Share, in.Primary
 			if in.Until != "" {
 				cur.Until = in.Until
+				if len(cur.Periods) > 0 {
+					cur.Periods[len(cur.Periods)-1].Until = in.Until
+				}
 			}
 			continue
 		}
@@ -438,7 +567,11 @@ func (m *Model) Sync(source string, elements []Element, relationships []Relation
 	for i := range m.Relationships {
 		r := &m.Relationships[i]
 		if strings.HasPrefix(r.ID, prefix) && !seenRel[r.ID] && r.Until == "" {
-			r.Until = today
+			if replay {
+				r.Until = today
+			} else {
+				_ = r.EndOn(today)
+			}
 			res.Ended++
 		}
 	}

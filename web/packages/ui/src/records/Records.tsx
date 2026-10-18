@@ -23,7 +23,7 @@ import { RecordKanban, type KanbanLane, type KanbanMove } from "./RecordKanban";
 import { checkbox, date, datetime, json, longText, markdown, multiSelect, number, singleSelect, tags, text, type FieldType } from "../fields/types";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
-import { RecordLookup } from "./RecordLookup";
+import { EnterpriseReference, RecordLookup } from "./RecordLookup";
 import { Chart } from "../charts/Chart";
 import { FlowSteps, type FlowStepEdge, type FlowStepNode } from "../graph/flow/FlowSteps";
 import { Pivot } from "../charts/Pivot";
@@ -72,6 +72,9 @@ export type Money = { amount: number; currency: string };
 
 /** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0024). */
 export type RecordSource = {
+	enterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;
+	enterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;
+  watchEnterprise?: (changed: () => void) => () => void;
   /** Stable member/definition scope; changing it discards cached view data. */
   scope?: string;
   ruleIdentity?: {me:string;timezone:string};
@@ -138,7 +141,7 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         case "choice": return info.lifecycle?.field === f.name ? lifecycleField(common, info.lifecycle)
           : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c })) });
         case "reference": return source && f.ref
-          ? { ...text(common), type: "reference", editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} onChange={onChange} /> }
+          ? { ...text(common), type: "reference", display: (value,record) => f.ref === "enterprise.element" ? <EnterpriseReference source={source} value={value} /> : text(common).display(value,record), editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} stereotypes={[...(f.stereotype ? [f.stereotype] : []), ...(f.stereotypes ?? [])]} onChange={onChange} /> }
           : options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
         case "references": return multiSelect({ ...common, readOnly: true, options: options[f.name] ?? [] });
         // Tags with a list to choose from are that list; tags without one are

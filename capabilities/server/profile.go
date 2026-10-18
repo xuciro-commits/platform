@@ -111,6 +111,7 @@ const (
 func tenantSettings() []platform.Setting {
 	return []platform.Setting{
 		{Name: SettingName, Title: "Organisation name", Type: "text", Description: "How the tenant is shown to its members and in documents it sends."},
+		{Name: "enterpriseRoot", Title: "Representative organization", Type: "text", Description: "The enterprise organization representing this tenant; no name or role is copied."},
 		{Name: SettingLegalName, Title: "Legal name", Type: "text", Description: "The registered name, for documents that need it."},
 		{Name: SettingCountry, Title: "Country", Type: "text", Description: "ISO 3166-1 alpha-2, such as CN or DE."},
 		{Name: SettingLanguage, Title: "Default language", Type: "text", Default: "",

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -65,4 +66,58 @@ func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member
 		seats = append(seats, Seat{Subjects: []string{member.ID}, Member: member})
 	}
 	return NewConsole(tenant, seats...)
+}
+
+// UnitGrantUsage reads both current grants and their accepted history. Revoking
+// access must not make a previously used organisation identity deletable.
+func (d *Console) UnitGrantUsage(unit, until string) []host.UnitGrantUsage {
+	uses := map[string]bool{}
+	d.mu.Lock()
+	for _, member := range d.members {
+		grants := slices.Clone(member.Grants)
+		if member.Active() {
+			grants = append(grants, d.currentMember(member).Grants...)
+		}
+		for _, grant := range grants {
+			if grant.Unit == unit {
+				uses[member.ID] = uses[member.ID] || member.Active() && (grant.Until == "" || grant.Until > until)
+			}
+		}
+	}
+	for _, team := range d.teams {
+		for _, grant := range team.Grants {
+			if grant.Unit == unit {
+				uses["team:"+team.ID] = uses["team:"+team.ID] || grant.Until == "" || grant.Until > until
+			}
+		}
+	}
+	d.mu.Unlock()
+	for _, record := range d.ledger.RecordsFor(d.tenant) {
+		submission := record.GetSubmission()
+		if submission.GetSchema().GetName() == SchemaTeamSave {
+			var team Team
+			if json.Unmarshal(submission.GetPayload(), &team) == nil && slices.ContainsFunc(team.Grants, func(grant platform.Grant) bool { return grant.Unit == unit }) {
+				id := "team:" + submission.GetTarget().GetId()
+				if _, exists := uses[id]; !exists {
+					uses[id] = false
+				}
+			}
+		}
+		if submission.GetSchema().GetName() != SchemaGrant {
+			continue
+		}
+		var grant platform.Grant
+		if json.Unmarshal(submission.GetPayload(), &grant) == nil && grant.Unit == unit {
+			member := submission.GetTarget().GetId()
+			if _, exists := uses[member]; !exists {
+				uses[member] = false
+			}
+		}
+	}
+	result := make([]host.UnitGrantUsage, 0, len(uses))
+	for member, current := range uses {
+		result = append(result, host.UnitGrantUsage{Member: member, Current: current})
+	}
+	slices.SortFunc(result, func(a, b host.UnitGrantUsage) int { return strings.Compare(a.Member, b.Member) })
+	return result
 }

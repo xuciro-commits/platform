@@ -19,6 +19,8 @@ type Slice = enterpriseapi.Slice
 type SyncResult = enterpriseapi.SyncResult
 type View = enterpriseapi.View
 type Viewpoint = enterpriseapi.Viewpoint
+type Period = enterpriseapi.Period
+type TenantLink = enterpriseapi.TenantLink
 
 const (
 	Capability   = enterpriseapi.Capability

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:66b6bcc63094e61c",
+  "revision": "sha256:c1285a2df0b35558",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1742,6 +1742,14 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
+        },
+        {
+          "name": "enterprise",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
         }
       ],
       "composed": [
@@ -9273,7 +9281,7 @@
         {
           "name": "RecordSource",
           "kind": "type",
-          "signature": "export type RecordSource = {\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
         },
         {
           "name": "RecordQuery",
@@ -9359,6 +9367,14 @@
           "optional": false,
           "isCallback": true,
           "isSlot": false
+        },
+        {
+          "name": "stereotypes",
+          "type": "string[]",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "[]"
         },
         {
           "name": "window",
@@ -9793,7 +9809,7 @@
         {
           "name": "RecordSource",
           "kind": "type",
-          "signature": "export type RecordSource = {\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
         },
         {
           "name": "EntityRecord",
@@ -12473,7 +12489,9 @@
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/enterprise/lifecycle.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
@@ -12926,7 +12944,9 @@
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/enterprise/lifecycle.tsx",
       "web/packages/platform/src/enterprise/properties.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
@@ -13042,7 +13062,9 @@
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/enterprise/lifecycle.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/people.tsx",
@@ -13063,7 +13085,9 @@
       "web/packages/csm/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/enterprise/lifecycle.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
@@ -13104,7 +13128,9 @@
       "web/packages/app/src/widgets/Notice.tsx",
       "web/packages/build/src/ontology/object-protocols.tsx",
       "web/packages/build/src/projects/InstalledApplicationHome.tsx",
-      "web/packages/build/src/projects/project.tsx"
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
+      "web/packages/platform/src/enterprise/lifecycle.tsx"
     ],
     "ui/page-header": [
       "web/packages/app/src/automation/agents.tsx",
@@ -13215,6 +13241,7 @@
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
@@ -13673,12 +13700,8 @@
     "ui/editor-workbench": [
       "web/packages/build/src/ontology/ModelWorkbench.tsx"
     ],
-    "app/dependency-graph": [
-      "web/packages/build/src/ontology/lineage.tsx",
-      "web/apps/workspace/src/chrome.tsx",
-      "web/apps/workspace/src/shell/Lineage.tsx"
-    ],
     "app/semantic-selection": [
+      "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/process.tsx",
@@ -13690,6 +13713,11 @@
       "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx"
+    ],
+    "app/dependency-graph": [
+      "web/packages/build/src/ontology/lineage.tsx",
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "app/application-runs": [
       "web/packages/build/src/projects/InstalledApplicationHome.tsx",

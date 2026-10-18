@@ -608,7 +608,11 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 	}
 	v := copyOf(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
-	if err := checkEnterpriseReferences(c, et.info.Fields, v, now); err != nil {
+	previous := reflect.Value{}
+	if old := et.rows.get(recordOf(v).ID); old != nil {
+		previous = old.value
+	}
+	if err := checkEnterpriseReferences(c, et.info.Fields, v, previous, now); err != nil {
 		return err
 	}
 	// A conditional field (FieldInfo.When) follows its condition's value.
@@ -742,7 +746,10 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 
 // Enterprise references resolve through the model rather than the record store.
 // Lines carry the same declaration and must not bypass its validity/type check.
-func checkEnterpriseReferences(c platform.Caller, fields []platform.FieldInfo, value reflect.Value, now time.Time) *kernel.Error {
+func checkEnterpriseReferences(c platform.Caller, fields []platform.FieldInfo, value, previous reflect.Value, now time.Time) *kernel.Error {
+	if c.Replaying {
+		return nil
+	}
 	for _, f := range fields {
 		v := value.FieldByIndex(f.Index)
 		if v.Kind() == reflect.Pointer {
@@ -752,8 +759,9 @@ func checkEnterpriseReferences(c platform.Caller, fields []platform.FieldInfo, v
 			v = v.Elem()
 		}
 		if f.Type == "lines" {
+			used := map[int]bool{}
 			for i := 0; i < v.Len(); i++ {
-				if err := checkEnterpriseReferences(c, f.Fields, v.Index(i), now); err != nil {
+				if err := checkEnterpriseReferences(c, f.Fields, v.Index(i), previousLine(previous, f, v.Index(i), used), now); err != nil {
 					return err
 				}
 			}
@@ -761,15 +769,51 @@ func checkEnterpriseReferences(c platform.Caller, fields []platform.FieldInfo, v
 		if f.Ref != "enterprise.element" || v.IsZero() {
 			continue
 		}
+		if previous.IsValid() && reflect.DeepEqual(value.FieldByIndex(f.Index).Interface(), previous.FieldByIndex(f.Index).Interface()) {
+			continue
+		}
 		el, ok := c.Enterprise().Element(v.String(), now)
 		if !ok {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE, "{field} names an enterprise element that is not active: {element}", f.Title, v.String())
 		}
-		if f.Stereotype != "" && el.Stereotype != f.Stereotype {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} names {element}, which is not a {stereotype}", f.Title, v.String(), f.Stereotype)
+		families := slices.Clone(f.Stereotypes)
+		if f.Stereotype != "" {
+			families = append(families, f.Stereotype)
+		}
+		if len(families) > 0 && !slices.Contains(families, el.Stereotype) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} names an enterprise element of an unsupported type", f.Title)
 		}
 	}
 	return nil
+}
+
+func previousLine(record reflect.Value, field platform.FieldInfo, current reflect.Value, used map[int]bool) reflect.Value {
+	if !record.IsValid() {
+		return reflect.Value{}
+	}
+	lines := fieldValue(record, field.Index)
+	if !lines.IsValid() || (lines.Kind() != reflect.Slice && lines.Kind() != reflect.Array) {
+		return reflect.Value{}
+	}
+	// A line has no separate identity. Match its reference fields once, allowing
+	// reorder or edits to other columns without allowing another retired use.
+	for i := 0; i < lines.Len(); i++ {
+		if used[i] {
+			continue
+		}
+		same := true
+		for _, column := range field.Fields {
+			if column.Ref == "enterprise.element" && !reflect.DeepEqual(fieldValue(lines.Index(i), column.Index).Interface(), fieldValue(current, column.Index).Interface()) {
+				same = false
+				break
+			}
+		}
+		if same {
+			used[i] = true
+			return lines.Index(i)
+		}
+	}
+	return reflect.Value{}
 }
 
 // find selects records of a type; visible, when set, is the caller's scope.
@@ -1535,9 +1579,13 @@ func declaresEnterpriseRef(fields []platform.FieldInfo) bool {
 // matchingRefs are the declared references through which the record names the
 // element; a "lines" field is descended into, and its path is dotted.
 func matchingRefs(fields []platform.FieldInfo, prefix string, v reflect.Value, element string, roles []string) []refPath {
+	return matchingRefsWithAccess(fields, prefix, v, element, roles, false)
+}
+
+func matchingRefsWithAccess(fields []platform.FieldInfo, prefix string, v reflect.Value, element string, roles []string, all bool) []refPath {
 	var out []refPath
 	for _, f := range fields {
-		if !f.ReadsAny(roles) {
+		if !all && !f.ReadsAny(roles) {
 			continue
 		}
 		path := f.Name
@@ -1550,7 +1598,7 @@ func matchingRefs(fields []platform.FieldInfo, prefix string, v reflect.Value, e
 				continue
 			}
 			for i := 0; i < fv.Len(); i++ {
-				out = append(out, matchingRefs(f.Fields, path, fv.Index(i), element, roles)...)
+				out = append(out, matchingRefsWithAccess(f.Fields, path, fv.Index(i), element, roles, all)...)
 			}
 			continue
 		}

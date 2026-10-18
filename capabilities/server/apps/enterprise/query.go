@@ -24,7 +24,7 @@ type EnterpriseQueryResult = enterpriseapi.EnterpriseQueryResult
 
 func project(e Element, today Date) EnterpriseQueryElement {
 	return EnterpriseQueryElement{ID: e.ID, Stereotype: e.Stereotype, Name: e.Name, Kind: e.Kind, ShortName: e.ShortName,
-		Legal: e.Legal, From: e.From, Until: e.Until, Closed: !enterpriseapi.ActiveOn(e.From, e.Until, today)}
+		Legal: e.Legal, From: e.From, Until: e.Until, Periods: slices.Clone(e.Periods), Closed: !e.ActiveOn(today)}
 }
 
 // Query answers the typed read (ADR-0034 D1): stereotypes is an OR-filter
@@ -52,10 +52,13 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 	defer e.mu.Unlock()
 	matches := []Element{}
 	for _, el := range e.model.Elements {
+		if el.Deleted {
+			continue
+		}
 		if len(keep) > 0 && !keep[el.Stereotype] || kind != "" && el.Kind != kind {
 			continue
 		}
-		if alive != "all" && !enterpriseapi.ActiveOn(el.From, el.Until, today) {
+		if alive != "all" && !el.ActiveOn(today) {
 			continue
 		}
 		if needle != "" && !strings.Contains(strings.ToLower(el.ID+" "+el.Name+" "+el.ShortName+" "+el.Kind), needle) {
@@ -90,7 +93,7 @@ func (e *Enterprise) Resolve(ids []string, now time.Time) (EnterpriseQueryResult
 		if id == "" {
 			continue
 		}
-		if el := e.model.ElementOf(id); el != nil {
+		if el := e.model.ElementOf(id); el != nil && !el.Deleted {
 			out.Elements = append(out.Elements, project(*el, today))
 		}
 	}

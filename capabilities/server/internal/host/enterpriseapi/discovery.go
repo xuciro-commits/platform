@@ -31,14 +31,15 @@ type Metamodel struct {
 }
 
 type EnterpriseQueryElement struct {
-	ID         string `json:"id"`
-	Stereotype string `json:"stereotype"`
-	Name       string `json:"name"`
-	Kind       string `json:"kind,omitempty"`
-	ShortName  string `json:"shortName,omitempty"`
-	Legal      bool   `json:"legal,omitempty"`
-	From       Date   `json:"from,omitempty"`
-	Until      Date   `json:"until,omitempty"`
+	ID         string   `json:"id"`
+	Stereotype string   `json:"stereotype"`
+	Name       string   `json:"name"`
+	Kind       string   `json:"kind,omitempty"`
+	ShortName  string   `json:"shortName,omitempty"`
+	Legal      bool     `json:"legal,omitempty"`
+	From       Date     `json:"from,omitempty"`
+	Until      Date     `json:"until,omitempty"`
+	Periods    []Period `json:"periods,omitempty"`
 	// Closed marks an element that is no longer live today (ended, merged,
 	// decommissioned): resolve returns it so a stored reference still reads.
 	Closed bool `json:"closed,omitempty"`

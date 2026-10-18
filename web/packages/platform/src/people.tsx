@@ -153,6 +153,7 @@ function GrantForm({ apps, onSubmit, onCancel }: { apps: { id: string; roles: st
 // A member's units in every structure, as of today (a person often belongs to several).
 function MemberUnits({ member }: { member: string }) {
   const chart = useRead<Chart>("/v1/organization").data;
+  const { open } = useWorkspace();
   if (!chart) return null;
   const day = today();
   const mine = chart.memberships.filter((m) => m.party === `member:${member}` && active(m, day));
@@ -164,7 +165,7 @@ function MemberUnits({ member }: { member: string }) {
       <div className="grid gap-1.5 text-sm">
         {mine.map((m) => (
           <p key={m.unit + m.role} className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{name(m.unit)}</span><span className="text-muted">{m.role}</span>
+            <Button size="sm" variant="ghost" onClick={() => open({ view: "enterprise", params: { element: m.unit, section: "organization" } })}>{name(m.unit)}</Button><span className="text-muted">{m.role}</span>
             {m.primary && <Tag label="primary" tone="info" />}
             {structuresOf(m.unit).map((s) => <Tag key={s.id} label={s.name} />)}
             {m.until && <span className="text-xs text-muted">until {m.until}</span>}

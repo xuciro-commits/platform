@@ -1,5 +1,5 @@
 import type {Api} from "@platform/kernel";
-export type RuleInput={name:string;type:string;choices?:string;required?:boolean;ref?:string;minLength?:number};
+export type RuleInput={name:string;type:string;choices?:string;required?:boolean;ref?:string;stereotype?:string;stereotypes?:string[];minLength?:number};
 export type StateAction={from:string[];to?:string;toInput?:string;inputs?:RuleInput[];approval?:unknown;transaction?:Api.BusinessTxn};
 const ruleChoices=(value:string|undefined)=>[...new Set((value??'').split(',').map(v=>v.trim()).filter(Boolean))];
 /** Canvas edges are a view of the subject's original transaction assignment. */
@@ -25,4 +25,10 @@ export function setActionDestination<A extends StateAction>(action:A,value:strin
  if(index<0&&value)steps.push({name:"state",kind:"update",target:{type:subject,id:"$subject"},changes:[assignment]});
  return {...action,to:undefined,toInput:undefined,transaction:{...transaction,steps}};
 }
-export function ruleInputValid(i:RuleInput,entities:readonly {type:string}[]):boolean{return (i.type==='reference'?!!i.ref&&!i.choices&&entities.some(e=>e.type===i.ref):!i.ref)&&(i.minLength===undefined||['text','longtext'].includes(i.type)&&Number.isInteger(i.minLength)&&i.minLength>=0&&i.minLength<=4096);}
+export function ruleInputValid(input: RuleInput, entities: readonly { type: string }[]): boolean {
+ const reference = input.type === "reference" ? !!input.ref && !input.choices && (input.ref === "enterprise.element" || entities.some(entity => entity.type === input.ref)) : !input.ref;
+ const textLength = input.minLength === undefined || ["text", "longtext"].includes(input.type) && Number.isInteger(input.minLength) && input.minLength >= 0 && input.minLength <= 4096;
+ const types = [...input.stereotype ? [input.stereotype] : [], ...input.stereotypes ?? []];
+ const enterprise = !types.length || input.type === "reference" && input.ref === "enterprise.element" && types.every(value => ["ActualOrganization", "ActualPerson", "ActualPost", "ActualLocation"].includes(value));
+ return reference && textLength && enterprise;
+}

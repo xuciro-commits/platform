@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../primitives/button";
-import { Input } from "../primitives/input";
+import { Input, Select } from "../primitives/input";
 import { t } from "../i18n";
+import { useWorkspace } from "../shell/Workspace";
+import type { Api } from "@platform/kernel";
 import type { EntityRecord, InterfaceRecordData, InterfaceRecordIdentity, RecordSource, RecordList } from "./Records";
 
 const pageSize = 25;
@@ -66,10 +68,11 @@ function Lookup<T>({ id, scope, target, revision, read, watch, value, valueLabel
   </div>;
 }
 
-export function RecordLookup({ id, source, type, value, onChange, window, labelField, selectedRecord, ariaLabel, disabled }: {
-  id?: string; source: RecordSource; type: string; value?: string; onChange: (id?: string) => void;
+export function RecordLookup({ id, source, type, value, onChange, window, labelField, selectedRecord, ariaLabel, disabled, stereotypes = [] }: {
+  id?: string; source: RecordSource; type: string; value?: string; onChange: (id?: string) => void; stereotypes?: string[];
   window?:NonNullable<Parameters<typeof RecordList>[0]["window"]>;labelField?:string;selectedRecord?:EntityRecord;ariaLabel?:string;disabled?:boolean;
 }) {
+  if (type === "enterprise.element") return <EnterpriseElementLookup id={id} source={source} value={value} onChange={onChange} stereotypes={stereotypes} ariaLabel={ariaLabel} disabled={disabled} />;
   const title = labelField ?? source.entity(type)?.display;
   return <Lookup id={id} scope={source.scope ?? source} target={type} revision={source.revision} value={value} onChange={record => onChange(record?.id)}
     read={(search,offset) => source.list(type,{search,offset,limit:pageSize})}
@@ -92,4 +95,48 @@ export function InterfaceRecordLookup({id,source,name,value,onChange,ariaLabel,d
       const display=labelField??source.entity(row.type)?.display,value=display && display!=="id" && row.record[display];
       return value ? `${prefix(row)} · ${String(value)}` : prefix(row);
     }} window={window} ariaLabel={ariaLabel} disabled={disabled}/>;
+}
+
+/** The model owns validity and labels; record editing never treats it as a record table. */
+export function EnterpriseElementLookup({id,source,value,onChange,stereotypes=[],ariaLabel,disabled}:{id?:string;source:RecordSource;value?:string;onChange:(id?:string)=>void;stereotypes?:string[];ariaLabel?:string;disabled?:boolean}) {
+ const [items,setItems]=useState<Api.EnterpriseQueryElement[]>([]),[kept,setKept]=useState<Api.EnterpriseQueryElement>(),[error,setError]=useState(false);
+ const scope=source.scope,revision=source.revision,families=stereotypes.join(",");
+ useEffect(() => {
+   let active = true, epoch = 0;
+   setError(false); setItems([]); setKept(undefined);
+   const load = async () => {
+     const request = ++epoch;
+     try {
+       const [options, resolved] = await Promise.all([
+         source.enterpriseQuery?.(stereotypes, "") ?? Promise.reject(Error("unavailable")),
+         value ? source.enterpriseResolve?.([value]) ?? Promise.resolve({elements: []}) : Promise.resolve({elements: []}),
+       ]);
+       if (active && epoch === request) { setItems(options.elements); setKept(resolved.elements[0]); setError(false); }
+     } catch { if (active && epoch === request) setError(true); }
+   };
+   void load();
+   const stop = source.watchEnterprise?.(() => void load());
+   return () => { active = false; stop?.(); };
+ }, [scope, revision, families, value, source.enterpriseQuery, source.enterpriseResolve, source.watchEnterprise]);
+ return <div className="grid min-w-0 gap-1"><Select id={id} aria-label={ariaLabel} disabled={disabled} value={value??""} onChange={event=>onChange(event.target.value||undefined)} className="h-7 w-full min-w-0 rounded-md border border-border bg-surface px-2 text-xs"><option value="">—</option>{items.map(item=><option key={item.id} value={item.id}>{item.name}{item.kind?" · "+item.kind:""}</option>)}{value&&!items.some(item=>item.id===value)&&<option value={value}>{kept?kept.name+(kept.closed?" · "+t("Inactive"):""):value}</option>}</Select>{error&&<p role="alert" className="text-xs text-danger">{t("Enterprise elements could not be loaded.")}</p>}</div>;
+}
+
+export function EnterpriseReference({source,value}:{source:RecordSource;value?:string}) {
+ const {open}=useWorkspace();const [element,setElement]=useState<Api.EnterpriseQueryElement>();
+ useEffect(() => {
+   let active = true, epoch = 0;
+   setElement(undefined);
+   const load = async () => {
+     const request = ++epoch;
+     if (!value) return;
+     try {
+       const answer = await source.enterpriseResolve?.([value]);
+       if (active && epoch === request) setElement(answer?.elements[0]);
+     } catch { /* A retained reference still reads as its ID when unavailable. */ }
+   };
+   void load();
+   const stop = source.watchEnterprise?.(() => void load());
+   return () => { active = false; stop?.(); };
+ }, [source.scope, source.revision, source.enterpriseResolve, source.watchEnterprise, value]);
+ return value?<Button variant="link" size="sm" className="max-w-full whitespace-normal text-left" onClick={()=>open({view:"enterprise",params:{element:value,section:"organization"}})}>{element?.name??value}{element?.closed?" · "+t("Inactive"):""}</Button>:<span className="text-muted">—</span>;
 }

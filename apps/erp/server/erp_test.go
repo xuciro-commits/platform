@@ -89,6 +89,37 @@ func line(account string, debit, credit int64) map[string]any {
 	return map[string]any{"account": account, "debit": map[string]any{"amount": debit}, "credit": map[string]any{"amount": credit}}
 }
 
+func TestEnterpriseUseFollowsOriginalJournalAndProductionStates(t *testing.T) {
+	tn := build(t)
+	controller, _ := tn.Member("cy")
+	infos := tn.Entities(controller)
+	for _, tc := range []struct {
+		typ, state string
+		current    bool
+	}{
+		{EntryType, "draft", true}, {EntryType, "posted", false}, {EntryType, "reversed", false},
+		{ProductionType, "draft", true}, {ProductionType, "released", true}, {ProductionType, "confirmed", false}, {ProductionType, "canceled", false},
+	} {
+		t.Run(tc.typ+"/"+tc.state, func(t *testing.T) {
+			for _, info := range infos {
+				if info.Type != tc.typ {
+					continue
+				}
+				program, err := info.CompileEnterpriseUse()
+				if err != nil || program == nil {
+					t.Fatalf("original use declaration: %v", err)
+				}
+				result, err := program.Eval(platform.ExprContext{Refs: map[string]platform.ExprValue{"state": {Kind: "choice", Status: "value", Data: platform.Raw(tc.state)}}})
+				if err != nil || string(result.Value.Data) != fmt.Sprint(tc.current) {
+					t.Fatalf("current use: %s %v", result.Value.Data, err)
+				}
+				return
+			}
+			t.Fatal("original owner declaration is unavailable")
+		})
+	}
+}
+
 // An accountant drafts and posts entries; posting checks balance, accounts and
 // the period, takes a number only when accepted, and writes postings; a posted
 // entry is final and corrected by reversal; a closed period refuses postings;

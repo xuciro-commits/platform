@@ -103,7 +103,7 @@ func SDK() string {
 func payloadType(schema string) string {
 	var b strings.Builder
 	b.WriteString("Enterprise")
-	for _, part := range strings.Split(strings.TrimPrefix(schema, "enterprise."), ".") {
+	for _, part := range strings.FieldsFunc(strings.TrimPrefix(schema, "enterprise."), func(r rune) bool { return r == '.' || r == '-' }) {
 		b.WriteString(strings.ToUpper(part[:1]) + part[1:])
 	}
 	return b.String() + "Payload"

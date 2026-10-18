@@ -54,6 +54,9 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
+	// EnterpriseUse says whether this record still actively uses its enterprise references.
+	// Nil keeps every unarchived record current; history always protects deletion.
+	EnterpriseUse    *Expr
 	Protocols        []Provision
 	CreateTxn        *BusinessTxn
 	ApplyCreateTxn   func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
@@ -349,7 +352,8 @@ type FieldInfo struct {
 	Ref          string   `json:"ref,omitempty"` // the entity type a reference points to
 	// Stereotype narrows a reference to the enterprise model (ref:"enterprise.element")
 	// to one UAF stereotype, tag stereo:"ActualLocation" (ADR-0022 D8).
-	Stereotype string `json:"stereotype,omitempty"`
+	Stereotype  string   `json:"stereotype,omitempty"`
+	Stereotypes []string `json:"stereotypes,omitempty"`
 	// Inverse names the relation from the referenced record back to this one
 	// ("opportunities" on an account), tag inverse:"…" (ADR-0047 21b D1).
 	Inverse string `json:"inverse,omitempty"`
@@ -441,6 +445,7 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
+	EnterpriseUse   *Expr               `json:"enterpriseUse,omitempty"`
 	Versioning      *Versioning         `json:"versioning,omitempty"`
 	VersionPins     []VersionPinBinding `json:"versionPins,omitempty"`
 	Sets            []RecordSet         `json:"sets,omitempty"`
@@ -492,7 +497,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	if info.Title == "" {
 		info.Title = e.Type
 	}
@@ -597,7 +602,26 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			return EntityInfo{}, fmt.Errorf("field %s needs one compatible direct read alias target", alias.Name)
 		}
 	}
+	if _, err := info.CompileEnterpriseUse(); err != nil {
+		return EntityInfo{}, fmt.Errorf("entity %s: %w", e.Type, err)
+	}
 	return info, nil
+}
+
+// CompileEnterpriseUse permits only this record's fields, using the same pure
+// expression compiler as other owner rules.
+func (info EntityInfo) CompileEnterpriseUse() (*ExprProgram, error) {
+	if info.EnterpriseUse == nil {
+		return nil, nil
+	}
+	if info.EnterpriseUse.Kind != "boolean" {
+		return nil, fmt.Errorf("current enterprise use must return boolean")
+	}
+	refs := map[string]ExprType{"archived": {Kind: "boolean"}}
+	for _, field := range info.Fields {
+		refs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
+	}
+	return CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
 }
 
 // ApplyFieldAliases copies only declared compatible fields. Owners use the
@@ -644,7 +668,7 @@ func EntityActions(e Entity) []Action {
 		}
 		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, Range: f.Range, Group: f.Group}
 		if f.Ref == "enterprise.element" {
-			field.Ref, field.Stereotype = f.Ref, f.Stereotype
+			field.Ref, field.Stereotype, field.Stereotypes = f.Ref, f.Stereotype, slices.Clone(f.Stereotypes)
 		}
 		fields = append(fields, field)
 		field.Required = false
@@ -673,7 +697,7 @@ func EntityActions(e Entity) []Action {
 			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: e.Standard.roles("create")})
 	}
 	if e.Standard.Edit {
-		out = append(out, Action{Schema: e.Type + ".edit", Target: e.Type, Capability: capability, Title: "Edit " + strings.ToLower(info.Title),
+		out = append(out, Action{recordEdit: true, Schema: e.Type + ".edit", Target: e.Type, Capability: capability, Title: "Edit " + strings.ToLower(info.Title),
 			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: e.Standard.roles("edit")})
 	}
 	if e.Standard.Archive {
@@ -882,6 +906,9 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			// A reference named by the type it points at, rather than Ref[T]: how
 			// a definition a tenant authored says it (ADR-0048).
 			f.Type, f.Ref, f.Stereotype = "reference", sf.Tag.Get("ref"), sf.Tag.Get("stereo")
+			if values := sf.Tag.Get("stereos"); values != "" {
+				f.Stereotypes = strings.Split(values, ",")
+			}
 		case ft.Kind() == reflect.String && refined == "date", ft.Kind() == reflect.String && refined == "longtext":
 			f.Type = refined
 		case ft.Kind() == reflect.String && sf.Tag.Get("choices") != "":

@@ -133,21 +133,22 @@ func TestFederation(t *testing.T) {
 	must(do(grp, "grp", SchemaElementAdd, ElementType, "group", map[string]any{"stereotype": Organization, "name": "Acme Group", "legal": true}))
 	must(do(grp, "grp", SchemaKindAdd, ModelType, "legal", map[string]any{"name": "Ownership", "kind": "legal"}))
 	must(do(grp, "grp", SchemaSliceImport, ModelType, "sub", map[string]any{"slice": sl}))
-	must(do(grp, "grp", SchemaRelationshipAdd, RelationshipType, "own", map[string]any{"stereotype": Placement, "kind": "legal", "source": "co", "target": "group", "share": 1}))
-	if err := do(grp, "grp", SchemaElementEdit, ElementType, "co", map[string]any{"name": "Renamed"}); err == nil {
+	company := enterpriseapi.ImportedElementID("sub", "co")
+	must(do(grp, "grp", SchemaRelationshipAdd, RelationshipType, "own", map[string]any{"stereotype": Placement, "kind": "legal", "source": company, "target": "group", "share": 1}))
+	if err := do(grp, "grp", SchemaElementEdit, ElementType, company, map[string]any{"name": "Renamed"}); err == nil {
 		t.Fatal("a mirrored element was edited in the group")
 	}
 	if got := grp.Units("", "legal", "2026-02-01"); len(got) != 0 {
 		t.Fatalf("units %v", got)
 	}
-	if !grp.Model().BelowIn("legal", "group", "co", "2026-02-01") {
+	if !grp.Model().BelowIn("legal", "group", company, "2026-02-01") {
 		t.Fatal("the subsidiary is not below the group in the legal kind")
 	}
 	// a second import with the capability unpublished drops it, keeps the group's own ownership edge
 	sl.Elements = sl.Elements[:1]
 	sl.Relationships = nil
 	must(do(grp, "grp", SchemaSliceImport, ModelType, "sub-2", map[string]any{"slice": sl}))
-	if m := grp.Model(); len(m.Elements) != 2 || len(m.Relationships) != 1 || m.Relationships[0].ID != "own" {
+	if m := grp.Model(); len(m.Elements) != 3 || len(m.Relationships) != 2 || m.ElementOf(enterpriseapi.ImportedElementID("sub", "cap")).Until == "" || m.RelationshipOf("own") == nil {
 		t.Fatalf("after re-import: %d elements %+v", len(m.Elements), m.Relationships)
 	}
 }

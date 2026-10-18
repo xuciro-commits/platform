@@ -38,6 +38,12 @@ export const enterpriseWrites = [
 	"enterprise.element.add",
 	"enterprise.element.edit",
 	"enterprise.element.close",
+	"enterprise.element.delete",
+	"enterprise.element.reopen",
+	"enterprise.element.reinstate",
+	"enterprise.kind.edit",
+	"enterprise.tenant-link.save",
+	"enterprise.tenant-link.remove",
 	"enterprise.kind.add",
 	"enterprise.relationship.add",
 	"enterprise.relationship.end",
@@ -93,7 +99,43 @@ export type EnterpriseElementClosePayload = {
 	// Last day + 1
 	until: string;
 	// e.g. merged into <element>
-	reason?: string;
+	reason: string;
+};
+
+export type EnterpriseElementDeletePayload = {
+	// Reason
+	reason: string;
+};
+
+export type EnterpriseElementReopenPayload = {
+	// Valid from (YYYY-MM-DD; empty: today)
+	from?: string;
+	// Reason
+	reason: string;
+};
+
+export type EnterpriseElementReinstatePayload = {
+	// Reason
+	reason: string;
+};
+
+export type EnterpriseKindEditPayload = {
+	// Name
+	name: string;
+};
+
+export type EnterpriseTenantLinkSavePayload = {
+	// Local organisation
+	organization: string;
+	// Source tenant
+	tenant: string;
+	// Shared root organisation
+	root: string;
+	// Connection record ID
+	connection: string;
+};
+
+export type EnterpriseTenantLinkRemovePayload = {
 };
 
 export type EnterpriseKindAddPayload = {
@@ -160,6 +202,14 @@ export type EnterpriseViewDeletePayload = {
 export type EnterpriseSliceImportPayload = {
 	// The other tenant's enterprise-published answer
 	slice: unknown;
+	// Tenant link
+	link?: string;
+	// Shared slice content
+	content?: string;
+	// Model version from preview
+	base?: string;
+	// Connection revision from preview
+	connectionRevision?: number;
 };
 
 export type EnterpriseSliceSyncPayload = {
@@ -227,6 +277,12 @@ export type EnterpriseWritePayloads = {
 	"enterprise.element.add": EnterpriseElementAddPayload;
 	"enterprise.element.edit": EnterpriseElementEditPayload;
 	"enterprise.element.close": EnterpriseElementClosePayload;
+	"enterprise.element.delete": EnterpriseElementDeletePayload;
+	"enterprise.element.reopen": EnterpriseElementReopenPayload;
+	"enterprise.element.reinstate": EnterpriseElementReinstatePayload;
+	"enterprise.kind.edit": EnterpriseKindEditPayload;
+	"enterprise.tenant-link.save": EnterpriseTenantLinkSavePayload;
+	"enterprise.tenant-link.remove": EnterpriseTenantLinkRemovePayload;
 	"enterprise.kind.add": EnterpriseKindAddPayload;
 	"enterprise.relationship.add": EnterpriseRelationshipAddPayload;
 	"enterprise.relationship.end": EnterpriseRelationshipEndPayload;

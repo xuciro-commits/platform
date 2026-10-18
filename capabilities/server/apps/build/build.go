@@ -750,6 +750,9 @@ func (b *Build) Check(o Object, id string) error {
 	if err := checkFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
+	if err := checkEnterpriseUse(o); err != nil {
+		return err
+	}
 	if err := b.checkObjectRules(o); err != nil {
 		return err
 	}
@@ -787,6 +790,25 @@ func (b *Build) Check(o Object, id string) error {
 		return err
 	}
 	return checkAccess(o)
+}
+
+func checkEnterpriseUse(o Object) error {
+	if o.EnterpriseUse == nil {
+		return nil
+	}
+	if o.EnterpriseUse.Kind != "boolean" {
+		return fmt.Errorf("current enterprise use must return boolean")
+	}
+	refs := map[string]platform.ExprType{}
+	for _, field := range o.Fields {
+		refs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
+	}
+	if len(o.States) > 0 {
+		refs["state"] = platform.ExprType{Kind: "choice"}
+	}
+	refs["archived"] = platform.ExprType{Kind: "boolean"}
+	_, err := platform.CompileExpr(*o.EnterpriseUse, platform.ExprSchema{Refs: refs})
+	return err
 }
 
 // BaseField is the reference an extension object carries to the record it extends.
@@ -862,6 +884,9 @@ func (b *Build) checkName(name, id string) error {
 // being built, or another saved draft object (ADR-0011). Delivery still
 // proves the object installs.
 func (b *Build) fieldKnown(ref string) bool {
+	if ref == "enterprise.element" {
+		return true
+	}
 	if _, known := b.lookupEntity(ref); known {
 		return true
 	}
@@ -902,8 +927,10 @@ func checkFields(fields []Field, known func(string) bool) error {
 			return fmt.Errorf("the choice field %q has no values", f.Name)
 		case f.Type == "reference" && f.Ref == "":
 			return fmt.Errorf("the reference field %q says nothing it refers to", f.Name)
-		case f.Type == "reference" && known != nil && !known(f.Ref):
+		case f.Type == "reference" && f.Ref != "enterprise.element" && known != nil && !known(f.Ref):
 			return fmt.Errorf("the field %q refers to %q, which this tenant has no object for", f.Name, f.Ref)
+		case f.Ref == "enterprise.element" && f.Inverse != "":
+			return fmt.Errorf("enterprise references do not declare inverse record relations")
 		case f.Inverse != "" && f.Type != "reference":
 			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)
 		case f.Inverse != "" && !named(f.Inverse):
@@ -912,8 +939,34 @@ func checkFields(fields []Field, known func(string) bool) error {
 			return fmt.Errorf("the field %q needs a direct read alias without a formula", f.Name)
 		}
 		seen[f.Name] = true
+		if err := checkEnterpriseReference(f.Type, f.Ref, f.Stereotype, f.Stereotypes); err != nil {
+			return err
+		}
 	}
 	return checkConditions(fields)
+}
+
+func checkEnterpriseReference(kind, ref, stereotype string, stereotypes []string) error {
+	if ref == "enterprise.element" && kind != "reference" {
+		return fmt.Errorf("enterprise element types require an enterprise reference")
+	}
+	if stereotype == "" && len(stereotypes) == 0 {
+		return nil
+	}
+	if kind != "reference" || ref != "enterprise.element" {
+		return fmt.Errorf("enterprise element types require an enterprise reference")
+	}
+	for _, value := range stereotypes {
+		if value == "" {
+			return fmt.Errorf("enterprise element types cannot be empty")
+		}
+	}
+	for _, value := range append(slices.Clone(stereotypes), stereotype) {
+		if value != "" && !slices.Contains([]string{"ActualOrganization", "ActualPerson", "ActualPost", "ActualLocation"}, value) {
+			return fmt.Errorf("unsupported enterprise element type %q", value)
+		}
+	}
+	return nil
 }
 
 // checkConditions reads every "Only when" as the kit will (field=value,value)
@@ -1210,6 +1263,12 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(buildapi.ValueChoices(f.Choices), ","))
 		case "reference":
 			tag += fmt.Sprintf(` ref:"%s"`, f.Ref)
+			if f.Stereotype != "" {
+				tag += fmt.Sprintf(` stereo:"%s"`, f.Stereotype)
+			}
+			if len(f.Stereotypes) > 0 {
+				tag += fmt.Sprintf(` stereos:"%s"`, strings.Join(f.Stereotypes, ","))
+			}
 			if f.Inverse != "" {
 				tag += fmt.Sprintf(` inverse:"%s"`, f.Inverse)
 			}
@@ -1287,6 +1346,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	entity := platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
 		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model, lookup), ValidateAt: numberingOf(o, model)}
 	entity.CreateTxn = creation
+	entity.EnterpriseUse = o.EnterpriseUse
 	entity.Protocols = objectProvisions(o, entity)
 	if creationError != nil {
 		legacy := entity.ValidateAt

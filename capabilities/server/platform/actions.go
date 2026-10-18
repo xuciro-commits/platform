@@ -17,6 +17,9 @@ import (
 // description that screens and automation callers (AI agents included) read.
 // Roles say who may call it; attribute conditions stay in the domain's policy.
 type Action struct {
+	// recordEdit is set only by EntityActions. Its unchanged enterprise values
+	// are retained references, not newly selected action parameters.
+	recordEdit    bool
 	Adoption      *ProposalAdoption `json:"adoption,omitempty"`
 	SchemaVersion *SchemaVersion    `json:"schemaVersion,omitempty"`
 	Schema        string            `json:"schema"`

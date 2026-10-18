@@ -31,10 +31,17 @@ const (
 	SchemaElementAdd         = "enterprise.element.add"
 	SchemaElementEdit        = "enterprise.element.edit"
 	SchemaElementClose       = "enterprise.element.close"
+	SchemaElementDelete      = "enterprise.element.delete"
+	SchemaElementReopen      = "enterprise.element.reopen"
+	SchemaElementReinstate   = "enterprise.element.reinstate"
 	SchemaRelationshipAdd    = "enterprise.relationship.add"
 	SchemaRelationshipEnd    = "enterprise.relationship.end"
 	SchemaRelationshipChange = "enterprise.relationship.change"
 	SchemaKindAdd            = "enterprise.kind.add"
+	SchemaKindEdit           = "enterprise.kind.edit"
+	SchemaTenantLinkSave     = "enterprise.tenant-link.save"
+	SchemaTenantLinkRemove   = "enterprise.tenant-link.remove"
+	TenantLinkType           = "enterprise.tenant-link"
 	SchemaViewSave           = "enterprise.view.save"
 	SchemaViewDelete         = "enterprise.view.delete"
 	SchemaSeed               = "enterprise.model.seed"
@@ -81,7 +88,13 @@ func declarations() []platform.Action {
 				f("published", "boolean", "Share it with the tenants this one federates with (group, subsidiaries, partners)", false)}},
 		platform.Action{Schema: SchemaElementClose, Target: ElementType, Capability: "elements", Title: "Close element", Roles: admin,
 			Description: "End an element (dissolved, merged into another, decommissioned); its history stays.",
-			Payload:     []platform.Field{f("until", "date", "Last day + 1", true), f("reason", "string", "e.g. merged into <element>", false)}},
+			Payload:     []platform.Field{f("until", "date", "Last day + 1", true), f("reason", "string", "e.g. merged into <element>", true)}},
+		{Schema: SchemaElementDelete, Target: ElementType, Capability: "elements", Title: "Delete unused element", Roles: admin, Description: "Delete a local element only when no model or business history uses it. Its identity cannot be reused.", Payload: []platform.Field{f("reason", "string", "Reason", true)}},
+		{Schema: SchemaElementReopen, Target: ElementType, Capability: "elements", Title: "Reopen element", Roles: admin, Description: "Start a new effective period without changing the closed period.", Payload: []platform.Field{from, f("reason", "string", "Reason", true)}},
+		{Schema: SchemaElementReinstate, Target: ElementType, Capability: "elements", Title: "Reinstate element", Roles: admin, Description: "Correct an accidental closure while recording why it was undone.", Payload: []platform.Field{f("reason", "string", "Reason", true)}},
+		{Schema: SchemaKindEdit, Target: ModelType, Capability: "kinds", Title: "Rename relationship kind", Roles: admin, Description: "Change a relationship kind's display name without changing its identity or structure.", Payload: []platform.Field{f("name", "string", "Name", true)}},
+		{Schema: SchemaTenantLinkSave, Target: TenantLinkType, Capability: "federation", Title: "Save tenant link", Roles: admin, Description: "Associate a local organisation with a shared organisation in another tenant.", Payload: []platform.Field{f("organization", "string", "Local organisation", true), f("tenant", "string", "Source tenant", true), f("root", "string", "Shared root organisation", true), f("connection", "string", "Connection record ID", true)}},
+		{Schema: SchemaTenantLinkRemove, Target: TenantLinkType, Capability: "federation", Title: "Remove tenant link", Roles: admin, Description: "Remove the tenant link while retaining imported model history.", Payload: []platform.Field{}},
 		platform.Action{Schema: SchemaKindAdd, Target: ModelType, Capability: "kinds", Title: "Add relationship kind", Roles: admin,
 			Description: "Add a way organisations relate: legal, management, finance, site, project, governance, community or custom.",
 			Payload:     []platform.Field{f("name", "string", "Name", true), f("kind", "string", "Kind", true), f("matrix", "boolean", "An organisation may have several parents", false)}},
@@ -105,7 +118,7 @@ func declarations() []platform.Action {
 			Payload:     []platform.Field{f("id", "string", "The view's id", true)}},
 		platform.Action{Schema: SchemaSliceImport, Target: ModelType, Capability: "federation", Title: "Import a published slice", Roles: admin,
 			Description: "Mirror what another tenant publishes — its organisations, capabilities, sites — read-only, owned there; relate your own elements to them. A connector delivers the slice.",
-			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true)}},
+			Payload:     []platform.Field{f("slice", "json", "The other tenant's enterprise-published answer", true), f("link", "string", "Tenant link", false), f("content", "string", "Shared slice content", false), f("base", "string", "Model version from preview", false), f("connectionRevision", "integer", "Connection revision from preview", false)}},
 		platform.Action{Schema: SchemaSliceSync, Target: ModelType, Capability: "federation", Title: "Sync a system's slice", Roles: admin, Automation: true,
 			Description: "Land what an external system holds about the enterprise - organisational units, posts, locations, equipment - as elements and relationships owned on its behalf. Repeated syncs diff: new ids start today, missing ids close today, history stays.",
 			Payload:     []platform.Field{f("source", "string", "The system's name, e.g. sap-hr", true), f("elements", "json", "Elements with ids stable across syncs", true), f("relationships", "json", "Relationships between them, or to the tenant's own elements", false)}},
@@ -138,7 +151,7 @@ func declarations() []platform.Action {
 // contract the generated SDK also reads (ADR-0034).
 func New(tenant string, seed platform.OrgSeed) *Enterprise {
 	catalog := platform.NewCatalog(declarations()...)
-	return &Enterprise{tenant: tenant, model: enterpriseapi.FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType)}
+	return &Enterprise{tenant: tenant, model: enterpriseapi.FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
 }
 
 // Snapshot and Restore: the model as decisions left it (ADR-0024).
@@ -183,7 +196,7 @@ func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ 
 	e.mu.Lock()
 	var open []string
 	for _, r := range e.model.Relationships {
-		if r.Stereotype == Membership && r.Source == party && enterpriseapi.ActiveOn(r.From, r.Until, day) {
+		if r.Stereotype == Membership && r.Source == party && r.ActiveOn(day) {
 			open = append(open, r.ID)
 		}
 	}
@@ -231,19 +244,42 @@ type payload struct {
 	Replacement                                                                                           string
 	Context                                                                                               []string
 	Params                                                                                                Params
+	Link, Content, Base, Organization, Tenant, Root, Connection                                           string
+	ConnectionRevision                                                                                    uint32
 }
 
 func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if !c.Replaying {
+		var p struct {
+			Until, Connection, Link string
+			ConnectionRevision      uint32
+		}
+		if err := json.Unmarshal(s.GetPayload(), &p); err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "the payload is not readable")
+		}
+		switch s.GetSchema().GetName() {
+		case SchemaElementClose, SchemaElementDelete:
+			if err := c.Enterprise().CheckUsage(s.GetTarget().GetId(), p.Until, s.GetSchema().GetName() == SchemaElementDelete, now); err != nil {
+				return nil, err
+			}
+		case SchemaTenantLinkSave:
+			if err := c.Enterprise().CheckTenantConnection(p.Connection, now); err != nil {
+				return nil, err
+			}
+		case SchemaSliceImport:
+			if p.Link != "" {
+				if err := c.Enterprise().CheckTenantLink(p.Link, p.ConnectionRevision, now); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	if !c.Replaying && s.GetSchema().GetName() == SchemaViewSave {
 		var v payload
 		if err := json.Unmarshal(s.GetPayload(), &v); err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid view")
 		}
-		m := e.Model()
 		pins := v.Pins
-		if old := m.ViewOf(s.GetTarget().GetId()); old != nil {
-			pins = append(slices.Clone(pins), old.Pins...)
-		}
 		for _, p := range pins {
 			if _, err := pinRecord(c, p.Ref, now); err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This view contains a record pin you may not read")
@@ -280,6 +316,8 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		id := s.GetTarget().GetId()
 		mm := uaf.Current()
 		m := &e.model
+		var supplied map[string]json.RawMessage
+		json.Unmarshal(s.GetPayload(), &supplied)
 		switch s.GetSchema().GetName() {
 		case SchemaElementAdd:
 			st := mm.Stereotypes[p.Stereotype]
@@ -312,6 +350,41 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			}
 			return func(*pb.ChangeRecord) {
 				m.Kinds = append(m.Kinds, Kind{ID: id, Name: p.Name, Kind: p.Kind, Matrix: p.Matrix})
+			}, nil
+		case SchemaKindEdit:
+			kind := m.KindOf(id)
+			if kind == nil {
+				return nil, notFound
+			}
+			if kind.Owner != "" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The relationship kind is maintained by its source")
+			}
+			if strings.TrimSpace(p.Name) == "" {
+				return nil, invalid("a relationship kind needs a name and a kind")
+			}
+			return func(*pb.ChangeRecord) { kind.Name = p.Name }, nil
+		case SchemaTenantLinkSave:
+			organization := m.ElementOf(p.Organization)
+			if organization == nil || organization.Deleted || organization.Owner != "" || organization.Stereotype != Organization || !organization.ActiveOn(today) {
+				return nil, invalid("Choose an active local organisation for the tenant link")
+			}
+			if p.Tenant == "" || p.Tenant == e.tenant || p.Root == "" || p.Connection == "" {
+				return nil, invalid("A tenant link needs a source tenant, shared root and connection")
+			}
+			link := TenantLink{ID: id, Organization: p.Organization, Tenant: p.Tenant, Root: p.Root, Connection: p.Connection}
+			if old := m.TenantLinkOf(id); old != nil {
+				if old.Tenant == p.Tenant && old.Root == p.Root && old.Connection == p.Connection {
+					link.UpdatedAt, link.Content = old.UpdatedAt, old.Content
+				}
+				return func(*pb.ChangeRecord) { *old = link }, nil
+			}
+			return func(*pb.ChangeRecord) { m.TenantLinks = append(m.TenantLinks, link) }, nil
+		case SchemaTenantLinkRemove:
+			if m.TenantLinkOf(id) == nil {
+				return nil, notFound
+			}
+			return func(*pb.ChangeRecord) {
+				m.TenantLinks = slices.DeleteFunc(m.TenantLinks, func(link TenantLink) bool { return link.ID == id })
 			}, nil
 		case SchemaSeed:
 			if len(m.Elements) > 0 {
@@ -360,14 +433,43 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				if own := m.ElementOf(el.ID); own != nil && own.Owner != owner {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is not {source}'s to change", el.ID, p.Source)
 				}
+				if !c.Replaying {
+					if el.Deleted {
+						return nil, invalid("A source element keeps its identity and type")
+					}
+					if own := m.ElementOf(el.ID); own != nil && (own.Deleted || own.Stereotype != el.Stereotype) {
+						return nil, invalid("A source element keeps its identity and type")
+					}
+					if err := enterpriseapi.CheckPeriods(el.PeriodsFromLegacy()); err != nil {
+						return nil, invalid(err.Error())
+					}
+				}
 				if err := checkProperties(mm, el.Stereotype, el.Properties, !c.Replaying); err != nil {
 					return nil, err
 				}
 				ids[el.ID] = true
 				stereotypes[el.ID] = el.Stereotype
 			}
+			relationshipIDs := map[string]bool{}
 			for i := range sync.Relationships {
 				r := &sync.Relationships[i]
+				if !c.Replaying {
+					if relationshipIDs[r.ID] {
+						return nil, invalid("The shared slice repeats a relationship")
+					}
+					relationshipIDs[r.ID] = true
+					prefixed := "sync:" + p.Source + ":"
+					relID := r.ID
+					if !strings.HasPrefix(relID, prefixed) {
+						relID = prefixed + relID
+					}
+					if old := m.RelationshipOf(relID); old != nil && (old.Source != r.Source || old.Target != r.Target || old.Stereotype != r.Stereotype) {
+						return nil, invalid("A source relationship keeps its endpoints; use a new relationship ID")
+					}
+					if err := enterpriseapi.CheckPeriods(r.PeriodsFromLegacy()); err != nil {
+						return nil, invalid(err.Error())
+					}
+				}
 				switch {
 				case r.ID == "" || r.Source == "" || r.Target == "":
 					return nil, invalid("every synced relationship has an id, a source and a target")
@@ -396,10 +498,42 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				}
 			}
 			source := p.Source
-			return func(*pb.ChangeRecord) { m.Sync(source, sync.Elements, sync.Relationships, today) }, nil
+			if !c.Replaying {
+				candidate := copyModel(*m)
+				candidate.Sync(source, sync.Elements, sync.Relationships, today)
+				if err := checkSourceRelationships(candidate, mm, "sync:"+source+":", today); err != nil {
+					return nil, err
+				}
+				return func(*pb.ChangeRecord) { *m = candidate }, nil
+			}
+			return func(*pb.ChangeRecord) { m.ReplaySync(source, sync.Elements, sync.Relationships, today) }, nil
 		case SchemaSliceImport:
 			if p.Slice == nil || p.Slice.Tenant == "" || p.Slice.Tenant == e.tenant {
 				return nil, invalid("a slice names the tenant it comes from")
+			}
+			if p.Link != "" {
+				next, err := m.PreviewImport(*p.Slice, p.Link, p.Content, p.Base, today)
+				if err != nil {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+				}
+				for _, el := range next.Elements {
+					if el.Owner == "tenant:"+p.Slice.Tenant {
+						if mm.Stereotypes[el.Stereotype] == nil || mm.Relationship(el.Stereotype) {
+							return nil, invalid("Choose a concrete enterprise element type")
+						}
+					}
+				}
+				if err := checkSourceRelationships(next, mm, "fed:"+p.Slice.Tenant+":", today); err != nil {
+					return nil, err
+				}
+				return func(*pb.ChangeRecord) { *m = next }, nil
+			}
+			if !c.Replaying {
+				normalized, err := m.NamespaceSlice(*p.Slice)
+				if err != nil {
+					return nil, invalid(err.Error())
+				}
+				p.Slice = &normalized
 			}
 			owner := "tenant:" + p.Slice.Tenant
 			stereotypes := map[string]string{}
@@ -430,6 +564,14 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				}
 			}
 			slice := *p.Slice
+			if !c.Replaying {
+				next := copyModel(*m)
+				next.ImportOn(slice, today)
+				if err := checkSourceRelationships(next, mm, "fed:"+slice.Tenant+":", today); err != nil {
+					return nil, err
+				}
+				return func(*pb.ChangeRecord) { *m = next }, nil
+			}
 			return func(*pb.ChangeRecord) { m.Import(slice) }, nil
 		case SchemaViewSave:
 			if p.Name == "" || p.Viewpoint == "" {
@@ -439,12 +581,12 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("{viewpoint} is not a view of this model", p.Viewpoint)
 			}
 			for _, el := range p.Elements {
-				if m.ElementOf(el) == nil {
+				if m.ElementOf(el) == nil || !c.Replaying && m.ElementOf(el).Deleted {
 					return nil, invalid("the view shows {element}, which is not in the model", el)
 				}
 			}
 			for _, pin := range p.Pins {
-				if m.ElementOf(pin.Anchor) == nil {
+				if m.ElementOf(pin.Anchor) == nil || !c.Replaying && m.ElementOf(pin.Anchor).Deleted {
 					return nil, invalid("a pinned record sits beside {element}, which is not in the model", pin.Anchor)
 				}
 				if !strings.HasPrefix(pin.Ref, "record:") || enterpriseapi.RefType(pin.Ref) == "" || enterpriseapi.RefID(pin.Ref) == "" {
@@ -489,21 +631,30 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				m.Views = slices.DeleteFunc(m.Views, func(x View) bool { return x.ID == id })
 			}, nil
 		case SchemaRelationshipAdd:
-			return decideRelationship(m, mm, id, p)
+			return decideRelationship(m, mm, id, p, !c.Replaying, false)
 		case SchemaRelationshipChange:
 			previous := m.RelationshipOf(id)
 			if previous == nil {
 				return nil, notFound
 			}
-			if p.From < previous.From || !enterpriseapi.ActiveOn(previous.From, previous.Until, p.From) {
+			if !c.Replaying && sourceRelationship(previous.ID) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The relationship is maintained by its source")
+			}
+			if p.From < previous.From || !previous.ActiveOn(p.From) {
 				return nil, invalid("The relationship is not active on {day}", p.From)
 			}
 			if p.Replacement == "" || p.Replacement == id {
 				return nil, invalid("A relationship change needs a new relationship id")
 			}
 			candidate := copyModel(*m)
-			candidate.RelationshipOf(id).Until = p.From
-			apply, err := decideRelationship(&candidate, mm, p.Replacement, p)
+			if c.Replaying {
+				candidate.RelationshipOf(id).Until = p.From
+			} else {
+				if err := candidate.RelationshipOf(id).EndOn(p.From); err != nil {
+					return nil, invalid(err.Error())
+				}
+			}
+			apply, err := decideRelationship(&candidate, mm, p.Replacement, p, !c.Replaying, false)
 			if err != nil {
 				return nil, err
 			}
@@ -514,14 +665,21 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if r == nil {
 				return nil, notFound
 			}
+			if !c.Replaying && sourceRelationship(r.ID) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The relationship is maintained by its source")
+			}
 			day := p.Until
 			if day == "" {
 				day = today
 			}
-			if day < r.From {
-				return nil, invalid("the relationship would end before it starts")
+			if c.Replaying {
+				return func(*pb.ChangeRecord) { r.Until = day }, nil
 			}
-			return func(*pb.ChangeRecord) { r.Until = day }, nil
+			next := *r
+			if err := next.EndOn(day); err != nil {
+				return nil, invalid(err.Error())
+			}
+			return func(*pb.ChangeRecord) { *r = next }, nil
 		}
 		el := m.ElementOf(id)
 		if el == nil {
@@ -530,8 +688,14 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		if el.Owner != "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{element} belongs to {owner}; it is changed there", el.Name, el.Owner)
 		}
+		if el.Deleted {
+			return nil, notFound
+		}
 		switch s.GetSchema().GetName() {
 		case SchemaElementEdit:
+			if !c.Replaying && supplied["name"] != nil && strings.TrimSpace(p.Name) == "" {
+				return nil, invalid("an element needs a name")
+			}
 			if p.Properties != nil {
 				if err := checkProperties(mm, el.Stereotype, p.Properties, !c.Replaying); err != nil {
 					return nil, err
@@ -541,16 +705,16 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				if p.Name != "" {
 					el.Name = p.Name
 				}
-				if p.Kind != "" {
+				if p.Kind != "" || !c.Replaying && supplied["kind"] != nil {
 					el.Kind = p.Kind
 				}
 				if p.Published != nil {
 					el.Published = *p.Published
 				}
-				if p.ShortName != "" {
+				if p.ShortName != "" || !c.Replaying && supplied["shortName"] != nil {
 					el.ShortName = p.ShortName
 				}
-				if p.Calendar != "" {
+				if p.Calendar != "" || !c.Replaying && supplied["calendar"] != nil {
 					el.Calendar = p.Calendar
 				}
 				if p.Properties != nil {
@@ -558,10 +722,48 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				}
 			}, nil
 		case SchemaElementClose:
+			if !c.Replaying {
+				if strings.TrimSpace(p.Reason) == "" {
+					return nil, invalid("Give a reason for changing the element's lifecycle")
+				}
+				if why := closingUsage(*m, id, p.Until); why != "" {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "End the relationship or tenant link before closing the element: {usage}", why)
+				}
+				next := *el
+				next.Periods = slices.Clone(el.Periods)
+				if err := next.CloseOn(p.Until, p.Reason); err != nil {
+					return nil, invalid(err.Error())
+				}
+				return func(*pb.ChangeRecord) { *el = next }, nil
+			}
 			if p.Until == "" || p.Until <= el.From {
 				return nil, invalid("the element would end before it starts")
 			}
 			return func(*pb.ChangeRecord) { el.Until, el.Closed = p.Until, p.Reason }, nil
+		case SchemaElementDelete:
+			if why := m.InternalUsage(id); why != "" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The element is still used by {usage}", why)
+			}
+			if strings.TrimSpace(p.Reason) == "" {
+				return nil, invalid("Give a reason for changing the element's lifecycle")
+			}
+			return func(*pb.ChangeRecord) { el.Deleted = true; el.Published = false; el.Closed = p.Reason }, nil
+		case SchemaElementReopen, SchemaElementReinstate:
+			if strings.TrimSpace(p.Reason) == "" {
+				return nil, invalid("Give a reason for changing the element's lifecycle")
+			}
+			next := *el
+			next.Periods = slices.Clone(el.Periods)
+			var err error
+			if s.GetSchema().GetName() == SchemaElementReopen {
+				err = next.ReopenOn(p.From)
+			} else {
+				err = next.Reinstate()
+			}
+			if err != nil {
+				return nil, invalid(err.Error())
+			}
+			return func(*pb.ChangeRecord) { *el = next }, nil
 		}
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
@@ -629,9 +831,12 @@ func (e *Enterprise) Holders(kind, unit, role string, day Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	var out []string
+	if !e.model.LiveOn(unit, day) {
+		return out
+	}
 	for _, r := range e.model.Relationships {
 		id, person := strings.CutPrefix(r.Source, "member:")
-		if r.Stereotype != Membership || !person || role != "" && r.Role != role || !enterpriseapi.ActiveOn(r.From, r.Until, day) || !e.model.LiveOn(r.Target, day) || slices.Contains(out, id) {
+		if r.Stereotype != Membership || !person || role != "" && r.Role != role || !r.ActiveOn(day) || !e.model.LiveOn(r.Target, day) || slices.Contains(out, id) {
 			continue
 		}
 		if r.Target == unit || e.model.BelowIn(kind, r.Target, unit, day) {
@@ -656,7 +861,7 @@ func (e *Enterprise) Calendar(party string, day Date) platform.Calendar {
 	}
 	var units []string
 	for _, r := range m.Relationships {
-		if r.Stereotype == Membership && r.Source == party && enterpriseapi.ActiveOn(r.From, r.Until, day) {
+		if r.Stereotype == Membership && r.Source == party && r.ActiveOn(day) && m.LiveOn(r.Target, day) {
 			if r.Primary {
 				units = append([]string{r.Target}, units...)
 			} else {
@@ -672,13 +877,13 @@ func (e *Enterprise) Calendar(party string, day Date) platform.Calendar {
 			continue
 		}
 		seen[u] = true
-		if x := m.ElementOf(u); x != nil && x.Calendar != "" {
+		if x := m.ElementOf(u); x != nil && x.ActiveOn(day) && x.Calendar != "" {
 			if c, ok := byID(x.Calendar); ok {
 				return c
 			}
 		}
 		for _, r := range m.Relationships {
-			if r.Stereotype == Placement && r.Source == u && enterpriseapi.ActiveOn(r.From, r.Until, day) {
+			if r.Stereotype == Placement && r.Source == u && r.ActiveOn(day) && m.LiveOn(r.Target, day) {
 				units = append(units, r.Target)
 			}
 		}

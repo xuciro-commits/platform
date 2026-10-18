@@ -8,6 +8,23 @@ import (
 	"testing"
 )
 
+func TestEnterpriseReferencesAreNotRecordAssetDependencies(t *testing.T) {
+	object := ReleaseAsset{Ref: AssetRef{App: "build", Kind: AssetObject, Name: "build.assignment"}, SourceVersion: "1", ContractVersion: 1, Body: json.RawMessage(`{"type":"build.assignment","name":"assignment","fields":[{"name":"unit","title":"Unit","type":"reference","ref":"enterprise.element","stereotype":"ActualOrganization"}]}`)}
+	action := ReleaseAsset{Ref: AssetRef{App: "build", Kind: AssetAction, Name: "build.assignment.assign"}, SourceVersion: "1", ContractVersion: 1, Body: json.RawMessage(`{"schema":"build.assignment.assign","target":"build.assignment","payload":[{"name":"unit","type":"string","ref":"enterprise.element","stereotype":"ActualOrganization"}]}`)}
+	for _, asset := range []ReleaseAsset{object, action} {
+		described, err := WithDependencies(asset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if slices.Contains(described.Requires, AssetRef{App: "enterprise", Kind: AssetObject, Name: "enterprise.element"}) {
+			t.Fatalf("enterprise element became a fabricated record asset: %+v", described.Requires)
+		}
+		if asset.Ref.Kind == AssetAction && !slices.Contains(described.Requires, object.Ref) {
+			t.Fatal("enterprise input removed the action's original object dependency")
+		}
+	}
+}
+
 func TestDependencyDescriptionDrivesBothDirectionsAndCapabilities(t *testing.T) {
 	object := AssetRef{App: "build", Kind: AssetObject, Name: "build.order"}
 	other := AssetRef{App: "build", Kind: AssetObject, Name: "build.supplier"}

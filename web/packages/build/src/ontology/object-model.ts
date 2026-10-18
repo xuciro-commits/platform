@@ -6,15 +6,15 @@ import { stateInputValid, ruleInputValid } from "./process-rules";
 import type { Api } from "@platform/kernel";
 import { t, type EntityInfo } from "@platform/ui";
 
-export type Field = { name: string; title: string; type: string; aiInput?:boolean;sourceType?:string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; readOnly?: boolean; aliasOf?: string; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; inverse?: string; read?: string[]; write?: string[] };
+export type Field = { name: string; title: string; type: string; aiInput?:boolean;sourceType?:string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; readOnly?: boolean; aliasOf?: string; formula?: string; formulaExpr?:Api.Expr; when?: string; ref?: string; stereotype?:string; stereotypes?:string[]; inverse?: string; read?: string[]; write?: string[] };
 export type State = { name: string; title: string; tone?: string; description?: string };
-export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;minLength?:number;constraints?:Api.InputConstraints;range?:Api.DateRange;group?:string };
+export type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean;ref?:string;stereotype?:string;stereotypes?:string[];minLength?:number;constraints?:Api.InputConstraints;range?:Api.DateRange;group?:string };
 /** Preview the same complete input contract in both object and action workbenches. */
 export function actionInputFields(inputs: Input_[]): Api.Field[] {
   return inputs.map(input => ({
     name: input.name,
     type: input.type === "integer" ? "integer" : input.type === "decimal" ? "number" : input.type === "date" || input.type === "datetime" ? input.type : input.type === "boolean" ? "boolean" : "string",
-    ref: input.ref, constraints: {...input.constraints, minLength: input.minLength ?? input.constraints?.minLength},
+    ref: input.ref, stereotype:input.stereotype, stereotypes:input.stereotypes, constraints: {...input.constraints, minLength: input.minLength ?? input.constraints?.minLength},
     range: input.range, group: input.group, required: input.required, description: input.title,
     choices: input.type === "choice" ? (input.choices ?? "").split(",").map(value => value.trim()).filter(Boolean) : undefined,
   }));
@@ -37,9 +37,9 @@ export type Access = { role: string; read: "all" | "below" | "unit" | "own" | "n
 /** The fields that place a record for row scopes: its owner (empty: creator) and its unit within a structure (ADR-0044). */
 export type ObjectScope = { owner?: string; unit?: string; structure?: string };
 export type ProtocolBinding = { contract?: Api.Protocol; name: string; version: number; actions: Record<string, string>; reads?: string[]; events?: Record<string, string> };
-export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; extensionSource?: { base: Api.AssetBinding }; numbering?: Numbering_; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[] };
+export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; extensionSource?: { base: Api.AssetBinding }; numbering?: Numbering_; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[]; enterpriseUse?:Api.Expr };
 /** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0020 A2, A3). */
-export type Process = { states: State[]; actions: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[] };
+export type Process = { states: State[]; actions: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[]; enterpriseUse?:Api.Expr };
 /** An edit changes only the parts the person touched; null explicitly clears an optional part. */
 export function objectChanges(draft: Process, saved: Process): Record<string, unknown> {
   const changes: Record<string, unknown> = {};

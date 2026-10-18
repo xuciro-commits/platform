@@ -1,5 +1,5 @@
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
-import {queryElements,resolveElements,type Api,type EnterpriseStereotype} from "@platform/kernel";
+import {type Api} from "@platform/kernel";
 // Every declared action has an entry in the generated views (F-33): an action
 // that makes a new record of a type is offered on the type's list; every other
 // action on the type, and a lifecycle transition that takes input (F-27), on
@@ -93,34 +93,9 @@ function ReadPicker({ id, field, app, value, onChange, onUnit }: { id: string; f
 /** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
  * field tagged ref:"enterprise.element" (ADR-0022 D8) — read through the typed query and
  * resolve contracts (ADR-0034), never the whole graph. The model is every member's to read. */
-function ElementPicker({ id, stereotype, stereotypes, value, onChange }: { id: string; stereotype?: string; stereotypes?:string[]; value: string; onChange: (id: string) => void }) {
-  const { client, source } = useHost();
-  const families=[...(stereotype?[stereotype]:[]),...(stereotypes??[])];
-  const query = useQuery({
-    queryKey: [client.connection.token, client.connection.tenant, source.scope, "enterprise", "query", families],
-    queryFn: () => queryElements(path => client.get(path), families.length ? { stereotype: families as EnterpriseStereotype[] } : {}),
-  });
-  const items = query.isError ? [] : query.data?.elements ?? [];
-  // A record keeps naming what it named: an element that has since been closed
-  // (or sits beyond the read page) is resolved by id and stays visible, marked,
-  // instead of the value silently reading as empty.
-  const resolved = useQuery({
-    queryKey: [client.connection.token, client.connection.tenant, source.scope, "enterprise", "resolve", value],
-    enabled: !!value && !items.some((e) => e.id === value),
-    queryFn: () => resolveElements(path => client.get(path), [value]),
-  });
-  const kept = resolved.isError ? undefined : resolved.data?.elements[0];
-  return (
-    <>
-    <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">—</option>
-      {items.map((e) => <option key={e.id} value={e.id}>{e.name}{e.kind ? ` · ${e.kind}` : ""}</option>)}
-      {value&&!items.some(item=>item.id===value)&&!kept&&<option value={value}>{query.isPending||resolved.isPending?`${value} · ${t("Loading…")}`:t("{value} · unavailable",{value})}</option>}
-      {kept && <option value={kept.id}>{kept.closed ? t("{name} · closed {until}", { name: kept.name, until: kept.until ?? "" }) : `${kept.name}${kept.kind ? ` · ${kept.kind}` : ""}`}</option>}
-    </Select>
-    {query.isError&&<p role="alert">{t("The options could not be loaded. Try again.")} <Button size="sm" onClick={()=>void query.refetch()}>{t("Retry")}</Button></p>}
-    </>
-  );
+function ElementPicker({id,stereotype,stereotypes,value,onChange}:{id:string;stereotype?:string;stereotypes?:string[];value:string;onChange:(id:string)=>void}) {
+ const {source}=useHost();
+ return <RecordLookup id={id} source={source} type="enterprise.element" value={value} stereotypes={[...(stereotype?[stereotype]:[]),...(stereotypes??[])]} onChange={id=>onChange(id??"")} />;
 }
 
 /** A list of the records of a type the member may read, for a payload field that names one (ADR-0038). */

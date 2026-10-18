@@ -116,6 +116,8 @@ func TestSDK(t *testing.T) {
 		`viewpoint: EnterpriseViewpoint;`,
 		`until: string;`,
 		`export type EnterpriseWritePayloads = {`,
+		`export type EnterpriseTenantLinkSavePayload = {`,
+		`"enterprise.tenant-link.save": EnterpriseTenantLinkSavePayload;`,
 		`export function enterpriseWrite<K extends EnterpriseWrite>(`,
 		`export async function queryElements(get: EnterpriseGet, filters: EnterpriseQueryFilters = {}): Promise<EnterpriseQueryResult> {`,
 		`export async function resolveElements(get: EnterpriseGet, ids: readonly string[]): Promise<EnterpriseQueryResult> {`,

@@ -583,7 +583,7 @@ func Entities(p *Plant) []platform.Entity {
 		p.finishOrder(c, r, string(sfcOf(record).Order), now)
 	}
 	return []platform.Entity{
-		{Type: OrderType, Title: "Shop order", Model: Order{}, Synonyms: "work order,production order",
+		{Type: OrderType, Title: "Shop order", EnterpriseUse: &platform.Expr{Op: "!=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("choice", "status"), platform.ExprLiteralValue("choice", "completed")}}, Model: Order{}, Synonyms: "work order,production order",
 			Derived: []platform.Derivation{{From: "adviceSources", Fields: []string{"advice", "adviceCategory", "adviceReview", "adviceSources"}}}, Withheld: "adviceWithheld",
 			Description: "An order released to the shop floor to make a quantity of a product; it is split into SFCs and confirmed to the ERP when its last SFC ends.",
 			Lifecycle: &platform.Lifecycle{Field: "status", Initial: "released",

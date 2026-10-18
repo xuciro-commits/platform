@@ -2,7 +2,7 @@ import {DateTimeInput} from "@platform/ui";
 import { Checkbox, Disclosure, Input, Select, t } from "@platform/ui";
 import { is, live, type Metamodel, type Model } from "./model";
 
-export type ElementEdit = { name: string; kind: string; shortName: string; properties: Record<string, unknown> };
+export type ElementEdit = { name: string; kind: string; shortName: string; calendar: string; properties: Record<string, unknown> };
 type Property = NonNullable<Metamodel["stereotypes"][string]["properties"]>[number];
 
 /** The tagged values of the actual stereotype, including inherited values. */

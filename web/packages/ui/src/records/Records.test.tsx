@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@t
 import { afterEach, expect, test, vi } from "vitest";
 import { RecordList, RecordPage, RecordLinks, RecordStatus, useRecordView, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
+import { EnterpriseElementLookup } from "./RecordLookup";
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
 import { RecordWorkspace } from "./RecordWorkspace";
 afterEach(cleanup);
@@ -299,4 +300,31 @@ test("RecordList uses only caller-offered board commands and keeps empty or abse
   rerender(<RecordList {...props} moves={[]} />);
   expect(screen.queryByRole("combobox", { name: "Move A with action" })).toBeNull();
   expect(screen.getByRole("button", { name: "A" }).closest("[draggable]")?.getAttribute("draggable")).toBe("false");
+});
+
+
+test("enterprise picker updates names live and retains an inactive existing reference", async () => {
+  let changed: (() => void) | undefined;
+  let name = "Operations", inactive = false;
+  const selected = () => ({id: "ORG", name, stereotype: "ActualOrganization", closed: inactive});
+  const stop = vi.fn();
+  const source: RecordSource = {
+    scope: "enterprise-reader", entity: () => undefined, list: vi.fn(), get: vi.fn(),
+    enterpriseQuery: vi.fn(async () => ({elements: inactive ? [] : [selected()]})),
+    enterpriseResolve: vi.fn(async () => ({elements: [selected()]})),
+    watchEnterprise: listener => { changed = listener; return stop; },
+  };
+  const onChange = vi.fn();
+  const view = render(<EnterpriseElementLookup source={source} value="ORG" stereotypes={["ActualOrganization"]} onChange={onChange} ariaLabel="Organisation" />);
+  await screen.findByRole("option", {name: "Operations"});
+  name = "Customer operations";
+  await act(async () => changed?.());
+  await screen.findByRole("option", {name});
+  inactive = true;
+  await act(async () => changed?.());
+  await screen.findByRole("option", {name: "Customer operations · Inactive"});
+  expect((screen.getByRole("combobox", {name: "Organisation"}) as HTMLSelectElement).value).toBe("ORG");
+  expect(onChange).not.toHaveBeenCalled();
+  view.unmount();
+  expect(stop).toHaveBeenCalledOnce();
 });

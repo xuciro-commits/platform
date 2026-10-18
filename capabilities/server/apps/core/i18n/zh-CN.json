@@ -172,5 +172,6 @@
   "customer": "客户",
   "supplier": "供应商",
   "carrier": "承运商",
-  "manufacturer": "制造商"
+  "manufacturer": "制造商",
+  "Person in the model": "模型中的人员"
 }

@@ -354,6 +354,27 @@ func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data 
 	d.tenant.askHeldEffects(c, kind, entity, planned, now)
 	return len(planned), nil
 }
+func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
+	view := d.enterpriseUsageTenant()
+	return view.checkEnterpriseUsage(c, d.records, id, until, deleting, now)
+}
+func (d *stagedDecision) CheckEnterpriseTenantLink(c platform.Caller, id string, revision uint32, now time.Time) *kernel.Error {
+	return d.enterpriseUsageTenant().checkTenantLink(c, id, revision, now)
+}
+func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
+	return d.routingTenant().checkTenantConnection(c, id, now)
+}
+
+func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
+	original := d.routingTenant()
+	view := &Tenant{ID: original.ID, apps: slices.Clone(original.apps), records: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
+	view.settings.restore(original.settings.clone())
+	for i, app := range view.apps {
+		view.apps[i] = d.stateApp(app)
+	}
+	return view
+}
+
 func (d *stagedDecision) Units(c platform.Caller, structure string, now time.Time) []string {
 	if d.tenant.directory == nil {
 		return nil

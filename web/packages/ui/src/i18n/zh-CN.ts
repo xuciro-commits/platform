@@ -1,5 +1,7 @@
 // Simplified Chinese for the UI kit (ADR-0005), keyed by the English source text.
 export default {
+  "Enterprise elements could not be loaded.": "无法加载企业模型节点。",
+  "Inactive": "已停用",
   "Workspace menu": "工作区菜单",
   "plug": "协议连接",
   "Observation source": "观测源",

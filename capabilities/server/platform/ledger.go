@@ -267,9 +267,18 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Cat
 			if len(issues) > 0 {
 				return nil, c.RefuseFields(issues)
 			}
+			var previous map[string]any
+			if declared.recordEdit && slices.ContainsFunc(declared.Payload, func(f Field) bool { return f.Ref == "enterprise.element" }) {
+				if raw, err := c.ReadRecord(declared.Target, s.GetTarget().GetId(), now); err == nil {
+					_ = json.Unmarshal(raw, &previous)
+				}
+			}
 			for _, f := range declared.Payload {
 				v, ok := payload[f.Name].(string)
 				if !ok || v == "" {
+					continue
+				}
+				if f.Ref == "enterprise.element" && previous[f.Name] == v {
 					continue
 				}
 				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.rt != nil && !c.rt.Readable(c, f.Ref+"/"+v) {

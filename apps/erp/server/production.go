@@ -54,7 +54,7 @@ type Production struct {
 
 func producing() []platform.Entity {
 	planning := []string{Planner, Controller}
-	return []platform.Entity{{Type: ProductionType, Title: "Production order", Model: Production{}, Synonyms: "manufacturing order, MO, planned order",
+	return []platform.Entity{{Type: ProductionType, Title: "Production order", EnterpriseUse: &platform.Expr{Op: "or", Kind: "boolean", Args: []platform.Expr{{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("choice", "state"), platform.ExprLiteralValue("choice", "draft")}}, {Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("choice", "state"), platform.ExprLiteralValue("choice", "released")}}}}, Model: Production{}, Synonyms: "manufacturing order, MO, planned order",
 		Description: "An order to make a finished product: released to the plant, then confirmed with what it made and scrapped.",
 		Standard:    platform.Standard{Create: true, Edit: true, Roles: planning},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",

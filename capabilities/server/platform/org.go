@@ -3,6 +3,8 @@ package platform
 import (
 	"slices"
 	"time"
+
+	"platformkernel/kernel"
 )
 
 // The organisation's vocabulary (ADR-0022): units of any kind, in any number of
@@ -12,15 +14,23 @@ import (
 // Date is a calendar day "YYYY-MM-DD"; "" means unbounded.
 type Date = string
 
+// Period is an active interval; Until is exclusive. Missing periods retain the
+// original From/Until interval in older organisation projections.
+type Period struct {
+	From  Date `json:"from,omitempty"`
+	Until Date `json:"until,omitempty"`
+}
+
 type Unit struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"` // open vocabulary: group, subsidiary, factory, line, committee, partner …
-	Legal    bool   `json:"legal,omitempty"`
-	External bool   `json:"external,omitempty"`
-	From     Date   `json:"from,omitempty"`
-	Until    Date   `json:"until,omitempty"`
-	Closed   string `json:"closed,omitempty"` // why it ended: dissolved, merged into <unit> …
+	Periods  []Period `json:"periods,omitempty"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Kind     string   `json:"kind"` // open vocabulary: group, subsidiary, factory, line, committee, partner …
+	Legal    bool     `json:"legal,omitempty"`
+	External bool     `json:"external,omitempty"`
+	From     Date     `json:"from,omitempty"`
+	Until    Date     `json:"until,omitempty"`
+	Closed   string   `json:"closed,omitempty"` // why it ended: dissolved, merged into <unit> …
 	// Calendar is the unit's working calendar (ADR-0038); empty: the one
 	// found above it in any structure, else the tenant's first.
 	Calendar string `json:"calendar,omitempty"`
@@ -71,22 +81,24 @@ type Structure struct {
 }
 
 type Edge struct {
-	Structure string  `json:"structure"`
-	Unit      string  `json:"unit"`
-	Parent    string  `json:"parent"`
-	Relation  string  `json:"relation,omitempty"` // part of, owned by, reports to, located at …
-	Share     float64 `json:"share,omitempty"`    // ownership share in a legal structure
-	From      Date    `json:"from,omitempty"`
-	Until     Date    `json:"until,omitempty"`
+	Periods   []Period `json:"periods,omitempty"`
+	Structure string   `json:"structure"`
+	Unit      string   `json:"unit"`
+	Parent    string   `json:"parent"`
+	Relation  string   `json:"relation,omitempty"` // part of, owned by, reports to, located at …
+	Share     float64  `json:"share,omitempty"`    // ownership share in a legal structure
+	From      Date     `json:"from,omitempty"`
+	Until     Date     `json:"until,omitempty"`
 }
 
 type Membership struct {
-	Party   string `json:"party"` // "member:<id>" or "unit:<id>"
-	Unit    string `json:"unit"`
-	Role    string `json:"role"` // open vocabulary: employee, volunteer, maintainer, chair, delegate …
-	Primary bool   `json:"primary,omitempty"`
-	From    Date   `json:"from,omitempty"`
-	Until   Date   `json:"until,omitempty"`
+	Periods []Period `json:"periods,omitempty"`
+	Party   string   `json:"party"` // "member:<id>" or "unit:<id>"
+	Unit    string   `json:"unit"`
+	Role    string   `json:"role"` // open vocabulary: employee, volunteer, maintainer, chair, delegate …
+	Primary bool     `json:"primary,omitempty"`
+	From    Date     `json:"from,omitempty"`
+	Until   Date     `json:"until,omitempty"`
 }
 
 // OrgSeed is an organisation's starting shape (an industry package's, or a deployment's).
@@ -124,6 +136,44 @@ type ElementInfo struct {
 type Enterprise struct{ c Caller }
 
 func (c Caller) Enterprise() Enterprise { return Enterprise{c} }
+
+// EnterpriseUsageRuntime checks references through the host's original stores.
+// It supplies no new read or write grant to the calling application.
+type EnterpriseUsageRuntime interface {
+	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *kernel.Error
+	CheckEnterpriseTenantLink(Caller, string, uint32, time.Time) *kernel.Error
+	CheckEnterpriseTenantConnection(Caller, string, time.Time) *kernel.Error
+}
+
+func (e Enterprise) CheckUsage(id, until string, deleting bool, now time.Time) *kernel.Error {
+	if e.c.Replaying {
+		return nil
+	}
+	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
+		return runtime.CheckEnterpriseUsage(e.c, id, until, deleting, now)
+	}
+	return nil
+}
+
+func (e Enterprise) CheckTenantLink(id string, revision uint32, now time.Time) *kernel.Error {
+	if e.c.Replaying {
+		return nil
+	}
+	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
+		return runtime.CheckEnterpriseTenantLink(e.c, id, revision, now)
+	}
+	return nil
+}
+
+func (e Enterprise) CheckTenantConnection(id string, now time.Time) *kernel.Error {
+	if e.c.Replaying {
+		return nil
+	}
+	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
+		return runtime.CheckEnterpriseTenantConnection(e.c, id, now)
+	}
+	return nil
+}
 
 // Units are the organisations the caller belongs to in kind ("" for all),
 // with those below them.

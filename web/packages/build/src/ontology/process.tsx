@@ -10,7 +10,7 @@ import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "..
 // edits that selection, without a second copy in a structure sidebar.
 // It writes the object's own record through its own action; the host checks
 // everything again when the object is published.
-import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost } from "@platform/app";
+import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost, useReadQuery } from "@platform/app";
 import {
   Button, Card, Checkbox, ContentTabs, DataTable, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
@@ -24,6 +24,7 @@ import { RecordSetsEditor } from "./record-sets";
 import { ObjectProtocolsEditor } from "./object-protocols";
 import { BusinessVersionEditor } from "./business-version";
 import { useAuthoringModel } from "./authoring-model";
+import { ExpressionEditor } from "../editor/ExpressionEditor";
 
 /** The objects of this organisation: open one to give it states and actions. */
 const objectSections = [
@@ -92,6 +93,10 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       </div>
       <p className="text-sm text-muted">{t("Properties describe a record; the lifecycle says which states it passes through; actions are the governed steps people take; permissions say who may read and change it. Preview shows the object as people will see it.")}</p>
       <ShapeEditor process={process} parent={parent} entities={entities} source={object.extensionSource} onChange={change} />
+      <fieldset className="grid gap-2"><Checkbox checked={!!process.enterpriseUse} onChange={enabled => change({ ...process, enterpriseUse: enabled ? { op: "", kind: "boolean", lit: { value: true } } : undefined })}>{t("Declare when records currently use enterprise elements")}</Checkbox>
+        <p className="text-xs text-muted">{t("A true result marks the current record as active use. Without a rule, every unarchived record counts. Only this record's fields are available.")}</p>
+        {process.enterpriseUse && <ExpressionEditor value={process.enterpriseUse} onChange={enterpriseUse => change({ ...process, enterpriseUse })} choices={[...process.fields, ...(process.states.length ? [{ name: "state", title: t("State"), type: "choice" }] : [])].filter(field => !field.readOnly).map(field => ({ value: field.name, label: field.title, type: field.type, ref: field.ref }))} />}
+      </fieldset>
       {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
     </div>,
     properties: <div className="grid content-start gap-3 p-4">
@@ -161,6 +166,20 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       id: section.id, title: t(section.title), content: <fieldset disabled={busy || blocked} className="flex h-full min-h-0 min-w-0 flex-col">{main[section.id]}</fieldset>,
     }))} />
   </Workbench>;
+}
+
+/** Enterprise types come from the original metamodel read, not a copied model. */
+export function EnterpriseReferenceTypes({ value, onChange }: { value: { stereotype?: string; stereotypes?: string[] }; onChange: (patch: { stereotype?: string; stereotypes?: string[] }) => void }) {
+  const metadata = useReadQuery<{ profile: { stereotype: string }[] }>("/v1/enterprise-metamodel");
+  const supported = ["ActualOrganization", "ActualPerson", "ActualPost", "ActualLocation"];
+  const available = supported.filter(stereotype => metadata.data?.profile.some(item => item.stereotype === stereotype));
+  const selected = [...new Set([value.stereotype, ...value.stereotypes ?? []].filter((entry): entry is string => !!entry))];
+  const labels: Record<string, string> = { ActualOrganization: "Organisation", ActualPerson: "Person", ActualPost: "Post", ActualLocation: "Location" };
+  return <fieldset className="grid gap-1 text-xs"><legend className="mb-1 font-medium">{t("Enterprise element types")}</legend>
+    <p className="text-muted">{t("Choose the enterprise families this reference accepts. No selection accepts every readable enterprise element.")}</p>
+    {[...new Set([...available, ...selected])].map(stereotype => <Checkbox key={stereotype} checked={selected.includes(stereotype)} onChange={checked => { const next = checked ? [...selected, stereotype] : selected.filter(entry => entry !== stereotype); onChange(next.length === 1 ? { stereotype: next[0], stereotypes: undefined } : { stereotype: undefined, stereotypes: next.length ? next : undefined }); }}>{t(labels[stereotype] ?? stereotype)}</Checkbox>)}
+    {metadata.isError && <p role="alert" className="text-danger">{t("Enterprise element types could not be loaded.")}</p>}
+  </fieldset>;
 }
 
 /** The lifecycle is the semantic source. Canvas edges only edit its From/To declarations. */
@@ -247,10 +266,11 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     {field.property&&<><p className="break-all text-xs text-muted">{field.property.ref.name}@{field.property.sourceVersion}</p><p className="text-xs text-muted">{t("The shared source controls type and title. Local names, required values and access stay with this object.")}</p>{!bound&&<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
     <Label text={t("What people call it")}><Input disabled={!!field.property} value={field.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
     <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
-    <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value, ref:undefined, inverse:undefined, stereotype:undefined, stereotypes:undefined })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
-    {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} drafts={objects} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
-    {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
+    {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect enterprise label={t("Reference object")} value={field.ref} drafts={objects} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined, stereotype:undefined, stereotypes:undefined })} /></Label>}
+    {field.type === "reference" && field.ref === "enterprise.element" && <EnterpriseReferenceTypes value={field} onChange={onChange} />}
+    {field.type === "reference" && field.ref !== "enterprise.element" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
     {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? (field.formulaExpr?formulaText(field.formulaExpr):"")} onChange={(e) => onChange({ formula: e.target.value || undefined,formulaExpr:undefined })} /></Label>}
     {(field.formula||field.formulaExpr) && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>

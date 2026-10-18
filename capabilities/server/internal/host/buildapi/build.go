@@ -36,6 +36,7 @@ type Object struct {
 	CreateTransaction *platform.BusinessTxn        `json:"createTransaction,omitempty" type:"json" field:"aside" title:"Creation transaction"`
 	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
 	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
+	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Current enterprise use"`
 	// States and Actions make its records a small process (ADR-0044): the
 	// object editor owns them, so generated forms do not ask for them.
 	States  []State  `json:"states,omitempty" field:"aside" title:"States"`
@@ -65,14 +66,16 @@ type Object struct {
 
 // Field is one field of a defined object, as a person describes it.
 type Field struct {
-	AIInput    *bool                  `json:"aiInput,omitempty" title:"Allow AI context"`
-	SourceType string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
-	Property   *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
-	Name       string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
-	Title      string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
-	Type       string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
-	Choices    string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
-	Ref        string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	AIInput     *bool                  `json:"aiInput,omitempty" title:"Allow AI context"`
+	SourceType  string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
+	Property    *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
+	Name        string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
+	Title       string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
+	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
+	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
+	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	Stereotype  string                 `json:"stereotype,omitempty" title:"Enterprise element type"`
+	Stereotypes []string               `json:"stereotypes,omitempty" title:"Enterprise element types"`
 	// Inverse names the relation seen from the referenced record (ADR-0047 21b).
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`
