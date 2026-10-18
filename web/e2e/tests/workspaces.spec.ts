@@ -2,6 +2,64 @@ import { readFile } from "node:fs/promises";
 import { expect, fresh, pageUIProfile, shots, test } from "./kit";
 import { switchWorkspace } from "./host";
 
+test("Builder keeps its complete menus, original object and action editors, and application workspaces", async ({ page, builder }, testInfo) => {
+  test.setTimeout(60_000);
+  const suffix = fresh("navigation");
+  const objectTitle = `Navigation item ${suffix}`, actionTitle = `Complete navigation item ${suffix}`;
+  const object = await builder.object({
+    title: objectTitle, fields: [{ name: "name", title: "Item name", type: "text" }],
+    states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
+    actions: [{ name: "complete", title: actionTitle, from: ["open"], to: "done" }],
+  });
+  const application = await builder.application({ title: `Navigation application ${suffix}`, resources: [{ app: "build", kind: "object", name: object.type }] });
+  await builder.open(page, "/projects");
+  const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
+  const showNavigation = async () => { if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click(); };
+  await showNavigation();
+  const navigation = page.getByRole("navigation", { name: "Main", exact: true });
+  for (const group of ["Applications", "Ontology", "Integration", "Interface", "Logic", "Functions", "Releases", "Explore"]) {
+    await expect(navigation.getByText(group, { exact: true })).toBeVisible();
+  }
+  for (const entry of ["All applications", "Object types", "Action types", "Relationships", "Shared properties", "Queries", "Connections", "Datasets", "Pipelines", "Modules", "Templates", "Automations", "Flows", "Runs", "AI functions", "Code functions", "Decision tables", "Agents", "Alert rules", "Changes", "Release history", "Object Explorer", "Lineage", "Asset Library"]) {
+    await expect(navigation.getByRole("button", { name: entry, exact: true })).toBeVisible();
+  }
+  await shots(page, navigation, "builder-menus", testInfo, showNavigation);
+  await showNavigation();
+
+  await navigation.getByRole("button", { name: "Object types", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search model resources", exact: true }).fill(objectTitle);
+  await page.getByRole("row").filter({ hasText: object.type }).click();
+  await page.getByRole("button", { name: "Edit object", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${object.id}(?:&|$)`));
+  await page.getByRole("tablist", { name: "Object sections", exact: true }).getByRole("tab", { name: "Properties", exact: true }).click();
+  await page.getByRole("row").filter({ hasText: "Item name" }).click();
+  const propertyTitle = page.getByRole("region", { name: "Object inspector", exact: true }).getByRole("textbox", { name: "What people call it", exact: true });
+  await expect(propertyTitle).toBeEnabled();
+  await propertyTitle.fill("Menu-edited item name");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.object", object.id)).fields.find((field: any) => field.name === "name")?.title).toBe("Menu-edited item name");
+
+  await navigation.getByRole("button", { name: "Action types", exact: true }).click();
+  await page.getByRole("treeitem", { name: new RegExp(`^${actionTitle}\\b`) }).click();
+  await expect(page).toHaveURL(new RegExp(`[?&]id=${object.id}(?:&|$)`));
+  await expect(page).toHaveURL(/[?&]action=complete(?:&|$)/);
+  await expect(page.getByRole("region", { name: "Action structure", exact: true }).getByRole("button", { name: "Overview", exact: true })).toBeVisible();
+  const actionName = page.getByRole("textbox", { name: "What people call it", exact: true });
+  await expect(actionName).toBeEnabled();
+  await actionName.fill(`${actionTitle} edited`);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.object", object.id)).actions.find((action: any) => action.name === "complete")?.title).toBe(`${actionTitle} edited`);
+  expect((await builder.record("build.object", object.id)).fields.find((field: any) => field.name === "name")?.title).toBe("Menu-edited item name");
+
+  await builder.open(page, `/project?id=${application.id}`);
+  const workspaces = navigation.getByRole("navigation", { name: "Application workspaces", exact: true });
+  for (const area of ["Model", "Behavior", "Interface", "Assemble", "Verify"]) {
+    await expect(workspaces.getByRole("button", { name: area, exact: true })).toBeVisible();
+  }
+  await workspaces.getByRole("button", { name: "Behavior", exact: true }).click();
+  await expect(workspaces.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
+});
+
 test("task workspaces preserve native PMS and hand off a controlled receiving application", async ({ browser, page, builder, operator, editor }, testInfo) => {
   test.setTimeout(120_000);
   const suffix = fresh("workspace").replace(/[^a-z0-9]/gi, "").toLowerCase();

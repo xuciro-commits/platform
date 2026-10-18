@@ -1,5 +1,5 @@
 import { ApplicationSampleAsset } from "./releases/samples";
-// ADR-0047: one application context, five workspaces, original editors.
+// ADR-0047: direct builder menus and application context share the original editors.
 import "./i18n";
 import { defineApp, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
@@ -35,7 +35,7 @@ import type { ReactNode } from "react";
 import { ApplicationScope } from "./projects/application-scope";
 import { StudioNavigation } from "./projects/studio-navigation";
 import { studioApplicationID } from "./projects/studio-model";
-import { Activity, BookOpen, Database, Fingerprint, FolderKanban, GitMerge, Hammer, Layers, Plug, Send } from "lucide-react";
+import { Activity, Bell, BookOpen, Bot, Boxes, Braces, Clock, Compass, Database, Fingerprint, FolderKanban, GitBranch, GitMerge, Hammer, History, Layers, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Send, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.role("build") === "builder";
 // An integrator connects, maps and runs integrations without designing objects or pages (ADR-0025).
@@ -98,7 +98,7 @@ const views = editorViews.map(view => ({ ...view, render: (params: Record<string
 export default defineApp({
   id: "build", surface: "studio", category: "build", title: t("Builder"),
   referenceContext,
-  description: t("Build, verify and deliver one business application."), icon: <Hammer />,
+  description: t("Design applications: their object types, modules, automations and functions, and release them together."), icon: <Hammer />,
   home: { view: "projects" }, views,
   opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.agent": "agent", "build.alertrule": "alert", "build.observation": "observation-source" },
   navigation: route => <StudioNavigation route={route} />,
@@ -109,16 +109,39 @@ export default defineApp({
     ] }];
     return [
       { label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] },
-      { label: t("All readable rules"), items: [
-        { label: t("Decision tables"), route: { view: "decision-table" } },
-        { label: t("Automations"), route: { view: "automation" } },
-        { label: t("Alert rules"), route: { view: "alert" } },
+      { label: t("Ontology"), items: [
+        { label: t("Object types"), icon: <Boxes />, route: { view: "object-type" } },
+        { label: t("Action types"), icon: <Zap />, route: { view: "action-type" } },
+        { label: t("Relationships"), icon: <Link2 />, route: { view: "link-type" } },
+        { label: t("Shared properties"), icon: <Tags />, route: { view: "property-type" } },
+        { label: t("Queries"), icon: <Search />, route: { view: "query" } },
       ] },
-      { label: t("Tenant delivery"), items: [
-        { label: t("Integration health"), route: { view: "integration-health" } },
-        { label: t("Release history"), route: { view: "release-history" } },
+      integration(),
+      { label: t("Interface"), items: [
+        { label: t("Modules"), icon: <LayoutTemplate />, route: { view: "module" } },
+        { label: t("Templates"), icon: <LayoutList />, route: { view: "studio-templates" } },
       ] },
-      { label: t("Explore"), items: [{ label: t("Asset Library"), icon: <BookOpen />, route: { view: "catalog" } }] },
+      { label: t("Logic"), items: [
+        { label: t("Automations"), icon: <Zap />, route: { view: "automation" } },
+        { label: t("Flows"), icon: <Workflow />, route: { view: "flow" } },
+        { label: t("Runs"), icon: <Clock />, route: { view: "runs" } },
+      ] },
+      { label: t("Functions"), items: [
+        { label: t("AI functions"), icon: <Sparkles />, route: { view: "function" } },
+        { label: t("Code functions"), icon: <Braces />, route: { view: "code" } },
+        { label: t("Decision tables"), icon: <Table2 />, route: { view: "decision-table" } },
+        { label: t("Agents"), icon: <Bot />, route: { view: "agent" } },
+        { label: t("Alert rules"), icon: <Bell />, route: { view: "alert" } },
+      ] },
+      { label: t("Releases"), items: [
+        { label: t("Changes"), icon: <PackageCheck />, route: { view: "changes" } },
+        { label: t("Release history"), icon: <History />, route: { view: "release-history" } },
+      ] },
+      { label: t("Explore"), items: [
+        { label: t("Object Explorer"), icon: <Compass />, route: { view: "explorer" } },
+        { label: t("Lineage"), icon: <GitBranch />, route: { view: "lineage" } },
+        { label: t("Asset Library"), icon: <BookOpen />, route: { view: "catalog" } },
+      ] },
     ];
   },
 });

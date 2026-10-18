@@ -272,7 +272,7 @@ test("decision tables and alerts remain application members through editing and 
   const applicationTableTab = page.getByRole("tab", { name: /^Decision tables/ }).and(page.locator(`[data-tab-panel-id="decision-table?application=${application.id}&id=${tableID}"]`));
   await expect(applicationTableTab).toHaveAttribute("aria-selected", "true");
   await page.getByRole("textbox", { name: "Description", exact: true }).fill("Unsaved application decision note");
-  await expect(navigation.getByText("All readable rules", { exact: true })).toBeVisible();
+  await expect(navigation.getByText("Functions", { exact: true })).toBeVisible();
   await expect(navigation.getByText("Shared rules", { exact: true })).toHaveCount(0);
   await navigation.getByRole("button", { name: "Decision tables", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Decision tables", exact: true })).toBeVisible();
@@ -294,7 +294,7 @@ test("decision tables and alerts remain application members through editing and 
   await page.setViewportSize({ width: 390, height: 844 });
   await toggle.click();
   await expect(assets.getByText("Current application", { exact: true })).toBeVisible();
-  await expect(navigation.getByText("Tenant delivery", { exact: true })).toBeVisible();
+  await expect(navigation.getByText("Releases", { exact: true })).toBeVisible();
   await shots(page, navigation, "application-navigation", testInfo);
   await page.setViewportSize({ width: 1280, height: 720 });
 
