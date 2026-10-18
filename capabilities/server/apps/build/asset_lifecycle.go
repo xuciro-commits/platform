@@ -966,3 +966,61 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 		b.jointEntities, b.jointMode, b.jointAssets, b.releaseDraftIDs, b.jointDeclarations = saved, savedMode, savedAssets, savedIDs, savedDeclarations
 	}, nil
 }
+
+// DefinitionMetadataKind identifies ordinary accepted metadata whose discovery
+// is governed by its original metadata record. Executable Build definitions
+// keep their installed descriptors; agent and observation projection remains
+// narrower than this ordinary record visibility check.
+func (*Build) DefinitionMetadataKind(kind platform.AssetKind) bool {
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert}, kind)
+}
+
+func (*Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Definition, error) {
+	definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides)}
+	var err error
+	switch asset.Ref.Kind {
+	case platform.AssetAlert:
+		var alert platform.AlertRule
+		if json.Unmarshal(asset.Body, &alert) != nil || alert.Check() != nil {
+			return definition, fmt.Errorf("invalid accepted alert rule")
+		}
+		definition.Alert = &alert
+	case platform.AssetObservation:
+		var observation platform.ObservationDefinition
+		if err = json.Unmarshal(asset.Body, &observation); err == nil {
+			err = observation.Check()
+		}
+		definition.Observation = &observation
+	case platform.AssetSampleSet:
+		var samples platform.SampleSet
+		if err = json.Unmarshal(asset.Body, &samples); err == nil {
+			err = samples.Check()
+		}
+		definition.SampleSet = &samples
+	case platform.AssetEvaluation:
+		var descriptor platform.EvaluationSetDescriptor
+		descriptor, err = platform.ReadEvaluationSet(asset.Body)
+		definition.Evaluation = &descriptor
+	case platform.AssetTestPlan:
+		var descriptor platform.TestPlanDescriptor
+		descriptor, err = platform.ReadTestPlan(asset.Body)
+		definition.TestPlan = &descriptor
+	case platform.AssetAgent:
+		var descriptor platform.AgentReleaseDescriptor
+		if json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Check() != nil {
+			return definition, fmt.Errorf("agent descriptor is unavailable")
+		}
+		definition.Agent = &descriptor
+	}
+	if err != nil {
+		return definition, err
+	}
+	if definition.Provides == nil {
+		descriptor, err := platform.DescribeAsset(asset)
+		if err != nil {
+			return definition, err
+		}
+		definition.Provides = descriptor.Provides
+	}
+	return definition, nil
+}

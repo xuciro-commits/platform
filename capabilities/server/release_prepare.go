@@ -341,7 +341,7 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 // Integration identity discovery contains no executable body or environment
 // parameters. Permission filtering remains the member-facing projection.
 func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
-	definition, indexed, err := ownedAssetDefinition(plan)
+	definition, indexed, err := t.ownedAssetDefinition(plan)
 	if err != nil || !indexed {
 		return err
 	}

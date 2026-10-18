@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:99b8ed41c1d8ddc5",
+  "revision": "sha256:56340d1c555cc149",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -9245,7 +9245,8 @@
           "type": "KanbanMove[]",
           "optional": true,
           "isCallback": false,
-          "isSlot": false
+          "isSlot": false,
+          "defaultValue": "[]"
         }
       ],
       "slots": [
@@ -12767,7 +12768,7 @@
       "web/packages/app/src/exploration/observation-reader.ts",
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
-      "web/packages/build/src/workshop/editor.tsx",
+      "web/packages/build/src/workshop/page-editor/diagnostics.ts",
       "web/packages/platform/src/enterprise/properties.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],
@@ -13401,7 +13402,7 @@
     ],
     "ui/choice-input": [
       "web/packages/app/src/widgets/ChoiceInput.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
+      "web/packages/build/src/workshop/page-editor/diagnostics.ts"
     ],
     "ui/derived-mean": [
       "web/packages/app/src/widgets/CollectionAnalysis.tsx"
@@ -13452,7 +13453,7 @@
     ],
     "ui/gauge": [
       "web/packages/app/src/widgets/Gauge.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
+      "web/packages/build/src/workshop/page-editor/diagnostics.ts"
     ],
     "ui/histogram": [
       "web/packages/app/src/widgets/Histogram.tsx"
@@ -13492,11 +13493,11 @@
     ],
     "ui/progress": [
       "web/packages/app/src/widgets/Progress.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
+      "web/packages/build/src/workshop/page-editor/diagnostics.ts"
     ],
     "ui/range-input": [
       "web/packages/app/src/widgets/Range.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
+      "web/packages/build/src/workshop/page-editor/diagnostics.ts"
     ],
     "ui/record-history": [
       "web/packages/app/src/widgets/RecordActivity.tsx"
@@ -13548,7 +13549,7 @@
     ],
     "ui/record-gantt": [
       "web/packages/app/src/widgets/RecordGantt.tsx",
-      "web/packages/build/src/workshop/editor.tsx"
+      "web/packages/build/src/workshop/page-editor/diagnostics.ts"
     ],
     "ui/record-map": [
       "web/packages/app/src/widgets/RecordMap.tsx",

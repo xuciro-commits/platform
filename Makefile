@@ -130,6 +130,7 @@ test-go: ## 仅运行宿主测试；可用 PKG=./platform 或 RUN=TestName 缩�
 ifneq ($(if $(strip $(SPEC)),$(filter heating-application protocol-packages,$(SPEC)),all),)
 e2e: packages
 e2e: export PLATFORM_PACKAGES_DIR ?= $(GATEWAY_PACKAGES)
+e2e: export PROTOCOL_VERSION := $(PROTOCOL_VERSION)
 endif
 e2e: ## 在开发宿主上运行 docs/Testing.md 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build

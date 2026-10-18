@@ -779,7 +779,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			definitions[build.AlertType] = append(definitions[build.AlertType], recordState{Value: platform.Raw(alert)})
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || ownedMetadataKind(asset.Ref.Kind) {
+		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || b.DefinitionMetadataKind(asset.Ref.Kind) {
 			continue // compiled after its source objects below
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
@@ -882,27 +882,10 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	// Passive owner declarations stay in the application closure. Their live
 	// connections, credentials, datasets and migration runs are never imported.
 	for _, asset := range candidate.Assets {
-		if ownedMetadataKind(asset.Ref.Kind) {
-			definition := platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: asset.Requires, Provides: asset.Provides}
-			switch asset.Ref.Kind {
-			case platform.AssetObservation:
-				var observation platform.ObservationDefinition
-				if json.Unmarshal(asset.Body, &observation) != nil || observation.Check() != nil {
-					return nil, fmt.Errorf("invalid observation declaration")
-				}
-				definition.Observation = &observation
-			case platform.AssetSampleSet:
-				var sample platform.SampleSet
-				if json.Unmarshal(asset.Body, &sample) != nil || sample.Check() != nil {
-					return nil, fmt.Errorf("Invalid sample asset")
-				}
-				definition.SampleSet = &sample
-			case platform.AssetEvaluation:
-				evaluation, err := platform.ReadEvaluationSet(asset.Body)
-				if err != nil {
-					return nil, err
-				}
-				definition.Evaluation = &evaluation
+		if b.DefinitionMetadataKind(asset.Ref.Kind) {
+			definition, err := b.DefinitionDescriptor(asset)
+			if err != nil {
+				return nil, err
 			}
 			sandbox.definitions = append(sandbox.definitions, definition)
 		}

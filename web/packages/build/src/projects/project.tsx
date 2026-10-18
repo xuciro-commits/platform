@@ -69,9 +69,13 @@ function NewResourceMenu({ application, onCreated, children, disabled, area }: {
   const { open } = useWorkspace();
   const creators = Object.fromEntries(resourceKinds.filter(kind => !editorCreatedKinds.has(kind.kind)).map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (role("build") !== "builder") return null;
-  const sections = area ? studioAreas.filter(section => section.id === area) : studioAreas;
-  const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && catalog.some(action => action.target === kind.type && action.new))
-    .map((kind, at) => ({ id: `${section.id}:${kind.kind}`, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => editorCreatedKinds.has(kind.kind) ? open(resourceRoute(kind, "new", application)) : creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) })));
+  const sections = [...studioAreas.filter(section => section.id === area), ...studioAreas.filter(section => section.id !== area)];
+  const offered = new Set<string>();
+  const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && !offered.has(kind.kind) && catalog.some(action => action.target === kind.type && action.new))
+    .map((kind, at) => {
+      offered.add(kind.kind);
+      return { id: kind.kind, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => editorCreatedKinds.has(kind.kind) ? open(resourceRoute(kind, "new", application)) : creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) };
+    }));
   return <>
     <ActionMenu label={t("New resource")} variant="primary" icon={<Plus />} commands={commands}>{children ?? t("New")}</ActionMenu>
     {Object.values(creators).map((creator, index) => <span key={index}>{creator.dialog}</span>)}

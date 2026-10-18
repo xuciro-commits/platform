@@ -74,10 +74,13 @@ test('legacy sections save as model bindings and a declared multi-hop field rend
   await model.getByRole('button',{name:'Add model field',exact:true}).click();
   const field=model.getByLabel('Declared model path',{exact:true}).last();
   await field.getByRole('combobox',{name:'Model field',exact:true}).selectOption('supplier');
+  await expect(field.getByRole('combobox',{name:'Model field',exact:true})).toHaveValue('supplier');
   await field.getByRole('button',{name:'Follow declared reference',exact:true}).click();
   await field.getByRole('combobox',{name:'Reference hop 1',exact:true}).selectOption('country');
+  await expect(field.getByRole('combobox',{name:'Reference hop 1',exact:true})).toHaveValue('country');
   await field.getByRole('button',{name:'Follow declared reference',exact:true}).click();
   await field.getByRole('combobox',{name:'Reference hop 2',exact:true}).selectOption('name');
+  await expect(field.getByRole('combobox',{name:'Reference hop 2',exact:true})).toHaveValue('name');
   await editor.save();
   await expect.poll(async()=> (await builder.record('build.page',draft.id)).sections[0].model.fields?.[0]?.path).toEqual(['supplier','country','name']);
   await editor.release();

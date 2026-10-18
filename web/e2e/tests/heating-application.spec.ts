@@ -1,15 +1,16 @@
 import { readFileSync } from "node:fs";
 import type * as Api from "../../packages/kernel/src/gen/host";
-import { expect, shots, test } from "./kit";
+import { expect, protocolVersion, shots, test } from "./kit";
 
 test("a builder creates heating drafts from an installed package and an operator handles a real alarm", async ({ page, builder, operator }, info) => {
   test.setTimeout(120_000);
   page.setDefaultTimeout(20_000);
   const gateway = "http://127.0.0.1:18510";
   const services = "http://127.0.0.1:18511";
+  const driverVersion = protocolVersion();
   const configuration = JSON.parse(readFileSync(new URL("../../../deploy/examples/heating/harbin.json", import.meta.url), "utf8")) as Api.DriverConfiguration;
   await builder.open(page, "/apps?surface=tenant");
-  for (const [id, version] of [["protocol.simulator", "0.1.3"], ["industry.heating", "0.1.0"]]) {
+  for (const [id, version] of [["protocol.simulator", driverVersion], ["industry.heating", "0.1.0"]]) {
     const card = page.getByRole("region", { name: `Package ${id}`, exact: true });
     await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version!);
     await card.getByRole("button", { name: "Install", exact: true }).click();
@@ -27,7 +28,7 @@ test("a builder creates heating drafts from an installed package and an operator
   const propertyFeed = application.drafts.find(draft => draft.ref.kind === "connection" && draft.ref.name === "propertyfeed")!;
   const sample = application.drafts.find(draft => draft.ref.kind === "sample-set" && draft.ref.name === "heatingdemo")!;
   const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");
-  const simulator = kinds.items.find(kind => kind.package === "protocol.simulator" && kind.profile?.id === "simulator" && kind.version === "0.1.3")!;
+  const simulator = kinds.items.find(kind => kind.package === "protocol.simulator" && kind.profile?.id === "simulator" && kind.version === driverVersion)!;
   expect(simulator.digest).toMatch(/^(sha256:)?[0-9a-f]{64}$/);
 
   await builder.open(page, `/connection?id=${connection.id}`);

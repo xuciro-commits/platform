@@ -934,7 +934,7 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	}
 	for _, ref := range a.Resources {
 		known := slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-		if !known && (ref.Kind == platform.AssetAgent || ownedMetadataKind(ref.Kind)) {
+		if !known && (ref.Kind == platform.AssetAgent || t.ownedMetadataKind(ref)) {
 			registered, err := t.ownedAssetDefinitions(t.definitions)
 			if err != nil {
 				return err

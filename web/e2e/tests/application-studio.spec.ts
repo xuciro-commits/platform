@@ -86,6 +86,15 @@ test("one application retains drafts across five workspaces and delivers grouped
   await expect.poll(async () => (await builder.record("build.object", objectID)).access?.[0]?.read).toBe("all");
   await shots(page, page.locator("body"), "application-roles", testInfo);
 
+  // Creating another kind does not require learning its workspace first.
+  await navigation.getByRole("button", { name: "Model", exact: true }).click();
+  await page.getByTitle("New resource", { exact: true }).click();
+  const newMenu = page.getByRole("menu", { name: "New", exact: true });
+  await expect(newMenu.getByRole("menuitem", { name: "Page", exact: true })).toBeVisible();
+  await expect(newMenu.getByRole("menuitem", { name: "Object type", exact: true })).toHaveCount(1);
+  await shots(page, page.locator("body"), "application-new-resource", testInfo);
+  await page.keyboard.press("Escape");
+
   const pageDraft = await builder.page({ title: "Service desk", object: `build.${objectName}`, sections: [{ id: "initial", widget: "text", configVersion: 1, text: "Service desk" }] });
   // Add existing uses the same membership decision as creating a page here.
   await navigation.getByRole("button", { name: "Interface", exact: true }).click();
@@ -260,7 +269,7 @@ test("decision tables and alerts remain application members through editing and 
   expect(new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("application")).toBe(application.id);
 
   // The tenant-wide inventory opens the same record without claiming it is shared.
-  const applicationTableTab = page.getByRole("tab", { name: /^Decision tables/ }).first();
+  const applicationTableTab = page.getByRole("tab", { name: /^Decision tables/ }).and(page.locator(`[data-tab-panel-id="decision-table?application=${application.id}&id=${tableID}"]`));
   await expect(applicationTableTab).toHaveAttribute("aria-selected", "true");
   await page.getByRole("textbox", { name: "Description", exact: true }).fill("Unsaved application decision note");
   await expect(navigation.getByText("All readable rules", { exact: true })).toBeVisible();

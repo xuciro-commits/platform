@@ -21,6 +21,20 @@ test('insert both before and after siblings uses original stable identities and 
  assert.deepEqual(canvasMove(next,'c',1,sections).nodes.root.children,['a','c','b']);
  assert.deepEqual(canvasDrop(d,'a',{kind:'insert',parent:'root',index:3},sections).nodes.root.children,['b','c','a']);
 });
+test('acknowledging autosave retains a model selection received after that submission',()=>{
+ const submitted={model:{type:'orders',fields:[{name:'id'}]}};
+ const initial={draft:submitted,saved:JSON.stringify(submitted),past:[],future:[]};
+ const selected={model:{type:'orders',fields:[{name:'supplier'}]}};
+ const edited=reduceDraft(initial,{type:'edit',edit:selected});
+ const normalized={...submitted,description:''};
+ const acknowledged=reduceDraft(edited,{type:'saved',draft:submitted,normalized});
+ assert.deepEqual(acknowledged.draft,selected);
+ assert.equal(acknowledged.saved,JSON.stringify(normalized));
+ assert.notEqual(JSON.stringify(acknowledged.draft),acknowledged.saved);
+ assert.deepEqual(reduceDraft(acknowledged,{type:'undo'}).draft,submitted);
+ const confirmed=reduceDraft(acknowledged,{type:'saved',draft:selected});
+ assert.equal(JSON.stringify(confirmed.draft),confirmed.saved);
+});
 test('perpendicular edge placement creates an ordered native group; moving a group into its own descendant is refused',()=>{
  const d=fixture(),n=canvasDrop(d,'c',{kind:'wrap',target:'a',side:'left'},sections),group=n.nodes.root.children[0];
  assert.equal(n.nodes[group].kind,'columns');assert.deepEqual(n.nodes[group].children,['c','a']);assert.equal(n.nodes.a.section,'a');

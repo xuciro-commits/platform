@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -412,15 +413,16 @@ func (t *Tenant) definitionsFor(m platform.Member) ([]platform.Definition, error
 	return t.definitionsFrom(m, registered), nil
 }
 
-func ownedMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert}, kind)
+func (t *Tenant) ownedMetadataKind(ref platform.AssetRef) bool {
+	owner, ok := t.app(ref.App).(host.AssetDefinitionReader)
+	return ok && owner.DefinitionMetadataKind(ref.Kind)
 }
 
 // ownedAssetDefinition indexes only an owner's accepted descriptor identity.
 // The original image remains the authority; no descriptor body is copied into
 // discovery, and its metadata record is retained solely for read filtering.
-func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition, bool, error) {
-	if !ownedMetadataKind(plan.Ref.Kind) {
+func (t *Tenant) ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition, bool, error) {
+	if !t.ownedMetadataKind(plan.Ref) {
 		return platform.Definition{}, false, nil
 	}
 	var record struct {
@@ -433,55 +435,12 @@ func ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition,
 	if err := json.Unmarshal([]byte(record.Published), &asset); err != nil || asset.Ref != plan.Ref || asset.SourceVersion == "" || asset.ContractVersion < 1 {
 		return platform.Definition{}, false, fmt.Errorf("asset %s has an invalid accepted definition", plan.Ref)
 	}
-	definition := platform.Definition{Ref: plan.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: plan.Record}
-	if plan.Ref.Kind == platform.AssetAlert {
-		var alert platform.AlertRule
-		if json.Unmarshal(asset.Body, &alert) != nil || alert.Check() != nil {
-			return definition, false, fmt.Errorf("invalid accepted alert rule")
-		}
-		definition.Alert = &alert
+	owner := t.app(plan.Ref.App).(host.AssetDefinitionReader)
+	definition, err := owner.DefinitionDescriptor(asset)
+	if err != nil {
+		return definition, false, err
 	}
-	if plan.Ref.Kind == platform.AssetObservation {
-		var observation platform.ObservationDefinition
-		if err := json.Unmarshal(asset.Body, &observation); err != nil {
-			return definition, false, err
-		}
-		if err := observation.Check(); err != nil {
-			return definition, false, err
-		}
-		definition.Observation = &observation
-	}
-	if definition.Provides == nil {
-		description, err := platform.DescribeAsset(asset)
-		if err != nil {
-			return definition, false, err
-		}
-		definition.Provides = description.Provides
-	}
-	if plan.Ref.Kind == platform.AssetSampleSet {
-		var samples platform.SampleSet
-		if err := json.Unmarshal(asset.Body, &samples); err != nil {
-			return definition, false, err
-		}
-		if err := samples.Check(); err != nil {
-			return definition, false, err
-		}
-		definition.SampleSet = &samples
-	}
-	if plan.Ref.Kind == platform.AssetEvaluation {
-		descriptor, err := platform.ReadEvaluationSet(asset.Body)
-		if err != nil {
-			return definition, false, err
-		}
-		definition.Evaluation = &descriptor
-	}
-	if plan.Ref.Kind == platform.AssetTestPlan {
-		descriptor, err := platform.ReadTestPlan(asset.Body)
-		if err != nil {
-			return definition, false, err
-		}
-		definition.TestPlan = &descriptor
-	}
+	definition.OwnerRecord = plan.Record
 	return definition, true, nil
 }
 
@@ -523,9 +482,13 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 				}
 				continue
 			}
-			var descriptor platform.AgentReleaseDescriptor
-			if json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Check() != nil {
-				return nil, fmt.Errorf("agent descriptor is unavailable")
+			reader, ok := owner.(host.AssetDefinitionReader)
+			if !ok {
+				return nil, fmt.Errorf("agent owner has no definition descriptor")
+			}
+			definition, err := reader.DefinitionDescriptor(asset)
+			if err != nil {
+				return nil, err
 			}
 			ownerRecord := ""
 			t.records.mu.Lock()
@@ -538,15 +501,8 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 				}
 			}
 			t.records.mu.Unlock()
-			provided := slices.Clone(asset.Provides)
-			if provided == nil {
-				description, err := platform.DescribeAsset(asset)
-				if err != nil {
-					return nil, err
-				}
-				provided = description.Provides
-			}
-			base = append(base, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: provided, Agent: &descriptor, OwnerRecord: ownerRecord})
+			definition.OwnerRecord = ownerRecord
+			base = append(base, definition)
 		}
 	}
 	type image struct {
@@ -596,7 +552,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		}
 	}
 	t.records.mu.Unlock()
-	out := slices.DeleteFunc(slices.Clone(base), func(def platform.Definition) bool { return ownedMetadataKind(def.Ref.Kind) })
+	out := slices.DeleteFunc(slices.Clone(base), func(def platform.Definition) bool { return def.Source != "code" && t.ownedMetadataKind(def.Ref) })
 	out = append(out, datasetDefinitions...)
 	if len(images) == 0 {
 		slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
@@ -615,7 +571,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		if plan.Record != image.record {
 			return nil, fmt.Errorf("owned publication metadata identity differs")
 		}
-		def, indexed, err := ownedAssetDefinition(plan)
+		def, indexed, err := t.ownedAssetDefinition(plan)
 		if err != nil {
 			return nil, err
 		}
@@ -845,7 +801,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 			def.Protocol = &projected
-		case platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetAlert:
+		default:
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {

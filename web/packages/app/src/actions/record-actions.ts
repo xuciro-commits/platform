@@ -1,4 +1,6 @@
 import type {Host} from "../index";
+import type {EntityInfo,KanbanMove} from "@platform/ui";
+import type {ActionDeclaration} from "@platform/kernel";
 import {confirmedDecision} from "../collaboration/decision";
 type OriginalActionHost=Pick<Host,"client"|"decide"|"resend"|"can">;
 const locks=new WeakMap<object,Set<string>>();
@@ -16,4 +18,20 @@ export function createRecordActionSubmitter(host:OriginalActionHost,active:()=>b
   try{const accepted=await host.decide(schema,target,payload,{expectedRevision:revision,quiet:true,onRefused:message=>error=message});if(accepted){attempts.delete(record);return {accepted,error};}return {accepted:false,error};}
   finally{const own=entries().findLast(e=>!before.has(e.submission.idempotencyKey)&&e.submission.expectedRevision===revision);if(own&&waiting(own.state)&&own.submission.idempotencyKey)attempts.set(record,{key:own.submission.idempotencyKey,revision,payload:body});locked.delete(record);}
  };
+}
+
+/** Only an explicit lifecycle and the member's original catalog can offer a
+ * board command. Choice fields and payload labels do not declare transitions. */
+export function recordKanbanMoves(info:EntityInfo|undefined,catalog:ActionDeclaration[]):KanbanMove[] {
+ const lifecycle=info?.lifecycle;
+ if(!lifecycle||!info.fields.some(field=>field.name===lifecycle.field))return [];
+ return lifecycle.transitions.flatMap(transition=>{
+  const action=catalog.find(action=>action.schema===transition.schema&&action.target===info.type&&!action.new);
+  if(!action)return [];
+  if(transition.toInput){
+   const input=action.payload.find(field=>field.name===transition.toInput&&field.type==="string");
+   if(!input||!transition.to.every(state=>input.choices?.includes(state)))return [];
+  }else if(transition.to.length!==1)return [];
+  return transition.to.map(to=>({schema:transition.schema,title:transition.title,from:transition.from,to,input:transition.toInput}));
+ });
 }

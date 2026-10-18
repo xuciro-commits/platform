@@ -102,6 +102,8 @@ Connection/Source/Dataset/Pipeline 的**定义描述符**及选定任务必需�
 
 **可信资产生命周期。** `platform.AssetRegistry` 在组合期注册可信 `AssetLifecycleOwner`，复用原 `AssetRef/ReleaseAsset/Candidate` 身份、规范字节及闭包。代码声明固定当前 owner 契约；受控定义由原 owner 产生 typed descriptor、声明依赖及环境要求、解析保留版本、计划草稿与安装、验证及纯应用。页面内容摘要独立于来源版本，精确保留内容也由同一 owner 解析。发现与资源选择沿当前成员可读的 owner 元数据投影，不暴露构建者描述符。租户不能注册执行钩子；根发布协调不再维护逐 kind 的解码/安装分支，原类型化执行、字段校验与历史解码留在各 owner。
 
+动态发现中的 Alert、Observation、样本、评测集、业务测试计划与 Agent 正文同样由原 Build 描述；候选模拟复用同一方法，宿主只保留已接受版本的身份检查、元数据读取和依赖过滤。原生 Manifest 的代码声明继续注册，不因种类相同而被受控元数据替换或删除。
+
 **私有首次装配和一次接受。** `AssetDraft.Ref` 对应候选内原资产；owner 按真实依赖安排草稿及安装计划。`BeginAssetBootstrap` 仅在私有 owner 暂存完整候选对象形状，原 create 权限与输入校验可识别自引用/互引用。缺失元数据通过真实 create 决定写入共享私有记录视图；前置 typed 安装使后续校验看见依赖，不修改 live 或提前裁决未完成闭包。完整集合另从原运行视图试装并校验；新 `release-result` 格式 4 将 create 的封存批次、owner 安装映像、升级/幂等收据及活跃指针一次接受。晚期拒绝或追加失败均不暴露草稿、定义、指针或外部请求。恢复校验原前驱并应用已保存映像；格式 1–3 保留原字节与解码义务。原 live `materialiseDrafts` 循环及根类型安装编排已退出。
 
 **集成定义与环境。** Connection、Source、Dataset、Pipeline、Writeback、Matching 使用 Build 的 typed descriptor 进入原候选闭包；来源/管道的对象、数据集、连接及匹配规则的实际 producer 依赖保持原身份。候选携带逻辑名称、配置与版本；地址、密钥名称/值及本地绑定 ID、执行主体、游标、数据/schema/运行历史和外部回执均不移植。目标 Connection 必须是唯一同名、同 kind、已就绪的本地配置，需要凭据时还要有可解析的本地密钥；不自动生成空端点。依赖名称映射为目标记录 ID，Puller/Runner/Publisher 绑定目标成员，保留目标运行状态。准备检查原调用者 token scope，最终私有试装检查目标当前角色及实际数据写/答复编辑权限；发布不授予权限。

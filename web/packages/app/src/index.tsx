@@ -23,13 +23,14 @@ import "./i18n";
 import { apiErrorMessage, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, Disclosure, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
-  type ChartSpec, type EntityInfo, type EntityRecord, type KanbanMove, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
+  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 export {boundQueryDefinition} from "./runtime/query-plans";
 export {interfaceQueryForSection} from "./runtime/ontology-interface";
 import { readPlaceholder } from "./runtime/read-placeholder";
 import { DeclaredActionDialog, NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
+import {recordKanbanMoves} from "./actions/record-actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./automation/capability";
 export { FlowInstanceView } from "./automation/flows";
@@ -305,38 +306,8 @@ export function Records({ type, description, actions, covers, saved, kanban }: {
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(saved?.title ?? "");
   const initial = useMemo<ListState>(() => { try { return saved ? JSON.parse(saved.state) as ListState : {}; } catch { return {}; } }, [saved]);
-  const moves: KanbanMove[] = useMemo(() => {
-    const l = info?.lifecycle;
-    if (l?.transitions?.length) {
-      return l.transitions.flatMap((t) => t.to.map((to) => ({
-        schema: t.schema,
-        title: t.title,
-        from: t.from,
-        to,
-        input: t.toInput,
-      })));
-    }
-    const stateField = l?.field ?? info?.fields.find((f) => (f.name === "stage" || f.name === "state" || f.type === "choice") && (f.choices?.length ?? 0) > 0)?.name;
-    const choices = stateField ? info?.fields.find((f) => f.name === stateField)?.choices : undefined;
-    if (stateField && choices?.length) {
-      const initial = l?.initial ?? choices[0];
-      const from = choices.filter((c) => c === initial || c === "open" || c === "pending");
-      return catalog.filter((a) => a.target === type).flatMap((a) => {
-        const destField = a.payload.find((p) => p.type === "string" && p.choices?.some((c) => choices.includes(c)));
-        if (destField?.choices) {
-          return destField.choices.filter((c) => choices.includes(c)).map((to) => ({
-            schema: a.schema,
-            title: a.title,
-            from,
-            to,
-            input: destField.name,
-          }));
-        }
-        return [];
-      });
-    }
-    return [];
-  }, [info, catalog, type]);
+  const moves = useMemo(() => kanban?.stateField && kanban.stateField !== info?.lifecycle?.field
+    ? [] : recordKanbanMoves(info, catalog), [info, catalog, kanban?.stateField]);
   const save = async () => {
     if (busy) return;
     setBusy(true);
@@ -365,8 +336,9 @@ export function Records({ type, description, actions, covers, saved, kanban }: {
         kanban={kanban}
         moves={moves}
         onMove={(record, schema, destination) => {
-          const move = moves.find((m) => m.schema === schema && (!destination || m.to === destination));
-          transition.take(schema, record, move?.input && destination ? { parameter: move.input, value: destination } : undefined);
+          const state = info?.lifecycle?.field;
+          const move = moves.find((m) => m.schema === schema && state && m.from.includes(String(record[state])) && (!m.input || m.to === destination));
+          if (move) transition.take(schema, record, move.input ? { parameter: move.input, value: move.to } : undefined);
         }}
       />
       {transition.dialog}

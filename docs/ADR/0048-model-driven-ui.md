@@ -112,6 +112,10 @@ type ModelBinding struct {
 
 ## 5. As built
 
+PageEditor 的保存/发布禁用与 Problems 共用 `pageDraftDiagnostics`，错误带原组件或布局节点位置，点击后进入原检查器。原布尔标志、禁用长表达式和另一份提示映射已删除；作用域、节点查找与同类输入检查复用，组件自身约束和服务端发布检查保留。原来只有禁用、没有原因的组件配置现在给出可定位说明。行内编辑检查复用原模型字段展开，默认字段不会被误判为不可见；自动保存开始时已发生的输入仍进入原草稿历史，旧保存回复不会覆盖这些后续编辑。
+
+RecordList 的状态来自明确 lifecycle 或显式看板配置；应用层按当前动作目录提供迁移命令，展示层不从 choice 字段、参数名称猜业务状态，也不在空命令列表时补动作。保留已有列表、看板、聚合与原动作表单；失效的保存视图回到可用列表。页面内短表格随内容收缩，保留原 320px 滚动窗口上限，不再挤远下方的明细和操作。
+
 平台与构建器 Section 的前 100 个相同配置字段统一归 `platform.PageWidgetConfig`，后 33 个字段保留各自引用类型与编辑元数据。原 descriptor / pageDraft 直接传递共有配置，保留原切片克隆；前端构建期 Section 引用生成的 Api.Section，只区分 object / query / actions / function / inlineEdit 五种表示。新组件配置不再增加三份手写字段声明和前后端逐项复制清单。原 JSON 字段顺序、扁平形状、组件版本、API 输出和冻结历史不变；此整理不把通用模型绑定等同于全部组件配置规则。
 
 现有 `PageDocument` / `Section` 使用 `platform.page.v2.110`，对象绑定写入 `Section.model`。`FieldRef` 保留原组件端口，组件配置版本与执行 owner 不变；旧字段名只在解码和组件端口投影中出现。Build 保存 V2 时收敛绑定，V1 沿原 `pageDocumentFromSections` 提升后保存；历史发布、候选、接受结果不改写。冻结候选激活及恢复保留模型引用。

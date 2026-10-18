@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Bind a visible scalar tag group, original query and matching output before saving.": "保存前，请绑定可见的标量分组字段、原查询及对应输出。",
+  "Bind shared record-set output to a writable table selection in the main page before saving.": "保存前，请将共享记录集输出绑定到主页面内可写的表格选择。",
+  "Bind a writable shared record output for the original object in the main page before saving.": "保存前，请绑定主页面中原对象的可写共享记录输出。",
+  "Choose a valid external frame before saving.": "保存前，请配置有效的外部页面框架。",
+  "Choose a published page content version before saving.": "保存前，请选择已发布的页面内容版本。",
+  "Bind a numeric histogram field, 1–64 bins and the original query before saving.": "保存前，请绑定数值字段、1 至 64 个直方图区间和原查询。",
+  "Bind a visible term field and the original query before saving.": "保存前，请绑定可见的词项字段和原查询。",
   "Source key value": "回读键取值",
   "Fill missing values": "填充缺失值",
   "Rename a field": "重命名字段",

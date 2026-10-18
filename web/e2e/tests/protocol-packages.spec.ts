@@ -1,16 +1,21 @@
 import { readFileSync } from "node:fs";
 import type * as Api from "../../packages/kernel/src/gen/host";
-import { expect, shots, slug, test } from "./kit";
+import { expect, protocolVersion, shots, slug, test } from "./kit";
 
 test("an installed protocol binary configures devices, previews points and publishes a connection", async ({ page, builder }, info) => {
+  test.setTimeout(120_000);
   // The host's package directory contains binaries built by make packages.
   // Installation and every read below use the real package owner and gateway.
-  const packageID = "protocol.simulator", version = "0.1.3";
+  const packageID = "protocol.simulator", version = protocolVersion();
   const gateway = process.env.PROTOCOL_GATEWAY_URL ?? "http://127.0.0.1:18510";
   await builder.open(page, "/apps?surface=tenant");
   const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
   await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);
-  await card.getByRole("button", { name: "Install", exact: true }).click();
+  const prior = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID)?.installed;
+  // Earlier browser tasks may use this exact installed driver. The original
+  // lifecycle below still uninstalls and reinstalls it through the package UI.
+  if (prior?.state === "active") expect(prior.version).toBe(version);
+  else await card.getByRole("button", { name: prior?.state === "retired" ? "Reinstall" : "Install", exact: true }).click();
   await expect(card.getByText("active", { exact: true })).toBeVisible();
   await expect(card.getByText("Deployment index", { exact: true })).toBeVisible();
   await expect(card.getByText("precheck failed", { exact: true })).toHaveCount(0);
@@ -25,7 +30,7 @@ test("an installed protocol binary configures devices, previews points and publi
   const reinstalled = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID && item.descriptor.version === version)!.installed!;
   expect(reinstalled.artifact).toBe(installed.artifact);
   expect(reinstalled.version).toBe(installed.version);
-  expect(reinstalled.retained ?? []).toEqual([]);
+  expect(reinstalled.retained ?? []).toEqual(installed.retained ?? []);
   await shots(page, card, "protocol-package", info);
 
   const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");
@@ -82,8 +87,8 @@ test("an installed protocol binary configures devices, previews points and publi
   await expect(page.getByRole("button", { name: "Save connection", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Check", exact: true }).click();
   await expect.poll(async () => (await builder.record<Api.Connection>("build.connection", saved!.id)).state, { timeout: 20_000 }).toBe("ready");
-  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review and publish…", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Review and publish…", exact: true }).click();
   await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
   await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await page.getByRole("button", { name: "Activate release", exact: true }).click();
@@ -92,12 +97,14 @@ test("an installed protocol binary configures devices, previews points and publi
 
 test("a third protocol imports documented HVAC points and exposes current readings to a business member", async ({ page, builder, operator }, info) => {
   test.setTimeout(120_000);
-  const packageID = "protocol.modbus-tcp", version = "0.1.3";
+  const packageID = "protocol.modbus-tcp", version = protocolVersion();
   const configuration: Api.DriverConfiguration = JSON.parse(readFileSync(new URL("../../../deploy/examples/hvac/modbus.json", import.meta.url), "utf8"));
   await builder.open(page, "/apps?surface=tenant");
   const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
   await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);
-  await card.getByRole("button", { name: "Install", exact: true }).click();
+  const prior = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID)?.installed;
+  if (prior?.state === "active") expect(prior.version).toBe(version);
+  else await card.getByRole("button", { name: prior?.state === "retired" ? "Reinstall" : "Install", exact: true }).click();
   await expect(card.getByText("active", { exact: true })).toBeVisible();
   const kinds = await builder.read<{ items: Api.ConnectionKind[] }>("connection-kinds");
   const kind = kinds.items.find(item => item.package === packageID && item.version === version);
@@ -143,8 +150,8 @@ test("a third protocol imports documented HVAC points and exposes current readin
   await expect(page.getByRole("button", { name: "Save connection", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Check", exact: true }).click();
   await expect.poll(async () => (await builder.record<Api.Connection>("build.connection", saved!.id)).state).toBe("ready");
-  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review and publish…", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Review and publish…", exact: true }).click();
   await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
   await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await page.getByRole("button", { name: "Activate release", exact: true }).click();

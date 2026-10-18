@@ -244,7 +244,7 @@ export type ListState = {
   group?: string; columns?: string; measure?: string; mark?: Mark;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate, kanban, onMove, moves }: {
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate, kanban, onMove, moves = [] }: {
   tablePresentation?:Api.PageTablePresentation;onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};selectedId?:string;columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;
@@ -260,6 +260,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   initial?: ListState; onSave?: (state: ListState) => void;
   kanban?: { lanes?: KanbanLane[]; stateField?: string; labelField?: string; properties?: (record: EntityRecord) => [string, ReactNode][] };
   onMove?: (record: EntityRecord, schema: string, destination?: string) => void;
+  /** Commands already offered by the application owner; absent or empty is read-only. */
   moves?: KanbanMove[];
 }) {
   const densityIdentity=JSON.stringify([source.scope,type,tablePresentation]),[densityChoice,setDensityChoice]=useState<{identity:string;density:string}>();
@@ -278,7 +279,6 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const [localError, setError] = useState<string>();
   const error = window ? window.error : localError;
   const [localView, setView] = useState<ListView>(initial.view ?? "list");
-  const view = window ? "list" : localView;
   const [drilled, setDrilled] = useState<unknown[] | undefined>(initial.drilled);
   const groups = useMemo(() => (info ? groupable(info) : []), [info]);
   const measures = useMemo(() => (info ? measurable(info) : []), [info]);
@@ -288,10 +288,11 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const [mark, setMark] = useState<Mark>(initial.mark ?? "bar");
   const rows = group || (info?.lifecycle?.field ?? groups[0]?.value ?? "");
   const lifecycle = info?.lifecycle;
-  const kanbanStateField = kanban?.stateField ?? lifecycle?.field ?? info?.fields.find((f) => (f.name === "stage" || f.name === "state" || f.type === "choice") && (f.choices?.length ?? 0) > 0)?.name;
+  const kanbanStateField = kanban?.stateField ?? lifecycle?.field;
   const choiceField = kanbanStateField ? info?.fields.find((f) => f.name === kanbanStateField) : undefined;
   const kanbanLanes: KanbanLane[] = useMemo(() => {
-    if (kanban?.lanes?.length) return kanban.lanes;
+    if (!choiceField) return [];
+    if (kanban?.lanes) return kanban.lanes;
     if (lifecycle?.states?.length && lifecycle.field === kanbanStateField) {
       return lifecycle.states.map((s) => ({ name: s.name, title: s.title, tone: s.tone as Tone }));
     }
@@ -300,25 +301,13 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     }
     return [];
   }, [kanban?.lanes, lifecycle, choiceField, kanbanStateField]);
-  const kanbanMoves: KanbanMove[] = useMemo(() => {
-    if (moves?.length) return moves;
-    if (lifecycle?.transitions?.length) {
-      return lifecycle.transitions.flatMap((t) => t.to.map((to) => ({
-        schema: t.schema,
-        title: t.title,
-        from: t.from,
-        to,
-        input: t.toInput,
-      })));
-    }
-    return [];
-  }, [moves, lifecycle]);
   const aggregate = window ? undefined : source.aggregate;
   const availableViews = useMemo<ListView[]>(() => [
     "list",
     ...(kanbanLanes.length > 0 && kanbanStateField ? ["kanban" as const] : []),
     ...(aggregate && rows ? ["pivot" as const, "chart" as const] : []),
   ], [kanbanLanes.length, kanbanStateField, aggregate, rows]);
+  const view = window || !availableViews.includes(localView) ? "list" : localView;
   const fixedKey = JSON.stringify(fixed ?? []);
   useEffect(() => { setOffset(0); }, [fixedKey, type]);
   const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? [])], [fixedKey, drilled]);
@@ -458,7 +447,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
             labelField={kanban?.labelField ?? cards?.labelField ?? (info.display !== "id" && info.display ? info.display : "title" in entity.fields ? "title" : "id")}
             selected={selectedId}
             onSelect={(r) => { if (r && onOpen) onOpen(r); }}
-            moves={kanbanMoves}
+            moves={moves}
             onMove={onMove}
             properties={kanban?.properties ?? (r => (fields ?? listed(entity)).slice(0, 4).filter(k => k !== kanbanStateField && k !== (info.display ?? "id")).map(k => [entity.fields[k]?.label ?? k, entity.fields[k]?.display(valueOf(entity, k, r), r)]))}
             label={info.plural ?? type}

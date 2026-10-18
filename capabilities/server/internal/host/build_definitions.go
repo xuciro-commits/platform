@@ -43,6 +43,7 @@ type IntegrationDefinitions interface {
 
 type ConstructionSandbox interface {
 	platform.App
+	AssetDefinitionReader
 	Reinstall() error
 	ProcessFromAsset(platform.ReleaseAsset) (build.Process, error)
 	InstallPropertyTypeAsset(platform.ReleaseAsset) error
@@ -91,4 +92,11 @@ type NativeFlowAssets interface {
 // and summaries are read transiently by the host transport.
 type ObservationDefinitions interface {
 	ExecutionObservation(build.Observation) (platform.ObservationDefinition, error)
+}
+
+// AssetDefinitionReader projects the original controlled owner's accepted
+// metadata. The host retains member filtering and the publication identity.
+type AssetDefinitionReader interface {
+	DefinitionMetadataKind(platform.AssetKind) bool
+	DefinitionDescriptor(platform.ReleaseAsset) (platform.Definition, error)
 }

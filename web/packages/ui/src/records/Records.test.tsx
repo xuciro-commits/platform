@@ -263,3 +263,40 @@ test("hidden record windows release their live lease, preserve search and regist
  rerender(view(false));await new Promise(resolve=>setTimeout(resolve,180));expect(list).toHaveBeenCalledTimes(count);
  rerender(view(true));expect((screen.getByPlaceholderText(/Search/) as HTMLInputElement).value).toBe("retained search");await waitFor(()=>expect(watch).toHaveBeenCalledTimes(3));
 });
+
+test("RecordList does not guess a lifecycle from an unrelated choice field", async () => {
+  const info = { ...entity, fields: [{ name: "priority", title: "Priority", type: "choice" as const, choices: ["low", "high"] }] };
+  const source: RecordSource = { entity: () => info, list: async () => ({ records: [{ ...record("A"), priority: "low" }], total: 1 }), get: vi.fn() };
+  const props = { source, type: info.type, initial: { view: "kanban" as const } };
+  const { rerender } = render(<RecordList {...props} />);
+  await waitFor(() => expect(screen.getByRole("cell", { name: "A" })).toBeTruthy());
+  expect(screen.queryByRole("button", { name: "Board" })).toBeNull();
+  rerender(<RecordList {...props} kanban={{ stateField: "priority" }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Board" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "A" })).toBeTruthy());
+  expect(screen.getByRole("region", { name: "Items" })).toBeTruthy();
+  expect(screen.queryByRole("combobox", { name: "Move A with action" })).toBeNull();
+});
+
+test("RecordList uses only caller-offered board commands and keeps empty or absent moves read-only", async () => {
+  const lifecycle = { field: "state", initial: "open", states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }, { name: "cancelled", title: "Cancelled" }], transitions: [
+    { name: "finish", schema: "sample.item.finish", title: "Finish", from: ["open"], to: ["done"] },
+    { name: "cancel", schema: "sample.item.cancel", title: "Cancel item", from: ["open"], to: ["cancelled"] },
+  ] };
+  const info = { ...entity, fields: [{ name: "state", title: "State", type: "choice" as const }], lifecycle };
+  const row = { ...record("A"), state: "open" }, moved = vi.fn();
+  const source: RecordSource = { entity: () => info, list: async () => ({ records: [row], total: 1 }), get: vi.fn() };
+  const props = { source, type: info.type, onMove: moved };
+  const { rerender } = render(<RecordList {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Board" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "A" })).toBeTruthy());
+  expect(screen.queryByRole("combobox", { name: "Move A with action" })).toBeNull();
+  rerender(<RecordList {...props} moves={[{ schema: "sample.item.finish", title: "Finish", from: ["open"], to: "done" }]} />);
+  const command = screen.getByRole("combobox", { name: "Move A with action" });
+  expect(screen.queryByRole("option", { name: "Cancel item → Cancelled" })).toBeNull();
+  fireEvent.change(command, { target: { value: "sample.item.finish" } });
+  expect(moved).toHaveBeenCalledExactlyOnceWith(row, "sample.item.finish");
+  rerender(<RecordList {...props} moves={[]} />);
+  expect(screen.queryByRole("combobox", { name: "Move A with action" })).toBeNull();
+  expect(screen.getByRole("button", { name: "A" }).closest("[draggable]")?.getAttribute("draggable")).toBe("false");
+});

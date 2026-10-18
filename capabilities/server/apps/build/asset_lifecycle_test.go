@@ -807,3 +807,23 @@ func TestLegacyIntegrationCandidateUsesFrozenReferences(t *testing.T) {
 		t.Fatal("legacy virtual action did not require its explicit next publication", err)
 	}
 }
+
+func TestDefinitionDescriptorReadsAcceptedVersionWithoutLiveHost(t *testing.T) {
+	owner := New("definition-reader")
+	ref := platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: "retained"}
+	dependency := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: "build.oldobject"}
+	asset := platform.ReleaseAsset{Ref: ref, SourceVersion: "1.sample-1", ContractVersion: 1, Requires: []platform.AssetRef{dependency}, Provides: []platform.Capability{{Kind: "interface", Name: "retained"}}, Body: platform.Raw(platform.SampleSet{Name: "retained", Title: "Accepted original title"})}
+	descriptor, err := owner.DefinitionDescriptor(asset)
+	if err != nil || descriptor.Ref != ref || descriptor.Version != "1.sample-1" || descriptor.SampleSet == nil || descriptor.SampleSet.Title != "Accepted original title" || !slices.Equal(descriptor.Requires, asset.Requires) || !reflect.DeepEqual(descriptor.Provides, asset.Provides) {
+		t.Fatalf("accepted descriptor changed: %+v %v", descriptor, err)
+	}
+	descriptor.Requires[0].Name = "changed"
+	descriptor.Provides[0].Name = "changed"
+	if asset.Requires[0] != dependency || asset.Provides[0].Name != "retained" {
+		t.Fatal("discovery modified accepted dependency metadata")
+	}
+	asset.Body = json.RawMessage(`{damaged`)
+	if _, err = owner.DefinitionDescriptor(asset); err == nil {
+		t.Fatal("damaged accepted body was hidden by retained capability metadata")
+	}
+}

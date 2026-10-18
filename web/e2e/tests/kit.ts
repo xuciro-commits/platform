@@ -10,6 +10,12 @@ import { decide, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevi
 
 export { expect, fresh, pageUIProfile, retainActionCatalog, stableReadRevision };
 
+export function protocolVersion(): string {
+  const version = process.env.PROTOCOL_VERSION;
+  if (!version) throw new Error("Run protocol browser tasks through make e2e so they use the packaged version.");
+  return version;
+}
+
 const BUILDER = "manager";
 const OPERATOR = "desk";
 const APP = "build";

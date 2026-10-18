@@ -100,6 +100,11 @@ test("notices freeze literal text and optional titles; page and overlay gates st
   await editor.save();
   const refusedDraft = await builder.record("build.page", id);
   expect(refusedDraft.sections.some((s: any) => s.notice?.message === oversized)).toBe(false);
+  await editor.select("Completion note");
+  await page.getByRole("tablist", { name: "Page dock", exact: true }).getByRole("tab", { name: /^Problems\b/ }).click();
+  await page.getByRole("button", { name: /Choose a supported notice tone and bounded plain title and text before saving\./ }).click();
+  await expect(text).toHaveValue(oversized);
+  await shots(page, page.locator("body"), "notice-problem-location", info);
   await text.fill(literal);
   const retained = `${literal}\nRetained after a refused save.`;
   await page.route("**/v1/submissions", async route => {

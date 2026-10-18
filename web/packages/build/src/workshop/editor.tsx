@@ -1,3 +1,5 @@
+import {recordComparisonSource} from "./page-editor/record-comparison";
+import {pageDraftDiagnostics} from "./page-editor/diagnostics";
 import {CompositeBindingInspector} from "./page-editor/CompositeBindingInspector";
 import {ModelBindingInspector} from "./page-editor/ModelBindingInspector";
 import {materializeModelSection,canonicalModelSection,foldModelPorts,modelEntity} from "@platform/app/model";
@@ -7,25 +9,15 @@ import { useAuthoringModel } from "../ontology/authoring-model";
 import {WidgetGlyph,LayoutGlyph} from "./page-editor/WidgetGlyph";
 import {canvasModel,canvasDrop,canvasMove,canvasResize,canvasResetSize,canvasGroup,canvasEqualize,canvasUngroup,canvasRemove} from "./page-editor/canvas-layout";
 import {addWidgetSlot} from "./page-editor/widget-slots";
-import {queryInventoryBudget} from "@platform/app/query-inventory";
-import {validActionDefaults} from "@platform/app/action-defaults";
-import {validExternalFrame} from "@platform/ui/external-frame";
-import {observationProblem} from "./page-editor/observation";
-import {recordWorkProblem} from "./page-editor/record-work";
-import {collectionAnalysisProblem} from "./page-editor/collection-analysis";
-import {explorationViewProblem} from "./page-editor/exploration-views";
-import {contextViewProblem} from "./page-editor/context";
-import {collaborationRecordSource,recordInputOwner,historyViewProblem,isCollaborationWidget,requiresOriginalRecord} from "./page-editor/collaboration";
-import {recordComparisonSource} from "./page-editor/record-comparison";
-import {searchInputObjects} from "@platform/app/search";
+import {collaborationRecordSource,requiresOriginalRecord} from "./page-editor/collaboration";
 import {interfaceQueryForSection,pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../ontology/record-paths";
 // Application Studio page design (ADR-0015). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageUIProfile, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, ActionMenu, Button, CanvasEditor, CanvasRegion, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
+  ActionMenu, Button, CanvasEditor, CanvasRegion, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, Download, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
@@ -34,7 +26,7 @@ import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
 import { WidgetLibrary } from "./page-editor/WidgetLibrary";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
-import {pageUIManifest,type Api as HostApi} from "@platform/kernel";
+import {type Api as HostApi} from "@platform/kernel";
 import { BindingEditor } from "../automate/workflow-binding";
 import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, layoutID, stashWidget, restoreWidget, setLayoutKind } from "./page-layout";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
@@ -43,7 +35,7 @@ import { InterfacePanel } from "./page-editor/InterfacePanel";
 import { widgetInspector,widgetBindingInspector } from "./page-editor/widgets/registry";
 import {InspectorFrame} from "./page-editor/widgets/InspectorFrame";
 import {CompatibilityReview} from "./page-editor/CompatibilityReview";
-import {applyProfileUpgrade,pageCompatibility} from "./page-editor/compatibility";
+import {applyProfileUpgrade} from "./page-editor/compatibility";
 import { OverlayProperties } from "./page-editor/OverlayPanel";
 import {LayoutTree} from "./page-editor/LayoutTree";
 import {LayoutProperties,LayoutSizing} from "./page-editor/LayoutProperties";
@@ -132,7 +124,9 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const chosen = selection.kind === "widget" ? sections.findIndex((section) => section.id === selection.id) : selection.kind === "container" ? -2 : selection.kind === "variables" ? -3 : -1;
   const container = selection.kind === "container" ? selection.id : undefined;
   const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! });  };
-  const edit: typeof session.edit = (update, key) => { if (!lock.current) session.edit((old) => {
+  // A native input event can already be in flight when autosave locks the UI.
+  // The draft history preserves it when the older submission is acknowledged.
+  const edit: typeof session.edit = (update, key) => { session.edit((old) => {
     const next = typeof update === "function" ? update(old) : { ...old, ...update };
     // Profile changes are explicit reviewed commands; ordinary editing retains
     // the original profile even when a layout helper returns the latest one.
@@ -147,72 +141,19 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
     return { ...next, ...synchronizeLoopBindings({...document,...sections.some(s=>s.composite)?{uiProfile:pageVariableContract.composite.requiredUIProfile}:sections.some(s=>s.model)?{uiProfile:pageVariableContract.modelBinding.requiredUIProfile}:{}}, sections) };
   }, key); };
   const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setRefused(undefined); };
-  const selectionProblem = selections.some((v, i) => !/^[a-z][a-z0-9_-]{0,63}$/.test(v.name) || selections.some((other, at) => at !== i && other.name === v.name))
-    ? t("Selection names must be unique lowercase identifiers.") : sections.some((s) =>
-      s.selection && !selections.some((v) => v.name === s.selection && v.object.name === (s.object || page?.object)) ||
-      s.parentSelection && !selections.some((v) => v.name === s.parentSelection))
-      ? t("A widget references a missing selection or the wrong object type.") : "";
-  const compatibility=pageCompatibility(session.draft);
-  const incompatible=!compatibility.supported||compatibility.issues.length>0;
-const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length && !document.unusedWidgets?.some(entry=>entry.parent===overlay.root) || !overlay.title.trim()) || sections.some(section=>{const contract=widgetContract(section.widget);return contract&&"events" in contract&&contract.events.some(event=>event.required&&!document.events?.some(binding=>binding.source===section.id&&binding.event===event.id));}); const groupProblem=sections.some(s=>s.widget==="button-group"&&(!(s.buttons?.length)||s.buttons.length>pageVariableContract.buttonGroup.maxButtons||s.buttons.some((b,i)=>!b.title||new TextEncoder().encode(b.title).length>pageVariableContract.buttonGroup.maxTitleBytes||s.buttons?.some((other,j)=>i!==j&&b.id===other.id)||!document.events?.some(e=>e.source===s.id&&e.control===b.id&&e.event==="click"))));
-  const loopProblem = Object.values(document.nodes).some((node) => node.kind === "loop" && (!node.loop || !document.variables?.[node.loop.collection]));
-  const searchInputProblem=sections.some(s=>s.inputKind!==undefined&&(s.widget!=="input"||s.inputKind!=="search"&&s.inputKind!=="scan"||searchInputObjects(document,Object.values(document.nodes).find(n=>n.section===s.id)?.valueVariable).length===0));
-  const inputProblem = Object.entries(document.nodes).some(([id, node]) => {
-    if (!sections.some((s) => s.id === node.section && s.widget === "input")) return false;
-    const variable = document.variables?.[node.valueVariable ?? ""];
-    return ["search","scan"].includes(sections.find(s=>s.id===node.section)?.inputKind??"")&&searchInputObjects(document,node.valueVariable).length===0||!variable || !(variable.mode === "state" || variable.mode === "shared" && variable.writable) || !["string","decimal"].includes(variable.type) || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
-  });
-  const variableProblems = pageVariableDiagnostics(document.variables ?? {});
-  const queryProblem = !queryInventoryBudget(document,sections as unknown as HostApi.Section[],pageVariableContract.query).valid || Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
-  const layoutProblems=pageLayoutDiagnostics(document,sections);
-  const inlineProblem=sections.some(s=>s.widget==="inline-action"&&(s.actions?.length!==1||!!s.actionDefaults?.length&&!validActionDefaults(authoringEntity(s.object||page?.object||""),catalog.find(a=>a.schema===s.actions?.[0]),s.actionDefaults)));
-  const tableEditProblem=sections.some(s=>s.inlineEdit&&(!s.inlineEdit.action||s.inlineEdit.fields.length===0||s.inlineEdit.fields.length>pageVariableContract.tableEditing.maxFields||s.inlineEdit.fields.some(f=>!s.fields?.includes(f))));
-  const presentationLimits=pageVariableContract.tablePresentation;
-  const tableControlsProblem=sections.some(s=>{const p=s.tablePresentation;if(!p)return false;const template=p.titleTemplate,source=document.variables?.[s.collectionVariable??""]?.source;return s.widget!=="table"||!["compact","normal"].includes(p.density)||typeof p.showToolbar!=="boolean"||template!==undefined&&(new TextEncoder().encode(template).length>256||/[{}]/.test(template.replace("{count}",""))||template.includes("{count}")&&source?.kind!=="plan");});
-  const tablePresentationProblem=tableControlsProblem||sections.some(s=>(s.tableColumns?.length??0)>presentationLimits.maxColumns||s.tableColumns?.some((c,i)=>c.field!=="id"&&!s.fields?.includes(c.field)||s.tableColumns?.some((other,j)=>j!==i&&other.field===c.field)||new TextEncoder().encode(c.title??"").length>presentationLimits.maxTitleBytes||c.width!==undefined&&(!Number.isInteger(c.width)||c.width<presentationLimits.minWidth||c.width>presentationLimits.maxWidth)));
-  const recordViewProblem=sections.some(s=>s.widget==="record-view"&&s.recordView?.tabs.length===0);
-  const recordLinksProblem=sections.some(s=>s.widget==="record-links"&&(!s.recordLinks?.length||s.recordLinks.length>pageVariableContract.recordLinks.maxGroups||s.recordLinks.some((g,i)=>!g.field||!g.object.name||new TextEncoder().encode(g.title??"").length>pageVariableContract.recordLinks.maxTitleBytes||s.recordLinks?.some((h,j)=>i!==j&&g.object.name===h.object.name&&g.field===h.field))));
-  const statusTrackerProblem=sections.some(s=>{if(s.widget!=="status-tracker")return false;const value=s.statusTracker,info=authoringEntity(s.object||page?.object||""),l=info?.lifecycle;return !value||!l||value.field!==l.field||!info?.fields.some(f=>f.name===value.field)||!value.stages.length||value.stages.length>pageVariableContract.statusTracker.maxStages||new Set(value.stages).size!==value.stages.length||value.stages.some(name=>!l.states.some(s=>s.name===name));});
-  const metricAnnotationProblem=sections.some(s=>{const note=s.metricPresentation?.annotation;return !!note&&(s.widget!=="metric"||!["up","down","flat"].includes(note.direction)||new TextEncoder().encode(note.text).length>256);});
-  const metricPresentationProblem=metricAnnotationProblem||sections.some(s=>s.metricPresentation&&(new TextEncoder().encode(s.metricPresentation.prefix??"").length>pageVariableContract.metricPresentation.maxUnitBytes||new TextEncoder().encode(s.metricPresentation.suffix??"").length>pageVariableContract.metricPresentation.maxUnitBytes));
-  const titleProblem=sections.some(s=>s.widget==="heading"&&(!s.text?.trim()||new TextEncoder().encode(s.text).length>pageVariableContract.titles.maxTextBytes)||s.widget==="collection-title"&&(!s.collectionVariable||!s.countVariable));
-  const leaderboardProblem=sections.some(s=>{if(s.widget!=="record-leaderboard")return false;const c=s.leaderboard,v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""];return !c||!c.valueField||!c.labelField||!Number.isInteger(c.limit)||c.limit<1||c.limit>32||q?.limit!==c.limit||!!q?.offset||JSON.stringify(q?.sort)!==JSON.stringify([`${c.ascending?"":"-"}${c.valueField}`,"id"]);});
-  const summaryProblem=sections.some(s=>{if(s.widget!=="summary-stats")return false;const set=document.variables?.[s.collectionVariable??""],v=document.variables?.[s.statisticsVariable??""];return !s.summaryField||!s.statisticsVariable||v?.type!=="statistics"||v.source?.measure!==s.summaryField||v.source.query!==set?.source?.query;});
-  const pickerValueProblem=sections.some(s=>{if(s.widget!=="record-picker"||!s.pickerValueVariable)return false;if(s.model){const v=document.variables?.[s.pickerValueVariable];return !v||v.type!=="string"||v.mode!=="state";}const v=document.variables?.[s.pickerValueVariable],set=document.variables?.[s.collectionVariable??""];return !v||v.type!=="string"||v.mode!=="state"||v.scope!==set?.scope||v.owner!==set?.owner;});
-  const pickerProblem=sections.some(s=>{if(s.widget!=="record-picker"||s.model)return false;const v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""];return !s.recordPicker?.labelField||v?.source?.kind!=="plan"||q?.limit!==20||!!q?.offset||JSON.stringify(q?.sort)!==JSON.stringify(["id"]);});
-  const spacerProblem=sections.some(s=>s.widget==="spacer"&&(!s.spacer||typeof s.spacer.size!=="number"||!Number.isFinite(s.spacer.size)||s.spacer.size<0||s.spacer.size>pageUIManifest.layout.maxSize));
-  const separatorProblem=sections.some(s=>s.widget==="separator"&&(!s.separator||new TextEncoder().encode(s.separator.label??"").length>pageVariableContract.separator.maxLabelBytes));
-  const noticeProblem=sections.some(s=>s.widget==="notice"&&(!s.notice||!(pageVariableContract.notice.tones as readonly string[]).includes(s.notice.tone)||new TextEncoder().encode(s.notice.title??"").length>pageVariableContract.notice.maxTitleBytes||new TextEncoder().encode(s.notice.message).length>pageVariableContract.notice.maxMessageBytes));
-  const alertProblem=sections.some(s=>{if(s.widget!=="alert-banner")return false;const c=s.alertBanner,v=document.variables?.[s.alertValueVariable??""],leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0];return !c||parsePageDecimal(c.threshold)?.value!==c.threshold||!(pageVariableContract.alertBanner.tones as readonly string[]).includes(c.tone)||!c.message||new TextEncoder().encode(c.message).length>pageVariableContract.alertBanner.maxMessageBytes||!v||v.type!=="decimal"||!["page","overlay"].includes(v.scope)||!leaf||!!loopOwner(document,leaf)||!variableAccessible(v,undefined,overlayOwner(document,leaf));});
-  const dateProblem=sections.some(s=>{if(s.widget!=="date-input")return false;if(s.dateKind&&!["date","datetime"].includes(s.dateKind)||s.dateKind==="datetime"&&!validTimestampOffset(s.dateOffset??"")||s.dateKind!=="datetime"&&s.dateOffset)return true;const v=document.variables?.[s.dateVariable??""],leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0];return !v||v.type!=="string"||v.mode!=="state"||!["page","overlay"].includes(v.scope)||new TextEncoder().encode(s.dateLabel??"").length>1024||!leaf||!!loopOwner(document,leaf)||!variableAccessible(v,undefined,overlayOwner(document,leaf));});
-  const choiceProblem=sections.some(s=>{if(s.widget!=="choice-input")return false;const multiple=s.choiceInput?.variant==="multiple",v=document.variables?.[(multiple?s.choiceSetVariable:s.choiceVariable)??""],leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0];return !s.choiceInput||!validChoiceInput(s.choiceInput)||!!(multiple?s.choiceVariable:s.choiceSetVariable)||!v||v.type!==(multiple?"string-set":"string")||(v.mode!=="state"&&(!["steps","tabs"].includes(s.choiceInput.variant)||v.mode!=="constant"))||!["page","overlay"].includes(v.scope)||!leaf||!!loopOwner(document,leaf)||!variableAccessible(v,undefined,overlayOwner(document,leaf))||["steps","tabs"].includes(s.choiceInput.variant)&&(v.scope!==(overlayOwner(document,leaf)?"overlay":"page")||v.owner!==overlayOwner(document,leaf));});
-  const booleanProblem=sections.some(s=>{if(s.widget!=="boolean-input")return false;const v=document.variables?.[s.booleanVariable??""];return !!s.booleanVariant&&!(pageVariableContract.booleanInput.variants as readonly string[]).includes(s.booleanVariant)||!v||v.type!=="boolean"||v.mode!=="state"||!["page","overlay"].includes(v.scope)||new TextEncoder().encode(s.booleanLabel??"").length>1024||(()=>{const leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0];return !leaf||!!loopOwner(document,leaf)||!variableAccessible(v,undefined,overlayOwner(document,leaf));})();});
-  const rangeProblem=sections.some(s=>{if(s.widget!=="range-input")return false;const a=document.variables?.[s.rangeMinVariable??""],b=document.variables?.[s.rangeMaxVariable??""],r=s.rangeInput;return !r||!rangeGrid(r.min,r.max,r.step)||!a||!b||s.rangeMinVariable===s.rangeMaxVariable||a.type!=="string"||b.type!=="string"||a.mode!=="state"||b.mode!=="state"||a.scope!==b.scope||a.owner!==b.owner||!["page","overlay"].includes(a.scope);});
-  const gaugeProblem=sections.some(s=>s.widget==="gauge"&&(!s.gaugeValueVariable||document.variables?.[s.gaugeValueVariable]?.type!=="number"||!s.gauge||!gaugeModel(0,s.gauge.max,s.gauge.warnAt)));
-  const progressProblem=sections.some(s=>{if(s.widget!=="progress")return false;return !s.progressValueVariable||document.variables?.[s.progressValueVariable]?.type!=="decimal"||(s.progressTotalVariable?document.variables?.[s.progressTotalVariable]?.type!=="decimal"||!!s.progressTotal:!progressRatio("0",s.progressTotal??""));});
-  const recordGanttProblem=sections.some(s=>s.widget==="record-gantt"&&(!s.recordGantt?.startField||!s.recordGantt?.endField||!s.recordGantt?.titleField||!s.recordGantt?.statusField||!ganttRange(s.recordGantt?.rangeStart??"",s.recordGantt?.rangeEnd??"")||!document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""]?.sort?.length));
-  const recordCalendarProblem=sections.some(s=>s.widget==="record-calendar"&&(!s.recordCalendar?.dateField||!s.recordCalendar?.labelField||!/^\d{4}-(0[1-9]|1[0-2])$/.test(s.recordCalendar?.initialMonth??"")||s.recordCalendar?.initialMonth.startsWith("0000")||!document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""]?.sort?.length));
-  const recordEventsProblem=sections.some(s=>s.widget==="record-events"&&(!s.recordEvents?.timeField||!s.recordEvents?.titleField||!s.recordEvents?.severityField||!document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""]?.sort?.length));
-  const explorationProblem=sections.some(s=>explorationViewProblem(document,sections,s,page?.object??"",type=>authoringEntity(type),definitions));
-  const contextProblem=sections.some(s=>contextViewProblem(document,sections,s,page?.object??"",type=>authoringEntity(type),definitions));
-  const workViewProblem=sections.some(s=>{if(!["approval-inbox","notification-feed"].includes(s.widget))return false;const leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0];return !leaf||!!loopOwner(document,leaf)||!!s.object||!!s.fields?.length||!!s.actions?.length||!!s.recordVariable||!!s.selection||!!s.collectionVariable||!!s.selectionVariable||!!s.selectionSetVariable||!!s.filterVariable||!!s.recordSetVariable||!!s.parentSelection||!!s.relation||!!s.query||!!s.inlineEdit||!!s.commentDraftVariable||!!s.fileVariable||!!s.pdfPageVariable;});
-  const historyProblem=sections.some(s=>historyViewProblem(document,sections,s,page?.object??""));
-  const collaborationProblem=sections.some(s=>{if(!isCollaborationWidget(s.widget))return false;const original=collaborationRecordSource(document,sections,s.recordVariable??"",s.id??"",page?.object??""),r=document.variables?.[s.recordVariable??""],bindingOwner=recordInputOwner(document,s),key=s.widget==="record-comments"?s.commentDraftVariable:s.fileVariable,value=document.variables?.[key??""],pdf=document.variables?.[s.pdfPageVariable??""];return !original||(s.object||page?.object)!==original.object||!!s.fields?.length||!!s.actions?.length||!!s.collectionVariable||!!s.selection||!!s.selectionVariable||!!s.selectionSetVariable||!!s.recordSetVariable||!!s.relation||!!s.parentSelection||!!s.query||!!s.inlineEdit||s.widget==="record-comments"&&!!(s.fileVariable||s.pdfPageVariable)||s.widget==="record-uploader"&&!!(s.commentDraftVariable||s.pdfPageVariable)||["media-preview","pdf-viewer","image-annotation","scene-3d"].includes(s.widget)&&!!s.commentDraftVariable||s.widget==="media-preview"&&!!s.pdfPageVariable||!value||value.type!=="string"||value.scope!==bindingOwner?.scope||value.owner!==bindingOwner?.owner||(value.mode!=="state"&&(!["media-preview","pdf-viewer","image-annotation","scene-3d"].includes(s.widget)||value.mode!=="constant"))||s.widget==="pdf-viewer"&&(!pdf||pdf.type!=="string"||pdf.mode!=="state"||pdf.scope!==r?.scope||pdf.owner!==r?.owner||s.fileVariable===s.pdfPageVariable);});
-  const recordComparisonProblem=sections.some(s=>{if(s.widget!=="record-comparison")return false;const binding=recordComparisonSource(document,sections,s.recordSetVariable??"",s.id??"",page?.object??""),info=binding&&authoringEntity(binding.object),label=s.recordComparison?.labelField,fields=s.fields??[];return !binding||(s.object||page?.object)!==binding.object||!label||label!=="id"&&!info?.fields.some(f=>f.name===label&&["text","longtext","choice","reference"].includes(f.type))||!fields.length||fields.length>64||new Set(fields).size!==fields.length||fields.some(name=>!info?.fields.some(f=>f.name===name&&["text","longtext","choice","reference","integer","decimal","money","date","datetime","boolean"].includes(f.type)));});
-  const recordCardProblem=sections.some(s=>{if(s.widget!=="record-card")return false;const v=document.variables?.[s.recordVariable??""];return !s.recordCard?.labelField||!s.recordCard.tone||(s.fields?.length??0)>4||!(v?.mode==="resource"&&v.source?.kind==="record"||Number(document.uiProfile.split(".").at(-1))>=98&&v?.mode==="shared"&&v.type==="record"&&v.source?.object?.name===(s.object||page?.object));});
-  const sparklineProblem=sections.some(s=>{if(s.widget!=="sparkline-kpi")return false;const c=s.sparkline,q=document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""];return !c||(!s.sparklineDecimalVariable&&!s.sparklineNumberVariable)||!!s.sparklineDecimalVariable&&!!s.sparklineNumberVariable||!!s.collectionVariable&&(!c.field||!q?.sort?.length||!q.limit||q.limit>30)||!s.collectionVariable&&!!c.field;});
-  const tagCountsProblem=sections.some(s=>{if(s.widget!=="tag-counts")return false;const v=document.variables?.[s.collectionVariable??""],output=document.variables?.[s.groupValueVariable??""],info=authoringEntity(s.object||page?.object||""),leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined;return !leaf||!!loopOwner(document,leaf)||v?.scope!==(owner?"overlay":"page")||v.owner!==owner|| !s.group||s.group==="count"||s.group.includes(":")||!info?.fields.some(f=>f.name===s.group&&["text","choice"].includes(f.type))||v?.mode!=="resource"||v.source?.kind!=="plan"||!!s.groupSetVariable||!!s.groupValueVariable&&(!output||output.type!=="string"||output.mode!=="state"||output.scope!==v.scope||output.owner!==v.owner);});
-  const treemapProblem=sections.some(s=>s.widget==="treemap"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"||!!s.groupValueVariable&&!!s.groupSetVariable));
-  const heatmapProblem=sections.some(s=>{if(s.widget!=="heatmap")return false;const v=document.variables?.[s.collectionVariable??""];return !s.group||!s.columnGroup||s.group===s.columnGroup||s.measure!=="count"||v?.mode!=="resource"||v.source?.kind!=="plan"||!!s.rowValueVariable&&!!s.rowSetVariable||!!s.columnValueVariable&&!!s.columnSetVariable;});
-  const scatterProblem=sections.some(s=>{if(s.widget!=="record-scatter")return false;const c=s.scatter,v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""];return !c?.xField||!c.yField||!c.colorField||!c.labelField||v?.mode!=="resource"||v.source?.kind!=="plan"||!q?.sort?.length||!q.limit||q.limit>100;});
-  const recordChartProblem=sections.some(s=>s.widget==="record-chart"&&(!s.recordChart?.xField||!s.recordChart?.yField||!document.queries?.[document.variables?.[s.collectionVariable??""]?.source?.query??""]?.sort?.length));
-  const recordListProblem=sections.some(s=>s.widget==="record-list"&&(!s.collectionVariable||!s.recordList||!s.cardLabel||(s.fields?.length??0)>pageVariableContract.recordList.maxFields));
-  const sharedRecordSetOutputProblem=sections.some(s=>!!s.selectionSetVariable&&document.variables?.[s.selectionSetVariable]?.mode==="shared"&&(()=>{const v=document.variables![s.selectionSetVariable!],leaf=Object.entries(document.nodes).find(([,n])=>n.section===s.id)?.[0];return s.widget!=="table"||!leaf||!!overlayOwner(document,leaf)||!!loopOwner(document,leaf)||!v?.writable||v.type!=="record-set"||v.source?.object?.name!==(s.object||page?.object);})());
-  const sharedRecordOutputProblem=sections.some(s=>["record-list","record-scatter","record-leaderboard","kanban","record-map"].includes(s.widget)&&!!s.selectionVariable&&(()=>{const v=document.variables?.[s.selectionVariable!],leaf=Object.entries(document.nodes).find(([,n])=>n.kind==='widget'&&n.section===s.id)?.[0];return !!s.selection||s.recordList?.layout==='tiles'||!leaf||!!overlayOwner(document,leaf)||!!loopOwner(document,leaf)||v?.type!=='record'||v.scope!=='application'||v.mode!=='shared'||!v.writable||v.source?.kind!=='application'||v.source.object?.name!==(s.object||page?.object);})());
-  const observationInvalid=sections.some(s=>observationProblem(document,sections,s,page?.object??"",type=>authoringEntity(type),definitions));
-  const analysisProblem=sections.some(s=>collectionAnalysisProblem(document,s,page?.object??"",type=>authoringEntity(type),definitions));
-  const recordWorkInvalid=sections.some(s=>recordWorkProblem(document,s,page?.object??"",name=>authoringEntity(name),catalog,definitions));
-  const invalid = sections.some(s=>s.widget==="external-frame"&&!validExternalFrame(s.externalFrame))||sections.some(s=>s.widget==="embedded-page"&&(!s.embedding||!/^page\.sha256\.[0-9a-f]{64}$/.test(s.embedding.contentVersion)))||observationInvalid||recordWorkInvalid||analysisProblem||sections.some(s=>s.widget==="histogram"&&(!s.histogram?.field||!Number.isInteger(s.histogram.bins)||s.histogram.bins<1||s.histogram.bins>64||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||sections.some(s=>s.widget==="term-counts"&&(!s.group||s.group==="count"||s.group.includes(":")||document.variables?.[s.collectionVariable??""]?.source?.kind!=="plan"))||searchInputProblem||pickerValueProblem||spacerProblem||separatorProblem||noticeProblem||alertProblem||pickerProblem||dateProblem||choiceProblem||booleanProblem||rangeProblem||leaderboardProblem||summaryProblem||gaugeProblem||progressProblem||recordGanttProblem||recordCalendarProblem||recordEventsProblem||recordCardProblem||recordComparisonProblem||collaborationProblem||workViewProblem||contextProblem||explorationProblem||historyProblem||sparklineProblem||treemapProblem||tagCountsProblem||heatmapProblem||scatterProblem||recordChartProblem||recordListProblem||sharedRecordOutputProblem||sharedRecordSetOutputProblem||titleProblem||metricPresentationProblem||statusTrackerProblem||recordLinksProblem||groupProblem||recordViewProblem||tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(session.inputProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const diagnostics = pageDraftDiagnostics(session.draft, { object: page?.object ?? "", entity: authoringEntity, catalog, definitions });
+  const problemList: WorkbenchProblem[] = [
+    ...diagnostics.map(issue => ({ id: issue.id, text: t(issue.code, issue.values), subject: issue.subject, locate: () => {
+      const target = issue.target;
+      if (target.kind === "compatibility") setCompatibilityOpen(true);
+      else if (target.kind === "node") canvasSelect(target.id);
+      else if (target.kind === "widget") { const at = sections.findIndex(section => section.id === target.id); if (at >= 0) choose(at); }
+      else select({ kind: target.kind });
+    } })),
+    ...Object.entries(session.inputProblems).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
+  ];
+  const invalid = problemList.length > 0;
+  const incompatible = diagnostics.some(issue => issue.target.kind === "compatibility");
   const relatedObjects = model.entities.filter(entity => entity.type !== page?.object)
     .filter(entity => entity.fields.some(field => field.type === "reference" && [page?.object, ...selections.map(selection => selection.object.name)].includes(field.ref))).map(entity => entity.type);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
@@ -294,60 +235,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     } catch { setRefused(t("The page could not be saved. Your draft is still here.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
-  const problemList: WorkbenchProblem[] = [
-    ...layoutProblems.map((issue, i) => ({ id: `layout:${i}`, text: t(issue.code), subject: issue.node, locate: () => canvasSelect(issue.node) })),
-    ...variableProblems.map((issue, i) => ({ id: `variable:${i}`, text: t(issue.code), subject: issue.variable, locate: () => select({ kind: "variables" }) })),
-    ...(selectionProblem ? [{ id: "selection", text: selectionProblem, locate: () => select({ kind: "page" }) }] : []),
-    ...Object.entries(session.inputProblems).filter(([, problem]) => problem).map(([id, problem]) => ({ id: `form:${id}`, text: problem, subject: id })),
-    ...(inputProblem ? [{ id: "input", text: t("Bind each input to a writable text or decimal state in its own scope.") }] : []),
-    ...(queryProblem ? [{ id: "query", text: t("Each query needs a field for every condition and a limit within the budget.") }] : []),
-    ...(inlineProblem ? [{ id: "inline", text: t("An inline action needs exactly one action and valid defaults.") }] : []),
-    ...(tableEditProblem ? [{ id: "table-edit", text: t("Inline table editing needs an action and 1–{n} visible fields.", { n: pageVariableContract.tableEditing.maxFields }) }] : []),
-    ...(incompatible ? [{ id: "profile", text: t("This draft needs a newer workspace version. Its saved content has been preserved."), locate: () => setCompatibilityOpen(true) }] : []),
-    ...(loopProblem ? [{ id: "p0", text: t("Choose a query window for each loop before saving.") }] : []),
-    ...(overlayProblem ? [{ id: "p1", text: t("Add content to each overlay and bind every button before saving.") }] : []),
-    ...(leaderboardProblem ? [{ id: "p2", text: t("Bind ranking fields and a matching numeric/ID sorted Top-N query before saving.") }] : []),
-    ...(recordWorkInvalid ? [{ id: "p3", text: t("Bind the original row action parameters, bounded tile/action window or note state before saving.") }] : []),
-    ...(analysisProblem ? [{ id: "p4", text: t("Bind the original analysis fields, matching scalar or axis ports and query before saving.") }] : []),
-    ...(summaryProblem ? [{ id: "p5", text: t("Bind the summary field, query and matching statistics before saving.") }] : []),
-    ...(searchInputProblem ? [{ id: "p6", text: t("Bind search text to a query search in the same scope before saving.") }] : []),
-    ...(pickerValueProblem ? [{ id: "p7", text: t("Bind picker ID output to original text state with the same query owner before saving.") }] : []),
-    ...(pickerProblem ? [{ id: "p8", text: t("Bind a picker title and a 20-record ID-sorted query before saving.") }] : []),
-    ...(dateProblem ? [{ id: "p9", text: t("Bind the date input to its original scoped text state before saving.") }] : []),
-    ...(choiceProblem ? [{ id: "p10", text: t("Bind a scoped text state and valid static choices before saving.") }] : []),
-    ...(booleanProblem ? [{ id: "p11", text: t("Bind a boolean state with its original page or overlay owner before saving.") }] : []),
-    ...(rangeProblem ? [{ id: "p12", text: t("Bind distinct text states with one owner and a valid decimal range before saving.") }] : []),
-    ...(gaugeProblem ? [{ id: "p13", text: t("Bind a number variable and positive gauge maximum before saving.") }] : []),
-    ...(spacerProblem ? [{ id: "p14", text: t("Declare a finite nonnegative spacer size within the layout budget before saving.") }] : []),
-    ...(separatorProblem ? [{ id: "p15", text: t("Declare a bounded plain separator label or leave it absent before saving.") }] : []),
-    ...(noticeProblem ? [{ id: "p16", text: t("Choose a supported notice tone and bounded plain title and text before saving.") }] : []),
-    ...(alertProblem ? [{ id: "p17", text: t("Bind an original decimal value and a valid threshold, tone and plain message before saving.") }] : []),
-    ...(progressProblem ? [{ id: "p18", text: t("Bind a decimal numerator and exactly one positive fixed total or decimal denominator before saving.") }] : []),
-    ...(recordGanttProblem ? [{ id: "p19", text: t("Bind Gantt fields, a valid fixed range and an explicitly sorted plan before saving.") }] : []),
-    ...(recordCalendarProblem ? [{ id: "p20", text: t("Bind calendar fields, an initial month and an explicitly sorted plan before saving.") }] : []),
-    ...(recordEventsProblem ? [{ id: "p21", text: t("Bind event fields and an explicitly sorted query plan before saving.") }] : []),
-    ...(explorationProblem ? [{ id: "p22", text: t("Exploration views require original typed resources, published assets, retained relations and distinct object-specific output ports.") }] : []),
-    ...(contextProblem ? [{ id: "p23", text: t("Context views need their original navigation, record or personnel-query bindings; image URL, caption and height must satisfy the static image profile.") }] : []),
-    ...(workViewProblem||historyProblem ? [{ id: "p24", text: t("Work views use their original member services. Bounded history needs an original same-owner record resource and a window of 1–100 entries.") }] : []),
-    ...(collaborationProblem ? [{ id: "p25", text: t("Bind the original record resource and collaboration state in the same page or overlay before saving.") }] : []),
-    ...(recordComparisonProblem ? [{ id: "p26", text: t("Bind an original multi-selection resource, title and 1–64 comparison fields before saving.") }] : []),
-    ...(recordCardProblem ? [{ id: "p27", text: t("Bind an original record resource, title and at most four card properties before saving.") }] : []),
-    ...(sparklineProblem ? [{ id: "p28", text: t("Bind one original sparkline scalar and an optional ordered 30-record numeric window before saving.") }] : []),
-    ...(observationInvalid ? [{ id: "p29", text: t("Bind original observation time, signals, owned windows and matching record or statistic ports before saving.") }] : []),
-    ...(treemapProblem ? [{ id: "p30", text: t("Bind a visible treemap group, original query window and exclusive output type before saving.") }] : []),
-    ...(heatmapProblem ? [{ id: "p31", text: t("Bind two distinct heatmap axes, complete count and the original query set before saving.") }] : []),
-    ...(scatterProblem ? [{ id: "p32", text: t("Bind visible scatter fields and an ordered original window of at most 100 records before saving.") }] : []),
-    ...(recordChartProblem ? [{ id: "p33", text: t("Bind visible record chart axes and an explicitly sorted query plan before saving.") }] : []),
-    ...(recordListProblem ? [{ id: "p34", text: t("Bind a record card window, title and bounded summary fields before saving.") }] : []),
-    ...(titleProblem ? [{ id: "p35", text: t("Enter bounded heading text or bind the collection and its original count before saving.") }] : []),
-    ...(metricPresentationProblem ? [{ id: "p36", text: t("Metric units and static notes need supported directions and bounded text.") }] : []),
-    ...(statusTrackerProblem ? [{ id: "p37", text: t("Choose an original lifecycle field and valid stages before saving.") }] : []),
-    ...(recordLinksProblem ? [{ id: "p38", text: t("Choose valid related groups before saving.") }] : []),
-    ...(recordViewProblem ? [{ id: "p39", text: t("Choose at least one record tab before saving.") }] : []),
-    ...(groupProblem ? [{ id: "p40", text: t("Give every group button a bounded title and its own click binding.") }] : []),
-    ...(tablePresentationProblem ? [{ id: "p41", text: t("Table columns and controls need supported formats, density and bounded titles.") }] : []),
-    ...(incompatible ? [{ id: "p42", text: t("This draft needs a newer workspace version. Its saved content has been preserved.") }] : []),
-  ];
   const nothing = sections.length === 0;
   saveRef.current = save;
   const publish = async () => {

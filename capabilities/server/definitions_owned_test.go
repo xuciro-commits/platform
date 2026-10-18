@@ -109,3 +109,18 @@ func TestOwnedAssetDiscoveryPreservesRowScopeAndFiltersDependencies(t *testing.T
 		t.Fatal("member's own readable metadata was not discoverable")
 	}
 }
+
+func TestOwnedAssetDiscoveryPreservesNativeMetadataDefinitions(t *testing.T) {
+	for _, tenant := range []*Tenant{stockTenant(t), builderTenant(t, "native-build-metadata")} {
+		app := "stock"
+		if tenant.app(build.ID) != nil {
+			app = build.ID
+		}
+		ref := platform.AssetRef{App: app, Kind: platform.AssetObservation, Name: "temperature"}
+		native := platform.Definition{Ref: ref, Source: "code", Version: "1", ContractVersion: 1, Observation: &platform.ObservationDefinition{Name: "temperature", Title: "Native temperature"}}
+		definitions, err := tenant.ownedAssetDefinitions([]platform.Definition{native})
+		if err != nil || len(definitions) != 1 || definitions[0].Ref != ref || definitions[0].Source != "code" || definitions[0].Observation != native.Observation {
+			t.Fatalf("controlled metadata projection removed a native declaration: %+v %v", definitions, err)
+		}
+	}
+}
