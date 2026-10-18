@@ -1,5 +1,5 @@
-// The Hotel app's contribution to the workspace (ADR-0018): reservations and
-// room types, read as records (ADR-0016). A lodging booking opens here when the
+// The Hotel app's contribution to the workspace (ADR-0019): reservations and
+// room types, read as records (ADR-0046). A lodging booking opens here when the
 // Hotel is the tenant's lodging provider.
 import "./i18n";
 import { Records, defineApp, useOpenRecord, useRead } from "@platform/app";

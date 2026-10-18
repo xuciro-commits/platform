@@ -22,7 +22,7 @@ type AgentRuntime interface {
 	ObserveAgentKnowledge(AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
 	ApplyAgentStep(stepBody, time.Time, bool) *kernel.Error
 	ApplyAgentStepCaller(platform.Caller, stepBody, time.Time) *kernel.Error
-	EvaluateAgent(Evaluation, time.Time) Evaluation
+	EvaluateAgent(Evaluation, time.Time, func(*Evaluation) bool) Evaluation
 	RecordAgentSignal(platform.Caller, *pb.ChangeRecord, string, Signal, time.Time)
 	AgentEffectEnded(platform.Caller, *pb.ChangeRecord, platform.Effect, platform.Outcome, time.Time)
 	AgentDeclaration(string) (AgentCardDeclaration, bool)

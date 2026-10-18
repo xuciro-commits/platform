@@ -1,4 +1,4 @@
-// Settings: owned work, integrations, app settings and the audit trail (ADR-0013, ADR-0014).
+// Settings: owned work, integrations, app settings and the audit trail (ADR-0027、ADR-0004).
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, Dialog, Input, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
@@ -106,7 +106,7 @@ export function Integrations() {
   );
 }
 
-// Webhook endpoints and their effects (ADR-0014): events go out signed, at least
+// Webhook endpoints and their effects (ADR-0004): events go out signed, at least
 // once with a stable key; outcomes are journaled, a replay never sends.
 function Webhooks() {
 	const host=useHost(),[resolving,setResolving]=useState<string>();
@@ -270,7 +270,7 @@ export function AppSettingsView() {
 export function Audit() {
   const audit = useRead<AuditEntry[]>("/v1/audit");
   const { catalog, me } = useHost();
-  const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title])); // the member's catalog, in their language (ADR-0023)
+  const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title])); // the member's catalog, in their language (ADR-0005)
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
   const personal = useRead<Api.PersonalRead[]>("/v1/personal-reads").data ?? [];
   const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [

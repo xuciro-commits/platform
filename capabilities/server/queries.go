@@ -19,7 +19,7 @@ func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
 	return platform.NamedQuery{}, false
 }
 
-// RunQuery runs one declared query as m (ADR-0040 21c): its fixed conditions,
+// RunQuery runs one declared query as m (ADR-0047 21c): its fixed conditions,
 // and the record it is run for through its reference. It is the member's own
 // read of the object, so a page and an agent tool see exactly what m may.
 func (t *Tenant) RunQuery(m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {

@@ -8,7 +8,7 @@ import type { Api } from "@platform/kernel";
 import { useHost } from "@platform/app";
 import { Button, DataTable, Input, PageHeader, Panel, Select, Textarea, t, type ColumnDef } from "@platform/ui";
 
-// Decision tables (ADR-0062): condition columns → result columns, first match
+// Decision tables (ADR-0040): condition columns → result columns, first match
 // wins. A saved draft joins the same release review as its application;
 // activation installs the native operation used by processes, pages and API callers.
 type Draft = Omit<Api.Table,"rows">&{rows:(Omit<Api.TableRow,"when">&{when:string[]})[]};

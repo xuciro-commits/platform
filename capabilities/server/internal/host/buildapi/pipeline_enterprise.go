@@ -8,7 +8,7 @@ import (
 	enterprise "platformserver/internal/host/enterpriseapi"
 )
 
-// EnterpriseTarget (ADR-0073) lands a pipeline's rows in the enterprise model
+// EnterpriseTarget (ADR-0022) lands a pipeline's rows in the enterprise model
 // as elements of one stereotype owned on an external system's behalf: SAP
 // HR/OM organisational units become ActualOrganizations under the org tree,
 // AD departments posts, MES equipment ActualResources at locations. Columns

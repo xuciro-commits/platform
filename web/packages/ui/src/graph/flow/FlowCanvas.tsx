@@ -1,7 +1,7 @@
 // The flow family's canvas: one process, drawn as activities joined through typed
 // ports. The owner says what a step means, which connections are allowed and what
 // a change writes; this canvas says how it looks and how a person drives it —
-// select, connect, insert on a line, arrange, collapse, copy, undo (ADR-0086 D1).
+// select, connect, insert on a line, arrange, collapse, copy, undo (ADR-0033).
 import { ConnectionLineType, MarkerType, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, type Connection } from "@xyflow/react";
 import { AlignHorizontalJustifyStart, ArrowDown, ArrowRight, ChevronsDownUp, ChevronsUpDown, Copy, Maximize, Plus, Redo2, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -35,14 +35,14 @@ export type FlowCanvasProps = {
   onLayout?: (positions: Record<string, CanvasPosition>) => void;
   onDelete?: (nodes: FlowNode[], edges: FlowEdge[]) => void;
   onDuplicate?: (nodes: FlowNode[], edges: FlowEdge[]) => void;
-  /** BPMN lanes: the responsibilities this process is drawn across (ADR-0087 D1).
+  /** BPMN lanes: the responsibilities this process is drawn across (ADR-0033).
    * The owner declares them and says which step sits in which; the canvas draws the
    * bands, arranges inside them, and reports a step dropped into another one. */
   lanes?: FlowLane[];
   onLaneChange?: (id: string, lane: string) => void;
   history?: FlowHistory;
   /** The reader's own arrangement is kept on this device for this drawing
-   * (ADR-0092): nodes become draggable even in view mode, and the arrangement
+   * (ADR-0035): nodes become draggable even in view mode, and the arrangement
    * survives a reload until the reader tidies it up again. */
   storeKey?: string;
 };

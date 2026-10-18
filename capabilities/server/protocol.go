@@ -44,9 +44,19 @@ func (t *Tenant) bind(i int, a platform.App) error {
 // choose another (platform.protocol.bind), so it is read under opsMu.
 func (t *Tenant) bound(protocol string) (binding, bool) {
 	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
 	b, ok := t.bindings[protocol]
-	return b, ok
+	t.opsMu.Unlock()
+	if !ok {
+		return binding{}, false
+	}
+	for _, current := range b.provider.Manifest().Provides {
+		if current.Protocol.ID() == protocol {
+			return binding{provider: b.provider, provision: current}, true
+		}
+	}
+	// Keep the selected provider when its declaration disappears. Resolve must
+	// refuse this call rather than silently send it to a different authority.
+	return binding{provider: b.provider}, true
 }
 
 // providers are every enabled provision of protocol, in the tenant's app order.
@@ -99,7 +109,7 @@ func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
 }
 
 // invoke calls a protocol action for a consumer: a flow's step, an agent, or a
-// decision's request once it is accepted (ADR-0026).
+// decision's request once it is accepted (ADR-0006).
 func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time, original ...string) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 	if !t.consumes(c, protocol) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{app} does not consume {protocol}", c.App, protocol)
@@ -319,6 +329,7 @@ func (t *Tenant) protocolEvent(name string) (platform.ProtocolEvent, bool) {
 
 // ProtocolInfo describes a protocol in a tenant: who provides it, who consumes it, which provider is bound.
 type ProtocolInfo struct {
+	Contract  *platform.Protocol       `json:"contract,omitempty"`
 	ID        string                   `json:"id"`
 	Actions   []string                 `json:"actions"`
 	Reads     []string                 `json:"reads"`
@@ -333,7 +344,7 @@ func (t *Tenant) Protocols() []ProtocolInfo {
 	var order []string
 	info := func(p platform.Protocol) *ProtocolInfo {
 		if byID[p.ID()] == nil {
-			i := &ProtocolInfo{ID: p.ID(), Reads: p.Reads, Events: p.Events, Providers: []string{}, Consumers: []string{}}
+			i := &ProtocolInfo{ID: p.ID(), Contract: &p, Reads: p.Reads, Events: p.Events, Providers: []string{}, Consumers: []string{}}
 			for _, a := range p.Actions {
 				i.Actions = append(i.Actions, a.Schema)
 			}

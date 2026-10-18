@@ -26,7 +26,7 @@ import { useAuthoringCapabilities, useAuthoringModel } from "../ontology/authori
 
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", manual: true, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
 type Edit = Partial<WorkflowDraft> | ((draft: WorkflowDraft) => WorkflowDraft);
-/** BPMN boundary events (ADR-0086 D4): the host already declares a step's timeout and
+/** BPMN boundary events (ADR-0033): the host already declares a step's timeout and
  * its error path, so the canvas draws them attached to the step instead of as a note. */
 const stepBoundary = (step: WorkflowStep): FlowBoundary[] => [
   ...(step.timeoutSeconds ? [{ id: "timeout", notation: "event-timer" as const, label: t("Timeout after {seconds} seconds", { seconds: step.timeoutSeconds }) }] : []),

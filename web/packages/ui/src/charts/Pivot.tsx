@@ -1,4 +1,4 @@
-// A pivot over an entity type (ADR-0019): row and column groups, one measure,
+// A pivot over an entity type (ADR-0024): row and column groups, one measure,
 // totals, and drilling into the records behind a cell, like Odoo's pivot view.
 import {CountMatrix} from "./CountMatrix";
 import { useEffect, useRef, useState } from "react";

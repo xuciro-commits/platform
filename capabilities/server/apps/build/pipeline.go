@@ -85,6 +85,11 @@ func (b *Build) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 	return nil
 }
 
+// CheckPipeline shares publication validation with the read-only draft trial.
+func (b *Build) CheckPipeline(c platform.Caller, p Pipeline) *kernel.Error {
+	return b.checkPipeline(c, p)
+}
+
 func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)

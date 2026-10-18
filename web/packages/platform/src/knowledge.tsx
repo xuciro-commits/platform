@@ -1,9 +1,9 @@
-// Settings: documents and the glossary (ADR-0022, ADR-0023).
+// Settings: documents and the glossary (ADR-0009、ADR-0005).
 import { Records, useDefinitions, useHost, useReadQuery, type Passage } from "@platform/app";
 import { Button, Card, Form, Input, Markdown, Panel, Tag, t } from "@platform/ui";
 import { useState } from "react";
 
-// Where a term is actually felt (ADR-0084 D7): the host validates RefersTo when
+// Where a term is actually felt (ADR-0031): the host validates RefersTo when
 // the term is saved (knowledge.go, host.Declares), Search proposes entity names
 // whose title, plural, synonyms or glossary terms contain the word
 // (languages.go, names()), and an agent's prompt carries the glossary of the app
@@ -39,7 +39,7 @@ function GlossaryReach() {
   </Panel>;
 }
 
-// The tenant's glossary (ADR-0023 D1): its own words, layered on the model.
+// The tenant's glossary (ADR-0005 D1): its own words, layered on the model.
 export function Glossary() {
   return (
     <>
@@ -49,7 +49,7 @@ export function Glossary() {
   );
 }
 
-// Knowledge (ADR-0022): documents agents and members find by words and, with
+// Knowledge (ADR-0009): documents agents and members find by words and, with
 // an embedding model, by meaning; each is read by members of the apps it names.
 export function Knowledge() {
   const { client } = useHost();

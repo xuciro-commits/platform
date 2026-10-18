@@ -652,6 +652,31 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		return nil, fmt.Errorf("candidate identity factory changed its owner")
 	}
 	apps := []platform.App{identity}
+	var journalSteps func([]platform.TxnStep) bool
+	journalSteps = func(steps []platform.TxnStep) bool {
+		return slices.ContainsFunc(steps, func(step platform.TxnStep) bool {
+			return step.Journal != nil || step.ForEach != nil && journalSteps(step.ForEach.Steps)
+		})
+	}
+	hasBooks := slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
+		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
+			return false
+		}
+		var object build.Object
+		if json.Unmarshal(asset.Body, &object) != nil {
+			return false
+		}
+		return object.CreateTransaction != nil && journalSteps(object.CreateTransaction.Steps) || slices.ContainsFunc(object.Actions, func(action build.Action) bool {
+			return action.Journal != nil || action.Reverses != "" || action.Transaction != nil && journalSteps(action.Transaction.Steps)
+		})
+	})
+	if hasBooks {
+		app, err := fresh(platform.BooksApp)
+		if err != nil {
+			return nil, err
+		}
+		apps = append(apps, app)
+	}
 	hasFunctions := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFunction })
 	hasFlow := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFlow })
 	hasProposal := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
@@ -699,6 +724,9 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		apps = append(apps, app)
 	}
 	for _, manifest := range environment.Manifests {
+		if slices.ContainsFunc(apps, func(app platform.App) bool { return app.Manifest().ID == manifest.ID }) {
+			continue
+		}
 		apps = append(apps, newSampleOwner(member.Tenant, manifest))
 	}
 	apps = append(apps, b)

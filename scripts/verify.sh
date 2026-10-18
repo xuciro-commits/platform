@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The named verification steps the Makefile composes (ADR-0081): each writes
+# The named verification steps the Makefile composes (ADR-0029): each writes
 # its log to .build/verify/<step>.log and prints one line. Run steps by name:
 #   scripts/verify.sh contract formal format capabilities composition web-check mes
 # `make check`, `make verify`, `make rehearse` choose the layer; this script is
@@ -91,7 +91,7 @@ mes() {
   step mes-server check_module apps/mes/server
 }
 
-# Apps know no other app; they meet through protocols (ADR-0011); and no
+# Apps know no other app; they meet through protocols (ADR-0006); and no
 # escape hatch appears without being listed.
 composition_static() {
   step app-boundaries scripts/boundaries.sh

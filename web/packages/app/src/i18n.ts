@@ -1,4 +1,4 @@
-// Simplified Chinese for this package (ADR-0023), keyed by the English source text.
+// Simplified Chinese for this package (ADR-0005), keyed by the English source text.
 import { register } from "@platform/ui";
 
 register("zh-CN", {
@@ -142,7 +142,8 @@ register("zh-CN", {
   "Correct the marked values before submitting a new intent.": "请纠正标记的值，再提交新的意图。",
   "Review the business reason and correct the inputs or follow the declared correction path.": "请查看业务原因，纠正输入或沿声明的纠正路径处理。",
   "Original refused inputs": "被拒绝的原始输入",
-  "Unchanged inputs repeat the original request. Changed inputs create a linked correction.": "输入未变时重试原请求；修改后的输入会创建与原请求关联的纠正。",
+  "Retry original inputs repeats the saved request. Corrected inputs or a refreshed definition create a linked correction.": "原样重试会再次提交已保存的原请求；修改输入或使用已刷新的定义，会创建与原请求关联的纠正。",
+  "Submit with refreshed definition": "按刷新后的定义提交",
   "Retry original inputs": "原样重试",
   "Submit corrected inputs": "提交纠正后的输入",
   "Only explicit business confirmations": "仅显式业务确认",

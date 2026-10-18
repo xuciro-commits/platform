@@ -10,7 +10,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// Constraint is a versioned, pure write invariant of an object (ADR-0102).
+// Constraint is a versioned, pure write invariant of an object (ADR-0041).
 // It is part of the object's publication, not a second executable asset.
 type Constraint struct {
 	Name         string            `json:"name"`

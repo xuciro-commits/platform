@@ -45,7 +45,7 @@ func resourceOfEvent(id string) string { resource, _, _ := strings.Cut(id, "#");
 
 // DeliverStates records a gateway batch as one observation and re-derives
 // downtime; a downtime that starts tells the supervisors of its line, when the
-// plant's setting says so (ADR-0013).
+// plant's setting says so (ADR-0027).
 func (p *Plant) DeliverStates(gateway platform.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -78,7 +78,7 @@ func (p *Plant) DeliverStates(gateway platform.Caller, b StateBatch, now time.Ti
 	return fact, nil
 }
 
-// supervisorsOf are whoever supervises the resource's line or a unit above it (ADR-0012).
+// supervisorsOf are whoever supervises the resource's line or a unit above it (ADR-0022).
 func (p *Plant) supervisorsOf(resource string) platform.Recipient {
 	return platform.Recipient{Structure: SiteStructure, Unit: p.resourceLine(resource), Role: string(Supervisor)}
 }

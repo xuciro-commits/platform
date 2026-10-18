@@ -11,7 +11,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// Sequence numbers an app's documents without gaps (ADR-0024 D3), as SAP's
+// Sequence numbers an app's documents without gaps (ADR-0026), as SAP's
 // number ranges and Odoo's journal sequences do: a number is taken only by a
 // decision that is accepted, so a refused one leaves no hole, and replay takes
 // the same numbers again.

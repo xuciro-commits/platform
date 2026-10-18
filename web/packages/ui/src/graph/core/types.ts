@@ -11,7 +11,7 @@ export type CanvasPosition = { x: number; y: number };
 export type CanvasDirection = "right" | "down";
 
 /** One thing a person may do to the selected element; the owner supplies the
- * meaning and the run, the canvas supplies the place and the wording (ADR-0084 D3). */
+ * meaning and the run, the canvas supplies the place and the wording (ADR-0031). */
 export type CanvasAction = { id: string; label: string; hint?: string; icon?: ReactNode; tone?: "default" | "danger"; disabled?: boolean; run: () => void };
 
 /** A box a layout measures; both families lay out boxes, not pixels. */

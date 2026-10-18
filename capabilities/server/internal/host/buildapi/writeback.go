@@ -10,9 +10,9 @@ import (
 	"platformserver/platform"
 )
 
-// Writebacks (ADR-0072). A writeback declares that an accepted action on an
+// Writebacks (ADR-0024). A writeback declares that an accepted action on an
 // object is sent to an external system through a Connection: an HTTP request
-// whose body is mapped from the action's payload. The sending is an ADR-0014
+// whose body is mapped from the action's payload. The sending is an ADR-0004
 // effect - at least once, in order per connection, with the decision's change
 // id as the idempotency key - so an outage queues it and the receiver can
 // deduplicate retries. The answer can write fields back onto the record (the document number

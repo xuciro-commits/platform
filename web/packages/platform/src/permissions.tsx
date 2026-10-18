@@ -1,4 +1,4 @@
-// Roles & permissions (ADR-0078 §3.2): the catalog every decision is checked
+// Roles & permissions (ADR-0027 §3.2): the catalog every decision is checked
 // against — per app, per role, the actions it may call — read from the host,
 // never written here. Holders counts who has each role today.
 import { useHost, useReadQuery as useRead } from "@platform/app";
@@ -43,7 +43,7 @@ function AppMatrix({ app }: { app: AppPermissions }) {
   );
 }
 
-// Ask the engine why (ADR-0078 §3.4): a member, a permission, the verdict with its rule.
+// Ask the engine why (ADR-0027 §3.4): a member, a permission, the verdict with its rule.
 function Explain({ catalog }: { catalog: AppPermissions[] }) {
 	const { client } = useHost();
   const members = useRead<Member[]>("/v1/members").data ?? [];
@@ -99,7 +99,7 @@ function Explain({ catalog }: { catalog: AppPermissions[] }) {
   );
 }
 
-// The tenant's own configuration (ADR-0078 D): custom roles, policies, teams.
+// The tenant's own configuration (ADR-0027 D): custom roles, policies, teams.
 function Access({ catalog }: { catalog: AppPermissions[] }) {
   const { can } = useHost();
   const access = useRead<AccessConfig>("/v1/access").data;

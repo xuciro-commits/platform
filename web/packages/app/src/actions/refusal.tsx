@@ -31,7 +31,7 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
   {policy&&<p className="text-xs text-muted">{t("Ask an administrator to review access before trying again.")}</p>}
   {constraint&&<p className="text-xs text-muted">{t("Correct the marked values before submitting a new intent.")}</p>}
   {business&&<p className="text-xs text-muted">{t("Review the business reason and correct the inputs or follow the declared correction path.")}</p>}
-  {original&&<Disclosure summary={t("Original refused inputs")}><pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(original,null,2)}</pre><p className="text-xs text-muted">{t("Unchanged inputs repeat the original request. Changed inputs create a linked correction.")}</p></Disclosure>}
+  {original&&<Disclosure summary={t("Original refused inputs")}><pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(original,null,2)}</pre><p className="text-xs text-muted">{t("Retry original inputs repeats the saved request. Corrected inputs or a refreshed definition create a linked correction.")}</p></Disclosure>}
  </div>;
 }
 

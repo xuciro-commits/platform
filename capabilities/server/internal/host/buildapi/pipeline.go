@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// Pipelines (ADR-0071, ADR-0069 I-D): a declared, closed set of steps from
+// Pipelines (ADR-0024、ADR-0062 I-D): a declared, closed set of steps from
 // datasets to a dataset or to an object. No script: every step is data the
 // builder can read back, every row that fails an expectation is quarantined
 // with its reason, and a run is an ordinary journaled input like a pull.
@@ -37,9 +37,9 @@ type Pipeline struct {
 	OutputDataset string `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject  string `json:"outputObject,omitempty" title:"Output object"`
 	Key           string `json:"key,omitempty" title:"Record id column"`
-	// Marking (ADR-0075) is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
+	// Marking (ADR-0025) is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
 	Marking string `json:"marking,omitempty" field:"readonly" title:"Marking"`
-	// OutputEnterprise lands the rows in the enterprise model instead (ADR-0073): one element per row.
+	// OutputEnterprise lands the rows in the enterprise model instead (ADR-0022): one element per row.
 	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
 	// Every is a period, or empty: run when an input gains a version, or on request.
 	Every     string       `json:"every,omitempty" title:"Run every"`
@@ -59,7 +59,7 @@ type Pipeline struct {
 //	rename     From → To
 //	cast       Column, Type (string, number, boolean, date)
 //	filter     Column, Op (=, !=, <, <=, >, >=, contains, empty, notempty), Value
-//	compute    To, Formula (the ADR-0064 arithmetic over number columns)
+//	compute    To, Formula (the ADR-0040 arithmetic over number columns)
 //	lookup     Dataset, Column (here) = Match (there), take Columns (prefixed with As)
 //	join       Dataset, Column = Match, inner unless Outer; the other side's columns prefixed with As
 //	dedupe     Columns (the key; first row wins after Sort)
@@ -105,8 +105,8 @@ type PipelineRun struct {
 	Input             int              `json:"inputVersion"`
 	Rows              int              `json:"rows"`              // rows after the steps
 	Written           int              `json:"written"`           // rows written to the output
-	Marking           string           `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0075)
-	Merged            int              `json:"merged,omitempty"`  // rows merged into matched records (ADR-0074)
+	Marking           string           `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0025)
+	Merged            int              `json:"merged,omitempty"`  // rows merged into matched records (ADR-0024)
 	Quarantined       int              `json:"quarantined"`
 	Failed            int              `json:"failed"` // rows the output refused
 	Error             string           `json:"error,omitempty"`
@@ -145,7 +145,10 @@ func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 
 // Execute runs the steps over rows, resolving other datasets through read,
 // then applies expectations; it returns the kept rows and the quarantined ones.
-func (p Pipeline) Execute(input []map[string]any, read func(dataset string) ([]map[string]any, error)) ([]map[string]any, []QuarantinedRow, error) {
+func (p Pipeline) Execute(input []map[string]any, read func(dataset string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, []QuarantinedRow, error) {
+	if len(rowLimit) > 0 && rowLimit[0] > 0 && len(input) > rowLimit[0] {
+		return nil, nil, fmt.Errorf("pipeline input exceeds the %d row limit", rowLimit[0])
+	}
 	rows := make([]map[string]any, len(input)) // steps edit rows in place; the input stays as it came
 	for i, r := range input {
 		rows[i] = make(map[string]any, len(r))
@@ -155,7 +158,7 @@ func (p Pipeline) Execute(input []map[string]any, read func(dataset string) ([]m
 	}
 	var err error
 	for i, s := range p.Steps {
-		rows, err = s.Apply(rows, read)
+		rows, err = s.Apply(rows, read, rowLimit...)
 		if err != nil {
 			return nil, nil, fmt.Errorf("step %d (%s): %v", i+1, s.Kind, err)
 		}
@@ -164,7 +167,7 @@ func (p Pipeline) Execute(input []map[string]any, read func(dataset string) ([]m
 	return kept, quarantined, nil
 }
 
-func (s Step) Apply(rows []map[string]any, read func(string) ([]map[string]any, error)) ([]map[string]any, error) {
+func (s Step) Apply(rows []map[string]any, read func(string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, error) {
 	switch s.Kind {
 	case "select":
 		out := make([]map[string]any, len(rows))
@@ -319,6 +322,9 @@ func (s Step) Apply(rows []map[string]any, read func(string) ([]map[string]any, 
 				continue
 			}
 			for _, h := range hits {
+				if len(rowLimit) > 0 && rowLimit[0] > 0 && len(out) >= rowLimit[0] {
+					return nil, fmt.Errorf("join exceeds the %d row limit", rowLimit[0])
+				}
 				n := make(map[string]any, len(r)+len(h))
 				for k, v := range r {
 					n[k] = v

@@ -7,7 +7,7 @@ import (
 	"slices"
 )
 
-// The application API owns this build-time UI contract (ADR-0046). The same
+// The application API owns this build-time UI contract (ADR-0015). The same
 // bytes generate the browser registry; they describe presentation, not grants
 // or new business execution capabilities.
 //

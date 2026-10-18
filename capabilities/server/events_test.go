@@ -111,7 +111,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	tn.Work(at(0)) // one: ok; wait:y: refused, retried in 2 s
 	submit("k3", "x3", "fail", 1)
 	submit("k4", "x4", "two", 1)
-	tn.Work(at(1)) // two passes: a failing delivery holds back only those about its own target (ADR-0027 D2)
+	tn.Work(at(1)) // two passes: a failing delivery holds back only those about its own target (ADR-0007 D2)
 	if w.texts["log"] != "saw two" {
 		t.Fatalf("log %q", w.texts["log"])
 	}

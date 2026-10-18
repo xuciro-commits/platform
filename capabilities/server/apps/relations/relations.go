@@ -1,5 +1,5 @@
-// Package relations is the platform's links and timeline (ADR-0011), a
-// platform app on the app API and internal/host (ADR-0025 D4).
+// Package relations is the platform's links and timeline (ADR-0006), a
+// platform app on the app API and internal/host (ADR-0016).
 package relations
 
 import (
@@ -17,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-// Relations is the platform's links and timeline (ADR-0011): relations between
+// Relations is the platform's links and timeline (ADR-0006): relations between
 // any two entities of any apps, and the activity about an entity, so no app —
 // and no bridge — has to own them. A member may link entities of apps it holds
 // a role in, and sees only those. Protocol events are told on the timeline of
@@ -28,7 +28,7 @@ const (
 	LinkType     = "platform.link"
 	SchemaLink   = "platform.link"
 	SchemaUnlink = "platform.unlink"
-	// Comments and followers on any record (ADR-0028 D6).
+	// Comments and followers on any record (ADR-0038).
 	CommentType    = "platform.comment"
 	FollowType     = "platform.follow"
 	SchemaComment  = "platform.comment.add"
@@ -81,7 +81,7 @@ func New(tenant string) *Relations {
 	), LinkType, CommentType, FollowType)}
 }
 
-// Snapshot and Restore: links and notes (ADR-0019 D6).
+// Snapshot and Restore: links and notes (ADR-0024).
 type relationsState struct {
 	Links []Link `json:"links"`
 	Notes []Note `json:"notes"`
@@ -250,7 +250,7 @@ func (r *Relations) PlanObserved(c platform.Caller, e platform.Event, events []s
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
 	if t := s.GetTarget().GetType(); t != CommentType && t != FollowType && t != LinkType && !strings.HasPrefix(s.GetPrincipalId(), "app:") {
-		// A member's decision on a record tells its followers (ADR-0028 D6).
+		// A member's decision on a record tells its followers (ADR-0038).
 		r.tell(c, entity, entity+" changed: "+s.GetSchema().GetName(), "by "+s.GetPrincipalId(),
 			"change:"+e.App+"/"+e.Record.GetChangeId(), []string{s.GetPrincipalId()}, e.Record.GetRecordedTime().AsTime())
 	}
@@ -329,7 +329,7 @@ func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, 
 	return err
 }
 
-// collaborate decides comments and follows (ADR-0028 D6): on a record the
+// collaborate decides comments and follows (ADR-0038): on a record the
 // member may read, which a replay does not ask again.
 func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	var p struct{ Target, Text string }

@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import type { Access, ObjectRecord } from "../ontology/object-model";
 import type { OwnedResource } from "./project";
 
-// Roles & scope designer (ADR-0057 F, ADR-0066): every role the project's
+// Roles & scope designer (ADR-0038 F, ADR-0044): every role the project's
 // objects name, against every object — what each reads and may do. Edits go
 // straight to the object drafts through the original build.object.edit; the
 // object's own Permissions tab stays the place for field-level access.

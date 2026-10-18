@@ -85,7 +85,7 @@ func (w *world) book(who, key, roomType, checkIn string) string {
 		map[string]string{"roomType": roomType, "checkIn": checkIn, "checkOut": "2026-10-03", "guest": "Acme board"})
 }
 
-// reservations are the hotel's reservation records, as the member may read them (ADR-0016).
+// reservations are the hotel's reservation records, as the member may read them (ADR-0046).
 func (w *world) reservations(who string) []any {
 	page, err := w.tenant.Records(w.members[who], pms.ReservationType, platform.Query{Archived: true}, t0)
 	if err != nil {
@@ -197,7 +197,7 @@ func TestStaysThroughTheLodgingProtocol(t *testing.T) {
 	}
 }
 
-// ADR-0011: another provider of the protocol plugs in with no change to the CRM.
+// ADR-0006: another provider of the protocol plugs in with no change to the CRM.
 func TestAnyLodgingProviderServesTheCRM(t *testing.T) {
 	w := newWorld(t, memoryProvider)
 	w.setup()
@@ -276,7 +276,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 	}
 }
 
-// Every app the sales solution runs reads in Chinese (ADR-0023 6a): a title or
+// Every app the sales solution runs reads in Chinese (ADR-0005 6a): a title or
 // description without a translation fails here.
 func TestChinese(t *testing.T) {
 	tn, err := NewTenant("t", nil)

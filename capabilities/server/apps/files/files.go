@@ -1,5 +1,5 @@
-// Package files is the platform's files app (ADR-0028), on the app API and
-// internal/host (ADR-0025 D4): a file is uploaded to the tenant's object
+// Package files is the platform's files app (ADR-0038), on the app API and
+// internal/host (ADR-0016): a file is uploaded to the tenant's object
 // store, then attached to a record by a decision that names its sha256, so the
 // journal holds the hash and never the bytes. A file is readable exactly when
 // the record it is attached to is.

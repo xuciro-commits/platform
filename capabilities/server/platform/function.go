@@ -20,7 +20,7 @@ type FunctionDefinitions interface {
 }
 
 // AIFunction is a bounded, declarative inference over explicit scalar fields
-// of one object (ADR-0043). It has no tools, code or business writes; the
+// of one object (ADR-0054). It has no tools, code or business writes; the
 // application's ordinary Reply action decides whether to adopt the answer.
 type AIFunction struct {
 	Proposal       *ProposalPolicy `json:"proposal,omitempty"`
@@ -41,7 +41,7 @@ type AIFunction struct {
 
 // FunctionCall identifies the exact accepted input without returning private
 // prompt bytes. Apps retain Sources alongside derived answer fields so their
-// Entity.Derived declarations enforce current read permissions (ADR-0033).
+// Entity.Derived declarations enforce current read permissions (ADR-0009).
 type FunctionCall struct {
 	SourceValues   map[string]json.RawMessage `json:"sourceValues,omitempty" field:"readonly" type:"json" title:"Accepted AI inputs"`
 	SourceRevision uint32                     `json:"sourceRevision,omitempty"`

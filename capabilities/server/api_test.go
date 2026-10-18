@@ -18,7 +18,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// The host API contract (ADR-0023 D7): every route is described, the document
+// The host API contract (ADR-0005 D7): every route is described, the document
 // is OpenAPI 3.1 whose references all resolve, a member's document names the
 // entity types and payloads they see, and the web edge's types are exactly
 // what the Go types generate.

@@ -11,7 +11,7 @@ const (
 )
 
 // auditLog is the tenant's bounded recent history for operators: accepted
-// inputs, event deliveries and reads of personal data (ADR-0028 D4). It has
+// inputs, event deliveries and reads of personal data (ADR-0038). It has
 // its own lock because entries are appended from inside the submit pipeline
 // and read by consoles without touching the tenant's main locks. Only the
 // audit entries and deliveries survive a snapshot; personal reads are volatile.

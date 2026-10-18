@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// Import and export of records as CSV (ADR-0028 D10). A row is a decision:
+// Import and export of records as CSV (ADR-0038). A row is a decision:
 // the type's generated create for a new ID, its generated edit for one the
 // member may read, submitted as the member and keyed by the file's hash and
 // the row, so a file sent twice repeats nothing. A preview probes each row
@@ -263,7 +263,7 @@ func toCSV(v any) string {
 	return fmt.Sprint(v)
 }
 
-// restricted says whether typ holds restricted data (ADR-0075): a dataset or
+// restricted says whether typ holds restricted data (ADR-0025): a dataset or
 // version marked so, or an object a restricted pipeline writes.
 func (t *Tenant) restricted(typ string) bool {
 	c := t.automation(build.ID, false)

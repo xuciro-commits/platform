@@ -18,7 +18,7 @@ import (
 )
 
 // stagedDecision owns the private record, ledger and intent views for supported
-// ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
+// ADR-0010 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
 	currentSubmission    *pb.Submission
 	businessRefusals     map[*kernel.Error]platform.BusinessRefusalFact

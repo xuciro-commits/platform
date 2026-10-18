@@ -44,7 +44,7 @@ fail() {
 wait_for() { for _ in $(seq 60); do curl -sf -o /dev/null "$1" && return; sleep 1; done; fail "$1 never answered"; }
 
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0018)
+pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0019)
 # Built apart, with plain progress: an image build whose output goes to a file can stall otherwise.
 compose build --progress plain >"$backup/build.log" 2>&1 || { tail -n 30 "$backup/build.log" >&2; fail "compose build"; }
 # Build cache unused for three days goes; the Go module and build caches in use stay (Dockerfiles).
@@ -63,7 +63,7 @@ code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" "$
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/me" | jq -r .principalId) == sup-1 ]] || fail "OIDC principal"
 [[ $(code supervisor) == 401 ]] || fail "demo token accepted in production mode"
-# One workspace per host (ADR-0018): the page, how to sign in, and the apps a member may open.
+# One workspace per host (ADR-0019): the page, how to sign in, and the apps a member may open.
 curl -s "$MANUFACTURING/" | grep -q "<title>Workspace</title>" || fail "workspace page"
 [[ $(curl -s "$HOSPITALITY/v1/sign-in" | jq -cS .) == "{\"client\":\"platform-web\",\"issuer\":\"$IDP/\"}" ]] || fail "sign-in: $(curl -s "$HOSPITALITY/v1/sign-in")"
 [[ $(curl -s -H "Authorization: Bearer $OP1" "$MANUFACTURING/v1/me" | jq -c '[.apps[].id]') == '["ai","mes"]' ]] || fail "apps of op1: $(curl -s -H "Authorization: Bearer $OP1" "$MANUFACTURING/v1/me" | jq -c '[.apps[].id]')"
@@ -74,7 +74,7 @@ forged=$(printf %s "$claims" | tr _- /+ | base64 -d | jq -c '.email = "sup@plant
 [[ -n $forged ]] || fail "could not forge"
 [[ $(code "$head.$forged.$sig") == 401 ]] || fail "forged claims accepted"
 echo "ok   principals come from Rauthy (demo tokens and forged claims refused)"
-# Health (ADR-0027 D6): the process, and each tenant's work for its administrators.
+# Health (ADR-0007 D6): the process, and each tenant's work for its administrators.
 [[ $(curl -s "$MANUFACTURING/healthz" | jq -r .status) == ok && $(curl -s "$HOSPITALITY/healthz" | jq -r .status) == ok ]] || fail "healthz"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health" | jq -r '.status + " " + (.apps|tostring)') =~ ^(ok|degraded)\ [0-9]+$ ]] || fail "tenant health: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health")"
 echo "ok   health: the processes are alive; the plant's administrator reads its tenant's health"
@@ -530,7 +530,7 @@ if awk '$1 == "batch" && $NF != 200 { bad = 1 } END { exit !bad }' "$backup/gate
 fi
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
 
-# Platform operations (ADR-0013): the gateway's downtime reached the supervisor
+# Platform operations (ADR-0027): the gateway's downtime reached the supervisor
 # of the line, not its operators; Settings disables the gateway's connector, and
 # that is a decision the restart below keeps.
 notified=false
@@ -548,7 +548,7 @@ fi
 [[ $(curl -s -H "Authorization: Bearer $OP1" "$MANUFACTURING/v1/notifications" | jq length) == 0 ]] || fail "operator notified"
 AUTHORITY=platform submit "$SUP" o-1 platform.connector.disable platform.connector gateway-l1 '{}' | jq -e .record >/dev/null || fail "disable connector"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/connectors" | jq -r '.[] | select(.id == "gateway-l1") | .health') == disabled ]] || fail "connector health"
-# The ERP (ADR-0024): the plant host seeded its books when its journal was
+# The ERP (ADR-0026): the plant host seeded its books when its journal was
 # empty. The ERP releases production orders; the plant makes WO-2 against MO-1,
 # its confirmation flow confirms it through production.orders/1, and the ERP
 # posts the cost with a number from the production journal.
@@ -573,7 +573,7 @@ for _ in $(seq 20); do [[ $(wo WO-2) == confirmed* ]] && break; sleep 0.5; done
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/erp.production/MO-1" | jq -r '.record | .state + " " + .shopOrder + " " + (.yield | tostring)') == "confirmed WO-2 12" ]] || fail "the ERP's MO-1"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/trial-balance" | jq -r '[.[] | select(.account == "1405") | .balance][0]') == 14400 ]] || fail "finished goods in the books: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/trial-balance")"
 echo "ok   operations: downtime notified to the line's supervisor only; the gateway's connector disabled from Settings; the ERP's production order made by the plant, confirmed through the protocol and posted"
-# Files (ADR-0028): bytes into RustFS, answered with their hash; a decision attaches them to a shop order; its readers download them.
+# Files (ADR-0038): bytes into RustFS, answered with their hash; a decision attaches them to a shop order; its readers download them.
 up=$(curl -s -H "Authorization: Bearer $SUP" -H 'Content-Type: text/plain' --data-binary 'WO-1 inspection: all good' "$MANUFACTURING/v1/files?name=inspection.txt")
 hash=$(jq -r .hash <<<"$up")
 [[ ${#hash} == 64 ]] || fail "upload: $up"
@@ -603,7 +603,7 @@ echo "ok   AI assistant: catalog of permitted plant actions and personal control
 # An order released without a planned order is refused at once. The line's AI
 # assistant resends it against MO-3, but it holds no role in the ERP, so the ERP
 # refuses it too: an agent acts within its own grants in every app. The
-# supervisor resends it and the ERP confirms it. Email (ADR-0014 D7): the
+# supervisor resends it and the ERP confirms it. Email (ADR-0004 D7): the
 # plant's and the platform's notifications are mailed to members who sign in
 # with an email address, through the sink's SMTP server.
 AUTHORITY=platform submit "$SUP" o-3 platform.endpoint.add platform.endpoint mail \
@@ -626,7 +626,7 @@ for _ in $(seq 20); do [[ $(mailed) == *"ERP refused the confirmation of WO-3"* 
 [[ $(mailed) == *"ERP refused the confirmation of WO-3"* ]] || fail "mail: $(curl -s "$SINK/mail")"
 echo "ok   ERP correction: a refused order resent by the AI assistant and refused by the ERP, where it holds no role, then resent by the supervisor and confirmed; the refusals mailed to the supervisor"
 
-# AI providers (ADR-0015): the plant's administrator adds a local model server
+# AI providers (ADR-0008): the plant's administrator adds a local model server
 # (the sink speaks the OpenAI wire) and opens a model to ai users; an operator
 # calls it through the host, the AI assistant (no ai role) is refused, and the
 # call's usage is journaled (compared again after the restart below).
@@ -637,7 +637,7 @@ chat() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/jso
 [[ $(chat "$OP1" | jq -r .content) == "echo: line one is down" ]] || fail "model call: $(chat "$OP1")"
 [[ $(chat "$AGENT" | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "the assistant called a model open to ai users only"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/ai-usage" | jq -c '[.totals[] | {member, model, calls, input, output}]') == '[{"member":"op-l1","model":"local/echo","calls":1,"input":4,"output":5}]' ]] || fail "AI usage: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/ai-usage")"
-# Limits (ADR-0029 D1): the operator's own limit of 5 tokens a day is spent,
+# Limits (ADR-0008 D1): the operator's own limit of 5 tokens a day is spent,
 # so the next call is refused before it reaches the model. A streamed call
 # answers as server-sent events (D2), from a server that does not stream too.
 AUTHORITY=ai submit "$SUP" ai-3 ai.limit.set ai.limit op-l1 '{"dailyTokens":5}' | jq -e .record >/dev/null || fail "set AI limit"
@@ -646,7 +646,7 @@ streamed=$(curl -s -N -H "Authorization: Bearer $SUP" -H 'Content-Type: applicat
 [[ $streamed == *"event: delta"*"echo: hi"*"event: done"* ]] || fail "streamed call: $streamed"
 echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused; past the operator's limit the call is refused; a call streams"
 
-# ADR-0043 24b: the same bounded declaration and model effect path advises a
+# ADR-0054 24b: the same bounded declaration and model effect path advises a
 # real shop order. Advice never completes it or confirms production to ERP.
 AUTHORITY=platform submit "$SUP" fn-model platform.setting.set platform.setting ai/app-model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "plant function model"
 [[ $(submit "$OP1" fn-denied mes.order.advise mes.order WO-1 '{}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "operator called supervisor function"
@@ -654,7 +654,7 @@ submit "$SUP" fn-order mes.order.advise mes.order WO-1 '{}' | jq -e .record >/de
 for _ in $(seq 30); do [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-1" | jq -r .record.adviceState) == ready ]] && break; sleep 0.5; done
 curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-1" | jq -e '.record | .adviceState == "ready" and .status == "released" and .adviceCategory == "routine" and .adviceModel == "local/echo" and (.adviceDefinition | length == 64) and (.adviceSources | length == 3)' >/dev/null || fail "typed order result"
 
-# Agents (ADR-0021): the confirmation flow's agent corrects a refused order. For
+# Agents (ADR-0054): the confirmation flow's agent corrects a refused order. For
 # WO-4 (P-200, released without a planned order) the plant refuses; its agent,
 # on the local model, reads the planned orders and proposes MO-2; the
 # supervisor approves in the inbox; the flow resends it and the ERP confirms.
@@ -674,7 +674,7 @@ for _ in $(seq 30); do [[ $(wo WO-4) == confirmed* ]] && break; sleep 0.5; done
 [[ $(wo WO-4) == "confirmed MJ/"????"/00003 MO-2" ]] || fail "WO-4 after the agent's correction: $(wo WO-4)"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/agent.run" | jq -r '[.records[] | select(.goal | contains("WO-4"))][0] | .agent + " " + .state + " " + ([.steps[].tool] | join(","))') == "mes.erp-fixer done read_planned_orders,finish" ]] || fail "the agent's run"
 echo "ok   agents: a refused order corrected by the plant's agent on the local model, approved by the supervisor in the inbox, resent by the flow and confirmed"
-# Agent-to-agent (ADR-0022 D7): the plant's planner asks the supplier's agent
+# Agent-to-agent (ADR-0009): the plant's planner asks the supplier's agent
 # (the sink, over A2A 1.0) for a lead time through an effect; the answer comes
 # back journaled and the run finishes with it.
 AUTHORITY=platform submit "$SUP" a2a-1 platform.endpoint.add platform.endpoint supplier \
@@ -683,13 +683,13 @@ AUTHORITY=agent submit "$SUP" a2a-2 agent.run.start agent.run PLAN-1 '{"agent":"
 plan() { curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/agent.run/PLAN-1" | jq -r '.record.state + " " + (.record.result // "")'; }
 for _ in $(seq 40); do [[ $(plan) == done* ]] && break; sleep 0.5; done
 [[ $(plan) == *'"leadTimeDays":12'* ]] || fail "the planner's answer: $(plan)"
-# Its chain shows the question it sent the supplier's agent (ADR-0029 D6).
+# Its chain shows the question it sent the supplier's agent (ADR-0008 D6).
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/chain/agent.run/PLAN-1" | jq -c '[.edges[] | .from + ">" + .to] | length > 0') == true ]] || fail "the planner's chain: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/chain/agent.run/PLAN-1")"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/chain/agent.run/PLAN-1" | jq -r '[.nodes[] | select(.kind == "effect")][0].detail') == supplier* ]] || fail "the supplier's task in the chain"
 echo "ok   agent-to-agent: the plant's planner asked the supplier's agent over A2A through an effect and answered with its lead time; the question is in the run's chain"
 
 # The hospitality solution: the CRM books a stay through the lodging protocol and the
-# PMS provides it (ADR-0011); the platform app revokes a role and the catalog
+# PMS provides it (ADR-0006); the platform app revokes a role and the catalog
 # follows on the next request; a hotel cancellation reaches the opportunity's
 # timeline through the platform link; an MCP client acts with a member's grants.
 SALES_TOKEN=$(token sales@hotel.test) MGR=$(token manager@hotel.test)
@@ -703,7 +703,7 @@ hosp platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app":
 catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/actions" | jq -c '[.[].schema | select(startswith("crm.") or startswith("pms."))]')
 [[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.advise","crm.opportunity.open","crm.opportunity.close","crm.opportunity.plan","crm.opportunity.answer"]' ]] || fail "catalog after revocation: $catalog"
 [[ $(hosp crm "$SALES_TOKEN" s-b2 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
-# Outbound effects (ADR-0014): the administrator subscribes a webhook endpoint to
+# Outbound effects (ADR-0004): the administrator subscribes a webhook endpoint to
 # the protocol's cancellation; the cancellation below reaches the sink signed, once.
 SERVER=$HOSPITALITY TENANT=hotel-a AUTHORITY=platform submit "$MGR" w-1 platform.endpoint.add platform.endpoint sink \
   '{"url":"http://webhook-sink:8080/hook","secret":"sink","events":["lodging.booking/1#canceled"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "add endpoint"
@@ -719,7 +719,7 @@ mcp "$MGR" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVer
 tools=$(mcp "$SALES_TOKEN" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jq -c '[.result.tools[].name]')
 [[ $tools == *crm_opportunity_open* && $tools != *pms_reservation_create* ]] || fail "mcp tools follow grants: $tools"
 mcp "$SALES_TOKEN" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"crm_opportunity_open","arguments":{"target":"OPP-2","account":"ACME","title":"Spring retreat","idempotencyKey":"mcp-1"}}}' | jq -e '.result.isError == false' >/dev/null || fail "mcp call"
-# The application model (ADR-0016): one read contract for every entity type,
+# The application model (ADR-0046): one read contract for every entity type,
 # scoped per member, with the record's history from the journal.
 records() { curl -s -H "Authorization: Bearer $1" "$HOSPITALITY/v1/records/$2"; }
 [[ $(records "$SALES_TOKEN" 'crm.opportunity?sort=-id&limit=1' | jq -c '[.total, .records[0].id, .records[0].owner]') == '[2,"OPP-2","sales-1"]' ]] || fail "records: $(records "$SALES_TOKEN" 'crm.opportunity')"
@@ -727,7 +727,7 @@ records() { curl -s -H "Authorization: Bearer $1" "$HOSPITALITY/v1/records/$2"; 
 [[ $(records "$MGR" 'crm.opportunity/OPP-1' | jq -c '[[.record.stays[].status], [.history[].schema]]') == '[["booked"],["crm.opportunity.answer","crm.opportunity.book","crm.opportunity.open"]]' ]] || fail "record history: $(records "$MGR" 'crm.opportunity/OPP-1')"
 [[ $(records "$MGR" 'crm.account/ACME' | jq -r '.related[0].total') == 2 ]] || fail "related records"
 echo "ok   application model: generic reads with a domain, the owner's scope, a record's history and its related records"
-# Analytics (ADR-0019): aggregates with the member's scope; the records projected
+# Analytics (ADR-0024): aggregates with the member's scope; the records projected
 # into PostgreSQL, readable by the tenant's reader role and no other tenant's.
 agg() { curl -s -H "Authorization: Bearer $1" "$HOSPITALITY/v1/aggregates/$2"; }
 [[ $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:rooms' | jq -c .rows) == '[{"count":2,"owner":"sales-1","sum:rooms":0}]' ]] || fail "aggregate: $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:rooms')"
@@ -737,7 +737,7 @@ for _ in $(seq 10); do [[ $(sql "set role tenant_hotel_a_reader; select count(*)
 [[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_hotel_a.crm_opportunity_changes where record_id = 'OPP-1'") == 3 ]] || fail "projected history"
 [[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_plant_sz.mes_sfc") == *"permission denied"* ]] || fail "a reader of another tenant"
 echo "ok   analytics: an aggregate within the manager's scope; records and their history in PostgreSQL for the tenant's reader role only"
-# Lifecycles, approvals and tasks (ADR-0017): a leave request waits for the
+# Lifecycles, approvals and tasks (ADR-0007): a leave request waits for the
 # manager found in the organisation, lands in their inbox, and is approved by
 # the approval; the requester is told.
 hosp hcm "$SALES_TOKEN" h-1 hcm.leave.create hcm.leave LV-1 '{"kind":"vacation","from":"2026-11-02","until":"2026-11-04"}' | jq -e .record >/dev/null || fail "draft leave"
@@ -757,13 +757,13 @@ hosp crm "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"lo
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/records/crm.opportunity/OPP-1" | jq -c '[.linked[].records[].roomType]') == '["suite","loft"]' ]] || fail "stays across providers on the opportunity's page"
 echo "ok   hospitality solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
-# Decisions across apps (ADR-0026): a group's rooms held at the provider until a
+# Decisions across apps (ADR-0006): a group's rooms held at the provider until a
 # cutoff, each answer on the opportunity; the hold survives the restart below.
 hosp crm "$SALES_TOKEN" f-1 crm.opportunity.open crm.opportunity OPP-9 '{"account":"ACME","title":"Group retreat"}' | jq -e .record >/dev/null || fail "open for the block"
 hosp crm "$SALES_TOKEN" f-2 crm.opportunity.plan crm.opportunity OPP-9 '{"rooms":2,"roomType":"standard","arrive":"2026-12-01","depart":"2026-12-03","cutoff":"2026-11-20"}' | jq -e .record >/dev/null || fail "plan the group block"
 blockstate() { records "$MGR" 'crm.opportunity/OPP-9' | jq -r '.record.block + " " + ([.record.stays[].status] | join(","))'; }
 [[ $(blockstate) == "held held,held" ]] || fail "group block: $(blockstate)"
-# Customer service (ADR-0021 D10 (2)): a ticket's triage agent, on the local model,
+# Customer service (ADR-0054 (2)): a ticket's triage agent, on the local model,
 # triages and replies; the reply's mail is held because an agent wrote it, and
 # reaches the mail gateway (the sink) once the manager approves it.
 hosp ai "$MGR" hd-1 ai.provider.add ai.provider local '{"kind":"local","baseUrl":"http://webhook-sink:8080/v1"}' | jq -e .record >/dev/null || fail "hospitality AI provider"
@@ -781,7 +781,7 @@ hosp csm "$MGR" hd-5 csm.ticket.open csm.ticket T-1 '{"subject":"Wifi keeps drop
 ticket() { records "$MGR" 'csm.ticket/T-1' | jq -r '.record.status + " " + .record.priority + " " + .record.replied'; }
 for _ in $(seq 40); do [[ $(ticket) == answered* ]] && break; sleep 0.5; done
 [[ $(ticket) == "answered normal agent:csm.triage" ]] || fail "ticket after triage: $(ticket)"
-# The helpdesk asked the tenant's model for apps for a line on the ticket, and took its answer (ADR-0029 D3).
+# The helpdesk asked the tenant's model for apps for a line on the ticket, and took its answer (ADR-0008 D3).
 for _ in $(seq 20); do [[ -n $(records "$MGR" 'csm.ticket/T-1' | jq -r '.record.summary // empty') ]] && break; sleep 0.5; done
 [[ $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.summary) == "echo: Wifi keeps dropping" ]] || fail "ticket summary: $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.summary)"
 [[ $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.reply) == *"House rules"* ]] || fail "the reply cites nothing: $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.reply)"
@@ -990,7 +990,7 @@ native_stream_resume "$HOSPITALITY" hotel-a "$MGR" hotel restart 101
   done
 )
 echo "ok   continuous intake restart: both retained instances resumed at the accepted PostgreSQL position without re-consuming earlier rows"
-# Snapshots (ADR-0019 D6): each host saved its tenant at shutdown and started from it.
+# Snapshots (ADR-0024): each host saved its tenant at shutdown and started from it.
 logged() { for _ in $(seq 10); do compose logs "$1" | grep "$2" >/dev/null && return; sleep 1; done; return 1; }
 for host in manufacturing-server hospitality-server; do
   logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
@@ -1013,7 +1013,7 @@ before=$(settled_state) # what the backup below holds
 sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == "$calls" ]] || fail "a delivered webhook was sent again after the restart"
 echo "ok   restart: each host saved a snapshot at shutdown and started from it (plant $(compose logs manufacturing-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 
-# The journal is what to back up: the projections are copies rebuilt at start-up (ADR-0019).
+# The journal is what to back up: the projections are copies rebuilt at start-up (ADR-0024).
 accepted=$(compose exec -T postgres psql -U platform -d platform -Atc \
   "select count(distinct tenant) from journal where kind='accepted-result' and tenant in ('plant-sz','hotel-a')")
 [[ $accepted == 2 ]] || fail "accepted-result entries absent from either industry journal"
@@ -1127,7 +1127,7 @@ function_joint_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 deployed_browser after
 echo "ok   builder AI functions: both operators called the page's retained function again after backup restore and complete journal recovery"
 
-# The delivery profile (ADR-0048 D5b). Every scenario above ran in the default
+# The delivery profile (ADR-0011b). Every scenario above ran in the default
 # development/import profile, which keeps the direct install. A tenant that
 # declares production refuses it at the owner — a hidden button is not a
 # retirement — names the candidate route, and still previews a saved candidate,

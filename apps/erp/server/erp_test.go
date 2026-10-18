@@ -63,7 +63,7 @@ func (b *books) as(authority, who, schema, typ, id string, payload any) string {
 	case err != nil:
 		b.why = err.Message
 		return err.Error()
-	case r.GetSubmission().GetSchema().GetName() != schema: // held for approval (ADR-0017)
+	case r.GetSubmission().GetSchema().GetName() != schema: // held for approval (ADR-0007)
 		return r.GetSubmission().GetSchema().GetName()
 	}
 	return "ok"

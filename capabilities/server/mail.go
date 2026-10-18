@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// Email as a notification channel (ADR-0014 D7, second use). An administrator
+// Email as a notification channel (ADR-0004 D7, second use). An administrator
 // adds an endpoint of kind email: an SMTP server, a sender, and the apps whose
 // notifications it carries. Each notification to a member who signs in as
 // user:<email> becomes one effect per such endpoint, inside the input that

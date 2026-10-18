@@ -1,4 +1,4 @@
-// One icon vocabulary for the whole platform (ADR-0084 D1). The kit owns the
+// One icon vocabulary for the whole platform (ADR-0031). The kit owns the
 // names, the glyphs and their words; the host only checks that a name looks
 // like a name, so the set can grow here without a host change. Anything that
 // lets a person choose an icon — a module, an application, an enterprise
@@ -30,10 +30,10 @@ export const iconGlyphs: Record<IconName, ReactNode> = {
   "file-text": <FileText />, folder: <Folder />, "folder-tree": <FolderTree />, bookmark: <Bookmark />, "book-open": <BookOpen />, mail: <Mail />,
   "message-square": <MessageSquare />, bell: <Bell />, milestone: <Award />,
   braces: <Braces />, zap: <Zap />,
-  // UAF's organization picture needs these (ADR-0090 D2): the profile's book
+  // UAF's organization picture needs these (ADR-0033): the profile's book
   // and user, plus the kinds' landmark, crown, door and scale.
   landmark: <Landmark />, crown: <Crown />, door: <DoorOpen />, scale: <Scale />, book: <BookOpen />, user: <UserRound />,
-  // Names the kit used before the vocabulary grew (ADR-0036 D3): stored
+  // Names the kit used before the vocabulary grew (ADR-0046): stored
   // applications keep their glyph, the picker offers the current set.
   clipboard: <ClipboardList />, people: <Users />, calendar: <CalendarDays />, map: <MapPin />,
   "shield-alert": <ShieldAlert />, alert: <AlertTriangle />,

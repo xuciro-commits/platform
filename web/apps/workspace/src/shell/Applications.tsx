@@ -1,4 +1,4 @@
-// The Applications portal (ADR-0052 §3.2), after Foundry's: every application
+// The Applications portal (ADR-0018 §3.2), after Foundry's: every application
 // this member may open, by category, searchable, starrable. It reads the apps
 // the shell was given, so an application handed over while it is open shows up.
 import { useHost } from "@platform/app";

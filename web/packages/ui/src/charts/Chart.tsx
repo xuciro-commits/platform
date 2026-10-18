@@ -1,4 +1,4 @@
-// A chart from the platform's visualization spec (ADR-0019): the data comes from
+// A chart from the platform's visualization spec (ADR-0024): the data comes from
 // the host's aggregates (records, within the member's scope) or inline values;
 // the renderer is ECharts 6, loaded only here.
 import type { ECharts } from "echarts/core";

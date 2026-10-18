@@ -29,7 +29,7 @@ import (
 	"platformserver/platform"
 )
 
-// Outbound effects (ADR-0014). An intent is created inside an input, so replay
+// Outbound effects (ADR-0004). An intent is created inside an input, so replay
 // rebuilds it; an attempt is made by the dispatcher outside the tenant's lock
 // and never during replay; its outcome is journaled as an input of its own.
 // This is the K5 outbox with the host as the edge and the endpoint as the
@@ -295,7 +295,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	var jobs []job
 	t.mu.Lock()
 	t.opsMu.Lock()
-	// Apps' model requests go to the built-in model destination (ADR-0029 D3);
+	// Apps' model requests go to the built-in model destination (ADR-0008 D3);
 	// the model door keeps each provider's own breaker.
 	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: modelEndpoint, Kind: modelEndpoint}) {
 		if ep.Kind != modelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now) {
@@ -492,7 +492,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 			a.Answer(t.automation(x.App, replaying), x, o, at)
 			t.enqueue(at)
 		}
-		if t.agents != nil { // an agent that sent it waits for the answer (ADR-0022 D7)
+		if t.agents != nil { // an agent that sent it waits for the answer (ADR-0009)
 			t.agents.AgentEffectEnded(t.automation(AgentApp, replaying), nil, x, o, at)
 			t.enqueue(at)
 		}
@@ -586,7 +586,7 @@ func effectActions() []platform.Action {
 		{Schema: SchemaEffectDiscard, Target: EffectType, Capability: "integrations", Title: "Discard effect",
 			Description: "Give up on an effect not yet delivered.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectApprove, Target: EffectType, Capability: "integrations", Title: "Approve effect",
-			Description: "Send an irreversible effect an AI agent caused; only a person may approve it (ADR-0014 D6).", Payload: []platform.Field{}, Roles: admin},
+			Description: "Send an irreversible effect an AI agent caused; only a person may approve it (ADR-0004 D6).", Payload: []platform.Field{}, Roles: admin},
 	}
 }
 
@@ -712,7 +712,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			held := x.State == "held"
 			x.State = "discarded"
 			t.opsMu.Unlock()
-			if held && x.Run != "" && t.agents != nil { // a person refused what the agent caused (ADR-0022 D9)
+			if held && x.Run != "" && t.agents != nil { // a person refused what the agent caused (ADR-0009)
 				t.agents.RecordAgentSignal(c, r, x.Run, Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
 			}
 			if t.agents != nil {

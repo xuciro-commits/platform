@@ -8,7 +8,7 @@ import { useViewTitle } from "../shell/Workspace";
 import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
 import { ContentTabs } from "./ContentTabs";
 
-/** The one editor container (ADR-0053 §4). Document state, commands and
+/** The one editor container (ADR-0047). Document state, commands and
  * selection belong to the caller. Closing a pane hides, rather than destroys,
  * its editing context. Below a useful three-pane width, focus one pane at a
  * time; desktop preferences remain intact when returning from a split/mobile view.

@@ -34,7 +34,7 @@ type FlowInstance struct {
 	Answer       string                     `json:"answer,omitempty" field:"readonly"`
 	Parent       string                     `json:"parent,omitempty" field:"readonly"` // the instance that called it
 	Tokens       []FlowToken                `json:"tokens" field:"readonly" title:"Where it stands"`
-	// Batch is the continuous instance's frame (ADR-0047 §13): the cursor it
+	// Batch is the continuous instance's frame (ADR-0016 §13): the cursor it
 	// consumed through, its watermark, node state and dead letters.
 	Batch *FlowBatchFrame `json:"batch,omitempty" field:"readonly" type:"json"`
 	// ArtifactCleanup is a durable retirement intent for already-superseded

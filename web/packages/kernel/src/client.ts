@@ -5,7 +5,7 @@ import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition,
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
 
-/** One action a server offers to this caller (ADR-0008): render from it, never re-check roles. Generated from the host (ADR-0023). */
+/** One action a server offers to this caller (ADR-0057): render from it, never re-check roles. Generated from the host (ADR-0005). */
 export type ActionDeclaration = Action;
 
 export type Connection = { server: string; token: string; tenant: string; principal: string };
@@ -92,7 +92,7 @@ export class EdgeClient {
     return /HTTP 401/.test(String(error)) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
   }
 
-  /** The bearer token, the tenant once known (a person may be a member of several on one host, ADR-0018), and the page's language, in which the host serves declarations (ADR-0023). */
+  /** The bearer token, the tenant once known (a person may be a member of several on one host, ADR-0019), and the page's language, in which the host serves declarations (ADR-0005). */
   private headers(json = false): Record<string, string> {
     const lang = typeof document === "undefined" ? "" : document.documentElement.lang;
     return { Authorization: `Bearer ${this.connection.token}`, ...(this.connection.tenant ? { "Platform-Tenant": this.connection.tenant } : {}),
@@ -155,8 +155,8 @@ export class EdgeClient {
     }
   }
 
-  /** Calls a host service that is not a submission, such as a model call (ADR-0015): the answer's JSON comes back whatever its status. */
-  /** Uploads a file's bytes (ADR-0028); answers the hash to attach. */
+  /** Calls a host service that is not a submission, such as a model call (ADR-0008): the answer's JSON comes back whatever its status. */
+  /** Uploads a file's bytes (ADR-0038); answers the hash to attach. */
   async upload(file: Blob, name: string, options:{signal?:AbortSignal}={}): Promise<{ hash: string; size: number; contentType: string; name: string }> {
     const response = await fetch(`${this.connection.server}/v1/files?name=${encodeURIComponent(name)}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": file.type || "application/octet-stream" }, body: file, signal:options.signal,
@@ -165,7 +165,7 @@ export class EdgeClient {
     return response.json();
   }
 
-  /** Imports records of a type from CSV, or previews what each row would do (ADR-0028). */
+  /** Imports records of a type from CSV, or previews what each row would do (ADR-0038). */
   async importCSV(type: string, file: Blob, preview: boolean): Promise<{ row: number; id: string; action: string; outcome: string }[]> {
     const response = await fetch(`${this.connection.server}/v1/import/${encodeURIComponent(type)}?preview=${preview}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": "text/csv" }, body: file,
@@ -174,7 +174,7 @@ export class EdgeClient {
     return response.json();
   }
 
-  /** The records a list shows the member, as CSV (ADR-0028). */
+  /** The records a list shows the member, as CSV (ADR-0038). */
   async exportCSV(type: string, query: Omit<Query, "domain"> & {domain?:unknown[]}): Promise<Blob> {
     const response = await fetch(`${this.connection.server}/v1/export/${encodeURIComponent(type)}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": "application/json" }, body: JSON.stringify(query),
@@ -188,7 +188,7 @@ export class EdgeClient {
     return response.blob();
   }
 
-  /** A file's bytes, as the member may read them (ADR-0028). */
+  /** A file's bytes, as the member may read them (ADR-0038). */
   async download(id: string, options:{signal?:AbortSignal;maxBytes?:number}={}): Promise<Blob> {
     const limit=options.maxBytes;
     if(limit!==undefined&&(!Number.isSafeInteger(limit)||limit<0))throw new Error("Invalid download byte budget");
@@ -212,7 +212,7 @@ export class EdgeClient {
   }
 
   /**
-   * A POST answered as server-sent events (ADR-0029 D2): each event's name and
+   * A POST answered as server-sent events (ADR-0008 D2): each event's name and
    * data as it comes; an answer that is not a stream (a refusal) is returned whole.
    */
   async stream<T>(path: string, body: unknown, onEvent: (event: string, data: unknown) => void): Promise<{ ok: boolean; status: number; body?: T }> {
@@ -238,7 +238,7 @@ export class EdgeClient {
     return { ok: true, status: response.status };
   }
 
-  /** Records of an entity type (ADR-0016): a domain, a search, sort fields and a page. */
+  /** Records of an entity type (ADR-0046): a domain, a search, sort fields and a page. */
   async records<T = unknown>(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
     return this.get<T>(this.recordsPath(type, q));
   }
@@ -251,7 +251,7 @@ export class EdgeClient {
     if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;
   }
 
-  /** Groups and measures of an entity type's records within the caller's scope (ADR-0019): `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */
+  /** Groups and measures of an entity type's records within the caller's scope (ADR-0024): `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */
   async aggregate<T = unknown>(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
     return this.get<T>(this.aggregatePath(type, q));
   }

@@ -60,6 +60,7 @@ type ConfirmationParty struct {
 }
 
 type ConfirmationRead struct {
+	KeyInput     string          `json:"keyInput,omitempty"`
 	Source       string          `json:"source"`
 	KeyField     string          `json:"keyField"`
 	ResultField  string          `json:"resultField"`

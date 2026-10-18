@@ -1,4 +1,4 @@
-// Command new-app scaffolds an app (ADR-0023 D8) that already runs, so that a
+// Command new-app scaffolds an app (ADR-0005 D8) that already runs, so that a
 // person — or a coding agent — walks the path of docs/Apps.md by changing it:
 // create app → declare entities → declare actions → declare flows → add
 // translations → run. Run it in capabilities/server:
@@ -173,7 +173,7 @@ replace platformserver => ../../../capabilities/server
 `
 
 const appGo = `// Package [[.ID]] is the [[.AppTitle]] app, scaffolded by capabilities/server/cmd/new-app
-// (ADR-0023 D8). docs/Apps.md walks its path; each step is marked below.
+// (ADR-0005 D8). docs/Apps.md walks its path; each step is marked below.
 package [[.ID]]
 
 import (
@@ -250,7 +250,7 @@ var languageFiles embed.FS
 
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
-// App is the app in one tenant; the host keeps its records (ADR-0016).
+// App is the app in one tenant; the host keeps its records (ADR-0046).
 type App struct {
 	mu     sync.Mutex
 	ledger *platform.Ledger
@@ -440,7 +440,7 @@ const packageJSON = `{
 const tsconfig = `{ "extends": "../../tsconfig.base.json", "include": ["src"] }
 `
 
-const indexTSX = `// The [[.AppTitle]] app's UI (scaffolded, ADR-0023 D8): its records' list, pages
+const indexTSX = `// The [[.AppTitle]] app's UI (scaffolded, ADR-0005 D8): its records' list, pages
 // and forms are generated from the declaration; the host decides who sees what.
 import "./i18n";
 import { GeneratedForm, Records, defineApp, newId, useHost } from "@platform/app";
@@ -472,7 +472,7 @@ export default defineApp({
 });
 `
 
-const i18nTS = `// Simplified Chinese for this package (ADR-0023), keyed by the English source text.
+const i18nTS = `// Simplified Chinese for this package (ADR-0005), keyed by the English source text.
 import { register } from "@platform/ui";
 
 register("zh-CN", {

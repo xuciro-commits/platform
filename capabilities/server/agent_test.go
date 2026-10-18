@@ -47,7 +47,7 @@ func newDesk(tenant string) *desk {
 
 var triage = platform.Agent{Name: "triage", Title: "Triage", Instructions: "Answer tickets.", Tools: []string{"desk.ticket.answer", "read:queue"},
 	Budget: platform.Budget{Steps: 4},
-	// Its suite (ADR-0029 D6): one case it answers, one it never does.
+	// Its suite (ADR-0008 D6): one case it answers, one it never does.
 	Cases: []platform.Case{
 		{Name: "answers wifi", Goal: "Answer ticket T1: wifi", Ref: "desk.ticket/T1", Check: func(r platform.CaseRun) string {
 			if !slices.ContainsFunc(r.Actions, func(a string) bool { return strings.HasPrefix(a, "desk.ticket.answer T1 ") }) {
@@ -72,7 +72,7 @@ var triage = platform.Agent{Name: "triage", Title: "Triage", Instructions: "Answ
 		return []platform.Recipient{{AppRole: "clerk"}}
 	}}
 
-// scout asks a partner's agent through an effect and waits for its answer (ADR-0022 D7).
+// scout asks a partner's agent through an effect and waits for its answer (ADR-0009).
 var scout = platform.Agent{Name: "scout", Title: "Scout", Instructions: "Ask the partner.", Tools: []string{"emit:lookup"}}
 
 // handle: a ticket whose subject says "auto" is drafted by the agent; stopped, a clerk answers.
@@ -169,7 +169,7 @@ func scriptedModel(t *testing.T) *httptest.Server {
 			call("search", map[string]any{"query": "T"})
 		case is("ask") && n == 0:
 			call("ask", map[string]any{"question": "May I answer T3?", "answers": []string{"yes", "no"}})
-		case is("speak"): // ADR-0023 D6: the run's language reaches the prompt
+		case is("speak"): // ADR-0005 D6: the run's language reaches the prompt
 			system, _ := req.Messages[0]["content"].(string)
 			call("finish", map[string]any{"result": map[bool]string{true: "中文", false: "English"}[strings.Contains(system, "Simplified Chinese")]})
 		case is("refund") && n == 0:
@@ -186,7 +186,7 @@ func scriptedModel(t *testing.T) *httptest.Server {
 	return s
 }
 
-// ADR-0021: agents run in the host as governed principals; each step the
+// ADR-0054: agents run in the host as governed principals; each step the
 // model chose is journaled and replayed without calling it.
 func TestAgents(t *testing.T) {
 	for _, accepted := range []bool{false, true} {
@@ -285,7 +285,7 @@ func testAgents(t *testing.T, accepted bool) {
 	think(2)
 	expect("R1", run("R1").State+" "+run("R1").Signals[0].Kind+" "+run("R1").Signals[0].Value, `done changed {"reply":"Hello, it works again"}`)
 
-	// In the person's language (ADR-0023 D6).
+	// In the person's language (ADR-0005 D6).
 	do("ana", AgentApp, SchemaRunStart, RunType, "RL1", map[string]string{"agent": "desk.triage", "goal": "speak", "language": "zh-CN"})
 	do("ana", AgentApp, SchemaRunStart, RunType, "RL2", map[string]string{"agent": "desk.triage", "goal": "speak"})
 	think(2)
@@ -321,7 +321,7 @@ func testAgents(t *testing.T, accepted bool) {
 	think(3)
 	expect("guard", run("R4").Steps[0].Outcome[:24]+" "+ticket("T4").Status, "refused by its guard: ER open")
 	// The budget is checked before the next call, so the loop stops at its
-	// fourth step rather than spend a fifth to learn it is over (ADR-0050 D6,
+	// fourth step rather than spend a fifth to learn it is over (ADR-0008,
 	// review AI-05); a reply that crosses the budget is still counted.
 	start("ana", "R5", "loop", "")
 	think(6)
@@ -340,12 +340,12 @@ func testAgents(t *testing.T, accepted bool) {
 	x, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "desk.handle:T6")
 	expect("fault", x.State+" "+x.Tokens[0].Step, "waiting manual")
 
-	// Memory (ADR-0022 D5): ana's change proposed a memory, which she keeps;
+	// Memory (ADR-0009): ana's change proposed a memory, which she keeps;
 	// bo may not forget it. The agent remembers a fact about ana itself, and
 	// both go into the prompt of her next run, not into bo's.
 	memory := func(id string) Memory { m, _ := platform.Get[Memory](tn.automation(AgentApp, false), id); return m }
 	expect("proposed", memory("R1:p1").State+" "+memory("R1:p1").For+" "+memory("R1:p1").Fact, `proposed ana ana changed a draft for "Answer ticket T1: wifi" to {"reply":"Hello, it works again"}.`)
-	// A memory bo may not read is not there for him to act on (ADR-0037 18b):
+	// A memory bo may not read is not there for him to act on (ADR-0044 18b):
 	// the same answer a read gives, which does not say whose memories exist.
 	expect("bo forgets", do("bo", AgentApp, MemoryType+".forget", MemoryType, "R1:p1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
 	expect("ana keeps", do("ana", AgentApp, MemoryType+".keep", MemoryType, "R1:p1", map[string]any{}), "ok")
@@ -374,7 +374,7 @@ func testAgents(t *testing.T, accepted bool) {
 	expect("report", ev.State+" "+strings.Join(verdicts, ", ")+fmt.Sprint(" ", ev.Score, " ", ticket("T4").Revision == before), "done R6 rejected repeats, R1 changed differs 0 true")
 	expect("reference", ev.Cases[1].Reference+" / "+ev.Cases[1].Candidate, `desk.ticket.answer T1 {"reply":"Hello, it works again"};  / desk.ticket.answer T1 {"reply":"Hello"}; `)
 
-	// The declared cases, three runs each, dry: one passes every time, one never (ADR-0029 D6).
+	// The declared cases, three runs each, dry: one passes every time, one never (ADR-0008 D6).
 	expect("suite", do("ana", AgentApp, SchemaEvalStart, EvaluationType, "E3", map[string]any{"agent": "desk.triage", "model": "lm/scripted", "suite": true}), "ok")
 	t1 := ticket("T1").Revision
 	tn.Evaluate(now)
@@ -395,7 +395,7 @@ func testAgents(t *testing.T, accepted bool) {
 	// Usage is metered as the agent's.
 	expect("metered", fmt.Sprint(tn.ai.Spent("agent:desk.triage", now) > 0), "true")
 
-	// The overview (ADR-0029 D5): each agent, declared or outside, with what
+	// The overview (ADR-0008 D5): each agent, declared or outside, with what
 	// it did and what people made of it.
 	overview := func(member string) AgentOverview {
 		for _, o := range tn.agents.AgentOverview() {

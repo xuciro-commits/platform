@@ -66,7 +66,8 @@ test("an old client keeps its schema through compatible publication and lost rep
   await expect.poll(() => retained.currentFamily(`${object.type}.create`)).toBe(2);
   expect(await operator.record(object.type, newID)).toBeUndefined();
   await expect(form.getByRole("textbox", { name: "Note", exact: true })).toHaveValue("Keep my draft after refresh");
-  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(form.getByRole("button", { name: "Retry original inputs", exact: true })).toBeEnabled();
+  await form.getByRole("button", { name: "Submit with refreshed definition", exact: true }).click();
   await expect(form).toHaveCount(0);
   expect(await operator.record(object.type, newID)).toMatchObject({ note: "Keep my draft after refresh", revision: 1 });
   expect(requests[2]!.family).toBe(1);
@@ -119,6 +120,7 @@ test("customer extension fields and actions survive an upgrade and resolve a dec
   await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(target);
   const migration = page.getByRole("region", { name: "Data migration", exact: true });
   await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(extension.type);
+  await migration.getByText("Migration source", { exact: true }).click();
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
     { kind: "rename", types: [extension.type], batch: 2, fields: [{ from: "customergrade", to: "localgrade" }] },
   ]));
@@ -167,11 +169,18 @@ test("a builder reviews a rename, resumes its data batches and activates the sea
   const steps = JSON.stringify([
     { kind: "rename", types: [object.type], batch: 1, fields: [{ from: "name", to: "title" }] },
   ]);
-  await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(steps);
+  await migration.getByRole("button", { name: "Add migration step", exact: true }).click();
+  const step = migration.getByRole("group", { name: "Migration step 1", exact: true });
+  await step.getByRole("spinbutton", { name: "Records per batch", exact: true }).fill("1");
+  await step.getByRole("combobox", { name: "Source field", exact: true }).selectOption("name");
+  await step.getByRole("combobox", { name: "Target field", exact: true }).selectOption("title");
+  await shots(page, migration, "migration-step-editor", info);
+
   await migration.getByRole("button", { name: "Save migration plan", exact: true }).click();
     await migration.getByRole("button", { name: "Publish migration plan", exact: true }).click();
     await migration.getByRole("button", { name: "Review migration", exact: true }).click();
   await expect(migration.getByRole("region", { name: "Migration review", exact: true })).toContainText("2 existing records");
+  await migration.getByText("Migration source", { exact: true }).click();
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill("null");
   await expect(migration.getByRole("button", { name: "Review migration", exact: true })).toBeDisabled();
   await expect(migration.getByRole("button", { name: "Start reviewed migration", exact: true })).toHaveCount(0);
@@ -275,6 +284,7 @@ for (const change of ["rename", "split", "extract"] as const) {
         : change === "split"
           ? [{ from: "note", to: "label", expr: { kind: "text", ref: "note" } }, { from: "note", to: "detail", expr: { kind: "text", ref: "note" } }]
           : [{ from: "note", to: "name", expr: { kind: "text", ref: "note" } }];
+      await migration.getByText("Migration source", { exact: true }).click();
       await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
         { kind: change, types: [object.type], batch: 1, fields, ...(change === "extract" ? { target: `build.${detailName}`, identity: { kind: "reference", ref: "id" } } : {}) },
         { kind: "default", types: [object.type], batch: 1, fields: [{ to: "enabled", expr: { op: "", kind: "boolean", lit: { value: true } } }] },
@@ -347,6 +357,7 @@ test(redirect ? "a declared redirect opens and executes a new approval after tar
   await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(to);
   const migration = page.getByRole("region", { name: "Data migration", exact: true });
   await migration.getByRole("combobox", { name: "Migration object", exact: true }).selectOption(object.type);
+  await migration.getByText("Migration source", { exact: true }).click();
   await migration.getByRole("textbox", { name: "Migration steps", exact: true }).fill(JSON.stringify([
     { kind: "retire-action", types: [object.type], action: `${object.type}.finish`, batch: 1, ...(redirect ? { redirect: `${object.type}.finishnew` } : {}) },
   ]));

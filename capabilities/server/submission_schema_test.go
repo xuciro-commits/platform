@@ -128,6 +128,16 @@ func TestSubmissionSchemaFamiliesRetainVersionsAndRecover(t *testing.T) {
 			if refusal == nil || live.records.types[typ].rows.get("B") != nil || !strings.Contains(refusal.Message, "refresh") {
 				t.Fatal("old family executed current rules or omitted its refresh reason", refusal)
 			}
+			corrected := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "B", map[string]any{"name": "Stale client"})
+			corrected.CorrelationId = "correction:" + oldRequest.IdempotencyKey
+			if _, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), corrected, compatible.Version, txnAt); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+				t.Fatal("same inputs and schema created another intent", refusal)
+			}
+			corrected.Schema.Version = current.Family
+			correctedReceipt, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), corrected, current.Version, txnAt)
+			if refusal != nil || correctedReceipt == nil || live.records.types[typ].rows.get("B") == nil {
+				t.Fatal("refreshed schema could not correct unchanged inputs", refusal)
+			}
 			freshRequest := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "C", map[string]any{"name": "New client", "note": "V2"})
 			freshRequest.Schema.Version = current.Family
 			if _, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), freshRequest, current.Version, txnAt); refusal != nil {
@@ -160,6 +170,10 @@ func TestSubmissionSchemaFamiliesRetainVersionsAndRecover(t *testing.T) {
 			}
 			if _, refusal, _ := recovered.submitSchemaDiagnosed(memberOf(t, recovered, "user"), oldRequest, compatible.Version, txnAt.Add(time.Hour)); refusal == nil || journal.Position(id) != position {
 				t.Fatal("refusal retry lost its original schema binding")
+			}
+			again, refusal, _ = recovered.submitSchemaDiagnosed(memberOf(t, recovered, "user"), corrected, current.Version, txnAt.Add(time.Hour))
+			if refusal != nil || again.GetChangeId() != correctedReceipt.GetChangeId() || journal.Position(id) != position {
+				t.Fatal("recovery lost the corrected request's schema identity", refusal)
 			}
 			again, refusal, _ = recovered.submitSchemaDiagnosed(memberOf(t, recovered, "user"), retiredRequest, current.Version, txnAt.Add(time.Hour))
 			if refusal != nil || again.GetChangeId() != retiredReceipt.GetChangeId() || journal.Position(id) != position {

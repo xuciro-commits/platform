@@ -1,5 +1,5 @@
 // Command hospitality-server runs the hospitality solution (CRM, PMS, HCM, CSM) on the platform host
-// for one demo tenant; the deployment flags are platformserver's (ADR-0010).
+// for one demo tenant; the deployment flags are platformserver's (ADR-0016).
 package main
 
 import (
@@ -27,7 +27,7 @@ var demo = []platformserver.Seat{
 	seat("sales-only", "sales-2", map[string]string{"crm": "sales"}),
 	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "pms": "manager", "memstay": lodging.Keeper, "platform": "admin", "enterprise": "admin", "ai": "admin", "hcm": "hr", "work": "admin", "flow": "admin", "agent": "admin", "csm": "lead", "knowledge": "editor", build.ID: build.Builder}),
 		platform.Membership{Unit: "hotel-a", Role: "general manager", Primary: true},
-		platform.Membership{Unit: "hotel-a", Role: "manager"}, platform.Membership{Unit: "hospitality", Role: "head"}, // HR's approvers (ADR-0017)
+		platform.Membership{Unit: "hotel-a", Role: "manager"}, platform.Membership{Unit: "hospitality", Role: "head"}, // HR's approvers (ADR-0007)
 		platform.Membership{Unit: "hotel-a-co", Role: "director"},
 		platform.Membership{Unit: "guest-committee", Role: "chair"}),
 	withUnits(seat("desk", "desk-1", map[string]string{"pms": "front-desk", "hcm": "employee", "csm": "desk", build.ID: build.User}), platform.Membership{Unit: "front-office", Role: "receptionist", Primary: true}),

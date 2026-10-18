@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// Data sources (ADR-0061, ADR-0057 block C): a builder names an external JSON
+// Data sources (ADR-0023、ADR-0038 block C): a builder names an external JSON
 // endpoint, the array inside its answer, the field that identifies a row and
 // how fields map onto one of the tenant's objects. The host pulls it when due
 // or asked, outside any decision - like a CSV import: every row becomes the
@@ -35,7 +35,7 @@ type Source struct {
 	platform.Record
 	Name  string `json:"name" field:"required,search"`
 	Title string `json:"title" field:"required,search"`
-	// Connection is the system the source reads through (ADR-0070); empty: a bare JSON URL as in ADR-0061.
+	// Connection is the system the source reads through (ADR-0023); empty: a bare JSON URL as in ADR-0023.
 	Connection string `json:"connection,omitempty" ref:"build.connection"`
 	// Profile is how rows are read: json (default), csv, odata (an entity set), table (a database table).
 	Profile string `json:"profile,omitempty" choices:"json,csv,odata,table"`
@@ -52,7 +52,7 @@ type Source struct {
 	Header string `json:"header,omitempty" title:"Request header" help:"One header such as Authorization: Bearer …"`
 	// Path is the dotted path to the array of rows inside the answer; empty: the answer is the array.
 	Path string `json:"path,omitempty" title:"Rows at" help:"Dotted path to the array, such as data.items; empty when the answer is the array"`
-	// Dataset keeps the rows as they came (ADR-0071); a pipeline maps them later. Otherwise Object is the
+	// Dataset keeps the rows as they came (ADR-0024); a pipeline maps them later. Otherwise Object is the
 	// tenant's type the rows become directly, Key the row field that is the record's id.
 	Dataset string        `json:"dataset,omitempty" ref:"build.dataset" title:"Target dataset"`
 	Object  string        `json:"object,omitempty" title:"Target object"`
@@ -88,7 +88,7 @@ type SourcePull struct {
 	Rows              int             `json:"rows"`
 	Applied           int             `json:"applied"`
 	Failed            int             `json:"failed"`
-	Merged            int             `json:"merged,omitempty"` // rows that became an edit of a matched record (ADR-0074)
+	Merged            int             `json:"merged,omitempty"` // rows that became an edit of a matched record (ADR-0024)
 	Error             string          `json:"error,omitempty"`
 	Failures          []SourceFailure `json:"failures,omitempty"`
 	// Cursor is the last incremental value the pull reached; kept on the source.

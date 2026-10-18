@@ -21,7 +21,7 @@ import (
 	"platformserver/platform"
 )
 
-// Languages (ADR-0023): declarations are served in the request's language,
+// Languages (ADR-0005): declarations are served in the request's language,
 // records never; every platform app's text has a Chinese translation.
 func TestLanguages(t *testing.T) {
 	tn, err := NewTenant("t-1", NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
@@ -59,7 +59,7 @@ func TestLanguages(t *testing.T) {
 		{"/v1/me", "fr,zh;q=0.5", `"title":"设置"`},          // the first the tenant speaks
 		{"/v1/actions", "zh-CN", `"title":"授予角色"`},
 		{"/v1/entities", "zh-CN", `"title":"任务"`},
-		{"/v1/enterprise", "", `"uaf":"1.3"`},                                 // the enterprise model (ADR-0067), readable by everyone
+		{"/v1/enterprise", "", `"uaf":"1.3"`},                                 // the enterprise model (ADR-0022), readable by everyone
 		{"/v1/enterprise-metamodel", "", `"stereotype":"ActualOrganization"`}, // the UAF profile the modeler draws from
 		{"/v1/entities", "zh-CN", `"choiceTitles":["进行中",`},                   // a task's states; the choices stay the values records hold
 		{"/v1/entities", "zh-CN", `"type":"core.account"`},
@@ -78,7 +78,7 @@ func TestLanguages(t *testing.T) {
 	}
 
 	// What apps write for people reads in the reader's language: exactly, or
-	// by a pattern whose values are translated in turn (ADR-0023 6b).
+	// by a pattern whose values are translated in turn (ADR-0005 6b).
 	for _, c := range []struct{ in, want string }{
 		{"Approve: Grant role platform.member/bo", "审批：授予角色 platform.member/bo"},
 		{"Grant role platform.member/bo: approved", "授予角色 platform.member/bo：已批准"},
@@ -141,7 +141,7 @@ func TestLanguages(t *testing.T) {
 	}
 }
 
-// The tenant's own words (ADR-0083) are the last dictionary layer: they say
+// The tenant's own words (ADR-0005) are the last dictionary layer: they say
 // what no shipped dictionary does, override what one does, and go when removed.
 func TestTenantWords(t *testing.T) {
 	tn, err := NewTenant("t-w", NewConsole("t-w"))

@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-// Interface is a shape several entity types share (ADR-0058 A2, Foundry's
+// Interface is a shape several entity types share (ADR-0020 A2, Foundry's
 // Ontology interfaces): named fields with their kinds. An entity type that
 // lists it in Entity.Implements must carry every one of those fields with the
 // same kind; the host refuses to compose otherwise. Interfaces are declared by

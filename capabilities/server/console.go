@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// The platform app (ADR-0010) is the tenant's console: its directory of
+// The platform app (ADR-0016) is the tenant's console: its directory of
 // members and their role in each app, and every administrator's decision about
 // the host's operations — connectors, app settings, owned work, protocol
 // bindings, notifications, endpoints and effects. Every change is one of its
@@ -37,7 +37,7 @@ const (
 type Seat struct {
 	Subjects []string `json:"subjects"` // "user:<email>", "client:<id>", or a development token's subject
 	platform.Member
-	Units []platform.Membership `json:"units,omitempty"` // the member's starting memberships (ADR-0012); Party is filled in
+	Units []platform.Membership `json:"units,omitempty"` // the member's starting memberships (ADR-0022); Party is filled in
 }
 
 // Memberships are the seats' starting memberships, for the org app's seed.
@@ -58,13 +58,13 @@ type Console struct {
 	members  map[string]*platform.Member
 	subjects map[string]string    // subject → member ID
 	then     func()               // what the decision being applied says once the lock is released
-	profiles map[string]*Profile  // member ID → profile (ADR-0079)
-	tokens   map[string]*Token    // ADR-0079 §5, hashed
+	profiles map[string]*Profile  // member ID → profile (ADR-0028)
+	tokens   map[string]*Token    // ADR-0028 §5, hashed
 	minted   map[string]bool      // token secrets already handed out
 	lastSeen map[string]time.Time // the host's memory, not decided state
 	sessions sessionTable
-	roles    map[string]*CustomRole   // ADR-0078 §3.3
-	policies map[string]*PolicyRecord // ADR-0078 §3.4
+	roles    map[string]*CustomRole   // ADR-0027 §3.3
+	policies map[string]*PolicyRecord // ADR-0027 §3.4
 	teams    map[string]*Team
 	projects map[string]*BuildProject
 	packages map[string]*InstalledPackage
@@ -155,7 +155,7 @@ func (d *Console) Identities() []Identity {
 	return out
 }
 
-// Snapshot and Restore: the members, how they sign in, and the decisions (ADR-0019 D6).
+// Snapshot and Restore: the members, how they sign in, and the decisions (ADR-0024).
 type consoleState struct {
 	Members  map[string]*platform.Member  `json:"members"`
 	Subjects map[string]string            `json:"subjects"`
@@ -207,8 +207,8 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	return nil
 }
 
-// restoreAccess takes the access configuration (ADR-0078 D) and tokens
-// (ADR-0079 D) of a decided state.
+// restoreAccess takes the access configuration (ADR-0027 D) and tokens
+// (ADR-0028 D) of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
 	d.projects, d.packages = s.Projects, s.Packages
 	if d.projects == nil {
@@ -617,7 +617,7 @@ func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time)
 	return nil, d.host.ConnectorHeartbeat(c, now)
 }
 
-// language is the language a member reads (ADR-0023 6b): their own choice,
+// language is the language a member reads (ADR-0005 6b): their own choice,
 // else the tenant's default; "" is English, or what the browser asks for.
 func (d *Console) Language(member string) string {
 	d.mu.Lock()

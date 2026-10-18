@@ -1,5 +1,5 @@
 import { useRunControl } from "./use-run-control";
-// Agents in the workspace (ADR-0021): a run's page — its steps with the
+// Agents in the workspace (ADR-0054): a run's page — its steps with the
 // rationale the model gave, what people made of it, and the draft that waits
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
@@ -11,7 +11,7 @@ import { useState } from "react";
 import { PayloadFields,payloadSchema } from "../actions/actions";
 import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "../index";
 
-// Generated from the host's Go types (ADR-0023 D7).
+// Generated from the host's Go types (ADR-0005 D7).
 export type RunStep = Api.RunStep;
 export type RunDraft = Api.Draft;
 export type RunSignal = Api.Signal;
@@ -142,7 +142,7 @@ export function RunView({ id, compact, application, project }: { id: string; com
   );
 }
 
-/** A run drawn as a process (#122, ADR-0086 D4): the goal as a start event, each
+/** A run drawn as a process (#122, ADR-0033): the goal as a start event, each
  * tool it called in turn as a service task, the sources it read as data objects, and
  * how it ended as an end event. */
 function RunGraph({ run, onStep }: { run: AgentRun; onStep: (i: number) => void }) {
@@ -170,7 +170,7 @@ const chainTone = (state?: string) => state === "done" || state === "delivered" 
   : state === "held" || state === "waiting" ? "warning" as const : state ? "info" as const : undefined;
 
 /**
- * The chain a run or a flow instance belongs to (ADR-0029 D6): the record, the
+ * The chain a run or a flow instance belongs to (ADR-0008 D6): the record, the
  * flows, the runs their steps started and the effects those caused, as the
  * member may read them; a node opens its record.
  */
@@ -179,7 +179,7 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
   const chain = useReadQuery<Api.Chain>(`/v1/chain/${of.split("/").map(encodeURIComponent).join("/")}`).data;
   if (!chain || chain.nodes.length < 2) return null;
   const nodes: RelationNode[] = chain.nodes.map((n) => ({ id: n.ref, label: n.title, class: n.kind,
-    // The class word comes from the kit's table (ADR-0090 D1); the run's own
+    // The class word comes from the kit's table (ADR-0033); the run's own
     // state still rides beside it, and still decides the tone.
     caption: [t(relationNodeClasses[n.kind]?.title ?? n.kind), n.state].filter(Boolean).join(" · "),
     detail: n.ref, tone: chainTone(n.state) }));
@@ -194,7 +194,7 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
   );
 }
 
-/** Every model call of a run in full, for agent administrators (ADR-0022 D8). */
+/** Every model call of a run in full, for agent administrators (ADR-0009). */
 function Transcripts({ run }: { run: string }) {
   const [shown, setShown] = useState(false);
   const calls = useReadQuery<Transcript[]>(`/v1/transcripts?run=${encodeURIComponent(run)}`).data;
@@ -218,7 +218,7 @@ function Transcripts({ run }: { run: string }) {
 /**
  * The assistant: give one of your apps' agents a goal, about a record when
  * opened from one. It works on your behalf, within what you may do, and every
- * action it wants waits for you as a draft (ADR-0021 D6).
+ * action it wants waits for you as a draft (ADR-0054).
  */
 export function Assistant({ about }: { about?: string }) {
   const { me, decide, can } = useHost();
@@ -261,7 +261,7 @@ export function Assistant({ about }: { about?: string }) {
   );
 }
 
-/** What agents remember about the member (ADR-0022 D5): proposals from their corrections to keep, and facts to forget. */
+/** What agents remember about the member (ADR-0009): proposals from their corrections to keep, and facts to forget. */
 function Remembered() {
   const { decide } = useHost();
   const memories = useRead<Memory[]>("/v1/memories") ?? [];

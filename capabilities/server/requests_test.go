@@ -10,7 +10,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0026: a decision changes one app. Its rules probe another app; once it
+// ADR-0006: a decision changes one app. Its rules probe another app; once it
 // is accepted, its requests run at the provider and their answers come back
 // to the app's reply action. "none" cannot be held.
 

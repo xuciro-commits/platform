@@ -14,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-// Purchasing and inventory (ADR-0024 7b): a buyer orders from a supplier; an
+// Purchasing and inventory (ADR-0026 7b): a buyer orders from a supplier; an
 // order above the approval limit waits for a controller; receiving it moves the
 // goods in and posts them at standard cost against goods received not invoiced
 // (the difference to the order's price is a price variance); the supplier's bill
@@ -53,7 +53,7 @@ type Product struct {
 	Kind string         `json:"kind" field:"required" choices:"material,finished" help:"Material is bought and used; finished goods are made and sold"`
 	Unit string         `json:"unit" field:"required" example:"pcs"`
 	Cost platform.Money `json:"cost" title:"Standard cost" help:"What one unit is worth in the books; receipts and production are valued at it"`
-	// Components are what one unit of a finished product takes (ADR-0024 7c).
+	// Components are what one unit of a finished product takes (ADR-0026 7c).
 	Components []Component `json:"components,omitempty" help:"What one unit is made of, for finished goods"`
 }
 

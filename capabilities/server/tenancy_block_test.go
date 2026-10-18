@@ -14,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0078 §2 / ADR-0079 §4, the closing block: tenant settings that bind
+// ADR-0027 §2 / ADR-0028 §4, the closing block: tenant settings that bind
 // (sign-in domains seat strangers, session hours end sign-ins, a second
 // factor is demanded), a unit-bound grant that narrows what is read,
 // offboarding that hands over and ends the tenure.

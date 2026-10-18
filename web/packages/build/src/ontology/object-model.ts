@@ -1,4 +1,4 @@
-// The object type's authoring model (ADR-0037, ADR-0053 §5–§6): what a
+// The object type's authoring model (ADR-0044、ADR-0047§6): what a
 // `build.object` record holds, and the early authoring checks the editors show
 // before the host's authoritative publication check.
 import { recordPaths } from "./record-paths";
@@ -24,21 +24,22 @@ type Condition = {expr?:Api.Expr; field: string; operator: string; value?: strin
 export type ApproverLevel = { title: string; role: string; all?: boolean };
 type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
 type Create_ = { object: string; via: string; sets?: Set_[] };
-/** A posting to a balance kept on another object (ADR-0063): match fields identify the balance, the amount is added or subtracted. */
+/** A posting to a balance kept on another object (ADR-0039): match fields identify the balance, the amount is added or subtracted. */
 type Post_ = { object: string; match: Set_[]; field: string; amount: string; subtract?: boolean; floor?: boolean };
-/** One line of the journal entry an action books (ADR-0076): an account (=code or a source), a debit or a credit source, and what it is about. */
+/** One line of the journal entry an action books (ADR-0026): an account (=code or a source), a debit or a credit source, and what it is about. */
 type JournalLine_ = { account: string; debit?: string; credit?: string; text?: string; object?: string; partner?: string };
 type Journal_ = { date?: string; text?: string; lines: JournalLine_[] };
 export type Action = {adoption?:Api.ProposalAdoption; name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[]; journal?: Journal_; reverses?: string; transaction?: Api.BusinessTxn; reads?: Api.RuleReadSpec };
-/** Gapless document numbers for an object's records (ADR-0076): prefix, optional year, zero-padded count. */
+/** Gapless document numbers for an object's records (ADR-0026): prefix, optional year, zero-padded count. */
 type Numbering_ = { field: string; prefix?: string; yearly?: boolean; width?: number };
-/** What one role of the builder app may do with the object (ADR-0037 18b). */
+/** What one role of the builder app may do with the object (ADR-0044 18b). */
 export type Access = { role: string; read: "all" | "below" | "unit" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
-/** The fields that place a record for row scopes: its owner (empty: creator) and its unit within a structure (ADR-0066). */
+/** The fields that place a record for row scopes: its owner (empty: creator) and its unit within a structure (ADR-0044). */
 export type ObjectScope = { owner?: string; unit?: string; structure?: string };
-export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; extensionSource?: { base: Api.AssetBinding }; numbering?: Numbering_; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[] };
-/** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0058 A2, A3). */
-export type Process = { states: State[]; actions: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[] };
+export type ProtocolBinding = { contract?: Api.Protocol; name: string; version: number; actions: Record<string, string>; reads?: string[]; events?: Record<string, string> };
+export type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access?: Access[]; scope?: ObjectScope; implements?: string[]; extends?: string; extensionSource?: { base: Api.AssetBinding }; numbering?: Numbering_; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[] };
+/** The draft in hand: fields, lifecycle, access, and its shape — the interfaces it implements and the type it extends (ADR-0020 A2, A3). */
+export type Process = { states: State[]; actions: Action[]; createTransaction?: Api.BusinessTxn; dispatchCommands?: Api.DispatchCommand[]; protocols?: ProtocolBinding[]; access: Access[]; fields: Field[]; scope?: ObjectScope; implements?: string[]; extends?: string; constraints?: Api.Constraint[]; sets?: Api.RecordSet[]; reads?: Api.RuleReadSpec; versioning?: Api.Versioning; versionPins?: Api.VersionPinBinding[] };
 /** An edit changes only the parts the person touched; null explicitly clears an optional part. */
 export function objectChanges(draft: Process, saved: Process): Record<string, unknown> {
   const changes: Record<string, unknown> = {};

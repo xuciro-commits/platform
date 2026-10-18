@@ -97,7 +97,7 @@ func TestJournal(t *testing.T) {
 	if err != nil || len(got) != 2 || !got[1].At.Equal(entry.At) || string(got[0].Body) != `{"a": 1}` {
 		t.Fatalf("entries %v %v", got, err)
 	}
-	// Snapshots (ADR-0019 D6): the newest of the same code, then the entries after it.
+	// Snapshots (ADR-0024): the newest of the same code, then the entries after it.
 	for seq := range int64(3) {
 		if err := j.SaveSnapshot(ctx, "t-journal", seq+1, "code-a", []byte(fmt.Sprint("state ", seq+1))); err != nil {
 			t.Fatal(err)

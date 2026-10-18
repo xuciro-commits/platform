@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// Knowledge search (ADR-0022), the host's engine over the knowledge app's documents: documents people upload, and fields apps
+// Knowledge search (ADR-0009), the host's engine over the knowledge app's documents: documents people upload, and fields apps
 // declare as knowledge, cut into passages and searched by words and, when an
 // embedding model is set, by meaning — only what the reader may read. Vectors
 // are derived: embedded as owned work outside the journal and kept by the
@@ -57,12 +57,12 @@ type index struct {
 	chunks map[string][]*chunk // by source key
 	texts  map[string]string   // attached text files by content hash
 	// walked says the tenant was read once in full; after that the index
-	// follows the records the store marks dirty (ADR-0033 14b, #130), so a
+	// follows the records the store marks dirty (ADR-0009 14b, #130), so a
 	// search costs nothing when nothing changed.
 	walked bool
 	// postings are the chunks each word appears in, with the corpus totals BM25
 	// needs: a search scores the passages holding a word of the question, not
-	// every passage of the tenant (ADR-0033 14b). stale counts the chunks left
+	// every passage of the tenant (ADR-0009 14b). stale counts the chunks left
 	// in the postings after being cut again; the postings are rebuilt when they
 	// are half of them.
 	postings map[string][]*chunk
@@ -152,7 +152,7 @@ func (t *Tenant) sources() []source {
 }
 
 // recordSources are the knowledge fields of one record. A restricted field is
-// not indexed (ADR-0028 D3); the record itself is the passage's scope, so the
+// not indexed (ADR-0038); the record itself is the passage's scope, so the
 // reader's authority over it is checked again at every search (#130).
 func recordSources(et *entityType, v reflect.Value) []source {
 	var out []source
@@ -183,7 +183,7 @@ func documentSource(d platform.KnowledgeDocument) source {
 }
 
 // sourcesOf are the sources of the records that changed since the last sync:
-// what one search has to cut again, instead of the whole tenant (ADR-0033 14b).
+// what one search has to cut again, instead of the whole tenant (ADR-0009 14b).
 func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 	var out []source
 	for ref := range changed {
@@ -224,7 +224,7 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 }
 
 // sync brings the index up to date: the tenant is read in full once, and after
-// that only the records the store marked dirty are cut again (ADR-0033 14b).
+// that only the records the store marked dirty are cut again (ADR-0009 14b).
 // A search over an unchanged tenant does no work at all, whatever its size.
 func (t *Tenant) sync() {
 	k := &t.index
@@ -649,7 +649,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 		Usage struct {
 			// Reported distinguishes a provider that says zero from one that
 			// says nothing: the accounting must not read "unknown" as "free"
-			// (ADR-0050 D6, review AI-05).
+			// (ADR-0008, review AI-05).
 			Prompt *int `json:"prompt_tokens"`
 		} `json:"usage"`
 	}
@@ -685,7 +685,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 
 // encodeVector and decodeVector keep a vector as little-endian float32s.
 // fileSources are the text files attached to knowledge documents, and to
-// records of types whose files are knowledge (ADR-0028 D3), read from the
+// records of types whose files are knowledge (ADR-0038), read from the
 // store once per content.
 func (t *Tenant) fileSources() []source {
 	if t.app(platform.FileApp) == nil {

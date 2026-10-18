@@ -10,7 +10,7 @@ import (
 	"platformserver/platform"
 )
 
-// Languages (ADR-0023). The host translates the declarations it serves —
+// Languages (ADR-0005). The host translates the declarations it serves —
 // apps, entity types, fields, states, transitions, actions, settings, flows
 // and agents — into the language of the request, from the app's dictionary
 // and then the platform's. Records, history and the journal are never
@@ -219,7 +219,7 @@ func (t *Tenant) Untranslated(app, lang string) []string {
 }
 
 // meaning describes an app's entity types as their declarations explain them
-// (ADR-0023 D1): what each type is, its other names, and what its fields and
+// (ADR-0005 D1): what each type is, its other names, and what its fields and
 // states hold. Only what is declared is said; "" when nothing is.
 func (t *Tenant) meaning(app string) string {
 	var b strings.Builder
@@ -306,7 +306,7 @@ func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
 }
 
 // termsFor are the tenant's glossary terms and synonyms that refer to a
-// declaration (ADR-0023 D1); the glossary layers names on top, never changes it.
+// declaration (ADR-0005 D1); the glossary layers names on top, never changes it.
 func (t *Tenant) termsFor(declaration string) []string {
 	if t.knowledge == nil {
 		return nil

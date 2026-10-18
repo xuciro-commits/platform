@@ -1,4 +1,4 @@
-// Package core is the platform's shared master data (ADR-0058 A1): the few
+// Package core is the platform's shared master data (ADR-0020 A1): the few
 // things every business application names and none should define again —
 // people, business partners, sites and the locations inside them, materials,
 // units of measure and currencies. It is a platform app on the app API like
@@ -6,7 +6,7 @@
 // role that maintains them, every member reads them. Applications reference
 // these types (`core.material`) and extend them through their own objects;
 // they do not copy them. The organisation itself (units, structures,
-// memberships, calendars) stays in org (ADR-0012).
+// memberships, calendars) stays in org (ADR-0022).
 package core
 
 import (
@@ -245,3 +245,5 @@ func DefaultCurrencies() []any {
 		Currency{Record: platform.Record{ID: "cur-eur"}, Code: "EUR", Name: "Euro", Decimals: 2, Symbol: "€"},
 	}
 }
+
+func (c *Core) NewSimulationApp(tenant string) platform.App { return New(tenant) }

@@ -1,5 +1,5 @@
 // Package host is what the host offers its own apps beyond the app API
-// (ADR-0025 D4): the platform's apps import platformserver/platform and this
+// (ADR-0016): the platform's apps import platformserver/platform and this
 // package, never the host runtime. Business apps outside this module cannot
 // import it. The host detects an app's roles by the interfaces it implements;
 // it keeps no field for any particular app.
@@ -44,7 +44,7 @@ type Listener interface {
 	Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *kernel.Error
 }
 
-// Processes is the flow app (ADR-0020): it takes the flows every app
+// Processes is the flow app (ADR-0007): it takes the flows every app
 // declares, pins the versions instances took for replay, and hears an agent
 // step's run end.
 type Processes interface {
@@ -70,7 +70,7 @@ type Processes interface {
 	RunEnded(c platform.Caller, run RunEnd, now time.Time)
 }
 
-// Runs are agent runs (ADR-0021) a flow's agent step starts and signals.
+// Runs are agent runs (ADR-0054) a flow's agent step starts and signals.
 type Runs interface {
 	// Start puts a new run with the decision r.
 	Start(c platform.Caller, r *pb.ChangeRecord, run RunStart, now time.Time)
@@ -86,7 +86,7 @@ type RunStart struct {
 	Token                            int
 }
 
-// RunSignal is what people made of a run's result (ADR-0021 D8).
+// RunSignal is what people made of a run's result (ADR-0054).
 type RunSignal struct {
 	At               time.Time
 	Kind, By, Detail string
@@ -99,7 +99,7 @@ type RunEnd struct {
 }
 
 // Tasks serves Caller.Assign for every app and closes tasks a platform app
-// no longer waits for (ADR-0017).
+// no longer waits for (ADR-0007).
 type Tasks interface {
 	Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error
 	Close(c platform.Caller, r *pb.ChangeRecord, id string)
@@ -128,7 +128,7 @@ type Linker interface {
 	Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error
 }
 
-// Directory answers who belongs where in the organisation (ADR-0012), for
+// Directory answers who belongs where in the organisation (ADR-0022), for
 // Caller.Units, approvals along the organisation and notifications to a unit's role.
 type Directory interface {
 	// Units are the units party ("member:<id>") belongs to on day, and those
@@ -139,9 +139,9 @@ type Directory interface {
 	// Holders are the members with role (any, when empty) in unit or a unit above it in structure on day.
 	Holders(structure, unit, role string, day platform.Date) []string
 	// Calendar is the working calendar of party ("member:<id>"; "" for the
-	// tenant's) on day (ADR-0028 D7).
+	// tenant's) on day (ADR-0038).
 	Calendar(party string, day platform.Date) platform.Calendar
-	// Element is an element of the enterprise model live on day (ADR-0067 D3).
+	// Element is an element of the enterprise model live on day (ADR-0022 D3).
 	Element(id string, day platform.Date) (platform.ElementInfo, bool)
 	// Related are the elements joined to element by a relationship stereotype
 	// on day: those it points at (outgoing) or those pointing at it.

@@ -6,6 +6,7 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -14,16 +15,38 @@ import (
 	"platformserver/platform"
 )
 
-// hostView is the tenant as its own apps see it (internal/host.Host, ADR-0025 D4).
+// hostView is the tenant as its own apps see it (internal/host.Host, ADR-0016).
 // hostView is the tenant as one of its own apps sees it; app is that app, for
-// what it declares at runtime (ADR-0034).
+// what it declares at runtime (ADR-0048).
 type hostView struct {
 	t        *Tenant
 	app      platform.App
 	decision *stagedDecision
 }
 
-// Install declares an entity this app composed at runtime (ADR-0034).
+func (h hostView) ProtocolContract(id string) (platform.Protocol, bool) {
+	if provider, ok := h.t.resolve(id); ok {
+		return provider.provision.Protocol, true
+	}
+	return platform.Protocol{}, false
+}
+
+func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *kernel.Error) {
+	store := h.t.records
+	if h.decision != nil {
+		store = h.decision.records
+	}
+	page, refusal := h.t.recordsFrom(store, c.Member, typ, platform.Query{Limit: 200}, time.Now())
+	if refusal != nil {
+		return nil, refusal
+	}
+	if page.Total > 200 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Protocol record reads support at most 200 visible records")
+	}
+	return page.Records, nil
+}
+
+// Install declares an entity this app composed at runtime (ADR-0048).
 func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -44,6 +67,21 @@ func (h hostView) installationView(records *recordStore) *Tenant {
 }
 
 func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
+	h.t.opsMu.Lock()
+	bindings := maps.Clone(h.t.bindings)
+	h.t.opsMu.Unlock()
+	for protocol, selected := range bindings {
+		if selected.provider.Manifest().ID != h.app.Manifest().ID {
+			continue
+		}
+		belongs := false
+		for _, schema := range selected.provision.Actions {
+			belongs = belongs || strings.HasPrefix(schema, e.Type+".")
+		}
+		if belongs && !slices.ContainsFunc(e.Protocols, func(p platform.Provision) bool { return p.Protocol.ID() == protocol }) {
+			return fmt.Errorf("protocol %s is bound to this object; retain its provider declaration", protocol)
+		}
+	}
 	draft := h.installationDraft()
 	if current := draft.records.types[e.Type]; current != nil && current.info.Go != reflect.TypeOf(e.Model) {
 		// Definition review cannot decode source rows as the unmigrated target.
@@ -284,7 +322,7 @@ func (h hostView) Runs() host.Runs {
 	return h.t.agents
 }
 
-// InstallPage offers a page composed in this tenant (ADR-0034).
+// InstallPage offers a page composed in this tenant (ADR-0048).
 func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -297,7 +335,7 @@ func (h hostView) ValidateInstallPage(p platform.Page) error {
 	return h.installationDraft().InstallPage(h.app, p)
 }
 
-// InstallApplication offers an application handed over in this tenant (ADR-0036).
+// InstallApplication offers an application handed over in this tenant (ADR-0046).
 func (h hostView) InstallApplication(c platform.Caller, a platform.Application) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -322,7 +360,7 @@ func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
 
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
-// Interfaces are the shapes declared across the tenant's apps (ADR-0058 A2).
+// Interfaces are the shapes declared across the tenant's apps (ADR-0020 A2).
 func (h hostView) Interfaces() []platform.Interface {
 	manifests := make([]platform.Manifest, len(h.t.apps))
 	for k, a := range h.t.apps {

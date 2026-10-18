@@ -9,7 +9,7 @@ registerHooks({ resolve(specifier, context, next) {
     throw error;
   }
 } });
-const { studioApplicationID, studioContext, studioRoute } = await import("./studio-model.ts");
+const { assetRoute, studioApplicationID, studioContext, studioRoute } = await import("./studio-model.ts");
 const { refKey, resourceKinds, resourceRef } = await import("./resources.ts");
 
 const objectKind = resourceKinds.find(kind => kind.kind === "object");
@@ -84,4 +84,37 @@ test("release review returns the original asset to Verify instead of its editing
   const history = studioContext({ view: "release-history", params: { application: "APP" } }, resources, []);
   assert.equal(history.selected, undefined);
   assert.deepEqual(studioRoute("APP", history.area), { view: "project", params: { id: "APP", area: "verify" } });
+});
+
+test("decision table release review resolves its canonical compute reference", () => {
+  const kind = resourceKinds.find(kind => kind.kind === "table");
+  const table = { kind, record: { id: "SAME", name: "prices" }, ref: resourceRef(kind, "prices"), title: "Prices", installed: true, missing: false };
+  const context = studioContext({ view: "release-review", params: { id: "SAME", kind: "compute", application: "APP" } }, [object, table], []);
+  assert.equal(context.selected, table);
+  assert.deepEqual(context.ref, table.ref);
+  assert.equal(context.area, "verify");
+});
+
+test("application test-plan route retains its selected asset in Verify", () => {
+  const kind = resourceKinds.find(kind => kind.kind === "test-plan");
+  const plan = { kind, record: { id: "PLAN", name: "shipping" }, ref: resourceRef(kind, "shipping"), title: "Shipping", installed: false, missing: false };
+  const route = assetRoute(plan.ref, [plan], [], "APP");
+  assert.deepEqual(route, { view: "project", params: { id: "APP", area: "verify", plan: "PLAN" } });
+  const context = studioContext(route, [object, plan], []);
+  assert.equal(context.selected, plan);
+  assert.deepEqual(context.ref, plan.ref);
+  assert.equal(context.area, "verify");
+});
+
+test("published observation opens and returns with its complete owner reference", () => {
+  const kind = resourceKinds.find(kind => kind.kind === "observation");
+  const observation = { kind, ref: { app: "other", kind: "observation", name: "temperature" }, title: "Temperature", installed: true, missing: false };
+  const wrongOwner = { ref: { ...observation.ref, app: "build" } };
+  const definition = { ref: observation.ref };
+  const route = assetRoute(observation.ref, [observation], [wrongOwner, definition], "APP");
+  const context = studioContext(route, [observation], [wrongOwner, definition]);
+  assert.equal(context.selected, observation);
+  assert.equal(context.ref, definition.ref);
+  assert.equal(context.area, "assemble");
+  assert.deepEqual(studioRoute("APP", context.area, refKey(context.selected.ref)), { view: "project", params: { id: "APP", area: "assemble", asset: "other/observation/temperature" } });
 });

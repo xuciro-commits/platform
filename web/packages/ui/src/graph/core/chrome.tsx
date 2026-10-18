@@ -1,6 +1,6 @@
 // The furniture every canvas shows around its drawing: the floating toolbar, the
 // help card, the bar of operations on the selected element, the empty state. Both
-// families drew their own copy of these; there is now one (ADR-0086 §D2).
+// families drew their own copy of these; there is now one (ADR-0033 §D2).
 import { CircleHelp } from "lucide-react";
 import type { ReactNode } from "react";
 import { t } from "../../i18n";
@@ -39,7 +39,7 @@ export function CanvasHelpTool({ open, onToggle }: { open: boolean; onToggle: ()
 }
 
 /** The operations of the selected element or connection, along the canvas foot.
- * Narrow panels scroll it sideways instead of stacking the words (ADR-0085 D5). */
+ * Narrow panels scroll it sideways instead of stacking the words (ADR-0031 D5). */
 export function CanvasActionBar({ label, children }: { label: string; children: ReactNode }) {
   return <div className="nodrag nopan platform-canvas-actions" role="toolbar" aria-label={label}>{children}</div>;
 }

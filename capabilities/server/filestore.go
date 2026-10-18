@@ -15,7 +15,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// FileStore keeps file bytes outside the journal (ADR-0028 D1): an
+// FileStore keeps file bytes outside the journal (ADR-0038): an
 // S3-compatible object store in a deployment, memory in development. Keys are
 // "<tenant>/<sha256>", so the same bytes are kept once and a key never changes.
 type FileStore interface {

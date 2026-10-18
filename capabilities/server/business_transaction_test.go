@@ -421,7 +421,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 			t.Fatalf("an authoritative, effectful or asynchronous %s capability was accepted as a transaction call", kind)
 		}
 	}
-	// ADR-0101 refuses an oversized rule operand before it can inflate the
+	// ADR-0040 refuses an oversized rule operand before it can inflate the
 	// accepted result. No truncation, number allocation or partial application.
 	decide(t, tn, "operator", build.ID, "build.request.create", "build.request", "large", map[string]any{"note": "unconsumed oversized input"}, txnAt)
 	large := txnRequest(t, tn, "operator", strings.Repeat("x", 200000))

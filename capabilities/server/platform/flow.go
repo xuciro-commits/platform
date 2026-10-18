@@ -8,7 +8,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// Flow is a long-running process an app declares (ADR-0020): a trigger, then
+// Flow is a long-running process an app declares (ADR-0007): a trigger, then
 // named steps joined by transitions, with Go functions for the logic. The host
 // runs each instance as a record of its flow app, acting as the declaring
 // app's automation principal on behalf of whoever started it; every step's
@@ -22,7 +22,7 @@ type Flow struct {
 	Start   Start
 	Steps   []Step // an instance starts at the first
 	// Subject is the entity type whose record an instance's key names: the
-	// record's page shows the processes about it (ADR-0026 D4).
+	// record's page shows the processes about it (ADR-0006 D4).
 	Subject string
 	// Owners are roles of the app asked when an instance is stuck: a failed
 	// compensation, or a version the code no longer runs.
@@ -31,11 +31,11 @@ type Flow struct {
 	// step there → the step here (a decision, taken by an administrator).
 	From map[string]string
 	// Continuous declares a flow an arriving batch advances, instead of one
-	// decision starting one instance (ADR-0047 §13, plan A).
+	// decision starting one instance (ADR-0016 §13, plan A).
 	Continuous *Continuous
 }
 
-// Continuous is a flow's declared batch contract (ADR-0047 §13.3): the real
+// Continuous is a flow's declared batch contract (ADR-0016 §13.3): the real
 // source it consumes, the batch and state budgets, and whether dead letters are
 // kept. The batch identity, predecessor and watermark travel with each batch;
 // the instance's frame keeps what was consumed.
@@ -155,10 +155,10 @@ type Start struct {
 	Begin      func(c Caller, e Event) (key string, data any, ok bool)
 	// Type and When start an instance the first time a decision brings a
 	// record of Type into a state When accepts, whichever record the decision
-	// named (ADR-0028 D8); its key is the record's ID. Either this or On.
+	// named (ADR-0038); its key is the record's ID. Either this or On.
 	Type string
 	When func(c Caller, record any) bool
-	// Every starts an instance once per period (ADR-0057 E1, a tenant's
+	// Every starts an instance once per period (ADR-0038 E1, a tenant's
 	// scheduled automation): its key is the period's start time, so a tick
 	// never starts the same period twice. At least a minute. OnBehalf is the
 	// member its steps act as — the one who published the schedule or stream.
@@ -209,7 +209,7 @@ type Step struct {
 	Timeout   time.Duration
 	OnTimeout string
 	// WorkingDays, when set, times the step out after that many working days
-	// of the calendar of whom the instance runs for, or the tenant's (ADR-0028 D7).
+	// of the calendar of whom the instance runs for, or the tenant's (ADR-0038).
 	WorkingDays int
 	// Fault is where an Act goes once its retries are spent; without it the
 	// flow compensates: each completed Act's Undo runs, newest first.
@@ -249,7 +249,7 @@ type Wait struct {
 	At    func(c Caller, r *Run) time.Time
 }
 
-// Ask gives people a task (ADR-0017). Its answer, one of Answers ("done"
+// Ask gives people a task (ADR-0007). Its answer, one of Answers ("done"
 // without any), is the instance's Answer for the next step to read. When an
 // event Match accepts arrives first (On), the task closes and the answer is "event".
 type Ask struct {
@@ -261,7 +261,7 @@ type Ask struct {
 	On      string
 	Match   func(c Caller, r *Run, e Event) bool
 	// Reviews names the agent step whose proposal this asks a person to
-	// accept (ADR-0021 D7): the first answer accepts it, another corrects it,
+	// accept (ADR-0054): the first answer accepts it, another corrects it,
 	// and an event On bypasses it. What people make of it is kept on the run.
 	Reviews string
 }
@@ -274,7 +274,7 @@ type Call struct {
 	Data    func(c Caller, r *Run) any
 }
 
-// AgentStep gives one of the app's agents a goal (ADR-0021) and waits for its
+// AgentStep gives one of the app's agents a goal (ADR-0054) and waits for its
 // run: its result is the Answer. When the run stops (a budget, a guard, no
 // model), the flow goes to the step's Fault, or else a person does the step (To).
 type AgentStep struct {

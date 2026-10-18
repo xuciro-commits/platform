@@ -1,5 +1,5 @@
-// Package hospitality is a hotel company's software as a solution (ADR-0011,
-// ADR-0025): the platform's directory, relations, AI, work (approvals, tasks),
+// Package hospitality is a hotel company's software as a solution (ADR-0006,
+// ADR-0016): the platform's directory, relations, AI, work (approvals, tasks),
 // flows and agents, a lodging provider (the PMS), the CRM, HCM and CSM,
 // composed without a bridge. The CRM consumes the lodging protocol; any provider serves it.
 package hospitality
@@ -38,7 +38,7 @@ func Compose(id string, providers []platform.App, seats ...platformserver.Seat) 
 	return platformserver.NewTenant(id, append(apps, crm.New(id), hcm.New(id), csm.New(id))...)
 }
 
-// DemoOrganization is a hospitality group as ADR-0012 sees it: the same units in
+// DemoOrganization is a hospitality group as ADR-0022 sees it: the same units in
 // a legal, a management and a governance structure, a temporary project and
 // committee, and an external partner that sits on the committee.
 func DemoOrganization() platform.OrgSeed {
@@ -60,7 +60,7 @@ func DemoOrganization() platform.OrgSeed {
 	acme.Legal, acme.External = true, true
 	return platform.OrgSeed{
 		// The office works Monday to Friday, closed for National Day week; the
-		// hotel's front office works every day (ADR-0028 D7).
+		// hotel's front office works every day (ADR-0038).
 		Calendars: []platform.Calendar{
 			{ID: "office", Name: "Office", Holidays: []platform.Date{"2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07"}},
 			{ID: "front-office", Name: "Front office", Workdays: []int{1, 2, 3, 4, 5, 6, 7}}},

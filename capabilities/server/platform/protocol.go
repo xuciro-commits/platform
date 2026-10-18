@@ -3,13 +3,14 @@ package platform
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 )
 
-// Protocol is a named, versioned interface apps provide and consume (ADR-0011):
+// Protocol is a named, versioned interface apps provide and consume (ADR-0006):
 // actions (payload fields and meaning), reads (result shape, by convention the
 // protocol package's types) and events. Consumers depend on a protocol, never on
 // the app that provides it.
@@ -24,6 +25,70 @@ type Protocol struct {
 type ProtocolEvent struct {
 	Name  string `json:"name"`
 	Title string `json:"title"` // how the timeline tells it, e.g. "Booking canceled"
+}
+
+// ProtocolBinding publishes an object's existing actions and record read as a
+// versioned protocol. It never introduces an execution or authorization path.
+type ProtocolBinding struct {
+	Contract *Protocol         `json:"contract,omitempty"`
+	Name     string            `json:"name"`
+	Version  int               `json:"version"`
+	Actions  map[string]string `json:"actions"`
+	Reads    []string          `json:"reads,omitempty"`
+	Events   map[string]string `json:"events,omitempty"`
+}
+
+// CheckProtocolActions checks the wire payload, not the provider's roles or
+// presentation. The contract and binding remain the original declarations.
+func CheckProtocolActions(contract Protocol, actions []Action) error {
+	for _, required := range contract.Actions {
+		index := slices.IndexFunc(actions, func(a Action) bool { return a.Schema == required.Schema })
+		if index < 0 || len(actions[index].Payload) != len(required.Payload) {
+			return fmt.Errorf("protocol %s action %s has an incompatible payload", contract.ID(), required.Schema)
+		}
+		kind := func(typ string) string {
+			switch typ {
+			case "string", "text", "longtext":
+				return "text"
+			case "number", "decimal":
+				return "decimal"
+			}
+			return typ
+		}
+		for _, field := range required.Payload {
+			matched := slices.ContainsFunc(actions[index].Payload, func(actual Field) bool {
+				return actual.Name == field.Name && kind(actual.Type) == kind(field.Type) && actual.Required == field.Required && actual.Ref == field.Ref && slices.Equal(actual.Choices, field.Choices)
+			})
+			if !matched {
+				return fmt.Errorf("protocol %s action %s field %s differs", contract.ID(), required.Schema, field.Name)
+			}
+		}
+	}
+	if len(actions) != len(contract.Actions) {
+		return fmt.Errorf("protocol %s action set differs", contract.ID())
+	}
+	return nil
+}
+
+func CheckProtocol(contract, actual Protocol) error {
+	if contract.ID() != actual.ID() {
+		return fmt.Errorf("protocol contract identity differs")
+	}
+	if err := CheckProtocolActions(contract, actual.Actions); err != nil {
+		return err
+	}
+	names := func(p Protocol) []string {
+		out := append([]string{}, p.Reads...)
+		for _, event := range p.Events {
+			out = append(out, "event:"+event.Name)
+		}
+		slices.Sort(out)
+		return out
+	}
+	if !slices.Equal(names(contract), names(actual)) {
+		return fmt.Errorf("protocol %s read or event declarations differ", contract.ID())
+	}
+	return nil
 }
 
 // ID is "<name>/<version>", e.g. "lodging.booking/1".
@@ -58,7 +123,7 @@ type ProviderResult struct {
 // Probe asks the tenant's provider, in a decision's rules, whether it would
 // accept a protocol action from the member now: its policy and rules run, and
 // nothing is recorded or applied. NOT_FOUND says no provider is bound. In a
-// replay it holds, as it did, when a provider is bound. Rules never change another app (ADR-0026 D1):
+// replay it holds, as it did, when a provider is bound. Rules never change another app (ADR-0006 D1):
 // what they need of one is a Request, made once the decision is accepted.
 func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *kernel.Error {
 	if c.rt == nil {
@@ -68,10 +133,10 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 }
 
 // Request is a protocol action an accepted decision asks of the tenant's provider
-// (ADR-0026 D2). The host submits it after the decision, as the member, and
+// (ADR-0006 D2). The host submits it after the decision, as the member, and
 // submits the provider's Answer to the app's Reply action on the decision's target.
 //
-// A request of a model (ADR-0029 D3) names no protocol: Model is
+// A request of a model (ADR-0008 D3) names no protocol: Model is
 // "<provider>/<model>", or empty for the tenant's model for apps resolved when
 // the decision is accepted (later settings cannot change it); Payload is a
 // Prompt; Target is what the answer is about. The host asks the model after
@@ -108,7 +173,7 @@ type Answer struct {
 	Code    string `json:"code,omitempty"`   // the refusal's code
 	Reason  string `json:"reason,omitempty"` // why, as the provider said it (F-23): a person reads it at the consumer
 	Ref     string `json:"ref,omitempty"`    // "<type>/<id>" of the provider's record
-	Text    string `json:"text,omitempty"`   // a model's answer (ADR-0029 D3)
+	Text    string `json:"text,omitempty"`   // a model's answer (ADR-0008 D3)
 	// Model effect callbacks alone supply these measurements. A missing meter
 	// is distinct from a measured zero; providers may omit tokens or price.
 	Metered        bool    `json:"metered,omitempty"`

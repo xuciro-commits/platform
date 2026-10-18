@@ -24,7 +24,7 @@ type session struct {
 	changed            map[string]*FlowInstance
 	order              []string
 	assigns            []flowTask
-	runs               []host.RunStart // agent runs its steps start (ADR-0021)
+	runs               []host.RunStart // agent runs its steps start (ADR-0054)
 	signals            []runSignal     // what people made of their proposals
 	close              []string
 	event              *platform.Event
@@ -551,7 +551,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			tok.Due = due
 		}
 		ss.trace(x, tok.Step, "waiting", waitingFor(step), "")
-	case step.Agent != nil && ss.f.host.Runs() != nil: // the app's agent takes the step (ADR-0021); its run ends it
+	case step.Agent != nil && ss.f.host.Runs() != nil: // the app's agent takes the step (ADR-0054); its run ends it
 		ag := step.Agent
 		id := fmt.Sprintf("%s:%d", x.ID, x.Seq)
 		x.Seq++
@@ -748,7 +748,7 @@ func (ss *session) compensate(x *FlowInstance, why string) {
 	ss.stopPaths(x)
 	x.State = "compensating"
 	x.Tokens = []Token{{ID: ss.tokenID(x), Step: "@undo", Waits: "ready"}}
-	if runs := ss.f.host.Runs(); runs != nil { // what its agents did is undone with the rest (ADR-0022 D9)
+	if runs := ss.f.host.Runs(); runs != nil { // what its agents did is undone with the rest (ADR-0009)
 		for _, run := range runs.Finished(ss.c, x.ID, "") {
 			ss.signals = append(ss.signals, runSignal{run: run, RunSignal: host.RunSignal{At: ss.now, Kind: "undone", By: "flow", Detail: why}})
 		}
@@ -799,7 +799,7 @@ func (ss *session) undo(x *FlowInstance, token int) {
 	ss.trace(x, u.Step, "undone", strings.TrimPrefix(u.Protocol+" ", " ")+u.Action+" "+u.Target, "")
 }
 
-// stuck stops a path and asks the flow's owners (ADR-0020 D5).
+// stuck stops a path and asks the flow's owners (ADR-0007).
 func (ss *session) stuck(x *FlowInstance, token int, why string) {
 	tok := ss.token(x, token)
 	d := ss.def(x)
@@ -1201,7 +1201,7 @@ func backoff(attempts int) time.Duration { return time.Second << attempts }
 func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
 
 // timeout is when a step times out: after its Timeout, or after its working
-// days in the calendar of whom the instance runs for, else the tenant's (ADR-0028 D7).
+// days in the calendar of whom the instance runs for, else the tenant's (ADR-0038).
 func (ss *session) timeout(x *FlowInstance, step *platform.Step) (time.Time, bool) {
 	if step.WorkingDays > 0 {
 		party := ""

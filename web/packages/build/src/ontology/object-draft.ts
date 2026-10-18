@@ -1,5 +1,5 @@
 // One draft session over a `build.object` record, shared by the object type
-// workbench and the action type workbench (ADR-0053 §5–§6): both edit the same
+// workbench and the action type workbench (ADR-0047§6): both edit the same
 // record through its own action, explicitly save it and publish it; the host checks
 // everything again at publication.
 import { useHost, useReadQuery } from "@platform/app";
@@ -10,7 +10,7 @@ import { useDraftSession } from "../session/DraftSession";
 import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
 import { useAuthoringModel } from "./authoring-model";
 
-const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], createTransaction: record.createTransaction, dispatchCommands: record.dispatchCommands ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [] });
+const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], createTransaction: record.createTransaction, dispatchCommands: record.dispatchCommands ?? [], protocols: record.protocols ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [] });
 
 export function useObjectDraft(id: string, onReset?: () => void) {
   const { decide, definitions } = useHost();
@@ -46,7 +46,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     // Inspector rows have no serialized UI ids. Move their buffers with the
     // original row when a sibling is removed or reordered; renames keep the slot.
     const indexOf=(before:unknown[],after:unknown[],at:number)=>{const found=after.indexOf(before[at]);return found>=0?found:before.length===after.length?at:-1;};
-    const collections={field:"fields",state:"states",action:"actions",access:"access",constraint:"constraints",recordSet:"sets"} as const;
+    const collections={field:"fields",state:"states",action:"actions",access:"access",constraint:"constraints",recordSet:"sets",protocol:"protocols"} as const;
     const parts={parameter:"inputs"} as const;
     const moves=Object.entries(session.inputs.values).flatMap(([key,value])=>{
       const segments=key.split("/");let changed=false,removed=false;

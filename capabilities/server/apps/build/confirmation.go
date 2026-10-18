@@ -43,6 +43,23 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 	if err := spec.Check(); err != nil {
 		return err
 	}
+	for _, party := range spec.Parties {
+		if party.Reconcile == nil || party.Reconcile.KeyInput == "" {
+			continue
+		}
+		declared := false
+		for _, action := range object.Actions {
+			if action.Transaction == nil || action.Transaction.Confirmation != spec {
+				continue
+			}
+			declared = slices.ContainsFunc(action.Inputs, func(input Input) bool {
+				return input.Name == party.Reconcile.KeyInput && input.Required && (input.Type == "text" || input.Type == "reference")
+			})
+		}
+		if !declared {
+			return fmt.Errorf("Reconciliation key input must name a required text or reference input of the initiating action")
+		}
+	}
 	subject := "build." + object.Name
 	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(a Access) bool { return a.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The confirmation reviewer role is not declared")

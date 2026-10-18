@@ -1,4 +1,4 @@
-// ECharts 6, loaded the first time a chart draws (ADR-0019 D5): the kit's other
+// ECharts 6, loaded the first time a chart draws (ADR-0024): the kit's other
 // pages never download it.
 import { BarChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";

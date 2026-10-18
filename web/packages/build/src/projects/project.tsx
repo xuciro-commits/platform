@@ -1,6 +1,6 @@
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
-// ADR-0108: one application, five workspaces and builder-named concepts.
+// ADR-0047: one application, five workspaces and builder-named concepts.
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, pageUIProfile, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
@@ -197,13 +197,13 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
         setError(t("The resource exists, but its project membership could not be read. Retry the same resource.")); return;
       }
       if (!await patch(changesForResource(current, kind, record), current.revision)) return;
-      setCreatedResource(undefined); open(resourceRoute(kind, target.id, id));
+      setCreatedResource(undefined); open(resourceRoute(kind, target.id, id), { ifCurrent: { view: "project", params: { id } } });
     } catch { setError(t("The resource exists, but its project membership could not be read. Retry the same resource.")); }
   };
   const retryPatch = async () => {
     const original = pendingRef.current;
     if (!original || !await patch(original.changes, original.revision, original.settings)) return;
-    if (createdResource) { const resource = createdResource; setCreatedResource(undefined); open(resourceRoute(resource.kind, resource.target.id, id)); }
+    if (createdResource) { const resource = createdResource; setCreatedResource(undefined); open(resourceRoute(resource.kind, resource.target.id, id), { ifCurrent: { view: "project", params: { id } } }); }
   };
   const remove = async (ref: Api.AssetRef) => {
     const current = latestProject.current;
@@ -298,9 +298,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
               {dependencyQuery.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}
               {!current.installed && <p className="text-xs text-muted">{t("Draft dependencies are checked by the release owner. Published links use declared dependencies.")}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                {current.record && <Button size="sm" variant="primary" onClick={() => open(resourceRoute(current.kind, current.record!.id, project.id))}>{t("Open")}</Button>}
-                {!current.record && current.installed && current.kind.kind === "object" && <Button size="sm" variant="primary" onClick={() => open({ view: "object-type", params: { object: current.ref.name, application: project.id } })}>{t("Open in object model")}</Button>}
-                {!current.record && current.installed && current.ref.kind !== "object" && <Button size="sm" variant="primary" onClick={() => open(assetRoute(current.ref, owned, definitions, project.id))}>{t("Open")}</Button>}
+                {(current.record || current.installed) && <Button size="sm" variant="primary" onClick={() => open(assetRoute(current.ref, owned, definitions, project.id))}>{t(!current.record && current.ref.kind === "object" ? "Open in object model" : "Open")}</Button>}
                 {builder && current.missing && current.kind !== publishedResourceKind && <NewResourceMenu application={id} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
                 {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
               </div>

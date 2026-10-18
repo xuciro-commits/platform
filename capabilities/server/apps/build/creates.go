@@ -55,7 +55,7 @@ func (b *Build) checkCreates(o Object) error {
 	return nil
 }
 
-// create builds one related record for the action being taken (ADR-0040 21c
+// create builds one related record for the action being taken (ADR-0047 21c
 // D2). The transition's Do builds and checks it, so a refusal refuses the
 // action; its After stores it under the same change, so the accepted result
 // holds both writes or neither. No second submission re-enters the ledger.

@@ -1,4 +1,4 @@
-// Which project holds a resource (ADR-0083 D6): inventories group by it, so a
+// Which project holds a resource (ADR-0005): inventories group by it, so a
 // builder sees object types, actions, queries and functions under the
 // applications they belong to rather than as one flat list. A resource no
 // project lists is shown under "Not in a project" — never guessed into one.

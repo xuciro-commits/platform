@@ -1,4 +1,4 @@
-// A search input read by a barcode scanner or a camera (ADR-0057 D1). Keyboard
+// A search input read by a barcode scanner or a camera (ADR-0038). Keyboard
 // wedge scanners type the code and press Enter: the field keeps focus, commits
 // on Enter and selects its text so the next scan replaces it. Where the browser
 // has a BarcodeDetector, a camera button reads the code through the lens.

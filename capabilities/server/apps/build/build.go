@@ -1,5 +1,5 @@
-// Package build is the platform's builder app (ADR-0034), on the app API and
-// internal/host (ADR-0025 D4): objects a tenant defines, published into the
+// Package build is the platform's builder app (ADR-0048), on the app API and
+// internal/host (ADR-0016): objects a tenant defines, published into the
 // running host so they behave like an app's own — the same records, generated
 // actions and forms, search, aggregates, journal and replay. The definition is
 // data; nothing about it is a second runtime.
@@ -33,13 +33,13 @@ type Build struct {
 	installed map[string]platform.Entity
 	// jointEntities are the object drafts of the candidate being built, so the
 	// same validation answers entity lookups as the candidate would install
-	// them (ADR-0048). Empty outside a joint build.
+	// them (ADR-0011). Empty outside a joint build.
 	jointEntities     map[string]platform.EntityInfo
 	jointAssets       map[platform.AssetRef]bool
 	jointDeclarations map[platform.AssetRef]platform.ReleaseAsset
 	// jointMode is set while a candidate holds more than one draft: the host's
 	// installed-state install checks then move to the candidate's own install
-	// dry run, because no single draft's image is installed yet (ADR-0048 D2).
+	// dry run, because no single draft's image is installed yet (ADR-0011).
 	jointMode     bool
 	linkTypes     map[string]LinkType
 	propertyTypes map[string]PropertyType
@@ -47,7 +47,7 @@ type Build struct {
 	functions     map[string]Function
 	agents        map[string]Agent
 	codes         map[string]Code
-	tables        map[string]Table // published decision tables, by name (ADR-0062)
+	tables        map[string]Table // published decision tables, by name (ADR-0040)
 }
 
 // Attach is called by the host when a tenant is composed.
@@ -147,7 +147,7 @@ func (b *Build) objectEntity() platform.Entity {
 }
 
 // releaseProfile is declared, not hidden: an operator sets it through the
-// platform's settings surface (ADR-0048 D5b).
+// platform's settings surface (ADR-0011b).
 func (b *Build) settings() []platform.Setting {
 	return []platform.Setting{{Name: SettingReleaseProfile, Title: "Release profile", Type: "choice",
 		Choices: []string{ProfileProduction, ProfileDevelopment}, Default: ProfileDevelopment,
@@ -165,8 +165,8 @@ func (b *Build) Manifest() platform.Manifest {
 		entities = append(entities, b.installed[typ])
 	}
 	// Every role an object names is a role of this app, which the Console
-	// grants — one that only reads grants no action (ADR-0037 D4). Builder and
-	// Publisher are the two roles releases need (ADR-0047 §11).
+	// grants — one that only reads grants no action (ADR-0044). Builder and
+	// Publisher are the two roles releases need (ADR-0016 §11).
 	roles := []string{User, Builder, Publisher, Integrator}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
@@ -176,7 +176,8 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Consumes: b.confirmationProtocols(), Reads: []string{ReadReleaseProfile}, ReadSources: map[string]string{ReadReleaseProfile: "record"}, Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
+	provisions, reads := b.objectProtocols()
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.confirmationProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -208,7 +209,7 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 	return out
 }
 
-// SettingReleaseProfile declares how definitions reach operators (ADR-0048
+// SettingReleaseProfile declares how definitions reach operators (ADR-0011
 // D5b): a tenant that declares "production" delivers only through a saved joint
 // candidate, and the direct install its authoring surfaces used to offer is
 // refused by the owner. Any other value — including the default below — is the
@@ -533,11 +534,11 @@ func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(ra
 
 // Read release-profile answers how this tenant delivers definitions, for the
 // authoring surfaces that must not offer an entry the owner would refuse
-// (ADR-0048 D5b). Every role of this app may read it: it is a declaration of
+// (ADR-0011b). Every role of this app may read it: it is a declaration of
 // the tenant's profile, not a record.
 func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name != ReadReleaseProfile {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return b.readProtocol(c, name)
 	}
 	profile := c.Setting(SettingReleaseProfile)
 	if profile != ProfileProduction {
@@ -858,7 +859,7 @@ func (b *Build) checkName(name, id string) error {
 
 // fieldKnown answers whether a reference names an object this tenant can
 // compose against: an installed one, one selected as a draft in the candidate
-// being built, or another saved draft object (ADR-0048 D1). Delivery still
+// being built, or another saved draft object (ADR-0011). Delivery still
 // proves the object installs.
 func (b *Build) fieldKnown(ref string) bool {
 	if _, known := b.lookupEntity(ref); known {
@@ -985,7 +986,7 @@ func named(s string) bool {
 
 // install declares the object in the running host: the record store keeps its
 // records, the ledger takes its generated actions, and the asset registry
-// offers it and its page (ADR-0034 D2). Installed again, it takes its new
+// offers it and its page (ADR-0048). Installed again, it takes its new
 // fields and its records come with it (D3).
 func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	if c.Staging() {
@@ -1021,7 +1022,7 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 }
 
 // published is a definition as it was published: what is installed, kept on the
-// record so a restore installs that and not a draft written since (ADR-0034 D3).
+// record so a restore installs that and not a draft written since (ADR-0048).
 func published[T any](definition T) string {
 	// A published definition is one version, not a recursive copy of every
 	// preceding publication. Keeping the old Published string inside the new
@@ -1077,7 +1078,7 @@ func wasPublished[T any](raw string) (T, bool) {
 
 // Reinstall installs every published object and page again, objects first: the
 // host calls it when a tenant is restored from a snapshot, before the records
-// of the types they define (ADR-0034 D4). It installs what was published, so a
+// of the types they define (ADR-0048). It installs what was published, so a
 // draft written since stays a draft.
 func (b *Build) Reinstall() error {
 	if err := restoreDefinitionPublications(b, b.propertyTypeInventory, SchemaPropertyType); err != nil {
@@ -1172,11 +1173,11 @@ func (b *Build) Reinstall() error {
 }
 
 // Entity is the declaration a defined object amounts to: a Go type built now,
-// with the tags a developer would have written (ADR-0034 D1).
+// with the tags a developer would have written (ADR-0048).
 func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
 
 // entity is the declaration as installed: its actions may create related
-// records through this builder's host (ADR-0040 21c).
+// records through this builder's host (ADR-0047 21c).
 func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b, b.conditionLookup) }
 
 func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
@@ -1267,7 +1268,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		withheld = "rulewithheld"
 		fields = append(fields, reflect.StructField{Name: "RuleWithheld", Type: reflect.TypeFor[bool](), Tag: reflect.StructTag(`json:"rulewithheld,omitempty" field:"readonly,aside"`)})
 	}
-	if len(o.States) > 0 { // where a record stands, which only its actions move (ADR-0037 D2)
+	if len(o.States) > 0 { // where a record stands, which only its actions move (ADR-0044)
 		names := make([]string, 0, len(o.States))
 		for _, st := range o.States {
 			names = append(names, st.Name)
@@ -1286,6 +1287,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	entity := platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
 		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model, lookup), ValidateAt: numberingOf(o, model)}
 	entity.CreateTxn = creation
+	entity.Protocols = objectProvisions(o, entity)
 	if creationError != nil {
 		legacy := entity.ValidateAt
 		entity.ValidateAt = func(c platform.Caller, record any, now time.Time) *kernel.Error {
@@ -1315,7 +1317,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 }
 
 // page is the list and detail page a defined object comes with: the same
-// descriptor a code page has (ADR-0034 D4).
+// descriptor a code page has (ADR-0048).
 func page(o Object) platform.Page {
 	names := []string{}
 	for _, f := range o.Fields {

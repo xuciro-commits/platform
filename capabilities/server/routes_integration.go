@@ -14,6 +14,15 @@ import (
 // routesIntegration serves connectors, protocols, typed capability calls, A2A, MCP and writebacks.
 func (h *Host) routesIntegration(rt *routes) {
 	h.routesObservations(rt)
+	rt.handle(Route{Pattern: "POST /v1/protocols/{protocol}/{version}/{action}/{target}", Summary: "Call a protocol action with a record target and stable Idempotency-Key", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil || !json.Valid(body) || r.Header.Get("Idempotency-Key") == "" {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		_, record, refusal, issues := t.invokeDiagnosed(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), r.PathValue("target"), body, r.Header.Get("Idempotency-Key"), h.Now())
+		Reply(w, record, t.i18n.said(refusal, t.Language(m, r)), t.localizedFieldIssues(m, issues, t.Language(m, r))...)
+	})
 	rt.handle(Route{Pattern: "POST /v1/connectors/{input}", Summary: "Deliver a connector's batch or page as the connector's member (K8)", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
 		out, err := t.Input(m, r.PathValue("input"), body, h.Now())
@@ -52,7 +61,7 @@ func (h *Host) routesIntegration(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.public(Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card (ADR-0022)"}, func(w http.ResponseWriter, r *http.Request) {
+	rt.public(Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card (ADR-0009)"}, func(w http.ResponseWriter, r *http.Request) {
 		tenants := h.currentTenants()
 		i := slices.IndexFunc(tenants, func(t *Tenant) bool { return t.ID == r.PathValue("tenant") })
 		if i < 0 || !tenants[i].published(r.PathValue("agent")) {

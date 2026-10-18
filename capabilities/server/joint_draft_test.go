@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// M3 (ADR-0047 §10.2, ADR-0048 D1/D2): a new object, a new page over it and an
+// M3 (ADR-0016 §10.2, ADR-0011/D2): a new object, a new page over it and an
 // application holding that page are composed and delivered as one joint
 // candidate, without publishing any dependency first. The same call proves the
 // selection installs before it can be saved, and refuses a selection whose
@@ -52,7 +52,7 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 
 	// The page alone still cannot be delivered: its object was never published,
 	// so the review must say what is missing rather than save a candidate that
-	// would not install (ADR-0048 D2).
+	// would not install (ADR-0011).
 	alone, aloneErr := tn.PreviewRelease(member, platform.AssetPage, "PAGE")
 	if aloneErr == nil && alone.Diagnostic == "" && alone.CandidateID != "" {
 		t.Fatalf("a page over an unpublished object was deliverable on its own: %+v", alone)
@@ -187,7 +187,7 @@ func TestJointDraftFirstScheduledFlowRetainsPublisher(t *testing.T) {
 	CheckReplay(t, tn, entries, compose)
 }
 
-// ADR-0107: the same owner-produced agent bytes travel with an application,
+// ADR-0046: the same owner-produced agent bytes travel with an application,
 // while the original target owners compile/install its tools and evaluations.
 func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	const tenant = "application-agents"

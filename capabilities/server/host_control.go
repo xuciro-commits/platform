@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// hostControl is what the host console holds over a tenant (ADR-0047 §6.5):
+// hostControl is what the host console holds over a tenant (ADR-0016 §6.5):
 // its lifecycle ("" or "open" runs, "suspend" and "decommission" block
 // ordinary requests), the support sessions it authorized, and the migrations
 // it moved in or out. The lifecycle is read without any lock (health, the

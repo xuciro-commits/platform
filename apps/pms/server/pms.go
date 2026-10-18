@@ -1,4 +1,4 @@
-// Package pms is the property management system (ADR-0025 D1; #79), modelled
+// Package pms is the property management system (ADR-0016; #79), modelled
 // on Oracle OPERA: room types, reservations taken at the desk or from a
 // channel, and the lodging protocol it provides. It accepts reservation
 // decisions through the kernel contract. It may
@@ -25,7 +25,7 @@ import (
 	"platformserver/platform"
 )
 
-// languages translate the app's titles and descriptions (ADR-0023).
+// languages translate the app's titles and descriptions (ADR-0005).
 //
 //go:embed i18n
 var languageFiles embed.FS
@@ -53,7 +53,7 @@ const (
 	Channel   Role = "channel"
 )
 
-// Actions is the hotel's action catalog (ADR-0008): front desk and channels
+// Actions is the hotel's action catalog (ADR-0057): front desk and channels
 // create and modify; only managers cancel. Other packages act through it too.
 func Actions() *platform.Catalog {
 	stay := []platform.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type", From: "room-types", Key: "id", Label: "name", Constraints: &platform.InputConstraints{}},
@@ -68,7 +68,7 @@ func Actions() *platform.Catalog {
 			Description: "Change the room type or dates of a reservation.", Payload: stay, Roles: book},
 		platform.Action{Schema: SchemaCancel, Target: ReservationType, Capability: "reservations", Title: "Cancel reservation",
 			Description: "Cancel a reservation; the record stays in its history.", Payload: []platform.Field{}, Roles: []string{string(Manager)}},
-		// Holds (ADR-0026 D3), as OPERA's tentative blocks: a room is taken until a date, then booked or given back.
+		// Holds (ADR-0006 D3), as OPERA's tentative blocks: a room is taken until a date, then booked or given back.
 		platform.Action{Schema: SchemaHold, Target: ReservationType, New: true, Capability: "reservations", Title: "Hold room",
 			Description: "Hold a room type for a stay until a date without booking it; refused when the type is sold out for any night. Held rooms are released after their date.",
 			Payload: append(append([]platform.Field{}, stay...), platform.Field{Name: "guest", Type: "string", Required: true, Description: "Guest or group name"},
@@ -87,7 +87,7 @@ type Stay struct {
 	CheckOut string `json:"checkOut"`
 }
 
-// Reservation is a stay of a guest in a room type (ADR-0016: the host keeps the records).
+// Reservation is a stay of a guest in a room type (ADR-0046: the host keeps the records).
 type Reservation struct {
 	platform.Record
 	RoomType platform.Ref[RoomType] `json:"roomType" field:"required" title:"Room type"`
@@ -210,7 +210,7 @@ func (h *Hotel) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 
 func (h *Hotel) AcceptedLedger() *platform.Ledger { return h.ledger }
 
-// Settings, job and notices of the hotel (ADR-0013), the second app on them after the MES.
+// Settings, job and notices of the hotel (ADR-0027), the second app on them after the MES.
 const (
 	SettingOverbooking  = "allow-overbooking"
 	SettingChannelNotes = "channel-booking-notice"
@@ -285,9 +285,9 @@ func ChannelConnector(id string) *pb.ConnectorDescriptor {
 // Declarations are the tenant's authority declarations, for edges (K5 A9).
 func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Declarations() }
 
-// Manifest declares the hotel as an app (ADR-0010).
+// Manifest declares the hotel as an app (ADR-0016).
 // Snapshot and Restore: the channel's facts and the decisions; reservations
-// and room types are the host's records (ADR-0019 D6).
+// and room types are the host's records (ADR-0024).
 func (h *Hotel) Snapshot() (json.RawMessage, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -321,7 +321,7 @@ func (h *Hotel) Manifest() platform.Manifest {
 			{Name: SettingArrivalsLead, Title: "Arrivals list, days ahead", Type: "integer", Default: "1",
 				Description: "The front desk receives the arrivals of the day this far ahead; 0 turns the list off."},
 		},
-		// The hotel sells stays to any app through the lodging protocol (ADR-0011).
+		// The hotel sells stays to any app through the lodging protocol (ADR-0006).
 		Provides: []platform.Provision{{Protocol: lodging.Protocol(),
 			Actions: map[string]string{"reserve": SchemaCreate, "change": SchemaModify, "cancel": SchemaCancel,
 				"hold": SchemaHold, "confirm": SchemaConfirm, "release": SchemaRelease},

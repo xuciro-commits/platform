@@ -122,6 +122,109 @@ func TestDeviceDispatchUnsafeUnknownReadsRealCompletionAndRecovers(t *testing.T)
 	CheckReplay(t, tn, entries, func() *Tenant { return deviceDispatchTenant(t) })
 }
 
+func TestDeviceDispatchStatusWritesOnlyChanges(t *testing.T) {
+	at := time.Date(2026, 10, 17, 16, 0, 0, 0, time.UTC)
+	tn := deviceDispatchTenant(t)
+	var entries []Entry
+	persist := func(entry Entry, _, _ string) ([]byte, error) {
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
+	tn.AcceptResult = persist
+	prepareDeviceDispatch(t, tn, at, "source", false)
+	state, reads := "", 0
+	var sourceError error
+	var duringRead func()
+	outbound := func(request *http.Request, _ bool) (*http.Response, error) {
+		if request.Method == http.MethodPost {
+			return nil, io.ErrUnexpectedEOF
+		}
+		reads++
+		if duringRead != nil {
+			duringRead()
+		}
+		if sourceError != nil {
+			return nil, sourceError
+		}
+		if state == "" {
+			return confirmationResponse(200, `[]`)
+		}
+		return confirmationResponse(200, `[{"id":"M1","state":"`+state+`"}]`)
+	}
+	tn.Outbound = outbound
+	startDeviceDispatch(t, tn, at)
+	tn.Dispatch(at)
+	written := len(entries)
+	duringRead = func() {
+		duringRead = nil
+		tn.ReadDispatches(at)
+	}
+	tn.ReadDispatches(at)
+	run := currentDeviceDispatch(t, tn)
+	if reads != 1 || len(entries) != written+1 || len(run.Readback) != 1 || run.State != "unknown" {
+		t.Fatalf("first read or concurrent read claim: reads=%d writes=%d run=%+v", reads, len(entries)-written, run)
+	}
+	first, revision := run.Readback[0], run.Revision
+	written = len(entries)
+	for _, delay := range []time.Duration{500 * time.Millisecond, time.Second, 1500 * time.Millisecond} {
+		tn.ReadDispatches(at.Add(delay))
+	}
+	run = currentDeviceDispatch(t, tn)
+	if reads != 2 || len(entries) != written || run.Revision != revision || len(run.Readback) != 1 || !run.Readback[0].At.Equal(first.At) {
+		t.Fatalf("unchanged status ignored its period or wrote again: reads=%d writes=%d run=%+v", reads, len(entries)-written, run)
+	}
+	state = "active"
+	tn.ReadDispatches(at.Add(3 * time.Second))
+	tn.ReadDispatches(at.Add(4 * time.Second))
+	if run = currentDeviceDispatch(t, tn); len(entries) != written+1 || run.State != "running" || len(run.Readback) != 2 {
+		t.Fatalf("changed status was not retained once: writes=%d run=%+v", len(entries)-written, run)
+	}
+	tn.ReadDispatches(at.Add(10 * time.Second))
+	tn.ReadDispatches(at.Add(11 * time.Second))
+	if run = currentDeviceDispatch(t, tn); len(entries) != written+2 || run.State != "stuck" || len(run.Readback) != 3 {
+		t.Fatalf("deadline was lost or repeated: writes=%d run=%+v", len(entries)-written, run)
+	}
+	sourceError = errors.New("status source unavailable")
+	tn.ReadDispatches(at.Add(12 * time.Second))
+	tn.ReadDispatches(at.Add(13 * time.Second))
+	if run = currentDeviceDispatch(t, tn); len(entries) != written+3 || run.State != "unknown" || len(run.Readback) != 4 || !strings.Contains(run.Reason, sourceError.Error()) {
+		t.Fatalf("changed error was lost or repeated: writes=%d run=%+v", len(entries)-written, run)
+	}
+	written = len(entries)
+	recovered := deviceDispatchTenant(t)
+	if err := recovered.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	tn = recovered
+	tn.AcceptResult, tn.Outbound = persist, outbound
+	readsBefore := reads
+	tn.ReadDispatches(at.Add(14 * time.Second))
+	tn.ReadDispatches(at.Add(14500 * time.Millisecond))
+	if reads != readsBefore+1 || len(entries) != written {
+		t.Fatalf("restart lost polling or repeated saved evidence: reads=%d writes=%d", reads-readsBefore, len(entries)-written)
+	}
+	decide(t, tn, "reviewer", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retry", "reason": "Controller confirms the command was not executed"}, at.Add(15*time.Second))
+	written = len(entries)
+	tn.ReadDispatches(at.Add(15250 * time.Millisecond))
+	if run = currentDeviceDispatch(t, tn); len(entries) != written+1 || len(run.Readback) != 5 || run.State != "unknown" {
+		t.Fatalf("new attempt lost its first identical status: writes=%d run=%+v", len(entries)-written, run)
+	}
+	duringRead = func() {
+		duringRead = nil
+		decide(t, tn, "reviewer", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "complete", "reason": "Physical completion confirmed during the pending status read"}, at.Add(16250*time.Millisecond))
+	}
+	state, sourceError = "active", nil
+	written = len(entries)
+	tn.ReadDispatches(at.Add(16250 * time.Millisecond))
+	if run = currentDeviceDispatch(t, tn); len(entries) != written+1 || run.State != "completed" || len(run.Readback) != 5 {
+		t.Fatalf("stale status replaced human completion: writes=%d run=%+v", len(entries)-written, run)
+	}
+	tn.ReadDispatches(at.Add(17 * time.Second))
+	if len(tn.dispatchReads) != 0 {
+		t.Fatal("completed dispatch retained its temporary polling state")
+	}
+}
+
 func TestDeviceDispatchUnsafeCrashDoesNotSendAgain(t *testing.T) {
 	at := time.Date(2026, 10, 15, 17, 0, 0, 0, time.UTC)
 	ctx, directory := context.Background(), t.TempDir()

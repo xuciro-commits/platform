@@ -1,5 +1,5 @@
 import type {Api} from "@platform/kernel";
-// The platform's visualization spec (ADR-0019 D5): what a chart shows, never how a
+// The platform's visualization spec (ADR-0024): what a chart shows, never how a
 // library draws it. After the Grammar of Graphics and Vega-Lite: data, a mark,
 // and encodings that map fields onto visual channels, each with a measurement
 // type and, when the data is records, an aggregate. Apps, dashboards and saved

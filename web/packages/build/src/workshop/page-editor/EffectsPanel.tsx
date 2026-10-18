@@ -1,4 +1,4 @@
-// A page event runs an ordered chain of effects (ADR-0053 §11): set state,
+// A page event runs an ordered chain of effects (ADR-0047): set state,
 // open or close an overlay, take an action, open another page, return to the
 // caller. This panel edits that chain for one event of one widget (or one
 // control of a button group). Navigation and return end the chain, so they are

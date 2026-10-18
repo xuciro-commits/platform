@@ -1,4 +1,4 @@
-// Names are written in one language (ADR-0083 D1): "Pallet/托盘" in a title is
+// Names are written in one language (ADR-0005): "Pallet/托盘" in a title is
 // flagged, "WMS 仓库" (an abbreviation beside a word) is not. The other
 // languages come from Control Panel → Languages and words, never from the name.
 const cjk = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/;

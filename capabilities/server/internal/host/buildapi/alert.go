@@ -6,7 +6,7 @@ import (
 
 const AlertType = "build.alertrule"
 
-// Alert is a rule over a published object (ADR-0077): when a record of it
+// Alert is a rule over a published object (ADR-0008): when a record of it
 // comes to match a condition, the people holding a role are told, once per
 // record or every time. It is the operations face's "situation": no page has
 // to be open for it to be seen.

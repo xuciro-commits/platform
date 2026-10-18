@@ -1,4 +1,4 @@
-// The application model's pages (ADR-0016): an entity type described by the
+// The application model's pages (ADR-0046): an entity type described by the
 // host (`GET /v1/entities`) becomes a kit entity, a list page with server-side
 // search, sort and paging, a record page (fields, related records, history) and
 // generated forms. Components take a RecordSource, so the kit knows no client.
@@ -32,7 +32,7 @@ import { t } from "../i18n";
 import { humanizeKernelError } from "../lib/errors";
 import type { Api } from "@platform/kernel";
 
-// What the host describes is generated from its Go types (ADR-0023 D7); the kit
+// What the host describes is generated from its Go types (ADR-0005 D7); the kit
 // only refines what it holds in general: any entity's record.
 export type FieldInfo = Api.FieldInfo;
 export type State = Api.State;
@@ -46,10 +46,10 @@ export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, "type" | "id">;
 export type InterfaceRecordData = Omit<Api.InterfaceRecord, "record"> & { record: EntityRecord };
 export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, "records"> & { records: InterfaceRecordData[] };
 export type RecordChange = Api.RecordChange;
-/** A file attached to a record (ADR-0028). */
+/** A file attached to a record (ADR-0038). */
 export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };
 
-/** A comment on a record (ADR-0028 D6). */
+/** A comment on a record (ADR-0038). */
 export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };
 
 export type RecordView = Omit<Api.RecordView, "record" | "related" | "linked" | "activity" | "processes" | "approvals" | "tasks" | "files" | "comments"> & {
@@ -64,13 +64,13 @@ export type RecordView = Omit<Api.RecordView, "record" | "related" | "linked" | 
   linked: RelatedRecords[];
   /** What apps told about it through protocols, oldest first. */
   activity: Api.Note[];
-  /** The flow instances about the record (ADR-0026 D4). */
+  /** The flow instances about the record (ADR-0006 D4). */
   processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];
 };
 type RelatedRecords = Omit<Api.Related, "records"> & { records: EntityRecord[] };
 export type Money = { amount: number; currency: string };
 
-/** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0019). */
+/** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0024). */
 export type RecordSource = {
   /** Stable member/definition scope; changing it discards cached view data. */
   scope?: string;
@@ -91,7 +91,7 @@ export type RecordSource = {
   watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;
 };
 
-// The tenant's currency (ADR-0024): the default of amounts people enter; the workspace sets it from /v1/me.
+// The tenant's currency (ADR-0026): the default of amounts people enter; the workspace sets it from /v1/me.
 let tenantCurrency = "EUR";
 export const setCurrency = (currency: string) => { if (currency) tenantCurrency = currency; };
 
@@ -159,7 +159,7 @@ const listed = (entity: Entity<EntityRecord>) => Object.keys(entity.fields).filt
 
 type Line = Record<string, unknown>;
 
-// Child lines (Odoo's one2many, ADR-0024): a table on record pages, and rows
+// Child lines (Odoo's one2many, ADR-0026): a table on record pages, and rows
 // to add, edit and remove in forms; the app's rules check them.
 const lines = (common: { label: string; help?: string; required?: boolean; readOnly?: boolean }, columns: Record<string, FieldType<any>>): FieldType<Line[]> => {
   const shown = Object.entries(columns);
@@ -219,7 +219,7 @@ export function StatusBar({ lifecycle, state, can, onTransition, tracker=false }
 const displayOf = (info: EntityInfo, r: EntityRecord) => String((info.display === "id" ? r.id : r[info.display]) ?? r.id);
 
 /** A list of one entity type: server-side search, sort and paging; a row opens the record. */
-/** The fields a list can group by (ADR-0019): values that repeat, and dates by bucket. */
+/** The fields a list can group by (ADR-0024): values that repeat, and dates by bucket. */
 export function groupable(info: EntityInfo): { value: string; label: string }[] {
   const out: { value: string; label: string }[] = [];
   for (const f of info.fields) {
@@ -238,7 +238,7 @@ export function measurable(info: EntityInfo): { value: string; label: string }[]
 }
 
 type ListView = "list" | "kanban" | "pivot" | "chart";
-/** What a list shows: kept by a member as a saved view (ADR-0019 D4). */
+/** What a list shows: kept by a member as a saved view (ADR-0024). */
 export type ListState = {
   view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];
   group?: string; columns?: string; measure?: string; mark?: Mark;
@@ -475,7 +475,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
 
 export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};
 /** A record's original journal order: who changed what. Its
- *  page shows it, and so does a composed page's timeline (ADR-0035 16b). */
+ *  page shows it, and so does a composed page's timeline (ADR-0048 16b). */
 export function RecordHistory({info,history=[],heading=true,label,limit,total,loadedCount=history.length,recordID,recordRevision}:RecordHistoryProps) {
   if(!Array.isArray(history)||limit!==undefined&&(!Number.isSafeInteger(limit)||limit<1||limit>pageUIManifest.runtime.workViews.maxHistoryWindow)||!Number.isSafeInteger(loadedCount)||loadedCount<history.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount)||recordID!==undefined&&(typeof recordID!=="string"||!recordID)||recordRevision!==undefined&&(!Number.isSafeInteger(recordRevision)||recordRevision<0)||history.some((change:RecordChange)=>!change||typeof change.change!=="string"||!change.change||typeof change.schema!=="string"||!change.schema||typeof change.by!=="string"||typeof change.at!=="string"||!change.at||!Array.isArray(change.fields)||change.fields.some((field:Api.FieldChange)=>!field||typeof field.field!=="string"||!field.field)))return <p role="alert">{t("The original record history is unavailable or incompatible.")}</p>;
   const visible:readonly RecordChange[]=limit===undefined?history:history.slice(0,limit),range=limit!==undefined||total!==undefined||loadedCount!==history.length;
@@ -553,9 +553,9 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   fields?: string[];
   /** A composed detail widget shows only this record's header and fields. */
   detailOnly?: boolean;
-  /** Uploading a file to the record and downloading one (ADR-0028); without it the files are listed only. */
+  /** Uploading a file to the record and downloading one (ADR-0038); without it the files are listed only. */
   files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
-  /** Commenting and following (ADR-0028 D6); without it comments are listed only. */
+  /** Commenting and following (ADR-0038); without it comments are listed only. */
   comments?: { add: (text: string) => Promise<boolean>; follow: (on: boolean) => Promise<void> };
   onOpen?: (type: string, r: EntityRecord) => void; reload?: number;
   /** The caller's catalog, and how to take a lifecycle transition (a decision on this record). */
@@ -596,7 +596,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         {!detailOnly && <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>}
       </header>);
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
-  // Extension records (ADR-0058 A3): a type that extends this one pairs one record per base record; its
+  // Extension records (ADR-0020 A3): a type that extends this one pairs one record per base record; its
   // fields show as the base record's own, as far as the reader may read them (the host already filters).
   const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo);return [{rel,relInfo,relEntity,row}];});
   const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
@@ -793,7 +793,7 @@ export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer
 }
 
 /** An approval chain drawn as a process (#122): the requester, each level with its
- * approvers and who decided, and how it ended — in BPMN shapes (ADR-0086 D4). */
+ * approvers and who decided, and how it ended — in BPMN shapes (ADR-0033). */
 function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   const nodes: FlowStepNode[] = [{ id: "requester", label: a.requester, detail: t("asked"), notation: "event-start", tone: "success" }];
   const edges: FlowStepEdge[] = [];
@@ -837,10 +837,10 @@ function Processes({ source, processes, onOpen }: { source: RecordSource; proces
   );
 }
 
-/** A task offered to a member; `answers` are what a flow's question offers (ADR-0020), none: done. */
+/** A task offered to a member; `answers` are what a flow's question offers (ADR-0007), none: done. */
 export type InboxTask = Api.InboxTask;
 
-/** A member's open tasks (ADR-0017), overdue first; each can open what it is about and offers the actions the app gives it. */
+/** A member's open tasks (ADR-0007), overdue first; each can open what it is about and offers the actions the app gives it. */
 export function Inbox({ tasks, onOpen, actions, empty = t("Nothing for you") }: {
   tasks: InboxTask[]; onOpen?: (task: InboxTask) => void; actions?: (task: InboxTask) => ReactNode; empty?: string;
 }) {

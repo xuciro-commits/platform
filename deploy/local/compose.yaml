@@ -1,7 +1,7 @@
 # The platform host's two deployments on their production path, locally (#87, #92):
-# manufacturing-server (the manufacturing solution: the MES and the ERP, ADR-0024)
+# manufacturing-server (the manufacturing solution: the MES and the ERP, ADR-0026)
 # and hospitality-server (the hospitality solution: CRM, PMS, HCM, CSM). PostgreSQL
-# keeps the journal, Rauthy issues identities, each host replays the journal on start. Each host serves the workspace (ADR-0018), built first:
+# keeps the journal, Rauthy issues identities, each host replays the journal on start. Each host serves the workspace (ADR-0019), built first:
 # `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
 name: platform
@@ -20,7 +20,7 @@ services:
       interval: 2s
       retries: 30
 
-  # File bytes (ADR-0028): RustFS, an S3-compatible object store; the journal keeps
+  # File bytes (ADR-0038): RustFS, an S3-compatible object store; the journal keeps
   # only each file's hash. Its console is on FILES_CONSOLE_PORT (platform / platform-files-local-only).
   rustfs:
     image: rustfs/rustfs:latest@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff # pinned; RustFS publishes often
@@ -96,7 +96,7 @@ services:
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
     volumes: [./hospitality/tenants.json:/etc/hospitality/tenants.json, ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
-    # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.
+    # Webhook signing secrets, referenced by name from endpoints (ADR-0004 D5); local-only.
     environment: { PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
       PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
       PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
@@ -108,7 +108,7 @@ services:
       code-builder: { condition: service_healthy }
     restart: on-failure
 
-  # Stateless compute execution and fixed-profile build drivers (ADR-0044).
+  # Stateless compute execution and fixed-profile build drivers (ADR-0013).
   # Compiler images are pulled once by the owner; every tenant build is offline.
   wasm-worker:
     build: { context: ../.., dockerfile: capabilities/server/cmd/compute/Dockerfile, target: worker }
@@ -151,7 +151,7 @@ services:
     stop_grace_period: 15s
     restart: on-failure
 
-  # A webhook receiver, mail server, model server and supplier's agent for local endpoints and the rehearsal (ADR-0014).
+  # A webhook receiver, mail server, model server and supplier's agent for local endpoints and the rehearsal (ADR-0004).
   webhook-sink:
     build: { context: ../.., dockerfile: capabilities/server/cmd/webhook-sink/Dockerfile }
     environment: { WEBHOOK_SECRET: sinkLocalOnly0000000000000000000000000000000000000000000000000000 }

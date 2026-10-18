@@ -13,7 +13,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// Anthropic's Messages API through its official Go SDK (ADR-0015 point 3).
+// Anthropic's Messages API through its official Go SDK (ADR-0008 point 3).
 // The SDK does not retry: one call is one metered attempt, and a rate limit
 // reaches the caller as it does for the OpenAI wire.
 
@@ -40,7 +40,7 @@ func (t *Tenant) completeAnthropic(pv platform.AIProvider, model string, req Cha
 	if req.Temperature != nil {
 		params.Temperature = anthropic.Float(*req.Temperature)
 	}
-	for _, x := range req.Tools { // custom tools (ADR-0021): an agent's catalog actions, reads and built-ins
+	for _, x := range req.Tools { // custom tools (ADR-0054): an agent's catalog actions, reads and built-ins
 		tool := anthropic.ToolParam{Name: x.Name, Description: anthropic.String(x.Description),
 			InputSchema: anthropic.ToolInputSchemaParam{Properties: x.Properties, Required: x.Required}}
 		params.Tools = append(params.Tools, anthropic.ToolUnionParam{OfTool: &tool})

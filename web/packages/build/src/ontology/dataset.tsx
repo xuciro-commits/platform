@@ -8,7 +8,7 @@ import { MarkingField, integrates } from "./marking";
 import { Button, DataTable, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
-// Datasets (ADR-0071): rows as they came from a source or a pipeline, kept as
+// Datasets (ADR-0024): rows as they came from a source or a pipeline, kept as
 // versions with an inferred schema. A builder names one; sources and pipelines
 // load it; this page shows the schema, the versions kept and the rows of one.
 type Field = { name: string; type: string };
@@ -44,7 +44,7 @@ export function DatasetEditor({ id }: { id: string }) {
   const draftedObject = useRef<{ id: string; name: string } | undefined>(undefined);
   const version = shown || draft.version || 0;
   const versionQuery = useReadQuery<{ record?: Version }>(`/v1/records/build.datasetversion/${encodeURIComponent(`${draft.id}@${version}`)}`, 15000, version > 0);
-  // Builder Assist without a model (ADR-0077): the dataset's inferred schema
+  // Builder Assist without a model (ADR-0008): the dataset's inferred schema
   // becomes an object draft - one property per column, typed - that the
   // builder then names, shapes and publishes as any other.
   const draftObject = async () => {

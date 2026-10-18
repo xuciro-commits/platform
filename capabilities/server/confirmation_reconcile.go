@@ -15,7 +15,7 @@ import (
 )
 
 // Scheduling is disposable; accepted differences remain the evidence owner.
-type confirmationReadAttempt struct {
+type statusReadAttempt struct {
 	Due  time.Time
 	Busy bool
 }
@@ -96,9 +96,9 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				return
 			}
 			if t.confirmationReads == nil {
-				t.confirmationReads = map[string]confirmationReadAttempt{}
+				t.confirmationReads = map[string]statusReadAttempt{}
 			}
-			t.confirmationReads[slot] = confirmationReadAttempt{Busy: true}
+			t.confirmationReads[slot] = statusReadAttempt{Busy: true}
 			t.mu.Unlock()
 			reads++
 			p := run.Parties[i]
@@ -112,6 +112,17 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				rows, problem = t.readSourceWithConnection(source, &connection)
 			}
 			_, subject, _ := strings.Cut(run.Subject, "/")
+			if policy.KeyInput != "" {
+				var inputs map[string]any
+				if json.Unmarshal(run.Input, &inputs) != nil {
+					problem = fmt.Errorf("Reconciliation input is unavailable")
+				}
+				value, ok := inputs[policy.KeyInput].(string)
+				if !ok || value == "" {
+					problem = fmt.Errorf("Reconciliation key input is unavailable")
+				}
+				subject = value
+			}
 			matches := 0
 			for _, row := range rows {
 				key, exists := build.ValueLookupPath(row, policy.KeyField)
@@ -149,7 +160,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				outcome = "accepted"
 			}
 			t.mu.Lock()
-			t.confirmationReads[slot] = confirmationReadAttempt{Due: at.Add(time.Duration(policy.EverySeconds) * time.Second)}
+			t.confirmationReads[slot] = statusReadAttempt{Due: at.Add(time.Duration(policy.EverySeconds) * time.Second)}
 			current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
 			valid = exists && current.Revision == run.Revision && i < len(current.Parties) && current.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, current.State)
 			if valid {

@@ -10,7 +10,7 @@ import (
 	"platformserver/platform"
 )
 
-// The agents overview and the off switch (ADR-0029 D4, D5): every agent the
+// The agents overview and the off switch (ADR-0008 D4, D5): every agent the
 // apps declare and every outside principal marked as one, what each did and
 // what people made of it; an administrator suspends one by a decision, which
 // stops its runs at their next step, refuses new ones, and refuses an outside

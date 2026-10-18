@@ -3,7 +3,7 @@ import { layoutGraph } from "./layout/adapter";
 export type GraphSize = { width: number; height: number; gapX: number; gapY: number };
 export type LaneAssignment = { ids: string[]; of: (id: string) => string | undefined };
 export type LaneBand = { id: string; position: CanvasPosition; box: CanvasBox };
-/** Compatibility vocabulary for owners; the engine is exclusively ELK (ADR-0095). */
+/** Compatibility vocabulary for owners; the engine is exclusively ELK (ADR-0035). */
 export async function layeredLayout(nodes: { id: string }[], edges: { from: string; to: string; label?: string }[], direction: CanvasDirection = "right",
   size: GraphSize = { width: 216, height: 112, gapX: 72, gapY: 36 }, box?: (id: string) => CanvasBox, lanes?: LaneAssignment): Promise<Map<string, CanvasPosition>> {
   const result = await layoutGraph({ nodes: nodes.map((n) => ({ id: n.id, ...(box?.(n.id) ?? size), lane: lanes?.of(n.id) })),

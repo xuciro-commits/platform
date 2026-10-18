@@ -1,4 +1,4 @@
-// Package production is the production order protocol (ADR-0024 D7): what an
+// Package production is the production order protocol (ADR-0026): what an
 // ERP provides and a plant consumes, without either knowing the other. It
 // follows ISA-95 and SAP's integration of production orders with an MES: the
 // ERP releases orders for the plant to execute and receives confirmations of

@@ -1,4 +1,4 @@
-// Package rules is the one pure rule compiler/evaluator (ADR-0101). Host and
+// Package rules is the one pure rule compiler/evaluator (ADR-0040). Host and
 // browser use this same implementation; it has no tenant scripts or I/O.
 package rules
 

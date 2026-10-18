@@ -1,4 +1,4 @@
-// A list of resources in groups (ADR-0083 D6): every group is a heading with
+// A list of resources in groups (ADR-0005): every group is a heading with
 // its count that folds; a search filters rows across groups and opens the
 // groups that match; a "group by" switch changes what the groups mean. The
 // alternative to a flat grid of cards or a long table for builders'

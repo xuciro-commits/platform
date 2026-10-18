@@ -1,4 +1,4 @@
-// The helpdesk's UI (ADR-0021 D10): tickets logged by the desk, triaged and
+// The helpdesk's UI (ADR-0054): tickets logged by the desk, triaged and
 // answered by its agent or by people, within their service level. A ticket's
 // page shows its lifecycle's actions; its service-level flow and the agent's
 // runs are one click away from the record's context.

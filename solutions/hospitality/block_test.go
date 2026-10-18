@@ -13,7 +13,7 @@ import (
 	"platformserver"
 )
 
-// ADR-0026 D6: the group block. Planned rooms are held at the hotel until a
+// ADR-0006 D6: the group block. Planned rooms are held at the hotel until a
 // cutoff; won, they are confirmed; lost, or past the cutoff, released. Each
 // answer of the hotel lands on the opportunity; a block the hotel cannot hold
 // whole fails and gives back what it held; with no provider, people answer.

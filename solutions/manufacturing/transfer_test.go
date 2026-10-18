@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0028 11e: products imported into the ERP from CSV — previewed, then
+// ADR-0038 11e: products imported into the ERP from CSV — previewed, then
 // imported; the same file twice creates them once — and exported back.
 func TestImportExport(t *testing.T) {
 	var journal []platformserver.Entry

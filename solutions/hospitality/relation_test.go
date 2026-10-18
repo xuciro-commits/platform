@@ -12,7 +12,7 @@ import (
 )
 
 // A builder's object refers to a CRM account and names the relation seen from
-// there (ADR-0040 21b D1). The account's page lists the related records under
+// there (ADR-0047 21b D1). The account's page lists the related records under
 // that name, only for a member who may read both ends; another member of CRM
 // alone does not learn the builder's records exist.
 func TestNamedRelationFromAnotherApp(t *testing.T) {

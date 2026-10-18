@@ -6,7 +6,7 @@
 
 ## 日常开发（不打镜像）
 
-一键切换（ADR-0081），两种模式都使用酒店 `http://localhost:8495`、制造 `http://localhost:8490`：
+一键切换（ADR-0029），两种模式都使用酒店 `http://localhost:8495`、制造 `http://localhost:8490`：
 
 ```bash
 make local   # 停 Docker 宿主；启动基础设施/计算容器，两台 Go 宿主由 Air 重启，Vite 提供前端 HMR
@@ -25,7 +25,7 @@ make help    # 中文命令说明
 
 需要先有 Docker（OrbStack：`orb start`）。
 
-每个主机自己提供工作台页面（ADR-0018），所以先构建一次工作台：
+每个主机自己提供工作台页面（ADR-0019），所以先构建一次工作台：
 
 ```bash
 pnpm --dir web/apps/workspace build
@@ -55,7 +55,7 @@ cd deploy/local && docker compose ps
 
 - 停止：`docker compose stop`。数据保存在 Docker 卷 `pgdata` 和 `rauthy` 里，下次启动会重放日志，数据还在。
 - 只重建主机：`docker compose up -d --build manufacturing-server hospitality-server webhook-sink`。改了前端要先重新构建工作台。
-- 计算能力（ADR-0044）：`wasm-worker` 与 `code-builder` 共用私有 `compute-sockets` 卷，没有公开端口、业务数据库或自有队列。主机通过 `PLATFORM_WASM_WORKER_SOCKET` / `PLATFORM_CODE_BUILDER_SOCKET` 委托执行与编译。只有固定命令的构建 driver 持有 Docker daemon socket；业务主机、Wasm worker、租户编译容器均不挂载它。worker 无网络、只读根、2 GiB RSS/2 CPU 限额；编译容器无网络、只读根、65534 用户及 CPU/RSS/进程限额。源码经内存 tar 输入，Wasm 与构建元数据走现有制品存储和发布。
+- 计算能力（ADR-0013）：`wasm-worker` 与 `code-builder` 共用私有 `compute-sockets` 卷，没有公开端口、业务数据库或自有队列。主机通过 `PLATFORM_WASM_WORKER_SOCKET` / `PLATFORM_CODE_BUILDER_SOCKET` 委托执行与编译。只有固定命令的构建 driver 持有 Docker daemon socket；业务主机、Wasm worker、租户编译容器均不挂载它。worker 无网络、只读根、2 GiB RSS/2 CPU 限额；编译容器无网络、只读根、65534 用户及 CPU/RSS/进程限额。源码经内存 tar 输入，Wasm 与构建元数据走现有制品存储和发布。
 - **在 8495/8490 验收本次代码时**：先运行 `pnpm --dir web/apps/workspace build`，再在 `deploy/local` 运行 `docker compose up -d --no-deps --build hospitality-server`（或对应的 `manufacturing-server`），最后刷新浏览器。`scripts/verify.sh web` 的浏览器路线使用一次性的内存酒店主机 `18496`；它通过也不会自动更新你正在看的 8495 容器。两者的测试数据和登录方式也不同，视觉验收应以你实际使用的容器地址为准。
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
 - 灌酒店业演示数据：`./seed-hospitality.sh`。可以重复执行，结果不变。
@@ -68,9 +68,9 @@ cd deploy/local && docker compose ps
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-主机按名字取密钥（ADR-0014 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
+主机按名字取密钥（ADR-0004 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
 
-## 轻量 profile（无 Docker 的单机运行，ADR-0049）
+## 轻量 profile（无 Docker 的单机运行，ADR-0017）
 
 同一套语义可以在小设备上用一个二进制加一个数据目录跑起来：没有 Docker、没有 PostgreSQL、没有对象存储、没有外部身份服务。profile 是**声明**的，缺依赖就失败退出，不会悄悄回退到另一个 profile 的存储或身份。
 
@@ -101,9 +101,9 @@ TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mi
 
 ## 地址
 
-- 文件（ADR-0028）：存在 RustFS（S3 兼容），S3 接口 `http://127.0.0.1:9000`，管理界面 `http://127.0.0.1:9001`，账号 `platform`，密码 `platform-files-local-only`。日志里只记文件的哈希，备份时 RustFS 的卷要和 PostgreSQL 一起备份。
+- 文件（ADR-0038）：存在 RustFS（S3 兼容），S3 接口 `http://127.0.0.1:9000`，管理界面 `http://127.0.0.1:9001`，账号 `platform`，密码 `platform-files-local-only`。日志里只记文件的哈希，备份时 RustFS 的卷要和 PostgreSQL 一起备份。
 - 健康检查：`http://127.0.0.1:8490/healthz`、`http://127.0.0.1:8495/healthz`（进程是否活着）；租户的健康（队列、放弃的工作、超配额、熔断器）是管理员的 `/v1/health`，也显示在 设置 → 自动化。租户被隔离时，先查明并修复其权威日志或依赖；仅该租户管理员可在工作区的恢复提示中重试，或以同一身份调用 `POST /v1/recovery/retry`。该操作从完整日志创建新租户代际，验证成功后才替换旧代际并修复派生快照；失败仍保持隔离，不会修复损坏的权威日志。`/healthz` 仍可能显示共享进程在线，不能代替该租户的 `/v1/health`。
-- 链路和指标（ADR-0027）：给主机设环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`（如 `http://otel-collector:4318`）就会按 OTLP 导出；不设则不导出。本地环境**没有**装采集器（Jaeger、Grafana 这类），所以现在没有地址可填、也没有界面可看；不装也不影响任何功能，平台里能看的是 设置 → 自动化 的健康状态和运行、流程页上的调用链。要看完整链路时再加一个采集器（需要新的镜像，先确认）。
+- 链路和指标（ADR-0007）：给主机设环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`（如 `http://otel-collector:4318`）就会按 OTLP 导出；不设则不导出。本地环境**没有**装采集器（Jaeger、Grafana 这类），所以现在没有地址可填、也没有界面可看；不装也不影响任何功能，平台里能看的是 设置 → 自动化 的健康状态和运行、流程页上的调用链。要看完整链路时再加一个采集器（需要新的镜像，先确认）。
 
 | 服务 | 地址 | 说明 |
 |---|---|---|
@@ -123,7 +123,7 @@ TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mi
 cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy
 ```
 
-## 报表工具直连数据库（ADR-0019）
+## 报表工具直连数据库（ADR-0024）
 
 两个主机启动时会把各自租户的记录复制到 PostgreSQL，每个租户一个 schema（`tenant_hotel_a`、`tenant_plant_sz`），每个实体类型一张表（如 `crm_opportunity`），变更历史在 `<表名>_changes`。这些只是副本，主机每次启动会按日志重建，所以不要往里写，备份也只需要日志表 `journal`。
 
@@ -160,7 +160,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 每个人只担一份职责，测试时换人登录就能看到权限的差别；要同时看两个人，用一个普通窗口加一个无痕窗口分别登录。
 - 新加的账号要 Rauthy 重新初始化才有（本地数据可丢）：`cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy`，再重建两个主机。
-- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`（ADR-0078）；模板在 `deploy/templates/`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
+- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`（ADR-0027）；模板在 `deploy/templates/`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
 ## 服务账号与 AI 代理（client credentials）
 
@@ -191,7 +191,7 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 | 酒店业：CRM、PMS、HCM、CSM | `solutions/hospitality`：`go run ./cmd/hospitality-server` | 8496 | `workspace-hospitality` | `manager`、`sales`、`sales-only`、`desk` |
 | 制造业：MES、ERP | `solutions/manufacturing`：`go run ./cmd/manufacturing-server` | 8491 | `workspace-manufacturing` | `supervisor`（也是 ERP 主管会计）、`accountant`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`assistant-l1`（AI 代理） |
 
-**每个应用单独运行**（ADR-0025：每个应用先能自己干，不依赖别的应用和外部系统）：在 `apps/<应用>/server` 下运行 `go run ./cmd/<应用>-server -web ../../../web/apps/workspace/dist`，端口都是 8499（一次起一个），启动配置 `workspace-app`：
+**每个应用单独运行**（ADR-0016：每个应用先能自己干，不依赖别的应用和外部系统）：在 `apps/<应用>/server` 下运行 `go run ./cmd/<应用>-server -web ../../../web/apps/workspace/dist`，端口都是 8499（一次起一个），启动配置 `workspace-app`：
 
 | 应用 | 开发令牌 |
 |---|---|
@@ -212,7 +212,7 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 
 WMS 是在应用工作台保存并发布的 `build.app` 与对象/页面/流程/代码定义，复用所在 solution 的宿主、域名和端口，不启动 WMS 专用服务。酒店工作区可从 Projects 新建 WMS；保存为草稿后可在设计台继续编辑，交付后业务成员从应用门户打开。制造工作区同样可以创建受控应用。
 
-旧 `18505` 内存走查宿主已停止，误建的第三个 `wms-review` 容器和配置已撤回；本地不再把它作为入口。酒店和制造共用一个数据命名空间；日常更新保留当前命名空间的数据卷。装配探针命令与所需身份/角色见 [Apps](../../docs/Apps.md#wms-受控装配探针)，`PLATFORM_URL` 指向这两个正式本地入口之一。
+旧 `18505` 内存走查宿主已停止，误建的第三个 `wms-review` 容器和配置已撤回；本地不再把它作为入口。酒店和制造共用一个数据命名空间；日常更新保留当前命名空间的数据卷。装配探针命令与所需身份/角色见 [Apps](../../docs/Apps.md#工作台中的-wms)，`PLATFORM_URL` 指向这两个正式本地入口之一。
 
 每次更新 main 后运行 `deploy/local/update.sh`：构建工作区、重建两台宿主、校验 Git 版本标记、健康及实际提供的页面资源。原数据卷和租户配置保留。
 

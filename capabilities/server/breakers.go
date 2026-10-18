@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Breakers per destination (ADR-0027 D4): an endpoint or an AI provider that
+// Breakers per destination (ADR-0007 D4): an endpoint or an AI provider that
 // failed several times in a row opens its breaker; while it is open its work
 // waits instead of spending attempts; after a pause one attempt probes it, and
 // a success closes it. They are volatile: what was attempted is journaled.
@@ -102,7 +102,7 @@ func (t *Tenant) Breakers(now time.Time) []Breaker {
 
 // ioLane bounds the work waiting on the outside at once across the process:
 // effects, model calls and embeddings run on it, outside every tenant's lock,
-// so one slow destination holds one slot, not the process (ADR-0027 D2).
+// so one slow destination holds one slot, not the process (ADR-0007 D2).
 var ioLane = make(chan struct{}, 16)
 
 // onLane runs each job on the lane and waits for all of them.

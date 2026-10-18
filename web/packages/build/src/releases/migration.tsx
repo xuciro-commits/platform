@@ -1,7 +1,8 @@
 import { createRecordActionSubmitter, newId, useHost, useRecordInventory } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Disclosure, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges, type EntityInfo } from "@platform/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 
 type Migration = {
   id: string; revision: number; plan: Api.MigrationPlan; review: string;
@@ -135,10 +136,11 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
         <option value="">{t("Choose a migration object")}</option>
         {objects.map(asset => <option key={asset.ref.name} value={asset.ref.name}>{asset.ref.name}</option>)}
       </Select></label>
-      <label className="grid gap-1 text-xs">{t("Migration steps")}<Textarea aria-label={t("Migration steps")} disabled={blocked} parse="json" rows={12} value={JSON.stringify(steps, null, 2)} onChange={event => editSteps(event.target.value)} /></label>
-      <p className="text-xs text-muted">{t("Each step declares its kind, types, fields and batch size. Conversions use the existing versioned expressions; reference changes require an identity mapping.")}</p>
-      <Disclosure summary={t("Record filter expression")}>
-        <Textarea aria-label={t("Record filter expression")} disabled={blocked} parse="json" rows={5} value={where ? JSON.stringify(where, null, 2) : "null"} onChange={event => setWhere(JSON.parse(event.target.value) ?? undefined)} />
+      <MigrationStepsEditor value={steps} onChange={value => { setSteps(value); setStepsValid(true); setError(""); }} type={type} entities={host.entities} assets={objects} disabled={blocked} />
+      <Checkbox checked={!!where} disabled={blocked} onChange={enabled => setWhere(enabled ? literalExpression("boolean") : undefined)}>{t("Filter migration records")}</Checkbox>
+      {where && <fieldset disabled={blocked} className="min-w-0"><legend className="mb-2 text-xs">{t("Record filter expression")}</legend><ExpressionEditor value={where} onChange={setWhere} choices={migrationChoices(host.entities.find(entity => entity.type === type))} /></fieldset>}
+      <Disclosure summary={t("Migration source")}>
+        <label className="grid gap-1 text-xs">{t("Migration steps")}<Textarea aria-label={t("Migration steps")} disabled={blocked} parse="json" rows={12} value={JSON.stringify(steps, null, 2)} onChange={event => editSteps(event.target.value)} /></label>
       </Disclosure>
       <div className="flex flex-wrap gap-2">
         <Button variant="ghost" disabled={!type || !steps.length || !stepsValid || blocked || plans.isError || plans.isPending} onClick={() => void savePlan()}>{t("Save migration plan")}</Button>
@@ -171,4 +173,94 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     <Button size="sm" variant="ghost" disabled={busy} onClick={() => void perform(async () => { await inventory.refetch(); await plans.refetch(); await onChanged(); })}>{t("Refresh migration progress")}</Button>
   </Card>;
+}
+
+const migrationKinds = ["add", "default", "rename", "split", "merge", "retype", "extract", "retire", "retire-action", "rebind"];
+const migrationLabels: Record<string, string> = { add: "Add a field", default: "Fill missing values", rename: "Rename a field", split: "Split a field", merge: "Merge fields", retype: "Convert a field type", extract: "Extract records", retire: "Retire a field", "retire-action": "Retire an action", rebind: "Change a reference target" };
+const migrationKind = (type: string) => ({ longtext: "text", number: "decimal", string: "text" } as Record<string, string>)[type] ?? type;
+const migrationChoices = (entity?: EntityInfo): ExpressionChoice[] => [
+  { value: "id", label: t("Record ID"), type: "reference", ref: entity?.type },
+  ...(entity?.fields ?? []).map(field => ({ value: field.name, label: field.title || field.name, type: migrationKind(field.type), ref: field.ref })),
+];
+
+/** These controls edit the original plan. Only the release owner reviews and
+ * executes transformations against the sealed source and target shapes. */
+function MigrationStepsEditor({ value, onChange, type, entities, assets, disabled }: {
+  value: Api.MigrateStep[]; onChange: (value: Api.MigrateStep[]) => void; type: string;
+  entities: EntityInfo[]; assets: Api.ReleaseAsset[]; disabled: boolean;
+}) {
+  const [mappingError, setMappingError] = useState("");
+  const patch = (index: number, change: Partial<Api.MigrateStep>) => onChange(value.map((step, at) => at === index ? { ...step, ...change } : step));
+  const move = (index: number, direction: number) => {
+    const next = [...value];
+    [next[index], next[index + direction]] = [next[index + direction]!, next[index]!];
+    onChange(next);
+  };
+  return <fieldset disabled={disabled} className="grid min-w-0 gap-3">
+    <legend className="mb-2 text-xs font-medium">{t("Migration steps")}</legend>
+    {!value.length && <p className="text-xs text-muted">{t("Add a step to describe how records change between these releases.")}</p>}
+    {value.map((step, index) => {
+      const source = entities.find(entity => entity.type === step.types[0]);
+      const destination = assets.find(asset => asset.ref.name === (step.kind === "extract" ? step.target : step.types[0]));
+      const fields = (destination?.body as { fields?: Api.FieldInfo[] } | undefined)?.fields ?? [];
+      const choices = migrationChoices(source);
+      const changeFields = (fields: Api.MigrateField[]) => patch(index, { fields });
+      const changeField = (at: number, change: Partial<Api.MigrateField>) => changeFields((step.fields ?? []).map((field, fi) => fi === at ? { ...field, ...change } : field));
+      return <div key={index} className="grid min-w-0 gap-3 rounded border border-border p-3" role="group" aria-label={t("Migration step {number}", { number: index + 1 })}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-xs">{t("Step kind")}<Select value={step.kind} onChange={event => {
+            const kind = event.target.value as Api.MigrateStep["kind"];
+            patch(index, { kind, onFailure: step.onFailure || "reject", fields: kind === "retire-action" ? undefined : [{ from: "", to: "" }], expr: undefined, mapping: undefined, action: undefined, redirect: undefined, target: undefined, identity: kind === "extract" ? { op: "", kind: "reference", ref: "id" } : undefined });
+          }}>{migrationKinds.map(kind => <option key={kind} value={kind}>{t(migrationLabels[kind]!)}</option>)}</Select></label>
+          <label className="grid gap-1 text-xs">{t("Records per batch")}<Input type="number" min={1} max={256} value={step.batch} onChange={event => patch(index, { batch: Number(event.target.value) })} /></label>
+          <label className="grid gap-1 text-xs">{t("Conversion failure")}<Select value={step.onFailure ?? "reject"} onChange={event => patch(index, { onFailure: event.target.value as Api.MigrateStep["onFailure"] })}><option value="reject">{t("Reject the whole batch")}</option><option value="quarantine">{t("Keep failed rows for review")}</option></Select></label>
+          {step.kind === "extract" && <label className="grid gap-1 text-xs">{t("Target object")}<Select value={step.target ?? ""} onChange={event => patch(index, { target: event.target.value })}><option value="">{t("Choose a migration object")}</option>{assets.filter(asset => !step.types.includes(asset.ref.name)).map(asset => <option key={asset.ref.name} value={asset.ref.name}>{asset.ref.name}</option>)}</Select></label>}
+        </div>
+        <fieldset className="grid gap-1"><legend className="text-xs">{t("Object types in this step")}</legend><Toggles value={step.types} options={assets.map(asset => ({ value: asset.ref.name, label: asset.ref.name }))} onChange={types => patch(index, { types })} /></fieldset>
+        {step.kind === "retire-action" ? <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-xs">{t("Action to retire")}<Input value={step.action ?? ""} onChange={event => patch(index, { action: event.target.value })} /></label>
+          <label className="grid gap-1 text-xs">{t("Redirect pending approvals to action")}<Input value={step.redirect ?? ""} onChange={event => patch(index, { redirect: event.target.value || undefined })} /></label>
+        </div> : <>
+          {step.kind === "extract" && step.identity && <div className="grid gap-1"><span className="text-xs">{t("New record identity")}</span><ExpressionEditor value={step.identity} kind={step.identity.kind} choices={choices} onChange={identity => patch(index, { identity })} /></div>}
+          {(step.fields ?? []).map((field, at) => {
+            const target = fields.find(info => info.name === field.to);
+            return <div key={at} className="grid min-w-0 gap-2 border-t border-border pt-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs">{t("Source field")}<Select value={field.from ?? ""} onChange={event => changeField(at, { from: event.target.value || undefined, ...(step.kind === "retire" ? { to: event.target.value } : {}) })}><option value="">{t("No source field")}</option>{(source?.fields ?? []).map(info => <option key={info.name} value={info.name}>{info.title || info.name} · {info.name}</option>)}</Select></label>
+                <label className="grid gap-1 text-xs">{t("Target field")}<Select disabled={step.kind === "retire"} value={field.to} onChange={event => changeField(at, { to: event.target.value })}><option value="">{t("Choose a target field")}</option>{fields.map(info => <option key={info.name} value={info.name}>{info.title || info.name} · {info.name}</option>)}</Select></label>
+              </div>
+              {!["rename", "retire", "rebind"].includes(step.kind) && <>
+                <Checkbox checked={!!field.expr} onChange={enabled => changeField(at, { expr: enabled ? literalExpression(migrationKind(target?.type ?? "text")) : undefined })}>{t("Set a conversion expression")}</Checkbox>
+                {field.expr && <ExpressionEditor value={field.expr} kind={migrationKind(target?.type ?? field.expr.kind)} choices={choices} onChange={expr => changeField(at, { expr })} />}
+              </>}
+              <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => changeFields((step.fields ?? []).filter((_, fi) => fi !== at))}>{t("Remove field change")}</Button>
+            </div>;
+          })}
+          {step.expr && <div className="grid gap-1"><span className="text-xs">{t("Default conversion expression")}</span><ExpressionEditor value={step.expr} kind={step.expr.kind} choices={choices} onChange={expr => patch(index, { expr })} /><Button size="sm" variant="ghost" className="justify-self-start" onClick={() => patch(index, { expr: undefined })}>{t("Remove default expression")}</Button></div>}
+          <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => changeFields([...(step.fields ?? []), { to: "" }])}>{t("Add field change")}</Button>
+          {step.kind === "rebind" && <div className="grid gap-2">
+            <span className="text-xs">{t("Reference identity mapping")}</span>
+            {Object.entries(step.mapping ?? {}).map(([from, to], at) => <div key={at} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <Input aria-label={t("Source record ID")} value={from} onChange={event => {
+                const source = event.target.value;
+                if (source !== from && Object.hasOwn(step.mapping ?? {}, source)) { setMappingError(t("Reference identities must be unique. The existing mapping is retained.")); return; }
+                setMappingError("");
+                patch(index, { mapping: Object.fromEntries(Object.entries(step.mapping ?? {}).map((entry, i) => i === at ? [source, to] : entry)) });
+              }} />
+              <Input aria-label={t("Target record ID")} value={to} onChange={event => patch(index, { mapping: { ...step.mapping, [from]: event.target.value } })} />
+              <Button size="sm" variant="ghost" onClick={() => patch(index, { mapping: Object.fromEntries(Object.entries(step.mapping ?? {}).filter((_, i) => i !== at)) })}>{t("Remove mapping")}</Button>
+            </div>)}
+            <Button size="sm" variant="ghost" className="justify-self-start" disabled={Object.hasOwn(step.mapping ?? {}, "")} onClick={() => patch(index, { mapping: { ...step.mapping, "": "" } })}>{t("Add mapping")}</Button>
+          </div>}
+        </>}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="ghost" disabled={!index} onClick={() => move(index, -1)}>{t("Move step up")}</Button>
+          <Button size="sm" variant="ghost" disabled={index === value.length - 1} onClick={() => move(index, 1)}>{t("Move step down")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => onChange(value.filter((_, at) => at !== index))}>{t("Remove step")}</Button>
+        </div>
+      </div>;
+    })}
+    {mappingError && <p role="alert" className="text-xs text-danger">{mappingError}</p>}
+    <Button size="sm" variant="ghost" className="justify-self-start" disabled={!type || value.length >= 256} onClick={() => onChange([...value, { kind: "rename", types: [type], batch: 64, fields: [{ from: "", to: "" }] }])}>{t("Add migration step")}</Button>
+  </fieldset>;
 }

@@ -1,4 +1,4 @@
-// A flow instance (ADR-0020): its definition drawn as BPMN steps, with the path the
+// A flow instance (ADR-0007): its definition drawn as BPMN steps, with the path the
 // instance took, where it stands now, and why it moved — the decision trace.
 import type { Api } from "@platform/kernel";
 import { StatusTag, defineStatuses } from "../../components/StatusTag";
@@ -38,7 +38,7 @@ export function FlowReleaseBinding({ dependencies, release }: Pick<FlowInstanceD
 const kinds: Record<string, string> = { act: t("Act"), wait: t("Wait"), ask: t("Ask"), call: t("Sub-flow"), all: t("All of"), any: t("Any of"), agent: t("Agent") };
 const waits: Record<string, string> = { ready: "ready", retry: "retrying", wait: "waiting", ask: "asking people", call: "in a sub-flow", join: "waiting for its branches", undo: "retrying an undo", stuck: "stuck" };
 
-/** A flow drawn in BPMN (#122, ADR-0086 D4): its steps from the start event to the
+/** A flow drawn in BPMN (#122, ADR-0033): its steps from the start event to the
  * end event, each in the shape its kind asks for, and, for an instance, what it did. */
 export function FlowGraph({ definition, instance, height = 260 }: { definition: FlowDefinition; instance?: FlowInstanceData; height?: number }) {
   const trace = instance?.trace ?? [];

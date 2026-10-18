@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,11 +22,27 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 	}
 	t.mu.Lock()
 	runs, refusal := platform.PendingDispatches(t.automation(build.ID, false))
-	t.mu.Unlock()
 	if refusal != nil {
+		t.mu.Unlock()
 		return
 	}
-	slices.SortStableFunc(runs, func(a, b platform.DispatchRun) int { return a.ReadDue.Compare(b.ReadDue) })
+	active := make(map[string]bool, len(runs))
+	for _, run := range runs {
+		active[run.Intent] = true
+	}
+	for intent, attempt := range t.dispatchReads {
+		if !active[intent] && !attempt.Busy {
+			delete(t.dispatchReads, intent)
+		}
+	}
+	due := func(run platform.DispatchRun) time.Time {
+		if cached := t.dispatchReads[run.Intent].Due; cached.After(run.ReadDue) {
+			return cached
+		}
+		return run.ReadDue
+	}
+	slices.SortStableFunc(runs, func(a, b platform.DispatchRun) int { return due(a).Compare(due(b)) })
+	t.mu.Unlock()
 	reads := 0
 	for _, saved := range runs {
 		if saved.ReadDue.After(at) {
@@ -33,7 +50,8 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		}
 		t.mu.Lock()
 		run, exists := platform.Get[platform.DispatchRun](t.automation(build.ID, false), saved.ID)
-		valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State) && !run.ReadDue.After(at)
+		attempt := t.dispatchReads[run.Intent]
+		valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State) && !run.ReadDue.After(at) && !attempt.Busy && !attempt.Due.After(at)
 		var stamp string
 		if valid {
 			valid = (hostView{t: t}).CheckDispatchRead(run, at) == nil
@@ -41,21 +59,46 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 				stamp, valid = t.dispatchReadStamp(run)
 			}
 		}
-		t.mu.Unlock()
-		if !valid {
+		if !valid || reads >= 64 {
+			t.mu.Unlock()
+			if reads >= 64 {
+				return
+			}
 			continue
 		}
-		if reads >= 64 {
-			return
+		if t.dispatchReads == nil {
+			t.dispatchReads = map[string]statusReadAttempt{}
 		}
+		t.dispatchReads[run.Intent] = statusReadAttempt{Busy: true}
+		t.mu.Unlock()
 		reads++
 		reading := t.readDispatchStatus(run, at)
 		t.mu.Lock()
+		t.dispatchReads[run.Intent] = statusReadAttempt{Due: at.Add(time.Duration(run.Definition.Readback.EverySeconds) * time.Second)}
 		current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
 		currentStamp, valid := t.dispatchReadStamp(current)
 		if !found || current.Revision != run.Revision || !valid || currentStamp != stamp || (hostView{t: t}).CheckDispatchRead(current, at) != nil {
 			t.mu.Unlock()
 			continue
+		}
+		if n := len(current.Readback); n > 0 {
+			last := current.Readback[n-1]
+			state := reading.State
+			if !at.Before(current.Deadline) && state != "unknown" && state != "failed" && state != "completed" {
+				state = "stuck"
+			}
+			// A new command attempt must retain its own first status, even
+			// when the controller returns the same value as the old attempt.
+			started := current.StartedAt
+			for _, attempt := range current.Attempts {
+				if attempt.Intent == current.Intent {
+					started = attempt.At
+				}
+			}
+			if current.ReadDue.After(started) && !last.At.Before(started) && current.State == state && last.State == reading.State && last.Value == reading.Value && last.Reason == reading.Reason && bytes.Equal(last.Observed, reading.Observed) {
+				t.mu.Unlock()
+				continue // Polling time alone is not new business evidence.
+			}
 		}
 		caller := t.automation(build.ID, false).Member
 		submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID,

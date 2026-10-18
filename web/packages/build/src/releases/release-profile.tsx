@@ -1,4 +1,4 @@
-// The tenant's release profile (ADR-0048 D5b). A production tenant delivers
+// The tenant's release profile (ADR-0011b). A production tenant delivers
 // definitions through a saved joint candidate, so its authoring surfaces no
 // longer offer the direct install; the development and import profiles keep the
 // same implementation, and the owner refuses a bypass either way.

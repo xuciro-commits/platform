@@ -39,7 +39,7 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload) (func
 		return nil, invalid("an element cannot relate to itself")
 	}
 	// The ends the standard names, and the profile's own rules, in one
-	// place (ADR-0085 D2): a pair the contract refuses never enters the
+	// place (ADR-0031 D2): a pair the contract refuses never enters the
 	// model, and the refusal names the rule it breaks.
 	sourceEnd := source
 	if sourceEnd == nil && strings.HasPrefix(p.Source, "member:") {

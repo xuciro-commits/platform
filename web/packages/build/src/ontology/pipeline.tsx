@@ -5,14 +5,14 @@ import { ResourceList } from "../editor/ResourceList";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
-import { type Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/kernel";
 import { MarkingTag, integrates } from "./marking";
-import { Button, Checkbox, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
+import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
 import { useAuthoringModel } from "./authoring-model";
 
-// Pipelines (ADR-0071): a dataset in, declared steps in order, expectations on
+// Pipelines (ADR-0024): a dataset in, declared steps in order, expectations on
 // the result, and a dataset or an object out. The host runs a published
 // pipeline when its input gains a version, on a period, or on request; rows
 // that fail an expectation are quarantined on the run, never written.
@@ -21,7 +21,7 @@ type Step = { kind: string; columns?: string[]; from?: string; to?: string; colu
 type Expectation = { column: string; rule: string; value?: string };
 type Run = { merged?: number; at: string; inputVersion: number; rows: number; written: number; quarantined: number; failed: number; error?: string; outputVersion?: number;
   quarantine?: { reason: string; row: Record<string, unknown> }[]; failures?: { id: string; outcome: string }[] };
-// ADR-0073: rows land in the enterprise model as elements owned on the source system's behalf.
+// ADR-0022: rows land in the enterprise model as elements owned on the source system's behalf.
 type EnterpriseTarget = { source: string; stereotype: string; id: string; name: string; shortName?: string; kind?: string; parent?: string; root?: string; in?: string; relation?: string; at?: string; atKind?: string; from?: string; until?: string; properties?: string[] };
 const STEREOTYPES = ["ActualOrganization", "ActualPost", "ActualPerson", "ActualLocation", "ActualResource", "ActualProject"];
 const AT_KINDS = ["ResponsibleFor", "FillsPost", "ActualOrganizationRole", "IsCapableToPerform"];
@@ -78,7 +78,7 @@ export function Pipelines() {
 }
 
 export function PipelineEditor({ id }: { id: string }) {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { client, role } = useHost(), { open } = useApplicationWorkspace();
   const { entities, drafts: objects } = useAuthoringModel();
   const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
   // The enterprise model's own kinds and elements, so a pipeline writing into
@@ -93,6 +93,15 @@ export function PipelineEditor({ id }: { id: string }) {
     },
   });
   const [picked, setPicked] = useState<string>(); // the step the inspector edits
+  const [preview, setPreview] = useState<{ signature: string; result: Api.PipelinePreview }>();
+  const signature = JSON.stringify(draft);
+  const previewResult = preview?.signature === signature ? preview.result : undefined;
+  const trial = async () => {
+    setPreview(undefined);
+    const response = await client.call<Api.PipelinePreview>("POST", "/v1/pipelines/preview", { pipeline: draft });
+    if (!response.ok) throw Error(apiErrorMessage(response.body) ?? t("The pipeline trial could not be completed. Your draft is still here."));
+    setPreview({ signature, result: response.body });
+  };
   if (!integrates(role("build"))) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Pipelines")} description={query.isError ? t("The pipeline could not be loaded.") : t("Loading…")} />;
   const last = draft.last, input = datasets.find((d) => d.id === draft.input);
@@ -124,6 +133,7 @@ export function PipelineEditor({ id }: { id: string }) {
         <Button onClick={() => open({ view: "pipeline" })}>{t("Pipelines")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save pipeline")}</Button>
+        <Button disabled={busy || !!inputs?.invalid || !draft.input} onClick={() => void perform(trial)}>{t("Trial pipeline")}</Button>
         <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
         {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         {draft.state === "published" && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("run"))}>{draft.requested ? t("Run requested…") : t("Run now")}</Button>}
@@ -131,6 +141,19 @@ export function PipelineEditor({ id }: { id: string }) {
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {objects.isError && role("build") === "builder" && <Panel role="alert" className="text-danger">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
+    {previewResult && <Panel title={t("Draft trial")} role="region" aria-label={t("Pipeline trial results")} className="grid min-w-0 gap-3">
+      <p className="text-xs text-muted">{t("Transforms the current draft over readable dataset versions. No pipeline is published, and no dataset versions or business records are written.")}</p>
+      <p className="flex flex-wrap items-center gap-2 text-xs"><MarkingTag marking={previewResult.marking} /><span>{t("Input v{version}: {sampled} of {total} rows · {rows} output rows · {quarantined} quarantined", { version: previewResult.inputVersion, sampled: previewResult.sampledRows, total: previewResult.inputRows, rows: previewResult.rows.length, quarantined: previewResult.quarantine.length })}</span></p>
+      {previewResult.truncated && <p role="status" className="text-xs text-warning">{t("Each dataset is limited to its first 100 rows. Joins, counts and aggregates describe that sample, not the complete datasets.")}</p>}
+      <div className="min-w-0" role="region" aria-label={t("Trial output rows")}><PipelineRows rows={previewResult.rows} /></div>
+      {previewResult.quarantine.length > 0 && <div className="grid min-w-0 gap-2" role="region" aria-label={t("Trial quarantined rows")}>
+        <h3 className="text-xs font-semibold">{t("Quarantined rows")}</h3>
+        <DataTable data={previewResult.quarantine} getRowId={row => String(previewResult.quarantine.indexOf(row))} searchable={false} height={Math.min(320, 40 + previewResult.quarantine.length * 28)} columns={[
+          { id: "reason", header: t("Reason"), accessorFn: row => row.reason },
+          ...[...new Set(previewResult.quarantine.flatMap(item => Object.keys(item.row)))].map((name): ColumnDef<Api.PipelinePreview["quarantine"][number], unknown> => ({ id: `row:${name}`, header: name, accessorFn: item => item.row[name], cell: context => cell(context.getValue()) })),
+        ]} />
+      </div>}
+    </Panel>}
     <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Input")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Pipeline name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="cleanmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
@@ -218,6 +241,11 @@ export function PipelineEditor({ id }: { id: string }) {
       </Panel>
     </fieldset>
   </div>;
+}
+
+function PipelineRows({ rows }: { rows: Record<string, unknown>[] }) {
+  const columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
+  return <DataTable data={rows} getRowId={row => String(rows.indexOf(row))} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: row => row[name], cell: context => cell(context.getValue()) }))} />;
 }
 
 function StepFields({ step: s, datasets, onChange }: { step: Step; datasets: DatasetRow[]; onChange: (change: Partial<Step>) => void }) {

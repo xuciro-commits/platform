@@ -40,7 +40,7 @@ export function ModuleImportDialog({object:targetObject,profile,open,onClose,onA
  const mappingView=useMemo(()=>parsed.module?workshopBindingView(parsed.module,selected):undefined,[parsed.module,selected]);
  const pageFor=(widget:string)=>application?parsed.module?.pages.find(p=>workshopRegionSections(parsed.module,p.id).some(s=>s.children.some(c=>c.kind==='widget'&&c.id===widget)))?.id??selected:selected;
  // Objects this tenant saved as drafts and will deliver with the application
- // (ADR-0048 D6): the pages may bind to them, and they are candidate inputs.
+ // (ADR-0011): the pages may bind to them, and they are candidate inputs.
  const importEntities=useMemo<EntityInfo[]>(()=>draftObjects?.length?[...host.entities,...draftObjects.map(item=>item.entity)]:host.entities,[host.entities,draftObjects]);
  const draftChoices=useMemo(()=>draftObjects?.map(item=>({name:item.name,title:item.title}))??[],[draftObjects]);
  const allReport=useMemo(()=>application?compileWorkshopApplication(source,bindings,application.destinations,{profile,entities:importEntities,actions:host.catalog,definitions:host.definitions}):undefined,[source,bindings,application?.destinations,profile,importEntities,host.catalog,host.definitions]);

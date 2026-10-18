@@ -426,7 +426,7 @@ func TestRecords(t *testing.T) {
 	if len(bin.Related) != 1 || bin.Related[0].Total != 1 { // I3 is archived
 		t.Fatalf("related %+v", bin.Related)
 	}
-	// Aggregates (ADR-0019 D1): the list's domain and scope, grouped and measured.
+	// Aggregates (ADR-0024): the list's domain and scope, grouped and measured.
 	agg := func(who string, q AggregateQuery) string {
 		out, err := tn.Aggregate(member(who), "stock.item", q, now)
 		if err != nil {

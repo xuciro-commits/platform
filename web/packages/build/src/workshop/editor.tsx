@@ -20,7 +20,7 @@ import {recordComparisonSource} from "./page-editor/record-comparison";
 import {searchInputObjects} from "@platform/app/search";
 import {interfaceQueryForSection,pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../ontology/record-paths";
-// Application Studio page design (ADR-0046). Document history, UI selection
+// Application Studio page design (ADR-0015). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, parsePageDecimal, pageUIProfile, pageVariableContract, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
@@ -397,7 +397,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const canvasRoute: Route = module ? { view: "module", params: { id: module.project.id, application: module.project.id, page: id } } : { view: "module", params: { page: id } };
   const objectRef = { app: page.object.split(".")[0]!, kind: "object", name: page.object };
   const overlayEntries = container ? Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container) : [];
-  // --- Inspector tabs follow what is in hand: the page, a layout, or a widget (ADR-0053 §5.3).
+  // --- Inspector tabs follow what is in hand: the page, a layout, or a widget (ADR-0047).
   const pageTabs: WorkbenchTab[] = [
     { id: "page", title: t("Page"), content: <Settings value={{ title, description }} object={info?.title ?? page.object} device={document.device ?? ""} onDevice={(device) => edit({ document: { ...document, device: device || undefined } }, "settings:device")}
       selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
@@ -545,7 +545,7 @@ type PropertiesProps = {
 };
 
 /** Inspector navigation is local UI; every panel edits the same DraftSession. */
-/** The inspector tabs of the widget in hand (ADR-0053 §5.3): Properties, Data, Events, Appearance. */
+/** The inspector tabs of the widget in hand (ADR-0047): Properties, Data, Events, Appearance. */
 function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: ReactNode; appearance: ReactNode }): WorkbenchTab[] {
   const { section, sections, document, info, object, onChange, onResourcesChange } = props;
   const leaf = Object.entries(document.nodes).find(([, node]) => node.section === section.id)?.[0];

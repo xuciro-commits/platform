@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-// A member's profile (ADR-0079 §2) is how the platform addresses them and
+// A member's profile (ADR-0028 §2) is how the platform addresses them and
 // how they want it to behave: name and contact, language, timezone and
 // formats, notification preferences, and where the workspace opens. Members
 // change their own; administrators change anyone's. What is empty inherits
@@ -65,7 +65,7 @@ type Account struct {
 		Email        string `json:"email"`
 		Digest       string `json:"digest"`
 	} `json:"effective"`
-	// Subjects are the identities that sign in as this member (ADR-0079 §2):
+	// Subjects are the identities that sign in as this member (ADR-0028 §2):
 	// bound by the administrator who added or invited them, sorted.
 	Subjects []string `json:"subjects"`
 }
@@ -91,7 +91,7 @@ func profileActions() []platform.Action {
 	}
 }
 
-// Tenant-wide defaults a profile inherits (ADR-0078 §2.1), as settings of the
+// Tenant-wide defaults a profile inherits (ADR-0027 §2.1), as settings of the
 // platform app so they are decided, journaled and read like any setting.
 const (
 	SettingName         = "name"
@@ -231,7 +231,7 @@ func (d *Console) Account(member string) Account {
 	return d.account(member, def)
 }
 
-// Location is the timezone member works in (ADR-0079 §3): their own, else the
+// Location is the timezone member works in (ADR-0028 §3): their own, else the
 // tenant's, else UTC.
 func (d *Console) Location(member string) *time.Location {
 	a := d.Account(member)
@@ -344,7 +344,7 @@ func (d *Console) SeenMember(member string, now time.Time) {
 	}
 }
 
-// Reach is how a member wants to be told (ADR-0079 §3): in the workspace,
+// Reach is how a member wants to be told (ADR-0028 §3): in the workspace,
 // by mail at which address and in which language, and when mail may go out.
 type Reach struct {
 	InApp, Mail bool

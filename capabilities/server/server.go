@@ -1,4 +1,4 @@
-// Package platformserver is the platform host (layer 2, ADR-0010): it runs a
+// Package platformserver is the platform host (layer 2, ADR-0016): it runs a
 // tenant's apps behind one HTTP surface — authentication, the directory, routing
 // by action, read and input name, the per-caller catalog, one journal — and maps
 // contract errors to HTTP once.
@@ -46,25 +46,25 @@ type Host struct {
 	authenticate Authenticate
 	Now          func() time.Time
 	Recover      func(context.Context, string) error // only configured with a durable journal and a tenant factory
-	// Web is the directory of the workspace's build (ADR-0018), served at "/"
+	// Web is the directory of the workspace's build (ADR-0019), served at "/"
 	// from the API's origin; empty serves no pages.
 	Web string
 	// SignIn tells the workspace how to sign in (GET /v1/sign-in): the OpenID
 	// issuer and the workspace's client, or, with neither, the identities of
 	// the host's own seats — on a development host the token is the subject,
 	// on a lightweight one each served token is signed with the local key
-	// (ADR-0049 D3).
+	// (ADR-0017 D3).
 	Issuer, Client string
 	Development    bool
 	// Mint, when set, signs the identity tokens /v1/sign-in serves: the
-	// lightweight host's key (ADR-0049 D3). Without it the tokens are the
+	// lightweight host's key (ADR-0017 D3). Without it the tokens are the
 	// development ones, the subject itself.
 	Mint func(subject string) string
-	// HostAdmins are the subjects that may open the host console (ADR-0047
+	// HostAdmins are the subjects that may open the host console (ADR-0016
 	// §6.5): an independent scope, not a tenant's administrators.
 	HostAdmins map[string]bool
 	// Templates and CreateTenant are how the host console adds a tenant
-	// (ADR-0078 §2.2); a host without a Rebuild leaves CreateTenant nil.
+	// (ADR-0027 §2.2); a host without a Rebuild leaves CreateTenant nil.
 	Templates    func() []TenantTemplate
 	CreateTenant func(CreateTenantRequest, string) (*Tenant, error)
 	routes       []Route // as Handler registered them: the API contract's source (api.go)
@@ -72,7 +72,7 @@ type Host struct {
 }
 
 // SignWith makes the host take the lightweight provider's tokens and sign the
-// seats it serves with them (ADR-0049 D3): the host's authenticate function is
+// seats it serves with them (ADR-0017 D3): the host's authenticate function is
 // replaced, so a development token — the subject itself — is not accepted
 // beside them. Both are set through one call so a host cannot end up signing
 // with a key it does not verify.
@@ -106,7 +106,7 @@ func consoleOf(t *Tenant) IdentitySessions {
 }
 
 // TenantHeader names the tenant a request is for, when the caller is a member
-// of several on this host (ADR-0018 D7); without it, the first that knows them.
+// of several on this host (ADR-0019); without it, the first that knows them.
 const TenantHeader = "Platform-Tenant"
 
 // chatMaxBytes bounds a chat request body: a conversation with its tool
@@ -117,7 +117,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	want := r.Header.Get(TenantHeader)
 	now := h.Now()
-	if strings.HasPrefix(credential, tokenPrefix) { // a personal token (ADR-0079 §5)
+	if strings.HasPrefix(credential, tokenPrefix) { // a personal token (ADR-0028 §5)
 		for _, t := range h.currentTenants() {
 			if d := consoleOf(t); d != nil && (want == "" || t.ID == want) {
 				if m, ok := d.MemberByToken(credential, now); ok && d.NoticeSession(m.ID, credential, r.UserAgent(), "token", now) {
@@ -145,7 +145,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 			return m, t, true
 		}
 	}
-	for _, t := range h.currentTenants() { // nobody's member: a tenant's sign-in domain may seat them (ADR-0079 §4)
+	for _, t := range h.currentTenants() { // nobody's member: a tenant's sign-in domain may seat them (ADR-0028 §4)
 		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && (!d.SecondFactorRequired() || h.SecondFactor != nil && h.SecondFactor(credential)) && d.JoinsSubject(subject) && h.join(t, d, subject, now) {
 			return h.member(r)
 		}
@@ -203,13 +203,13 @@ func (h *Host) Handler() http.Handler {
 	h.routesAI(rt)
 	h.routesIntegration(rt)
 	h.routes = append(h.routes, namedReads...) // served by GET /v1/{read}
-	rt.metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees (ADR-0023)"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
+	rt.metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees (ADR-0005)"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
-	// The host console (ADR-0047 §6.5): its own scope, its own administrators.
+	// The host console (ADR-0016 §6.5): its own scope, its own administrators.
 	h.hostConsoleRoutes(mux)
 	h.environmentRoutes(mux)
-	// The process is alive and holds its tenants (ADR-0027 D6); a tenant's own
+	// The process is alive and holds its tenants (ADR-0007 D6); a tenant's own
 	// health is the administrators' read /v1/health.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		quarantined := 0
@@ -238,7 +238,7 @@ func (h *Host) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept-Language, "+TenantHeader+", "+SchemaVersionHeader)
-		w.Header().Set("Vary", "Accept-Language") // declarations are served in the request's language (ADR-0023)
+		w.Header().Set("Vary", "Accept-Language") // declarations are served in the request's language (ADR-0005)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -15,7 +15,7 @@ import (
 // exact, validated candidate bytes by id, which one is active, which release
 // commands were applied (by idempotency key → result digest), and the sealed
 // artifacts the host console moved out. It is guarded by the tenant's lock
-// like the rest of the tenant's committed state (ADR-0039 20b); it never
+// like the rest of the tenant's committed state (ADR-0011 20b); it never
 // derives anything from the mutable development definitions.
 type releaseStore struct {
 	candidates map[string]json.RawMessage

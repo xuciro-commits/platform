@@ -5,7 +5,7 @@ import (
 	"platformserver/internal/rules"
 )
 
-// Expr is the one versioned, side-effect-free business rule tree (ADR-0101).
+// Expr is the one versioned, side-effect-free business rule tree (ADR-0040).
 // Application owners reach the compiler only through the platform API.
 type Expr = rules.Expr
 type ExprLiteral = rules.Literal

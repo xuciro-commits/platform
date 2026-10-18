@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-// TestEnterpriseQueryHTTP walks the typed reads over the wire (ADR-0094): the
+// TestEnterpriseQueryHTTP walks the typed reads over the wire (ADR-0034): the
 // routes answer, the filters reach the model, and a refused argument is a 400 —
 // the contract the generated SDK calls.
 func TestEnterpriseQueryHTTP(t *testing.T) {

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
  * element and its relationships, an asset and what it is built from, a record and
  * its neighbours, a run and the effects it caused. There is no order to read and no
  * port to join — a line says two things are related, and the owner says what the
- * line means and what may be done about it (ADR-0086 D3). */
+ * line means and what may be done about it (ADR-0033). */
 
 /** One fact the details card shows about a chosen element. */
 export type RelationFact = { label: string; value: string };
@@ -16,7 +16,7 @@ export type RelationBadge = { label: string; size: number };
 export type RelationNode = {
   id: string; label: string; caption?: string; icon?: ReactNode; tone?: string; dim?: boolean;
   flag?: string; detail?: string; linkable?: boolean; facts?: RelationFact[]; badge?: RelationBadge;
-  /** What this thing is, for drawing and grouping (ADR-0090): the class decides
+  /** What this thing is, for drawing and grouping (ADR-0033): the class decides
    * the glyph, the default tone and the caption word when the node names none. */
   class?: string;
   /** The box this element occupies; without it the family's standard box is used. */
@@ -41,8 +41,8 @@ export const relationLayouts: RelationLayout[] = ["down", "up", "right", "left",
 /** The box one element occupies; every layout in this family measures it. */
 export const relationNodeSize = { width: 180, height: 56 };
 
-/** The standing relation classes (ADR-0090 D1): what a thing on a relationship
- * drawing *is*. The icon is a name from the kit's one icon vocabulary (ADR-0084
+/** The standing relation classes (ADR-0033): what a thing on a relationship
+ * drawing *is*. The icon is a name from the kit's one icon vocabulary (ADR-0031
  * D1), so this table is pure data — a new class is one row, never a renderer. A
  * node's own icon/tone/caption always win; the class only fills what is absent. */
 export const relationNodeClasses: Record<string, { title: string; icon: string; tone?: string }> = {

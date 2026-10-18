@@ -4,21 +4,21 @@
 
 ## 检查选择与停止
 
-代码精简（ADR-0124）：`make code-size REVISION=e7b972ee` 与 `make code-size` 分开统计生产、测试、生成物和构建代码。集成编辑器用 `make e2e SPEC=integration-editors`，经正常界面分别创建 Connection / Source / Dataset / Pipeline / Matching / Writeback，确认关联被拒后只创建一次、原键继续使用、Discard 不改已存记录。`make e2e SPEC='application-authoring application-studio workspaces'` 检查建模、应用内草稿、规则发布及原生 PMS 工作区。Go 按 `make test-go PKG='./platform ./apps/build ./internal/rules'` 和宿主 Agent / Protocol / RecordedInput / Legacy / Accepted / Release / Candidate 对应测试检查；`TestPageModelSelectorAndStartShareOneRuleAndRecover` 保留筛选、动作和恢复断言，`TestRuleMigrationRetainsFrozenPublicationBytes` 检查旧条件进入 Transaction.Guard 后的历史字节。新应用模板以原生成器实际生成后执行 vet / test。Web 单元、`make check` 与 `scripts/verify.sh composition` 分别验证公共组件、类型与应用边界；原全根测试曾发现两处既有失败，修复后只重跑直接相关项，不把未重新完成的全根测试写为通过。
+代码精简（ADR-0062）：`make code-size REVISION=e7b972ee` 与 `make code-size` 分开统计生产、测试、生成物和构建代码。集成编辑器用 `make e2e SPEC=integration-editors`，经正常界面分别创建 Connection / Source / Dataset / Pipeline / Matching / Writeback，确认关联被拒后只创建一次、原键继续使用、Discard 不改已存记录。`make e2e SPEC='application-authoring application-studio workspaces'` 检查建模、应用内草稿、规则发布及原生 PMS 工作区。Go 按 `make test-go PKG='./platform ./apps/build ./internal/rules'` 和宿主 Agent / Protocol / RecordedInput / Legacy / Accepted / Release / Candidate 对应测试检查；`TestPageModelSelectorAndStartShareOneRuleAndRecover` 保留筛选、动作和恢复断言，`TestRuleMigrationRetainsFrozenPublicationBytes` 检查旧条件进入 Transaction.Guard 后的历史字节。新应用模板以原生成器实际生成后执行 vet / test。Web 单元、`make check` 与 `scripts/verify.sh composition` 分别验证公共组件、类型与应用边界；原全根测试曾发现两处既有失败，修复后只重跑直接相关项，不把未重新完成的全根测试写为通过。
 
-首次联合构建（ADR-0124/0108）：`make e2e SPEC=application-authoring` 从空白应用通过原界面创建两对象、引用字段、状态与动作参数，模板绑定未发布模型并一次发布；保存后续字段和页面修改，核对原运行定义未变。`make test-go PKG=. RUN=TestJointDraftsDeliverNewObjectsAndRelationship` 检查关系与新对象同批交付、错误引用拒绝及发布后的关系约束；它不代替浏览器中的引用配置或真实构建者体验。
+首次联合构建（ADR-0062、ADR-0047）：`make e2e SPEC=application-authoring` 从空白应用通过原界面创建两对象、引用字段、状态与动作参数，模板绑定未发布模型并一次发布；保存后续字段和页面修改，核对原运行定义未变。`make test-go PKG=. RUN=TestJointDraftsDeliverNewObjectsAndRelationship` 检查关系与新对象同批交付、错误引用拒绝及发布后的关系约束；它不代替浏览器中的引用配置或真实构建者体验。
 
-专业组件配置（ADR-0110）：`make e2e SPEC=professional-components`，同一图 widget 分别装配工艺路线、组织汇报与单据沿革，同一矩阵分别装配能力和费率表达式，工作站沿原共享规则选资源并提交类型化报工。`make test-go PKG=. RUN=TestPageComposite` 检查原规则读数变化、权限隐藏/标记、分层路径、环路拒绝、候选与日志恢复；Catalog 检查包含原生 MES 页面迁入通用库的拒绝反例。Catalog 样例是合成预览，真实读取另走宿主路线。
+专业组件配置（ADR-0049）：`make e2e SPEC=professional-components`，同一图 widget 分别装配工艺路线、组织汇报与单据沿革，同一矩阵分别装配能力和费率表达式，工作站沿原共享规则选资源并提交类型化报工。`make test-go PKG=. RUN=TestPageComposite` 检查原规则读数变化、权限隐藏/标记、分层路径、环路拒绝、候选与日志恢复；Catalog 检查包含原生 MES 页面迁入通用库的拒绝反例。Catalog 样例是合成预览，真实读取另走宿主路线。
 
-构建者验证（ADR-0111）：`make e2e SPEC=builder-verification`，从应用 New 菜单进入样本的原字段表单，检查保存后关联被拒的同记录重试及其他成员保留；未发布事务以三个真实成员试跑，区分预期拒绝与真正不匹配，保存/重载原 TestPlan，检查旧具名样本及转为可交付计划时具体值保留。另一场景用正常界面创建未发布对象、动作与状态触发流程，从 New 菜单进入业务测试计划，检查关联失败重试、保存/重载含推进时钟的计划，创建合成记录、推进时间并读取完成状态。两例均从结果旁边打开原对象、动作或流程，返回时保留应用与测试输入，并核对样本和正式定义不变。宿主 `make test-go PKG=. RUN=TestApplicationTrial` 另守整笔回滚、规则/约束/Layers 解释与字段隐藏、生产快照字节不变、固定候选在草稿变化和恢复后结果一致及生产拒绝对照。页面草稿规则另用 `TestPageDraftRulesUseSavedModelsWithoutPublishingThem` 检查新增字段可保存、单独发布拒绝和联合发布成功。手测：准备工单/关联记录 → 三成员对照 → 展开 Execution explanation 查看规则实际值、约束名与事务前后值 → 临时改样本重跑并确认未回流 → 显式保存样本 → 保存测试计划 → 独立审查候选与激活。缺少原生/外部 owner fixture 时应显示拒绝；试跑通过不能代替发布审查或负责人验收。
+构建者验证（ADR-0050）：`make e2e SPEC=builder-verification`，从应用 New 菜单进入样本的原字段表单，检查保存后关联被拒的同记录重试及其他成员保留；未发布事务以三个真实成员试跑，区分预期拒绝与真正不匹配，保存/重载原 TestPlan，检查旧具名样本及转为可交付计划时具体值保留。另一场景用正常界面创建未发布对象、动作与状态触发流程，从 New 菜单进入业务测试计划，检查关联失败重试、保存/重载含推进时钟的计划，创建合成记录、推进时间并读取完成状态。两例均从结果旁边打开原对象、动作或流程，返回时保留应用与测试输入，并核对样本和正式定义不变。宿主 `make test-go PKG=. RUN=TestApplicationTrial` 另守整笔回滚、规则/约束/Layers 解释与字段隐藏、生产快照字节不变、固定候选在草稿变化和恢复后结果一致及生产拒绝对照。页面草稿规则另用 `TestPageDraftRulesUseSavedModelsWithoutPublishingThem` 检查新增字段可保存、单独发布拒绝和联合发布成功。手测：准备工单/关联记录 → 三成员对照 → 展开 Execution explanation 查看规则实际值、约束名与事务前后值 → 临时改样本重跑并确认未回流 → 显式保存样本 → 保存测试计划 → 独立审查候选与激活。缺少原生/外部 owner fixture 时应显示拒绝；试跑通过不能代替发布审查或负责人验收。
 
-模型驱动界面（ADR-0109）：`make e2e SPEC=model-driven-ui`。沿原 Inspector 配置选择器规则引用并激活，修改同一动作规则后检查候选与动作拒绝一起变化；旧 V1 页面保存前后核对原数据，再逐段配置关系字段，阻断真实引用读取后检查失败状态与旧值清理。以部分可见角色检查显式标记、只读单元格的原授权原因，以及严格默认隐藏。桌面/窄视口截图与构建者走查分别记录；Go owner 路线另验证声明/过滤集合、固定查询分页、路径/类型/权限反例和发布恢复。
+模型驱动界面（ADR-0048）：`make e2e SPEC=model-driven-ui`。沿原 Inspector 配置选择器规则引用并激活，修改同一动作规则后检查候选与动作拒绝一起变化；旧 V1 页面保存前后核对原数据，再逐段配置关系字段，阻断真实引用读取后检查失败状态与旧值清理。以部分可见角色检查显式标记、只读单元格的原授权原因，以及严格默认隐藏。桌面/窄视口截图与构建者走查分别记录；Go owner 路线另验证声明/过滤集合、固定查询分页、路径/类型/权限反例和发布恢复。
 
-应用上下文（ADR-0124 / ADR-0046 §6.7）：`make e2e SPEC=application-context`，从已发布应用的页面进入原构建编辑器，预览自动使用所属应用；改变共享值后通过页面调用/返回和页头切换，核对预览实例、构建应用 ID 与值保持一致。新建/关闭预览实例后，正式页面的共享值和原定义应保持不变；原 `ApplicationSessions.test.mjs` 检查实例退役、版本/成员隔离及迟到读取不能恢复旧状态。预览只使用可读的已发布应用，不把构建草稿当运行版本。
+应用上下文（ADR-0062、ADR-0015 §6.7）：`make e2e SPEC=application-context`，从已发布应用的页面进入原构建编辑器，预览自动使用所属应用；改变共享值后通过页面调用/返回和页头切换，核对预览实例、构建应用 ID 与值保持一致。新建/关闭预览实例后，正式页面的共享值和原定义应保持不变；原 `ApplicationSessions.test.mjs` 检查实例退役、版本/成员隔离及迟到读取不能恢复旧状态。预览只使用可读的已发布应用，不把构建草稿当运行版本。
 
-应用 AI 配置（ADR-0124 / ADR-0116）：`make e2e SPEC=ai-authoring` 从应用新建入口配置未发布模型上的函数、智能体及函数评测集，检查排除字段不可选、成员更新失败后重试同一保存、切换文档后迟到保存不抢焦点，以及原定义不变。`TestAIAuthoringUsesSavedModelsOnlyForExplicitJointDelivery` 检查草稿动作、查询与角色可保存、单独发布拒绝、明确选择模型与 AI 声明后可共同候选、无评测不能激活；未知查询字段仍由原私有安装检查拒绝。`proposal-adoption` 的首条任务从旧 `function` 页面经统一 AI 部件启动一次运行调用，检查等待与结果、切换记录后的隔离、历史原调用详情的计量和原审批采纳；旧独立请求按钮不存在，评测与运行合计调用数保持四次。其他实际提议、采纳、审批、模型评估与运行继续用该文件和原 `TestApplicationProposalAdoption|TestApplicationAgentCandidateEvaluationGate`，合成模型不代表真实模型质量。
+应用 AI 配置（ADR-0062、ADR-0054）：`make e2e SPEC=ai-authoring` 从应用新建入口配置未发布模型上的函数、智能体及函数评测集，检查排除字段不可选、成员更新失败后重试同一保存、切换文档后迟到保存不抢焦点，以及原定义不变。`TestAIAuthoringUsesSavedModelsOnlyForExplicitJointDelivery` 检查草稿动作、查询与角色可保存、单独发布拒绝、明确选择模型与 AI 声明后可共同候选、无评测不能激活；未知查询字段仍由原私有安装检查拒绝。`proposal-adoption` 的首条任务从旧 `function` 页面经统一 AI 部件启动一次运行调用，检查等待与结果、切换记录后的隔离、历史原调用详情的计量和原审批采纳；旧独立请求按钮不存在，评测与运行合计调用数保持四次。其他实际提议、采纳、审批、模型评估与运行继续用该文件和原 `TestApplicationProposalAdoption|TestApplicationAgentCandidateEvaluationGate`，合成模型不代表真实模型质量。
 
-应用集成配置（ADR-0124 / ADR-0070–0074）：`make e2e SPEC=integration-authoring` 从应用新建入口配置连接、数据集、数据源、管道、回写和匹配规则，使用尚未发布的模型；检查成员写入失败重试、未就绪连接拒绝后保留原页与同一资源，再经原共同候选激活，实际拉取并回填外部答复。`TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels` 检查已发布配置改用新字段/对象时可保存、运行定义不变、单独发布与无效字段拒绝、明确选定后共同激活，以及匹配规则唯一性按实际发布定义判断。`TestDependencyDiscoveryIncludesOriginalDatasetConfigurations` 检查原创建/装载的数据集与已发布管道沿同一描述双向发现，普通成员与未发布管道拒绝，运行行不进入元数据。原跨环境、投递失败/重试和恢复继续使用 `integration-fabric` 与本表的集成交付检查；本地 HTTP 不代替客户外部系统或真实设备。
+应用集成配置（ADR-0062、ADR-0023、ADR-0024、ADR-0022）：`make e2e SPEC=integration-authoring` 从应用新建入口配置连接、数据集、数据源、管道、回写和匹配规则，使用尚未发布的模型；检查成员写入失败重试、未就绪连接拒绝后保留原页与同一资源，再经原共同候选激活，实际拉取并回填外部答复。`TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels` 检查已发布配置改用新字段/对象时可保存、运行定义不变、单独发布与无效字段拒绝、明确选定后共同激活，以及匹配规则唯一性按实际发布定义判断。`TestDependencyDiscoveryIncludesOriginalDatasetConfigurations` 检查原创建/装载的数据集与已发布管道沿同一描述双向发现，普通成员与未发布管道拒绝，运行行不进入元数据。原跨环境、投递失败/重试和恢复继续使用 `integration-fabric` 与本表的集成交付检查；本地 HTTP 不代替客户外部系统或真实设备。
 
 自动测试集中在契约、业务行为、权限、数据一致性和恢复；浏览器只保留规范入口与关键构建/操作路线。外观、布局、画布拖动、一般交互和体验由截图检查及负责人走查。不为颜色、面板宽高、拖动距离或每种设备/语言复制自动路线。
 
@@ -29,19 +29,19 @@
 | Lean 模型/工具链 | `scripts/verify.sh formal`（`make verify` 包含）；映射与可信前提见 [Lean README](../contract/lean/README.md) |
 | Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改变应用 API/组合时加 `scripts/verify.sh composition` |
 | 两行业真实来源业务（W4 / S-01） | 原 `make rehearse` 的 S-01 区块复用受控 SELECT-only PostgreSQL 与原 Source mapping：客户行→CRM Account→普通前台成员商机/PMS 预订，生产计划行→ERP release→普通操作员固定工艺 SFC→原协议确认。核对来源 last/applied、两应用各自结果/链接/历史和受权业务视图；从原目录重启后比较记录、修订与接受历史。可在原 `make lite` 宿主执行同一区块，使用签名角色卡并观察桌面/窄视口；它只证明合成来源、本地文件和原生业务链，不代替完整 OIDC/RustFS/Docker、现场质量或独立人员交接 |
-| 轻量启动与恢复（ADR-0049 / W4） | 原 `make lite` 与 `make lite SOLUTION=manufacturing`；两行业 `/healthz`、签名角色卡 `/v1/me`、拒绝未签名开发 token，浏览器打开对应工作台并检查错误。通过原业务动作创建记录，停止宿主后从同一数据目录重启，核对原签名身份、记录修订与原 key 幂等结果；不得重置 `journal/files/idp.key`。检查原生持续链时沿原 Data Connection/Source/Process/candidate API，使用环境 secret 与 SELECT-only PostgreSQL 角色；保留 512 批量、100 信号、8 并发和 `checkpointEvery:5000`。核对完成窗口的全部 Action 与只读值历史，停止/取消后重启，比较接受行/修订、冻结版本/主体、sealed frame 和来源位置；同版本 resume 后只消费新行，旧结果不重算。恢复死信时保留最终拒绝动作和迟到信号的原版本、主体、key/值，重启后先检查终止实例拒绝 replay，再按原恢复动作续接、修复目标并重放；重复命令应拒绝，信号 replay 不推进来源 checkpoint，新后继 Action 不复用被拒绝请求的 key，原接受行/修订不重复。5000 配置不等于已运行到第 5000 批，本地文件不等于 RustFS/S3。`make test-go PKG=. RUN=TestLightweight` 守恢复与身份；存储沿 `TestLocalFilesKeepsTheSameContract`、`TestFileJournalRefusesADamagedJournal` 与 `TestJournalsKeepTheSameContract`。后者的 PostgreSQL 分支必须配置真实 `PLATFORM_TEST_DATABASE`。这不等于 Docker/RustFS/隔离 Compute 或生产恢复验收 |
+| 轻量启动与恢复（ADR-0017 / W4） | 原 `make lite` 与 `make lite SOLUTION=manufacturing`；两行业 `/healthz`、签名角色卡 `/v1/me`、拒绝未签名开发 token，浏览器打开对应工作台并检查错误。通过原业务动作创建记录，停止宿主后从同一数据目录重启，核对原签名身份、记录修订与原 key 幂等结果；不得重置 `journal/files/idp.key`。检查原生持续链时沿原 Data Connection/Source/Process/candidate API，使用环境 secret 与 SELECT-only PostgreSQL 角色；保留 512 批量、100 信号、8 并发和 `checkpointEvery:5000`。核对完成窗口的全部 Action 与只读值历史，停止/取消后重启，比较接受行/修订、冻结版本/主体、sealed frame 和来源位置；同版本 resume 后只消费新行，旧结果不重算。恢复死信时保留最终拒绝动作和迟到信号的原版本、主体、key/值，重启后先检查终止实例拒绝 replay，再按原恢复动作续接、修复目标并重放；重复命令应拒绝，信号 replay 不推进来源 checkpoint，新后继 Action 不复用被拒绝请求的 key，原接受行/修订不重复。5000 配置不等于已运行到第 5000 批，本地文件不等于 RustFS/S3。`make test-go PKG=. RUN=TestLightweight` 守恢复与身份；存储沿 `TestLocalFilesKeepsTheSameContract`、`TestFileJournalRefusesADamagedJournal` 与 `TestJournalsKeepTheSameContract`。后者的 PostgreSQL 分支必须配置真实 `PLATFORM_TEST_DATABASE`。这不等于 Docker/RustFS/隔离 Compute 或生产恢复验收 |
 | 应用/协议 | `scripts/verify.sh composition format`（`make verify` 包含）；MES 规则加 `mes`，PMS 桌面/离线链加 `pms` |
 | Web 日常编码与同类组件批次 | `make check-web`：生成一致性、Catalog、全部包 tsc；`make test` 加单元测试；开发中按问题选择原 owner 的 `go test` 和单元测试 |
 | 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；按影响面 `make e2e SPEC=<spec>`；需要全量验收时 `make e2e` 共用一次完整 Playwright，不按每个组件重复 |
-| 两行业应用交付闭环（ADR-0047 M6 / ADR-0048） | `make e2e SPEC=integration-fabric`：酒店/制造各从真实 HTTP 来源拉行，经数据集清洗/隔离、Pipeline 落对象，页面＋Flow＋应用联合候选封存激活，普通成员收货并核对实例候选绑定，外部故障后同键/同请求重试且仅一次成功、回写自动回显/刷新后保留；故意空分组，发布拒绝后返回 Navigation 修正。`make e2e SPEC=workspaces` 另守原生 PMS/Knowledge 与规范入口。六类集成定义与页面/Flow/应用同候选交付，环境参数及运行数据保持独立；不宣称行业全量语义 |
-| 接口查询、页面绑定与共享记录选择器（ADR-0058） | `make test-go PKG=. RUN=TestInterfaceQueries`：不同对象相同 ID、原类型/行/共同字段权限、元数据/数量不泄漏、搜索只取共同字段且不改原 schema、冻结实现者、旧版本、页面成员投影、联合未发布对象及重放；`make test-go PKG=./platform` 守精确页面来源版本、候选闭包、实现者形状与合法数据自引用。原 app 会话/查询计划测试守类型＋ID、原记录访问确认、迟到应答和成员退休。现有 `integration-fabric` 在两行业核对查询工作台和页面编辑器选接口/发布、同 ID 不同类型选择、卡片、打开原对象并按原权限编辑；其他窗口/端口仍按 ADR-0058 §3.1 的具体对象边界 |
-| 持续 Flow 批次接受与窗口（ADR-0047 §13.5） | `make test-go PKG='./apps/flow/... .' RUN=TestContinuous`：原批次摘要/前驱、整批预算拒绝、乱序/分区身份、watermark grace 内迟到事件、overflow/slide 与确定性空闲 timer tick（不推进来源 checkpoint）；原实例提交、历史重试、接受结果重放与快照。封存测试使用共享测试 FileStore，核对大窗口只保留引用、不同成员/租户拒绝、摘要损坏拦截及恢复后消费后继；不放宽原输出/接受结果预算。`TestContinuousLatestBootstrapWithComputeEntry` 检查首次 latest 游标不误调用 Compute，`TestContinuousComputeRemainsWithinAcceptedResultBudget` 核对 64 批及接受结果重放/快照，`TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization` 核对格式 1/2 接续与错误前缀拒绝；`TestContinuousProcessUsesPublishedSourceStartInsteadOfManualEntry` 同时核对旧 Manual 版本可重新安装。`TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork` 另外检查被接受替换的 frame/checkpoint 清理意图、模拟删除失败后的重试、用户动作拒绝、共享宿主循环确认及接受结果重放（仍为内存 FileStore）。`TestPostgresTableProfilePullAndReplay` 另验真实 PostgreSQL 来源，但须显式设置 `PLATFORM_TEST_DATABASE`（未配置时跳过，不得报告为真实数据库验收）。ADR-0047 §13.5/§14 已记录真实 PostgreSQL owner 测试及两行业 worker/自动来源/重启/备份/全日志重建与选定浏览器恢复路线的本地演练；ADR-0097 整块交付已重跑本地两行业来源/重启/备份/全日志重建及选定浏览器恢复路线。W4 的 `TestContinuousNativeChainAssetsReplayResumeAndRetire` 核对原 f32 七节点、八路算子/业务动作、只读输出/当前权限、动作死信重放、停止续接及终态删除故障；`TestContinuousSignalReplayUsesRetainedOperationAndInputChannel` 另核对原 Operation、大输入、撤权及原键收据。`TestContinuousWindowPreparationRetriesOnlyFailedIO` / `TestContinuousSourcePreparationRetriesWithoutCursorLoss` 核对瞬时失败、耗尽、固定游标及拒绝无推进；`TestContinuousDeadLetterAssetsRetainBoundsExpiryAndRecovery` / `TestContinuousDeadLetterArchiveProgressesPastPagingTarget` 核对每个失败动作原键、signal/action 共同数量/TTL、无 tick 到期拒绝、停止态归档、合法大记录和日志/快照恢复；同一轮有清理积压的普通到期 Flow 仍推进，归档保持一批预算。GC/inventory 测试核对恢复边界、完整历史引用（含大整数版本）、失败不删与孤儿保留。`make rehearse` 沿真实 PostgreSQL/RustFS 在两行业跑原七节点和行业任务并恢复同版本消费；准确已运行结果归 ADR-0097 §7，不把内存注入当真实 S3 故障或生产容量通过；周期 checkpoint 边界/读取由 `TestContinuousPeriodicCheckpointIsRetainedAndVersionBound` 使用内存 FileStore 覆盖，不代表目标存储或重启验收 原原生输出/预算与拒绝 key 回归继续由 `TestContinuousNativeChainAssetsReplayResumeAndRetire` 核对：100 个 Action、算子引用摘要/大小、48 KiB 只读值、60 KiB token 输出和 1 MiB 接受结果；intake-only 保留已完成输出，空窗口替换 `[]`；历史未占位 Action key 与信号死信重放不重复旧行/修订、不推进来源 checkpoint。原 lite 同目录恢复证据不冒充 main 的目标存储故障或完整容量。 |
-| 提交/资产/宿主角色收敛（ADR-0097） | `make check` 守 App 必需账本、具名 Runtime 与匿名探测/旧准入标记退出；AST 边界检查扫描全部生产 Go（含非当前 build tag），阻断宿主具体应用 import/Console/Agents 断言、owner 间依赖、公共 API 匿名探测与宽 Host 消费，无迁移例外。`make test-go PKG=./cmd/check-boundaries RUN=TestSourceBoundaryRules` 守负例，`make test-go PKG=. RUN=TestCompositionReadyRequiresAllDeclarations` 守声明完整后就绪与失败组合不就绪。平台 owner 与宿主完整测试覆盖 Submit/Input/Work/Effect 的 memory、Record、AcceptResult 三存储接受、拒绝、重试、追加失败无暴露、接受后纯恢复及旧格式。`accepted_parent_context`/`ledger_publication` 守内部 Ledger.Receive 的 HoldChanges、十类父子保存点、无回调收据与历史不多发事件；`accepted_control` 守私有组件控制、身份及取消；`accepted_callback_rows` 守真实来源/owner/前驱、batch 4 纯恢复和伪造拒绝；`submission_pipeline` 守完整 Composite 2、发布快照重试及晋级拒绝；HostControl、Usage/Agent、Trace/Scheduler 守计量、运行管理与异步路径。`make test-go PKG=./journal RUN=TestPostgresAcceptedResultScopes` 须配置真实 `PLATFORM_TEST_DATABASE`，覆盖旧索引升级、各结果族键空间及重新打开，未配置则跳过。并发改动以 `GOFLAGS=-race make test-go PKG=<owner> RUN=<测试>` 检查，race 不证明无死锁；整块持久恢复沿 `make rehearse`，应用/协议沿 `scripts/verify.sh composition`，Web 沿 `make check-web`。W2 的整条跨环境/故障检查见下一行；SRS/SOW v1.1 的 S-01–05 完整场景仍需原产品验收 |
-| 集成定义跨环境交付（ADR-0097 W2） | `make test-go PKG='./platform ./apps/build'` 守可信 registry、完整 typed 映像、依赖排序、私有 bootstrap、旧 family 拒绝及固定执行。`make test-go PKG=. RUN=TestIntegrationReleaseAcrossEnvironments` 守酒店/制造完整定义闭包、首次交付、本地 binding/actor/token scope、v2 升级、失败零暴露、旧在途/回复与恢复；`TestJournalIntegrationReleaseAcrossEnvironments` 须设置真实 `PLATFORM_TEST_DATABASE`，增加追加失败/崩溃、原 key 重试、重新打开及日志/快照恢复。配置数据库后加 `GOFLAGS=-race` 跑同组；未配置/跳过不算 PG 证据。浏览器沿 `make e2e SPEC=integration-fabric`，整块部署恢复沿 `make rehearse`；服务端绿不代替浏览器、生产容量或 SRS 整体验收 |
+| 两行业应用交付闭环（ADR-0016 M6 / ADR-0011） | `make e2e SPEC=integration-fabric`：酒店/制造各从真实 HTTP 来源拉行，经数据集清洗/隔离、Pipeline 落对象，页面＋Flow＋应用联合候选封存激活，普通成员收货并核对实例候选绑定，外部故障后同键/同请求重试且仅一次成功、回写自动回显/刷新后保留；故意空分组，发布拒绝后返回 Navigation 修正。`make e2e SPEC=workspaces` 另守原生 PMS/Knowledge 与规范入口。六类集成定义与页面/Flow/应用同候选交付，环境参数及运行数据保持独立；不宣称行业全量语义 |
+| 接口查询、页面绑定与共享记录选择器（ADR-0020） | `make test-go PKG=. RUN=TestInterfaceQueries`：不同对象相同 ID、原类型/行/共同字段权限、元数据/数量不泄漏、搜索只取共同字段且不改原 schema、冻结实现者、旧版本、页面成员投影、联合未发布对象及重放；`make test-go PKG=./platform` 守精确页面来源版本、候选闭包、实现者形状与合法数据自引用。原 app 会话/查询计划测试守类型＋ID、原记录访问确认、迟到应答和成员退休。现有 `integration-fabric` 在两行业核对查询工作台和页面编辑器选接口/发布、同 ID 不同类型选择、卡片、打开原对象并按原权限编辑；其他窗口/端口仍按 ADR-0020 §3.1 的具体对象边界 |
+| 持续 Flow 批次接受与窗口（ADR-0016 §13.5） | `make test-go PKG='./apps/flow/... .' RUN=TestContinuous`：原批次摘要/前驱、整批预算拒绝、乱序/分区身份、watermark grace 内迟到事件、overflow/slide 与确定性空闲 timer tick（不推进来源 checkpoint）；原实例提交、历史重试、接受结果重放与快照。封存测试使用共享测试 FileStore，核对大窗口只保留引用、不同成员/租户拒绝、摘要损坏拦截及恢复后消费后继；不放宽原输出/接受结果预算。`TestContinuousLatestBootstrapWithComputeEntry` 检查首次 latest 游标不误调用 Compute，`TestContinuousComputeRemainsWithinAcceptedResultBudget` 核对 64 批及接受结果重放/快照，`TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization` 核对格式 1/2 接续与错误前缀拒绝；`TestContinuousProcessUsesPublishedSourceStartInsteadOfManualEntry` 同时核对旧 Manual 版本可重新安装。`TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork` 另外检查被接受替换的 frame/checkpoint 清理意图、模拟删除失败后的重试、用户动作拒绝、共享宿主循环确认及接受结果重放（仍为内存 FileStore）。`TestPostgresTableProfilePullAndReplay` 另验真实 PostgreSQL 来源，但须显式设置 `PLATFORM_TEST_DATABASE`（未配置时跳过，不得报告为真实数据库验收）。ADR-0016 §13.5/§14 已记录真实 PostgreSQL owner 测试及两行业 worker/自动来源/重启/备份/全日志重建与选定浏览器恢复路线的本地演练；ADR-0037 整块交付已重跑本地两行业来源/重启/备份/全日志重建及选定浏览器恢复路线。W4 的 `TestContinuousNativeChainAssetsReplayResumeAndRetire` 核对原 f32 七节点、八路算子/业务动作、只读输出/当前权限、动作死信重放、停止续接及终态删除故障；`TestContinuousSignalReplayUsesRetainedOperationAndInputChannel` 另核对原 Operation、大输入、撤权及原键收据。`TestContinuousWindowPreparationRetriesOnlyFailedIO` / `TestContinuousSourcePreparationRetriesWithoutCursorLoss` 核对瞬时失败、耗尽、固定游标及拒绝无推进；`TestContinuousDeadLetterAssetsRetainBoundsExpiryAndRecovery` / `TestContinuousDeadLetterArchiveProgressesPastPagingTarget` 核对每个失败动作原键、signal/action 共同数量/TTL、无 tick 到期拒绝、停止态归档、合法大记录和日志/快照恢复；同一轮有清理积压的普通到期 Flow 仍推进，归档保持一批预算。GC/inventory 测试核对恢复边界、完整历史引用（含大整数版本）、失败不删与孤儿保留。`make rehearse` 沿真实 PostgreSQL/RustFS 在两行业跑原七节点和行业任务并恢复同版本消费；准确已运行结果归 ADR-0037 §7，不把内存注入当真实 S3 故障或生产容量通过；周期 checkpoint 边界/读取由 `TestContinuousPeriodicCheckpointIsRetainedAndVersionBound` 使用内存 FileStore 覆盖，不代表目标存储或重启验收 原原生输出/预算与拒绝 key 回归继续由 `TestContinuousNativeChainAssetsReplayResumeAndRetire` 核对：100 个 Action、算子引用摘要/大小、48 KiB 只读值、60 KiB token 输出和 1 MiB 接受结果；intake-only 保留已完成输出，空窗口替换 `[]`；历史未占位 Action key 与信号死信重放不重复旧行/修订、不推进来源 checkpoint。原 lite 同目录恢复证据不冒充 main 的目标存储故障或完整容量。 |
+| 提交/资产/宿主角色收敛（ADR-0037） | `make check` 守 App 必需账本、具名 Runtime 与匿名探测/旧准入标记退出；AST 边界检查扫描全部生产 Go（含非当前 build tag），阻断宿主具体应用 import/Console/Agents 断言、owner 间依赖、公共 API 匿名探测与宽 Host 消费，无迁移例外。`make test-go PKG=./cmd/check-boundaries RUN=TestSourceBoundaryRules` 守负例，`make test-go PKG=. RUN=TestCompositionReadyRequiresAllDeclarations` 守声明完整后就绪与失败组合不就绪。平台 owner 与宿主完整测试覆盖 Submit/Input/Work/Effect 的 memory、Record、AcceptResult 三存储接受、拒绝、重试、追加失败无暴露、接受后纯恢复及旧格式。`accepted_parent_context`/`ledger_publication` 守内部 Ledger.Receive 的 HoldChanges、十类父子保存点、无回调收据与历史不多发事件；`accepted_control` 守私有组件控制、身份及取消；`accepted_callback_rows` 守真实来源/owner/前驱、batch 4 纯恢复和伪造拒绝；`submission_pipeline` 守完整 Composite 2、发布快照重试及晋级拒绝；HostControl、Usage/Agent、Trace/Scheduler 守计量、运行管理与异步路径。`make test-go PKG=./journal RUN=TestPostgresAcceptedResultScopes` 须配置真实 `PLATFORM_TEST_DATABASE`，覆盖旧索引升级、各结果族键空间及重新打开，未配置则跳过。并发改动以 `GOFLAGS=-race make test-go PKG=<owner> RUN=<测试>` 检查，race 不证明无死锁；整块持久恢复沿 `make rehearse`，应用/协议沿 `scripts/verify.sh composition`，Web 沿 `make check-web`。W2 的整条跨环境/故障检查见下一行；SRS/SOW v1.1 的 S-01–05 完整场景仍需原产品验收 |
+| 集成定义跨环境交付（ADR-0037 W2） | `make test-go PKG='./platform ./apps/build'` 守可信 registry、完整 typed 映像、依赖排序、私有 bootstrap、旧 family 拒绝及固定执行。`make test-go PKG=. RUN=TestIntegrationReleaseAcrossEnvironments` 守酒店/制造完整定义闭包、首次交付、本地 binding/actor/token scope、v2 升级、失败零暴露、旧在途/回复与恢复；`TestJournalIntegrationReleaseAcrossEnvironments` 须设置真实 `PLATFORM_TEST_DATABASE`，增加追加失败/崩溃、原 key 重试、重新打开及日志/快照恢复。配置数据库后加 `GOFLAGS=-race` 跑同组；未配置/跳过不算 PG 证据。浏览器沿 `make e2e SPEC=integration-fabric`，整块部署恢复沿 `make rehearse`；服务端绿不代替浏览器、生产容量或 SRS 整体验收 |
 
 | 纯样式/布局/文案 | `make check-web`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
-| 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0080） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；不加新测试 |
-| 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0047 §11 / ADR-0080 §3.1） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户宿主上通过发布工作台/Host Console 将已封存候选晋级到目标租户，并在 Migrate records 迁移主数据；旧 WMS 装配脚本已清理 |
+| 结构整理（搬文件、拆函数、Tenant 组件化，ADR-0062） | 零行为变更：`go build ./... && go vet .` 加全量 `go test .`；web 侧对应包 `tsc --noEmit` 与 `node scripts/catalog.mjs generate` 零语义差异；不加新测试 |
+| 环境生命周期（定义→候选→封存→激活→晋级→迁移→升级，ADR-0016 §11 / ADR-0062） | `go test -run 'TestApplicationLifecycle' .`：`environment_lifecycle_test.go` 走租户方法，`environment_http_test.go` 走 `Host.Handler()` 的真实路由（含宿主控制台）；本地两租户宿主上通过发布工作台/Host Console 将已封存候选晋级到目标租户，并在 Migrate records 迁移主数据；旧 WMS 装配脚本已清理 |
 | 应用全生命周期跨环境（发布、晋级、迁移、升级、恢复） | `go test -run TestApplicationLifecycleAcrossEnvironments .`：一个对象+页面+应用的联合候选在 dev 封存激活，业务写入后晋级到 prod，`MigrateRecords` 迁数据（二次运行零写入），v2 加一个可选标量经两环境各自审阅的计划激活，最后 prod 从快照+日志尾恢复并通过 `CheckReplay`；改动候选/发布/环境/迁移任一 owner 时先跑它 |
 | 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `make rehearse`；纯发布导航不自动触发 |
 
@@ -51,11 +51,11 @@
 
 ## 测试规范
 
-分层与入口是 `Makefile`（ADR-0081）。写测试时：
+分层与入口是 `Makefile`（ADR-0029）。写测试时：
 
 - **浏览器 spec**（`web/e2e/tests/*.spec.ts`）只从 `./kit` 导入 `test`/`expect`：`builder`（`manager` 席位）造对象 `builder.object()`、记录 `builder.records()`、页面 `builder.page()`、后台改稿 `builder.edit()`；`editor` 走编辑器（`importModule`、`select`、`saveUntil`、`release`，联合依赖交付用 `release(between, true)`）；`runtime(page, operator, name)` 以 `desk` 开运行时页；截图用 `shots()`。spec 里不再出现 `/v1/submissions`、`Authorization`、"Import Workshop module" 对话框步骤或 Review→Check→Candidate→Activate 四连点。一个 spec 一条路线、格式化、分段注释写明每段证明什么；样板 `page-notice.spec.ts`。旧的单行压缩 spec 在触碰时按样板改写，不另立迁移任务。
 - **宿主测试**（`capabilities/server/*_test.go`）用 `testkit_test.go`：`composeTenant(t, id, seats, apps...)` / `builderTenant(t, id, apps...)` 组租户，`seatOf("ann", "build:desk")` 写席位，`decide(...)` 提交并在拒绝时 fail，`refuse(...)` 返回 `code: message` 做权限表，`publishObject(...)` 一步建并发布对象。不手拼 `pb.Submission`、不自维护幂等计数；文件内已有的 `submit := func` 闭包在触碰时改到 kit 上；样板 `build_access_test.go`。
-- **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新增或修改测试应能发现本次变更涉及的重要错误；优先改已有的不变量测试。浏览器按实际任务选择必要路线，保留覆盖不同长期责任的已有路线，不按固定数量增删。临时过程检查不提交（ADR-0082）。
+- **不写**：像素/布局断言、为每种设备或语言复制的路线、服务端已证明规则的浏览器重测、只为"覆盖率"存在的用例。新增或修改测试应能发现本次变更涉及的重要错误；优先改已有的不变量测试。浏览器按实际任务选择必要路线，保留覆盖不同长期责任的已有路线，不按固定数量增删。临时过程检查不提交（ADR-0030）。
 
 历史 W4 轻量沙箱的十秒命令限制和缺少生成工具，是当时环境的证据边界，不约束当前本地检查，也不表示 main 仍有同一生成缺口。语法、类型或 jsdom 检查不替代真实弹窗、用户体验、模型、目标存储或交接证据。宿主 API 或 Catalog 源声明发生变化时使用原生成器更新；具体命令与沙箱准备见 AGENTS，不手写生成类型或增加替代生成器。
 
@@ -66,7 +66,7 @@
 | K1–K9 语义及跨语言边缘 | `contract/spec`、`contract/vectors`、`contract/go`、Rust/TypeScript K5；选定 K4 Lean 模型 |
 | 声明/读取/动作/授权与派生来源 | `capabilities/server` 的对应 Go 测试与应用组合探针 |
 | 原子提交、版本和恢复 | 对应 accepted-result / release / process / function 测试；需要 PostgreSQL 的用例不能用内存通过代替 |
-| 数据与定义演进（ADR-0106） | `make test-go PKG='. ./platform' RUN=TestMigration` 核对封存审阅、三行两批、同键重试、源写入/直接发布拒绝、失败整批边界、隔离与补偿取消、快照及日志文件关闭重开续接、目标校验/激活/恢复，以及只读别名的后续更新/权限、字段退役、动作退役两批/待审批默认拒绝/任务关闭与恢复、旧 Flow 封存动作/别名写入/等待恢复及多次迁移源映像保留、旧类型/引用写入转换与失败回滚、旧 Flow 新开封存审批、显式重定向及当前策略拒绝。`TestMigrationSixChangesResumeWaitingFlows` 对六类变更及合并逐例跑三行两批、实际日志关闭/重开、原键重试、旧 Flow 完成与历史读取；拆分再接重命名与级间快照恢复。`TestMigrationRedirectsMultilevelDelegatedApproval` 核对源第二级、目标两级/委托、级间日志恢复及末级追加失败/重试。`TestMigrationPlanAssetsRetainVersionsAndUseTheOriginalExecutor` 核对保存/发布、原注册表/候选安装、版本保留与固定执行；`TestMigrationExtractsDeclaredObjectsAndResumes` 核对目标首次声明、文件重开/快照恢复、旧 Flow、身份冲突/隔离、追加失败与取消归档。配置 `PLATFORM_TEST_DATABASE` 时同一日志路线加入 PostgreSQL；未配置须明确未验。`make e2e SPEC=migration` 走原发布工作台：保存/发布迁移计划，审阅重命名两批、服务端接受后回复丢失的同键重试、重开续接、激活、新字段编辑，以及动作退役→旧审批拒绝/退出等待状态→激活后目录撤除、联合候选重命名/拆分/对象提取迁移后从收件箱继续旧 Flow 并对比新实例的动作结果、声明重定向后目标激活→新审批→目标动作完成；`PLATFORM_SCREENSHOTS=1` 保存桌面/窄视口图。手测按 Apps 的迁移面板操作，取消按批恢复源事实并保留历史。`make test-go PKG=. RUN=TestCustomerExtension` 核对 Core 原生包升级、两项客户字段/扩展动作、闭包外扩展、来源版本、追加失败、文件重开与全日志/快照恢复；同名字段与基础字段类型冲突明确暂停，原重命名迁移分批解决；伪造来源/新发布遮蔽基础字段拒绝。浏览器同时走基础对象升级→客户字段保留→冲突拒绝→联合目标/显式重命名→刷新续接→独立字段写入与扩展动作。`make test-go PKG=. RUN=TestSubmissionSchema` 核对同族旧内容、跨族拒绝、换头/删头同键冲突、非法头不占键、退役动作的原收据、审批原请求/Work 子收据与日志/快照恢复。浏览器另核对旧目录→兼容升级→回复丢失→跨族升级后的原键重试，以及新请求拒绝/刷新、输入保留和新族新键成功。`make rehearse PROFILE=migration` 使用当前两行业二进制、现有 OIDC/RustFS/PostgreSQL，创建独立来源/恢复数据库与临时宿主：三行/三个旧 Flow，重命名/必填默认值/动作退役，首批中断，快照重启、真实备份恢复、完整日志重建、原键重试、续接/激活、旧/新动作结果及完成态恢复；结束清理本次资源。原 `make rehearse` 已接同一路线，本次 native profile 不代替全套容器集成、AI/持续流或生产恢复验收。`TestMigrationRetypeRequiresQuarantineForReferencesOutsideItsRelease` 守闭包外引用准入、显式隔离、范围及无写入；未知步骤/物理删除继续由平台编译器反例守住 |
+| 数据与定义演进（ADR-0045） | `make test-go PKG='. ./platform' RUN=TestMigration` 核对封存审阅、三行两批、同键重试、源写入/直接发布拒绝、失败整批边界、隔离与补偿取消、快照及日志文件关闭重开续接、目标校验/激活/恢复，以及只读别名的后续更新/权限、字段退役、动作退役两批/待审批默认拒绝/任务关闭与恢复、旧 Flow 封存动作/别名写入/等待恢复及多次迁移源映像保留、旧类型/引用写入转换与失败回滚、旧 Flow 新开封存审批、显式重定向及当前策略拒绝。`TestMigrationSixChangesResumeWaitingFlows` 对六类变更及合并逐例跑三行两批、实际日志关闭/重开、原键重试、旧 Flow 完成与历史读取；拆分再接重命名与级间快照恢复。`TestMigrationRedirectsMultilevelDelegatedApproval` 核对源第二级、目标两级/委托、级间日志恢复及末级追加失败/重试。`TestMigrationPlanAssetsRetainVersionsAndUseTheOriginalExecutor` 核对保存/发布、原注册表/候选安装、版本保留与固定执行；`TestMigrationExtractsDeclaredObjectsAndResumes` 核对目标首次声明、文件重开/快照恢复、旧 Flow、身份冲突/隔离、追加失败与取消归档。配置 `PLATFORM_TEST_DATABASE` 时同一日志路线加入 PostgreSQL；未配置须明确未验。`make e2e SPEC=migration` 走原发布工作台：保存/发布迁移计划，审阅重命名两批、服务端接受后回复丢失的同键重试、重开续接、激活、新字段编辑，以及动作退役→旧审批拒绝/退出等待状态→激活后目录撤除、联合候选重命名/拆分/对象提取迁移后从收件箱继续旧 Flow 并对比新实例的动作结果、声明重定向后目标激活→新审批→目标动作完成；`PLATFORM_SCREENSHOTS=1` 保存桌面/窄视口图。手测按 Apps 的迁移面板操作，取消按批恢复源事实并保留历史。`make test-go PKG=. RUN=TestCustomerExtension` 核对 Core 原生包升级、两项客户字段/扩展动作、闭包外扩展、来源版本、追加失败、文件重开与全日志/快照恢复；同名字段与基础字段类型冲突明确暂停，原重命名迁移分批解决；伪造来源/新发布遮蔽基础字段拒绝。浏览器同时走基础对象升级→客户字段保留→冲突拒绝→联合目标/显式重命名→刷新续接→独立字段写入与扩展动作。`make test-go PKG=. RUN=TestSubmissionSchema` 核对同族旧内容、跨族拒绝、换头/删头同键冲突、非法头不占键、退役动作的原收据、审批原请求/Work 子收据与日志/快照恢复。浏览器另核对旧目录→兼容升级→回复丢失→跨族升级后的原键重试，以及新请求拒绝/刷新、输入保留和新族新键成功。`make rehearse PROFILE=migration` 使用当前两行业二进制、现有 OIDC/RustFS/PostgreSQL，创建独立来源/恢复数据库与临时宿主：三行/三个旧 Flow，重命名/必填默认值/动作退役，首批中断，快照重启、真实备份恢复、完整日志重建、原键重试、续接/激活、旧/新动作结果及完成态恢复；结束清理本次资源。原 `make rehearse` 已接同一路线，本次 native profile 不代替全套容器集成、AI/持续流或生产恢复验收。`TestMigrationRetypeRequiresQuarantineForReferencesOutsideItsRelease` 守闭包外引用准入、显式隔离、范围及无写入；未知步骤/物理删除继续由平台编译器反例守住 |
 | 业务与协议 | 各应用/协议测试及 `CheckReplay`，酒店/制造组合 |
 | 共享组件行为 | `web/packages/ui`；翻译完整性由 i18n 检查 |
 | Catalog 一致性与查询 | `scripts/catalog.mjs check` 已接入 Web：公共导出/示例/翻译/Widget 引用与私有导入；`@platform/catalog` 验证有界查询，Catalog 预览隔离和 Studio 草稿路线只保留核心行为 |
@@ -77,18 +77,18 @@
 | 协议包与独立网关 | 先 `make packages`；`make test-go PKG='./driver ./gateway ./drivers/s7 ./drivers/modbus ./drivers/simulator'` 检查真实 TCP、类型解码、质量、确定性模拟、命令收据与配置重开。`PLATFORM_PROTOCOL_PACKAGES="$PWD/.build/protocol/packages" make test-go PKG=. RUN='TestProtocolPackage\|TestProtocolConnection'` 使用真实二进制，经原安装与 Connection，检查三种包、旧修订读取、模拟 Observation 判定和 unknown 后状态回读；未给目录的真实包用例明确跳过，不作通过证据。按 [Apps](Apps.md#协议包与模拟采集) 启动网关并提供包目录/网关密钥引用，再运行 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=protocol-packages`，检查安装、导入错误、预览、保存检查与原发布，以及桌面/窄屏画面。Modbus 本地数据见 `deploy/examples/hvac/`；同一浏览器路线导入十点 CSV 并预览、检查和发布，再从原点表配置观测源，以普通成员从原记录只读详情进入观测，读取当前值、质量和时间，并确认当前值不能替代历史窗口。`TestProtocolConnectionLoadsReadOnlyPackages` 同时守两种实际驱动的当前读取、授权及租户状态不变；`TestObservationCurrentPointPreservesQualityAndExactValue` 守缺失、质量和精度。真机和客户 TSDB 另行验证。 |
 | 依赖与能力发现 | `make test-go PKG=./platform RUN='TestDependency|TestPageDescription|TestObjectAndActionDescription|TestCandidate'` 检查同一描述的正反向关系、能力类型、页面引用、非法 Side、缺失/循环与历史内容；宿主 `TestDependencyDiscovery` 检查原成员权限与一致投影，Build `TestConfirmationReleaseBindsStableAssetsOnTheStartingAction` 检查确认动作绑定。`make e2e SPEC=dependencies` 通过原构建器创建页面引用，检查自动依赖和反向影响、同一入口的成员能力差异；`PLATFORM_SCREENSHOTS=1` 保存桌面/窄屏。手测在 Lineage 切换资产与能力类型，打开原定义和运行证据，确认声明图与运行记录可区分。 |
 | 应用交付 | `make test-go PKG=. RUN='TestApplicationLifecycleAcrossEnvironments|TestApplicationArtifactAgentDeliveryAndRuntime|TestNativeFlowApplicationArtifactUsesOriginalDescriptor|TestCommittedResultCorruptionQuarantinesOnlyItsTenant'` 检查工件晋级、目标权限/工具、升级、确切决策版本、恢复、隔离、原生 Flow 固定与篡改拒绝；运行绑定、移出资源后的历史归属、后来共享不取得旧运行与 10002 条运行告警。`make test-go PKG=./platform RUN=TestApplicationArtifact` 检查闭包外容量、未知/凭据字段拒绝。真实 `PLATFORM_TEST_DATABASE` 下的 `TestJournalAcceptedJointFunctionActivationCrash` 贯通模型/规则/页面/流程/函数/智能体/版本化评测集/接入的组合工件、冻结评测策略、答复落盘故障与激活恢复；第二环境缺少模型/连接绑定时整件拒绝，绑定后安装同内容，未迁移存储变更拒绝、三行三批迁移、目标重新评测/激活、维护与上一版本、快照和日志恢复。未配置数据库会跳过，HTTP 模型为受控提供方，不计生产 AI 品质。`TestApplicationRulesPromoteUpgradeRollbackAndRecover` 检查规则跨环境、草稿不生效、追加失败重试、实际通知、旧候选与恢复；`TestSharedApplicationRulesKeepDependentsAndHistory` 检查两个应用共享、影响方纳入候选及成员移除后的保护。`make test-go PKG=./apps/build RUN=TestRetainedDeclarationsSelectOldRuntimeAndKeepNextOrdinal` 检查查询/函数/属性/关系/智能体的旧版本与历史；代码回退和新序号归 `TestCodeBuildUsesArtifactOwnerAndCandidate`。`make e2e SPEC=application-delivery` 走容量/恢复声明、发布、普通成员写入、无页面入口、超限告警、原记录诊断，以及评测集从原计划编辑器进入发布审阅；`PLATFORM_SCREENSHOTS=1` 保存截图。`make rehearse` 沿真实两行业的异步通知、原实例、重启、备份与全日志恢复，通知等待有截止时间。 |
-| 浏览器主路径 | `web/e2e/tests` 保留规范入口与任务路线：`routes`（动作/刷新、审批、字段安全、只读预览）、`business-access`（拒绝保留输入与独立业务主管）、`release-roles`（发布者/审计者）、`workflow`（流程编写与应答，含 Inspector 关闭/重开、页签键盘、Dock 测试输入保留、同一发布任务重开和窄容器切换）、`workspaces`（壳与任务工作区）、`host-sign-out`（会话）、`integration-fabric`（两宿主接入→联合发布→普通成员收货→外部投递恢复）、`page-notice`（编辑器→导入→发布→运行时的 kit 样板）、`migration`（演进计划→有界接受/丢失回复重试→续接→激活→别名更新）。按部件/按功能的路线已删除（ADR-0082）：那层由 Go 的发布/重放测试与负责人走查证明 |
+| 浏览器主路径 | `web/e2e/tests` 保留规范入口与任务路线：`routes`（动作/刷新、审批、字段安全、只读预览）、`business-access`（拒绝保留输入与独立业务主管）、`release-roles`（发布者/审计者）、`workflow`（流程编写与应答，含 Inspector 关闭/重开、页签键盘、Dock 测试输入保留、同一发布任务重开和窄容器切换）、`workspaces`（壳与任务工作区）、`host-sign-out`（会话）、`integration-fabric`（两宿主接入→联合发布→普通成员收货→外部投递恢复）、`page-notice`（编辑器→导入→发布→运行时的 kit 样板）、`migration`（演进计划→有界接受/丢失回复重试→续接→激活→别名更新）。按部件/按功能的路线已删除（ADR-0030）：那层由 Go 的发布/重放测试与负责人走查证明 |
 | OIDC 与持久部署 | `deploy/local/rehearse.sh`、`web/e2e/deploy`；在部署边界改变或发布检查点运行 |
 
 共享读取的固定次数断言限定在同一成员/定义范围及数据修订。相关浏览器路线使用host.ts的stableReadRevision固定测试段的变更流，涉及后续动态发布时恢复真实流；真实租户变更允许重新读取，不能把它计成同一世代的重复请求。业务动作/刷新路线仍使用真实通知，会话用例验证revision变化后的失效与同步重入合并。
 
 浏览器历史路线号只是检索标识，已删除的次要路线转人工验证，不表示能力删除。固定计划、关系/查询、关联创建和函数夹具的语义由 Go 回归；保留浏览器主路径，避免逐功能重复完整生命周期。
 
-### 授权判定（ADR-0105）
+### 授权判定（ADR-0044）
 
 `make test-go PKG='./platform/authz .' RUN='TestOperationLayerOrder|TestOwnerAuthorization|TestAuthorizationRevocation|TestDeclaredInput|TestDerivedFreeText|TestGeneratedText|TestDeclaredSetVisibility|TestRecordSetTransactionSplit'` 核对九层定序、允许策略不能扩大行范围、出处与文本类型、集合可见计数、有效角色、保存的判定依据和恢复不重授权。行业组合按 `scripts/verify.sh composition`；权限/发布浏览器路线按 `make e2e SPEC=release-roles`，该路线包含审计者读取逐层解释、发布者不能编辑、可读对象的完整九层结果。
 
-手测：治理页「Roles and permissions / 角色与权限」选择成员，填写动作或对象、记录和字段，查看第一拒绝层；撤回来源权限后重开派生记录，确认文本与出处被遮蔽。检查只证明这些用例；ADR-0105 §4 的九类入口整体验收仍以各入口的实际拒绝证据为准。
+手测：治理页「Roles and permissions / 角色与权限」选择成员，填写动作或对象、记录和字段，查看第一拒绝层；撤回来源权限后重开派生记录，确认文本与出处被遮蔽。检查只证明这些用例；ADR-0044 §4 的九类入口整体验收仍以各入口的实际拒绝证据为准。
 
 `make test-go PKG='./cmd/check-boundaries .' RUN='TestAuthorizationNine|TestAuthorizationRejects|TestHostHTTP|TestMemberProjection|TestSourceBoundary'` 验证九类入口显式拒绝、虚构主体、第二角色、宿主管理依据/恢复和实体投影/评论。`scripts/escapes.sh` 使用同一个 AST 守门检查成员存储投影；它是入口防遗漏检查，不代替任意原生业务算法的权限审查。
 
@@ -96,23 +96,35 @@
 
 `make test-go PKG=. RUN='TestDerivedDTO|TestUndeclaredDTO|TestUndeclaredOpaque|TestOriginalReadSource|TestMissingSources|TestAuthorizationDefinitionChanges'` 检查非实体/JSON 的来源行与字段、撤权后重新投影、缺少出处的整字段/列表/合并来源、原始配置不能扩大嵌入实体权限、循环/不透明内容关闭以及原字节不变。JSON 检查包含大整数与重复键；来源/策略改变须改变接受依据的定义指纹。通知没有可读出处时保留自身状态而遮蔽文本；原始 Flow 记录读取与纯恢复保留执行状态，不能拿派生遮蔽后的状态驱动调度。
 
-### 数据与定义演进（ADR-0106）
+### 数据与定义演进（ADR-0045）
 
-`make test-go PKG='. ./platform' RUN=TestMigration` 检查迁移声明的封闭步骤、原求值器转换、默认值/原值保留、来源/目标形状、引用映射与失败，以及封存版本审阅不改业务记录。迁移资产、分批执行、退役/在途兼容与客户扩展路线见上方检查表；文件日志的关闭重开、全日志/快照恢复已有自动证据。`make test-go PKG=. RUN=TestCustomerExtension` 覆盖基础包升级保留、同名冲突暂停与显式迁移解决。手测在发布工作台核对“Customer extensions / 客户扩展”的来源/目标包版本、保留字段与冲突，再沿 Apps 的迁移操作走到激活。schema family 与两行业持久演练仍未完成，不能用单元或浏览器路线代替 `make rehearse`。
+`make test-go PKG='. ./platform' RUN=TestMigration` 检查迁移声明的封闭步骤、原求值器转换、默认值/原值保留、来源/目标形状、引用映射与失败，以及封存版本审阅不改业务记录。迁移资产、分批执行、退役/在途兼容与客户扩展路线见上方检查表。`make test-go PKG=. RUN=TestCustomerExtension` 覆盖基础包升级保留、同名冲突暂停与显式迁移解决。手测在发布工作台核对“Customer extensions / 客户扩展”的来源/目标包版本、保留字段与冲突，再用步骤表单配置批次、字段、表达式和映射，沿 Apps 的迁移操作走到激活。`migration` 浏览器路线包含表单创建重命名、保存/发布和续接；高级原定义仍可编辑。schema family 与两行业持久演练的实际范围归 ADR-0045，不能用本节的方法说明代替运行证据。
 
-### 业务事务（ADR-0100）
+### Pipeline 草稿试跑
+
+`make test-go PKG=. RUN=TestPipelineDraftPreview` 检查原数据集读取权限、100 行采样、原公式和期望、join 扩张上限，以及成功/拒绝均不改草稿、数据集或日志。`make e2e SPEC=integration-authoring` 从原 Pipeline 编辑器试跑未保存配置，查看输出和隔离原因，修改后清除旧结果，核对保存定义及数据版本未变。采样显示不能作为全量聚合或正式写入结果；检查范围归 ADR-0024。
+
+### 长评测继续
+
+`make test-go PKG=. RUN=TestEvaluationCheckpointRestart` 检查逐项接受、保存失败后先重试原结果、同进程不重复模型费用、快照重启只执行剩余项、定义/模型变化拒绝和结果重放。原 `TestAgents` 保留历史评测与权限检查。调用已发生但结果尚未保存时进程崩溃，单项仍可能重做；不把该外部窗口说成恰好一次。
+
+### 声明式协议与分批生产
+
+`make test-go PKG=. RUN='TestDeclarativeProtocol|TestProductionBatchPackages'` 检查完整输入合同、当前映射、成员可见行、绑定保护、候选运行比较、日志和快照恢复；两个生产包在独立租户经本地 HTTP 完成开工、逐批良品/报废、累计/提前终结、超额拒绝、库存和独立 Core 记账、同键重试及丢响应后的回读。测试计划仍用原私有运行器；不代表真实 ERP、设备或文件/PostgreSQL 进程重启已经验证。`make e2e SPEC=object-protocols` 从原对象编辑器配置协议，检查普通字段编辑保留声明，再保存候选、激活、调用并重开固定合同。
+
+### 业务事务（ADR-0039）
 
 `make test-go PKG=. RUN=TestBusinessTxn` 在原单据场景验证构建器定义、发布、一次接受与重开恢复：头、两行、输入主体、余额、状态与命名序列同批，出站、账簿和任务意图一起保存；初始快照与前序结果查询分别得到声明的值，十进制过账保持精度。步骤/授权/追加失败不改变业务状态；接受和拒绝均按原键重试，异内容冲突；实际子进程在 fsync 后、应用前退出，文件日志重开后结果与记录字节一致，不重新执行规则或外部请求。旧编号迁移只在首次取号时读取已有最大号码，拒绝不占号。用 `GOFLAGS=-v` 查看结果占用与超限拒绝数字；没有配置数据库也会运行真实文件日志。编译反例用 `make test-go PKG=./apps/build RUN=TestBusinessTxnPublicationBoundaries`。
 
 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=business-transaction` 走 Action types 的类型化步骤编辑、保存候选、激活、操作员填写输入、审批放行，再检查编号、状态、余额、显式外部请求和收件箱任务。查看桌面与窄屏截图；本地 HTTP 接收方不代表真实外部系统交付。手工还可留空必填字段或撤去行 create 角色，确认头/行、输入消费标志与编号不变；同键改内容应冲突。
 
-### 业务规则语言（ADR-0101）
+### 业务规则语言（ADR-0040）
 
 `make test-go PKG='./internal/rules ./apps/build ./platform .'` 核对统一语义、类型/路径/集合反例、权限范围、接受前回滚、旧语法保存迁移与历史恢复；`@platform/app` 单元测试使用同一 Go/Wasm 模块和 Go 共享向量。`make e2e SPEC=rule-language` 走已发布 Expr 控制页面可见性的浏览器路线。Web 开发/生产构建自动生成受信规则模块，不提交 wasm 或 Go 运行时生成物。
 
-手测：同一 Expr 放入动作条件、布尔计算字段、表格条件和页面 Rule；切换输入确认四处一致。将 required 数值留空、除数置零、撤去来源字段读取权限，确认可读原因与整批拒绝；对部分查询窗口聚合应拒绝。保存旧条件/公式/单元格/算子图后检查对应 Expr 字段，核对旧 Published 字符串未改变；调用旧不可变公式仍保持旧缺值/除零行为，新发布明确拒绝。规则编辑控件与复杂树 API 分工见 ADR-0101 As built。
+手测：同一 Expr 放入动作条件、布尔计算字段、表格条件和页面 Rule；切换输入确认四处一致。将 required 数值留空、除数置零、撤去来源字段读取权限，确认可读原因与整批拒绝；对部分查询窗口聚合应拒绝。保存旧条件/公式/单元格/算子图后检查对应 Expr 字段，核对旧 Published 字符串未改变；调用旧不可变公式仍保持旧缺值/除零行为，新发布明确拒绝。规则编辑控件与复杂树 API 分工见 ADR-0040 As built。
 
-### 业务版本与时间（ADR-0103）
+### 业务版本与时间（ADR-0042）
 
 `make test-go PKG='./platform ./apps/build ./apps/enterprise .'` 检查版本声明、唯一键、on_create / on_state 固定、固定后引用/主数据/工序集合修改拒绝、有效期倒置及失效新引用拒绝。`TestBusinessVersionsPinTimeAndPureRecovery` 在真实文件日志关闭重开后恢复保存结果并比较记录字节；`TestPinnedBusinessVersionPreservesSourceReadPermissions` 核对来源版本字段权限撤回后复制字段和收据均被遮蔽；`TestBusinessEffectiveTimeBoundaries` 核对半开日期边界及含时区时间点。
 
@@ -120,7 +132,7 @@
 
 手测：把业务版本与记录 rev、定义发布版本分别核对；用有效期字段关闭旧版，确认默认列表只含当前有效版本，显式 `businessTime.at` 可看当时集合，`businessTime.all` 可读被授权的保留版本。已固定单据继续读原记录，新单据选失效版本应明确拒绝；创建另一版及其工序，不改变旧单据集合。来源权限撤回后，旧复制版本和固定标注也不得泄漏。
 
-### 记录集与关联（ADR-0104）
+### 记录集与关联（ADR-0043）
 
 `make test-go PKG='./internal/rules ./platform ./apps/build ./apps/relations .'` 检查来源/排序/路径和步骤边界、当前草稿绑定、条件/计算/约束一致、封存后改行拒绝、有序 ForEach 分组及格式 5 保存结果重放；关系与记录共同接受、父/子基数和 Required 最终检查、归档、解除最后父关系拒绝、修改引用后两端 inverse 更新、旧关系迁移失败无残留、原 owner-state 字节保持与当前唯一读取。`TestAggregateUsesTheExactRuleFold` 核对 HTTP / Expr 聚合精度一致；`TestDeclaredAggregateAndTenThousandRuleMembers` 核对同集合聚合、10000 元素及 10001 拒绝；`TestDeclaredSetVisibility` 核对 HTTP 聚合可见 count 和 partial，`TestSameAuthorityAdHocRelationshipIsFrozen` 守旧写入冻结。
 
@@ -128,7 +140,7 @@
 
 手测：选择固定版本的查询/关系或 inverse，配置 Where / Order、英中约束原因和事务；撤去某行/字段权限，核对 partial、量词和整批拒绝。关系启用 Parent relationship required，确认孤立子记录创建和解除最后父关系被拒绝，同批创建并建立关系可以接受。历史关系先预览再迁移，核对原始历史可读且当前没有重复边；新关系和迁移共用所属宿主。客户数据未执行显式迁移时不得报告已迁移，截图不代替负责人体验认可。
 
-### 业务约束（ADR-0102）
+### 业务约束（ADR-0041）
 
 `make test-go PKG='./internal/rules ./apps/build ./platform .'` 检查四种不变式在标准动作、事务、CSV 预览/导入、受权 agent 动作与协议写入的相同拒绝；事务合计/引用基数、并发唯一、历史锁定与收紧后恢复、关联来源权限、发布/冻结反例。模式匹配与主语言共用 Go/Wasm 向量。`make e2e SPEC=rule-language` 同时覆盖对象约束配置 → 冻结候选 → 激活 → 普通成员重复值拒绝/保留草稿 → 更正成功。
 
@@ -148,26 +160,26 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 | 任务 | 操作与预期 | 剩余待验范围 |
 |---|---|---|
 | 构建与交付 | 构建者在工坊选择对象、编辑字段/状态/权限；组合页面和流程，保存固定计划，测试后审查并保存候选；沿发布/激活路径交付，操作员完成记录动作或收件箱任务 | 固定计划与线性自动化流程完整交付。 |
-| AI 在应用中的装配（ADR-0116） | 配置字段上下文、类型化提议、采纳事务与原审批角色；运行建议，核对业务字节/编号不变；修改值申请审批，由指定角色放行，核对原申请人、修改证据、生成字段来源和 work 任务关闭。撤销来源读取后核对派生遮蔽；隔离试跑拒绝采纳。应用面查看用量/费用，函数及智能体候选无评测/失败时不能激活，模型配置变化后重新评测；目标环境晋级也检查门禁。宿主用 `make test-go PKG=. RUN='TestApplicationProposalAdoption\|TestApplicationAgentCandidateEvaluationGate\|TestApplicationArtifactAgentDeliveryAndRuntime'`，浏览器用 `make e2e SPEC=proposal-adoption`。 | 合成模型不代表真实模型质量；真实业务的裁决角色、阈值、预算和负责人操作体验须以实际配置验收。 |
-| 专业组件配置（ADR-0110） | 在 Data 配置同一图的节点、层级、边、叠加和同一矩阵的两轴/表达式；用工艺路线与非 MES 模型分别保存/激活；工作站选择原规则给出的资源并提交类型化输入；核对窄视口表格、选择与打开详情 | 两个不同人员独立配置；负责人以真实 MES 数据逐项核对原 RoutingFlow 的信息内容与可用性。当前自动样例不替代这两项。 |
+| AI 在应用中的装配（ADR-0054） | 配置字段上下文、类型化提议、采纳事务与原审批角色；运行建议，核对业务字节/编号不变；修改值申请审批，由指定角色放行，核对原申请人、修改证据、生成字段来源和 work 任务关闭。撤销来源读取后核对派生遮蔽；隔离试跑拒绝采纳。应用面查看用量/费用，函数及智能体候选无评测/失败时不能激活，模型配置变化后重新评测；目标环境晋级也检查门禁。宿主用 `make test-go PKG=. RUN='TestApplicationProposalAdoption\|TestApplicationAgentCandidateEvaluationGate\|TestApplicationArtifactAgentDeliveryAndRuntime'`，浏览器用 `make e2e SPEC=proposal-adoption`。 | 合成模型不代表真实模型质量；真实业务的裁决角色、阈值、预算和负责人操作体验须以实际配置验收。 |
+| 专业组件配置（ADR-0049） | 在 Data 配置同一图的节点、层级、边、叠加和同一矩阵的两轴/表达式；用工艺路线与非 MES 模型分别保存/激活；工作站选择原规则给出的资源并提交类型化输入；核对窄视口表格、选择与打开详情 | 两个不同人员独立配置；负责人以真实 MES 数据逐项核对原 RoutingFlow 的信息内容与可用性。当前自动样例不替代这两项。 |
 | 酒店销售 | 建客户/商机，预留住宿或团队房间，确认与拒绝原因可理解；无外部提供方时走人工答复 | 人工答复流程。 |
 | 制造与 ERP | 生产订单下达、SFC 流转/不合格处置、跨应用确认；ERP 凭证平衡/连续编号、采购审批及收货记账 | 生产订单/SFC/采购完整业务路线。 |
 | 人工协同 | 请假提交、审批、驳回/再提交和代办，申请人与审批人看到正确状态；私有字段只对授权角色可见 | 代办与私有字段权限隔离。 |
 | AI 与知识 | 配置启用模型，运行建议/智能体，查看依据、回答、拒绝、用量与待人工确认事项；检索与引文遵守当前来源权限 | 真实模型质量、引用权限、人工确认事项。 |
-| 企业模型（ADR-0067/0084/0085） | 控制面板 → Enterprise：添加元素、UAF 网格、模式嫁接；选择节点和连线，检查底部操作条、改接、隐藏与按日期结束；新建视图、空视图、改名、另存和删除只改本图；两个视图分别拖动后切换回来，草稿仍在；节点 A 输入未保存名字后选 B，不得串写；切换 UAF 视角应改变默认范围，跨域元素明确加入上下文；树/表/时间轴共用范围，日期与关系结构随本图保存；项目/里程碑编辑日期和关联资源；新增岗位并任职，Members 加入账号；业务表单引用有效元素，关闭后旧引用仍能辨认 | 左右/上下排布连线使用相向端口，拖端点原子改接，失败时原关系仍有效；隐藏与结束的区别、岗位/人员/账号完整路径、历史引用及 Used by 的嵌套、翻页与权限；钉到画布的记录可打开，不能作为关系端点。构建/类型、宿主视图身份与原子关系回放、ERP 记账嵌套引用分别核对；体验以实际浏览器观察为准。 |
-| MES 工艺场景（ADR-0088） | 工艺页：选一条工艺路线，看它按工作中心分泳道画出来，每道工序读得到要求的能力、要保持的工艺参数与算出来的可用设备；下达对话框说明批次将固定到哪个路线版本。SFC 详情：批次在自己下达时的路线版本上按工序号前进，开工下拉只列出该工序的可用设备（装配工序要求 torque，ASM-2 在同一工作中心却选不到），参数面板按 setpoint/range/limit/note 读，返工是从"已到达的工序"里选而不是输下标 | 批次是否固定在下达时的路线版本（RT-200 v1 与 v2 在第 20 道工序分别是装配与去毛刺）；`capable` 是否由能力匹配算出而非工作中心成员列表；`start` 是否按同一条规则拒绝 ASM-2；返工是否拒绝未声明的工序号与超前的工序号。Go 侧三个新测试 + `TestChinese` 已核对；**泳道化的路线图与参数面板的外观未在浏览器观察**。 |
-| 画布两族（ADR-0086 / ADR-0087） | 流程侧：Logic Studio 编写（从能力库拖入、类型化端口连线、连线上插入一步、删除/复制、undo/redo、自动排布、位置随草稿保存）、声明泳道并按泳道排布、把一步拖进另一条泳道即交接、运行叠加与执行历史；只读步骤路径：审批链、Agent 运行、SFC 工艺路线、发布试跑的流程轨迹。关系侧：企业画布（行为不变）、对象关系图、资产血缘、链路图、记录邻域、集成血缘（对象 Data 页与数据集 Lineage，从连接/数据源/管道/回写推导成一张图）、管道步骤编辑（`FlowCanvas`：从组件库拖一步、在箭头上插入、选中步编辑字段、按 `rows` 端口限制连线） | BPMN 记号读不读得通（网关是菱形、事件是圆环、重复步骤带 ↻、超时与错误路径挂在步骤边框上）；泳道带子是否合身、竖排标题是否读得通、泳道内并行分支是否压到邻居泳道、`checkFlow` 是否拒绝未声明的泳道；五个搬家站点与集成血缘的排布、单击选中/双击打开行为；管道画布插入一步后序号与字段编辑器是否对得上；`compact` 形状视图与带端口编写视图的取舍；节点超过 12 个时迷你地图出现。构建/类型、目录检查与 i18n 扫描已核对；**外观与拖动未在浏览器观察**，需一次真实走查。 |
-| 节点体系（ADR-0089） | 任一站点的调色板：同一次拖入里看到代码、文档、函数与默认节点各自一类图标与分组；从代码节点的输出端口拖一条数据边到函数节点的 json 输入被接受，拖到另一个只收 `flow` 的输入被拒绝并给出口径；拖入一条类型对不上的边被当场拒绝；Logic Studio 的能力块与同名原生块（`compute`/`ai`/`ask`）在画布、检视器与结构树里三处同一图标 | 类别表加一行是否就出现新节点而无需改渲染器；`flowPortAccepts` 加一行是否让新兼容规则在调色板、拖拽与自动绑定三处同时生效；`checkFlowEdges` 能否报告一张存下来的图里已经对不上的绑定。`model.test.ts` 7 例与七包 `tsc` 已核对；**图标与分组的实际观感未在浏览器观察**。 |
-| 关系类别与节点外观（ADR-0090） | 企业画布：换租户 profile 后 stereotype 图标跟着宿主数据变（不再硬编码）；kind（部门/班组/房间…）仍各有专属图标；对象血缘、工作区血缘、模型关系图、Agent 链路图四处的节点图标与色调是否来自同一张类别表；节点自带 icon/tone/caption 覆盖类别；流程侧按 kind 声明的 `size`/`collapsed` 在画布上生效（拖入一个声明大尺寸的块、一个默认折叠的块） | 类别表加一行是否四个站点同时出现新图标；UAF 的 `book`/`user` 与 kinds 的 `landmark`/`crown`/`door`/`scale` 图标是否解析；workspace 血缘的 `object` 保留 warning 覆盖。`layered.test.ts`/`model.test.ts` 新用例与五包 `tsc`、目录检查、i18n 扫描已核对；**未在浏览器观察**。 |
-| 关系图整洁树与流程 ELK 排布（ADR-0095，取代 ADR-0091） | 企业图切换四个方向/放射/距离平衡/紧凑排列：上级在上、无重叠、线连在边中点不穿节点；拖动后线即时跟随、不回弹，保存/重开保留位置；Flow 多端口与 MES 泳道重排 | `relation/tree.test.ts` 核对层级、整洁树与避障路由；Flow owner 测试核对尺寸、方向、确定性、跨泳道端口和正交路径；企业图已在浏览器观察，外观由负责人验收。Flow 固定手动位置的避障路由未接入。 |
-| 读者排布与单一布局脑（ADR-0092） | 任一站点（企业只读画布、工作区血缘、运行图、函数地图、对象流程、管道、mes 路由、审批流、Agent 步骤图）：读者把节点拖到自己的位置，刷新后还在；读者点自动排布（或 view 模式的 Tidy）后自己的旧排布被新排布替换；作者（admin/编辑模式）的排布与服务端持久化不受读者拖动影响——企业画布读者的拖动只写本机；运行图与对象流程里声明 `kind.size` 的块按声明的尺寸排（与画布 Tidy 同宽同高）；审批流的 `data-object` 步骤显示 document 图标、`service-task` 显示 action 图标（render 时 notation 参与图标判定） | 种子→拖动→刷新→仍在→Tidy 替换 的完整链路；60 键上限的过期只发生在最旧图纸；同一张图两次 Tidy 结果一致（arrangeFlow 确定性）。`store.test.ts` 3 例、`arrange.test.ts` 3 例、`FlowSteps.test.ts` 2 例、FlowCanvas 集成例与 15 包 `tsc`、目录检查（api +`arrangeFlow`）已核对；**未在浏览器观察**。 |
-| 五视图画布与 IA（ADR-0093） | 企业页：左栏三 Tab（视角/样板/清单）；视角 Tab 里五个 ARIS 视图按钮（组织与场所/信息/能力与目标/交付/运行）带问题句与元素计数，点按切换画布起点；已存画图列表行尾显示可读视角标题（不再有 St-Sr 式格号）；顶栏视角下拉同源；Add 降为画布左上浮层（拖入或点击即建）；控制视图能同时看到过程/项目/规则与贴着它们的组织，组织与场所视图有场地层级（车间/产线/库房/仓位/设备），信息视图能新建 InformationElement；同一模型切五个视角数据零复制（元素数之和=按类去重后的模型规模） | 旧存档画图缺 viewpoint 字段时回落首视角不报错；视角切换后作者显式添加的元素仍在 context；view.save 拒绝未知视角 id（服务端口径）；注册表 Disclosure 里 offered/loadable 检索仍可用。`TestViews`（五视图、档案 18 项全覆盖、派生关系不出词汇表）与 `go build ./...`、17 包 `tsc`、api-types 重生成、i18n 孤儿清扫（platform −12 / server −2+1）已核对；**未在浏览器观察**。 |
-| 标准接口与生成式 SDK（ADR-0094） | 三类契约 + MES 首个消费者：`GET /v1/enterprise-query` 按 stereotype/kind/q/alive/limit 过滤（alive 缺省当天、`all` 含已关闭与未来），`/v1/enterprise-resolve` 按 id 解析（已关闭元素带 closed 标注、未知 id 跳过、≤100）；动作表单的 ElementPicker 改走 query+resolve，不再全量拉 `/v1/enterprise`，既存关闭值仍显示并标注；`go run ./cmd/api-types` 同时生成 host.ts 与 enterprise-sdk.ts（stereotype/viewpoint 联合、13 个写动作的载荷类型、`enterpriseWrite`/`queryElements`/`resolveElements`），`TestAPIContract` 把两份文件都钉成 staleness；MES 发布工单对话框新增「Place in the model」下拉，选项来自 `queryElements([ActualLocation, ActualOrganization])`，place 经内核引用校验落 `Order` 记录、反向读（enterprise-references）可见 | 未知 place 被 `checked` 拒绝（INVALID_ARGUMENT）、ghost 进不了工厂规则；`TestQuery`/`TestResolve`/`TestSDK`/`TestEnterpriseQueryHTTP`、mes `TestReleasePlacesOrderInModel`、`TestChinese`（zh-CN 新增 5 键）与全量 mes 套件、gofmt/vet、目录重生成（catalog 139+1 动作改载荷）已核对；**未在浏览器观察**。 |
-| 语言与清单（ADR-0083） | 语言与用词：英文原名补中文、中文原名补英文、清空译文恢复原名；切换语言验证发布声明；检查能力矩阵、对象/动作分组与树/表切换、术语及血缘边界说明 | 实际租户译文与清单交互；不将声明血缘当作记录级流向。 |
-| 共享图标（ADR-0084） | 应用与模块设置打开共享选择器，中文搜索、选择和清空；导航与启动器显示一致；历史别名仍可显示；不设图标的应用仍可发布 | 图标弹层布局、搜索/清空和保存后的显示一致性。 |
-| 集成织物 Ⅰ-A/B（ADR-0070） | 新建 http/OData/postgres 连接 Check 就绪；Data source 选连接并配置过滤/增量列；Publish/Pull now 增量拉取与游标重置；恶意过滤拦截 | CSV/PostgreSQL 数据源配置及恶意过滤拦截。 |
-| 集成织物 Ⅰ-C/D（ADR-0071） | 新建数据集；Data source 指向它并拉取生成 v1/Schema 推断；管道加清洗步骤与期望，输出另一数据集或对象；新版本自动触发重跑 | 更广转换步骤与输出对象去重验证。 |
-| 集成织物 Ⅰ-E（ADR-0072） | 新建回写；对象页新建记录触发端点效果，回填 docno；不可达时排队并恢复重试；对象 Data 页下钻血缘链 | 从对象字段逐级下钻至管道、数据集、数据源、连接的深链。 |
+| 企业模型（ADR-0022、ADR-0031） | 控制面板 → Enterprise：添加元素、UAF 网格、模式嫁接；选择节点和连线，检查底部操作条、改接、隐藏与按日期结束；新建视图、空视图、改名、另存和删除只改本图；两个视图分别拖动后切换回来，草稿仍在；节点 A 输入未保存名字后选 B，不得串写；切换 UAF 视角应改变默认范围，跨域元素明确加入上下文；树/表/时间轴共用范围，日期与关系结构随本图保存；项目/里程碑编辑日期和关联资源；新增岗位并任职，Members 加入账号；业务表单引用有效元素，关闭后旧引用仍能辨认 | 左右/上下排布连线使用相向端口，拖端点原子改接，失败时原关系仍有效；隐藏与结束的区别、岗位/人员/账号完整路径、历史引用及 Used by 的嵌套、翻页与权限；钉到画布的记录可打开，不能作为关系端点。构建/类型、宿主视图身份与原子关系回放、ERP 记账嵌套引用分别核对；体验以实际浏览器观察为准。 |
+| MES 工艺场景（ADR-0032） | 工艺页：选一条工艺路线，看它按工作中心分泳道画出来，每道工序读得到要求的能力、要保持的工艺参数与算出来的可用设备；下达对话框说明批次将固定到哪个路线版本。SFC 详情：批次在自己下达时的路线版本上按工序号前进，开工下拉只列出该工序的可用设备（装配工序要求 torque，ASM-2 在同一工作中心却选不到），参数面板按 setpoint/range/limit/note 读，返工是从"已到达的工序"里选而不是输下标 | 批次是否固定在下达时的路线版本（RT-200 v1 与 v2 在第 20 道工序分别是装配与去毛刺）；`capable` 是否由能力匹配算出而非工作中心成员列表；`start` 是否按同一条规则拒绝 ASM-2；返工是否拒绝未声明的工序号与超前的工序号。Go 侧三个新测试 + `TestChinese` 已核对；**泳道化的路线图与参数面板的外观未在浏览器观察**。 |
+| 画布两族（ADR-0033） | 流程侧：Logic Studio 编写（从能力库拖入、类型化端口连线、连线上插入一步、删除/复制、undo/redo、自动排布、位置随草稿保存）、声明泳道并按泳道排布、把一步拖进另一条泳道即交接、运行叠加与执行历史；只读步骤路径：审批链、Agent 运行、SFC 工艺路线、发布试跑的流程轨迹。关系侧：企业画布（行为不变）、对象关系图、资产血缘、链路图、记录邻域、集成血缘（对象 Data 页与数据集 Lineage，从连接/数据源/管道/回写推导成一张图）、管道步骤编辑（`FlowCanvas`：从组件库拖一步、在箭头上插入、选中步编辑字段、按 `rows` 端口限制连线） | BPMN 记号读不读得通（网关是菱形、事件是圆环、重复步骤带 ↻、超时与错误路径挂在步骤边框上）；泳道带子是否合身、竖排标题是否读得通、泳道内并行分支是否压到邻居泳道、`checkFlow` 是否拒绝未声明的泳道；五个搬家站点与集成血缘的排布、单击选中/双击打开行为；管道画布插入一步后序号与字段编辑器是否对得上；`compact` 形状视图与带端口编写视图的取舍；节点超过 12 个时迷你地图出现。构建/类型、目录检查与 i18n 扫描已核对；**外观与拖动未在浏览器观察**，需一次真实走查。 |
+| 节点体系（ADR-0033） | 任一站点的调色板：同一次拖入里看到代码、文档、函数与默认节点各自一类图标与分组；从代码节点的输出端口拖一条数据边到函数节点的 json 输入被接受，拖到另一个只收 `flow` 的输入被拒绝并给出口径；拖入一条类型对不上的边被当场拒绝；Logic Studio 的能力块与同名原生块（`compute`/`ai`/`ask`）在画布、检视器与结构树里三处同一图标 | 类别表加一行是否就出现新节点而无需改渲染器；`flowPortAccepts` 加一行是否让新兼容规则在调色板、拖拽与自动绑定三处同时生效；`checkFlowEdges` 能否报告一张存下来的图里已经对不上的绑定。`model.test.ts` 7 例与七包 `tsc` 已核对；**图标与分组的实际观感未在浏览器观察**。 |
+| 关系类别与节点外观（ADR-0033） | 企业画布：换租户 profile 后 stereotype 图标跟着宿主数据变（不再硬编码）；kind（部门/班组/房间…）仍各有专属图标；对象血缘、工作区血缘、模型关系图、Agent 链路图四处的节点图标与色调是否来自同一张类别表；节点自带 icon/tone/caption 覆盖类别；流程侧按 kind 声明的 `size`/`collapsed` 在画布上生效（拖入一个声明大尺寸的块、一个默认折叠的块） | 类别表加一行是否四个站点同时出现新图标；UAF 的 `book`/`user` 与 kinds 的 `landmark`/`crown`/`door`/`scale` 图标是否解析；workspace 血缘的 `object` 保留 warning 覆盖。`layered.test.ts`/`model.test.ts` 新用例与五包 `tsc`、目录检查、i18n 扫描已核对；**未在浏览器观察**。 |
+| 关系图整洁树与流程 ELK 排布（ADR-0035，取代 ADR-0035） | 企业图切换四个方向/放射/距离平衡/紧凑排列：上级在上、无重叠、线连在边中点不穿节点；拖动后线即时跟随、不回弹，保存/重开保留位置；Flow 多端口与 MES 泳道重排 | `relation/tree.test.ts` 核对层级、整洁树与避障路由；Flow owner 测试核对尺寸、方向、确定性、跨泳道端口和正交路径；企业图已在浏览器观察，外观由负责人验收。Flow 固定手动位置的避障路由未接入。 |
+| 读者排布与单一布局脑（ADR-0035） | 任一站点（企业只读画布、工作区血缘、运行图、函数地图、对象流程、管道、mes 路由、审批流、Agent 步骤图）：读者把节点拖到自己的位置，刷新后还在；读者点自动排布（或 view 模式的 Tidy）后自己的旧排布被新排布替换；作者（admin/编辑模式）的排布与服务端持久化不受读者拖动影响——企业画布读者的拖动只写本机；运行图与对象流程里声明 `kind.size` 的块按声明的尺寸排（与画布 Tidy 同宽同高）；审批流的 `data-object` 步骤显示 document 图标、`service-task` 显示 action 图标（render 时 notation 参与图标判定） | 种子→拖动→刷新→仍在→Tidy 替换 的完整链路；60 键上限的过期只发生在最旧图纸；同一张图两次 Tidy 结果一致（arrangeFlow 确定性）。`store.test.ts` 3 例、`arrange.test.ts` 3 例、`FlowSteps.test.ts` 2 例、FlowCanvas 集成例与 15 包 `tsc`、目录检查（api +`arrangeFlow`）已核对；**未在浏览器观察**。 |
+| 五视图画布与 IA（ADR-0031） | 企业页：左栏三 Tab（视角/样板/清单）；视角 Tab 里五个 ARIS 视图按钮（组织与场所/信息/能力与目标/交付/运行）带问题句与元素计数，点按切换画布起点；已存画图列表行尾显示可读视角标题（不再有 St-Sr 式格号）；顶栏视角下拉同源；Add 降为画布左上浮层（拖入或点击即建）；控制视图能同时看到过程/项目/规则与贴着它们的组织，组织与场所视图有场地层级（车间/产线/库房/仓位/设备），信息视图能新建 InformationElement；同一模型切五个视角数据零复制（元素数之和=按类去重后的模型规模） | 旧存档画图缺 viewpoint 字段时回落首视角不报错；视角切换后作者显式添加的元素仍在 context；view.save 拒绝未知视角 id（服务端口径）；注册表 Disclosure 里 offered/loadable 检索仍可用。`TestViews`（五视图、档案 18 项全覆盖、派生关系不出词汇表）与 `go build ./...`、17 包 `tsc`、api-types 重生成、i18n 孤儿清扫（platform −12 / server −2+1）已核对；**未在浏览器观察**。 |
+| 标准接口与生成式 SDK（ADR-0034） | 三类契约 + MES 首个消费者：`GET /v1/enterprise-query` 按 stereotype/kind/q/alive/limit 过滤（alive 缺省当天、`all` 含已关闭与未来），`/v1/enterprise-resolve` 按 id 解析（已关闭元素带 closed 标注、未知 id 跳过、≤100）；动作表单的 ElementPicker 改走 query+resolve，不再全量拉 `/v1/enterprise`，既存关闭值仍显示并标注；`go run ./cmd/api-types` 同时生成 host.ts 与 enterprise-sdk.ts（stereotype/viewpoint 联合、13 个写动作的载荷类型、`enterpriseWrite`/`queryElements`/`resolveElements`），`TestAPIContract` 把两份文件都钉成 staleness；MES 发布工单对话框新增「Place in the model」下拉，选项来自 `queryElements([ActualLocation, ActualOrganization])`，place 经内核引用校验落 `Order` 记录、反向读（enterprise-references）可见 | 未知 place 被 `checked` 拒绝（INVALID_ARGUMENT）、ghost 进不了工厂规则；`TestQuery`/`TestResolve`/`TestSDK`/`TestEnterpriseQueryHTTP`、mes `TestReleasePlacesOrderInModel`、`TestChinese`（zh-CN 新增 5 键）与全量 mes 套件、gofmt/vet、目录重生成（catalog 139+1 动作改载荷）已核对；**未在浏览器观察**。 |
+| 语言与清单（ADR-0005） | 语言与用词：英文原名补中文、中文原名补英文、清空译文恢复原名；切换语言验证发布声明；检查能力矩阵、对象/动作分组与树/表切换、术语及血缘边界说明 | 实际租户译文与清单交互；不将声明血缘当作记录级流向。 |
+| 共享图标（ADR-0031） | 应用与模块设置打开共享选择器，中文搜索、选择和清空；导航与启动器显示一致；历史别名仍可显示；不设图标的应用仍可发布 | 图标弹层布局、搜索/清空和保存后的显示一致性。 |
+| 集成织物 Ⅰ-A/B（ADR-0023） | 新建 http/OData/postgres 连接 Check 就绪；Data source 选连接并配置过滤/增量列；Publish/Pull now 增量拉取与游标重置；恶意过滤拦截 | CSV/PostgreSQL 数据源配置及恶意过滤拦截。 |
+| 集成织物 Ⅰ-C/D（ADR-0024） | 新建数据集；Data source 指向它并拉取生成 v1/Schema 推断；管道加清洗步骤与期望，输出另一数据集或对象；新版本自动触发重跑 | 更广转换步骤与输出对象去重验证。 |
+| 集成织物 Ⅰ-E（ADR-0024） | 新建回写；对象页新建记录触发端点效果，回填 docno；不可达时排队并恢复重试；对象 Data 页下钻血缘链 | 从对象字段逐级下钻至管道、数据集、数据源、连接的深链。 |
 | 基座补课 0078-B（权限目录与多授予） | 成员添加多角色与昨天到期角色；撤销其一；Roles and permissions 查看应用动作矩阵；持双角色成员同时调用两个应用动作 | 多角色动作矩阵展示与跨应用多角色动作联合调用。 |
 | 基座补课 0078-C（授权引擎） | 给只读成员加可写角色，表单字段可编辑且记录可见范围取并集；Roles and permissions 解释器解释动作允许/拒绝理由 | 多角色字段/行范围合并生效。 |
 | 基座补课 0079-B（偏好生效） | 设置时区 Asia/Shanghai、免打扰 22:00–08:00、Opens on mes、外观 dark；北京时间过账单据日期为本地当天；免打扰期间通知 Due 为次日 08:00 | 本地日期过账与通知 Due 延后计算。 |
@@ -183,7 +195,7 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 记录暂存的隔离由 `TestRecordDraftIsolationAndPromotion` 核对不可变索引快照、无序批量映像与重复 ID 拒绝、嵌套丢弃、读取切片隔离、未修改记录共享、历史私有副本、投影时机与过期世代拒绝。`TestLinkTypeVersionsFreezeTraverseAndRecover` 核对引用桶的写入/回滚、无关写入不失效、关系最终校验、空引用和归档语义、整体类型替换的完整准入；`TestMigrationMapsRetainedFlowWrites` 核对单条旧版本读取不解码无关目标版记录、完整视图复用和无世代变化的映像失效。可用 `make test-go PKG='.' RUN='TestRecordDraftIsolationAndPromotion|TestLinkType|TestAccepted|TestStaged|TestMigration|TestRelease'` 集中检查。持久恢复沿原 `accepted_*`、快照和两行业重放验证；性能对比只作本地测量，不添加计时阈值或据此声明生产容量。
 
-对象/页面/应用/流程/代码候选支持冻结安装；AI 版本/评测仍归函数 owner。拒绝、追加失败及追加后应用前崩溃保留旧运行或恢复已接受结果；迁移、退役、在途版本与客户扩展的实施边界归 ADR-0106 As built；schema family 与两行业持久演练仍待交付。隔离编译/计算不等于候选数据的物理沙箱。
+对象/页面/应用/流程/代码候选支持冻结安装；AI 版本/评测仍归函数 owner。拒绝、追加失败及追加后应用前崩溃保留旧运行或恢复已接受结果；迁移、退役、在途版本与客户扩展的实施边界归 ADR-0045 As built；schema family 与两行业持久演练仍待交付。隔离编译/计算不等于候选数据的物理沙箱。
 
 阶段集成按 Platform §10.6 核对两行业完整旅程、权限、隔离、在途版本及恢复；真实模型质量使用实际任务和供应商评测，替身只证明协议和治理。无真实客户或生产数据时标为内部演练。当前能力边界查 ADR，本文不保存旧检查点的“当时尚未完成”清单。
 
@@ -193,7 +205,7 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 设置 `PLATFORM_TEST_DATABASE` 指向专用测试 PostgreSQL 后，根包 `TestPostgresTableProfilePullAndReplay` 检查真实只读表接入、数字增量游标和重放；`TestJournalWritebackCallbackAndReplay` 检查真实接受结果落盘及快照恢复；`TestJournalBooksFromBuilderActions` 检查账簿待过账恢复及冲销落盘后丢应答的重试；`TestJournalConcurrentOpen` 检查四个宿主同时初始化同一个测试库。测试地址不含密码，凭据仍通过受控密钥提供。
 
-### 应用设计台（ADR-0108）
+### 应用设计台（ADR-0047）
 
 `make e2e SPEC=workspaces` 同时检查文档/术语只保留一个声明创建入口、文档已接受但答复丢失后的同键确认不增加修订、术语无效引用拒绝后保留输入并可纠正；普通成员的目录与创建权限保持原样。原手写知识创建入口不再存在，检索与术语影响说明不改。
 
@@ -207,14 +219,14 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 工程验证：`make check`；`make test-go PKG='./platform ./apps/build'`；`make test-go PKG=. RUN='TestApplicationStudio|TestLanguages|TestAPIContract|TestJointDraft'`。分组测试核对非应用资产定义的完整字节、声明依赖、用户权限、应用候选分页以及日志重放/快照恢复。浏览器主线：`PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-studio`，在同一应用创建对象/状态动作、保留跨工作区草稿、装配页面、移动业务分组并联合发布；原 `workspaces` 和 `application-delivery` 检查导航与运行；`record-sets` 检查当前查询的 CSV 导出。`web/packages/kernel/src/live.test.ts` 检查资产较多的工作区按服务器条数和字节限制拆分实时订阅，不让一组过大的登记令所有读取失败。
 
-人工走查：由非平台开发者从一个业务意图开始，完成模型、行为、页面、验证与交付，再自由切换五个工作区，检查资产分组词汇、依赖入口、草稿恢复和窄屏操作。记录实际任务、断点与结论；尚未完成，ADR-0108 保持“体验待验收”。截图与自动发布路线不替代该走查。
+人工走查：由非平台开发者从一个业务意图开始，完成模型、行为、页面、验证与交付，再自由切换五个工作区，检查资产分组词汇、依赖入口、草稿恢复和窄屏操作。记录实际任务、断点与结论；尚未完成，ADR-0047 保持“体验待验收”。截图与自动发布路线不替代该走查。
 
 共享资源路线可单独运行 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=application-delivery E2E_ARGS='--grep "shared published"'`：显示并移除失效引用，再从正常添加入口引用已发布的动作、函数和流程，查看只读定义并发布应用；检查原定义不变、未给普通成员增加权限。`make test-go PKG=./platform RUN=TestApplicationMembershipRetainsForeignActionsWithoutInvokingThem` 区分结构成员与真正的跨应用调用，后者仍需原协议。
 
 发布后修改路线用同一 spec 的 `--grep "saved application changes"`：已发布对象和应用再保存修改，从项目进入 Changes、查看原值/草稿值、批量选择并沿原联合候选激活。`TestSavedDraftChangesRetainPublicationsAndIncludeApplication` 核对应用自身、保留字节、恢复原值后无差异及成员权限；`TestDraftComparisonUsesOriginalPortableOwners` 核对接入与告警原描述，`TestApprovalRequestsJoinSharedLiveReads` 确保新读取参与原实时更新而不使同组其他读取失败。不以此代替完整构建者走查。
 
 
-### 跨系统协同（ADR-0112）
+### 跨系统协同（ADR-0051）
 
 `make test-go PKG='. ./apps/build/... ./apps/work/... ./platform/...' RUN='TestBusinessConfirmation|TestConfirmation|TestAcceptedEffect|TestJournalAcceptedEffect|TestControl|TestAcceptedControl|TestJournalWriteback|TestWriteback|TestLanguages|TestTenantComposition'` 核对独立回执、部分策略、全部补偿、未知结果裁决/原键重试、源读取期间的过期证据拒绝、旧定义与协议、文件重开及接受结果恢复。配置真实 `PLATFORM_TEST_DATABASE` 时 DurableUnknownRecovery 同跑 PostgreSQL；它在持久追加后、内存应用前注入故障，关闭重开，不把内存回放算成持久恢复。
 
@@ -223,7 +235,7 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 手测：在业务记录的 Business confirmation progress 看等谁、等待时长、截止、拒绝原因、部分标记与差异。选择 hold / proceed-with-flag / reject 检查对应动作；选择 escalate 核对原收件箱与通知。对一方的 unknown 保存可读证据，撤去复核角色应拒绝；未知补偿不允许直接重试，被拒补偿可原键重试，确认补偿后原未知意图收敛。升级对象/回写后到达的原回执仍按原映像处理；缺原映射在 Integrations 的 Receipt refusal 明确显示。重启保留确认与差异，继续运行时接收方按原键幂等；未发生的现实故障与专有连接器仍须另验。
 
 
-### 设备派发与状态回读（ADR-0121）
+### 设备派发与状态回读（ADR-0059）
 
 `make test-go PKG='. ./apps/build/... ./platform/...' RUN='TestDeviceDispatch|TestDispatch|TestBusinessConfirmation|TestWriteback|TestAcceptedEffect|TestLanguages|TestAPIContract|TestTenantComposition'` 检查发布期拒绝不安全自动重试、稳定业务身份、发送与完成分开、三种回读及补偿证据区分、当前权限、人工裁定和恢复。发送前记录开始尝试，未被接受的开始不能发网络；文件日志关闭重开后，发送中断的非幂等指令不得被自动重发，效果控制台也不能绕过业务裁定。换环境时使用不同连接 ID 和地址，检查封存定义只保留逻辑名称，目标激活后向目标环境发送并回读。
 
@@ -231,13 +243,13 @@ PLATFORM_SCREENSHOTS=1 make e2e SPEC=page-notice
 
 手测：分别选择 Source、Observation 或受权记录读取状态；缺失、歧义和未映射状态保留 unknown，业务截止后卡住可见。配置手工/通知/安全重试/已声明反向指令，检查当前复核角色，撤去角色后拒绝裁定。改目标和重发必须说明原因；取消不等于设备停止。构建器与使用说明须明确安全联锁、急停及实时控制留在设备/网关/PLC。本地 HTTP 适配器验证不代表真实控制器、现场安全或客户上线已经验证。
 
-### 拒绝、异常与纠正（ADR-0117）
+### 拒绝、异常与纠正（ADR-0055）
 
 `make test-go PKG='. ./apps/build/... ./apps/work/... ./platform/...' RUN='TestBusinessRefusal|TestBusinessCorrection|TestAcceptedRefusal|TestBusinessTxn|TestLanguages|TestAPIContract'` 覆盖三级处置、无编号/无效果、目标权限/输入、原值关联、审批、同键和修改新键、保存点以及完整日志/快照回放。`TestBusinessRefusalPersistenceReopensWithoutExecutingRules` 在文件日志与配置的真实 `PLATFORM_TEST_DATABASE` 上运行追加后/应用前故障、关闭重开、原键答复与后继纠正；数据库未配置不得报为 PostgreSQL 通过。
 
 `PLATFORM_SCREENSHOTS=1 make e2e SPEC=business-refusal` 从原动作编辑器读取并修改稳定拒绝码，操作员 block 保留输入 → 原样重试同键 → 修改输入新键纠正 → 记录历史；另走 flag 的关联记录、route 的原分支回收与返工记录、应用运行面的码分布。桌面/窄屏截图靠实际查看，不写像素断言。
 
-动作提交合并（ADR-0124）：原 `workspaces` 检查生成表单答复丢失后同键确认、同目标修改的新键及纠正关联；`business-access` 检查更换 ID 和输入后仍可原样重试旧目标，当前草稿保留，新目标不关联旧纠正，以及编辑与主管审批；`routes` 的 route 17 检查声明参数未确认时同键重试；`proposal-adoption` 检查固定采纳参数与原审批。保留两种输入表单，不把输入控件相似当作语义等价。
+动作提交合并（ADR-0062）：原 `workspaces` 检查生成表单答复丢失后同键确认、同目标修改的新键及纠正关联；`business-access` 检查更换 ID 和输入后仍可原样重试旧目标，当前草稿保留，新目标不关联旧纠正，以及编辑与主管审批；`routes` 的 route 17 检查声明参数未确认时同键重试；`proposal-adoption` 检查固定采纳参数与原审批。保留两种输入表单，不把输入控件相似当作语义等价。
 
 手测：撤去目标动作/字段/派生来源权限后，不能由改路、审批或历史原值恢复越权数据。记录暂停后到期进入原工作收件箱，再通过普通业务动作留下裁决结果；重复拒绝按声明阈值升级，同键重试不能增加计数，工作完成后不能反复重开。AI 驳回更新提议状态和拒绝历史，不修改业务源；让步与返工保留申请/批准身份和原值。业务码由构建者定义，平台不能识别任意行业措辞是否被误放进约束，不能宣称静态推断出全部业务分类错误。
 

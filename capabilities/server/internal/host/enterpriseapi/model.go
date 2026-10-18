@@ -8,9 +8,9 @@ import (
 	"platformserver/platform"
 )
 
-// The tenant's enterprise model (ADR-0067 D3): elements and relationships
+// The tenant's enterprise model (ADR-0022 D3): elements and relationships
 // typed by UAF stereotypes, in valid time, plus the views drawn over them.
-// What ADR-0012 called units, structures, edges and memberships are the
+// What ADR-0022 called units, structures, edges and memberships are the
 // Personnel-domain corner of it: «ActualOrganization» elements, relationship
 // kinds, «ActualResourceRelationship» and «ActualOrganizationRole».
 
@@ -28,7 +28,7 @@ const (
 	Placement  = "ActualResourceRelationship" // unit under parent, in a kind
 	Membership = "ActualOrganizationRole"     // party (member:<id> or element id) in an organisation, with a role
 	FillsPost  = "FillsPost"                  // person holds post
-	Performs   = "IsCapableToPerform"         // the older pair for "has a capability"; UAF's own spelling is Exhibits (ADR-0085 D2)
+	Performs   = "IsCapableToPerform"         // the older pair for "has a capability"; UAF's own spelling is Exhibits (ADR-0031 D2)
 	Exhibits   = "Exhibits"                   // organisation/resource exhibits a Capability (UAF 1.3)
 	System     = "System"                     // a system the organisation runs (ERP, MES, WMS, PLM, CRM)
 	Owns       = "ResponsibleFor"             // organisation answers for resource/location/project
@@ -37,7 +37,7 @@ const (
 
 type Date = platform.Date
 
-// Kind is a way organisations relate (ADR-0012's Structure): legal,
+// Kind is a way organisations relate (ADR-0022's Structure): legal,
 // management, finance, site, project, governance, community, custom.
 type Kind struct {
 	ID     string `json:"id"`
@@ -60,7 +60,7 @@ type Element struct {
 	Closed     string         `json:"closed,omitempty"`
 	Calendar   string         `json:"calendar,omitempty"`
 	Owner      string         `json:"owner,omitempty"`     // "tenant:<id>" when federated in from another tenant (read-only here)
-	Published  bool           `json:"published,omitempty"` // shared with the tenants this one federates with (ADR-0067 D5)
+	Published  bool           `json:"published,omitempty"` // shared with the tenants this one federates with (ADR-0022 D5)
 	Properties map[string]any `json:"properties,omitempty"`
 }
 
@@ -80,11 +80,11 @@ type Relationship struct {
 	Until      Date    `json:"until,omitempty"`
 }
 
-// View is a drawing over the model: which elements, where, from which viewpoint (ADR-0093).
+// View is a drawing over the model: which elements, where, from which viewpoint (ADR-0031).
 type View struct {
 	ID        string                `json:"id"`
 	Name      string                `json:"name"`
-	Viewpoint string                `json:"viewpoint"` // "organization", "data", "function", "output", "control" (ADR-0093)
+	Viewpoint string                `json:"viewpoint"` // "organization", "data", "function", "output", "control" (ADR-0031)
 	Kind      string                `json:"kind,omitempty"`
 	Elements  []string              `json:"elements"`
 	Layout    map[string][2]float64 `json:"layout,omitempty"`
@@ -93,7 +93,7 @@ type View struct {
 	AsOf      Date                  `json:"asOf,omitempty"`
 }
 
-// Pin is a record drawn on a view beside the element it names (ADR-0085 D3):
+// Pin is a record drawn on a view beside the element it names (ADR-0031 D3):
 // the picture then holds the modules that work with the model, not only the
 // model. The ref is "record:<entity type>/<id>"; the anchor is the element it
 // points at. A pin is a mark on a drawing, not a fact about the model: nothing
@@ -246,7 +246,7 @@ func (m Model) Of(id, stereotype string, out bool, day Date) []string {
 	return found
 }
 
-// --- The ADR-0012 projection, kept as the seed format and the "organization" read. ---
+// --- The ADR-0022 projection, kept as the seed format and the "organization" read. ---
 
 // FromOrgSeed lifts units, structures, edges and memberships into the model.
 func FromOrgSeed(seed platform.OrgSeed) Model {
@@ -270,7 +270,7 @@ func FromOrgSeed(seed platform.OrgSeed) Model {
 	return m
 }
 
-// OrgSeed projects the Personnel corner back into ADR-0012's shape.
+// OrgSeed projects the Personnel corner back into ADR-0022's shape.
 func (m Model) OrgSeed() platform.OrgSeed {
 	out := platform.OrgSeed{Calendars: slices.Clone(m.Calendars), Structures: []platform.Structure{}, Units: []platform.Unit{}, Edges: []platform.Edge{}, Memberships: []platform.Membership{}}
 	for _, k := range m.Kinds {
@@ -310,7 +310,7 @@ func CutPrefix(s, p string) (string, bool) {
 	return s, false
 }
 
-// Slice is what one tenant publishes to another (ADR-0067 D5): the elements
+// Slice is what one tenant publishes to another (ADR-0022 D5): the elements
 // it marked published, with the relationships among them. The receiving
 // tenant imports it read-only, owned by "tenant:<id>", and may relate its own
 // elements to them (a subsidiary under the group, a shared capability).
@@ -367,7 +367,7 @@ func (m *Model) Import(s Slice) {
 	m.Relationships = append(rels, s.Relationships...)
 }
 
-// Sync (ADR-0073) lands what an external system holds about the enterprise -
+// Sync (ADR-0022) lands what an external system holds about the enterprise -
 // SAP HR/OM organisational units, AD departments, MES equipment - as a slice
 // this model owns on the system's behalf (Owner "source:<name>"). Unlike
 // Import it diffs instead of replacing: a new id is added from today, a known

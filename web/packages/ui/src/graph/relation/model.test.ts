@@ -1,4 +1,4 @@
-// Relation node classes (ADR-0090 D1): the class is a declaration of what a
+// Relation node classes (ADR-0033): the class is a declaration of what a
 // thing on a relationship drawing *is*; the table is the single place its glyph,
 // tone and caption word live, and a node's own words always win over it.
 import { describe, expect, it } from "vitest";

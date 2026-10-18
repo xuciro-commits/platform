@@ -22,7 +22,7 @@ func (r *tenantRegistry) list() []*Tenant {
 	return append([]*Tenant(nil), r.tenants...)
 }
 
-// add hosts a new tenant (ADR-0078 §2.2); ids are unique.
+// add hosts a new tenant (ADR-0027 §2.2); ids are unique.
 func (r *tenantRegistry) add(t *Tenant) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -1,7 +1,7 @@
 // Package uaf reads the OMG Unified Architecture Framework profile as OMG
 // publishes it (XMI) and answers what the enterprise model may contain: the
 // stereotypes, their domain and aspect in the UAF grid, their generalisations,
-// attributes and enumerations (ADR-0067 D1). The platform never writes its own
+// attributes and enumerations (ADR-0022 D1). The platform never writes its own
 // copy of the metamodel: a new UAF release is a new XMI beside the old one.
 package uaf
 

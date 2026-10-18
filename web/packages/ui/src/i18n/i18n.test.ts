@@ -14,7 +14,7 @@ test("English is the source and the fallback; placeholders take values", () => {
 });
 
 // Every text a package passes to t() has a Simplified Chinese translation in
-// that package's dictionary, or its declared dependencies' (ADR-0023 6a).
+// that package's dictionary, or its declared dependencies' (ADR-0005 6a).
 test("every translated text of every package reads in Chinese", () => {
   const web = join(__dirname, "../../../..");
   const { readDictionary } = createRequire(import.meta.url)(join(web, "../scripts/catalog-check.mjs")) as { readDictionary: (file: string, text: string) => Record<string, string> };

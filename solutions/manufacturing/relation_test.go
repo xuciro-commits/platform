@@ -15,7 +15,7 @@ import (
 )
 
 // A shop order lists its released SFCs under the declared inverse relation "sfcs"
-// (ADR-0040 21b D1). A member with no MES role cannot read the order.
+// (ADR-0047 21b D1). A member with no MES role cannot read the order.
 func TestNamedRelationOnShopOrder(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	seatSup := Seat("sup", "sup-1", map[string]string{mes.ID: string(mes.Supervisor), erp.ID: erp.Controller, platformserver.PlatformApp: platformserver.Admin}, "plant-sz")
@@ -68,7 +68,7 @@ func TestNamedRelationOnShopOrder(t *testing.T) {
 // A builder object "inspection" refers to mes.order, and "finding" refers to
 // "inspection". Taking the inspection's "fail" action as an operator creates a
 // finding with its reference set under the same change, verified by CheckReplay
-// (ADR-0040 21c D2).
+// (ADR-0047 21c D2).
 func TestInspectionActionCreatesFinding(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	seatSup := Seat("sup", "sup-1", map[string]string{

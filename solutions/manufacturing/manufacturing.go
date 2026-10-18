@@ -1,4 +1,4 @@
-// Package manufacturing is a plant's software as a solution (ADR-0024, ADR-0025): the
+// Package manufacturing is a plant's software as a solution (ADR-0026、ADR-0016): the
 // platform's directory, organisation, AI, work, flows, agents and knowledge,
 // the MES, and its books — the ERP app, or the adapter to an ERP outside —
 // composed without a bridge. The books provide production.orders/1 and the MES
@@ -40,7 +40,7 @@ func NewTenant(id string, books platform.App, seats ...platformserver.Seat) (*pl
 	return t, err
 }
 
-// Seat signs in as subject with roles by app, and belongs to units of the site structure (ADR-0012).
+// Seat signs in as subject with roles by app, and belongs to units of the site structure (ADR-0022).
 func Seat(subject, id string, roles map[string]string, units ...string) platformserver.Seat {
 	s := platformserver.Seat{Subjects: []string{subject}, Member: platform.Member{ID: id, Roles: roles}}
 	for _, u := range units {

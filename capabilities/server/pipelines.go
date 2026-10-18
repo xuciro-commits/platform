@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// Pipeline runs (ADR-0071). A run reads the input dataset's latest version,
+// Pipeline runs (ADR-0024). A run reads the input dataset's latest version,
 // executes the declared steps in memory, quarantines rows that fail the
 // expectations, and writes the rest: as the output dataset's next version, or
 // as the output object's own create/edit per row keyed by content. Every write
@@ -139,7 +139,7 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 
 const pipelineQuarantineKept = 50
 
-// unguarded are the object's fields every role reads, when marking forbids pouring into them (ADR-0075).
+// unguarded are the object's fields every role reads, when marking forbids pouring into them (ADR-0025).
 func (t *Tenant) unguarded(object, marking string) []string {
 	if !build.Guarded(marking) {
 		return nil

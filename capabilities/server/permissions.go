@@ -12,7 +12,7 @@ import (
 	"platformserver/platform/authz"
 )
 
-// Permission catalog (ADR-0078 §3.2): what each role in each app may do,
+// Permission catalog (ADR-0027 §3.2): what each role in each app may do,
 // derived from the manifests — the same catalog decisions use, so the page
 // that shows it and the engine that enforces it cannot disagree.
 type RolePermissions struct {
@@ -68,7 +68,7 @@ func (t *Tenant) Permissions() []AppPermissions {
 }
 
 // Explanation is the engine's answer to "may this member do this?", for the
-// explain endpoint (ADR-0078 §3.4): the permission, who holds what, and the verdict.
+// explain endpoint (ADR-0027 §3.4): the permission, who holds what, and the verdict.
 type Explanation struct {
 	Member     string        `json:"member"`
 	Permission string        `json:"permission"`

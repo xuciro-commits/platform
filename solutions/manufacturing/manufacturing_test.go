@@ -27,7 +27,7 @@ var seats = []platformserver.Seat{
 	Seat("op", "op-l1", map[string]string{"mes": string(mes.Operator)}, "L1"),
 }
 
-// ADR-0024 7c: the ERP releases a production order; the plant releases a shop
+// ADR-0026 7c: the ERP releases a production order; the plant releases a shop
 // order against it, makes it, and its confirmation flow confirms it through
 // production.orders/1; the ERP posts the production's cost. A confirmation the
 // ERP refuses (its period is closed) reaches the plant's flow at once, and a
@@ -112,7 +112,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	work()
 	o := order("SO-1")
 	expect("confirmed through the protocol", o.ERP+" "+o.Confirmation, "confirmed MJ/2026/00001")
-	// The order's page shows the process about it (ADR-0026 D4).
+	// The order's page shows the process about it (ADR-0006 D4).
 	if v, _ := tn.RecordOf(sup, mes.OrderType, "SO-1", now); len(v.Processes) != 1 || v.Processes[0].(flow.FlowInstance).State != "done" {
 		t.Fatalf("processes of SO-1: %+v", v.Processes)
 	}
@@ -140,7 +140,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	}
 	// 10 kg of steel (50.00) into work in progress, 5 housings out at 12.00; the standard's 10.00 more is a variance.
 	expect("books", got, "1403 -5000; 1405 6000; 5001 0; 6404 -1000; ")
-	// ADR-0028: a photo of the finished order, attached to the shop order;
+	// ADR-0038: a photo of the finished order, attached to the shop order;
 	// the operator of its line downloads it, a member of the ERP alone does not.
 	photo, _, uerr := tn.Upload(sup, "SO-1.jpg", "image/jpeg", strings.NewReader("jpeg bytes"), now)
 	if uerr != nil {
@@ -156,7 +156,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	clerk, _ := tn.Member("clerk")
 	tn.Download(w, clerk, "PH-1", now)
 	expect("the ERP's clerk does not", fmt.Sprint(w.Code), "404")
-	// ADR-0028 D6: comments with mentions and followers on the shop order.
+	// ADR-0038: comments with mentions and followers on the shop order.
 	told := func(who, prefix string) bool {
 		m, _ := tn.Member(who)
 		out, _ := tn.Read(m, "notifications")

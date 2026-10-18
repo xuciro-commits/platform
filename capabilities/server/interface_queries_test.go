@@ -12,7 +12,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0058: interface reads retain concrete identity and original permissions;
+// ADR-0020: interface reads retain concrete identity and original permissions;
 // frozen query versions never acquire later implementers behind the reader.
 func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing.T) {
 	const tenant = "interface-queries"

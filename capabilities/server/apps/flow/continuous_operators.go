@@ -12,7 +12,7 @@ import (
 	"platformserver/platform"
 )
 
-// The native operators the default streaming graph declares (ADR-0047 §13.1):
+// The native operators the default streaming graph declares (ADR-0016 §13.1):
 // the window's retained event-time rows feed a fixed aggregate, and the
 // aggregate's records drive a hysteresis threshold. Both run inside the Flow's
 // own accepted frame — the same owner, the same batch decision, no second
@@ -104,7 +104,7 @@ func checkOperators(declared platform.Continuous) error {
 	}
 	// The declared partition workers are part of the same whole-declaration
 	// check: the fold runs at most 8 of them, and more than one needs the
-	// event-time window whose partitions they fold (ADR-0047 §13.3).
+	// event-time window whose partitions they fold (ADR-0016 §13.3).
 	if declared.Concurrency < 0 || declared.Concurrency > 8 {
 		return fmt.Errorf("a stream fold runs with 1 to 8 partition workers")
 	}

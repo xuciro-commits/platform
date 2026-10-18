@@ -280,7 +280,7 @@ type OperationLimits struct {
 	MaxInputBytes  int    `json:"maxInputBytes"`
 	MaxOutputBytes int    `json:"maxOutputBytes"`
 	// StagedOutputBytes, when set, allows a result above MaxOutputBytes to be
-	// sealed into the per-call result channel the host owns (ADR-0047 §13.3).
+	// sealed into the per-call result channel the host owns (ADR-0016 §13.3).
 	// 0 keeps the inline-only profile; the worker still never writes anywhere.
 	StagedOutputBytes int `json:"stagedOutputBytes,omitempty"`
 	// DataInputBytes bounds the call-owned read channel; it never raises stdin.

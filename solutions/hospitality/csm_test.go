@@ -24,19 +24,19 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0021 D10 (2): the helpdesk's triage agent grounds itself in what the
+// ADR-0054 (2): the helpdesk's triage agent grounds itself in what the
 // CRM knows of the customer, triages and replies; its reply's mail waits for a
 // person. A ticket the agent cannot take goes to the desk, and to its leads
 // when it is late. A reply promising money is refused by the agent's guard.
 func TestCSMTriage(t *testing.T) {
 	// The model searches its own app, reads the ticket's context, tries the guest
-	// account (refused: a flow's agent reads its own app, ADR-0050 D1/D2), looks
+	// account (refused: a flow's agent reads its own app, ADR-0008/D2), looks
 	// the matter up in the house rules, triages and replies with what it may
 	// read; "fail" tickets get errors.
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Messages []map[string]any }
 		json.NewDecoder(r.Body).Decode(&req)
-		if system, _ := req.Messages[0]["content"].(string); strings.HasPrefix(system, "Say in one short line") { // an app's request (ADR-0029 D3)
+		if system, _ := req.Messages[0]["content"].(string); strings.HasPrefix(system, "Say in one short line") { // an app's request (ADR-0008 D3)
 			fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"Wifi drops in the rooms"}}],"usage":{"prompt_tokens":20,"completion_tokens":6}}`)
 			return
 		}
@@ -60,7 +60,7 @@ func TestCSMTriage(t *testing.T) {
 		case 1:
 			name, args = "context", map[string]any{"type": "csm.ticket", "id": ticket}
 		case 2:
-			// Another app's record: a run no person started may not read it (ADR-0050 D1/D2).
+			// Another app's record: a run no person started may not read it (ADR-0008/D2).
 			name, args = "context", map[string]any{"type": "crm.account", "id": account}
 		case 3:
 			name, args = "knowledge", map[string]any{"query": "wifi"}
@@ -145,14 +145,14 @@ func TestCSMTriage(t *testing.T) {
 
 	// Grounded in its own app and the house rules, cited: the reply relies on the
 	// rule it read; the guest account is refused, so nothing from another app
-	// grounds it (ADR-0050 D1/D2); the high priority makes it due in four hours;
+	// grounds it (ADR-0008/D2); the high priority makes it due in four hours;
 	// the mail waits for a person.
 	open("T-1", "Wifi keeps dropping")
 	tick(8 * time.Second)
 	x := ticket("T-1")
 	w.expect(fmt.Sprint(x.Status, " ", x.Category, " ", x.Priority, " ", x.Due.Sub(x.Created.At), " ", x.Replied, " | ", x.Reply),
 		"answered booking high 4h0m0s agent:csm.triage | About the wifi: the front desk resets the wifi password (House rules). A colleague is on it.")
-	w.expect(x.Summary, "Wifi drops in the rooms") // the app asked the tenant's model for apps, and its reply action took the answer (ADR-0029 D3)
+	w.expect(x.Summary, "Wifi drops in the rooms") // the app asked the tenant's model for apps, and its reply action took the answer (ADR-0008 D3)
 	// An administrator of the agent app reads a run's trace only where they may
 	// also read what the run read (#130): the lead holds those roles; an
 	// administrator of agents alone sees that the run happened, not its content,
@@ -165,7 +165,7 @@ func TestCSMTriage(t *testing.T) {
 	citedRun := cited.Records[0].(platformserver.AgentRunRecord)
 	w.expect(fmt.Sprint(citedRun.Citations), "[{knowledge.document/RULES House rules 0 3}]")
 	// The guest account it tried to read: another app's record, refused, and
-	// nothing from it reaches the trace (ADR-0050 D1/D2).
+	// nothing from it reaches the trace (ADR-0008/D2).
 	if len(citedRun.Steps) < 3 || !strings.HasPrefix(citedRun.Steps[2].Outcome, "refused:") || strings.Contains(citedRun.Steps[2].Outcome, "Board") {
 		t.Fatalf("a flow's agent read another app's record: %+v", citedRun.Steps)
 	}
@@ -195,10 +195,10 @@ func TestCSMTriage(t *testing.T) {
 		page, _ := w.tenant.Records(agents, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","` + ticket + ` "]]`)}, now)
 		return page.Records[0].(platformserver.AgentRunRecord)
 	}
-	w.expect(runOf("T-1").Signals[0].Kind+" "+runOf("T-1").Signals[0].By, "approved ops") // the reply approved: an accepted outcome (ADR-0022 D9)
+	w.expect(runOf("T-1").Signals[0].Kind+" "+runOf("T-1").Signals[0].By, "approved ops") // the reply approved: an accepted outcome (ADR-0009)
 
 	// A reply discarded instead: a signal, and a memory proposed to the agent.
-	// Numbers are taken only by accepted decisions (ADR-0024 D3): the refused
+	// Numbers are taken only by accepted decisions (ADR-0026): the refused
 	// ticket before it leaves no gap.
 	w.expect(do(desk, "csm", csm.SchemaOpen, csm.TicketType, "T-X", map[string]string{"subject": "Who?", "customer": "nobody"}), "ERROR_CODE_INVALID_ARGUMENT")
 	open("T-4", "Wifi slow in the lobby")
@@ -238,7 +238,7 @@ func TestCSMTriage(t *testing.T) {
 	tick(3 * time.Second)
 	w.expect(fmt.Sprint(instance("T-3").State, " ", inbox(lead), " ", len(mailed)), "done [Late ticket: I want a refund] 2") // a person's reply is mailed at once; T-2 is late too
 
-	// The chain T-1's run belongs to (ADR-0029 D6): the ticket, its service
+	// The chain T-1's run belongs to (ADR-0008 D6): the ticket, its service
 	// level, the triage run its step started, and the reply mail it caused.
 	chainer := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}}
 	chain, err := w.tenant.ChainOf(chainer, platformserver.RunType+"/"+runOf("T-1").ID, now)
@@ -257,7 +257,7 @@ func TestCSMTriage(t *testing.T) {
 	fromInstance, _ := w.tenant.ChainOf(chainer, flow.InstanceType+"/csm.service-level:T-1", now)
 	w.expect(fmt.Sprint(len(fromInstance.Nodes) == len(chain.Nodes)), "true") // the same chain from the flow's side
 
-	// The triage agent's declared cases, three runs each, dry (ADR-0029 D6): it
+	// The triage agent's declared cases, three runs each, dry (ADR-0008 D6): it
 	// replies to an ordinary request, and its guard keeps it from promising a refund.
 	w.expect(do(agents, platformserver.AgentApp, platformserver.SchemaEvalStart, platformserver.EvaluationType, "SUITE-1",
 		map[string]any{"agent": "csm.triage", "model": "lm/triage", "suite": true}), "ok")
@@ -269,7 +269,7 @@ func TestCSMTriage(t *testing.T) {
 	}
 	w.expect(strings.Join(cases, ", "), "replies to wifi passes 3/3, promises no refund passes 3/3")
 
-	// An agent past its own limit stops before calling the model, and the desk takes the ticket (ADR-0029 D1).
+	// An agent past its own limit stops before calling the model, and the desk takes the ticket (ADR-0008 D1).
 	agent := runOf("T-1").Agent
 	w.expect(do(ops, ai.ID, ai.SchemaLimitSet, ai.LimitType, "agent:"+agent, map[string]int{"dailyTokens": 1}), "ok")
 	open("T-6", "Late breakfast")

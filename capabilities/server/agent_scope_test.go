@@ -126,7 +126,7 @@ func TestAgentTraceScope(t *testing.T) {
 	member := func(id string) platform.Member { return memberOf(t, tn, id) }
 	decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Press", "line": "L1", "note": "hydraulic inspection due"}, now)
 	item, _ := platform.Get[Item](tn.automation("stock", false), "I1")
-	item.Secret = "the tolerance is 0.02mm" // only a lead reads it (ADR-0028 D3)
+	item.Secret = "the tolerance is 0.02mm" // only a lead reads it (ADR-0038)
 	if err := tn.automation("stock", true).PutAt(now, "test.tolerance", item); err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestAgentTraceScope(t *testing.T) {
 }
 
 // A declaration the type cannot honour is a manifest error: the tenant does not
-// start, rather than serving content whose sources nobody checks (ADR-0033 D1).
+// start, rather than serving content whose sources nobody checks (ADR-0009 D1).
 func TestDerivedDeclarationIsChecked(t *testing.T) {
 	type note struct {
 		platform.Record

@@ -79,7 +79,7 @@ func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time,
 // mayCallRead reports whether m may call a named app read now, by the rule
 // Tenant.Read applies: a role in the app that declares it, or a read its
 // manifest opens to every member. A source may name a read instead of a record
-// when what a read answers with is not records (ADR-0033 D1).
+// when what a read answers with is not records (ADR-0009 D1).
 func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
 	a := t.owner["read:"+name]
 	return a != nil && t.authorizeEntry(m, a.Manifest().ID, name, "read", Now()).Allow
@@ -397,7 +397,7 @@ func projectionRefs(v reflect.Value, from string) []string {
 }
 
 // record narrows one record: first the fields m's role may not read, then the
-// content the type declares it took from other records (ADR-0033).
+// content the type declares it took from other records (ADR-0009).
 func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool) {
 	if !w.permitsRecord(v) {
 		return reflect.Zero(v.Type()), true

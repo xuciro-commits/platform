@@ -4,6 +4,43 @@ import { expect, fresh, shots, slug, test } from "./kit";
 
 test.use({ actionTimeout: 10_000 });
 
+test("a pipeline trials unsaved expectations without publishing or writing outputs", async ({ page, builder, operator }, info) => {
+  const name = slug("trial"), input = fresh("INPUT"), output = fresh("OUTPUT"), pipeline = fresh("PIPELINE");
+  await builder.decide("build.dataset.create", { type: "build.dataset", id: input }, { name: `${name}input`, title: "Trial input" });
+  await builder.decide("build.dataset.create", { type: "build.dataset", id: output }, { name: `${name}output`, title: "Trial output" });
+  await builder.decide("build.dataset.load", { type: "build.dataset", id: input }, {
+    rows: Array.from({ length: 101 }, (_, index) => ({ sku: index === 0 ? "" : `ROW-${index}`, qty: index })),
+  });
+  await builder.decide("build.pipeline.create", { type: "build.pipeline", id: pipeline }, {
+    name, title: "Pipeline trial", input, outputDataset: output, steps: [], expectations: [],
+  });
+  const original = {
+    input: await builder.record("build.dataset", input), output: await builder.record("build.dataset", output),
+    pipeline: await builder.record("build.pipeline", pipeline), definitions: await operator.definitions(),
+  };
+  await builder.open(page, `/pipeline?id=${pipeline}`);
+  await page.getByRole("button", { name: "Add expectation", exact: true }).click();
+  await page.getByPlaceholder("column", { exact: true }).fill("sku");
+  await page.route("**/v1/pipelines/preview", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { message: "Pipeline trial refused" } }) }));
+  await page.getByRole("button", { name: "Trial pipeline", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Pipeline trial refused" })).toBeVisible();
+  await expect(page.getByPlaceholder("column", { exact: true })).toHaveValue("sku");
+  await page.unroute("**/v1/pipelines/preview");
+  await page.getByRole("button", { name: "Trial pipeline", exact: true }).click();
+  const trial = page.getByRole("region", { name: "Pipeline trial results", exact: true });
+  await expect(trial).toContainText("Input v1: 100 of 101 rows · 99 output rows · 1 quarantined");
+  await expect(trial.getByRole("status")).toContainText("first 100 rows");
+  await expect(trial.getByRole("region", { name: "Trial output rows", exact: true })).toContainText("ROW-1");
+  await expect(trial.getByRole("region", { name: "Trial quarantined rows", exact: true })).toContainText("sku");
+  await shots(page, page.locator("body"), "pipeline-draft-trial", info);
+  await page.getByPlaceholder("column", { exact: true }).fill("qty");
+  await expect(trial).toHaveCount(0);
+  expect(await builder.record("build.dataset", input)).toEqual(original.input);
+  expect(await builder.record("build.dataset", output)).toEqual(original.output);
+  expect(await builder.record("build.pipeline", pipeline)).toEqual(original.pipeline);
+  expect(await operator.definitions()).toEqual(original.definitions);
+});
+
 test("an application assembles integration drafts over a saved model before joint delivery", async ({ page, builder, operator }, info) => {
   test.setTimeout(150_000);
   const name = slug("integration"), objectID = fresh("MODEL"), type = `build.${name}`;

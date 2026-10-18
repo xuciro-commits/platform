@@ -20,7 +20,7 @@ type State struct {
 }
 
 // Action is a step people take on one of its records.
-// Sets/Creates/Posts/Journal/Reverses are frozen legacy expressions (ADR-0100).
+// Sets/Creates/Posts/Journal/Reverses are frozen legacy expressions (ADR-0039).
 // New multi-record capabilities use Transaction exclusively; historical
 // definitions retain their original bytes and execution during migration.
 type Action struct {
@@ -36,21 +36,21 @@ type Action struct {
 	Reads       *platform.RuleReadSpec     `json:"reads,omitempty" type:"json" field:"aside"`
 	Sets        []Set                      `json:"sets,omitempty" title:"What it sets"`
 	Conditions  []Condition                `json:"conditions,omitempty" title:"What it needs"`
-	// Roles are who may take it (ADR-0037 18b); empty: every role of the object.
+	// Roles are who may take it (ADR-0044 18b); empty: every role of the object.
 	Roles    []string        `json:"roles,omitempty" title:"Taken by"`
 	Approval *ActionApproval `json:"approval,omitempty" title:"Approval"`
-	// Creates are related records it makes in the same decision (ADR-0040 21c
+	// Creates are related records it makes in the same decision (ADR-0047 21c
 	// D2): all of them and the record's change commit together, or none does.
 	Creates []Create `json:"creates,omitempty" title:"What it creates"`
 	// Posts add to or subtract from balances kept on other objects, under the
-	// same decision (ADR-0063).
+	// same decision (ADR-0039).
 	Posts []Post `json:"posts,omitempty" title:"What it posts"`
 	// Journal is the balanced accounting entry the decision causes in the
-	// books (core.journal, ADR-0076): landed by the host after acceptance,
+	// books (core.journal, ADR-0026): landed by the host after acceptance,
 	// once per decision, into the open period of its date.
 	Journal *JournalPost `json:"journal,omitempty" title:"What it books"`
 	// Reverses names another action of this object whose postings and journal
-	// this one undoes with the opposite sign (ADR-0076): a reversal, not a delete.
+	// this one undoes with the opposite sign (ADR-0026): a reversal, not a delete.
 	Reverses string `json:"reverses,omitempty" title:"Reverses action"`
 }
 
@@ -222,7 +222,7 @@ func ValueTextOf(v any) string {
 }
 
 // Access is what one role of the builder app may do with a defined object
-// (ADR-0037 D4): which records it reads, and which of create, edit and
+// (ADR-0044): which records it reads, and which of create, edit and
 // archive it takes. The roles an object names become roles of `build`, which
 // the Console assigns. Actions and fields name their own roles.
 type Access struct {
@@ -233,7 +233,7 @@ type Access struct {
 	Archive bool   `json:"archive,omitempty"`
 }
 
-// ObjectScope names the fields that place a record for row scopes (ADR-0066).
+// ObjectScope names the fields that place a record for row scopes (ADR-0044).
 type ObjectScope struct {
 	Owner     string `json:"owner,omitempty" help:"The field holding the member a record belongs to; empty: whoever created it"`
 	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisation (a reference to enterprise.element, or its id)"`

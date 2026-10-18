@@ -1,5 +1,5 @@
 import {useInputDrafts} from "@platform/ui";
-// Host Console (ADR-0052 §3.4, batch P5): the host administrator's view over
+// Host Console (ADR-0018 §3.4, batch P5): the host administrator's view over
 // every tenant this host runs — health, lifecycle, support sessions, trusted
 // artifacts, and promotions and migrations between tenants (environments).
 // Everything here calls the host console's own routes (`/v1/host/*`); who may
@@ -156,7 +156,7 @@ export function HostTenant({ tenant }: { tenant: string }) {
   </>;
 }
 
-/** A new tenant from a template (ADR-0078 §2.2): its first administrator holds admin in every app; settings are decided and journaled. */
+/** A new tenant from a template (ADR-0027 §2.2): its first administrator holds admin in every app; settings are decided and journaled. */
 function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const call = useConsole();
   const templates = useReadQuery<Api.TenantTemplate[]>("/v1/host/templates").data ?? [];

@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0028 11a: files uploaded to the store, attached to a record by a
+// ADR-0038 11a: files uploaded to the store, attached to a record by a
 // decision naming their hash, readable exactly when the record is; replay
 // reads no bytes; what nobody attached is swept; text files are knowledge.
 func TestFiles(t *testing.T) {

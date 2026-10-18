@@ -8,7 +8,7 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* One drawing surface, two families (ADR-0086): processes join through typed ports,
+/* One drawing surface, two families (ADR-0033): processes join through typed ports,
    relationships do not. The surface itself — frame, toolbar, help, action bar, lines
    and the node's own words — is shared; each family styles only its own shapes. */
 .platform-canvas {
@@ -45,7 +45,7 @@
 /* Processes: a block with typed ports, or, in a reader's compact view, the BPMN
    shape its kind asks for — a diamond gateway, a ringed event, a doubled sub-process. */
 .platform-flow .react-flow__node { border-radius: 12px; }
-/* A lane band: the responsibility a set of steps sits inside (ADR-0087 D1). It is
+/* A lane band: the responsibility a set of steps sits inside (ADR-0033). It is
    scenery, so it never takes a pointer event and always sits behind its steps. */
 .platform-flow-lane { display: flex; width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 12px;
   background: color-mix(in oklch, var(--lane-color, var(--muted)), transparent 96%); }
@@ -142,7 +142,7 @@
   --tone-success: oklch(0.55 0.14 150);
   --tone-warning: oklch(0.62 0.15 70);
   --tone-danger: oklch(0.56 0.19 25);
-  /* Series colours after the tones (ADR-0019 charts). */
+  /* Series colours after the tones (ADR-0024 charts). */
   --chart-5: oklch(0.55 0.15 300);
   --chart-6: oklch(0.6 0.1 195);
 }
@@ -251,7 +251,7 @@ body {
   overflow: hidden;
 }
 
-/* ADR-0046 F1b / pageui.layout.stackBelow: every group has its own inline
+/* ADR-0015 F1b / pageui.layout.stackBelow: every group has its own inline
    container. Narrow Columns retire horizontal constraints without losing IDs. */
 .platform-layout-stack { container-type: inline-size; }
 .platform-layout-columns { flex-direction: row; flex-wrap: wrap; }
@@ -265,7 +265,7 @@ body {
   }
 }
 
-/* ADR-0057 D1: a page laid out for a handheld terminal — one column, large
+/* ADR-0038: a page laid out for a handheld terminal — one column, large
    type and targets for gloved fingers; the scan field is the first thing. */
 [data-device="handheld"] { font-size: 1.0625rem; }
 [data-device="handheld"] .platform-layout-columns { flex-direction: column; flex-wrap: nowrap; }

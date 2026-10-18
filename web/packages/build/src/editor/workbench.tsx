@@ -1,5 +1,5 @@
 // What every builder editor shares on top of the Workbench chrome
-// (ADR-0053 §4, D6): drafts save themselves, the title bar shows one
+// (ADR-0047, D6): drafts save themselves, the title bar shows one
 // status, and "Publish" is one menu with the same entries everywhere.
 import {useInputDrafts} from "@platform/ui";
 import { useRecordArchive } from "@platform/app";

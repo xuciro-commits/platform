@@ -1,4 +1,4 @@
-// The object's shape (ADR-0058 A2, A3): the interfaces it implements, so pages
+// The object's shape (ADR-0020 A2, A3): the interfaces it implements, so pages
 // and queries written against the interface work for its records too, and the
 // installed type it extends, one extension record per base record through the
 // `base` reference. The host checks both again when the object is published.

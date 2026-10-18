@@ -21,6 +21,7 @@ type ConstructionDrafts interface {
 	DraftReleaseAssetsMulti([]build.JointDraftRef, platform.Member) (build.JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
 	CheckProcess(platform.Caller, build.Process) *kernel.Error
+	CheckPipeline(platform.Caller, build.Pipeline) *kernel.Error
 }
 
 // ConstructionDraftReader converts a copied, already authorized object draft

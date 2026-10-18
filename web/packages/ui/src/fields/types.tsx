@@ -21,7 +21,7 @@ export type FieldType<V = any, R = any> = {
  input?: Api.Field;
   type: string;
   label: string;
-  /** What the field holds, from its declaration (ADR-0023 D1): shown under the label of forms. */
+  /** What the field holds, from its declaration (ADR-0005 D1): shown under the label of forms. */
   help?: string;
   required?: boolean;
   readOnly?: boolean;

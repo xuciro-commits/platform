@@ -3,7 +3,7 @@
 // far more often than a general graph, and a tree drawn as one — parents
 // centred over their children, siblings packed against each other's contours,
 // leaves stacked along a trunk — reads at a glance where a layered graph engine
-// spreads it into a wall of columns (ADR-0095).
+// spreads it into a wall of columns (ADR-0035).
 import type { CanvasBox, CanvasPosition } from "../core/types";
 
 export type TreeDirection = "down" | "up" | "right" | "left";

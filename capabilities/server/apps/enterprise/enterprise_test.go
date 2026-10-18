@@ -88,7 +88,7 @@ func TestOrgProjection(t *testing.T) {
 	if got := e.Model().Of("l1", Performs, true, "2026-02-01"); len(got) != 1 || got[0] != "cap-1" {
 		t.Fatalf("capabilities of l1 %v", got)
 	}
-	// what the host's Directory answers the apps (ADR-0067 D3)
+	// what the host's Directory answers the apps (ADR-0022 D3)
 	if info, ok := e.Element("l1", "2026-02-01"); !ok || info.Stereotype != Organization || info.Kind != "line" {
 		t.Fatalf("element l1 %+v %v", info, ok)
 	}
@@ -100,7 +100,7 @@ func TestOrgProjection(t *testing.T) {
 	}
 }
 
-// Federation (ADR-0067 D5): a subsidiary publishes, the group imports read-only.
+// Federation (ADR-0022 D5): a subsidiary publishes, the group imports read-only.
 func TestFederation(t *testing.T) {
 	sub := New("sub", platform.OrgSeed{})
 	grp := New("grp", platform.OrgSeed{})
@@ -186,7 +186,7 @@ func TestPatternsGraft(t *testing.T) {
 	}
 }
 
-// TestViews pins the five description views (ADR-0093): the profile's whole
+// TestViews pins the five description views (ADR-0031): the profile's whole
 // palette is answered by exactly one view's slice, and every view offers only
 // relationships the contracts admit among its own elements.
 func TestViews(t *testing.T) {

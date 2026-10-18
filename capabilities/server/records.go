@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// The record store (ADR-0016 D1): the records of every app's entity types,
+// The record store (ADR-0046): the records of every app's entity types,
 // kept by the host in memory and rebuilt by replay, since every record is put
 // by a decision inside its input. Apps read their own records unscoped;
 // members read through one contract, scoped by each type's declaration.
@@ -37,14 +37,14 @@ type recordStore struct {
 	baseGeneration uint64
 	writes         map[string]bool
 	sealed         bool
-	// touched, when set, hears of each record put, under mu (the PostgreSQL projection, ADR-0019).
+	// touched, when set, hears of each record put, under mu (the PostgreSQL projection, ADR-0024).
 	touched func(typ, id string)
 	// dirty are the records of knowledge-bearing types put since the index last
 	// read it, under mu: knowledge is cut again for those records alone, not by
-	// walking the tenant at every search (ADR-0033 14b, #130).
+	// walking the tenant at every search (ADR-0009 14b, #130).
 	dirty recordIndex[bool]
 	// changed are the records each recent decision put ("<app>/<change>" →
-	// "<type>/<id>"), for flows started by a record's state (ADR-0028 D8).
+	// "<type>/<id>"), for flows started by a record's state (ADR-0038).
 	changed recordIndex[[]string]
 	order   []string
 }
@@ -92,11 +92,11 @@ type entityType struct {
 	fullImage        bool // private schema/bulk replacement needs full admission once
 	// knowledge says a record of this type may become knowledge: it declares a
 	// knowledge field, it is a knowledge document, or it is a file that may be
-	// attached to one (ADR-0022 D1).
+	// attached to one (ADR-0009).
 	knowledge bool
 }
 
-// viewOf is a type as m may see it (ADR-0028 D3): without the fields m's role
+// viewOf is a type as m may see it (ADR-0038): without the fields m's role
 // in the app may not read, so search, filters, sort, grouping and forms never
 // reach them; the rows are shared. hidden are those fields.
 func viewOf(m platform.Member, et *entityType) (view *entityType, hidden []platform.FieldInfo) {
@@ -430,7 +430,7 @@ func (s *recordStore) declare(a platform.App) error {
 
 // knowledgeBearing says a record of this type may become a knowledge passage:
 // a knowledge field of its own, the knowledge app's document, or a file that
-// may be attached to either (ADR-0022 D1). The index re-cuts only these.
+// may be attached to either (ADR-0009). The index re-cuts only these.
 func knowledgeBearing(info platform.EntityInfo) bool {
 	return info.Type == platform.KnowledgeDocumentType || info.Type == platform.FileType || info.KnowledgeFiles ||
 		slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge })
@@ -1194,7 +1194,7 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	for _, et := range t.records.types {
 		roles := m.RolesIn(et.info.App)
 		if len(roles) > 0 && et.info.Scope.LevelFor(roles) == platform.ScopeNone && et.info.Scope.Participants == nil {
-			continue // a type none of these roles sees at all (ADR-0037 18b)
+			continue // a type none of these roles sees at all (ADR-0044 18b)
 		}
 		if len(roles) > 0 || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
 			view, _ := viewOf(m, et)
@@ -1213,7 +1213,7 @@ func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bo
 
 func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
-	if typ == "enterprise.element" && t.directory != nil { // the model is every member's to read (ADR-0067 D3)
+	if typ == "enterprise.element" && t.directory != nil { // the model is every member's to read (ADR-0022 D3)
 		_, ok := t.directory.Element(id, now.UTC().Format(time.DateOnly))
 		return ok
 	}
@@ -1289,7 +1289,7 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, roles []string, now t
 	case platform.ScopeNone:
 		return func(reflect.Value) bool { return false }, nil
 	case platform.ScopeOwn:
-		if scope.Owner == platform.OwnerCreated { // whoever's decision created it (ADR-0037 D5)
+		if scope.Owner == platform.OwnerCreated { // whoever's decision created it (ADR-0044)
 			return func(v reflect.Value) bool { return recordOf(v).Created.By == m.ID }, nil
 		}
 		owner := field(scope.Owner)
@@ -1397,7 +1397,7 @@ func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ stri
 	w := t.narrowerIn(s, m, now, true)
 	for i, v := range page {
 		out.Records[i] = masked(et, v, hidden)
-		if et.info.HasReadSources() || len(et.info.VersionPins) > 0 { // checked against its sources again (ADR-0033)
+		if et.info.HasReadSources() || len(et.info.VersionPins) > 0 { // checked against its sources again (ADR-0009)
 			narrowed, _ := w.derive(et, reflect.ValueOf(out.Records[i]))
 			out.Records[i] = narrowed.Interface()
 		}
@@ -1409,7 +1409,7 @@ func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ stri
 
 // EnterpriseReference is a record that names an enterprise element through a
 // declared reference, at whatever depth the reference sits: a top-level field
-// or a line of a line (ADR-0085 D4). The path is the record's own, so a reader
+// or a line of a line (ADR-0031 D4). The path is the record's own, so a reader
 // can go and look.
 type EnterpriseReference struct {
 	Type       string `json:"type"`
@@ -1435,7 +1435,7 @@ type EnterpriseReferenceGroup struct {
 // EnterpriseReferences are the records that name an enterprise element, across
 // every entity type the member may read, at any nesting depth, paged by column.
 // The modeler's "Used by" asks this instead of querying one field at a time
-// (ADR-0085 D4): a reference inside a line is found, a page says how many it
+// (ADR-0031 D4): a reference inside a line is found, a page says how many it
 // left out, and a type the member may not read is not mentioned.
 func (t *Tenant) EnterpriseReferences(m platform.Member, element string, offset, limit int, now time.Time) ([]EnterpriseReferenceGroup, *kernel.Error) {
 	if element == "" {
@@ -1629,7 +1629,7 @@ func recordLabel(et *entityType, value any, id string) string {
 
 // RecordView is one record with its history, newest first, the records of
 // the app's other types that refer to it, and the processes about it the
-// member may read (ADR-0026 D4).
+// member may read (ADR-0006 D4).
 type RecordView struct {
 	Effective   *bool             `json:"effective,omitempty"`
 	Values      map[string]any    `json:"values,omitempty"`
@@ -1640,8 +1640,8 @@ type RecordView struct {
 	Processes   []any             `json:"processes"`
 	Approvals   []any             `json:"approvals"` // requests to move it, newest first (F-38)
 	Tasks       []any             `json:"tasks"`     // open tasks about it the member may take, to answer from its page
-	Files       []any             `json:"files"`     // attached to it (ADR-0028)
-	Comments    []any             `json:"comments"`  // on it, oldest first (ADR-0028 D6)
+	Files       []any             `json:"files"`     // attached to it (ADR-0038)
+	Comments    []any             `json:"comments"`  // on it, oldest first (ADR-0038)
 	Following   bool              `json:"following"` // the member follows it
 	Linked      []Related         `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
 	Activity    []any             `json:"activity"`  // what apps told about it through protocols (platform.RelationNote), oldest first
@@ -1650,7 +1650,7 @@ type RecordView struct {
 type Related struct {
 	Type  string `json:"type"`
 	Field string `json:"field"`
-	// Relation is the reference field's declared inverse name, when it has one (ADR-0040 21b).
+	// Relation is the reference field's declared inverse name, when it has one (ADR-0047 21b).
 	Relation string `json:"relation,omitempty"`
 	Title    string `json:"title"`
 	Records  []any  `json:"records"`
@@ -1802,7 +1802,7 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 	return out, activity
 }
 
-// PersonalRead is one read of personal data (ADR-0028 D4): who read which
+// PersonalRead is one read of personal data (ADR-0038): who read which
 // records' personal fields, and when. Kept outside the journal, like transcripts.
 type PersonalRead struct {
 	At     time.Time `json:"at"`

@@ -1,4 +1,4 @@
-// ADR-0118: declaration, reverse impact and discovery read one owner descriptor.
+// ADR-0056: declaration, reverse impact and discovery read one owner descriptor.
 import { assetKey, definitionPresentation, DependencyGraph, useDependencies, useDefinitions, useProvidedCapabilities, type AssetRef, type ProvidedCapability } from "@platform/app";
 import { Button, DataTable, Disclosure, PageHeader, Panel, relationNodeClasses, Select, useWorkspace, t } from "@platform/ui";
 import { useState } from "react";

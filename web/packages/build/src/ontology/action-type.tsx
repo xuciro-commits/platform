@@ -2,7 +2,7 @@ import { TransactionEditor } from "./TransactionEditor";
 import {ConfirmationEditor} from "./ConfirmationEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import {RefusalEditor} from "./RefusalEditor";
-// The action type workbench (ADR-0053 §6, built under ADR-0054): an action is a
+// The action type workbench (ADR-0047, built under ADR-0019): an action is a
 // first-class resource with its own sections — Overview, Parameters, Form,
 // Transaction, Approval, Permissions. Left: the
 // object's actions and this action's sections. Main: the section as a table or
@@ -39,7 +39,7 @@ type ActionRow = { key: string; object: ObjectDraft; action: Action };
 /** Every action type of every object type this tenant drafts (Ontology Manager's Action types list): one row per action, opening its workbench. */
 type BuiltInRow = { key: string; definition: Definition; object?: Definition };
 
-/** Action types in a tree (ADR-0083 D5/D6): the tenant's own under their object
+/** Action types in a tree (ADR-0005/D6): the tenant's own under their object
  * types, and — folded, read-only — the actions the host and its modules ship,
  * so a builder sees what already exists before declaring another. */
 export function ActionTypes() {
@@ -136,7 +136,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
 
 
       {action.transaction && <>
-        <ConfirmationEditor value={action.transaction.confirmation} onChange={confirmation => patch({ transaction: { ...action.transaction!, confirmation } })} actions={process.actions.filter(candidate => candidate.name !== action.name).map(candidate => candidate.name)} roles={reviewerRoles} />
+        <ConfirmationEditor value={action.transaction.confirmation} onChange={confirmation => patch({ transaction: { ...action.transaction!, confirmation } })} actions={process.actions.filter(candidate => candidate.name !== action.name).map(candidate => candidate.name)} roles={reviewerRoles} inputs={inputs} />
         <DispatchEditor value={action.transaction.dispatch} onChange={dispatch => patch({ transaction: { ...action.transaction!, dispatch } })} commands={process.dispatchCommands ?? []}
           onCommandsChange={(dispatchCommands, rename) => change({ ...process, dispatchCommands: dispatchCommands.map(command => rename && command.compensate === rename.before ? { ...command, compensate: rename.after } : command), actions: rename ? process.actions.map(candidate => candidate.transaction?.dispatch?.command === rename.before ? { ...candidate, transaction: { ...candidate.transaction, dispatch: { ...candidate.transaction.dispatch, command: rename.after } } } : candidate) : process.actions })}
           object={parent} fields={process.fields} choices={[{ value: "input.$subject", label: t("Subject record ID"), type: "reference", ref: parent }, ...subjects]} roles={reviewerRoles} />

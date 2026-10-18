@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# ADR-0105: the source guard checks member-facing storage reads structurally,
+# ADR-0044: the source guard checks member-facing storage reads structurally,
 # including files excluded by the current OS/build tags.
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 

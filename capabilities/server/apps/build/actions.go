@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// States and actions a tenant gives its own objects (ADR-0037 D1–D3). An action
+// States and actions a tenant gives its own objects (ADR-0044–D3). An action
 // is typed data compiled into the platform's own lifecycle transition: the
 // ledger routes it, replay runs it again, and every surface that offers a coded
 // transition offers it. Nothing here is code the tenant supplies.
@@ -342,7 +342,7 @@ func checkCondition(kind string, options []string, c Condition) error {
 }
 
 // lifecycle is the object's states and actions as the platform's own lifecycle
-// (ADR-0037 D1): each action a transition whose Do checks its conditions and
+// (ADR-0044): each action a transition whose Do checks its conditions and
 // sets its fields, inside the decision and again in replay.
 func lifecycle(o Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
 	if len(o.States) == 0 {
@@ -426,7 +426,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 }
 
 // stored puts an action's related records under the change that took it, as
-// Do built and checked them from the same inputs (ADR-0040 21c).
+// Do built and checked them from the same inputs (ADR-0047 21c).
 func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
 	if len(a.Creates) == 0 && len(a.Posts) == 0 || creates == nil {
 		return nil
@@ -643,7 +643,7 @@ func checkAccess(o Object) error {
 }
 
 // access is the object's access as the platform's own declarations: its
-// generated actions' roles per verb, and its scope (ADR-0037 D4, D5). With no
+// generated actions' roles per verb, and its scope (ADR-0044, D5). With no
 // access declared an object keeps the rule of 15a: builder and user do everything.
 func access(o Object) (platform.Standard, platform.Scope, []string) {
 	std := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, User}, Capability: o.Name}

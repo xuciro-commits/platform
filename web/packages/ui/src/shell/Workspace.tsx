@@ -31,18 +31,18 @@ export type Menu = { label: string; items: MenuItem[] };
 export type ShellCommand = { id: string; label: string; group?: string; shortcut?: string; run: () => void };
 export type Session = {
   tenant: string; principal: string; detail?: string;
-  /** The member's display name (ADR-0079), shown over the principal when set. */
+  /** The member's display name (ADR-0028), shown over the principal when set. */
   name?: string;
   options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;
   /** Opens the member's own account page, when the host has one. */
   onAccount?: () => void;
 };
 
-/** A platform application in the Applications portal (ADR-0052 §3.2): a stable id, a category and a home route. */
+/** A platform application in the Applications portal (ADR-0018 §3.2): a stable id, a category and a home route. */
 export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
 /** The portal: every application this member may open, its categories in display order, and the one in front. */
 export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
-/** The constant left rail (ADR-0052 §3.1): where Home, the portal, notifications and the assistant live. */
+/** The constant left rail (ADR-0018 §3.1): where Home, the portal, notifications and the assistant live. */
 export type Rail = { home: Route; applications: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
 /** A route the member opened, remembered by the shell for the Recent list and Home. */
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
@@ -135,12 +135,12 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
 }
 
 /**
- * The platform shell (ADR-0052): a constant rail (Home, search, notifications,
+ * The platform shell (ADR-0018): a constant rail (Home, search, notifications,
  * applications, recent, favorites, assistant, account), a header
  * with the current application and its menus, a context pane with that
  * application's navigation, and a docking workspace whose tabs are routes
  * (one per entity) with a command palette (⌘K).
- * Tabs are grouped by application (ADR-0054 D1): each `layoutScope` has its own
+ * Tabs are grouped by application (ADR-0019 D1): each `layoutScope` has its own
  * remembered layout, swapped in when the scope changes; the recent/favorites memory is per `storageKey`; the active tab is in the URL.
  */
 export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, menus = [], commands = [], session, status, applications: appEntries, rail, onActiveRoute, onEmpty, onLanguage, search }: {
@@ -280,7 +280,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const wait = setTimeout(() => { void search(typed).then((hits) => { if (live) setFound(hits); }).catch(() => undefined); }, 200);
     return () => { live = false; clearTimeout(wait); };
   }, [search, typed]);
-  // What the member comes back to (ADR-0052 §4.2): recent routes and starred applications, per shell.
+  // What the member comes back to (ADR-0018 §4.2): recent routes and starred applications, per shell.
   const navKey = `${storageKey}:nav`;
   const [memory, setMemory] = useState<{ recent: RecentEntry[]; favorites: string[] }>(() => {
     try { const saved = localStorage.getItem(navKey); if (saved) return { recent: [], favorites: [], ...JSON.parse(saved) }; } catch { /* storage unavailable */ }

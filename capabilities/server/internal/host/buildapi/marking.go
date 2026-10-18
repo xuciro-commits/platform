@@ -6,12 +6,12 @@ import (
 	"platformserver/platform"
 )
 
-// Markings (ADR-0075, ADR-0069 Ⅰ-I): a bounded classification that travels
+// Markings (ADR-0025、ADR-0062 Ⅰ-I): a bounded classification that travels
 // with data. A connection or dataset is marked internal, confidential or
 // restricted; what is loaded or run from it can only raise the marking of
 // where it lands, never lower it. There is no second permission engine: a
 // marking compiles to what already exists - an object field fed with
-// confidential or restricted data must name the roles that read it (ADR-0028
+// confidential or restricted data must name the roles that read it (ADR-0038
 // D3), and restricted datasets never leave as CSV.
 const (
 	Integrator = "integrator" // connects, maps and runs integrations; never designs objects or pages

@@ -12,7 +12,7 @@ import (
 )
 
 // Holding and its deadline remain ordinary lifecycle + Process/Work behavior.
-// ADR-0117 introduces no exception scheduler or separate adjudication engine.
+// ADR-0055 introduces no exception scheduler or separate adjudication engine.
 func TestBusinessRefusalHoldDeadlineAndDecisionReturnToSubject(t *testing.T) {
 	compose := func() *Tenant {
 		return composeTenant(t, "refusal-hold", []Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:operator"), seatOf("manager", "build:manager")}, work.New("refusal-hold"), flow.New("refusal-hold"), build.New("refusal-hold"))

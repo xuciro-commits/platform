@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// Member lifecycle, personal tokens and sessions (ADR-0079 §4–5). A member's
+// Member lifecycle, personal tokens and sessions (ADR-0028 §4–5). A member's
 // standing is a decision of the directory: invited when added before they
 // sign in, suspended (nothing is held until resumed), left (offboarded: the
 // subjects go, the grants go, the record stays for history). A personal token
@@ -158,7 +158,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 		return func(r *pb.ChangeRecord) {
 			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}, Agent: p.Agent, Status: platform.MemberInvited}
 			d.subjects[p.Subject] = id
-			d.then = func() { // the invitation, mailed where the tenant mails (ADR-0079 §4); nothing when it does not
+			d.then = func() { // the invitation, mailed where the tenant mails (ADR-0028 §4); nothing when it does not
 				org := cmp.Or(d.tenantDefault(SettingName), d.tenant)
 				c.Notify(platform.Notification{Title: "You are invited to " + org, Key: "invite",
 					Body: "Sign in with " + strings.TrimPrefix(p.Subject, "user:") + " to take your seat at " + org + "."},
@@ -215,7 +215,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 	return nil, invalid
 }
 
-// decideToken issues or revokes a personal token (ADR-0079 §5). The directory
+// decideToken issues or revokes a personal token (ADR-0028 §5). The directory
 // keeps its issuing change, never the secret; Minted derives it for collection.
 func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -474,7 +474,7 @@ func summarize(ua string) string {
 }
 
 // joins reports whether subject may take a seat by its mail domain alone: a
-// person of one of the tenant's sign-in domains (ADR-0078 §2, ADR-0079 §4).
+// person of one of the tenant's sign-in domains (ADR-0027 §2, ADR-0028 §4).
 func (d *Console) JoinsSubject(subject string) bool {
 	if d.host == nil {
 		return false

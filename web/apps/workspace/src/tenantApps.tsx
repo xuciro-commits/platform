@@ -1,4 +1,4 @@
-// Applications a tenant hands to its people (ADR-0036). One of them is not a
+// Applications a tenant hands to its people (ADR-0046). One of them is not a
 // code package: it is a name, an icon and pages from the host's definition
 // registry, which the workspace turns into an ordinary entry in the launcher
 // and the navigation — beside the apps that came as code, with the same shell.
@@ -22,7 +22,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     const pages = new Map(definitions.filter((d) => d.ref.kind === "page" && d.ref.app === definition.ref.app).map((d) => [d.ref.name, d.page]));
     const held = application.pages.filter((name) => pages.has(name));
     if (held.length === 0 && !application.resources?.length) return [];
-    const icon = <IconGlyph name={application.icon} />; // the kit's vocabulary (ADR-0084 D1)
+    const icon = <IconGlyph name={application.icon} />; // the kit's vocabulary (ADR-0031)
     const id = `${definition.ref.app}:${application.name}`;
     const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
     const item = (name: string) => ({ label: pages.get(name)?.title ?? name, icon, route: route(name) });
@@ -48,7 +48,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
       category: held.length ? "business" : "operate",
       icon,
       home: sections.length ? route(sections[0]!.pages[0]!) : overview,
-      views: [], // its pages are the workspace's own page view (ADR-0032)
+      views: [], // its pages are the workspace's own page view (ADR-0020)
       nav,
     }];
   });

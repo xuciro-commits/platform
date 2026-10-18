@@ -18,7 +18,7 @@ import (
 )
 
 // File is a host's journals in one local directory, with no database
-// (ADR-0049 D2): journal.jsonl holds every tenant's entries, one line each;
+// (ADR-0017 D2): journal.jsonl holds every tenant's entries, one line each;
 // snapshots/ holds each tenant's checkpoints; derived/ holds what is kept
 // outside the journal, the passage vectors and the model-call transcripts.
 //
@@ -330,7 +330,7 @@ func (j *File) SaveSnapshot(_ context.Context, tenant string, seq int64, code st
 }
 
 // RepairSnapshot replaces this tenant's checkpoints with one, after the whole
-// journal was validated and a fresh state captured (ADR-0019 D6).
+// journal was validated and a fresh state captured (ADR-0024).
 func (j *File) RepairSnapshot(_ context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -466,7 +466,7 @@ func (j *File) Close() {
 }
 
 // The derived data: passage vectors and model-call transcripts, kept beside the
-// journal. Losing either loses no truth (ADR-0022), so a failure is logged.
+// journal. Losing either loses no truth (ADR-0009), so a failure is logged.
 
 func (j *File) putVector(tenant, model, hash string, vector []float32) {
 	key := tenant + "|" + model
@@ -557,7 +557,7 @@ func (j *File) PurgeTranscripts(tenant string, before time.Time) {
 	}
 	j.transcripts = kept
 	// The file is rewritten from what is kept; losing a transcript loses no
-	// truth, so the journal itself is untouched (ADR-0022 D8).
+	// truth, so the journal itself is untouched (ADR-0009).
 	var out []byte
 	for _, x := range kept {
 		raw, err := json.Marshal(transcriptLine{Tenant: x.Tenant, Transcript: x})

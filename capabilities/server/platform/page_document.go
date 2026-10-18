@@ -28,7 +28,7 @@ type PageDocument struct {
 	Queries       map[string]PageQuery      `json:"queries,omitempty"`
 	Interface     *PageInterface            `json:"interface,omitempty"`
 	// Device is what the page is laid out for: empty for a desk, "handheld"
-	// for a scanner terminal or phone — one column, large targets (ADR-0057 D1).
+	// for a scanner terminal or phone — one column, large targets (ADR-0038).
 	Device string `json:"device,omitempty"`
 }
 

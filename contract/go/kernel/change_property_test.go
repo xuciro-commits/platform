@@ -13,7 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// TestIdempotencySequences maps generated SubmitChecked traces to ADR-0041's
+// TestIdempotencySequences maps generated SubmitChecked traces to ADR-0012's
 // scoped, immutable receipt model; it is evidence, not a refinement proof.
 func TestIdempotencySequences(t *testing.T) {
 	property := func(seed uint64) bool {

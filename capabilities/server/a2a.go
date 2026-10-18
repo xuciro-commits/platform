@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// Agent-to-agent (ADR-0022 D6, D7), A2A 1.0 over JSON-RPC. A declared agent an
+// Agent-to-agent (ADR-0009, D7), A2A 1.0 over JSON-RPC. A declared agent an
 // administrator publishes (the agent app's setting "published") has an agent
 // card at /a2a/<tenant>/<agent>/.well-known/agent-card.json and answers at
 // /a2a/<tenant>/<agent>. Callers sign in as members through the host's
@@ -290,7 +290,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 
 // sendA2A sends an effect to an external agent: a SendMessage whose message ID
 // is the effect's, so a resend is the same message; the task it answers with
-// is the effect's answer, journaled with the outcome (ADR-0022 D7).
+// is the effect's answer, journaled with the outcome (ADR-0009).
 func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect) platform.Outcome {
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}

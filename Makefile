@@ -1,4 +1,4 @@
-# The platform's one entry point, in three layers (ADR-0081):
+# The platform's one entry point, in three layers (ADR-0029):
 #
 #   dev      run it here: infrastructure in containers, the Go host under air,
 #            the workspace under Vite - nothing is rebuilt into an image
@@ -28,7 +28,7 @@ LITE_HOST ?= 127.0.0.1
 GATEWAY_LISTEN ?= 127.0.0.1:8510
 GATEWAY_PACKAGES ?= $(ROOT)/.build/protocol/packages
 GATEWAY_STATE ?= $(ROOT)/.build/protocol/state
-PROTOCOL_VERSION ?= 0.1.3
+PROTOCOL_VERSION ?= 0.1.4
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
 

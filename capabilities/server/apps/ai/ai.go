@@ -1,4 +1,4 @@
-// Package ai is the platform's AI app (ADR-0015), on the app API (ADR-0025 D4).
+// Package ai is the platform's AI app (ADR-0008), on the app API (ADR-0016).
 package ai
 
 import (
@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// AI is the platform's AI capability (ADR-0015): the providers a tenant uses,
+// AI is the platform's AI capability (ADR-0008): the providers a tenant uses,
 // the models it enables and who may call them, and the usage of every call.
 // Providers and models are its decisions; calls are made by the host
 // (aicall.go) and each call's usage is journaled; prompts and answers are not.
@@ -31,10 +31,10 @@ const (
 	LimitType            = platform.AILimitType
 	SchemaLimitSet       = platform.AISchemaLimitSet
 	SchemaLimitRemove    = platform.AISchemaLimitRemove
-	// Settings of the defaults a limit overrides (ADR-0029 D1).
+	// Settings of the defaults a limit overrides (ADR-0008 D1).
 	SettingDailyTokens = platform.AISettingDailyTokens // tokens per person per day; 0: none
 	SettingPerMinute   = platform.AISettingPerMinute   // calls per person or agent per minute; 0: none
-	SettingAppModel    = platform.AISettingAppModel    // the model apps ask when they name none (ADR-0029 D3)
+	SettingAppModel    = platform.AISettingAppModel    // the model apps ask when they name none (ADR-0008 D3)
 	SettingMaxTokens   = platform.AISettingMaxTokens   // the most tokens one answer may ask for; 0: the provider's default
 	Admin              = platform.AIAdmin
 	User               = platform.AIUser // may call models open to users
@@ -53,7 +53,7 @@ type Provider = platform.AIProvider
 // Model is an enabled model and who may call it.
 type Model = platform.AIModel
 
-// Limit overrides the defaults for one member, agent or app (ADR-0029 D1); 0 keeps the default.
+// Limit overrides the defaults for one member, agent or app (ADR-0008 D1); 0 keeps the default.
 type Limit = platform.AILimit
 
 // Name is how callers name the model: "<provider>/<model>".
@@ -75,7 +75,7 @@ type AI struct {
 	recent map[string][]time.Time
 	// inflight are the calls that passed the door and whose usage is not
 	// metered yet: a call in flight counts against its caller's minute, so
-	// calls that start together cannot each pass the same limit (ADR-0050 D4).
+	// calls that start together cannot each pass the same limit (ADR-0008).
 	inflight map[string][]time.Time
 	ledger   *platform.Ledger
 }
@@ -107,7 +107,7 @@ func New(tenant string) *AI {
 	), ProviderType, ModelType, LimitType)}
 }
 
-// Snapshot and Restore: providers, models and usage (ADR-0019 D6).
+// Snapshot and Restore: providers, models and usage (ADR-0024).
 type aiState struct {
 	Providers []Provider       `json:"providers"`
 	Models    []Model          `json:"models"`
@@ -310,7 +310,7 @@ func (a *AI) Usage() []Usage {
 	return slices.Clone(a.usage)
 }
 
-// Defaults are the limits a member without its own takes (ADR-0029 D1):
+// Defaults are the limits a member without its own takes (ADR-0008 D1):
 // tokens a day for people and for agents, and calls a minute; 0: none.
 type Defaults = platform.AIDefaults
 
@@ -368,7 +368,7 @@ func (a *AI) callsLocked(member string, now time.Time) int {
 // registration: it refuses with why, or lets the call start and counts it as in
 // flight until its usage is metered. It is what every model call takes instead
 // of a bare Allow — calls that start together would each pass the same limit
-// otherwise (ADR-0050 D4, review AI-03).
+// otherwise (ADR-0008, review AI-03).
 func (a *AI) Reserve(m platform.Member, model Model, d Defaults, now time.Time) string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -484,7 +484,7 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 type AIUsage = platform.AIUsageReport
 
 // Model is an enabled model by name, whatever the caller's access: agents call
-// the model the tenant set for them (ADR-0021).
+// the model the tenant set for them (ADR-0054).
 func (a *AI) Model(name string) (Model, Provider, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

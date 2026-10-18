@@ -28,7 +28,7 @@ type acceptedRelease struct {
 	CandidateID string    `json:"candidateId"`
 	Bytes       []byte    `json:"bytes"`
 	// Active marks an activation: the tenant's single release pointer moves to
-	// this saved candidate (ADR-0039 D2). A save leaves the pointer alone.
+	// this saved candidate (ADR-0011 D2). A save leaves the pointer alone.
 	Active    bool   `json:"active,omitempty"`
 	UpgradeID string `json:"upgradeId,omitempty"`
 	// From names the environment a promoted candidate's sealed bytes came
@@ -267,7 +267,7 @@ func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind
 
 // SaveReleaseCandidates persists one or several saved drafts as one immutable
 // candidate. The bytes are recomputed under the tenant lock, so a joint
-// selection cannot be frozen from a stale browser image (ADR-0048 D4).
+// selection cannot be frozen from a stale browser image (ADR-0011).
 func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
@@ -312,7 +312,7 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 }
 
 // ActivateRelease installs the supported saved closure and moves its pointer
-// in one committed result (ADR-0039 D2). Unsupported upgrades and changed code
+// in one committed result (ADR-0011 D2). Unsupported upgrades and changed code
 // dependencies are refused before either state is exposed.
 func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now time.Time) (string, error) {
 	return t.ActivateReleaseWithUpgrade(m, candidateID, key, "", now)
@@ -463,7 +463,7 @@ func (t *Tenant) acceptedInstallationReleaseLocked(saved platform.ReleaseCandida
 
 // pendingWorkFitsLocked refuses an activation that would change the action a
 // pending approval holds: the approval must run under the release it opened
-// in (ADR-0039 D4). There is no migration; decide or withdraw it first.
+// in (ADR-0011 D4). There is no migration; decide or withdraw it first.
 func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 	if t.app(platform.WorkApp) == nil {
 		return nil

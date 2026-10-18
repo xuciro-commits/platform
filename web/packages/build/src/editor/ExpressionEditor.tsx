@@ -41,7 +41,7 @@ function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: 
   return { refs, windows };
 }
 
-/** Edits the ADR-0101 tree. Validation calls the original Go compiler in Wasm;
+/** Edits the ADR-0040 tree. Validation calls the original Go compiler in Wasm;
  * execution and record/collection authorization remain with original owners. */
 export function ExpressionEditor({ value, onChange, choices = [], lookup, windows, kind = "boolean" }: {
   value: Api.Expr;

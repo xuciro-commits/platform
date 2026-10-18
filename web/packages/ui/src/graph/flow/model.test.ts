@@ -1,4 +1,4 @@
-// The node type system (ADR-0089): a class declares what a node is, one table
+// The node type system (ADR-0033): a class declares what a node is, one table
 // decides what may join what, and the same rule reads a whole graph back.
 import { describe, expect, it } from "vitest";
 import { checkFlowEdges, flowBlockHeight, flowNodeBox, flowNodeWidth, flowPlacement, flowPortFits, validateFlowConnection, type FlowCatalog, type FlowEdge, type FlowNode } from "./model";
@@ -86,7 +86,7 @@ describe("the same rule reads a whole graph back", () => {
   });
 });
 
-// Appearance is a declaration too (ADR-0090 D3): a kind names its own box and
+// Appearance is a declaration too (ADR-0033): a kind names its own box and
 // its default fold, and an instance can override the fold.
 describe("a kind carries how it looks", () => {
   const sized = { id: "big", title: "Big", inputs: [], outputs: [], size: { width: 320, height: 200 } };

@@ -45,7 +45,7 @@ func TestGuardedReadsResponseBodyAfterHeaders(t *testing.T) {
 	}
 }
 
-// receiver is a webhook consumer as ADR-0014 expects one: it checks the
+// receiver is a webhook consumer as ADR-0004 expects one: it checks the
 // signature and keeps one copy per webhook-id.
 type receiver struct {
 	mu      sync.Mutex

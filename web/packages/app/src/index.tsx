@@ -15,7 +15,7 @@ export type {CollaborationTarget,CollaborationHost} from "./collaboration/servic
 export {confirmedDecision} from "./collaboration/decision";
 export {createWorkViews,type WorkViewsHost} from "./work/service";
 export {searchInputObjects} from "./widgets/search-input";
-// The app API of the workspace (ADR-0018), the browser's counterpart of
+// The app API of the workspace (ADR-0019), the browser's counterpart of
 // platformserver/platform: an app's UI declares itself with defineApp and
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
@@ -42,11 +42,11 @@ export { AppSelect, RoleSelect, ProtocolSelect, MemberSelect, useTenantApps } fr
 export { DependencyGraph } from "./semantic/DependencyGraph";
 export { useDependencies, useProvidedCapabilities, type DependencyDescriptor, type DependencyRead, type ProvidedCapability } from "./semantic/dependencies";
 
-/** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
+/** An app the member may open: the tenant runs it and they hold a role in it (ADR-0019). */
 export type AppEntry = Api.AppEntry;
 export type AssetRef = Api.AssetRef;
 export type Definition = Api.Definition;
-/** The signed-in member on this host, with their language (ADR-0023). */
+/** The signed-in member on this host, with their language (ADR-0005). */
 export type Me = Api.MeView;
 /** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
 export type Decision = {
@@ -81,7 +81,7 @@ export type Host = {
   resend: () => Promise<void>;
   entities: EntityInfo[];
   /** The installed assets the member may discover, for navigation built from
-   *  pages — a code page or one composed in this tenant (ADR-0032, ADR-0034). */
+   *  pages — a code page or one composed in this tenant (ADR-0020、ADR-0048). */
   definitions: Definition[];
   source: RecordSource;
   /** Refresh original reads without submitting business actions or replacing drafts. */
@@ -201,14 +201,14 @@ export function useOpenRecord(): (ref: string | { type: string; id: string }, op
   };
 }
 
-/** A dashboard an app ships (ADR-0019 D4): charts in the platform's visualization spec, for the members `for` admits. */
+/** A dashboard an app ships (ADR-0024): charts in the platform's visualization spec, for the members `for` admits. */
 export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };
 
 /** A task surface is presentation context; it never grants owner permissions. */
 export type WorkspaceSurface = "work" | "studio" | "tenant" | "developer";
 
 /**
- * Where an application sits in the Applications portal (ADR-0052 §3.2). A
+ * Where an application sits in the Applications portal (ADR-0018 §3.2). A
  * category is display grouping only; it never grants owner permissions.
  * `business` is every application a tenant hands to its people; the others
  * are the platform's own tools.
@@ -224,7 +224,7 @@ export type AppUI = {
   /** Stable UI contribution identity; existing native app ids are retained. */
   id: string;
   surface?: WorkspaceSurface;
-  /** Portal category (ADR-0052); defaults from `surface`, then `business`. */
+  /** Portal category (ADR-0018); defaults from `surface`, then `business`. */
   category?: PlatformAppCategory;
   /** One line under the title in the portal and on Home. */
   description?: string;
@@ -259,7 +259,7 @@ function AppInputBody({children}:{children:ReactNode}) {
 }
 export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(view=>({...view,render:params=><AppInputView scope={`${app.id}/${view.id}/${params.id??""}/${params.page??""}`}>{view.render(params)}</AppInputView>}))});
 
-// Generated pages (ADR-0016), for any app's entity types.
+// Generated pages (ADR-0046), for any app's entity types.
 
 /** A form generated from an entity's declaration; submits only editable fields. */
 export function GeneratedForm({ type, record, initial, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema }: {
@@ -268,14 +268,14 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   onValuesChange?: (values: Record<string, unknown>) => void;
   submitDisabled?: boolean;
   actionSchema?: string;
-  /** Presentation subset, in this order: a composed page's form asks for these (ADR-0035 16b). */
+  /** Presentation subset, in this order: a composed page's form asks for these (ADR-0048 16b). */
   fields?: string[];
 }) {
   const { source, catalog } = useHost();
   const info = source.entity(type);
   const action = catalog.find((action) => action.schema === (actionSchema??`${type}.${record ? "edit" : "create"}`));
   if (!info || !action) return null;
-  // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0035).
+  // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0048).
   const inputs = new Set(action.payload.map((field) => field.name));
   const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
   return <RecordForm entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record ?? initial} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
@@ -288,7 +288,7 @@ export type SavedView = Api.SavedView;
 
 /**
  * The list page of an entity type: the host's search, sort and pages, within
- * the member's scope, grouped, pivoted or charted (ADR-0019); a member saves
+ * the member's scope, grouped, pivoted or charted (ADR-0024); a member saves
  * where they are as a view of their own.
  */
 /**
@@ -383,7 +383,7 @@ export function Records({ type, description, actions, covers, saved, kanban }: {
   );
 }
 
-/** Import a type's records from CSV after a preview of what each row would do (ADR-0028). */
+/** Import a type's records from CSV after a preview of what each row would do (ADR-0038). */
 function Transfer({ type, client, importable }: { type: string; client: EdgeClient; importable: boolean }) {
   const [file, setFile] = useState<File>();
   const [rows, setRows] = useState<{ row: number; id: string; action: string; outcome: string }[]>();
@@ -430,8 +430,8 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const [editing, setEditing] = useState<EntityRecord>();
   const archive = useRecordArchive(type);
   const transition = useTransition(type);
-  // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
-  // Comments and following (ADR-0028 D6).
+  // Files (ADR-0038): upload the bytes, then attach them to this record by a decision.
+  // Comments and following (ADR-0038).
   const original=useRef({type,id,scope:source.scope});original.current={type,id,scope:source.scope};
   const mounted=useRef(true);useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const scope=source.scope,active=()=>mounted.current&&original.current.type===type&&original.current.id===id&&original.current.scope===scope;

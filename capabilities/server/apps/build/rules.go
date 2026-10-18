@@ -321,6 +321,9 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 	return b.checkObjectRules(*o)
 }
 func (b *Build) checkObjectRules(o Object) error {
+	if err := b.checkObjectProtocols(o); err != nil {
+		return err
+	}
 	lookup := ruleLookup(o, b.conditionLookup)
 	if _, err := formulaOrder(o.Fields); err != nil {
 		return err

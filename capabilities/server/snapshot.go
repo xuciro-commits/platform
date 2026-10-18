@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// A snapshot is a tenant's state at a journal position (ADR-0019 D6): what the
+// A snapshot is a tenant's state at a journal position (ADR-0024): what the
 // host keeps (records and their history, owned work, connectors, notices,
 // settings, endpoints and effects, bindings, the audit) and each app's own,
 // through platform.Snapshotter. Restored into a tenant composed as at start-up,
@@ -53,10 +53,10 @@ type tenantState struct {
 	Notices             []platform.Notification           `json:"notices"`
 	NoticeSeq           int                               `json:"noticeSeq"`
 	Settings            map[string]string                 `json:"settings"`
-	Words               map[string]map[string]string      `json:"words,omitempty"` // the tenant's translations (ADR-0083)
+	Words               map[string]map[string]string      `json:"words,omitempty"` // the tenant's translations (ADR-0005)
 	Endpoints           []*Endpoint                       `json:"endpoints"`
 	Outbound            []effectState                     `json:"outbound"`
-	// The host console's lifecycle and support sessions (ADR-0047 §6.5) travel
+	// The host console's lifecycle and support sessions (ADR-0016 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
 	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
 	HostLifecycle    string                           `json:"hostLifecycle,omitempty"`
@@ -183,7 +183,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 
 // restoreRecords restores the records of every type declared now, and hands
 // back those of types nobody has declared yet: a tenant's own objects, which
-// their definitions install (ADR-0034 D4).
+// their definitions install (ADR-0048).
 func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]recordState, error) {
 	held := map[string][]recordState{}
 	t.records.mu.Lock()
@@ -247,7 +247,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	}
 	// First the records of the types code declares, then the definitions a
 	// tenant authored — which install their own types — then the records of
-	// those (ADR-0034 D4).
+	// those (ADR-0048).
 	held, err := t.restoreRecords(s.Records)
 	if err != nil {
 		return err
@@ -280,7 +280,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 
 // restoreDefinitions reinstalls the tenant-authored definitions when the
 // snapshot's published assets or held records need them, then restores the
-// records of the types they install (ADR-0034 D4).
+// records of the types they install (ADR-0048).
 func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordState) error {
 	needsDefinitions := len(held) > 0
 	for typ, kind := range map[string]platform.AssetKind{build.PropertyTypeType: platform.AssetPropertyType, build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute, build.TableType: platform.AssetCompute} {

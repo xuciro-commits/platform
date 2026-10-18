@@ -1,4 +1,4 @@
-// The Asset Library (ADR-0054 D3): one IDE-shaped view over the public code
+// The Asset Library (ADR-0019 D3): one IDE-shaped view over the public code
 // assets. Left: a searchable tree by layer. Main: the asset's documentation and
 // its live example. Right: how to use it (import, source, API, composition,
 // consumers, open in Builder). Dock: Health of the index and the runtime

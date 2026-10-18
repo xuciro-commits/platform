@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// A page someone composes here (ADR-0034, #132): which object it shows, the
+// A page someone composes here (ADR-0048, #132): which object it shows, the
 // fields its list and its detail carry, and the actions it offers. It is the
 // same descriptor a code page declares, so the workspace renders it with the
 // same component, and every read and action on it is still the member's own.
@@ -31,7 +31,7 @@ type Page struct {
 	Detail      []string `json:"detail" title:"Fields in the detail" help:"The object's field names, in the order one record shows them"`
 	Actions     []string `json:"actions,omitempty" title:"Actions it offers" help:"Actions of that object, by their schema" example:"crm.opportunity.close"`
 	// Sections are what the page is laid out from when someone composes it in
-	// the editor (ADR-0035); with none, the page is the list and detail above.
+	// the editor (ADR-0048); with none, the page is the list and detail above.
 	Sections   []Section                    `json:"sections,omitempty" field:"aside" title:"What is on the page"`
 	Document   *platform.PageDocument       `json:"document,omitempty" field:"aside" type:"json" title:"Page layout"`
 	Selections []platform.SelectionVariable `json:"selections,omitempty" field:"aside" title:"Record selections"`
@@ -67,7 +67,7 @@ type Section struct {
 	ParentSelection      string               `json:"parentSelection,omitempty"`
 	// Relation follows the typed parent selection, or the page's shared record.
 	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
-	// Query is a named query "<app>.<name>" the section lists (ADR-0040 21c).
+	// Query is a named query "<app>.<name>" the section lists (ADR-0047 21c).
 	Query        string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like crm.open-opportunities"`
 	Fields       []string                    `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
 	Actions      []string                    `json:"actions,omitempty" help:"For actions: the schemas it offers"`
@@ -275,7 +275,7 @@ func (b *Build) checkPage(p Page) error {
 		return fmt.Errorf("this tenant has no object %q", p.Object)
 	}
 	if len(p.Sections) > 0 {
-		return nil // the host checks every section when the page is published (ADR-0035)
+		return nil // the host checks every section when the page is published (ADR-0048)
 	}
 	if len(p.List) == 0 || len(p.Detail) == 0 {
 		return fmt.Errorf("a page needs fields in its list and in its detail, or sections to lay out; %s has %s", p.Object, names(info))

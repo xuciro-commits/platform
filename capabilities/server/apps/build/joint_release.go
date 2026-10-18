@@ -406,7 +406,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 
 // ReferencedDrafts lists the saved record drafts a chosen draft depends on and
 // that are not installed yet, so a builder can select them for one joint
-// candidate instead of publishing dependencies first (ADR-0048 D1).
+// candidate instead of publishing dependencies first (ADR-0011).
 //
 // Records only — objects, pages, applications and workflows. A draft whose
 // non-record dependency (an AI function, query or code function) is still a

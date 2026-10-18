@@ -94,7 +94,7 @@ func changedBusinessInputs(before, after []byte) []BusinessInputChange {
 	slices.SortFunc(out, func(a, b BusinessInputChange) int { return strings.Compare(a.Field, b.Field) })
 	return out
 }
-func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission) *kernel.Error {
+func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, binding *platform.SchemaVersion) *kernel.Error {
 	key := correctionOf(sub)
 	if key == "" {
 		return nil
@@ -104,7 +104,8 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission) 
 	if !ok || key == sub.GetIdempotencyKey() || protojson.Unmarshal(prior.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetAuthority() != sub.GetAuthority() || original.GetSchema().GetName() != sub.GetSchema().GetName() || original.GetTarget().GetType() != sub.GetTarget().GetType() || original.GetTarget().GetId() != sub.GetTarget().GetId() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A correction needs the same applicant, action and target as its original refused request")
 	}
-	if len(changedBusinessInputs(original.GetPayload(), sub.GetPayload())) == 0 {
+	sameSchema := original.GetSchema().GetVersion() == sub.GetSchema().GetVersion() && reflect.DeepEqual(prior.SchemaVersion, binding)
+	if sameSchema && len(changedBusinessInputs(original.GetPayload(), sub.GetPayload())) == 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Unchanged inputs must repeat the original request key")
 	}
 	return nil

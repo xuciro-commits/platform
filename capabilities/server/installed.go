@@ -12,7 +12,7 @@ import (
 	"platformserver/platform"
 )
 
-// Objects a tenant defines are installed into the running host (ADR-0034):
+// Objects a tenant defines are installed into the running host (ADR-0048):
 // the record store keeps their records, the host routes their generated
 // actions to the app that owns them, and the asset registry offers the object,
 // its actions and its page. From then on they are ordinary entity types — the
@@ -53,15 +53,30 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 		}
 		t.owner["action:"+action.Schema] = owner
 	}
+	for name, owner := range t.owner {
+		if owner.Manifest().ID == id && strings.HasPrefix(name, "read:protocol:"+e.Type+":") {
+			delete(t.owner, name)
+		}
+	}
+	for _, protocol := range e.Protocols {
+		for _, name := range protocol.Reads {
+			t.owner["read:"+name] = t.app(id)
+		}
+	}
 	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
 		return def.Ref.App == id && def.Source == "tenant" && def.Action != nil && def.Action.Target == info.Type && !slices.ContainsFunc(actions, func(action platform.Action) bool { return action.Schema == def.Ref.Name })
 	})
-	return t.installDefinitions(id, info, actions, pages)
+	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
+		return def.Ref.App == id && def.Protocol != nil && slices.ContainsFunc(def.Requires, func(ref platform.AssetRef) bool {
+			return ref.Kind == platform.AssetAction && strings.HasPrefix(ref.Name, e.Type+".")
+		})
+	})
+	return t.installDefinitions(id, info, actions, pages, e.Protocols...)
 }
 
 // install declares a type, or declares it again: the rows are carried into the
 // new Go type through their JSON, so a record keeps the value of every field
-// that is still there (ADR-0034 D3).
+// that is still there (ADR-0048).
 func (s *recordStore) install(info platform.EntityInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -139,8 +154,8 @@ func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 }
 
 // installDefinitions puts the installed object, its actions and its pages in
-// the asset registry, so code and builder discover one set of assets (ADR-0032).
-func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page) error {
+// the asset registry, so code and builder discover one set of assets (ADR-0020).
+func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error {
 	var describeErr error
 	put := func(def platform.Definition) {
 		if describeErr != nil {
@@ -169,6 +184,22 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetPage, Name: p.Name}, Source: "tenant", Version: "1",
 			ContractVersion: 1, Page: &p})
 	}
+	for _, provision := range protocols {
+		protocol := platform.ProtocolReleaseDescriptor{Name: provision.Protocol.Name, Version: provision.Protocol.Version, Actions: slices.Clone(provision.Protocol.Actions), Reads: slices.Clone(provision.Protocol.Reads), ActionBindings: map[string]platform.AssetRef{}, ActionRoles: map[string][]string{}, ReadBindings: map[string]platform.AssetRef{}}
+		for _, action := range protocol.Actions {
+			mapped := provision.Actions[action.Schema]
+			protocol.ActionBindings[action.Schema] = platform.AssetRef{App: app, Kind: platform.AssetAction, Name: mapped}
+			for _, actual := range actions {
+				if actual.Schema == mapped {
+					protocol.ActionRoles[action.Schema] = slices.Clone(actual.Roles)
+				}
+			}
+		}
+		for _, read := range protocol.Reads {
+			protocol.ReadBindings[read] = object
+		}
+		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetProtocol, Name: protocol.Name}, Source: "tenant", Version: "1", ContractVersion: protocol.Version, Protocol: &protocol})
+	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return describeErr
 }
@@ -193,7 +224,7 @@ func (t *Tenant) reinstall() error {
 
 // InstallPage offers a page an app composed at runtime: it must name an object
 // this tenant has, fields that object declares and actions about it, so the
-// workspace can always open what the registry offers (ADR-0034, #132). The
+// workspace can always open what the registry offers (ADR-0048, #132). The
 // member's own reads and catalog still decide what they see on it.
 func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	return t.installPage(app, p, true)
@@ -210,7 +241,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) er
 	p = p.EffectiveModelPage(t.entity)
 	id := app.Manifest().ID
 	if p.Name == "" || (p.Layout != "list-detail" && p.Layout != "composed") {
-		return fmt.Errorf("page %q: a page is list-detail, or composed of sections (ADR-0035)", p.Name)
+		return fmt.Errorf("page %q: a page is list-detail, or composed of sections (ADR-0048)", p.Name)
 	}
 	if p.Document != nil && p.Layout != "composed" {
 		return fmt.Errorf("page %s: a structured layout needs composed sections", p.Name)
@@ -283,7 +314,7 @@ var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
 // checkSections holds a composed page to what this tenant has: a widget it
 // knows, an object, the fields, actions and measures that object declares
-// (ADR-0035). What the registry offers must open.
+// (ADR-0048). What the registry offers must open.
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
 	p = p.EffectiveModelPage(t.entity)
 	if err := p.Document.Check(p.Sections); err != nil {
@@ -866,7 +897,7 @@ func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
 }
 
 // InstallApplication offers an application a tenant handed to its people: a
-// name over pages that are already installed (ADR-0036). It grants nothing —
+// name over pages that are already installed (ADR-0046). It grants nothing —
 // the registry offers each page to whoever may read what it shows, and an
 // application to whoever may open one of its pages.
 func (t *Tenant) InstallApplication(app platform.App, a platform.Application) error {

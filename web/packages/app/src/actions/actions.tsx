@@ -90,8 +90,8 @@ function ReadPicker({ id, field, value, onChange, onUnit }: { id: string; field:
 }
 
 /** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
- * field tagged ref:"enterprise.element" (ADR-0067 D8) — read through the typed query and
- * resolve contracts (ADR-0094), never the whole graph. The model is every member's to read. */
+ * field tagged ref:"enterprise.element" (ADR-0022 D8) — read through the typed query and
+ * resolve contracts (ADR-0034), never the whole graph. The model is every member's to read. */
 function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereotype?: string; value: string; onChange: (id: string) => void }) {
   const { client, source } = useHost();
   const query = useQuery({
@@ -121,7 +121,7 @@ function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereo
   );
 }
 
-/** A list of the records of a type the member may read, for a payload field that names one (ADR-0028 D5). */
+/** A list of the records of a type the member may read, for a payload field that names one (ADR-0038). */
 function RecordPicker({ id, type, value, onChange }: { id: string; type: string; value: string; onChange: (id: string) => void }) {
   const { source } = useHost();
   return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} />;
@@ -131,17 +131,22 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** One submission state for generated record forms, declared payloads and inline hosts. */
-export function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
- const {decide}=useHost(),lock=useRef(false);
+export function DeclaredActionForm({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
+ const {decide,catalog}=useHost(),lock=useRef(false);
  const [values,setValues]=useState<Record<string,unknown>>({...initial,...fixed}),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN"),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>(originalOutcome?.issues??[]);
  const [attempt,setAttempt]=useState<{entry:Entry;values:Record<string,unknown>}|undefined>(()=>originalOutcome?{entry:originalOutcome,values:actionEntryInputs(originalOutcome,{...initial,...fixed})}:undefined);
+ const current=catalog.find(action=>action.schema===openedDeclaration.schema&&action.target===target.type);
+ const refused=attempt&&["SUBMISSION_STATE_REJECTED","SUBMISSION_STATE_CONFLICT"].includes(attempt.entry.state);
+ const attemptedVersion=attempt?.entry.schemaVersion??openedDeclaration.schemaVersion;
+ const schemaChanged=!!refused&&!!attemptedVersion&&!!current?.schemaVersion&&actionInputSignature(current.schemaVersion)!==actionInputSignature(attemptedVersion);
+ const declared=schemaChanged&&current?current:openedDeclaration;
  const sameTarget=attempt?.entry.submission.target?.type===target.type&&attempt.entry.submission.target.id===target.id;
- const changed=!!attempt&&(!sameTarget||actionInputSignature(values)!==actionInputSignature(attempt.values));
+ const changed=!!attempt&&(!sameTarget||schemaChanged||actionInputSignature(values)!==actionInputSignature(attempt.values));
  const submit=async(inputs=values,original=false)=>{
   if(!enabled||preview||lock.current)return false;
   setSubmitted(true);
   if(!original&&!generated&&!payloadSchema(declared.payload).safeParse(inputs).success)return false;
-  const same=!!attempt&&(original||sameTarget&&actionInputSignature(inputs)===actionInputSignature(attempt.values));
+  const same=!!attempt&&(original||!schemaChanged&&sameTarget&&actionInputSignature(inputs)===actionInputSignature(attempt.values));
   const requested=same?{type:attempt!.entry.submission.target!.type!,id:attempt!.entry.submission.target!.id!}:{...target};
   if(!requested.id)return false;
   inputs=structuredClone(same?attempt!.values:inputs);
@@ -158,7 +163,7 @@ export function DeclaredActionForm({declared,target,revision,onCancel,onComplete
  const change=(next:Record<string,unknown>)=>{setOwnerIssues(old=>old.filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>next[name]===values[name])));setValues({...next,...fixed});};
  const refusalView=refusal&&<ActionRefusal entry={attempt?.entry} message={refusal} original={!pending?attempt?.values:undefined}/>;
  const retry=attempt&&!pending&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
- const label=submitting?t("Executing…"):pending?t("Retry confirmation"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
+ const label=submitting?t("Executing…"):pending?t("Retry confirmation"):schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
  if(generated)return <div className="grid gap-3">{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={initial} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onValuesChange={change} onSubmit={async inputs=>await submit(inputs as Record<string,unknown>)||undefined}/>{retry}</div>;
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
@@ -233,7 +238,7 @@ export function useNewRecord(type: string, onCreated?: (target: { type: string; 
 /** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
 export function RecordActions({ type, record, allowed, steps: withSteps = false }: {
   type: string; record: EntityRecord; allowed?: string[];
-  /** Also the lifecycle's steps from where the record stands — where no status bar shows them (a composed page's actions, ADR-0037). */
+  /** Also the lifecycle's steps from where the record stands — where no status bar shows them (a composed page's actions, ADR-0044). */
   steps?: boolean;
 }) {
   const { catalog, source } = useHost();
@@ -266,7 +271,7 @@ export function useTransition(type: string) {
   return { take, dialog };
 }
 
-/** An action taken as one effect of a page event chain (ADR-0053 §11): at once
+/** An action taken as one effect of a page event chain (ADR-0047): at once
  * when it takes no input, through its form otherwise. Resolves true when the
  * host accepted it, false when the person cancelled, so the chain can stop. */
 export function useActionEffect() {

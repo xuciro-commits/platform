@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// Files (ADR-0028): bytes are uploaded to the tenant's store and answered with
+// Files (ADR-0038): bytes are uploaded to the tenant's store and answered with
 // their SHA-256; a decision of the files app attaches them to a record. Bytes
 // no decision attached within a day are removed.
 

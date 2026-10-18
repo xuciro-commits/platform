@@ -3,7 +3,7 @@ import { assetKey, DependencyGraph, useDependencies, useReadQuery } from "@platf
 import { Button, DataTable, Panel, t, type Route } from "@platform/ui";
 
 // Runtime outcomes remain with integration owners. Declared relationships use
-// the shared release descriptor graph (ADR-0118).
+// the shared release descriptor graph (ADR-0056).
 type Conn = { id: string; name: string; title: string; kind: string; state: string };
 type Src = { id: string; title: string; name: string; connection?: string; profile?: string; url?: string; entity?: string; object?: string; dataset?: string; key?: string; mapping?: { from: string; to: string }[]; state: string };
 type Ds = { id: string; title: string; name: string; producer?: string; version?: number; schema?: { name: string }[] };

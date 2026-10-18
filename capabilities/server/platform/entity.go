@@ -15,7 +15,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// The application model (ADR-0016). An app declares its entity types once, as
+// The application model (ADR-0046). An app declares its entity types once, as
 // Go structs; the host keeps their records, and gives every type the same
 // reads (filter, sort, page, history, related records), a record page and
 // generated forms. The app keeps the rules: its decisions put records through
@@ -54,6 +54,7 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
+	Protocols        []Provision
 	CreateTxn        *BusinessTxn
 	ApplyCreateTxn   func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
 	Versioning       *Versioning
@@ -68,7 +69,7 @@ type Entity struct {
 	ComputeAt func(c Caller, record any, now time.Time) *kernel.Error
 	// Validate, when set, may refuse a record after Compute and before the
 	// store's own checks: cross-record rules such as one extension record per
-	// base record (ADR-0058 A3). It receives a pointer to the record.
+	// base record (ADR-0020 A3). It receives a pointer to the record.
 	Validate func(c Caller, record any) *kernel.Error
 	// ValidateAt supplies the accepted input's clock to time-dependent rules.
 	ValidateAt func(c Caller, record any, now time.Time) *kernel.Error
@@ -77,32 +78,32 @@ type Entity struct {
 	Title  string // "Opportunity"
 	Plural string // "Opportunities"; default: Title with the English plural rule
 	// Description says what a record of this type is, for people and agents
-	// (ADR-0023 D1); Synonyms are other names people use for it, comma-separated.
+	// (ADR-0005 D1); Synonyms are other names people use for it, comma-separated.
 	Description string
 	Synonyms    string
 	Model       any    // the struct's zero value, e.g. Opportunity{}
 	Display     string // the field naming a record; default: the first search field, else the ID
 	Scope       Scope
 	// KnowledgeFiles makes the text files attached to its records knowledge,
-	// searched and cited like a knowledge field (ADR-0028 D3).
+	// searched and cited like a knowledge field (ADR-0038).
 	KnowledgeFiles bool
 	// Standard asks for generated create, edit and archive actions (D5),
 	// named <type>.create, <type>.edit and <type>.archive.
 	Standard Standard
 	// Implements names the interfaces this type carries the fields of
-	// (ADR-0058 A2); the host checks them when the tenant is composed.
+	// (ADR-0020 A2); the host checks them when the tenant is composed.
 	Implements []string
 	// Extends names the type this one adds fields to, one record per base
-	// record through its `base` reference (ADR-0058 A3); its pages merge them.
+	// record through its `base` reference (ADR-0020 A3); its pages merge them.
 	Extends         string
 	ExtensionSource *ExtensionSource
-	// Lifecycle makes the type a document that moves through states (ADR-0017).
+	// Lifecycle makes the type a document that moves through states (ADR-0007).
 	Lifecycle *Lifecycle
 	// Seed are the records the type starts with in a tenant (a deployment's or
 	// a package's configuration, like the organisation's seed); decisions change
 	// them afterwards, and replay starts from them again.
 	Seed []any
-	// Derived is content this type took from other records (ADR-0033), and
+	// Derived is content this type took from other records (ADR-0009), and
 	// Withheld the boolean field the host sets when it left some of it out for
 	// a reader. The host checks every source again at each read; the app's only
 	// duty is to keep the refs on the record when it writes the content.
@@ -111,7 +112,7 @@ type Entity struct {
 }
 
 // Derivation says that some of a type's content came from other records
-// (ADR-0033): what the reader may not read at the source is not read here
+// (ADR-0009): what the reader may not read at the source is not read here
 // either, however long ago it was written.
 type Derivation struct {
 	// From is the field holding the records the content came from: refs
@@ -139,7 +140,7 @@ type DerivationInfo struct {
 }
 
 // Lifecycle declares a status field, its states and the transitions between
-// them (ADR-0017 D1). Each transition is an action <type>.<name>; the status
+// them (ADR-0007). Each transition is an action <type>.<name>; the status
 // changes only through transitions, so a record's history is its lifecycle.
 type Lifecycle struct {
 	Field       string // the status field: read-only text or choice
@@ -152,7 +153,7 @@ type State struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
 	Tone        string `json:"tone,omitempty" enum:"info,success,warning,danger,neutral"`
-	Description string `json:"description,omitempty"` // what a record in this state means (ADR-0023 D1)
+	Description string `json:"description,omitempty"` // what a record in this state means (ADR-0005 D1)
 }
 
 // Transition moves a record from one of From to one of To. Do, when set,
@@ -176,7 +177,7 @@ type Transition struct {
 	Payload       []Field
 	DeferRequired bool      `json:"-"` // the transition owner explains missing inputs in its own terms
 	Capability    string    // default: the entity type
-	Approval      *Approval // the transition waits for these approvers (ADR-0017)
+	Approval      *Approval // the transition waits for these approvers (ADR-0007)
 	Do            func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
 	// After runs once the transition is accepted and the record stored: what
 	// follows from it elsewhere (another record, a notification, an effect).
@@ -254,7 +255,7 @@ type Standard struct {
 	Roles                 []string
 	Capability            string // default: the entity type
 	// CreateRoles, EditRoles and ArchiveRoles, when set, say who may take that
-	// verb instead of Roles (ADR-0037 18b): a role that reads may not create.
+	// verb instead of Roles (ADR-0044 18b): a role that reads may not create.
 	CreateRoles, EditRoles, ArchiveRoles []string
 }
 
@@ -277,7 +278,7 @@ type Scope struct {
 	Structure string // organisation structure for unit and below
 	Unit      string // field holding the record's unit
 	// Owner is the field holding the member who owns the record, or
-	// OwnerCreated: whoever's decision created it (ADR-0037 D5).
+	// OwnerCreated: whoever's decision created it (ADR-0044).
 	Owner string
 	// Participants are the members a record concerns — a request's requester
 	// and approvers, a task's candidates: they read it whatever their role in
@@ -285,7 +286,7 @@ type Scope struct {
 	Participants func(record any) []string
 	// Through makes a record readable exactly when the record it names
 	// ("<type>/<id>") is: a file attached to a ticket, a comment on an order
-	// (ADR-0028). It replaces roles and levels for the type.
+	// (ADR-0038). It replaces roles and levels for the type.
 	Through func(record any) string
 }
 
@@ -294,7 +295,7 @@ const (
 	ScopeBelow  = "below"
 	ScopeUnit   = "unit"
 	ScopeOwn    = "own"
-	// ScopeNone hides the type and its records from the role (ADR-0037 18b).
+	// ScopeNone hides the type and its records from the role (ADR-0044 18b).
 	ScopeNone = "none"
 	// OwnerCreated as Scope.Owner makes a record its creator's.
 	OwnerCreated = "created"
@@ -311,7 +312,7 @@ func (s Scope) Level(role string) string {
 	return s.Default
 }
 
-// LevelFor is the widest level any of roles gives (ADR-0078 §3.3); none without a role.
+// LevelFor is the widest level any of roles gives (ADR-0027 §3.3); none without a role.
 func (s Scope) LevelFor(roles []string) string {
 	levels := make([]string, 0, len(roles))
 	for _, r := range roles {
@@ -338,33 +339,33 @@ type FieldInfo struct {
 	ReadOnly    bool              `json:"readOnly,omitempty"`
 	AliasOf     string            `json:"aliasOf,omitempty"`
 	// Aside marks a field a purpose-built surface writes — a page's sections in
-	// the composer (ADR-0035) — so generated forms do not ask for it. Its
+	// the composer (ADR-0048) — so generated forms do not ask for it. Its
 	// actions still take it, and it is read and shown like any other field.
 	Aside   bool     `json:"aside,omitempty"`
 	Choices []string `json:"choices,omitempty"`
 	// ChoiceTitles are the choices in the reader's language, beside the values
-	// records hold; the host fills them when it translates (ADR-0023).
+	// records hold; the host fills them when it translates (ADR-0005).
 	ChoiceTitles []string `json:"choiceTitles,omitempty"`
 	Ref          string   `json:"ref,omitempty"` // the entity type a reference points to
 	// Stereotype narrows a reference to the enterprise model (ref:"enterprise.element")
-	// to one UAF stereotype, tag stereo:"ActualLocation" (ADR-0067 D8).
+	// to one UAF stereotype, tag stereo:"ActualLocation" (ADR-0022 D8).
 	Stereotype string `json:"stereotype,omitempty"`
 	// Inverse names the relation from the referenced record back to this one
-	// ("opportunities" on an account), tag inverse:"…" (ADR-0040 21b D1).
+	// ("opportunities" on an account), tag inverse:"…" (ADR-0047 21b D1).
 	Inverse string `json:"inverse,omitempty"`
 	// Knowledge marks a text field agents and members find through the
-	// knowledge app (ADR-0022 D1), tag knowledge:"true".
+	// knowledge app (ADR-0009), tag knowledge:"true".
 	Knowledge bool `json:"knowledge,omitempty"`
-	// Field security (ADR-0028 D3), from the tags read:"role,role" and
+	// Field security (ADR-0038), from the tags read:"role,role" and
 	// write:"role": the app's roles that read the field, and those that set it
 	// through generated actions; empty: every role that reads the record.
 	// Who may not read a field may not set it either.
 	Read  []string `json:"read,omitempty"`
 	Write []string `json:"write,omitempty"`
-	// Personal marks personal data (ADR-0028 D4), tag personal:"contact",
+	// Personal marks personal data (ADR-0038), tag personal:"contact",
 	// "identity", "health", "finance" …: its reads are audited.
 	Personal string `json:"personal,omitempty"`
-	// Meaning (ADR-0023 D1), from the tags help:"…", synonyms:"a,b" and
+	// Meaning (ADR-0005 D1), from the tags help:"…", synonyms:"a,b" and
 	// example:"…": what the field holds, other names for it, a typical value.
 	Help     string `json:"help,omitempty"`
 	Synonyms string `json:"synonyms,omitempty"`
@@ -375,7 +376,7 @@ type FieldInfo struct {
 	// must be given; while it does not, it must stay empty. Pages hide it the
 	// same way. One level only: the condition's field is unconditional.
 	When *FieldCondition `json:"when,omitempty"`
-	// Fields are a lines field's columns (ADR-0024): each line is a struct of them.
+	// Fields are a lines field's columns (ADR-0026): each line is a struct of them.
 	Fields []FieldInfo `json:"fields,omitempty"`
 	Index  []int       `json:"-"`
 }
@@ -449,18 +450,18 @@ type EntityInfo struct {
 	Plural          string              `json:"plural"`
 	Description     string              `json:"description,omitempty"`
 	Synonyms        string              `json:"synonyms,omitempty"`
-	KnowledgeFiles  bool                `json:"knowledgeFiles,omitempty"` // its attached text files are knowledge (ADR-0028)
+	KnowledgeFiles  bool                `json:"knowledgeFiles,omitempty"` // its attached text files are knowledge (ADR-0038)
 	App             string              `json:"app"`
 	Display         string              `json:"display"`
 	Fields          []FieldInfo         `json:"fields"`
 	Standard        []string            `json:"standard"`             // the generated actions' schemas
-	Implements      []string            `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0058 A2)
-	Extends         string              `json:"extends,omitempty"`    // the type it adds fields to (ADR-0058 A3)
+	Implements      []string            `json:"implements,omitempty"` // the interfaces it carries the fields of (ADR-0020 A2)
+	Extends         string              `json:"extends,omitempty"`    // the type it adds fields to (ADR-0020 A3)
 	ExtensionSource *ExtensionSource    `json:"-"`
 	Lifecycle       *LifecycleInfo      `json:"lifecycle,omitempty"`
 	Go              reflect.Type        `json:"-"`
 	Scope           Scope               `json:"-"`
-	// Derived and Withheld are ADR-0033's declaration, resolved: the host
+	// Derived and Withheld are ADR-0009's declaration, resolved: the host
 	// narrows these fields to the sources the reader may still read.
 	Derived  []DerivationInfo `json:"-"`
 	Withheld []int            `json:"-"`
@@ -879,7 +880,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			f.Type = "money"
 		case ft.Kind() == reflect.String && sf.Tag.Get("ref") != "":
 			// A reference named by the type it points at, rather than Ref[T]: how
-			// a definition a tenant authored says it (ADR-0034 D1).
+			// a definition a tenant authored says it (ADR-0048).
 			f.Type, f.Ref, f.Stereotype = "reference", sf.Tag.Get("ref"), sf.Tag.Get("stereo")
 		case ft.Kind() == reflect.String && refined == "date", ft.Kind() == reflect.String && refined == "longtext":
 			f.Type = refined
@@ -922,7 +923,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 	return out, nil
 }
 
-// Reads reports whether a member holding role in the field's app reads it (ADR-0028 D3).
+// Reads reports whether a member holding role in the field's app reads it (ADR-0038).
 func (f FieldInfo) Reads(role string) bool {
 	return len(f.Read) == 0 || slices.Contains(f.Read, role)
 }
@@ -932,7 +933,7 @@ func (f FieldInfo) Writes(role string) bool {
 	return f.Reads(role) && (len(f.Write) == 0 || slices.Contains(f.Write, role))
 }
 
-// ReadsAny reports whether a member holding any of roles reads it (ADR-0078 §3.3: roles add up).
+// ReadsAny reports whether a member holding any of roles reads it (ADR-0027 §3.3: roles add up).
 func (f FieldInfo) ReadsAny(roles []string) bool {
 	return len(f.Read) == 0 || slices.ContainsFunc(roles, f.Reads)
 }
@@ -943,7 +944,7 @@ func (f FieldInfo) WritesAny(roles []string) bool {
 }
 
 // describeDerived resolves Entity.Derived and Entity.Withheld to field indices
-// (ADR-0033), refusing a declaration that names a field the type does not have:
+// (ADR-0009), refusing a declaration that names a field the type does not have:
 // a tenant with one does not start, like any other manifest error.
 func describeDerived(info *EntityInfo, e Entity) error {
 	fail := func(format string, args ...any) error {
@@ -960,7 +961,7 @@ func describeDerived(info *EntityInfo, e Entity) error {
 		return nil
 	}
 	if e.Withheld == "" {
-		return fail("a type that derives content names a withheld field, so a reader is told (ADR-0033 D4)")
+		return fail("a type that derives content names a withheld field, so a reader is told (ADR-0009 D4)")
 	}
 	for _, d := range e.Derived {
 		out := DerivationInfo{Element: d.Element, Names: append([]string{d.From}, d.Fields...)}

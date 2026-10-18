@@ -17,7 +17,7 @@ import (
 
 // journalsUnderTest are the backends the same contract is put through: the
 // lightweight profile's single file always, PostgreSQL when a test database is
-// configured. ADR-0049 S1 asks for one set of tests on both.
+// configured. ADR-0017 S1 asks for one set of tests on both.
 func journalsUnderTest(t *testing.T) []struct {
 	name    string
 	open    func(t *testing.T, tenant string) Journals
@@ -96,7 +96,7 @@ func forgetJournal(t *testing.T, j Journals, tenant string) {
 // TestJournalsKeepTheSameContract puts both backends through the semantics the
 // host relies on: entries in order per tenant, an append that expects the read
 // position, a snapshot of this code, an accepted result committed once under
-// its key, and derived data that survives a restart (ADR-0049 D2).
+// its key, and derived data that survives a restart (ADR-0017 D2).
 func TestJournalsKeepTheSameContract(t *testing.T) {
 	at := time.Date(2026, 10, 5, 8, 0, 0, 0, time.UTC)
 	for _, backend := range journalsUnderTest(t) {
@@ -238,7 +238,7 @@ func TestJournalsKeepTheSameContract(t *testing.T) {
 
 // TestFileJournalRefusesADamagedJournal: a journal whose sequence jumps is not
 // state a host may run on, and the file journal says so instead of guessing
-// (fail-stop, ADR-0049 D1).
+// (fail-stop, ADR-0017 D1).
 func TestFileJournalRefusesADamagedJournal(t *testing.T) {
 	dir := t.TempDir()
 	j, err := OpenFileJournal(dir)

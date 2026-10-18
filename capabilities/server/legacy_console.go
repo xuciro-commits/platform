@@ -7,18 +7,18 @@ import (
 	"platformkernel/kernel"
 )
 
-// Replay-only branches of the console, gathered per ADR-0080 §1.6. Each is a
+// Replay-only branches of the console, gathered per ADR-0062 Each is a
 // contract with journals already written and may be deleted only when no
 // hosted journal still contains the input it decodes:
 //
 //   - enterpriseRoles / legacyConsolePredecessor: directory images written
-//     while the enterprise owner was still called "org" (ADR-0068).
+//     while the enterprise owner was still called "org" (ADR-0022).
 //   - legacyMemberLanguage / replayMemberLanguage: the per-member language
-//     action retired by ADR-0079 (the profile owns language now).
+//     action retired by ADR-0028 (the profile owns language now).
 //
 // Nothing here is reached by a live submission.
 
-// ADR-0080 added core:steward to the local bootstrap seats. Existing journals
+// ADR-0062 added core:steward to the local bootstrap seats. Existing journals
 // still start with the former seats. Remove this one implicit seed role
 // (never a decided grant) from the comparison and require the
 // entire resulting directory to match the exact saved predecessor digest.
@@ -46,7 +46,7 @@ func (d *Console) LegacyCoreSeedPredecessor(saved acceptedState, prior json.RawM
 	return changed && err == nil && hash == saved.Before
 }
 
-// ADR-0068 renamed the org owner. Keep accepted directory bytes unchanged:
+// ADR-0022 renamed the org owner. Keep accepted directory bytes unchanged:
 // historical hashes describe the stored roles, not their current projection.
 func (d *Console) enterpriseRoles() bool {
 	return d.host != nil && d.host.App("enterprise") != nil && d.host.App("org") == nil
@@ -92,7 +92,7 @@ func (d *Console) LegacyConsolePredecessor(saved acceptedState, prior json.RawMe
 	return changed && err == nil && hash == saved.Before
 }
 
-// Retired in ADR-0079. Replay keeps the original schema, change identity and
+// Retired in ADR-0028. Replay keeps the original schema, change identity and
 // Member.Language bytes; the current account projects them until edited.
 const legacyMemberLanguage = "platform.member.language"
 

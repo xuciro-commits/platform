@@ -46,7 +46,7 @@ type AIUsage struct {
 	TokensReported bool           `json:"tokensReported,omitempty"`
 	// TokensEstimated marks usage the provider did not report: the numbers are
 	// the platform's conservative estimate, so an unknown call is never booked
-	// as a free one (ADR-0050 D7, review AI-05).
+	// as a free one (ADR-0008, review AI-05).
 	TokensEstimated bool    `json:"tokensEstimated,omitempty"`
 	Cost            float64 `json:"cost,omitempty"` // USD, when the provider reports it
 	CostReported    bool    `json:"costReported,omitempty"`
@@ -76,7 +76,7 @@ type AITotal struct {
 	// Reported and Estimated split Input+Output into what the provider said
 	// and what the platform had to estimate; CostUnknown counts the calls
 	// whose cost no provider reported, so a cost of 0 is never read as free
-	// when it was simply not said (ADR-0050 D7, review AI-05).
+	// when it was simply not said (ADR-0008, review AI-05).
 	Reported    int `json:"reported"`
 	Estimated   int `json:"estimated"`
 	CostUnknown int `json:"costUnknown"`

@@ -1,9 +1,9 @@
-// BPMN notation for the flow family (ADR-0086 D4): one vocabulary of shapes and
+// BPMN notation for the flow family (ADR-0033): one vocabulary of shapes and
 // markers, so a process reads the same way in every view that draws it. A notation
 // says which shape an activity is drawn as and which marker sits inside it; the
 // owner's own icon still says what the activity does.
 //
-// Node classes (ADR-0089) sit one level above: what a node *is*. A class is a
+// Node classes (ADR-0033) sit one level above: what a node *is*. A class is a
 // declaration, not a drawing — it hands a node its glyph, its palette group and
 // its default notation, so a new scenario picks a class instead of commissioning
 // a renderer.
@@ -88,7 +88,7 @@ export function notationTitle(notation: FlowNotation): string {
 export const eventRing = (notation: FlowNotation): number => notation === "event-start" ? 1.5 : notation === "event-end" || notation === "event-terminate" ? 4 : 2.5;
 
 /* -------------------------------------------------------------------------- */
-/* Node classes (ADR-0089): what a node is, decided by declaration.            */
+/* Node classes (ADR-0033): what a node is, decided by declaration.            */
 /* -------------------------------------------------------------------------- */
 
 /** What a node is, for drawing and grouping. The standing scenarios are named

@@ -20,7 +20,7 @@ import (
 
 // Entry is one durable tenant input or accepted result. Legacy entries replay
 // the application code; accepted-result entries apply saved record and intent
-// bytes without rerunning the original business decision (ADR-0038).
+// bytes without rerunning the original business decision (ADR-0010).
 type Entry struct {
 	App       string          `json:"app"`
 	Kind      string          `json:"kind"`
@@ -28,7 +28,7 @@ type Entry struct {
 	Body      json.RawMessage `json:"body"`
 	At        time.Time       `json:"at"`
 	// Versions are the flow versions instances started with while the entry was
-	// handled (ADR-0020 D6): replay starts them on the same ones, whatever the
+	// handled (ADR-0007): replay starts them on the same ones, whatever the
 	// code declares since.
 	Versions map[string]int `json:"versions,omitempty"`
 }
@@ -186,7 +186,7 @@ func (j *Postgres) Position(tenant string) int64 {
 }
 
 // SaveSnapshot keeps a tenant's state at a position, compressed, with the code
-// that wrote it; the two newest are kept (ADR-0019 D6).
+// that wrote it; the two newest are kept (ADR-0024).
 func (j *Postgres) SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -261,7 +261,7 @@ func (j *Postgres) Snapshot(ctx context.Context, tenant, code string) (int64, []
 }
 
 // Append adds an entry to a tenant's journal. The order is per tenant, so
-// tenants append side by side, each under its own lock (F-34, ADR-0027 D7).
+// tenants append side by side, each under its own lock (F-34, ADR-0007 D7).
 func (j *Postgres) Append(ctx context.Context, tenant string, e Entry) error {
 	j.mu.Lock()
 	lock := j.locks[tenant]
@@ -372,7 +372,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 func (j *Postgres) Close() { j.pool.Close() }
 
 // The journal's database also keeps what is derived outside the journal
-// (ADR-0022): passages' vectors and model calls' transcripts. Losing either
+// (ADR-0009): passages' vectors and model calls' transcripts. Losing either
 // loses no truth, so failures are logged, not fatal.
 
 func (j *Postgres) Vectors(tenant, model string, hashes []string) map[string][]float32 {

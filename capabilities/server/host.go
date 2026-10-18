@@ -40,7 +40,8 @@ type Delivery struct {
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
 	observationWindows map[string]observationWindowAttempt
-	confirmationReads  map[string]confirmationReadAttempt
+	confirmationReads  map[string]statusReadAttempt
+	dispatchReads      map[string]statusReadAttempt
 	simulation         bool                         // isolated builder execution, never authoritative state
 	simulationTrace    func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
 	// Private control views route callbacks back into their owning decision.
@@ -48,18 +49,18 @@ type Tenant struct {
 	identity      host.IdentityDirectory
 	ID            string
 	// Record, when set, makes each accepted input durable before it is answered;
-	// a failure must stop the server (ADR-0007).
+	// a failure must stop the server (ADR-0010).
 	Record func(Entry)
 	// AcceptResult persists a supported top-level decision or owned-work
 	// attempt before any authoritative changes or intents are visible.
 	AcceptResult func(Entry, string, string) ([]byte, error)
 	// Store keeps what is derived outside the journal: vectors and transcripts
-	// (ADR-0022); without one they stay in memory.
+	// (ADR-0009); without one they stay in memory.
 	Store         Store
 	memStore      journal.Memory // the Store without one
-	knowledge     host.Glossary  // the knowledge app: documents are searched, terms read (ADR-0022)
+	knowledge     host.Glossary  // the knowledge app: documents are searched, terms read (ADR-0009)
 	index         index          // passages cut from documents and knowledge fields
-	i18n          translator     // says declarations and messages in a language (ADR-0023)
+	i18n          translator     // says declarations and messages in a language (ADR-0005)
 	agentRun      string         // the run whose agent is submitting, under mu: its effects name it
 	mu            sync.Mutex
 	streamMu      sync.Mutex                  // one outside-lane source intake pass per tenant
@@ -88,33 +89,33 @@ type Tenant struct {
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
 	opsMu sync.Mutex
 	work  workBoard // queues, failed deliveries and jobs (work_board.go)
-	// Quota is the attempts of owned work each app may make in a minute (ADR-0027 D3); 0: no limit.
+	// Quota is the attempts of owned work each app may make in a minute (ADR-0007 D3); 0: no limit.
 	Quota      int
 	quota      quota           // attempts per app per minute and the round-robin turn (quota.go)
 	breakers   breakers        // per endpoint and AI provider (volatile)
 	connectors connectorRoster // registry, descriptor index, last refusals (connector_roster.go)
 	notices    noticeBoard     // notifications (notices.go)
 	settings   settingValues   // "<app>/<name>" → value (settings.go)
-	words      tenantWords     // the tenant's own translations (words.go, ADR-0083)
-	sequences  sequences       // number counters (ADR-0024)
+	words      tenantWords     // the tenant's own translations (words.go, ADR-0005)
+	sequences  sequences       // number counters (ADR-0026)
 	endpoints  []*Endpoint
 	outbound   []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
 	// PLATFORM_SECRET_<NAME>); Outbound sends an effect's request (default: a
-	// client refusing private addresses). Tests replace both (ADR-0014).
+	// client refusing private addresses). Tests replace both (ADR-0004).
 	Secrets  func(name string) ([]byte, bool)
 	Outbound func(req *http.Request, allowPrivate bool) (*http.Response, error)
 	// AIClient sends model calls (default: a client refusing private addresses
-	// unless the provider is local); tests replace it (ADR-0015).
+	// unless the provider is local); tests replace it (ADR-0008).
 	AIClient  func(req *http.Request) (*http.Response, error)
-	ai        models          // the AI app: the models the host calls (ADR-0015)
-	records   *recordStore    // the apps' entity records (ADR-0016)
-	tasks     host.Tasks      // serves Caller.Assign: the work app (ADR-0017)
-	procs     host.Processes  // the flow app (ADR-0020)
+	ai        models          // the AI app: the models the host calls (ADR-0008)
+	records   *recordStore    // the apps' entity records (ADR-0046)
+	tasks     host.Tasks      // serves Caller.Assign: the work app (ADR-0007)
+	procs     host.Processes  // the flow app (ADR-0007)
 	listeners []string        // platform apps given other apps' events as owned work (host.Listener)
-	agents    AgentRuntime    // AI agents (ADR-0021)
+	agents    AgentRuntime    // AI agents (ADR-0054)
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
-	// Files keeps file bytes (ADR-0028 D1); nil: memory, for development and tests.
+	// Files keeps file bytes (ADR-0038); nil: memory, for development and tests.
 	Files         FileStore
 	ComputeWorker WasmWorker
 	Compiler      CodeCompiler
@@ -157,7 +158,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if err := t.bind(i, a); err != nil {
 			return nil, err
 		}
-		// Roles the host's own apps take (ADR-0025 D4), by the interfaces they implement.
+		// Roles the host's own apps take (ADR-0016), by the interfaces they implement.
 		host.Attach(a, hostView{t: t, app: a})
 		if x, ok := a.(host.Observer); ok {
 			t.observers = append(t.observers, x)
@@ -234,7 +235,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			}
 		}
 	}
-	for _, a := range apps { // agents, once every app is composed (ADR-0021); flows may give them steps
+	for _, a := range apps { // agents, once every app is composed (ADR-0054); flows may give them steps
 		if len(a.Manifest().Agents) == 0 {
 			continue
 		}
@@ -245,7 +246,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
-	for _, a := range apps { // flows, once every app is composed (ADR-0020)
+	for _, a := range apps { // flows, once every app is composed (ADR-0007)
 		if len(a.Manifest().Flows) == 0 {
 			continue
 		}
@@ -256,7 +257,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
-	{ // interfaces, once every entity is described (ADR-0058 A2)
+	{ // interfaces, once every entity is described (ADR-0020 A2)
 		manifests := make([]platform.Manifest, len(apps))
 		infos := map[string]platform.EntityInfo{}
 		for k, a := range apps {
@@ -464,7 +465,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		answer := prior.Error
 		return nil, &answer
 	}
-	if err := t.checkBusinessCorrection(m, s); err != nil {
+	if err := t.checkBusinessCorrection(m, s, binding); err != nil {
 		return nil, err
 	}
 	if m.Agent && t.suspended(m.ID) {
@@ -848,7 +849,7 @@ func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
 	return out
 }
 
-// Apps describes the enabled apps from their manifests (ADR-0010): discovery,
+// Apps describes the enabled apps from their manifests (ADR-0016): discovery,
 // the protocol graph and the capability matrix read this.
 func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
@@ -876,7 +877,7 @@ func (t *Tenant) Apps() []AppInfo {
 	return out
 }
 
-// AppEntry is an app a member may open in the workspace (ADR-0018 D4): the
+// AppEntry is an app a member may open in the workspace (ADR-0019): the
 // tenant runs it and the member holds a role in it.
 type AppEntry struct {
 	ID    string `json:"id"`
@@ -909,7 +910,7 @@ type AppInfo struct {
 	Provides     []string                  `json:"provides"`
 	Consumes     []string                  `json:"consumes"`
 	Emits        []platform.EffectKind     `json:"emits"`
-	Interfaces   []platform.Interface      `json:"interfaces"` // the shapes this app declares (ADR-0058 A2)
+	Interfaces   []platform.Interface      `json:"interfaces"` // the shapes this app declares (ADR-0020 A2)
 }
 
 // checkManifest refuses a manifest the host could not honour: every app's

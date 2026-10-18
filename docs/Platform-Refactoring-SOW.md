@@ -30,7 +30,7 @@
 
 ### 2.2 评审基线确认的短板与风险
 
-以下记录评审时的问题与整改要求；当前实现和已验证边界以 [ADR-0097 §7](ADR/0097-submission-assets-and-host-boundaries.md#7-as-built) 为准，执行顺序以 [WorkQueue](WorkQueue.md) 为准。已完成的结构整改不继续作为欠账，也不替代 §5.2 的完整场景验收。
+以下记录评审时的问题与整改要求；当前实现和已验证边界以 [ADR-0037 §7](ADR/0037-submission-assets-and-host-boundaries.md#7-as-built) 为准，执行顺序以 [WorkQueue](WorkQueue.md) 为准。已完成的结构整改不继续作为欠账，也不替代 §5.2 的完整场景验收。
 
 | 编号 | 证据与判断 | 对产品和维护的影响 | 应达到的结果 |
 | --- | --- | --- | --- |
@@ -47,13 +47,13 @@
 
 ### 2.3 结构根因与本次评审裁决
 
-工程按下列已确认问题组织，不再将 F1–F8 或九个产品域作为相互独立的修补块。结构设计归 [ADR-0097](ADR/0097-submission-assets-and-host-boundaries.md)，具体执行顺序只归 WorkQueue。
+工程按下列已确认问题组织，不再将 F1–F8 或九个产品域作为相互独立的修补块。结构设计归 [ADR-0037](ADR/0037-submission-assets-and-host-boundaries.md)，具体执行顺序只归 WorkQueue。
 
 | 根因 | 核验事实与影响 | 必须完成的结构结果 |
 |---|---|---|
 | RC-1 提交与恢复覆盖双轨 | 七类选择加入接口、匿名 Caller runtime 能力、Submit 的声明/schema/草稿分流及 legacy 直接写路径仍存在。影响 F2/F7 与恢复承诺，不足以证明全部产品故障同因。[E12] | 所有权威状态新写入口显式进入暂存、接受、纯应用契约；缺能力明确拒绝。恢复不重新裁决，旧历史读取与必要状态/事实/发布义务保留，禁止永久新写双轨。 |
 | RC-2 资产生命周期未统一协调 | 已有 AssetKind/AssetRef/ReleaseAsset/Candidate 和通用依赖闭包；缺的是 owner 生命周期注册与覆盖，安装/激活等仍逐类接线，集成记录不在交付闭包。[E3、E12] | 在原模型上统一描述符、依赖、环境绑定、私有试装/迁移计划及接受安装/恢复协调；必要集成定义进入同一应用交付，不另建身份/候选，也不强制合并全部业务模型。 |
-| RC-3 宿主角色边界未贯彻 | 评审基线的具体平台应用 import/断言和私有状态访问已确认；反向耦合范围超过 host.go 的两个类型。当前角色与反向守门实现见 ADR-0097 §7。[E7、E12] | 消费者只依赖所需具名角色，组合与就绪时序明确；提交/恢复/发布不依赖具体应用实现，原守门加入反向检查，迁完即退出例外。 |
+| RC-3 宿主角色边界未贯彻 | 评审基线的具体平台应用 import/断言和私有状态访问已确认；反向耦合范围超过 host.go 的两个类型。当前角色与反向守门实现见 ADR-0037 §7。[E7、E12] | 消费者只依赖所需具名角色，组合与就绪时序明确；提交/恢复/发布不依赖具体应用实现，原守门加入反向检查，迁完即退出例外。 |
 | RC-4 单写者与锁外 I/O 约束未完整治理 | 实际存在单写者、source intake 互斥、锁外准备与回锁校验。调用核验表明 mu→opsMu 有短时合法嵌套，禁止持 opsMu 反向取得 mu；不能直接采纳评审的总锁层级。当前锁义务见宿主 doc.go。[E12] | 保留单写者；按调用事实确定锁归属/禁止同持/合法嵌套，检查准备、撤权/版本再校验、接受及制品回收时序，不复制并发/恢复规则。 |
 
 **修正另一 AI 的“全部 100% 吻合”：** 评审基线的 Manifest 为 27 字段、11 个定义切片，Host 为 46 个直接方法，Tenant 为 59 个直接字段；非测试 platform 包的匿名 Caller runtime 探测为 17 处且不止五种能力。数字只作同版本基线。单记录/批次编码均可实现接受结果；已配置结果存储的记录型 connector Input 缺接受能力会拒绝，不是必然静默回退。不同扩展模式有合理职责，不能从资产接线推断必须合成一个引擎。
@@ -212,7 +212,7 @@ AR-01–AR-17 均为本项目必须逐项满足的要求，适用范围见 §5�
 | --- | --- | --- |
 | S-01 两行业应用交付 | 利用现有酒店和制造应用，各完成实际来源接入、业务语义与页面/流程组合、发布、普通成员业务操作、跨应用协作及诊断 | 两行业各有连贯业务任务，使用相同共享能力并保留不同业务语义；所需集成依赖完整可用，不能用独立前端 Mock 或一组 CRUD 页面代替 |
 | S-02 演进与失败处置 | 对上述应用完成目标环境交付、一次受支持升级，并处理一个实际失败的业务任务或外部投递 | 版本与依赖可核对，环境绑定明确，历史数据和在途任务按声明规则保留；授权拒绝、撤权、重试及恢复结果可解释 |
-| S-03 持续执行 | 从已接入的受控 PostgreSQL 来源，完成 ADR-0047 已接受的持续 Flow 业务处理链及停止、续接、异常处置和恢复 | 原有规模与预算承诺保持，输入到业务结果完整，消费位置和接受结果正确恢复；制品保留与清理有可用结果，不以手动流程替代持续运行 |
+| S-03 持续执行 | 从已接入的受控 PostgreSQL 来源，完成 ADR-0016 已接受的持续 Flow 业务处理链及停止、续接、异常处置和恢复 | 原有规模与预算承诺保持，输入到业务结果完整，消费位置和接受结果正确恢复；制品保留与清理有可用结果，不以手动流程替代持续运行 |
 | S-04 AI 业务任务 | 使用现有 AI 与知识能力完成一个真实模型参与的检索/建议及受控动作确认任务，含拒绝或人工接管路径 | 质量按真实任务评价，来源权限、引用、预算、工具调用和业务执行责任可核对；替身只证明协议，不替代真实模型质量证据 |
 | S-05 共享交互与扩展 | 在业务表单和构建者 Inspector 等入口完成关联选择、日期区间、无效输入纠正、提交失败和重试；通过既有扩展机制完成一项能力的受控演进 | 同一语义跨入口一致，输入不无说明地丢失；扩展的依赖、兼容和退出影响明确，无须修改无关核心或复制共享机制 |
 
@@ -292,12 +292,12 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
 
 架构验收看责任、权威和变更影响；产品验收看完整任务；可靠性验收看实际授权、版本与故障行为；维护性验收看重复路径退出和独立交接能力。不得以删除文件、组件数量、测试数量、覆盖率单一数字或文档厚度代替这些结果。
 
-**当前交付与验收映射。** 已验证的结构交付为 W1、W2 `65ec09e2`、W3 `47bbef7d`；W4 实现基线为 `650555eb`（包含 Catalog Inspector 修正及持续算子、只读资产、死信和制品保留），边界修复与集中验收已交付于 `7cdb9d16`，实际范围归 ADR-0097 §7。以下复用 [ADR-0097 §7](ADR/0097-submission-assets-and-host-boundaries.md#7-as-built) 的对应版本证据，不表示未验证的新改动已通过。产品任务与最终结论分开：有复核方法和接手说明，不等同独立人员已完成操作。 冻结分支 `d26d7a9a` 的 Shell/表单/沙箱及发布交接修复已按内容基点整合，完整类型/Go/Web 单元和 13 条浏览器路线有通过证据；原 lite 两行业认证来源/持久恢复证据保留，准确当前范围见 ADR-0097 §7。独立人员接手与负责人更广体验仍未观察。
+**当前交付与验收映射。** 已验证的结构交付为 W1、W2 `65ec09e2`、W3 `47bbef7d`；W4 实现基线为 `650555eb`（包含 Catalog Inspector 修正及持续算子、只读资产、死信和制品保留），边界修复与集中验收已交付于 `7cdb9d16`，实际范围归 ADR-0037 §7。以下复用 [ADR-0037 §7](ADR/0037-submission-assets-and-host-boundaries.md#7-as-built) 的对应版本证据，不表示未验证的新改动已通过。产品任务与最终结论分开：有复核方法和接手说明，不等同独立人员已完成操作。 冻结分支 `d26d7a9a` 的 Shell/表单/沙箱及发布交接修复已按内容基点整合，完整类型/Go/Web 单元和 13 条浏览器路线有通过证据；原 lite 两行业认证来源/持久恢复证据保留，准确当前范围见 ADR-0037 §7。独立人员接手与负责人更广体验仍未观察。
 
 | 要求 | 已交付内容与证据归属 | 适用边界及当前结论 |
 |---|---|---|
-| AR-01 | Platform 的现行能力地图、原 owner 目录及 Catalog；ADR-0097 按实际职责处置重复提交、资产接线和宿主耦合 | 保留原能力归属，不以注册表推导成熟度；完整场景结论依下表。 |
-| AR-02 | Platform 的层次/角色/术语；Shell 按 ADR-0052/0053；当前权限、业务记录与企业元素分别保持权威 | 结构说明已更新，术语/导航的跨角色体验仍需实际走查。 |
+| AR-01 | Platform 的现行能力地图、原 owner 目录及 Catalog；ADR-0037 按实际职责处置重复提交、资产接线和宿主耦合 | 保留原能力归属，不以注册表推导成熟度；完整场景结论依下表。 |
+| AR-02 | Platform 的层次/角色/术语；Shell 按 ADR-0018/0047；当前权限、业务记录与企业元素分别保持权威 | 结构说明已更新，术语/导航的跨角色体验仍需实际走查。 |
 | AR-03 | W3 具名消费者角色、窄 Attach、声明后 Ready；`cmd/check-boundaries` 扫描生产源码及负例 | 已验证宿主具体应用 import 退出、反向耦合守门与组合就绪；不是全平台功能验收。 |
 | AR-04 | W1 单一接受结果、W2 owner 资产生命周期、W3 角色边界；三类消费者实际迁移 | 结构与影响范围可核对；新增业务/共享交互/外部替换的完整任务效果沿 S-01/02/05。 |
 | AR-05 | 原生 App/协议与受控定义继续分工；包生命周期和候选冻结/晋级/激活沿原归属 | 受支持扩展与兼容拒绝已有工程证据；接手者扩展/退出操作仍须复核，不承诺热插拔。 |
@@ -318,15 +318,15 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
 |---|---|---|
 | S-01 | 两宿主 integration-fabric 的外部输入→清洗→对象→页面/Flow→动作→回写；deploy 演练的 CRM/PMS 与 MES/ERP 原生业务；[Apps 两行业接手步骤](Apps.md#两行业交付与接手操作) | 隔离真实 PostgreSQL 来源客户由普通成员转为 CRM 商机/PMS 住宿，生产行转为 ERP 下达/MES-SFC 操作/协议确认；重启、备份及全日志恢复保持原记录和权限。工程路线通过，独立接手操作尚未观察。 |
 | S-02 | `TestIntegrationReleaseAcrossEnvironments` / `TestJournalIntegrationReleaseAcrossEnvironments` 的目标绑定、v2、旧工作、拒绝/崩溃/重新打开；integration-fabric 的 503/原键重试；deploy 的备份/全日志恢复 | 自动交付/升级及故障证据有效；独立人员目标环境交付与日常失败处置尚未观察。 |
-| S-03 | 固定原 f32 Wasm 七节点、八分区、真实业务 Action、flow.output 只读资产、版本化死信重放、来源/窗口有限重试、原版本停止续接及完整历史引用的有界制品清理；原预算保持，精确运行证据归 ADR-0047 §13.5 / ADR-0097 §7 | owner/host 定向行为与两行业 PostgreSQL/RustFS 完整恢复通过；八路原动作、停止/原游标续接、联合候选的 Workshop 只读消费在恢复后真浏览器通过。数量/TTL 对失败 Action 和 signal 即时限制重放且有界归档，原历史保留。容量和更广真实存储故障不计通过。 |
+| S-03 | 固定原 f32 Wasm 七节点、八分区、真实业务 Action、flow.output 只读资产、版本化死信重放、来源/窗口有限重试、原版本停止续接及完整历史引用的有界制品清理；原预算保持，精确运行证据归 ADR-0016 §13.5 / ADR-0037 §7 | owner/host 定向行为与两行业 PostgreSQL/RustFS 完整恢复通过；八路原动作、停止/原游标续接、联合候选的 Workshop 只读消费在恢复后真浏览器通过。数量/TTL 对失败 Action 和 signal 即时限制重放且有界归档，原历史保留。容量和更广真实存储故障不计通过。 |
 | S-04 | 负责人配置的 OpenRouter `nvidia/nemotron-3-ultra-550b-a55b:free`；酒店真实受权知识检索→票据分类草稿→人工确认→回复草稿→其他成员确认拒绝→人工拒绝并取消；原模型设置已恢复 | 两个实际 run 共六次模型调用，报告 19,473 tokens、costReported=true / $0、单次约 3.3–9.5 秒。指定合成 Wi-Fi 政策任务的建议符合来源且没有发客户消息；不代表通用质量、付费成本或生产 SLA。知识引用授权修复由原 Document.Apps 管理，更新后 8495 已重读原 R2，知识步骤/引用可见且销售不可读，模型配置保留；复验没有重新调用模型或发业务动作。 |
 | S-05 | 共享关联选择、日期/区间输入、原表单拒绝后保留与重试，以及受控定义版本交付；原浏览器/组件回归 | 业务动作与构建者 Inspector 的引用、日期范围、无效原文保留、发布阻断、拒绝纠正重试的实际浏览器路线通过；受控定义版本/旧工作和原包 precheck/upgrade/drain/retire 检查通过。已观察正常/390px 通知、CRM 和 Inspector；负责人更广体验仍须走查。 |
 
 | 成果 | 唯一交付位置 | 当前结论 |
 |---|---|---|
-| D-01–D-04 | 本文件 §2、Platform、ADR-0097 与原能力 ADR | 结构审查、概念/归属、责任与权威说明已更新；最终需求结论采用本节，不新写阶段报告。 |
+| D-01–D-04 | 本文件 §2、Platform、ADR-0037 与原能力 ADR | 结构审查、概念/归属、责任与权威说明已更新；最终需求结论采用本节，不新写阶段报告。 |
 | D-05–D-07 | 原公开契约、Apps、部署 README 和生命周期 ADR；对应 W1–W3 代码 | 装配/受控扩展、代码、兼容和操作方法已交付；独立交接效果仍依 S-01/02 与 AR-17。 |
-| D-08–D-09 | Testing 的原检查入口、ADR-0097 的版本证据、AGENTS/Makefile 和边界脚本 | 已有检查结果可复核；未运行/超时/真实模型及用户体验边界明确，不借测试数量作最终结论。 |
+| D-08–D-09 | Testing 的原检查入口、ADR-0037 的版本证据、AGENTS/Makefile 和边界脚本 | 已有检查结果可复核；未运行/超时/真实模型及用户体验边界明确，不借测试数量作最终结论。 |
 | D-10 | 本节逐项映射及 §7.3 | 本块工程实现、自动路线、运行更新已完成；独立人类接手与负责人更广体验尚未观察，项目保持未最终完成。 |
 
 ### 7.2 测量与运行边界
@@ -368,14 +368,14 @@ AR-01–AR-17 必须逐项有“实际交付内容、适用边界、交付版本
 | 证据 | 仓库位置 | 支撑范围 |
 | --- | --- | --- |
 | E1 | [Intent](Intent.md)、[宿主组件说明](../capabilities/server/doc.go)、[应用公开 API](../capabilities/server/platform/app.go)、[酒店方案组合](../solutions/hospitality/hospitality.go) | 产品宗旨、现有分层、公开契约与实际业务组合 |
-| E2 | [Platform](Platform.md) §2、§10；[现有能力矩阵界面](../web/packages/platform/src/apps.tsx)；[ADR-0052](ADR/0052-foundry-aligned-platform-experience.md)、[ADR-0053](ADR/0053-builder-experience.md) | 产品结构、能力目录、历史基线与目标方向并存；已有工作区和构建器设计 |
-| E3 | [ADR-0047](ADR/0047-platform-composition-and-workspaces.md) §13.5、§14；[发布资产契约](../capabilities/server/platform/revision.go)；[项目资源目录](../web/packages/build/src/projects/resources.ts)；[ADR-0070](ADR/0070-connections-and-source-profiles.md) | 发布资产和集成记录的覆盖差异；持续运行与制品保留边界 |
+| E2 | [Platform](Platform.md) §2、§10；[现有能力矩阵界面](../web/packages/platform/src/apps.tsx)；[ADR-0018](ADR/0018-foundry-aligned-platform-experience.md)、[ADR-0047](ADR/0047-application-studio.md#adr-0047) | 产品结构、能力目录、历史基线与目标方向并存；已有工作区和构建器设计 |
+| E3 | [ADR-0016](ADR/0016-platform-composition-and-workspaces.md) §13.5、§14；[发布资产契约](../capabilities/server/platform/revision.go)；[项目资源目录](../web/packages/build/src/projects/resources.ts)；[ADR-0023](ADR/0023-connections-and-source-profiles.md) | 发布资产和集成记录的覆盖差异；持续运行与制品保留边界 |
 | E4 | [包生命周期](../capabilities/server/packages.go)、[前端包装配](../web/apps/workspace/src/host/packages.ts)、[工作区组合](../web/apps/workspace/src/App.tsx) | 已有包生命周期、原生代码组合与受控应用定义的区别 |
-| E5 | [ADR-0096](ADR/0096-unified-form-input-and-inspector-editing.md) 状态、As built 与边界；[ADR-0053](ADR/0053-builder-experience.md) As built | 表单和 Inspector 共享机制已整合；工程交付与体验验收的边界 |
-| E6 | [WorkQueue](WorkQueue.md)、[ADR-0069](ADR/0069-phase-two-coexist-absorb-replace.md) As built | 当前主线、按需扩展、集成与行业深度的明确边界，不以立案时差距代替现状 |
+| E5 | [ADR-0036](ADR/0036-unified-form-input-and-inspector-editing.md) 状态、As built 与边界；[ADR-0047](ADR/0047-application-studio.md#adr-0047) As built | 表单和 Inspector 共享机制已整合；工程交付与体验验收的边界 |
+| E6 | [WorkQueue](WorkQueue.md)、[ADR-0062](ADR/0062-platform-consolidation.md#adr-0062) As built | 当前主线、按需扩展、集成与行业深度的明确边界，不以立案时差距代替现状 |
 | E7 | [宿主内部接口](../capabilities/server/internal/host/host.go)、[宿主组合](../capabilities/server/host.go)、[定义安装](../capabilities/server/definitions.go)、[状态快照](../capabilities/server/snapshot.go)、[Build](../capabilities/server/apps/build/build.go) | 已确认具体应用耦合和私有状态访问；变更影响须在实施中前后比较 |
 | E8 | [AI 治理](../capabilities/server/apps/ai/ai.go)、[智能体评测](../capabilities/server/agent_eval.go)、[工作配额](../capabilities/server/quota.go)、[WorkQueue](WorkQueue.md) AI 边界 | 预算与评测已有机制；真实任务质量等仍需按交付范围验证 |
-| E9 | [共享业务对象](../capabilities/server/apps/core/core.go)、[企业模型](../capabilities/server/apps/enterprise/enterprise.go)、[WorkQueue](WorkQueue.md) ADR-0088 条目 | 已有人员/账号、地点/企业元素等关联；行业能力限制明确，不把相近概念直接认定为重复 |
-| E10 | [边界检查](../scripts/boundaries.sh)、[已知例外检查](../scripts/escapes.sh)、[减法清单](Subtraction.md)、[ADR-0080](ADR/0080-great-cleanup.md) | 现有工程约束与清理机制；合法历史兼容不能机械删除 |
-| E11 | [Testing](Testing.md)、[ADR-0047](ADR/0047-platform-composition-and-workspaces.md) §13.5/§14 | 已同步持续 Flow 摘要与现有有界 PostgreSQL/worker/部署恢复证据；完整七节点及更广故障/容量/体验仍未验收。本次修正文档，没有重新运行验收 |
-| E12 | [提交/输入/组合/成员读取](../capabilities/server/host.go)：Tenant.Submit、acceptsGenerated、submitAccepted、Input、request、NewTenant、Member；[公开契约](../capabilities/server/platform/app.go)：七类接口、Caller、Runtime、Manifest；[读取契约](../capabilities/server/platform/reads.go)；[资产身份](../capabilities/server/platform/definition.go)：AssetKind/AssetRef；[通用候选](../capabilities/server/platform/revision.go)：ReleaseAsset/Candidate；[资产激活](../capabilities/server/apps/build/activation.go)；[锁外来源](../capabilities/server/continuous_frames.go)：continuousSources/pullContinuousSources；[守门](../scripts/boundaries.sh) | 本次 main 静态根因核验及评审修正；详细裁决/迁移义务归 ADR-0097，不作为运行失败或重构完成证据 |
+| E9 | [共享业务对象](../capabilities/server/apps/core/core.go)、[企业模型](../capabilities/server/apps/enterprise/enterprise.go)、[ADR-0052](ADR/0052-mes-baseline.md) 的行业范围 | 已有人员/账号、地点/企业元素等关联；行业能力限制明确，不把相近概念直接认定为重复 |
+| E10 | [边界检查](../scripts/boundaries.sh)、[已知例外检查](../scripts/escapes.sh)、[减法清单](Subtraction.md)、[ADR-0062](ADR/0062-platform-consolidation.md#adr-0062) | 现有工程约束与清理机制；合法历史兼容不能机械删除 |
+| E11 | [Testing](Testing.md)、[ADR-0016](ADR/0016-platform-composition-and-workspaces.md) §13.5/§14 | 已同步持续 Flow 摘要与现有有界 PostgreSQL/worker/部署恢复证据；完整七节点及更广故障/容量/体验仍未验收。本次修正文档，没有重新运行验收 |
+| E12 | [提交/输入/组合/成员读取](../capabilities/server/host.go)：Tenant.Submit、acceptsGenerated、submitAccepted、Input、request、NewTenant、Member；[公开契约](../capabilities/server/platform/app.go)：七类接口、Caller、Runtime、Manifest；[读取契约](../capabilities/server/platform/reads.go)；[资产身份](../capabilities/server/platform/definition.go)：AssetKind/AssetRef；[通用候选](../capabilities/server/platform/revision.go)：ReleaseAsset/Candidate；[资产激活](../capabilities/server/apps/build/activation.go)；[锁外来源](../capabilities/server/continuous_frames.go)：continuousSources/pullContinuousSources；[守门](../scripts/boundaries.sh) | 本次 main 静态根因核验及评审修正；详细裁决/迁移义务归 ADR-0037，不作为运行失败或重构完成证据 |

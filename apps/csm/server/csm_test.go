@@ -28,7 +28,7 @@ func build(t *testing.T) *platformserver.Tenant {
 	return tn
 }
 
-// ADR-0025 D3: customer service works alone — no CRM, no model: the desk
+// ADR-0016: customer service works alone — no CRM, no model: the desk
 // opens, triages and answers tickets, numbered without gaps; a mail gateway
 // outside opens one through the same action; a ticket unanswered when due is
 // escalated to the leads by the service-level flow.

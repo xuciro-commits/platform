@@ -11,7 +11,7 @@ import (
 )
 
 // Continuous Flow: admission, watermark, dead letters and the batch frame
-// (ADR-0047 §13, plan A).
+// (ADR-0016 §13, plan A).
 
 func TestContinuousBatchAdmissionAndFolding(t *testing.T) {
 	declared := platform.Continuous{Source: "k8.meters", Batch: 3, DeadLetter: true}

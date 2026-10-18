@@ -89,7 +89,7 @@ func (b *mailbox) serve(conn net.Conn) {
 	}
 }
 
-// Email as a notification channel (ADR-0014 D7): an administrator adds an SMTP
+// Email as a notification channel (ADR-0004 D7): an administrator adds an SMTP
 // endpoint for an app's notifications; each notification to a member who signs
 // in with an email address is mailed at least once, with its effect ID as the
 // Message-ID, and replay rebuilds the mails without sending them.

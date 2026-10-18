@@ -14,7 +14,7 @@ import (
 )
 
 // An evaluation re-runs an agent's past runs dry against a candidate model
-// (ADR-0021 D8). Its reference is what people made of each run — the signals:
+// (ADR-0054). Its reference is what people made of each run — the signals:
 // a confirmed or accepted decision should come again, a rejected or corrected
 // one should not. The candidate sees what the run saw (its context at the
 // start, what its reads answered); reads it makes anew read the records as
@@ -41,20 +41,27 @@ type Evaluation struct {
 	Score   float64 `json:"score" field:"readonly"` // agrees and avoids, of the cases
 	Tokens  int     `json:"tokens" field:"readonly"`
 	// Cost is the USD the providers reported for the whole evaluation; calls
-	// whose cost was not reported are not counted here (ADR-0050 D7).
+	// whose cost was not reported are not counted here (ADR-0008).
 	Cost  float64    `json:"cost,omitempty" field:"readonly" title:"Model cost, USD"`
 	Cases []EvalCase `json:"cases" field:"readonly"`
-	// Suite runs the agent's declared cases instead of its past runs (ADR-0029 D6).
-	Suite            bool   `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
-	Candidate        string `json:"candidate,omitempty" field:"readonly" title:"Release candidate"`
-	DefinitionDigest string `json:"definitionDigest,omitempty" field:"readonly" title:"Evaluated definition"`
-	ModelConfig      string `json:"modelConfig,omitempty" field:"readonly" title:"Evaluated model configuration"`
+	// Suite runs the agent's declared cases instead of its past runs (ADR-0008 D6).
+	Suite            bool              `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
+	Candidate        string            `json:"candidate,omitempty" field:"readonly" title:"Release candidate"`
+	DefinitionDigest string            `json:"definitionDigest,omitempty" field:"readonly" title:"Evaluated definition"`
+	ModelConfig      string            `json:"modelConfig,omitempty" field:"readonly" title:"Evaluated model configuration"`
+	Inputs           []EvaluationInput `json:"inputs,omitempty" field:"readonly"`
+}
+
+// EvaluationInput pins the historical run revision selected for a dry rerun.
+type EvaluationInput struct {
+	Run      string `json:"run"`
+	Revision uint32 `json:"revision"`
 }
 
 const suiteRuns = 3 // each declared case, as models vary
 
 // EvalCase is one past run and what the candidate made of it, or one of the
-// agent's declared cases run three times (ADR-0029 D6).
+// agent's declared cases run three times (ADR-0008 D6).
 type EvalCase struct {
 	Case      string  `json:"case,omitempty"`   // the declared case's name
 	Passes    int     `json:"passes,omitempty"` // of Runs
@@ -117,7 +124,7 @@ func normal(s string) string {
 
 // evalBudget is what a whole evaluation of planned runs may spend: the
 // definition's budget once per run, so a suite cannot run past what its runs
-// were each allowed (ADR-0050 D9, review AI-05).
+// were each allowed (ADR-0008, review AI-05).
 func evalBudget(b platform.Budget, planned int) platform.Budget {
 	b.Steps, b.Tokens, b.Cost = b.Steps*planned, b.Tokens*planned, b.Cost*float64(planned)
 	return b
@@ -159,10 +166,24 @@ func (t *Tenant) Evaluate(now time.Time) {
 		if len(evals) == 0 {
 			return
 		}
-		report := t.agents.EvaluateAgent(evals[0], now)
-		t.agentStep(stepBody{Run: evals[0].ID, Evaluation: &report}, now)
+		report := t.agents.EvaluateAgent(evals[0], now, func(ev *Evaluation) bool {
+			revision := ev.Revision
+			t.agentStep(stepBody{Run: ev.ID, Evaluation: ev}, now)
+			t.mu.Lock()
+			current, known := platform.Get[Evaluation](t.automation(AgentApp, false), ev.ID)
+			t.mu.Unlock()
+			if !known || current.Revision != revision+1 {
+				return false
+			}
+			*ev = current
+			return true
+		})
+		if report.State != "done" {
+			return // a checkpoint was not accepted; do no further model work
+		}
+		t.agentStep(stepBody{Run: report.ID, Evaluation: &report}, now)
 		t.mu.Lock()
-		current, known := platform.Get[Evaluation](t.automation(AgentApp, false), evals[0].ID)
+		current, known := platform.Get[Evaluation](t.automation(AgentApp, false), report.ID)
 		t.mu.Unlock()
 		if !known || current.State == "queued" {
 			return // retry on the next work cycle after an append failure
@@ -170,58 +191,145 @@ func (t *Tenant) Evaluate(now time.Time) {
 	}
 }
 
-func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time) Evaluation {
+// evaluationVersion includes the declared inputs as well as the original
+// owner's version. Check functions stay owned by that version, never serialized.
+func (a *Agents) evaluationVersion(d *agentDef) string {
+	cases := make([][]string, len(d.Cases))
+	for i, c := range d.Cases {
+		cases[i] = []string{c.Name, c.Goal, c.Ref}
+	}
+	digest, _ := canonicalDigest([]any{a.definitionVersion(d), cases})
+	return digest
+}
+
+func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time, checkpoint func(*Evaluation) bool) Evaluation {
+	// An append error is not a new evaluation attempt. Retry the exact item
+	// before any further model call, even if another queued ID now sorts first.
+	a.mu.Lock()
+	pending := a.pendingEvaluation
+	a.mu.Unlock()
+	if pending != nil {
+		ev = *pending
+		if !checkpoint(&ev) {
+			return ev
+		}
+		a.mu.Lock()
+		a.pendingEvaluation = nil
+		a.mu.Unlock()
+	}
+	save := func(ev *Evaluation) bool {
+		if checkpoint(ev) {
+			return true
+		}
+		copy := *ev
+		a.mu.Lock()
+		a.pendingEvaluation = &copy
+		a.mu.Unlock()
+		return false
+	}
 	h := a.host
 	endRead := h.BeginAgentRead()
 	c := a.automation(AgentApp, false)
 	d := a.def(ev.Agent)
 	var definitionErr error
+	digest := ""
 	if ev.Candidate != "" {
-		var digest string
 		d, digest, definitionErr = a.evaluationDefinition(ev.Candidate, ev.Agent)
-		if definitionErr == nil && digest != ev.DefinitionDigest {
-			definitionErr = fmt.Errorf("the evaluation's saved declaration differs")
-		}
+	} else if d != nil {
+		digest = a.evaluationVersion(d)
 	}
-	domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
-	past, _, _ := platform.Find[AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
+	if definitionErr == nil && ev.DefinitionDigest != "" && digest != ev.DefinitionDigest {
+		definitionErr = fmt.Errorf("the evaluation's saved declaration differs")
+	}
 	model, pv, err := h.AgentModel(ev.Model)
-	if ev.Candidate != "" && err == nil {
-		config, problem := canonicalDigest([]any{model, pv})
-		if problem != nil || config != ev.ModelConfig {
+	config := ""
+	if err == nil {
+		var problem error
+		config, problem = canonicalDigest([]any{model, pv})
+		if problem != nil || ev.ModelConfig != "" && config != ev.ModelConfig {
 			definitionErr = fmt.Errorf("the evaluation's model configuration changed")
 		}
 	}
 	who, _ := h.Member(ev.Created.By)
+	// Select historical inputs once. Later runs and new human signals cannot
+	// silently change the remaining comparison after a restart.
+	initialize := ev.DefinitionDigest == "" || ev.ModelConfig == ""
+	if !ev.Suite && ev.Inputs == nil {
+		domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
+		past, _, _ := platform.Find[AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
+		ev.Inputs = []EvaluationInput{}
+		for _, run := range past {
+			if len(run.Signals) != 0 {
+				ev.Inputs = append(ev.Inputs, EvaluationInput{Run: run.ID, Revision: run.Revision})
+				if len(ev.Inputs) == evaluationRuns {
+					break
+				}
+			}
+		}
+		initialize = true
+	}
 	endRead()
-	ev.State = "done"
-	if definitionErr != nil {
-		ev.Cases = []EvalCase{{Verdict: "fails", Candidate: definitionErr.Error()}}
-		ev.Fails = 1
+	if definitionErr != nil || d == nil || err != nil {
+		reason := "the agent is not declared, or the model " + ev.Model + " is not enabled"
+		if definitionErr != nil {
+			reason = definitionErr.Error()
+		}
+		ev.Cases = append(slices.Clone(ev.Cases), EvalCase{Verdict: "fails", Candidate: reason})
+		ev.Fails++
+		ev.Score, ev.State = 0, "done"
 		return ev
 	}
-	if d != nil && err == nil && ev.Suite {
-		return a.suite(ev, d, model, pv, who, now)
-	}
-	if d == nil || err != nil {
-		ev.Cases = []EvalCase{{Verdict: "fails", Candidate: "the agent is not declared, or the model " + ev.Model + " is not enabled"}}
-		ev.Fails = 1
-		return ev
-	}
-	for _, run := range past {
-		if len(run.Signals) == 0 {
-			continue
+	if initialize {
+		ev.DefinitionDigest, ev.ModelConfig = digest, config
+		if !save(&ev) {
+			return ev
 		}
-		if len(ev.Cases) == evaluationRuns {
-			break
+	}
+	if ev.Suite {
+		return a.suite(ev, d, model, pv, who, now, save)
+	}
+	for _, input := range ev.Inputs[len(ev.Cases):] {
+		endRead := h.BeginAgentRead()
+		run, known := platform.Get[AgentRunRecord](c, input.Run)
+		endRead()
+		x := EvalCase{Run: input.Run, Verdict: "fails", Candidate: "the evaluation's historical run revision changed"}
+		if known && run.Revision == input.Revision {
+			x = a.rerun(d, run, model, pv, who, now)
 		}
-		x := a.rerun(d, run, model, pv, who, now)
 		ev.Cases = append(ev.Cases, x)
-		ev.Tokens, ev.Cost = ev.Tokens+x.Tokens, ev.Cost+x.Cost
+		evaluationScore(&ev)
+		if !save(&ev) {
+			return ev
+		}
+	}
+	if len(ev.Cases) == 0 {
+		ev.Cases = []EvalCase{{Verdict: "nothing", Candidate: "No run of this agent was confirmed, changed or rejected by a person yet, so there is nothing to compare the candidate with. Let people judge its runs first, or run its declared cases."}}
+	}
+	ev.State = "done"
+	return ev
+}
+
+// Rebuild the small report from its accepted items, including spend from an
+// unfinished suite case. A resumed evaluation uses the same total budget.
+func evaluationScore(ev *Evaluation) {
+	ev.Agrees, ev.Differs, ev.Repeats, ev.Avoids, ev.Asks, ev.Fails = 0, 0, 0, 0, 0, 0
+	ev.Tokens, ev.Cost, ev.Score = 0, 0, 0
+	total, passed := 0, 0
+	for _, x := range ev.Cases {
+		ev.Tokens += x.Tokens
+		ev.Cost += x.Cost
+		if ev.Suite {
+			total, passed = total+x.Runs, passed+x.Passes
+		} else {
+			total++
+			if x.Verdict == "agrees" || x.Verdict == "avoids" {
+				passed++
+			}
+		}
 		switch x.Verdict {
-		case "agrees":
+		case "agrees", "passes":
 			ev.Agrees++
-		case "differs":
+		case "differs", "varies":
 			ev.Differs++
 		case "repeats":
 			ev.Repeats++
@@ -229,16 +337,13 @@ func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time) Evaluation {
 			ev.Avoids++
 		case "asks":
 			ev.Asks++
-		default:
+		case "fails":
 			ev.Fails++
 		}
 	}
-	if n := len(ev.Cases); n > 0 {
-		ev.Score = float64(ev.Agrees+ev.Avoids) / float64(n)
-	} else { // nothing to compare: say so, rather than a report of nothing (the owner's testing)
-		ev.Cases = []EvalCase{{Verdict: "nothing", Candidate: "No run of this agent was confirmed, changed or rejected by a person yet, so there is nothing to compare the candidate with. Let people judge its runs first, or run its declared cases."}}
+	if total > 0 {
+		ev.Score = float64(passed) / float64(total)
 	}
-	return ev
 }
 
 // rerun runs one past run's goal dry with the candidate and judges it.
@@ -298,67 +403,68 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model platform.AIModel, 
 }
 
 // suite runs each of the agent's declared cases three times, dry, and counts
-// the runs that pass (ADR-0029 D6): a case passes when every run does, varies
+// the runs that pass (ADR-0008 D6): a case passes when every run does, varies
 // when some do, and fails when none does. The score is the runs that pass.
-func (a *Agents) suite(ev Evaluation, d *agentDef, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) Evaluation {
-	// The whole evaluation has a ceiling too: each case runs suiteRuns times,
-	// so it may spend the definition's budget that many times over, checked
-	// before each run is started rather than after it spent
-	// (ADR-0050 D9, review AI-05).
+func (a *Agents) suite(ev Evaluation, d *agentDef, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*Evaluation) bool) Evaluation {
 	ceiling, spent := evalBudget(d.Budget, len(d.Cases)*suiteRuns), platform.Budget{}
-	total, passed := 0, 0
-	for _, c := range d.Cases {
-		x := EvalCase{Case: c.Name, Runs: suiteRuns}
-		var why []string
-		for i := range suiteRuns {
+	for _, x := range ev.Cases {
+		spent.Steps += x.Steps
+		spent.Tokens += x.Tokens
+		spent.Cost += x.Cost
+	}
+	for n, c := range d.Cases {
+		if n == len(ev.Cases) {
+			ev.Cases = append(ev.Cases, EvalCase{Case: c.Name})
+		}
+		for ev.Cases[n].Runs < suiteRuns {
+			x := ev.Cases[n]
+			i := x.Runs
 			room := budgetLeft(ceiling, spent)
-			if room.Steps <= 0 || room.Tokens <= 0 || ceiling.Cost > 0 && room.Cost <= 0 {
-				why = append(why, fmt.Sprintf("run %d: over the evaluation's budget", i+1))
-				continue
-			}
-			run := AgentRunRecord{Record: platform.Record{ID: fmt.Sprintf("%s:%s:%d", ev.ID, c.Name, i+1)}, Agent: ev.Agent, Goal: c.Goal, Ref: c.Ref, OnBehalf: who.ID}
-			dry, failed := a.dryRun(d, run, model, pv, who, now, minBudget(d.Budget, room))
-			x.Steps, x.Tokens = x.Steps+dry.StepsUsed, x.Tokens+dry.TokensUsed
-			x.Cost += dry.Cost
-			spent.Steps, spent.Tokens, spent.Cost = spent.Steps+dry.StepsUsed, spent.Tokens+dry.TokensUsed, spent.Cost+dry.Cost
-			got, _, result := decision(d, dry.Steps, dry.Result, func(int) string { return "" })
-			miss := failed
-			switch {
-			case miss != "":
-			case dry.State != "done" && dry.State != "asked":
-				miss = "over its budget"
-			case c.Check != nil:
-				miss = c.Check(platform.CaseRun{Actions: got, Result: result, Asked: dry.State == "asked"})
+			miss := "over the evaluation's budget"
+			if room.Steps > 0 && room.Tokens > 0 && (ceiling.Cost == 0 || room.Cost > 0) {
+				run := AgentRunRecord{Record: platform.Record{ID: fmt.Sprintf("%s:%s:%d", ev.ID, c.Name, i+1)}, Agent: ev.Agent, Goal: c.Goal, Ref: c.Ref, OnBehalf: who.ID}
+				dry, failed := a.dryRun(d, run, model, pv, who, now, minBudget(d.Budget, room))
+				x.Steps, x.Tokens, x.Cost = x.Steps+dry.StepsUsed, x.Tokens+dry.TokensUsed, x.Cost+dry.Cost
+				spent.Steps, spent.Tokens, spent.Cost = spent.Steps+dry.StepsUsed, spent.Tokens+dry.TokensUsed, spent.Cost+dry.Cost
+				got, _, result := decision(d, dry.Steps, dry.Result, func(int) string { return "" })
+				miss = failed
+				switch {
+				case miss != "":
+				case dry.State != "done" && dry.State != "asked":
+					miss = "over its budget"
+				case c.Check != nil:
+					miss = c.Check(platform.CaseRun{Actions: got, Result: result, Asked: dry.State == "asked"})
+				}
+				if i == 0 {
+					x.Candidate = strings.Join(append(got, result), "; ")
+				}
 			}
 			if miss == "" {
 				x.Passes++
 			} else {
-				why = append(why, fmt.Sprintf("run %d: %s", i+1, miss))
+				if x.Reference != "" {
+					x.Reference += "; "
+				}
+				x.Reference += fmt.Sprintf("run %d: %s", i+1, miss)
 			}
-			if i == 0 {
-				x.Candidate = strings.Join(append(got, result), "; ")
+			x.Runs++
+			if x.Runs == suiteRuns {
+				x.Verdict = "varies"
+				if x.Passes == suiteRuns {
+					x.Verdict = "passes"
+				}
+				if x.Passes == 0 {
+					x.Verdict = "fails"
+				}
 			}
-		}
-		x.Verdict = map[bool]string{true: "passes", false: "varies"}[x.Passes == suiteRuns]
-		if x.Passes == 0 {
-			x.Verdict = "fails"
-		}
-		x.Reference = strings.Join(why, "; ")
-		total, passed = total+suiteRuns, passed+x.Passes
-		ev.Tokens, ev.Cost = ev.Tokens+x.Tokens, ev.Cost+x.Cost
-		ev.Cases = append(ev.Cases, x)
-		switch x.Verdict {
-		case "passes":
-			ev.Agrees++
-		case "varies":
-			ev.Differs++
-		default:
-			ev.Fails++
+			ev.Cases[n] = x
+			evaluationScore(&ev)
+			if !checkpoint(&ev) {
+				return ev
+			}
 		}
 	}
-	if total > 0 {
-		ev.Score = float64(passed) / float64(total)
-	}
+	ev.State = "done"
 	return ev
 }
 

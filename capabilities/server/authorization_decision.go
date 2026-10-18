@@ -53,7 +53,7 @@ func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.Authz
 }
 
 // Recovery checks the saved shape, never current grants or policies. Missing
-// evidence remains valid for historical results written before ADR-0105.
+// evidence remains valid for historical results written before ADR-0044.
 func validateAuthorizationEvidence(tenant string, evidence []authorizationEvidence) error {
 	order := []string{"tenant", "principal", "deny", "verb", "row", "fields", "derived", "markings", "allow"}
 	for _, item := range evidence {

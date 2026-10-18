@@ -10,13 +10,13 @@ import (
 	"platformserver/platform"
 )
 
-// Postings (ADR-0063, ADR-0057 block E3): an action adds to or subtracts from
+// Postings (ADR-0039、ADR-0038 block E3): an action adds to or subtracts from
 // a running balance kept on another object of this builder - a stock balance
 // per item and location, a received quantity per order line, a spent amount
 // per budget. The balance record's identity is the posting's match fields, so
 // two actions that name the same item and location meet the same balance; it
 // is created on first posting and changed under the same decision as the
-// action (like Creates, ADR-0040 21c). A reversal is a posting of the other
+// action (like Creates, ADR-0047 21c). A reversal is a posting of the other
 // sign; there is no delete.
 type Post struct {
 	Object string `json:"object" field:"required" help:"A defined object of this builder that keeps the balance" example:"build.stockbalance"`

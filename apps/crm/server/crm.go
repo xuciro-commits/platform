@@ -1,7 +1,7 @@
 // Package crm is a customer and opportunity app (#91), modelled on the
 // account/opportunity core of Salesforce and Dynamics 365 Sales. It knows no
 // other app. It consumes the lodging protocol when a tenant has a provider
-// (ADR-0011): stays booked and rooms held for an opportunity are linked to it
+// (ADR-0006): stays booked and rooms held for an opportunity are linked to it
 // through the platform, and the platform's timeline tells what happens to them.
 package crm
 
@@ -22,7 +22,7 @@ import (
 	"platformserver/platform"
 )
 
-// languages translate the app's titles and descriptions (ADR-0023).
+// languages translate the app's titles and descriptions (ADR-0005).
 //
 //go:embed i18n
 var languageFiles embed.FS
@@ -47,13 +47,13 @@ const (
 
 type Role string
 
-// Account and Opportunity are the CRM's entity types (ADR-0016): the host
+// Account and Opportunity are the CRM's entity types (ADR-0046): the host
 // keeps their records and gives them lists, record pages and history.
 type Account struct {
 	platform.Record
 	Name string `json:"name" field:"required,search" help:"The customer's legal or everyday name" example:"Acme Corp"`
 	Kind string `json:"kind" field:"required" choices:"company,person" help:"Whether the customer is an organisation or one person"`
-	// Phone is personal data when the customer is a person: its reads are audited (ADR-0028 D4).
+	// Phone is personal data when the customer is a person: its reads are audited (ADR-0038).
 	Phone string `json:"phone,omitempty" personal:"contact" help:"The customer's phone number"`
 }
 
@@ -62,10 +62,10 @@ type Opportunity struct {
 	Account platform.Ref[Account] `json:"account" field:"required" inverse:"opportunities"`
 	Title   string                `json:"title" field:"required,search" help:"What is being sold, in the customer's words" example:"Board offsite, 12 rooms"`
 	Owner   string                `json:"owner" field:"readonly" help:"The salesperson who owns it; only they and managers may close it"`
-	// Margin is the expected margin: sales managers read and set it (ADR-0028 D3).
+	// Margin is the expected margin: sales managers read and set it (ADR-0038).
 	Margin float64 `json:"margin,omitempty" type:"decimal" title:"Expected margin" read:"sales-manager" write:"sales-manager" help:"The margin the company expects, in percent; only sales managers see it"`
 	Stage  string  `json:"stage" field:"readonly" choices:"open,won,lost" help:"open while it is being worked on; won or lost once closed"`
-	// The group's block (ADR-0026 D6), as a hotel sales system keeps it: planned
+	// The group's block (ADR-0006 D6), as a hotel sales system keeps it: planned
 	// rooms are held until a cutoff date; won, they are confirmed; lost, or past
 	// the cutoff, they are released.
 	Rooms            int      `json:"rooms,omitempty" field:"readonly" title:"Group rooms"`
@@ -115,7 +115,7 @@ func Entities() []platform.Entity {
 	}
 }
 
-// Actions is the CRM catalog (ADR-0008).
+// Actions is the CRM catalog (ADR-0057).
 func Actions() *platform.Catalog {
 	minimum, maximum := 1.0, 20.0
 	both := []string{string(Sales), string(Manager)}
@@ -186,7 +186,7 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 		}
 		// asks requests each stay of the provider once the decision is accepted
-		// (ADR-0026 D2); unbound, nothing is asked and a person records the answers.
+		// (ADR-0006 D2); unbound, nothing is asked and a person records the answers.
 		var asks []platform.Request
 		ask := func(action, booking string, payload any) {
 			asks = append(asks, platform.Request{Protocol: lodging.ID, Action: action, Target: booking, Payload: payload, Reply: SchemaAnswer})
@@ -409,8 +409,8 @@ func (c *CRM) Handle(who platform.Caller, e platform.Event) *kernel.Error {
 
 func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 
-// Manifest declares the CRM as an app (ADR-0010).
-// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0019 D6).
+// Manifest declares the CRM as an app (ADR-0016).
+// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
 func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
 
 func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }
@@ -458,7 +458,7 @@ func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
 	return options, nil
 }
 
-// Assistant is the CRM's assistant (ADR-0021): asked about an account or an
+// Assistant is the CRM's assistant (ADR-0054): asked about an account or an
 // opportunity, it reads what the tenant knows and drafts the change — a new
 // opportunity, a plan for rooms, an outcome — that the member confirms.
 func Assistant() platform.Agent {
@@ -468,7 +468,7 @@ func Assistant() platform.Agent {
 		Budget:       platform.Budget{Steps: 8, Actions: 2}}
 }
 
-// queries are CRM's named queries, shared by pages and agents (ADR-0040 21c).
+// queries are CRM's named queries, shared by pages and agents (ADR-0047 21c).
 var queries = []platform.NamedQuery{{Name: "open-opportunities", Title: "Open opportunities",
 	Description: "An account's opportunities still being worked on, newest first.", Object: OpportunityType, By: "account",
 	Domain: json.RawMessage(`[["stage","=","open"]]`), Sort: []string{"-id"}}}

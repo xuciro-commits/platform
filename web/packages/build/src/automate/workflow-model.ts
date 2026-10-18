@@ -27,7 +27,7 @@ export function commonSchemaProperties(schema?: ValueSchema): Record<string, Val
 }
 export const workflowKindTitle = (kind: string) => t(({ payload: "Input", query: "Query", action: "Action", act: "Action", transform: "Transform", branch: "Branch", switch: "Switch", foreach: "For each", while: "While", fork: "Parallel paths", all: "Parallel paths", any: "Parallel paths", join: "Join", ask: "Human task", wait: "Wait", subflow: "Run workflow", call: "Run workflow", ai: "AI function", compute: "Code function", end: "Return", break: "Break", continue: "Continue iteration", fail: "Fail" } as Record<string, string>)[kind] ?? kind);
 
-/** What each native step kind *is*, for the canvas's node classes (ADR-0089). A
+/** What each native step kind *is*, for the canvas's node classes (ADR-0033). A
  * capability's kind is the same vocabulary, so a host capability and a native
  * block of the same kind draw with one glyph and one default notation — the
  * class table decides, nothing else names a drawing. */
@@ -147,6 +147,6 @@ export function workflowDiagnostics(draft: WorkflowDraft): Record<string, FlowDi
   return issues;
 }
 
-/** Schedule periods a process may repeat at (ADR-0057 E1); the owner accepts any Go duration of a minute or more. */
+/** Schedule periods a process may repeat at (ADR-0038 E1); the owner accepts any Go duration of a minute or more. */
 export const PERIODS = ["15m", "1h", "24h", "168h"] as const;
 export const periodLabel = (every: string) => ({ "15m": t("every 15 minutes"), "1h": t("every hour"), "24h": t("every day"), "168h": t("every week") })[every] ?? t("every {period}", { period: every });

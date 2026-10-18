@@ -1,4 +1,4 @@
-// Home (ADR-0052 §3.1), after Foundry's landing page: search, what waits for
+// Home (ADR-0018 §3.1), after Foundry's landing page: search, what waits for
 // me, what I opened recently, what I starred, and the applications I may open.
 // It reads only through the host's own reads; nothing here grants access.
 import { useHost, useRead } from "@platform/app";

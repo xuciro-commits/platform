@@ -1,5 +1,5 @@
 import { useDefinitionDraft } from "../session/definition-draft";
-// Agents a builder declares over the ontology (ADR-0077): instructions, the
+// Agents a builder declares over the ontology (ADR-0008): instructions, the
 // published actions and queries they may use, a budget, checkpoints and the
 // cases they must pass. Publishing installs one as build.<name>; the host runs
 // it like any agent - every step journaled, drafts confirmed by a person.

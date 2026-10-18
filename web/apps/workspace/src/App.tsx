@@ -1,4 +1,4 @@
-// The workspace (ADR-0018, ADR-0052): one page and one sign-in for every app a
+// The workspace (ADR-0019、ADR-0018): one page and one sign-in for every app a
 // member may open on this host. The host decides who sees what — the apps the
 // tenant runs and the member holds a role in (`/v1/me`), the actions of their
 // catalog — and each app's UI package contributes its views and navigation
@@ -62,11 +62,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!me) return;
-    if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser (ADR-0023)
+    if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser (ADR-0005)
     let live = true;
     setReady(false);
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
-    setCurrency(me.currency); // the default of amounts people enter (ADR-0024)
+    setCurrency(me.currency); // the default of amounts people enter (ADR-0026)
     client.refreshDeclarations().then(() => { if (live) setReady(true); }, () => { if (live) notify.error(t("Host unreachable")); });
     return () => { live = false; };
   }, [client, identityScope, me?.preferred]);
@@ -101,7 +101,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const chosen = useRef<{ id: string; from?: string } | undefined>(undefined);
   useEffect(() => { chosen.current = undefined; setCurrent(selectionScope ? remembered(selectionScope) : undefined); }, [selectionScope]);
   // The apps this member may open: the code packages above, and the
-  // applications this tenant handed to its people (ADR-0036). The Host
+  // applications this tenant handed to its people (ADR-0046). The Host
   // Console is a host-level application: it appears only for host administrators.
   const [activeRoute, setActiveRoute] = useState<Route>();
   const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })]
@@ -136,7 +136,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [selectionScope]);
   const { setScheme } = useTheme();
   const homeOpened = useRef<string | undefined>(undefined);
-  useEffect(() => { // the member's own appearance and start page follow them to any browser (ADR-0079 §3)
+  useEffect(() => { // the member's own appearance and start page follow them to any browser (ADR-0028 §3)
     if (!me || !ready) return;
     const theme = me.account?.theme;
     if (theme === "light" || theme === "dark" || theme === "system") setScheme(theme);
@@ -189,7 +189,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }
   if (!host || !apps || !ready) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
-  // The portal (ADR-0052 §3.2): every application this member may open, by
+  // The portal (ADR-0018 §3.2): every application this member may open, by
   // category; and the projections they may switch between. Both only group
   // what the host already allowed.
   const portal = all.map(portalEntry);

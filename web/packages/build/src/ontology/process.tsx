@@ -5,7 +5,7 @@ import {actionDestinations,actionResultEdges,actionStateInput,setActionDestinati
 import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
-// The object's process editor (ADR-0037): its states and the actions people
+// The object's process editor (ADR-0044): its states and the actions people
 // take on its records. The main tables and map own selection; the Inspector
 // edits that selection, without a second copy in a structure sidebar.
 // It writes the object's own record through its own action; the host checks
@@ -21,12 +21,13 @@ import { useObjectDraft } from "./object-draft";
 import { ConstraintsEditor } from "./constraints";
 import { TransactionEditor } from "./TransactionEditor";
 import { RecordSetsEditor } from "./record-sets";
+import { ObjectProtocolsEditor } from "./object-protocols";
 import { BusinessVersionEditor } from "./business-version";
 import { useAuthoringModel } from "./authoring-model";
 
 /** The objects of this organisation: open one to give it states and actions. */
 const objectSections = [
-  { id: "overview", title: "Overview" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "actions", title: "Actions" },
+  { id: "overview", title: "Overview" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "actions", title: "Actions" }, { id: "protocols", title: "Protocols" },
   { id: "versions", title: "Business versions" }, { id: "constraints", title: "Business constraints" }, { id: "sets", title: "Record sets" },
   { id: "lifecycle", title: "Lifecycle" }, { id: "permissions", title: "Permissions" }, { id: "data", title: "Data" }, { id: "preview", title: "Preview" },
 ] as const;
@@ -130,6 +131,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Lifecycle")}</h2><Button size="sm" onClick={addState}><Plus />{t("Add a state")}</Button></div>
       <ProcessGraph key={id} objectId={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
     </div>,
+    protocols: <ObjectProtocolsEditor process={process} onChange={change} />,
     versions: <BusinessVersionEditor process={process} entities={entities} onChange={change} />,
     constraints: <ConstraintsEditor process={process} onChange={change} />,
     sets: <RecordSetsEditor process={process} parent={parent} entities={entities} onChange={change} />,
@@ -180,7 +182,7 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
     ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!actionStateInput(a),label:actionStateInput(a)})),
   ]);
-  // One layout brain decides where a state or an action sits (ADR-0092): the
+  // One layout brain decides where a state or an action sits (ADR-0035): the
   // same arrangement the canvas's own tidy-up would choose, sizes included.
   const places = useFlowArrangement([
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, position: { x: 0, y: 0 } })),
@@ -327,7 +329,7 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
 const reads = { all: () => t("Every record"), below: () => t("Those of their units and the units below"), unit: () => t("Those of their own units"), own: () => t("Only their own"), none: () => t("Not at all") };
 const readLevels = ["all", "below", "unit", "own", "none"] as const;
 
-/** Which fields place a record for the row scopes above (ADR-0066): owner for "own", unit + structure for "unit" and "below". */
+/** Which fields place a record for the row scopes above (ADR-0044): owner for "own", unit + structure for "unit" and "below". */
 function ScopeFields({ process, onChange }: { process: Process; onChange: (scope: ObjectScope) => void }) {
   const scope = process.scope ?? {};
   const candidates = process.fields.filter((f) => f.type === "text" || f.type === "reference");

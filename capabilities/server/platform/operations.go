@@ -8,7 +8,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// What the host operates for apps (ADR-0013): scheduled jobs, typed settings,
+// What the host operates for apps (ADR-0027): scheduled jobs, typed settings,
 // notifications and connector deliveries (K8).
 
 // Job is work an app runs on a schedule, as "app:<id>" (manifest).
@@ -18,7 +18,7 @@ type Job struct {
 	Every time.Duration `json:"every"`
 }
 
-// Retry is how owned work tries again (ADR-0027 D4): the first wait, doubling
+// Retry is how owned work tries again (ADR-0007 D4): the first wait, doubling
 // up to Max, at most Attempts attempts; then it fails, is shown, and a person
 // retries it. The host declares one per kind of work; an app may declare its
 // own for the events delivered to it (Manifest.Retry).
@@ -33,7 +33,7 @@ func (r Retry) After(attempts int) time.Duration {
 }
 
 // Setting is a typed per-tenant value an app declares and administrators set in
-// Settings; a value within the app's rules, never a rule (ADR-0008 point 2).
+// Settings; a value within the app's rules, never a rule (ADR-0057 point 2).
 type Setting struct {
 	Name        string   `json:"name"`
 	Title       string   `json:"title"`
@@ -67,7 +67,7 @@ func (c Caller) Setting(name string) string {
 }
 
 // Recipient is a member; whoever holds a membership (with Role, when given) in
-// Unit or in a unit above it in Structure (ADR-0012); or whoever holds AppRole
+// Unit or in a unit above it in Structure (ADR-0022); or whoever holds AppRole
 // in the notifying app.
 type Recipient struct {
 	Member                string

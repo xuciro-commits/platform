@@ -1,5 +1,5 @@
 import { ApplicationSampleAsset } from "./releases/samples";
-// ADR-0108: one application context, five workspaces, original editors.
+// ADR-0047: one application context, five workspaces, original editors.
 import "./i18n";
 import { defineApp, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
@@ -38,7 +38,7 @@ import { studioApplicationID } from "./projects/studio-model";
 import { Activity, BookOpen, Database, Fingerprint, FolderKanban, GitMerge, Hammer, Layers, Plug, Send } from "lucide-react";
 
 const builder = (host: Host) => host.role("build") === "builder";
-// An integrator connects, maps and runs integrations without designing objects or pages (ADR-0075).
+// An integrator connects, maps and runs integrations without designing objects or pages (ADR-0025).
 const integrator = (host: Host) => host.role("build") === "integrator";
 const integration = (): NavSection => ({ label: t("Integration"), items: [
   { label: t("Connections"), icon: <Plug />, route: { view: "connection" } },

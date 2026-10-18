@@ -1,4 +1,4 @@
-// Object Explorer (ADR-0052 §3.4, batch P3): every object type the member may
+// Object Explorer (ADR-0018 §3.4, batch P3): every object type the member may
 // read, and its records with the host's search, sort and pages. One place to
 // browse the Ontology as data; the definition itself opens in the Ontology app.
 import { useHost, useOpenRecord, OpenIn } from "@platform/app";

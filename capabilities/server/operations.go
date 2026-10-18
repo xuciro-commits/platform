@@ -16,10 +16,10 @@ import (
 	"platformserver/platform"
 )
 
-// Platform operations (ADR-0013): work the host owns (event deliveries and
+// Platform operations (ADR-0027): work the host owns (event deliveries and
 // scheduled jobs, K9), the tenant's connectors (K8), notifications and typed app
 // settings. Everything the host runs on its own is an input: it is journaled
-// and a replay runs it again through the same code (ADR-0007).
+// and a replay runs it again through the same code (ADR-0010).
 
 const (
 	maxHops   = 100 // events caused by handlers of events …: a subscription cycle
@@ -106,7 +106,7 @@ func (t *Tenant) enqueue(now time.Time) {
 			}
 			t.deliver(id, e, now)
 		}
-		for _, id := range t.listeners { // flows start and wait on events (ADR-0020); a person answered an agent (ADR-0021)
+		for _, id := range t.listeners { // flows start and wait on events (ADR-0007); a person answered an agent (ADR-0054)
 			if id != e.App && t.app(id).(host.Listener).Interested(names, e.Event) {
 				t.deliver(id, e, now)
 			}
@@ -154,7 +154,7 @@ func (t *Tenant) Work(now time.Time) {
 }
 
 // Round takes up to budget due items, one app after another from where the
-// last round stopped (ADR-0027 D3): each app's first ready delivery, then due
+// last round stopped (ADR-0007 D3): each app's first ready delivery, then due
 // jobs. An app past its quota is deferred to the next minute. It reports
 // whether ready work remains.
 func (t *Tenant) Round(now time.Time, budget int) (more bool) {
@@ -204,7 +204,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 
 // ready is a subscriber's first due delivery that no earlier one holds back:
 // deliveries of one event target keep their order, others pass a failing one
-// (ADR-0027 D2).
+// (ADR-0007 D2).
 func ready(q []*Task, now time.Time) *Task {
 	held := map[string]bool{}
 	for _, x := range q {
@@ -350,7 +350,7 @@ func (t *Tenant) replayWork(kind string, raw []byte, at time.Time) error {
 }
 
 // failedWork tells the platform's administrators that owned work gave up, so
-// someone retries it (ADR-0027 D4); a replay tells them again, the same way.
+// someone retries it (ADR-0007 D4); a replay tells them again, the same way.
 func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool) {
 	if t.app(PlatformApp) == nil {
 		return
@@ -437,13 +437,13 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 	return out
 }
 
-// Notifications: an app tells members something from any input (ADR-0013).
+// Notifications: an app tells members something from any input (ADR-0027).
 
 const noticesKept = 2000
 
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	members := t.recipients(c, now, to)
-	delivery := map[string]Reach{} // how each member wants to be told (ADR-0079 §3)
+	delivery := map[string]Reach{} // how each member wants to be told (ADR-0028 §3)
 	if d, ok := t.app(PlatformApp).(IdentityProfile); ok {
 		for _, m := range members {
 			delivery[m] = d.Reach(m)
@@ -452,7 +452,7 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 	return t.notice(c, n, now, members, delivery)
 }
 
-// recipients are the members to resolves to on now's day (ADR-0012).
+// recipients are the members to resolves to on now's day (ADR-0022).
 func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
 	var members []string
 	for _, r := range to {

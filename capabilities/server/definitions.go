@@ -867,7 +867,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	}
 	out = filterPageNavigation(out)
 
-	// An application is offered to whoever may open one of its pages (ADR-0036).
+	// An application is offered to whoever may open one of its pages (ADR-0046).
 	opens := map[platform.AssetRef]bool{}
 	for _, def := range out {
 		if def.Ref.Kind == platform.AssetPage {
@@ -932,7 +932,7 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 	page.DetailFields = slices.DeleteFunc(slices.Clone(page.DetailFields), func(name string) bool { return !visibleFields[name] })
 	page.Actions = slices.DeleteFunc(slices.Clone(page.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 	// A composed page's widgets are trimmed the same way: a field or an
-	// action this member may not have is not on the page (ADR-0035).
+	// action this member may not have is not on the page (ADR-0048).
 	if len(page.Sections) > 0 {
 		sections := make([]platform.Section, 0, len(page.Sections))
 		for _, section := range page.Sections {
@@ -1247,7 +1247,7 @@ func (t *Tenant) visiblePage(def platform.Definition, m platform.Member, entitie
 }
 
 // visibleApplication is an application definition as m sees it: absent unless
-// they may open one of its pages (ADR-0036); its pages, groups, resources,
+// they may open one of its pages (ADR-0046); its pages, groups, resources,
 // queries and variables are narrowed to the definitions visible so far.
 func (t *Tenant) visibleApplication(registered platform.Definition, m platform.Member, visible []platform.Definition, entities map[string]platform.EntityInfo, opens, visibleResources map[platform.AssetRef]bool) (platform.Definition, bool) {
 	if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || m.Roles[registered.Ref.App] == "" {
