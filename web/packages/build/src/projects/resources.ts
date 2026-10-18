@@ -37,6 +37,16 @@ export const resourceKinds: ResourceKindInfo[] = [
 
 export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.type === type);
 
+/** The original installed declaration determines the category, never its name. */
+export function systemDefinitionsForType(definitions: readonly Api.Definition[], type: string) {
+  const kind = type === "build.evaluation-set" || type === "build.testplan"
+    ? resourceKinds.find(kind => kind.kind === (type === "build.testplan" ? "test-plan" : "evaluation-set")) : kindOfType(type);
+  if (!kind) return [];
+  return definitions.filter(definition => definition.source === "code" && definition.ref.kind === (kind.ref ?? kind.kind)
+    && (type !== "build.table" || !!definition.operation?.rules)
+    && (type !== "build.code" || !!definition.operation && !definition.operation.rules));
+}
+
 /** Published owner references without a local draft still have a normal read-only route. */
 export const publishedResourceKind: ResourceKindInfo = { kind: "definition", type: "", view: "definition", label: "Published resource", plural: "Published resources" };
 

@@ -60,6 +60,124 @@ test("Builder keeps its complete menus, original object and action editors, and 
   await expect(workspaces.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
+test("system definitions are opt-in across lists and keep native references and tenant drafts separate", async ({ page, builder }, testInfo) => {
+  test.setTimeout(60_000);
+  const suffix = fresh("systemlists").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const object = await builder.object({ title: `System list source ${suffix}`, fields: [{ name: "note", title: "Note", type: "text" }] });
+  const queryID = fresh("QUERY"), queryTitle = `Tenant query ${suffix}`;
+  await builder.decide("build.query.create", { type: "build.query", id: queryID }, {
+    name: `query${suffix}`, title: queryTitle, description: "Retain this tenant query when system references are hidden", object: object.type, limit: 20, sort: ["id"], domain: [],
+  });
+  const functionID = fresh("FUNCTION"), functionTitle = `Tenant advice ${suffix}`;
+  await builder.decide("build.function.create", { type: "build.function", id: functionID }, {
+    name: `advice${suffix}`, title: functionTitle, description: "Retain this tenant AI draft", object: object.type, fields: ["note"],
+    instructions: "Summarise the supplied note", output: [{ name: "summary", type: "string", required: true }],
+    maxInputBytes: 4096, maxOutputBytes: 1024, maxTokens: 256, roles: ["builder", "user"],
+  });
+  const flowID = fresh("FLOW"), flowTitle = `Tenant flow ${suffix}`;
+  await builder.decide("build.process.create", { type: "build.process", id: flowID }, {
+    name: `flow${suffix}`, title: flowTitle, manual: true, steps: [{ name: "done", kind: "end" }],
+  });
+  const definitions = await builder.definitions();
+  expect(definitions.find(definition => definition.ref.app === "crm" && definition.ref.kind === "object" && definition.ref.name === "crm.opportunity")?.entity.fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "account", type: "reference", ref: "crm.account" })]));
+  expect(definitions.find(definition => definition.ref.app === "pms" && definition.ref.kind === "object" && definition.ref.name === "pms.reservation")?.entity.fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "roomType", type: "reference", ref: "pms.room-type" })]));
+  const nativeQuery = definitions.find(definition => definition.source === "code" && definition.ref.app === "crm" && definition.ref.kind === "query" && definition.ref.name === "open-opportunities");
+  const nativeFunction = definitions.find(definition => definition.source === "code" && definition.ref.app === "crm" && definition.ref.kind === "function" && definition.ref.name === "record-advice");
+  const nativeFlow = definitions.find(definition => definition.source === "code" && definition.ref.kind === "flow" && !!definition.flow);
+  const nativeAction = definitions.find(definition => definition.source === "code" && definition.ref.kind === "action" && !!definition.action);
+  expect(nativeQuery).toBeTruthy();
+  expect(nativeFunction).toBeTruthy();
+  expect(nativeFlow).toBeTruthy();
+  expect(nativeAction).toBeTruthy();
+
+  await builder.open(page, "/link-type");
+  const navigation = page.getByRole("navigation", { name: "Main", exact: true });
+  const relationships = page.getByRole("region", { name: "Relationships", exact: true });
+  const checkbox = relationships.getByRole("checkbox", { name: "Show system definitions", exact: true });
+  const references = relationships.getByRole("region", { name: "System definitions", exact: true });
+  await expect(checkbox).not.toBeChecked();
+  await expect(references).toHaveCount(0);
+  await checkbox.check();
+  const crmReference = references.getByRole("treeitem", { name: /^Opportunity · Account/ });
+  const pmsReference = references.getByRole("treeitem", { name: /^Reservation · Room type/ });
+  await expect(crmReference).toContainText("account → Account");
+  await expect(pmsReference).toContainText("roomType → Room type");
+  await shots(page, page.locator("body"), "system-relationship-references", testInfo);
+  await crmReference.click();
+  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/object-type", object: "crm.opportunity", tab: "links" });
+  await expect(page.getByRole("tablist", { name: "Object resource views", exact: true }).getByRole("tab", { name: "Relationships", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Native definitions are maintained by their code owner. This workbench provides read-only inspection.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit object", exact: true })).toHaveCount(0);
+
+  await navigation.getByRole("button", { name: "Relationships", exact: true }).click();
+  await expect(checkbox).toBeChecked();
+  await pmsReference.click();
+  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/object-type", object: "pms.reservation", tab: "links" });
+  await expect(page.getByRole("tablist", { name: "Object resource views", exact: true }).getByRole("tab", { name: "Relationships", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Edit object", exact: true })).toHaveCount(0);
+
+  await navigation.getByRole("button", { name: "Queries", exact: true }).click();
+  const queries = page.getByRole("region", { name: "Queries", exact: true });
+  await expect(queries.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
+  const queryReferences = queries.getByRole("region", { name: "System definitions", exact: true });
+  await expect(queryReferences.getByRole("treeitem", { name: /^Open opportunities/ })).toBeVisible();
+  await expect(queries.getByRole("treeitem").filter({ hasText: queryTitle }).last()).toBeVisible();
+  await queries.getByRole("button", { name: "Table", exact: true }).click();
+  await expect(queryReferences).toBeVisible();
+  await expect(queries.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
+  await queries.getByRole("button", { name: "Tree", exact: true }).click();
+
+  await navigation.getByRole("button", { name: "AI functions", exact: true }).click();
+  const functions = page.getByRole("region", { name: "AI functions", exact: true });
+  const functionCheckbox = functions.getByRole("checkbox", { name: "Show system definitions", exact: true });
+  await expect(functionCheckbox).toBeChecked();
+  const functionReferences = functions.getByRole("region", { name: "System definitions", exact: true });
+  await functionReferences.getByRole("textbox", { name: "Search", exact: true }).fill("crm/function/record-advice");
+  const adviceReference = functionReferences.getByRole("treeitem", { name: /^Record summary and review advice/ });
+  await expect(adviceReference).toBeVisible();
+  await adviceReference.click();
+  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/definition", app: "crm", kind: "function", name: "record-advice" });
+  await expect(page.getByRole("region", { name: "Published resource", exact: true })).toContainText("This published definition is read only.");
+
+  await navigation.getByRole("button", { name: "Flows", exact: true }).click();
+  const flows = page.getByRole("region", { name: "Flows", exact: true });
+  await expect(flows.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
+  const flowReferences = flows.getByRole("region", { name: "System definitions", exact: true });
+  await flowReferences.getByRole("textbox", { name: "Search", exact: true }).fill(`${nativeFlow.ref.app}/flow/${nativeFlow.ref.name}`);
+  await expect(flowReferences.getByRole("treeitem", { name: /System definition/ }).last()).toBeVisible();
+  await expect(flows.getByRole("treeitem").filter({ hasText: flowTitle }).last()).toBeVisible();
+
+  await navigation.getByRole("button", { name: "Object types", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
+  const modelSearch = page.getByRole("textbox", { name: "Search model resources", exact: true });
+  await modelSearch.fill("crm.opportunity");
+  await expect(page.getByRole("row").filter({ hasText: "crm.opportunity" })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Show system definitions", exact: true }).uncheck();
+  await expect(page.getByRole("row").filter({ hasText: "crm.opportunity" })).toHaveCount(0);
+  await navigation.getByRole("button", { name: "Action types", exact: true }).click();
+  const publishedActions = page.getByRole("region", { name: "Published action definitions", exact: true });
+  const nativeActionKey = [nativeAction.ref.app, nativeAction.ref.kind, nativeAction.ref.name].join("/");
+  await publishedActions.getByRole("textbox", { name: "Search", exact: true }).fill(nativeActionKey);
+  await expect(publishedActions.getByRole("treeitem").filter({ hasText: nativeActionKey }).last()).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Show system definitions", exact: true }).check();
+  await expect(publishedActions.getByRole("treeitem").filter({ hasText: nativeActionKey }).last()).toBeVisible();
+
+  await navigation.getByRole("button", { name: "AI functions", exact: true }).click();
+  await functionCheckbox.uncheck();
+  await expect(functionReferences).toHaveCount(0);
+  await expect(functions.getByRole("treeitem").filter({ hasText: functionTitle }).last()).toBeVisible();
+  await navigation.getByRole("button", { name: "Queries", exact: true }).click();
+  await expect(queries.getByRole("checkbox", { name: "Show system definitions", exact: true })).not.toBeChecked();
+  await expect(queryReferences).toHaveCount(0);
+  await expect(queries.getByRole("treeitem").filter({ hasText: queryTitle }).last()).toBeVisible();
+  await navigation.getByRole("button", { name: "Relationships", exact: true }).click();
+  await expect(checkbox).not.toBeChecked();
+  await expect(references).toHaveCount(0);
+  expect((await builder.record("build.query", queryID)).state).toBe("draft");
+  expect((await builder.record("build.function", functionID)).state).toBe("draft");
+  expect((await builder.record("build.process", flowID)).state).toBe("draft");
+});
+
 test("platform apps expose their own primary functions and keep one menu owner", async ({ page, builder }, testInfo) => {
   test.setTimeout(90_000);
   const savedTitle = `Navigation saved view ${fresh("saved")}`, savedID = fresh("VIEW");

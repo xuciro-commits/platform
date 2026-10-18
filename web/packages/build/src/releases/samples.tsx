@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useHost, useRecordInventory } from "@platform/app";
+import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { Button, Card, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import type { Project } from "../projects/project";
@@ -214,6 +215,7 @@ export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
   const project = projects.data?.records.find(record => record.id === application), record = inventory.data?.records.find(record => record.id === id);
   if (!application) return <div className="grid max-w-xl content-start gap-4 p-4">
     <PageHeader title={t("Sample sets")} description={t("Choose an application to prepare its sample records.")} />
+    <SystemDefinitionReferences type="build.sample-set" />
     <label className="grid gap-1 text-sm">{t("Application")}<Select value="" disabled={projects.isPending} onChange={event => {
       if (event.target.value) open({ view: "sample-set", params: { id, application: event.target.value } });
     }}>

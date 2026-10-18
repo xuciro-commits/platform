@@ -1,9 +1,10 @@
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useStudioApplication } from "../projects/use-studio-application";
 import { ResourceControls as AssetControls } from "../editor/workbench";
+import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
 import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
-import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, PropertyList, RecordList, RelationCanvas, Select, Tag,
+import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, PropertyList, RecordList, RelationCanvas, Tag,
   t, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { Boxes, Database, GitBranch, Layers, Link2 } from "lucide-react";
@@ -36,9 +37,11 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const linkInventory=useRecordInventory<{id:string;name:string}>("build.linktype");
   const propertyInventory=useRecordInventory<{id:string;name:string}>("build.propertytype");
   const model = useMemo(() => semanticModelView(host.definitions), [host.definitions]);
-  const [search, setSearch] = useState(""), [origin, setOrigin] = useState("all");
+  const [search, setSearch] = useState("");
+  const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
+  const includeSystem = showSystem || !!application;
   const [current, setCurrent] = useState(initialObject ?? ""), [view, setView] = useState<"catalog" | "graph" | "detail" | "shared" | "interfaces">(initialObject ? "detail" : "catalog");
-  const interfaces = useInterfaces();
+  const interfaces = useInterfaces().filter(shape => includeSystem || host.definitions.find(definition => definition.ref.app === shape.app && definition.ref.kind === "interface" && definition.ref.name === shape.name)?.source !== "code");
   const [shared,setShared]=useState("");
   const [tab, setTab] = useState(initialTab ?? "overview"), [selection, select] = useState<Selection>();
   const [seed, setSeed] = useState<PageSeed>();
@@ -51,8 +54,10 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
     }
     return [...all.values()].filter(item => !application || held?.includes(item.ref.name)).sort((a, b) => a.title.localeCompare(b.title));
   }, [model, inventory.data, installedApplication, application, project]);
+  const listedResources = useMemo(() => resources.filter(item => includeSystem || item.source !== "code"), [resources, includeSystem]);
+  // A direct system-object link remains readable while the catalog hides it.
   const resource = resources.find((item) => item.ref.name === current);
-  const visible = useMemo(() => resources.filter((item) => (origin === "all" || item.source === origin) && `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [resources, origin, search]);
+  const visible = useMemo(() => listedResources.filter((item) => `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [listedResources, search]);
   const projects = useProjectIndex();
   const appTitle = (id: string) => host.me.apps.find((a) => a.id === id)?.title ?? id;
   const choose = (item: Resource) => { setCurrent(item.ref.name); setView("detail"); select(undefined); setTab("overview"); };
@@ -67,7 +72,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
     { id: "state", header: t("Status"), accessorFn: (item) => item.installed ? "published" : "draft", cell: ({ row }) => t(row.original.installed ? "Published" : "Draft") },
   ];
   const graph = useMemo(() => {
-    // The graph is a bounded view. Search and origin filters are reflected in
+    // The graph is a bounded view. Search and system visibility are reflected in
     // both the node set and edges; hidden objects never get placeholder nodes.
     const shown = visible.slice(0, 80), ids = new Set(shown.map((item) => item.ref.name));
     const edges: RelationEdge[] = model.relations.filter((relation) => ids.has(relation.ref.object.name) && ids.has(relation.target.name)).map((relation) => ({
@@ -84,7 +89,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const dependencies = useDependencies(resource?.ref, undefined, !!resource?.installed);
   const used = (dependencies.data?.usedBy ?? []).flatMap(ref => { const owner = host.definitions.find(definition => assetKey(definition.ref) === assetKey(ref)); return owner ? [{ owner }] : []; });
   const property = selection?.kind === "property" ? resource?.fields.find((field) => field.name === selection.ref.field) : undefined;
-  const sharedProperties=model.propertyTypes.filter(p=>(origin==="all"||p.definition.source===origin)&&`${p.property.title} ${p.binding.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const sharedProperties=model.propertyTypes.filter(p=>(includeSystem||p.definition.source!=="code")&&`${p.property.title} ${p.binding.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   const sharedProperty=model.propertyTypes.find(p=>assetBindingKey(p.binding)===shared);
   const propertySource=property?.property?model.propertyTypes.find(p=>assetBindingKey(p.binding)===assetBindingKey(property.property!)):undefined;
   const editShared=(name:string)=>{const draft=propertyInventory.data?.records.find(p=>p.name===name);if(draft)open({view:"property-type",params:{id:draft.id}});};
@@ -97,14 +102,12 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       <Button variant={view === "shared" ? "primary" : "ghost"} onClick={() => setView("shared")}><Boxes />{t("Shared property catalog")}</Button>
       <Button variant={view === "interfaces" ? "primary" : "ghost"} onClick={() => setView("interfaces")}><Layers />{t("Interfaces")}</Button>
       <Input aria-label={t("Search model resources")} placeholder={t("Search model resources")} value={search} onChange={(event) => setSearch(event.target.value)} className="ml-auto h-8 w-56 text-xs" />
-      <label className="flex min-w-0 items-center gap-2 text-xs">{t("Source")}<Select value={origin} onChange={(event) => setOrigin(event.target.value)}>
-        <option value="all">{t("All sources")}</option><option value="code">{t("Native code")}</option><option value="tenant">{t("Tenant definitions")}</option>
-      </Select></label>
+      {!application && <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />}
     </Card>
     {inventory.isError && <Panel role="alert">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
     <EditorWorkbench leftLabel={t("Model resources")} centerLabel={t("Model workspace")} rightLabel={t("Semantic inspector")}
       left={<div className="grid content-start gap-3 p-3">
-        <GroupedList<Resource> items={resources.filter((item) => origin === "all" || item.source === origin)} id={(item) => item.ref.name} selected={current} onSelect={choose}
+        <GroupedList<Resource> items={listedResources} id={(item) => item.ref.name} selected={current} onSelect={choose}
           text={(item) => `${item.title} ${item.ref.name}`} dense
           groupings={[
             { id: "project", label: t("Project"), of: (item) => item.source === "code" ? { id: `app:${item.installed?.ref.app ?? item.ref.app}`, label: appTitle(item.installed?.ref.app ?? item.ref.app), hint: t("shipped"), order: 5 } : projectGroup(projects, item.ref) },

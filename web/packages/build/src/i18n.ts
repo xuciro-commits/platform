@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Show system definitions": "显示系统自带内容",
+  "System definitions": "系统自带内容",
+  "System definition": "系统自带",
+  "System flows": "系统流程",
+  "System flows are available here as read-only references.": "系统流程仅供查看参考。",
+  "Read-only reference": "只读参考",
+  "Reference relationship": "引用字段关系",
+  "No system definitions are available in this category.": "此类别暂无可查看的系统定义。",
+  "Published action definitions": "已发布的动作定义",
+  "Read-only action definitions. Open an action to inspect its parameters, rules and access.": "只读动作定义。打开动作可查看其参数、规则和权限。",
   "{count} assets in this workspace": "此工作区有 {count} 个资产",
   "Relationships and shared properties": "关系与共享属性",
   "Objects and actions": "对象与动作",

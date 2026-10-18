@@ -8,6 +8,7 @@ import { ActionMenu, Button, Input, PageHeader, ProblemList, Select, Tag, Workbe
 import { ArrowDown, ArrowUp, Brain, Clock, MoreHorizontal, Plus, Trash2, Workflow, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
+import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { useDraftSession } from "../session/DraftSession";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState, useAutoSave } from "../editor/workbench";
 import { WorkflowInspector } from "./workflow-inspector";
@@ -53,11 +54,12 @@ export function Automations() {
   return <div className="grid content-start gap-3 p-4">
     <PageHeader title={t("Automations")} description={t("When a record reaches a state, run effects. Each automation is one sentence; open it to shape the effects on the map.")}
       actions={role("build") === "builder" && <Button onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Input type="search" aria-label={t("Filter automations")} placeholder={t("Filter automations")} value={search} onChange={(event) => setSearch(event.target.value)} className="max-w-xs" />
       <Button variant="ghost" size="sm" onClick={() => open({ view: "runs" })}><Clock />{t("Runs")}</Button>
       <Button variant="ghost" size="sm" onClick={() => open({ view: "flow" })}><Workflow />{t("All flows")}</Button>
     </div>
+    <SystemDefinitionReferences type="build.process" search={search} title="System flows" description="System flows are available here as read-only references." />
     {query.isLoading && <p className="text-sm text-muted">{t("Loading…")}</p>}
     {!query.isLoading && !visible.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">
       <p>{rows.length ? t("No automation matches the filter.") : t("No automations yet.")}</p>

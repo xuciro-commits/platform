@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ca554113cfe008c0",
+  "revision": "sha256:66b6bcc63094e61c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12609,6 +12609,7 @@
       "web/packages/build/src/automate/workflow.tsx",
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/editor/ResourceList.tsx",
+      "web/packages/build/src/editor/SystemDefinitions.tsx",
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
@@ -12720,6 +12721,7 @@
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/automate/workflow-runs.tsx",
       "web/packages/build/src/editor/ResourceList.tsx",
+      "web/packages/build/src/editor/SystemDefinitions.tsx",
       "web/packages/build/src/editor/workbench.tsx",
       "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
@@ -12970,6 +12972,7 @@
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
       "web/packages/build/src/editor/ExpressionEditor.tsx",
+      "web/packages/build/src/editor/SystemDefinitions.tsx",
       "web/packages/build/src/functions/agent.tsx",
       "web/packages/build/src/functions/alert.tsx",
       "web/packages/build/src/functions/code.tsx",
@@ -13638,6 +13641,7 @@
     ],
     "ui/grouped-list": [
       "web/packages/build/src/editor/ResourceList.tsx",
+      "web/packages/build/src/editor/SystemDefinitions.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/ui/src/catalog.examples.tsx"

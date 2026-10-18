@@ -15,6 +15,7 @@ import { HeaderEditor } from "./HeaderEditor";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { VariablesPanel } from "./page-editor/VariablesPanel";
 import { StudioTemplates } from "./template-ui";
+import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 
 type PageRecord = { id: string; name: string; title: string; state: string; object: string; archived?: boolean };
 type ModuleDraft = Pick<Api.Application, "header" | "uiProfile" | "variables" | "queries" | "pages" | "groups" | "title" | "description" | "icon" | "replacements">;
@@ -55,6 +56,7 @@ function ModulesList() {
   const rows = (projects.data?.records ?? []).filter((project) => !project.archived);
   return <div className="grid min-w-0 gap-4">
     <div><h1 className="text-xl font-semibold tracking-tight">{t("Modules")}</h1><p className="text-sm text-muted">{t("Each project has one module: the pages, navigation and header people use. Open a project to edit its module.")}</p></div>
+    <SystemDefinitionReferences type="build.page" />
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {rows.map((project) => <li key={project.id}><Button variant="row" type="button" onClick={() => open({ view: "module", params: { id: project.id, application: project.id } })} className="grid w-full gap-1 border border-border bg-surface rounded-md p-4 text-left hover:border-primary">
         <span className="flex items-center gap-2"><LayoutTemplate className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate font-semibold">{project.title || project.name}</span><DraftStatus state={project.state} /></span>

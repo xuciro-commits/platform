@@ -5,6 +5,7 @@ import { useApplicationScope, useApplicationWorkspace } from "../projects/applic
 import { joinProjectResource } from "../projects/membership";
 import { refKey, resourceKinds, resourceRef, resourceRoute } from "../projects/resources";
 import { ResourceControls as AssetControls } from "../editor/workbench";
+import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { AppSelect, useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
@@ -313,6 +314,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   return <div className="grid gap-3">
     {!embedded && <PageHeader title={t("Test a candidate")} description={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
       actions={<Button disabled={!id || blocked} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}
+    {!embedded && !planId && <SystemDefinitionReferences type={evaluationSet ? "build.evaluation-set" : "build.testplan"} />}
     {kind==="app" && <PageHeader title={t("Draft trial")} description={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
     {!!planRoots.length && <p className="text-xs text-muted">{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</p>}
  <Card className="p-3">

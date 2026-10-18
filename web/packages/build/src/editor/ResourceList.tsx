@@ -10,6 +10,7 @@ import { useState } from "react";
 import { kindOfType } from "../projects/resources";
 import { projectGroupOfRecord, useProjectIndex } from "../projects/membership";
 import { DraftStatus } from "./workbench";
+import { SystemDefinitionReferences } from "./SystemDefinitions";
 
 type Row = EntityRecord & { name?: string; title?: string; state?: string; object?: string; archived?: boolean; version?: number };
 
@@ -37,10 +38,10 @@ export function ResourceList({ source, type, fields = [], onOpen }: { source: Re
     <Button size="sm" variant={mode === "tree" ? "primary" : "ghost"} aria-pressed={mode === "tree"} onClick={() => setMode("tree")}><ListTree />{t("Tree")}</Button>
     <Button size="sm" variant={mode === "table" ? "primary" : "ghost"} aria-pressed={mode === "table"} onClick={() => setMode("table")}><Table2 />{t("Table")}</Button>
   </span>;
-  if (mode === "table") return <div className="grid gap-2"><div className="flex">{toggle}</div><RecordList source={source} type={type} fields={fields} onOpen={onOpen} /></div>;
-  if (inventory.isError) return <Panel role="alert" className="grid gap-2 text-sm"><p>{t("The resource inventory is unavailable. This does not mean the application has no assets.")}</p>
-    <div>{toggle}<Button size="sm" onClick={() => void inventory.refetch()}>{t("Refresh")}</Button></div></Panel>;
-  return <GroupedList<Row> items={rows} id={(r) => r.id} text={(r) => `${r.title ?? ""} ${r.name ?? ""} ${r.object ?? ""} ${extras.map((f) => String((r as Record<string, unknown>)[f] ?? "")).join(" ")}`}
+  const content = mode === "table" ? <div className="grid gap-2"><div className="flex">{toggle}</div><RecordList source={source} type={type} fields={fields} onOpen={onOpen} /></div>
+    : inventory.isError ? <Panel role="alert" className="grid gap-2 text-sm"><p>{t("The resource inventory is unavailable. This does not mean the application has no assets.")}</p>
+      <div>{toggle}<Button size="sm" onClick={() => void inventory.refetch()}>{t("Refresh")}</Button></div></Panel>
+    : <GroupedList<Row> items={rows} id={(r) => r.id} text={(r) => `${r.title ?? ""} ${r.name ?? ""} ${r.object ?? ""} ${extras.map((f) => String((r as Record<string, unknown>)[f] ?? "")).join(" ")}`}
     onSelect={onOpen} groupings={groupings} toolbar={toggle}
     row={(r) => <>
       <span className="min-w-0 flex-1 truncate">{r.title || r.name || r.id}</span>
@@ -50,4 +51,5 @@ export function ResourceList({ source, type, fields = [], onOpen }: { source: Re
       {stateOf(r) && (["draft", "published", "archived"].includes(stateOf(r)!) ? <DraftStatus state={stateOf(r)} /> : <Tag label={t(stateOf(r)!)} tone={stateOf(r) === "active" ? "success" : "neutral"} />)}
     </>}
     empty={inventory.isLoading ? t("Loading…") : t("Nothing here yet.")} />;
+  return <div className="grid min-w-0 gap-3"><SystemDefinitionReferences type={type} />{content}</div>;
 }

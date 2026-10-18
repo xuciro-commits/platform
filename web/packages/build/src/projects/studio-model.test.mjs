@@ -10,7 +10,25 @@ registerHooks({ resolve(specifier, context, next) {
   }
 } });
 const { assetRoute, resourceInArea, studioActionGroups, studioApplicationID, studioAreaForRoute, studioContext, studioResourceGroups, studioRoute } = await import("./studio-model.ts");
-const { refKey, resourceKinds, resourceRef } = await import("./resources.ts");
+const { refKey, resourceKinds, resourceRef, systemDefinitionsForType } = await import("./resources.ts");
+
+test("system references use original declaration categories and code ownership", () => {
+  const native = (kind, name, details = {}) => ({ ref: { app: "native", kind, name }, source: "code", ...details });
+  const flow = native("flow", "native.workflow");
+  const algorithm = native("compute", "algorithm", { operation: { binding: { kind: "native" } } });
+  const table = native("compute", "rules", { operation: { binding: { kind: "native" }, rules: { rows: [] } } });
+  const query = native("query", "query");
+  const tenant = { ...query, ref: { ...query.ref, app: "build" }, source: "tenant" };
+  const evaluation = native("evaluation-set", "checks"), plan = native("test-plan", "trial");
+  const all = [flow, algorithm, table, query, tenant, evaluation, plan];
+  assert.deepEqual(systemDefinitionsForType(all, "build.process"), [flow]);
+  assert.deepEqual(systemDefinitionsForType(all, "build.code"), [algorithm]);
+  assert.deepEqual(systemDefinitionsForType(all, "build.table"), [table]);
+  assert.deepEqual(systemDefinitionsForType(all, "build.query"), [query]);
+  assert.deepEqual(systemDefinitionsForType(all, "build.testplan"), [plan]);
+  assert.deepEqual(systemDefinitionsForType(all, "build.evaluation-set"), [evaluation]);
+  assert.deepEqual(systemDefinitionsForType(all, "unsupported"), []);
+});
 
 const objectKind = resourceKinds.find(kind => kind.kind === "object");
 const flowKind = resourceKinds.find(kind => kind.kind === "flow");
