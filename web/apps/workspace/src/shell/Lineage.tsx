@@ -17,7 +17,7 @@ export function Lineage({ ref: requested }: { ref?: string }) {
   const ref = focus && parts.length === 3 ? { app: parts[0]!, kind: parts[1]!, name: parts[2]! } : undefined;
   const query = useDependencies(ref);
   const descriptors = query.data?.descriptors ?? [];
-  const apps = [...new Set(descriptors.map(d => d.ref.app))].sort();
+  const apps = [...new Set(definitions.map(d => d.ref.app))].sort();
   const scopeApp = ref?.app ?? app ?? apps[0] ?? "";
   const openAsset = (ref: AssetRef) => {
     if (ref.kind === "observation") return open({ view: "observations", params: { app: ref.app, name: ref.name } });
@@ -31,10 +31,7 @@ export function Lineage({ ref: requested }: { ref?: string }) {
         <Select aria-label={t("App")} value={scopeApp} className="w-40" onChange={event => { setApp(event.target.value); setPicked(""); }}>{apps.map(id => <option key={id} value={id}>{id}</option>)}</Select>
         <Select aria-label={t("Asset")} value={focus} className="w-72" onChange={event => setPicked(event.target.value)}>
           <option value="">{t("Every asset of {app}", { app: scopeApp })}</option>
-          {descriptors.filter(d => d.ref.app === scopeApp).map(d => {
-            const definition = definitions.find(item => assetKey(item.ref) === assetKey(d.ref));
-            return <option key={assetKey(d.ref)} value={assetKey(d.ref)}>{kindLabel(d.ref.kind)} · {definition ? definitionPresentation(definition).title : d.ref.name}</option>;
-          })}
+          {definitions.filter(d => d.ref.app === scopeApp).map(d => <option key={assetKey(d.ref)} value={assetKey(d.ref)}>{kindLabel(d.ref.kind)} · {definitionPresentation(d).title}</option>)}
         </Select>
       </>} />
     <Panel title={t("Declared dependencies")}>

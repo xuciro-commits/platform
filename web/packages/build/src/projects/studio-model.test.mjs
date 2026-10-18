@@ -9,7 +9,7 @@ registerHooks({ resolve(specifier, context, next) {
     throw error;
   }
 } });
-const { assetRoute, studioApplicationID, studioContext, studioRoute } = await import("./studio-model.ts");
+const { assetRoute, resourceInArea, studioActionGroups, studioApplicationID, studioAreaForRoute, studioContext, studioResourceGroups, studioRoute } = await import("./studio-model.ts");
 const { refKey, resourceKinds, resourceRef } = await import("./resources.ts");
 
 const objectKind = resourceKinds.find(kind => kind.kind === "object");
@@ -117,4 +117,72 @@ test("published observation opens and returns with its complete owner reference"
   assert.equal(context.ref, definition.ref);
   assert.equal(context.area, "assemble");
   assert.deepEqual(studioRoute("APP", context.area, refKey(context.selected.ref)), { view: "project", params: { id: "APP", area: "assemble", asset: "other/observation/temperature" } });
+});
+
+test("workspace groups use business categories and preserve custom concept titles", () => {
+  const queryKind = resourceKinds.find(kind => kind.kind === "query");
+  const query = { kind: queryKind, ref: resourceRef(queryKind, "openorders"), title: "Open orders", installed: true, missing: false };
+  const otherObject = { ...object, ref: { ...object.ref, name: "build.customer" }, title: "Customer" };
+  const application = { name: "delivery", title: "Delivery", concepts: [{ id: "fulfilment", title: "订单交付 / Fulfilment", assets: [object.ref, page.ref] }] };
+  const all = [flow, page, query, object, otherObject];
+  const modelGroups = studioResourceGroups(application, "model", all.filter(item => resourceInArea(item, "model")));
+  assert.deepEqual(modelGroups.map(group => [group.id, group.title, group.items.map(item => item.ref.name)]), [
+    ["concept:fulfilment", "订单交付 / Fulfilment", [object.ref.name]],
+    ["business-model", "Business model", [otherObject.ref.name]],
+    ["queries", "Queries", [query.ref.name]],
+  ]);
+  const interfaceGroups = studioResourceGroups(application, "interface", all.filter(item => resourceInArea(item, "interface")));
+  assert.deepEqual(interfaceGroups.map(group => [group.id, group.title, group.items]), [["concept:fulfilment", "订单交付 / Fulfilment", [page]]]);
+  const assemblyGroups = studioResourceGroups(application, "assemble", all.filter(item => resourceInArea(item, "assemble")));
+  assert.deepEqual(assemblyGroups.map(group => [group.id, group.items]), [["automation", [flow]]]);
+});
+
+test("actions group by declared target and complete owner while unmatched actions stay visible", () => {
+  const nativeObject = { ...object, record: undefined, ref: { app: "mes", kind: "object", name: "mes.order" } };
+  const sameNameOtherOwner = { ...nativeObject, ref: { ...nativeObject.ref, app: "external" }, title: "External order" };
+  const taskObject = { ...nativeObject, ref: { ...nativeObject.ref, name: "mes.task" }, title: "Task" };
+  const action = (app, name) => ({ kind: { kind: "action" }, ref: { app, kind: "action", name }, title: name, installed: true, missing: false });
+  const release = action("mes", "release");
+  const misleadingPrefix = action("mes", "mes.order.route");
+  const otherOwner = action("external", "release");
+  const hiddenTarget = action("mes", "finish");
+  const noTarget = action("mes", "refresh");
+  const unreadable = action("mes", "unknown");
+  const definitions = [
+    { ref: release.ref, action: { target: nativeObject.ref.name } },
+    { ref: misleadingPrefix.ref, action: { target: taskObject.ref.name } },
+    { ref: otherOwner.ref, action: { target: sameNameOtherOwner.ref.name } },
+    { ref: hiddenTarget.ref, action: { target: "mes.unavailable" } },
+    { ref: noTarget.ref, action: {} },
+  ];
+  const grouped = studioActionGroups([nativeObject, sameNameOtherOwner, taskObject, release, misleadingPrefix, otherOwner, hiddenTarget, noTarget, unreadable], definitions);
+  assert.deepEqual(grouped.groups.map(group => [refKey(group.object.ref), group.actions.map(item => refKey(item.ref))]), [
+    ["mes/object/mes.order", ["mes/action/release"]],
+    ["external/object/mes.order", ["external/action/release"]],
+    ["mes/object/mes.task", ["mes/action/mes.order.route"]],
+  ]);
+  assert.deepEqual(grouped.other, [hiddenTarget, noTarget, unreadable]);
+});
+
+test("editor and read-only routes choose the right workspace without a selected draft", () => {
+  for (const [route, area] of [
+    [{ view: "project", params: { area: "verify" } }, "verify"],
+    [{ view: "project", params: { area: "unknown" } }, "model"],
+    [{ view: "module" }, "interface"],
+    [{ view: "page-preview" }, "interface"],
+    [{ view: "definition", params: { kind: "page" } }, "interface"],
+    [{ view: "definition", params: { kind: "query" } }, "model"],
+    [{ view: "definition", params: { kind: "action" } }, "behavior"],
+    [{ view: "definition", params: { kind: "compute" } }, "behavior"],
+    [{ view: "definition", params: { kind: "protocol" } }, "assemble"],
+    [{ view: "action-type" }, "behavior"],
+    [{ view: "decision-table" }, "behavior"],
+    [{ view: "link-type" }, "model"],
+    [{ view: "observations" }, "assemble"],
+    [{ view: "flow" }, "assemble"],
+    [{ view: "release-review", params: { kind: "object" } }, "verify"],
+    [{ view: "release-history" }, "verify"],
+    [{ view: "test-plan" }, "verify"],
+    [undefined, "model"],
+  ]) assert.equal(studioAreaForRoute(route), area, JSON.stringify(route));
 });

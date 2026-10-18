@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "{count} assets in this workspace": "此工作区有 {count} 个资产",
+  "Relationships and shared properties": "关系与共享属性",
+  "Objects and actions": "对象与动作",
+  "Filter assets in this workspace": "筛选当前工作区资产",
+  "No assets match your search in this workspace.": "当前工作区没有匹配的资产。",
+  "No assets in this workspace.": "当前工作区尚无资产。",
+  "Actions for {name}": "{name}的业务动作",
+  "Rules and decisions": "规则与决策",
+  "Connections and data": "连接与数据",
+  "Flows and automation": "流程与自动化",
+  "Agents and observations": "智能体与观测",
+  "Tests and evaluation": "测试与评估",
+  "Release and migration": "发布与迁移",
   "Inspect installed applications and extend them through the same drafts and releases.": "查看已安装应用，并沿用同一套草稿和发布方式进行扩展。",
   "Application extension": "应用扩展",
   "Build application": "构建应用",

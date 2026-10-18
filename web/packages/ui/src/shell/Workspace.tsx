@@ -274,6 +274,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     return () => removeEventListener("beforeunload", beforeUnload);
   }, []);
   const [active, setActive] = useState<string>();
+  const [activeRoute, setActiveRoute] = useState<string>();
   const [openTabs, setOpenTabs] = useState<{ key: string; title: string }[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [typed, setTyped] = useState("");
@@ -313,6 +314,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   useEffect(() => setInspection(undefined), [active, layoutScope]);
   const [compact, setCompact] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 639px)").matches);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const navigationTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => setMobileNavOpen(false), [activeRoute, layoutScope]);
   const compactGroup = useRef(false);
   useEffect(() => {
     const media = matchMedia("(max-width: 639px)");
@@ -559,6 +562,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       setOpenTabs(api.panels.map((panel) => ({ key: panel.id, title: panel.title ?? panel.id })));
       setActive(api.activePanel?.id);
       const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
+      setActiveRoute(route && routeKey(route));
       if (!switching.current) {
         history.replaceState(null, "", route ? routeToHash(route) : "#/");
         if (route) followed.current?.(route); else emptied.current?.();
@@ -585,6 +589,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented && mobileNavOpen) { setMobileNavOpen(false); navigationTrigger.current?.focus(); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w" && dock.current?.activePanel) { e.preventDefault(); closePanel(dock.current.activePanel.id); }
     };
@@ -592,7 +597,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     addEventListener("keydown", onKey);
     addEventListener("hashchange", onHash);
     return () => { removeEventListener("keydown", onKey); removeEventListener("hashchange", onHash); };
-  }, [readLink, closePanel]);
+  }, [readLink, closePanel, mobileNavOpen]);
 
   const activePanel = () => dock.current?.activePanel;
   const builtInMenus: Menu[] = [
@@ -663,7 +668,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </aside>
         )}
         <header data-ui="chrome" className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
-          <button type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
+          <button ref={navigationTrigger} type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
           {applications && applications.apps.length > 0
             ? <AppMenu applications={applications} product={product} icon={productIcon} />
@@ -718,7 +723,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </div>
         </header>
         <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen && (nav.length > 0 || navigation) ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
-          {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-0 z-20 bg-black/25" onClick={() => setMobileNavOpen(false)} />}
+          {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-x-0 bottom-0 top-9 z-20 bg-black/25" onClick={() => setMobileNavOpen(false)} />}
           {(nav.length > 0 || navigation) && (!compact && navOpen || compact && mobileNavOpen) && (
             <nav aria-label={t("Main")} className={cn("overflow-auto border-r border-border bg-surface p-2",
               compact && "fixed inset-y-9 left-0 z-30 w-[min(19rem,85vw)] shadow-lg")}>

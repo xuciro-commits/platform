@@ -32,6 +32,37 @@ test("installed native applications open without drafts and accept an explicitly
   const delivered = (await builder.definitions<any>()).find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === extension.name);
   expect(delivered.application.extends).toEqual(native.ref);
   expect((await builder.definitions<any>()).find(item => item.ref.app === "pms" && item.ref.kind === "app")).toEqual(native);
+
+  // Large code applications expose workspaces, then objects with their actions.
+  const builderApp = definitions.find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === "build");
+  const action = definitions.find(item => item.ref.kind === "action" && item.action?.target && builderApp.application.resources.some(ref => ref.app === item.ref.app && ref.kind === item.ref.kind && ref.name === item.ref.name));
+  const target = definitions.find(item => item.ref.app === action.ref.app && item.ref.kind === "object" && item.ref.name === action.action.target);
+  await builder.open(page, "/project?id=installed/build/build&area=behavior");
+  const assets = page.getByRole("region", { name: "Application assets", exact: true });
+  const actionGroup = assets.getByRole("button", { name: "Actions for " + target.entity.title, exact: true });
+  await expect(actionGroup).toHaveAttribute("aria-expanded", "false");
+  const group = assets.getByRole("button", { name: /^Objects and actions/ });
+  await group.click();
+  await expect(group).toHaveAttribute("aria-expanded", "false");
+  const filter = assets.getByRole("searchbox", { name: "Filter assets in this workspace", exact: true });
+  await filter.fill(action.ref.name);
+  await expect(group).toHaveAttribute("aria-expanded", "true");
+  await expect(actionGroup).toHaveAttribute("aria-expanded", "true");
+  await expect(assets.getByRole("button", { name: target.entity.title, exact: true })).toBeVisible();
+  await shots(page, page.locator("body"), "native-builder-search", info);
+  await filter.fill("no-such-asset");
+  await expect(assets.getByRole("status")).toHaveText("No assets match your search in this workspace.");
+  await filter.fill("");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Toggle navigation", exact: true }).click();
+  await expect(assets).toBeVisible();
+  if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("native-builder-mobile-navigation.png") });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Toggle navigation", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Toggle navigation", exact: true }).press("Enter");
+  await assets.getByRole("button", { name: "Model", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Toggle navigation", exact: true })).toHaveAttribute("aria-expanded", "false");
 });
 
 test("one application retains drafts across five workspaces and delivers grouped business assets", async ({ page, builder, operator }, testInfo) => {
@@ -151,11 +182,13 @@ test("one application retains drafts across five workspaces and delivers grouped
   await concepts.getByRole("combobox", { name: "Business concept for selected asset", exact: true }).selectOption(savedApp.concepts[0].id);
   await expect.poll(async () => (await builder.record("build.app", application.id)).concepts?.[0]?.assets.length).toBe(2);
 
-  // Workspaces offer tasks; the business tree keeps the whole concept together.
+  // The sidebar shows the active workspace; the concept editor keeps all members together.
   const assets = navigation.getByRole("region", { name: "Application assets", exact: true });
   await navigation.getByRole("button", { name: "Model", exact: true }).click();
   await expect(assets.getByRole("button", { name: /^Service case/ })).toBeVisible();
-  await expect(assets.getByRole("button", { name: /^Service desk/ })).toBeVisible();
+  await expect(assets.getByRole("button", { name: /^Service desk/ })).toHaveCount(0);
+  await navigation.getByRole("button", { name: "Interface", exact: true }).click();
+  await expect(assets.getByRole("button", { name: /^Service case/ })).toHaveCount(0);
   await assets.getByRole("button", { name: /^Service desk/ }).click();
   await expect(navigation.getByRole("button", { name: "Interface", exact: true })).toHaveAttribute("aria-current", "page");
   await context.getByRole("button", { name: "Service application", exact: true }).click();
@@ -296,8 +329,7 @@ test("decision tables and alerts remain application members through editing and 
   await assets.getByRole("button", { name: /^Heating decision/ }).click();
   await expect(page.getByRole("heading", { name: "Heating decision", exact: true }).first()).toBeVisible();
   await expect(navigation.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(assets.getByText("Current application", { exact: true })).toBeVisible();
-  await expect(assets.getByRole("paragraph").filter({ hasText: /^Heating control$/ })).toBeVisible();
+  await expect(assets.getByRole("heading", { name: "Heating control", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Application context", exact: true })
     .getByRole("button", { name: "Heating control", exact: true })).toBeVisible();
   expect(new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("application")).toBe(application.id);
@@ -306,8 +338,9 @@ test("decision tables and alerts remain application members through editing and 
   const applicationTableTab = page.getByRole("tab", { name: /^Decision tables/ }).and(page.locator(`[data-tab-panel-id="decision-table?application=${application.id}&id=${tableID}"]`));
   await expect(applicationTableTab).toHaveAttribute("aria-selected", "true");
   await page.getByRole("textbox", { name: "Description", exact: true }).fill("Unsaved application decision note");
-  await expect(navigation.getByText("Functions", { exact: true })).toBeVisible();
+  await expect(navigation.getByText("Functions", { exact: true })).toHaveCount(0);
   await expect(navigation.getByText("Shared rules", { exact: true })).toHaveCount(0);
+  await navigation.getByRole("button", { name: "All applications", exact: true }).click();
   await navigation.getByRole("button", { name: "Decision tables", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Decision tables", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Application context", exact: true })).toHaveCount(0);
@@ -327,9 +360,9 @@ test("decision tables and alerts remain application members through editing and 
   await shots(page, page.locator("body"), "application-and-readable-rules", testInfo);
   await page.setViewportSize({ width: 390, height: 844 });
   await toggle.click();
-  await expect(assets.getByText("Current application", { exact: true })).toBeVisible();
-  await expect(navigation.getByText("Releases", { exact: true })).toBeVisible();
-  await shots(page, navigation, "application-navigation", testInfo);
+  await expect(assets.getByRole("heading", { name: "Heating control", exact: true })).toBeVisible();
+  await expect(navigation.getByRole("button", { name: "All applications", exact: true })).toBeVisible();
+  if (process.env.PLATFORM_SCREENSHOTS) await navigation.screenshot({ path: testInfo.outputPath("application-navigation-narrow.png") });
   await page.setViewportSize({ width: 1280, height: 720 });
 
   const rulePanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Rules", exact: true }) }).last();

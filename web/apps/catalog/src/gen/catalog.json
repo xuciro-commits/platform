@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:987ec4f83541748e",
+  "revision": "sha256:ca554113cfe008c0",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12697,6 +12697,7 @@
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
       "web/packages/build/src/ontology/TransactionEditor.tsx",
       "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/projects/studio-navigation.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",

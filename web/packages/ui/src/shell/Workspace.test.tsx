@@ -165,6 +165,34 @@ test("application navigation reuses its document while different applications ke
   expect(observed.dock!.panels).toHaveLength(2);
 });
 
+test("compact custom navigation closes after route parameters or application scope change", async () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 639px)", media: query, addEventListener() {}, removeEventListener() {} }));
+  const props = { product: "Compact assets", storageKey: "workspace:compact-assets", views, home: { view: "home" }, nav: [], navigation: <>
+    <button onClick={() => api.open({ view: "project", params: { id: "one", area: "model" } })}>Model assets</button>
+    <button onClick={() => api.open({ view: "project", params: { id: "one", area: "verify" } })}>Verify assets</button>
+  </> };
+  const result = render(<Workspace {...props} layoutScope="build" />);
+  await screen.findByLabelText("Draft A");
+  fireEvent.click(screen.getByRole("button", { name: "Toggle navigation" }));
+  fireEvent.click(screen.getByRole("button", { name: "Model assets" }));
+  await screen.findByRole("heading", { name: "Project one model" });
+  await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+  const documentID = observed.dock!.activePanel!.id;
+  fireEvent.click(screen.getByRole("button", { name: "Toggle navigation" }));
+  fireEvent.click(screen.getByRole("button", { name: "Verify assets" }));
+  await screen.findByRole("heading", { name: "Project one verify" });
+  expect(observed.dock!.activePanel!.id).toBe(documentID);
+  await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Toggle navigation" }));
+  expect(screen.getByRole("navigation", { name: "Main" })).toBeTruthy();
+  fireEvent.keyDown(window, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Toggle navigation" }));
+  fireEvent.click(screen.getByRole("button", { name: "Toggle navigation" }));
+  result.rerender(<Workspace {...props} layoutScope="other" />);
+  await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+});
+
 test("switching applications asks once for all local drafts; cancellation keeps raw input, selection and URL", async () => {
   const selected = vi.fn();
   const input = await start({ onSelect: selected });

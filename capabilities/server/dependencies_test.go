@@ -25,9 +25,13 @@ func TestDependencyDiscoveryUsesTheAuthorizedOwnerDescription(t *testing.T) {
 	if !slices.Contains(view.UsedBy, create) || slices.Contains(view.UsedBy, count) {
 		t.Fatalf("impact did not preserve action authorization: %+v", view.UsedBy)
 	}
+	authorized, refusal := tn.DependencyView(clerk, platform.AssetRef{}, "")
+	if refusal != nil {
+		t.Fatal(refusal)
+	}
 	for _, descriptor := range view.Descriptors {
 		for _, dependency := range descriptor.Requires {
-			if !slices.ContainsFunc(view.Descriptors, func(d platform.Dependencies) bool { return d.Ref == dependency }) {
+			if !slices.ContainsFunc(authorized.Descriptors, func(d platform.Dependencies) bool { return d.Ref == dependency }) {
 				t.Fatalf("discovery exposed an unreadable dependency: %s -> %s", descriptor.Ref, dependency)
 			}
 		}
@@ -65,6 +69,41 @@ func TestDependencyDiscoveryTracksTheSameDescriptorChange(t *testing.T) {
 	view, refusal = tn.DependencyView(member, object, "")
 	if refusal != nil || slices.Contains(view.UsedBy, create) {
 		t.Fatalf("reverse view retained an independent list: %+v %v", view, refusal)
+	}
+}
+
+func TestFocusedDependenciesKeepCrossOwnerRelationsWithoutUnrelatedDescriptors(t *testing.T) {
+	const tenant = "focused-dependencies"
+	tn := composeTenant(t, tenant, []Seat{seatOf("builder", "build:builder", "stock:clerk")}, build.New(tenant), newStock(tenant))
+	at := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+	unrelatedType := publishObject(t, tn, "builder", "UNRELATED", map[string]any{"name": "unrelated", "title": "Unrelated", "fields": []build.Field{{Name: "note", Type: "text", Title: "Note"}}}, at)
+	decide(t, tn, "builder", build.ID, build.PageType+".create", build.PageType, "STOCK", map[string]any{"name": "stockdesk", "title": "Stock desk", "object": "stock.item", "list": []string{"name", "qty"}, "detail": []string{"name", "qty"}, "actions": []string{"stock.item.create"}}, at)
+	decide(t, tn, "builder", build.ID, build.SchemaRelease, build.PageType, "STOCK", map[string]any{}, at)
+	member := memberOf(t, tn, "builder")
+	object := platform.AssetRef{App: "stock", Kind: platform.AssetObject, Name: "stock.item"}
+	page := platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: "stockdesk"}
+	unrelated := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: unrelatedType}
+	full, refusal := tn.DependencyView(member, platform.AssetRef{}, "")
+	if refusal != nil || !slices.ContainsFunc(full.Descriptors, func(d platform.Dependencies) bool { return d.Ref == unrelated }) {
+		t.Fatalf("unfocused discovery lost an authorized unrelated asset: %+v %v", full, refusal)
+	}
+	for _, focus := range []platform.AssetRef{object, page} {
+		view, refusal := tn.DependencyView(member, focus, focus.App)
+		if refusal != nil {
+			t.Fatal(refusal)
+		}
+		if focus == object && !slices.Contains(view.UsedBy, page) || focus == page && !slices.Contains(view.Requires, object) {
+			t.Fatalf("focused discovery lost its cross-owner relation: %+v", view)
+		}
+		refs := append([]platform.AssetRef{focus}, append(slices.Clone(view.Requires), view.UsedBy...)...)
+		if len(view.Descriptors) >= len(full.Descriptors) || len(view.Descriptors) != len(refs) {
+			t.Fatalf("focused response retained unrelated descriptors: %+v", view)
+		}
+		for _, descriptor := range view.Descriptors {
+			if !slices.Contains(refs, descriptor.Ref) || descriptor.Ref == unrelated {
+				t.Fatalf("focused response retained an unrelated asset: %s", descriptor.Ref)
+			}
+		}
 	}
 }
 

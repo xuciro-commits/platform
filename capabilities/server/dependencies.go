@@ -13,6 +13,7 @@ import (
 
 // DependencyView is a member's view of the frozen declarations. Runtime
 // observations keep their original diagnostic endpoints and never add edges.
+// A focused view retains only the selected asset and its forward/reverse relations.
 type DependencyView struct {
 	Descriptors []platform.Dependencies `json:"descriptors"`
 	Requires    []platform.AssetRef     `json:"requires"`
@@ -287,6 +288,11 @@ func (t *Tenant) DependencyView(m platform.Member, focus platform.AssetRef, app 
 		if err != nil {
 			return view, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Asset dependencies are unavailable")
 		}
+		related := map[platform.AssetRef]bool{focus: true}
+		for _, ref := range append(slices.Clone(view.Requires), view.UsedBy...) {
+			related[ref] = true
+		}
+		view.Descriptors = slices.DeleteFunc(view.Descriptors, func(d platform.Dependencies) bool { return !related[d.Ref] })
 	} else if app != "" {
 		view.Descriptors = slices.DeleteFunc(view.Descriptors, func(d platform.Dependencies) bool { return d.Ref.App != app })
 	}

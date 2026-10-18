@@ -15,6 +15,9 @@ type ProtocolInfo = Api.ProtocolInfo;
 const metadataPaths = ["/v1/actions", "/v1/entities", "/v1/definitions", "/v1/protocols", "/v1/views"];
 const offline = (error: unknown) => /live connection unavailable|HTTP (400|413)/.test(String(error));
 
+// Remounts receive a new identity too, without reusing an older query key.
+let metadataRevision = 0;
+
 export type PlatformHost = {
   host?: Host;
   /** Initial route resolution waits for this identity's original discovery reads. */
@@ -115,12 +118,19 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     return confirmedDecision(client.authorities.outbox, client.connection.tenant, key);
   }, [actions, client, refresh]);
 
-  const source = useMemo<RecordSource | undefined>(() => {
+  const previousMetadata = useRef<{ content: string; scope: string } | undefined>(undefined);
+  const sourceScope = useMemo(() => {
     if (!me) return undefined;
     // Reading/exporting records updates activity, not the member's read scope.
     const scopeMe = { ...me, account: { ...me.account, lastSeen: undefined } };
+    const content = JSON.stringify([client.connection.tenant, client.connection.principal, scopeMe, entities, actions, definitions]);
+    if (previousMetadata.current?.content !== content) previousMetadata.current = { content, scope: `metadata:${++metadataRevision}` };
+    return previousMetadata.current.scope;
+  }, [actions, client, definitions, entities, me]);
+  const source = useMemo<RecordSource | undefined>(() => {
+    if (!me || !sourceScope) return undefined;
     return {
-      scope: JSON.stringify([client.connection.tenant, client.connection.principal, scopeMe, entities, actions, definitions]),
+      scope: sourceScope,
  ruleIdentity:{me:me.principalId,timezone:me.profile.timezone??me.account.effective.timezone},
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
@@ -136,7 +146,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       watchAggregate: (type, q, changed) => client.subscribeRead(client.aggregatePath(type, q), changed),
       revision,
     };
-  }, [actions, client, definitions, entities, me, revision]);
+  }, [actions, client, definitions, entities, me, revision, sourceScope]);
 
   const host = useMemo<Host | undefined>(() => {
     if (!me || !source) return undefined;

@@ -83,11 +83,14 @@ export default defineApp({
   home: { view: "projects" }, views: contextualViews(editorViews),
   opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.alertrule": "alert" },
   navigation: route => <StudioNavigation route={route} />,
-  nav: (host): NavSection[] => {
+  nav: (host, route): NavSection[] => {
     if (!builder(host)) return [{ label: t("Releases"), items: [
       { label: t("Changes"), route: { view: "changes" } },
       { label: t("Release review"), route: { view: "release-review" } },
       { label: t("Release history"), route: { view: "release-history" } },
+    ] }];
+    if (studioApplicationID(route)) return [{ label: t("Applications"), items: [
+      { label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } },
     ] }];
     return [
       { label: t("Applications"), items: [
