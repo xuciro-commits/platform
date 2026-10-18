@@ -275,7 +275,7 @@ Shell 采用“顶栏切换大应用 → 左侧当前应用菜单 → 中央工�
 
 现行实现沿原组件组合：
 
-- `@platform/ui` `shell/Workspace.tsx`：原顶栏应用切换、当前应用菜单、Dock 与 Inspector；菜单子项沿原路由，辅助 Rail 不承担第二套应用选择。应用切换与文档保护共用原工作区状态，窄屏沿原抽屉。
+- `@platform/ui` `shell/Workspace.tsx`：原顶栏应用切换、当前应用菜单、Dock 与 Inspector；菜单子项沿原路由，辅助 Rail 不承担第二套应用选择。旧标签按现行功能归属恢复，其他应用的标签不接管当前首页；应用切换与文档保护共用原工作区状态，窄屏沿原抽屉。
 - `@platform/app`：`AppUI.category`、`PlatformAppCategory` 与应用贡献契约保留；同一大应用的多个前端贡献合并其原视图和菜单，功能可见性仍由各自角色判断。`WorkspaceSurface` 继续支持历史译码。
 - `web/apps/workspace`：`App.tsx` 装配已获权应用与合并贡献；`chrome.tsx` 的 `personalWork` 持有 My work 四个原视图；`shell/registry.ts` 展示四类门户；Home、Applications、recent/favorites 与原导航存储继续使用各自组件。
 - `@platform/catalog-app`、`@pkg/build`、`@pkg/platform` 及业务包声明原菜单与视图；CRM/PMS/MES 的原看板由本 App 显式列出，Shell 不再追加第二组看板入口。

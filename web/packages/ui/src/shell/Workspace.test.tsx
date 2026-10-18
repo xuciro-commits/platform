@@ -216,6 +216,19 @@ test("a cross-application hash cannot tear down a dirty editor before confirmati
   expect(await screen.findByRole("heading", { name: "Documents" })).toBeTruthy();
 });
 
+test("stored tabs reassigned to another application cannot replace the chosen app's home", async () => {
+  await start();
+  choose("knowledge");
+  await screen.findByRole("heading", { name: "Documents" });
+  localStorage.setItem("workspace:test:build", JSON.stringify(observed.dock!.toJSON()));
+  choose("build");
+  await screen.findByRole("textbox", { name: "Draft A" });
+  expect(api.applications!.current).toBe("build");
+  expect(location.hash).toBe("#/flow?id=A");
+  choose("knowledge");
+  await screen.findByRole("heading", { name: "Documents" });
+});
+
 test("shared shell tabs stay out of app memory and never replace a new app's home", async () => {
   await start();
   act(() => api.open({ view: "home" }));

@@ -223,8 +223,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     if (!api) return false;
     try {
       const saved = localStorage.getItem(layoutKey(id));
-      const layout = saved && await resolveLayout(JSON.parse(saved) as SerializedDockview,
+      const restored = saved && await resolveLayout(JSON.parse(saved) as SerializedDockview,
         (route) => routeReader.current?.(route, id) ?? route, (view) => viewRegistry.current.has(view), keyOf);
+      const layout = restored && routeScope.current
+        ? rewriteLayout(restored, route => routeScope.current!(route) === id ? route : undefined, keyOf)
+        : restored;
       if (revision !== layoutRevision.current || dock.current !== api) return false;
       if (layout) api.fromJSON(layout); else api.clear();
     } catch {
