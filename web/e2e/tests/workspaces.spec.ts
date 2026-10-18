@@ -15,12 +15,12 @@ test("Builder keeps its complete menus, original object and action editors, and 
   await builder.open(page, "/projects");
   const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
   const showNavigation = async () => { if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click(); };
-  await showNavigation();
   const navigation = page.getByRole("navigation", { name: "Main", exact: true });
-  for (const group of ["Applications", "Ontology", "Integration", "Interface", "Logic", "Functions", "Releases", "Explore"]) {
+  await expect(navigation).toBeVisible();
+  for (const group of ["Applications", "Ontology", "Logic", "Functions", "Verify", "Releases"]) {
     await expect(navigation.getByText(group, { exact: true })).toBeVisible();
   }
-  for (const entry of ["All applications", "Object types", "Action types", "Relationships", "Shared properties", "Queries", "Connections", "Datasets", "Pipelines", "Modules", "Templates", "Automations", "Flows", "Runs", "AI functions", "Code functions", "Decision tables", "Agents", "Alert rules", "Changes", "Release history", "Object Explorer", "Lineage", "Asset Library"]) {
+  for (const entry of ["All applications", "Object types", "Action types", "Relationships", "Shared properties", "Queries", "Modules", "Templates", "Automations", "Flows", "AI functions", "Code functions", "Decision tables", "Alert rules", "Sample sets", "Business test plans", "Evaluation sets", "Changes", "Release review", "Release history"]) {
     await expect(navigation.getByRole("button", { name: entry, exact: true })).toBeVisible();
   }
   await shots(page, navigation, "builder-menus", testInfo, showNavigation);
@@ -58,6 +58,83 @@ test("Builder keeps its complete menus, original object and action editors, and 
   }
   await workspaces.getByRole("button", { name: "Behavior", exact: true }).click();
   await expect(workspaces.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
+});
+
+test("platform apps expose their own primary functions and keep one menu owner", async ({ page, builder }, testInfo) => {
+  test.setTimeout(90_000);
+  const savedTitle = `Navigation saved view ${fresh("saved")}`, savedID = fresh("VIEW");
+  await builder.decide("work.view.save", { type: "work.view", id: savedID }, { title: savedTitle, entity: "crm.account", state: "{}" }, "work");
+  await builder.open(page, "/home");
+  const switcher = page.getByRole("button", { name: "Switch application", exact: true });
+  const menu = page.getByRole("menu");
+  const openSwitcher = async () => { if (!await menu.isVisible()) await switcher.click(); };
+  await openSwitcher();
+  for (const category of ["Business applications", "Knowledge and data", "Build and intelligence", "Run and manage"]) {
+    await expect(menu.getByText(category, { exact: true })).toBeVisible();
+  }
+  for (const title of ["Builder", "Data Connection", "Agents", "Enterprise", "Master data", "My work"]) {
+    await expect(menu.getByRole("menuitemradio", { name: title, exact: true })).toHaveCount(1);
+  }
+  await shots(page, menu, "platform-apps", testInfo, openSwitcher);
+  await page.keyboard.press("Escape");
+
+  const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
+  const navigation = page.getByRole("navigation", { name: "Main", exact: true });
+  const choose = async (title: string) => {
+    await switchWorkspace(page, title);
+    if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+    await expect(switcher).toContainText(title);
+  };
+  const entries = async (labels: string[]) => {
+    for (const label of labels) await expect(navigation.getByRole("button", { name: label, exact: true })).toBeVisible();
+  };
+  await choose("Builder");
+  await entries(["Object types", "Action types", "Sample sets", "Business test plans", "Evaluation sets"]);
+  for (const label of ["Connections", "Agent definitions", "Object Explorer", "Asset Library"]) {
+    await expect(navigation.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+  }
+
+  await choose("Data Connection");
+  await expect(navigation.getByRole("button", { name: savedTitle, exact: true })).toHaveCount(0);
+  await entries(["Connections", "Connectors", "Endpoints", "Observation sources", "Data sources", "Datasets", "Pipelines", "Matching rules", "Writebacks", "Observations", "Lineage", "Outbound effects", "Integration health"]);
+  await navigation.getByRole("button", { name: "Endpoints", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Endpoints", exact: true })).toBeVisible();
+  await navigation.getByRole("button", { name: "Lineage", exact: true }).click();
+  await expect(switcher).toContainText("Data Connection");
+  await shots(page, navigation, "data-menus", testInfo, async () => { if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click(); });
+
+  await choose("Agents");
+  await entries(["Agent definitions", "Agents", "Agent runs", "Agent memories", "Evaluations", "Assistant"]);
+  await navigation.getByRole("button", { name: "Agent memories", exact: true }).click();
+  await expect(page).toHaveURL(/#\/agent-memories$/);
+  await choose("AI assistance");
+  await entries(["Playground", "Usage", "Providers and models"]);
+  await choose("Enterprise");
+  await entries(["Enterprise"]);
+  await choose("Master data");
+  await entries(["Object Explorer", savedTitle]);
+  await expect(page).toHaveURL(/#\/explorer$/);
+  await navigation.getByRole("button", { name: savedTitle, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#/saved\\?id=${savedID}$`));
+  await expect(switcher).toContainText("Master data");
+  await choose("Control Panel");
+  await entries(["Members", "Roles and permissions", "Packages", "App settings", "Audit trail"]);
+  for (const label of ["Enterprise", "Providers and models", "Outbox"]) {
+    await expect(navigation.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+  }
+
+  await choose("Runs");
+  await entries(["Workflow runs", "Work queue", "Delivery attempts", "Health"]);
+  for (const label of ["Work queue", "Delivery attempts", "Health"]) {
+    await navigation.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
+  }
+  await choose("Knowledge");
+  await entries(["Documents", "Glossary"]);
+  await choose("My work");
+  await entries(["Inbox", "My requests", "Notifications", "Outbox"]);
+  await navigation.getByRole("button", { name: "My requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "My requests", exact: true })).toBeVisible();
 });
 
 test("task workspaces preserve native PMS and hand off a controlled receiving application", async ({ browser, page, builder, operator, editor }, testInfo) => {
@@ -208,7 +285,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(page.getByRole("row").filter({ hasText: termName })).toBeVisible();
 
   await switchWorkspace(page, "Builder");
-  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("WMS entry probe");
+  await expect(page.getByRole("button", { name: "Switch application", exact: true })).toContainText("Builder");
   await page.goto(`/#/project?id=${appID}`); // preserve the supported old deep link
   await editor.release();
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
@@ -297,7 +374,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
     await expect(business.getByRole("button", { name: "Create term", exact: true })).toHaveCount(0);
     await expect(operator.decide("knowledge.document.create", { type: "knowledge.document", id: fresh("DENIED") }, { title: "Not an editor", text: "Not allowed" }, "knowledge")).rejects.toThrow(/POLICY_DENIED/);
     await switchWorkspace(business, "Control Panel");
-    await expect(business.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await expect(business.getByRole("heading", { name: "Control Panel", exact: true })).toBeVisible();
     await business.getByRole("button", { name: "My account", exact: true }).last().click();
     await expect(business.getByRole("heading", { name: "My account", exact: true })).toBeVisible();
     await operator.open(business, "/home");

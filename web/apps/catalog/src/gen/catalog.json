@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ae4ac34cf192eff0",
+  "revision": "sha256:4791e2e2ef949308",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2170,11 +2170,6 @@
           "name": "View",
           "kind": "type",
           "signature": "export type View = {\n  id: string;\n  /** Tab title for a route of this view, e.g. the entity's code. */\n  title: (params: Record<string, string>) => string;\n  icon?: ReactNode;\n  render: (params: Record<string, string>) => ReactNode;\n  /** Navigation within one document can change without opening another tab. */\n  documentKey?: (params: Record<string, string>) => string;\n};"
-        },
-        {
-          "name": "NavSection",
-          "kind": "type",
-          "signature": "export type NavSection = { label: string; items: { label: string; icon?: ReactNode; route: Route; badge?: ReactNode }[] };"
         },
         {
           "name": "Menu",
@@ -13131,6 +13126,7 @@
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
+      "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/erp/src/index.tsx",
@@ -13794,6 +13790,7 @@
         "layeredLayout",
         "loops",
         "measurable",
+        "navigationLinks",
         "neighborhoodPositions",
         "notationOf",
         "notationTitle",
@@ -13921,6 +13918,8 @@
         "Menu",
         "MenuItem",
         "Money",
+        "NavItem",
+        "NavLink",
         "NavSection",
         "NeighborhoodLayoutGroup",
         "NotificationItem",
@@ -14092,6 +14091,7 @@
     "@pkg/build": {
       "source": "web/packages/build/src/index.tsx",
       "symbols": [
+        "contributions",
         "default"
       ],
       "types": []

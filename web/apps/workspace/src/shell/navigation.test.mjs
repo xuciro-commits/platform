@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { routeApplication } from './navigation.ts';
+import { routeApplication, sharedViewApplication } from './navigation.ts';
 import { legacyRoute, resolveLegacyRoute } from './legacy.ts';
 
 const entries = [{ id: 'build', surface: 'studio' }, { id: 'knowledge', surface: 'work' }, { id: 'runs' }, { id: 'platform', surface: 'tenant' }];
@@ -10,6 +10,15 @@ const reader = (records, reads = []) => async (type, id) => {
   if (!records.has(`${type}/${id}`)) throw new Error(`/v1/records/${type}/${id}: HTTP 404`);
   return { record: { id } };
 };
+
+test('shared tools return to their primary app even from an old surface-qualified link', () => {
+  for (const [view, owner] of [['explorer', 'core'], ['saved', 'core'], ['observations', 'data-connection'], ['lineage', 'data-connection'], ['assistant', 'agents']]) {
+    const route = { view, params: { surface: 'studio' } };
+    assert.equal(sharedViewApplication(route), owner);
+    assert.equal(routeApplication(route, [...entries, { id: owner }], sharedViewApplication(route)), owner);
+  }
+  assert.equal(sharedViewApplication({ view: 'home' }), undefined);
+});
 
 test('an explicit Knowledge choice beats the old Flow surface until its own route arrives', () => {
   const old = { view: 'flow', params: { id: 'LITE-NATIVE-P', surface: 'studio' } };

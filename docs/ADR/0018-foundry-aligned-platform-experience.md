@@ -222,7 +222,7 @@ Context pane（示例）
 └─ Runs           按应用 · 按类型（Flow/Agent/计算/Work/效果）· 失败
 ```
 
-My work（收件箱/审批/申请/通知）不是独立应用：它是 Home 的首屏卡片与 Rail 的 Notifications；保留 `#/inbox` 等旧路由译码到 Home 的对应标签。
+My work 是运行与管理中的独立大应用，菜单为待办 `inbox`、申请 `requests`、通知 `notifications`、发件箱 `outbox` 四项。Home 卡片和 Rail 通知按钮只打开这些原页面，不把它们复制为 Shell 标签或其他应用的菜单。
 
 ---
 
@@ -265,14 +265,20 @@ P0–P6 的前端实现已经落地，结构、删除路径和支持边界见 §
 
 ---
 
-## 10. P0 实现摘要（As built，随本 ADR 提交）
+## 10. 现行入口与实现（As built）
 
-见 Git 本次提交：
+Shell 采用“顶栏切换大应用 → 左侧当前应用菜单 → 中央工作区 → 按需 Inspector”，不增加永久的左侧应用栏。顶栏始终显示当前大应用名，项目名显示在编辑区。主功能从所属大应用直接进入，按每层语义分组为约 **4±1（3–5）项**；数量更少的应用保留真实入口，详情和记录动作不凑成一级菜单，目录和业务记录也不因菜单建议而截断。每个功能只有一个所属应用；快捷方式、上下文入口和历史深链都打开同一原视图，不产生第二份定义或授权。
 
-- `@platform/ui` `shell/Workspace.tsx`：Rail + Context pane + Dock 布局；`applications`（门户数据与分类）、`workspaces`（投影切换）、`navigation`（recent/favorites 存储接口）替代 `launcher`/`entryPoints`；⌘K 新增"Applications"分组；窄屏 Rail 折叠为底部栏。
-- `@platform/app`：`AppUI.category`、`PlatformAppCategory`；`WorkspaceSurface` 保留为类型别名供译码期使用。
-- `web/apps/workspace`：`shell/Home.tsx`（搜索、我的工作、最近、收藏、推广应用）、`shell/Applications.tsx`（门户）、`shell/navigation.ts`（recent/favorites 持久化）、`registry.ts`（包表 → 分类 → 投影）；`App.tsx` 改为装配，`entryPoints`/`chooseSurface` 删除；`#/home` 译码到 `applications`。
-- `@platform/catalog-app`、`@pkg/build`、`@pkg/platform`：声明 `category`，不改 view。
+顶栏与门户按四类展示，`AppUI.category` 与后端身份保留：Business applications / 业务应用；Knowledge and data / 知识与数据；Build and intelligence / 构建与智能；Run and manage / 运行与管理。运行与管理有 **My work、Runs、Control Panel、Host Console** 四个大应用。My work 统一待办、申请、通知和发件箱；通知 Rail 按钮只是原通知页的快捷链接。Home、门户与搜索仍是 Shell 共享视图。
+
+功能归属为：Builder 管应用、本体、业务逻辑、测试和发布；Data Connection 管连接、来源、数据处理、观测和 Lineage；Agents 将 Design 定义与可用智能体、运行、记忆、评测和获权 Assistant 组合在一起；AI 管体验、模型配置与用量；Enterprise 为独立应用；Master data 管共享 core 资料、Object Explorer 与保存的视图；Knowledge 归知识与数据；Control Panel 管人员、权限、安装、设置与审计；Runs 管流程运行、工作队列、投递与健康；Host Console 管宿主；Asset Library 是唯一开发参考入口。已有功能和原路由的完整对应见 [Apps](../Apps.md)，应用内的业务概念树仍服务当前应用资源，不取代这些直接入口。没有 core 角色但有可读实体的成员可从 Master data 进入 Object Explorer，并以其为主页，不开放受限 core 记录；有原主数据角色的成员保留原菜单和主页。
+
+现行实现沿原组件组合：
+
+- `@platform/ui` `shell/Workspace.tsx`：原顶栏应用切换、当前应用菜单、Dock 与 Inspector；菜单子项沿原路由，辅助 Rail 不承担第二套应用选择。应用切换与文档保护共用原工作区状态，窄屏沿原抽屉。
+- `@platform/app`：`AppUI.category`、`PlatformAppCategory` 与应用贡献契约保留；同一大应用的多个前端贡献合并其原视图和菜单，功能可见性仍由各自角色判断。`WorkspaceSurface` 继续支持历史译码。
+- `web/apps/workspace`：`App.tsx` 装配已获权应用与合并贡献；`chrome.tsx` 的 `personalWork` 持有 My work 四个原视图；`shell/registry.ts` 展示四类门户；Home、Applications、recent/favorites 与原导航存储继续使用各自组件。
+- `@platform/catalog-app`、`@pkg/build`、`@pkg/platform` 及业务包声明原菜单与视图；CRM/PMS/MES 的原看板由本 App 显式列出，Shell 不再追加第二组看板入口。
 
 ## 11. P1–P6 实现摘要（As built，2026-10-06）
 

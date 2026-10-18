@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Planning and execution": "计划与执行",
+  "Craft and operations": "工艺与运营",
   "All": "全部",
   "Any resource of its work center": "其工作中心的任意资源",
   "At most the quantity": "不能超过数量",
@@ -24,7 +26,6 @@ register("zh-CN", {
   "Equipment": "设备",
   "Equipment downtime": "设备停机",
   "Equipment for this step": "本工序可用设备",
-  "Execution": "执行",
   "Finished per day": "每日完工",
   "Format SO-123": "格式 SO-123",
   "Holds": "挂起",
@@ -48,7 +49,6 @@ register("zh-CN", {
   "Place in the model": "模型中的场所",
   "Planned order": "计划订单",
   "Planned orders": "计划订单",
-  "Planning": "计划",
   "Process parameters": "工艺参数",
   "Product": "产品",
   "Production orders the ERP released to the plant (production.orders/1); release a shop order against one.": "ERP 下达给工厂的生产订单（production.orders/1）；可据此下达车间订单。",

@@ -19,10 +19,8 @@ export type PlatformHost = {
   release: UseQueryResult<Api.ReleaseActive>;
   unread: number;
   saved: SavedView[];
-  waiting: number;
   /** Whether this subject administers the host itself (GET /v1/host/me answers). */
   hostAdmin: boolean;
-  studioApplications: { id: string; name: string; title: string; archived?: boolean }[];
 };
 
 export function usePlatformHost({ client, token, tenant, me, ready, apps }: { client: EdgeClient; token: string; tenant: string; me?: Me; ready: boolean; apps?: (AppUI & { serves?: string[] })[] }): PlatformHost {
@@ -44,11 +42,6 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   const unread = (read<Notification[]>("/v1/notifications").data ?? []).filter((n) => !n.read).length;
   const saved = read<SavedView[]>("/v1/views").data ?? [];
   const hostMe = useQuery({ queryKey: [token, tenant, "/v1/host/me"], queryFn: () => client.get<{ subject: string; tenants: string[] }>("/v1/host/me"), enabled: ready, retry: false });
-  const builder = me?.profile.roles.build === "builder";
-  const studioApplications = useQuery({ queryKey: [token, tenant, "/v1/records/build.app", "inventory", 1000],
-    queryFn: () => client.inventory<{ id: string; name: string; title: string; archived?: boolean }>("build.app"), enabled: ready && builder });
-  const studioRefetch = useRef(studioApplications.refetch); studioRefetch.current = studioApplications.refetch;
-  useEffect(() => ready && builder ? client.subscribeInventory("build.app", 1000, () => { void studioRefetch.current(); }) : undefined, [client, ready, builder]);
 
   const [outbox, setOutbox] = useState<Entry[]>([]);
   useEffect(() => setOutbox([...client.authorities.outbox]), [client]);
@@ -156,6 +149,5 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     };
   }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, refresh, source]);
 
-  const waiting = outbox.filter((e) => e.state !== "SUBMISSION_STATE_CONFIRMED" && e.state !== "SUBMISSION_STATE_REJECTED").length;
-  return { host, release, unread, saved, waiting, hostAdmin: hostMe.isSuccess, studioApplications: studioApplications.data?.records ?? [] };
+  return { host, release, unread, saved, hostAdmin: hostMe.isSuccess };
 }

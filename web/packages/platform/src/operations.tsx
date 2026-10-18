@@ -10,9 +10,7 @@ import { when, type AppSettings, type AuditEntry, type Connector, type Delivery,
 export function Automation() {
   const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
   const { decide } = useHost();
-  const deliveries = useRead<Delivery[]>("/v1/deliveries");
   const work = useRead<Task[]>("/v1/work");
-  const health = useRead<Api.TenantHealth>("/v1/health", 5000).data;
   const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
   const taskColumns: ColumnDef<Task, any>[] = [
     { accessorKey: "kind", header: t("Kind"), meta: { width: 90 } },
@@ -27,6 +25,18 @@ export function Automation() {
       <Button size="sm" onClick={() => void decide("platform.work.retry", { type: "platform.work", id: w.id }, {})}>{w.kind === "job" ? t("Run now") : t("Retry")}</Button> },
   ];
   const subscriptions = apps.flatMap((a) => a.subscribes.map((action) => ({ app: a.id, action })));
+  return <>
+    <PageHeader title={t("Work queue")} description={t("Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision.")} />
+      <div className="mb-3 flex flex-wrap gap-2 text-sm">
+        {subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
+          subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
+      </div>
+    <DataTable data={work.data ?? []} columns={taskColumns} getRowId={(task) => task.id} height="calc(100dvh - 260px)" searchable={false} empty={t("Nothing queued, no jobs")} />
+  </>;
+}
+
+export function Deliveries() {
+  const deliveries = useRead<Delivery[]>("/v1/deliveries");
   const columns: ColumnDef<Delivery, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
     { accessorKey: "action", header: t("Event"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
@@ -35,13 +45,16 @@ export function Automation() {
     { accessorKey: "attempt", header: t("Attempt"), meta: { width: 80, align: "right" } },
     { accessorKey: "outcome", header: t("Outcome"), meta: { width: 200 }, cell: (c) => <Tag label={c.getValue()} tone={c.getValue() === "ok" ? "success" : "danger"} /> },
   ];
-  return (
-    <>
-      <PageHeader title={t("Automation")} description={t("Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision.")} />
-      <div className="mb-3 flex flex-wrap gap-2 text-sm">
-        {subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
-          subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
-      </div>
+  return <>
+    <PageHeader title={t("Delivery attempts")} />
+    <DataTable data={[...(deliveries.data ?? [])].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`} height="calc(100dvh - 220px)" empty={t("No deliveries yet")} />
+  </>;
+}
+
+export function SystemHealth() {
+  const health = useRead<Api.TenantHealth>("/v1/health", 5000).data;
+  return <>
+    <PageHeader title={t("Health")} />
       {health && <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
         {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
         <div className="flex flex-wrap items-center gap-2">
@@ -68,13 +81,7 @@ export function Automation() {
             tone={b.state === "closed" ? "neutral" : "danger"} />)}
         </div>}
       </div>}
-      <h2 className="mb-1 text-sm font-semibold">{t("Owned work")}</h2>
-      <DataTable data={work.data ?? []} columns={taskColumns} getRowId={(t) => t.id} height={200} searchable={false} empty={t("Nothing queued, no jobs")} />
-      <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Delivery attempts")}</h2>
-      <DataTable data={[...(deliveries.data ?? [])].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`}
-        height="calc(100dvh - 480px)" empty={t("No deliveries yet")} />
-    </>
-  );
+  </>;
 }
 
 // Integrations: the tenant's connectors (K8) with health, cursor and the last refused input.
@@ -98,20 +105,17 @@ export function Integrations() {
   ];
   return (
     <>
-      <PageHeader title={t("Integrations")} description={t("Connectors bring facts in (pushed batches or polled pages; a disabled one is refused and keeps its cursor). Webhook endpoints send events out.")} />
+      <PageHeader title={t("Connectors")} description={t("Connectors bring facts in, with health, cursors and the last refused input.")} />
       {connectors.error ? <p className="text-sm text-[var(--tone-danger)]">{String(connectors.error)} {t("— administrators only.")}</p> :
         <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height={180} searchable={false} empty={t("No connectors in this tenant")} />}
-      <Webhooks />
     </>
   );
 }
 
 // Webhook endpoints and their effects (ADR-0004): events go out signed, at least
 // once with a stable key; outcomes are journaled, a replay never sends.
-function Webhooks() {
-	const host=useHost(),[resolving,setResolving]=useState<string>();
+export function Endpoints() {
   const endpoints = useRead<EndpointView[]>("/v1/endpoints");
-  const effects = useRead<Effect[]>("/v1/effects");
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
   const { decide } = useHost();
@@ -124,34 +128,9 @@ function Webhooks() {
   const kinds = apps.flatMap((a) => (a.emits ?? []).map((e) => ({ id: `${a.id}/${e.name}`, title: e.title })));
   const events = [...apps.flatMap((a) => a.capabilities.flatMap((c) => c.actions)).filter((x) => !x.startsWith("platform.")),
     ...protocols.flatMap((p) => (p.events ?? []).map((e) => `${p.id}#${e.name}`))];
-  const tone = (s: string) => (({ delivered: "success", compensated:"success", unknown:"warning", retrying: "warning", pending: "info", held: "warning", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
-  const effectColumns: ColumnDef<Effect, any>[] = [
-    { accessorKey: "at", header: t("Event at"), meta: { width: 160 }, cell: (c) => when(c.getValue()) },
-    { accessorKey: "endpoint", header: t("Endpoint"), meta: { width: 110 } },
-    { accessorKey: "event", header: t("Event"), meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "target", header: t("Entity"), meta: { width: 200 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "state", header: t("State"), meta: { width: 130 }, cell: ({ row: { original: x } }) =>
-      <Tag label={x.state === "held" ? `held · ${x.agent}` : x.state} tone={tone(x.state)} /> },
-    { accessorKey: "attempts", header: t("Tries"), meta: { width: 60, align: "right" } },
-    { accessorKey: "due", header: t("Next"), meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
-    { accessorKey: "error", header: t("Last answer"), meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
-    { accessorKey: "callbackError", header: t("Receipt refusal"), meta: { width: 240 }, cell: (c) => <span className="text-xs text-danger">{c.getValue() ?? ""}</span> },
-    { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
-      {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
-      {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decide("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
-      {x.state === "held" && <Button size="sm" variant="primary" onClick={() => void decide("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
-      {(x.state === "held" || x.state === "pending" || x.state === "retrying") &&
-        <Button size="sm" variant="danger" onClick={() => void decide("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>{t("Discard")}</Button>}
-    </span> },
-  ];
-  return (
-    <>
-      {resolving&&host.action("platform.effect.resolve")&&<Panel title={t("Resolve unknown delivery")}><DeclaredActionForm declared={host.action("platform.effect.resolve")!} target={{type:"platform.effect",id:resolving}} revision={0} initial={{outcome:"delivered"}} onCancel={()=>setResolving(undefined)} onCompleted={()=>{setResolving(undefined);void effects.refetch();}} enabled/></Panel>}
-      <div className="mb-1 mt-5 flex items-center gap-2">
-        <h2 className="text-sm font-semibold">{t("Endpoints")}</h2>
-        <span className="text-xs text-muted">{t("Webhooks send events and effects signed (Standard Webhooks); email endpoints mail members their notifications. At least once, with a key receivers deduplicate by.")}</span>
-        <Button size="sm" variant="primary" className="ml-auto" onClick={() => { setDraft(blank); setAdding(true); }}>{t("Add endpoint")}</Button>
-      </div>
+  return <>
+    <PageHeader title={t("Endpoints")} description={t("Webhooks send events and effects signed (Standard Webhooks); email endpoints mail members their notifications. At least once, with a key receivers deduplicate by.")}
+      actions={<Button variant="primary" onClick={() => { setDraft(blank); setAdding(true); }}>{t("Add endpoint")}</Button>} />
       <div className="grid gap-2">
         {endpoints.data?.length === 0 && <p className="text-sm text-muted">{t("No endpoints.")}</p>}
         {endpoints.data?.map((ep) => (
@@ -165,8 +144,6 @@ function Webhooks() {
           </Card>
         ))}
       </div>
-      <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Outbound effects")}</h2>
-      <DataTable data={effects.data ?? []} columns={effectColumns} getRowId={(x) => x.id} height={260} empty={t("Nothing sent yet")} />
       <Dialog open={adding} onOpenChange={setAdding} title={t("Add endpoint")}>
         <div className="grid gap-2 text-sm">
           <Select aria-label={t("Kind")} value={draft.kind} onChange={(e) => setDraft({ ...blank, kind: e.target.value, id: draft.id })}>
@@ -217,8 +194,38 @@ function Webhooks() {
           </span>
         </div>
       </Dialog>
-    </>
-  );
+  </>;
+}
+
+export function OutboundEffects() {
+  const host = useHost(), { decide } = host;
+  const [resolving, setResolving] = useState<string>();
+  const effects = useRead<Effect[]>("/v1/effects");
+  const tone = (s: string) => (({ delivered: "success", compensated:"success", unknown:"warning", retrying: "warning", pending: "info", held: "warning", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
+  const effectColumns: ColumnDef<Effect, any>[] = [
+    { accessorKey: "at", header: t("Event at"), meta: { width: 160 }, cell: (c) => when(c.getValue()) },
+    { accessorKey: "endpoint", header: t("Endpoint"), meta: { width: 110 } },
+    { accessorKey: "event", header: t("Event"), meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "target", header: t("Entity"), meta: { width: 200 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "state", header: t("State"), meta: { width: 130 }, cell: ({ row: { original: x } }) =>
+      <Tag label={x.state === "held" ? `held · ${x.agent}` : x.state} tone={tone(x.state)} /> },
+    { accessorKey: "attempts", header: t("Tries"), meta: { width: 60, align: "right" } },
+    { accessorKey: "due", header: t("Next"), meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
+    { accessorKey: "error", header: t("Last answer"), meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
+    { accessorKey: "callbackError", header: t("Receipt refusal"), meta: { width: 240 }, cell: (c) => <span className="text-xs text-danger">{c.getValue() ?? ""}</span> },
+    { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
+      {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
+      {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decide("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
+      {x.state === "held" && <Button size="sm" variant="primary" onClick={() => void decide("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
+      {(x.state === "held" || x.state === "pending" || x.state === "retrying") &&
+        <Button size="sm" variant="danger" onClick={() => void decide("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>{t("Discard")}</Button>}
+    </span> },
+  ];
+  return <>
+    <PageHeader title={t("Outbound effects")} />
+      {resolving&&host.action("platform.effect.resolve")&&<Panel title={t("Resolve unknown delivery")}><DeclaredActionForm declared={host.action("platform.effect.resolve")!} target={{type:"platform.effect",id:resolving}} revision={0} initial={{outcome:"delivered"}} onCancel={()=>setResolving(undefined)} onCompleted={()=>{setResolving(undefined);void effects.refetch();}} enabled/></Panel>}
+    <DataTable data={effects.data ?? []} columns={effectColumns} getRowId={(effect) => effect.id} height="calc(100dvh - 220px)" empty={t("Nothing sent yet")} />
+  </>;
 }
 
 // App settings: typed values each app declares; a change is a platform decision.

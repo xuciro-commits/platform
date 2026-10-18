@@ -7,6 +7,24 @@ import { Workspace, useUnsavedChanges, useWorkspace, type View } from "./Workspa
 import { InputDraftProvider, useDraftInput } from "../fields/draft";
 import { routeKey, type Route } from "./route";
 import { setLanguage } from "../i18n";
+import { NavigationItems, navigationLinks } from "./Navigation";
+
+test("nested menus expose original routes, can collapse, and reopen for the active document", async () => {
+  const original = { view: "code", params: { application: "one" } };
+  const items = [{ label: "Functions", items: [{ label: "Code functions", route: original }] }];
+  const open = vi.fn();
+  const view = render(<NavigationItems items={items} onOpen={open} />);
+  const group = screen.getByText("Functions").closest("details")!;
+  expect(group.open).toBe(true);
+  group.open = false;
+  fireEvent(group, new Event("toggle"));
+  expect(group.open).toBe(false);
+  view.rerender(<NavigationItems items={items} active={routeKey(original)} onOpen={open} />);
+  await waitFor(() => expect(group.open).toBe(true));
+  fireEvent.click(screen.getByRole("button", { name: "Code functions" }));
+  expect(open).toHaveBeenCalledWith(original);
+  expect(navigationLinks(items)[0]!.route).toBe(original);
+});
 
 // The real Dockview model/renderer runs in jsdom. Only ResizeObserver and the
 // OS-window call are stubbed; these are logic checks, not viewport/browser UX.

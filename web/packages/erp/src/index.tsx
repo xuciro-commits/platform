@@ -100,15 +100,18 @@ export default defineApp({
       { label: t("Journal entries"), icon: <BookOpen />, route: { view: "entries" } },
       { label: t("Postings"), icon: <ListTree />, route: { view: "postings" } },
       { label: t("Trial balance"), icon: <Scale />, route: { view: "trial-balance" } },
-      { label: t("Accounts"), icon: <Landmark />, route: { view: "erp-accounts" } },
       { label: t("Periods"), icon: <CalendarRange />, route: { view: "periods" } },
     ],
   }, {
-    label: t("Purchasing and stock"), items: [
+    label: t("Production and supply"), items: [
       { label: t("Production orders"), icon: <Factory />, route: { view: "production" } },
       { label: t("Purchase orders"), icon: <ShoppingCart />, route: { view: "purchases" } },
       { label: t("On hand"), icon: <Warehouse />, route: { view: "on-hand" } },
       { label: t("Stock moves"), icon: <ArrowLeftRight />, route: { view: "moves" } },
+    ],
+  }, {
+    label: t("Master data"), items: [
+      { label: t("Accounts"), icon: <Landmark />, route: { view: "erp-accounts" } },
       { label: t("Products"), icon: <Package />, route: { view: "products" } },
       { label: t("Partners"), icon: <Handshake />, route: { view: "partners" } },
     ],

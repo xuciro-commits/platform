@@ -18,11 +18,41 @@
 
 打开关联流程会进入共享运行详情，不要求设置管理角色；读取与管理动作仍由原宿主授权。运行详情和工坊历史中的“启动时的发布”是该实例固定的版本来源，不能当成当前租户活跃发布。保持对象/动作依赖时可以正式发布新的流程路径，旧等待实例继续原版本；已有记录的存储字段变更需要单独迁移计划，当前激活会明确拒绝。
 
-工作区的 Shell 按 [ADR-0018](ADR/0018-foundry-aligned-platform-experience.md) 与 [ADR-0019](ADR/0019-ide-workspaces.md) 组织：左侧 Rail 提供 Home、搜索（⌘K）、通知、Applications、最近/收藏、助手与账户；Applications 门户按工作意图分类，不授予权限。顶栏“Switch application / 切换应用”及门户/收藏/命令入口切换获权应用，左栏只显示当前应用导航。构建侧只有 **Builder / 应用设计台**；治理进入 **Control Panel / 控制面板**，生产运行进入 **Runs / 运行**，发布者使用设计台的 Verify 发布入口。应用页签独立记忆；切回来恢复原活动资源，无布局才开主页。切应用、跨应用深链、关闭/关闭其他/关闭全部、身份与语言切换会检查未保存内容，一次列出全部；先在原编辑器保存，或明确放弃，待完成提交须等待结果。Shell 的 Home/门户/通知/搜索等不混入应用记忆。
+工作区的 Shell 按 [ADR-0018](ADR/0018-foundry-aligned-platform-experience.md) 与 [ADR-0019](ADR/0019-ide-workspaces.md) 组织：顶栏“Switch application / 切换应用”切换获权应用并始终显示当前大应用名，项目名显示在编辑区；左栏只显示当前应用功能，中央是工作区，Inspector 按需打开，不增加永久的左侧应用栏；Home、Applications 门户和搜索（⌘K）保持 Shell 共享入口，最近/收藏保留原快捷方式；通知页归 **My work / 我的工作**，Rail 只保留通向原通知页的快捷链接，助手与账户快捷方式分别打开 Agents 与 Control Panel 的原视图。门户分类不授予权限。构建侧只有 **Builder / 应用设计台**；治理进入 **Control Panel / 控制面板**，生产运行进入 **Runs / 运行**，发布者使用设计台的 Verify 发布入口。应用页签独立记忆；切回来恢复原活动资源，无布局才开主页。切应用、跨应用深链、关闭/关闭其他/关闭全部、身份与语言切换会检查未保存内容，一次列出全部；先在原编辑器保存，或明确放弃，待完成提交须等待结果。Shell 的 Home/门户/搜索不混入应用记忆；通知与待办、申请、发件箱一起归 My work。
 
 右键页签或 Window 菜单可在旁边打开或移到新窗口；已有资源移同一个页签，保留本地输入，不复制编辑会话。单独一个页签且无其他分栏时不提供伪分屏。移到新窗口不先放弃草稿；关闭子窗口由原 Dock 归回，浏览器阻止弹窗会提示。关闭全部后可用 Open home / 打开主页或搜索命令重新进入。旧资源深链仍由原 reader 解码：`flow` 是定义编辑器，`flow-instance` 是共享运行详情，运维自动化为 `automation-operations`；不改后台记录身份或权限。已发布应用左栏“Application runs / 应用运行”及其流程/Agent/计算详情沿共享运行读者，返回时保留应用上下文；读取失败不把缓存的旧运行结果继续展示为当前可用。
 
-业务成员只见已获权原生/租户应用及知识内容；`AppUI.category` 决定门户分类。项目按 `platform.project.save` 给出资产编辑委派（只提升编辑、不提升发布），发布与审计角色独立：`build` Publisher 只保存/激活候选不改定义；Auditor 可读审计、成员与包但不可决策。角色投影与导航不替代原宿主授权。
+业务成员只见已获权原生/租户应用及知识内容；`AppUI.category` 保留原分类身份，顶栏和门户将其展示为 **Business applications / 业务应用**、**Knowledge and data / 知识与数据**、**Build and intelligence / 构建与智能**、**Run and manage / 运行与管理**四类；运行与管理当前包含 My work、Runs、Control Panel、Host Console 四个大应用。项目按 `platform.project.save` 给出资产编辑委派（只提升编辑、不提升发布），发布与审计角色独立：`build` Publisher 只保存/激活候选不改定义；Auditor 可读审计、成员与包但不可决策。角色投影与导航不替代原宿主授权。
+
+同一个功能只有一个所属应用；详情、记录动作及带上下文的编辑器仍从原记录或资源进入。分组按语义控制在约 3–5 项，功能较少的应用直接显示已有入口，不补造页面。业务应用的原入口如下，`view` 是已有工作区路由：
+
+| 大应用 | 左侧菜单 → 已有功能与原 `view` |
+|---|---|
+| CRM | Accounts / 客户 → `accounts`；Opportunities / 商机 → `opportunities`；Pipeline / 销售漏斗 → `dashboard`（`app=crm&id=pipeline`） |
+| PMS | Reservations / 预订 → `reservations`；Room types / 房型 → `room-types`；Occupancy / 入住率 → `dashboard`（`app=pms&id=occupancy`） |
+| HCM | Leave requests / 请假申请 → `leave`；审批从 My work / 我的工作的原待办进入 |
+| CSM | Tickets / 服务工单 → `tickets`；Open ticket / 新建工单保留在该页 |
+| ERP | Accounting / 财务：凭证 `entries`、分录 `postings`、试算平衡 `trial-balance`、期间 `periods`；Production and supply / 生产与供应：生产订单 `production`、采购订单 `purchases`、现存量 `on-hand`、库存移动 `moves`；Master data / 主数据：科目 `erp-accounts`、物料 `products`、业务伙伴 `partners` |
+| MES | Planning and execution / 计划与执行：车间订单 `orders`、计划订单 `planned`、生产批次 `queue`；Craft and operations / 工艺与运营：工艺路线 `craft`、质量挂起 `holds`、设备停机 `equipment`、车间看板 `dashboard`（`app=mes&id=shop-floor`） |
+
+平台应用的功能归属与原入口如下。连接、数据处理和观测不再作为 Builder 的第二套菜单，Agent 定义与运行也只在 Agents 中组合；多个前端包向同一个大应用贡献功能，不产生第二个同名应用。菜单按当前角色过滤，隐藏入口不改变原授权。
+
+| 大应用 | 功能菜单 → 原 `view` |
+|---|---|
+| Builder / 应用设计台 | Applications / 应用：`projects`、`module`、`studio-templates`；Ontology / 本体：`object-type`、`action-type`、`link-type`、`property-type`、`query`；Logic / 业务逻辑：`automation`、`flow`，Functions / 函数下的 `function`、`code`、`decision-table`，以及 `alert`；Verify / 验证：`sample-set`、`test-plan`、`evaluation-set`；Releases / 发布：`changes`、`release-review`、`release-history` |
+| Data Connection / 数据连接 | Connections / 连接：`connection`、`integrations`、`endpoints`；Data sources / 来源：`observation-source`、`data-source`、`dataset`；Processing / 处理：`pipeline`、`match`、`writeback`；Monitoring / 监测：`observations`、`lineage`、`effects`、`integration-health` |
+| Agents / 智能体 | Design / 设计：定义 `agent`；可用智能体 `agents`、运行 `agent-runs`、记忆 `agent-memories`、评测 `evaluations`；Assistant / 助手 `assistant` 仅在可执行 `agent.run.start` 时显示 |
+| AI assistance / AI 助手 | Playground / 体验 `ai-playground`、Usage / 用量 `ai-usage`、Providers and models / 供应商与模型 `ai-providers` |
+| Enterprise / 企业模型 | 企业人员、场所、能力与关系 → `enterprise` |
+| Master data / 主数据 | People and places / 人员与场所、Materials and units / 物料与单位、Accounting / 会计资料 → `master-data`（`type` 选择当前成员可见的 `core` 类型）；Object Explorer / 对象浏览器 → `explorer`；Saved views / 保存的视图 → `saved`，不再复制到其他应用菜单；没有 core 角色但有可读实体时只提供对象浏览器，并以其为主页，不开放受限 core 资料 |
+| Knowledge / 知识 | Documents / 文档 `knowledge`；Glossary / 术语 `glossary` |
+| Control Panel / 控制面板 | Overview and identity / 总览与身份：`control-panel`、`account`、`organisation`、`members`；Access and packages / 权限与安装：`permissions`、`apps`、`matrix`、`protocols`；Settings and audit / 设置与审计：`app-settings`、`words`、`audit` |
+| My work / 我的工作 | Inbox / 待办 `inbox`；My requests / 我的申请 `requests`；Notifications / 通知 `notifications`；Outbox / 发件箱 `outbox` |
+| Runs / 运行 | Workflow runs / 流程运行 `flows`；Work queue / 工作队列 `automation-operations`；Delivery attempts / 投递 `delivery-attempts`；Health / 健康 `system-health` |
+| Host Console / 宿主管理 | Tenants / 租户 `host-overview`；Promote a release / 晋级发布 `host-promotions`；Migrate records / 迁移记录 `host-migrations`；租户详情仍从原租户进入 |
+| Asset Library / 资产库 | All assets / 全部资产 `catalog`；Sandbox / 沙箱 `sandbox`；Data diagnostics / 数据诊断中的 `records`、`definitions`（`surface=developer`）。开发参考只从本应用进入 |
+
+CRM 商机详情 `crm-opportunity`、PMS 预订详情 `reservation`、MES 订单详情 `mes-order` 和批次详情 `sfc` 都需要原记录 ID，不作为空白一级菜单。放单、开工、完工、质量处理及停机原因仍是页面或记录动作。看板菜单只指向原看板定义，不重复创建看板。
 
 资源树只按成功读取的原项目目录分组，目录不可用显示未知归属，不伪称“未加入项目”；多个应用引用同一资产时显示共同引用，不任意选择第一个。目录读取失败提供重读，不把空列表当作应用无资产。发布门禁只关注当前应用所需且未安装的资产，不因无关可选能力不可读而强制依赖它。
 
@@ -435,7 +465,7 @@ S7 profile 使用连接字段 `address`、`rack`、`slot`、`timeoutMs`，点地
 
 ## Asset Library / 资产库
 
-从 Apps 门户、应用设计台左栏"探索"或应用切换器打开 **Asset Library / 资产库**（[ADR-0019](ADR/0019-ide-workspaces.md) D3）：左栏按层级的资产树（搜索、用法筛选），主区文档 + 可操作示例（可展开占满），右栏"怎么用"（导入片段、来源、归属包 API、组成、被谁使用、在应用设计台中打开/创建），底栏 Health（索引健康，实时算出）与 Runtime（当前宿主已授权能力）。同一应用含 **Sandbox / 代码沙箱**（D4）：片段 · 编辑器 · 预览 · 控制台。片段切换/新建/删除/重置会保护未保存代码，Run 不等于 Save，预览标出上次运行；再次 Run 总会重新执行，隐藏预览停止其 frame，重开会重启。保存失败或另一个页签修改库时保留编辑代码，重读前先处理草稿。在线片段按租户/主体存于此浏览器，旧浏览器全局片段仍在离线库；不要在片段中放业务原文或凭据；这不是服务端/跨设备保存。离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳；离线示例只有合成数据。
+从 Applications 门户或顶栏应用切换器打开唯一开发参考入口 **Asset Library / 资产库**（[ADR-0019](ADR/0019-ide-workspaces.md) D3）：左栏按层级的资产树（搜索、用法筛选），主区文档 + 可操作示例（可展开占满），右栏"怎么用"（导入片段、来源、归属包 API、组成、被谁使用、在应用设计台中打开/创建），底栏 Health（索引健康，实时算出）与 Runtime（当前宿主已授权能力）。同一应用含 **Sandbox / 代码沙箱**（D4）：片段 · 编辑器 · 预览 · 控制台。片段切换/新建/删除/重置会保护未保存代码，Run 不等于 Save，预览标出上次运行；再次 Run 总会重新执行，隐藏预览停止其 frame，重开会重启。保存失败或另一个页签修改库时保留编辑代码，重读前先处理草稿。在线片段按租户/主体存于此浏览器，旧浏览器全局片段仍在离线库；不要在片段中放业务原文或凭据；这不是服务端/跨设备保存。离线目录用 `pnpm --dir web/apps/catalog dev`，默认端口 5174，复用同一应用声明与外壳；离线示例只有合成数据。
 
 观测代码组件：在Catalog查“Original observation table / 原观测表”“Original observation statistics / 原观测统计”“Original availability history / 原可用率历史”“Original observation time series / 原观测时间序列”，开发视角可查看`@platform/ui`的ObservationTable、ObservationStatistics、ObservationAvailability及ObservationTimeSeries公共类型。调用方提供原EntityInfo、显式信号/单位和事件datetime字段，窗口为`{scope, records, total}`；scope包含原读取/查询身份，旧窗口不显示。表格列搜索/隐藏、元数据固定和行高只改变已读取窗口，选择/导出回调返回原记录和字段，不读取其他数据。统计调用方提供完整窗口答复与signal/threshold/windowRows/计数；最新样本和历史也需原scope。时间图支持最多500点及三种独立单位，保留缺值、原时间和记录身份；availability摘要默认与原窗口作用域、字段及total一致；提供显式averageInfo/averageField时，原资产数量/均值可独立于样本历史total，仍校验可读数值字段与共同作用域，SLO是明确呈现阈值。Catalog示例仅用固定合成数据，不保存文件或接入遥测。四类Workshop源组件可沿显式真实来源映射导入；原生配置/读取/冻结已接通，边界见[ADR-0015 §6.78](ADR/0015-application-studio-fusion.md#678-业务观测宽表窗口统计与真实时间序列)。
 

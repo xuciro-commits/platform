@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Input, InputDraftProvider, InputProblems, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import type { Project } from "../projects/project";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
@@ -212,7 +212,18 @@ export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
   const application = useApplicationScope(), { open, close } = useApplicationWorkspace();
   const projects = useRecordInventory<Project>("build.app"), inventory = useRecordInventory<SampleSetRecord>("build.sample-set");
   const project = projects.data?.records.find(record => record.id === application), record = inventory.data?.records.find(record => record.id === id);
-  if (!application) return <p className="p-3 text-sm">{t("Open sample sets from an application.")}</p>;
+  if (!application) return <div className="grid max-w-xl content-start gap-4 p-4">
+    <PageHeader title={t("Sample sets")} description={t("Choose an application to prepare its sample records.")} />
+    <label className="grid gap-1 text-sm">{t("Application")}<Select value="" disabled={projects.isPending} onChange={event => {
+      if (event.target.value) open({ view: "sample-set", params: { id, application: event.target.value } });
+    }}>
+      <option value="">{t("Choose an application")}</option>
+      {projects.data?.records.filter(project => !project.archived).map(project => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}
+    </Select></label>
+    {projects.isError && <p role="alert" className="text-sm text-danger">{t("The applications could not be loaded.")} <Button size="sm" onClick={() => void projects.refetch()}>{t("Retry")}</Button></p>}
+    {projects.isSuccess && !projects.data.records.some(project => !project.archived) && <p className="text-sm text-muted">{t("Create an application before preparing sample records.")}</p>}
+    <Button className="w-fit" variant="ghost" onClick={() => open({ view: "projects" })}>{t("All applications")}</Button>
+  </div>;
   const failed = projects.isError || inventory.isError || projects.isSuccess && !project || inventory.isSuccess && id !== "new" && !record;
   if (!project || id !== "new" && !record) return <p role={failed ? "alert" : "status"} className="p-3 text-sm">{failed ? t("The application sample could not be loaded.") : t("Loading…")}</p>;
   return <SampleDocument key={`${application}:${id}`} application={project} record={record} onSaved={saved => {
@@ -224,5 +235,5 @@ export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
 
 function SampleDocument({ application, record, onSaved }: { application: Project; record?: SampleSetRecord; onSaved: (record: SampleSetRecord) => void }) {
   const [selected, setSelected] = useState(record?.name ?? ""), [samples, setSamples] = useState(JSON.stringify(record?.samples ?? [], null, 2));
-  return <ApplicationSamples document application={application} selected={selected} samples={samples} onChange={(name, rows) => { setSelected(name); setSamples(rows); }} onSaved={onSaved} />;
+  return <ApplicationSamples document={!!record} application={application} selected={selected} samples={samples} onChange={(name, rows) => { setSelected(name); setSamples(rows); }} onSaved={onSaved} />;
 }

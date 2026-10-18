@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Production and supply": "生产与供应",
+  "Master data": "主数据",
   "ERP": "ERP",
   "Account": "科目",
   "Accounting": "财务",
@@ -28,7 +30,6 @@ register("zh-CN", {
   "Production orders": "生产订单",
   "Products": "物料",
   "Purchase orders": "采购订单",
-  "Purchasing and stock": "采购与库存",
   "Save draft": "保存草稿",
   "Stock moves": "库存移动",
   "Nothing in stock": "没有库存",

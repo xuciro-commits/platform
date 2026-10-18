@@ -15,6 +15,8 @@ import { Button } from "../primitives/button";
 import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
 import { resolveLayout, rewriteLayout } from "./WorkspaceLayout";
+import { NavigationItems, navigationLinks, type NavSection } from "./Navigation";
+export type { NavSection } from "./Navigation";
 
 export type View = {
   id: string;
@@ -25,7 +27,6 @@ export type View = {
   /** Navigation within one document can change without opening another tab. */
   documentKey?: (params: Record<string, string>) => string;
 };
-export type NavSection = { label: string; items: { label: string; icon?: ReactNode; route: Route; badge?: ReactNode }[] };
 export type MenuItem = { label: string; shortcut?: string; onSelect: () => void; disabled?: boolean };
 export type Menu = { label: string; items: MenuItem[] };
 export type ShellCommand = { id: string; label: string; group?: string; shortcut?: string; run: () => void };
@@ -696,16 +697,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
               {nav.map((section) => (
                 <div key={section.label} className="mb-3">
                   <div className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted">{section.label}</div>
-                  {section.items.map((item) => {
-                    const key = routeKey(item.route);
-                    return (
-                      <button key={key} type="button" onClick={() => { open(item.route); setMobileNavOpen(false); }} aria-current={key === active ? "page" : undefined}
-                        className={cn("flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-row-hover [&_svg]:size-3.5 [&_svg]:shrink-0",
-                          key === active && "bg-row-selected font-medium")}>
-                        {item.icon}<span className="min-w-0 flex-1 break-words">{item.label}</span>{item.badge != null && <span className="shrink-0">{item.badge}</span>}
-                      </button>
-                    );
-                  })}
+                  <NavigationItems items={section.items} active={active} onOpen={route => { open(route); setMobileNavOpen(false); }} />
                 </div>
               ))}
             </nav>
@@ -751,7 +743,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
           {nav.map((section) => (
             <Command.Group key={section.label} heading={section.label} className={paletteGroup}>
-              {section.items.map((item) => (
+              {navigationLinks(section.items).map((item) => (
                 <Command.Item key={routeKey(item.route)} value={`${section.label} ${item.label}`} className={paletteItem}
                   onSelect={() => { open(item.route); setPaletteOpen(false); }}>{item.icon}{item.label}</Command.Item>
               ))}
@@ -804,22 +796,21 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 /** The application switcher in the header: the portal's applications by category, the current one marked. */
 function AppMenu({ applications, product, icon }: { applications: Applications; product: string; icon?: ReactNode }) {
   const current = applications.apps.find((a) => a.id === applications.current);
+  const groups = applications.categories.map(category => ({ ...category, apps: applications.apps.filter(app => app.category === category.id) })).filter(group => group.apps.length);
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger aria-label={t("Switch application")} className="flex h-7 min-w-0 max-w-64 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover max-sm:max-w-32 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted">
         {current?.icon ?? icon ?? <LayoutGrid />}<span className="truncate">{product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={4} className={cn(menuPanel, "max-h-[70vh] min-w-60 overflow-auto")}>
-          <DropdownMenu.RadioGroup value={applications.current ?? ""} onValueChange={applications.onSelect}>
-            {applications.categories.map((category) => {
-              const apps = applications.apps.filter((a) => a.category === category.id);
-              if (apps.length === 0) return null;
+        <DropdownMenu.Content align="start" sideOffset={4} collisionPadding={8} style={{ width: `min(calc(100vw - 16px), ${Math.min(4, groups.length) * 15}rem)` }} className={cn(menuPanel, "max-h-[70dvh] overflow-auto")}>
+          <DropdownMenu.RadioGroup value={applications.current ?? ""} onValueChange={applications.onSelect} className={cn("grid grid-cols-1 gap-3 p-1", groups.length > 1 && "sm:grid-cols-2", groups.length > 2 && "lg:grid-cols-3", groups.length > 3 && "xl:grid-cols-4")}>
+            {groups.map((category) => {
               return <div key={category.id}>
                 <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{category.label}</DropdownMenu.Label>
-                {apps.map((a) => (
-                  <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
-                    <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{a.icon}{a.title}
+                {category.apps.map((a) => (
+                  <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "h-auto min-h-8 gap-2 py-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0")}>
+                    <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{a.icon}<span className="min-w-0 break-words">{a.title}</span>
                   </DropdownMenu.RadioItem>
                 ))}
               </div>;

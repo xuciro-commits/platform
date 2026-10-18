@@ -4,7 +4,7 @@
 import "./i18n";
 import { Records, defineApp, useOpenRecord, useRead } from "@platform/app";
 import { PageHeader, t } from "@platform/ui";
-import { BedDouble, DoorOpen, Hotel } from "lucide-react";
+import { BedDouble, DoorOpen, Gauge, Hotel } from "lucide-react";
 import { ReservationCard, ReservationTable, type Reservation } from "./index";
 
 function Reservations() {
@@ -47,5 +47,6 @@ export default defineApp({
   nav: () => [{ label: t("Hotel"), items: [
     { label: t("Reservations"), icon: <BedDouble />, route: { view: "reservations" } },
     { label: t("Room types"), icon: <DoorOpen />, route: { view: "room-types" } },
+    { label: t("Occupancy"), icon: <Gauge />, route: { view: "dashboard", params: { app: "pms", id: "occupancy" } } },
   ] }],
 });

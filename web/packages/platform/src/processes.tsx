@@ -49,12 +49,16 @@ export function Agents() {
       <PageHeader title={t("Agents")} description={t("Agents the apps declare. Each is a principal of its own: it does what its tools allow and, for a person, only what they may do; people confirm its drafts. The model is an app setting of Agents.")} />
       <DataTable data={agents} columns={columns} getRowId={(a) => a.id} height={180} empty={t("No app declares an agent")} />
       <AgentsOverview />
-      <h2 className="mb-2 mt-4 text-sm font-semibold">{t("Runs")}</h2>
-      <Records type="agent.run" description={t("Every run: open one for its steps, the rationale of each, and what people made of it.")} />
-      <h2 className="mb-2 mt-4 text-sm font-semibold">{t("Memories")}</h2>
-      <Records type="agent.memory" description={t("What agents keep across runs: facts they chose to remember, and proposals from people's corrections, which count once someone keeps them. Open one to keep or forget it.")} />
     </>
   );
+}
+
+export function AgentRuns() {
+  return <Records type="agent.run" description={t("Every run: open one for its steps, the rationale of each, and what people made of it.")} />;
+}
+
+export function AgentMemories() {
+  return <Records type="agent.memory" description={t("What agents keep across runs: facts they chose to remember, and proposals from people's corrections, which count once someone keeps them. Open one to keep or forget it.")} />;
 }
 
 export function Evaluations() {

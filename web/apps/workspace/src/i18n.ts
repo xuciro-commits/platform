@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Master data": "主数据",
+  "Knowledge and data": "知识与数据",
+  "Build and intelligence": "构建与智能",
+  "Run and manage": "运行与管理",
+  "Your tasks, requests, notifications and pending decisions across applications.": "跨应用查看你的待办、申请、通知和尚待答复的操作。",
   "Published resource": "已发布资源",
   "Published assets from your applications. Inspect their owner, version, capabilities and declared dependencies.": "应用中已发布的资产，可查看其所属应用、版本、能力与声明的依赖。",
   "This published definition is read only. Its owner keeps the editing, execution and permissions.": "此已发布定义以只读方式查看，编辑、执行与权限仍由原所属应用负责。",

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "true",
+    "test": "pnpm --filter @platform/ui exec vitest run --root ../platform --config ../ui/vitest.config.ts src/navigation.test.mjs",
     "build": "true"
   },
   "dependencies": {

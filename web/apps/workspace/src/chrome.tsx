@@ -3,13 +3,14 @@
 // (ADR-0027), the outbox (K5), every record the member may read (ADR-0046),
 // and the assistant, agent runs and global search (ADR-0054).
 import "./i18n";
-import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Disclosure, Inbox, NotificationList, PageHeader, Panel, RecordList, RecordPage, Select, StatusTag, defineStatuses, submissionStatuses,
   useWorkspace, type ColumnDef, type InboxTask, type Route, type View,
  t } from "@platform/ui";
 import { useState, type ReactNode } from "react";
+import { Bell, BookOpen, ClipboardList, Inbox as InboxIcon, Send } from "lucide-react";
 import { ApplicationsPortal } from "./shell/Applications";
 import { Home } from "./shell/Home";
 import { ObjectExplorer } from "./shell/Explorer";
@@ -251,16 +252,41 @@ function Saved({ id }: { id: string }) {
   return view ? <Records type={view.entity} saved={view} /> : <p className="text-sm text-muted">{t("No saved view")} {id}.</p>;
 }
 
+export const personalWork = defineApp({
+  id: "my-work", serves: [], category: "operate", title: t("My work"), icon: <InboxIcon />,
+  description: t("Your tasks, requests, notifications and pending decisions across applications."),
+  home: { view: "inbox" },
+  views: [
+    { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
+    { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
+    { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
+    { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
+  ],
+  nav: host => [{ label: t("My work"), items: [
+    { label: t("Inbox"), icon: <InboxIcon />, route: { view: "inbox" } },
+    { label: t("My requests"), icon: <ClipboardList />, route: { view: "requests" } },
+    { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" } },
+    { label: t("Outbox"), icon: <Send />, route: { view: "outbox" }, badge: host.outbox.filter(entry => entry.state !== "SUBMISSION_STATE_CONFIRMED" && entry.state !== "SUBMISSION_STATE_REJECTED").length || undefined },
+  ] }],
+});
+
+// Members without a core role can still explore their own authorized records.
+// The core contribution supplies its existing master-data menu to stewards.
+export const explorerApplication = defineApp({
+  id: "core", serves: [], category: "ontology", title: t("Master data"), icon: <BookOpen />,
+  for: host => host.entities.length > 0,
+  home: { view: "explorer" }, views: [],
+  nav: host => host.role("core") ? [] : [{ label: t("Master data"), items: [
+    { label: t("Object Explorer"), route: { view: "explorer" } },
+  ] }],
+});
+
 export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[] = () => []): View[] => [
   { id: "saved", title: () => t("Saved view"), render: (p) => <Saved id={p.id ?? ""} /> },
   { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
   { id: "home", title: () => t("Home"), render: () => <Home /> },
   { id: "portal", title: () => t("Applications"), render: (p) => <ApplicationsPortal projection={(p.workspace as Projection | undefined) ?? projectionOfSurface(p.surface)} /> },
-  { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
-  { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
-  { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
-  { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
   { id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> },
   { id: "observations", title: () => t("Observations"), render: p => <Observations app={p.app} name={p.name} record={p.record} /> },
   { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },

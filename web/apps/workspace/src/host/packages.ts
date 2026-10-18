@@ -1,10 +1,8 @@
 // The UI packages this workspace is built with (D2): each loads only when the
 // member holds a role in an app it serves. Public reference applications need
 // no backend role; their runtime reads/actions still use the original host.
-// One package may contribute several applications (ADR-0018 §3.3): the build
-// package is the Ontology, Workshop, Automate, AI Functions, Code, Projects
-// and Releases applications; the platform package is Control Panel, Runs,
-// Data Connection, Agents, AI and Knowledge.
+// Packages contribute to functional applications (ADR-0018 §3.3); editors
+// and runtime views can join one application while retaining their owners.
 import type { AppUI } from "@platform/app";
 
 type PackageLoad = { default: AppUI; contributions?: AppUI[] };
@@ -13,10 +11,7 @@ export type Package = { serves: string[]; role?: string; public?: boolean; load:
 export const packages: Package[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
   { serves: ["build"], role: "builder", load: () => import("@pkg/build") },
-  { serves: ["build"], role: "integrator", load: async () => {
-    const app = await import("@pkg/build");
-    return { ...app, default: { ...app.default, home: { view: "connection" } } };
-  } },
+  { serves: ["build"], role: "integrator", load: () => import("@pkg/build") },
   { serves: ["build"], role: "publisher", load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },

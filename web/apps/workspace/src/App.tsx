@@ -9,9 +9,9 @@ import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@
 import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Bookmark, Gauge, Upload } from "lucide-react";
+import { Bookmark } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { chromeViews } from "./chrome";
+import { chromeViews, explorerApplication, personalWork } from "./chrome";
 import { availablePackages, packages, type Package } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
@@ -20,7 +20,8 @@ import { Recovery, ReleaseInformation, SignInProblem } from "./session/Problems"
 import { resolveLegacyRoute, shellViews } from "./shell/legacy";
 import { categories, portalEntry } from "./shell/registry";
 import { pageApplication, tenantApps } from "./tenantApps";
-import { routeApplication } from "./shell/navigation";
+import { routeApplication, sharedViewApplication } from "./shell/navigation";
+import { composeApplications } from "./host/applications";
 
 export type { Identity } from "./session/identity";
 
@@ -75,8 +76,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [loadedPackages, setLoadedPackages] = useState<{ scope: string; groups: { source: Package; apps: (AppUI & { serves?: string[] })[] }[] }>();
   // Keep still-authorized packages mounted while new ones load. Filtering is
   // synchronous, so withdrawn packages or another identity never linger.
-  const apps = useMemo(() => loadedPackages && loadedPackages.scope === identityScope
-    ? loadedPackages.groups.filter((group) => selectedPackages.includes(group.source)).flatMap((group) => group.apps)
+  const loadedApps = useMemo(() => loadedPackages && loadedPackages.scope === identityScope
+    ? [...loadedPackages.groups.filter((group) => selectedPackages.includes(group.source)).flatMap((group) => group.apps), personalWork, explorerApplication]
     : undefined, [loadedPackages, packageScope]);
   useEffect(() => {
     if (!me) return;
@@ -88,7 +89,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [packageScope]);
 
   // --- Host: reads, decisions and the record source every view shares.
-  const { host, release, unread, saved, waiting, hostAdmin, studioApplications } = usePlatformHost({ client, token, tenant, me, ready, apps });
+  const { host, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
+  const apps = useMemo(() => loadedApps ? composeApplications(loadedApps) : undefined, [loadedApps]);
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
   const definitions = host?.definitions ?? [];
@@ -104,22 +106,20 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // applications this tenant handed to its people (ADR-0046). The Host
   // Console is a host-level application: it appears only for host administrators.
   const [activeRoute, setActiveRoute] = useState<Route>();
-  const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })]
+  const all = useMemo(() => [...(apps ?? []).map(app => ({ ...app, home: host ? app.homeFor(host) : app.home })), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })]
     .filter((app) => (!app.for || !!host && app.for(host)) && (app.id !== "host-console" || hostAdmin)), [apps, definitions, host, hostAdmin, activeRoute?.params?.application, activeRoute?.params?.instance]);
   const entries = useRef(all);
   entries.current = all;
   const registry = useRef(definitions); // tab titles read current definitions without replacing registered views
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
-  const surface = app?.surface ?? "work";
-  const studioApplicationID = activeRoute?.view === "project" || activeRoute?.view === "module" && activeRoute.params?.id ? activeRoute.params?.id : activeRoute?.params?.application;
-  const studioApplication = studioApplications.find((record) => !record.archived && record.id === studioApplicationID);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   // Navigation and the destructive-switch guard must agree on one owner,
   // including shared pages, diagnostics and old surface-qualified links.
   const applicationOf = useCallback((route: Route, choice?: string) => {
-    if (shellViews.includes(route.view)) return undefined;
-    const owned = pageApplication(route, definitions, current) ?? owner.get(route.view)
+    const sharedOwner = owner.get(route.view) ?? sharedViewApplication(route);
+    if (shellViews.includes(route.view) && !sharedOwner) return undefined;
+    const owned = pageApplication(route, definitions, current) ?? sharedOwner
       ?? (route.view === "dashboard" ? route.params?.app : undefined)
       ?? (["records", "definitions"].includes(route.view) ? all.find((entry) => entry.surface === "developer")?.id : undefined);
     const id = routeApplication(route, all, owned, choice);
@@ -150,7 +150,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [me?.account?.theme, me?.account?.homePage, ready, all.length]);
   useEffect(() => {
     if (!activeRoute) return;
-    if (shellViews.includes(activeRoute.view)) return; // the shell's own places keep the current application
     const choice = chosen.current?.from === routeToHash(activeRoute) ? chosen.current.id : undefined;
     const id = applicationOf(activeRoute, choice);
     if (id) chosen.current = undefined;
@@ -218,11 +217,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (id.startsWith("as:")) { setToken(id.slice(3)); remember(IDENTITY_KEY, id.slice(3)); }
   };
   const decide = host.decide;
-  const badge = (n: number) => n ? <span className="text-xs text-[var(--tone-info)]">{n}</span> : null;
 
   return (
     <HostContext.Provider value={host}>
-      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={surface === "studio" && studioApplication ? studioApplication.title || studioApplication.name : app?.title ?? t("Platform")} productIcon={app?.icon}
+      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Platform")} productIcon={app?.icon}
         storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         layoutScope={app?.id} scopeOf={applicationOf}
         views={views} resolveRoute={resolveRoute} home={{ view: "home" }}
@@ -234,10 +232,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         navigation={app?.navigation?.(activeRoute)}
         nav={[
           ...(app?.nav(host, activeRoute) ?? []),
-          ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: t("Dashboards"), items: app.dashboards.filter((d) => !d.for || d.for(host))
-            .map((d) => ({ label: d.title, icon: <Gauge />, route: { view: "dashboard", params: { app: app.id, id: d.id } } })) }] : []),
-          ...((app?.surface ?? "work") === "work" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
-          ...(waiting ? [{ label: t("Pending"), items: [{ label: t("Outbox"), icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] }] : []),
+          ...(app?.id === "core" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
           { id: "inbox", label: t("Inbox"), group: t("My work"), run: () => { location.hash = "#/inbox"; } },

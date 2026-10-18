@@ -2,6 +2,22 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Assistant": "助手",
+  "Overview and identity": "概览与身份",
+  "Access and packages": "权限与软件包",
+  "Settings and audit": "设置与审计",
+  "Members, organisation, installed packages, settings and the audit trail.": "成员、组织、已安装软件包、设置与审计记录。",
+  "Work queue": "工作队列",
+  "Agent runs": "智能体运行",
+  "Agent memories": "智能体记忆",
+  "Connections": "连接",
+  "Monitoring": "监测",
+  "People and places": "人员与场所",
+  "Materials and units": "物料与计量",
+  "Accounting": "会计记录",
+  "Object Explorer": "对象浏览器",
+  "The organisation's people, places, capabilities and relationships.": "组织中的人员、场所、能力与关系。",
+  "Connectors bring facts in, with health, cursors and the last refused input.": "连接器将事实接入系统，并展示健康状态、游标与最近一次拒绝的输入。",
   "Application blueprint": "应用蓝图",
   "Build guide": "构建说明",
   "Application drafts could not be created.": "无法创建应用草稿。",

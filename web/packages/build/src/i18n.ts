@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Data Connection": "数据连接",
+  "Processing": "处理",
+  "Monitoring": "监控",
+  "Agent definitions": "智能体定义",
+  "Connect data sources, prepare datasets and monitor integrations.": "连接数据源、准备数据集并监控集成。",
+  "Define agents and their allowed actions.": "定义智能体及其允许执行的动作。",
+  "Choose an application to prepare its sample records.": "选择应用，准备其样本记录。",
+  "Choose an application": "选择应用",
+  "The applications could not be loaded.": "无法加载应用。",
+  "Create an application before preparing sample records.": "请先创建应用，再准备样本记录。",
   "Bind a visible scalar tag group, original query and matching output before saving.": "保存前，请绑定可见的标量分组字段、原查询及对应输出。",
   "Bind shared record-set output to a writable table selection in the main page before saving.": "保存前，请将共享记录集输出绑定到主页面内可写的表格选择。",
   "Bind a writable shared record output for the original object in the main page before saving.": "保存前，请绑定主页面中原对象的可写共享记录输出。",
@@ -470,7 +480,6 @@ register("zh-CN", {
   "Save application sample": "保存应用样本",
   "Published sample version": "已发布样本版本",
   "Application sample saved. Release review retains its version.": "应用样本已保存，发布审查会保留其版本。",
-  "Open sample sets from an application.": "请从应用中打开样本集。",
   "Saved application draft": "已保存的应用草稿",
   "Fixed candidate version": "固定候选版本",
   "Comparison members": "对照成员",

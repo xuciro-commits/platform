@@ -52,6 +52,7 @@ export {ExternalFrame,validExternalFrame,type ExternalFrameProps,type ExternalFr
 export {StaticImage,validStaticImage,validStaticImageURL,type StaticImageProps,type StaticImageConfig} from "./components/StaticImage";
 export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, useViewCall, useViewTitle, useUnsavedChanges, notify, type Applications, type PlatformApplication, type Rail, type RecentEntry, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
+export { navigationLinks, type NavItem, type NavLink } from "./shell/Navigation";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
 // One drawing surface, two families (ADR-0033): a process joins activities through

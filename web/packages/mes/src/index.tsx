@@ -6,7 +6,7 @@ import { DeclaredActionForm, RecordDetail, Records, defineApp, newId, useHost, u
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, FlowSteps, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type FlowStepEdge, type FlowStepNode,
  t } from "@platform/ui";
-import { Activity, ClipboardList, Factory, ListOrdered, Plus, Route, ShieldAlert } from "lucide-react";
+import { Activity, ClipboardList, Factory, Gauge, ListOrdered, Plus, Route, ShieldAlert } from "lucide-react";
 import { queryElements } from "@platform/kernel";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -419,11 +419,16 @@ export default defineApp({
     { id: "equipment", title: () => t("Downtime"), render: () => <Equipment /> },
   ],
   nav: () => [
-    { label: t("Planning"), items: [{ label: t("Shop orders"), icon: <ListOrdered />, route: { view: "orders" } },
-      { label: t("Planned orders"), icon: <ClipboardList />, route: { view: "planned" } }] },
-    { label: t("Execution"), items: [{ label: t("SFCs"), icon: <Factory />, route: { view: "queue" } }] },
-    { label: t("Craft"), items: [{ label: t("Routings"), icon: <Route />, route: { view: "craft" } }] },
-    { label: t("Quality"), items: [{ label: t("Holds"), icon: <ShieldAlert />, route: { view: "holds" } }] },
-    { label: t("Equipment"), items: [{ label: t("Downtime"), icon: <Activity />, route: { view: "equipment" } }] },
+    { label: t("Planning and execution"), items: [
+      { label: t("Shop orders"), icon: <ListOrdered />, route: { view: "orders" } },
+      { label: t("Planned orders"), icon: <ClipboardList />, route: { view: "planned" } },
+      { label: t("SFCs"), icon: <Factory />, route: { view: "queue" } },
+    ] },
+    { label: t("Craft and operations"), items: [
+      { label: t("Routings"), icon: <Route />, route: { view: "craft" } },
+      { label: t("Quality holds"), icon: <ShieldAlert />, route: { view: "holds" } },
+      { label: t("Downtime"), icon: <Activity />, route: { view: "equipment" } },
+      { label: t("Shop floor"), icon: <Gauge />, route: { view: "dashboard", params: { app: "mes", id: "shop-floor" } } },
+    ] },
   ],
 });

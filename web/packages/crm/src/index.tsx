@@ -6,7 +6,7 @@
 import "./i18n";
 import { RecordDetail, Records, defineApp } from "@platform/app";
 import { t } from "@platform/ui";
-import { Building2, Handshake } from "lucide-react";
+import { Building2, Gauge, Handshake } from "lucide-react";
 
 const opportunities = { entity: "crm.opportunity" };
 const count = { aggregate: "count", type: "quantitative" } as const;
@@ -34,5 +34,6 @@ export default defineApp({
   nav: () => [{ label: t("CRM"), items: [
     { label: t("Accounts"), icon: <Building2 />, route: { view: "accounts" } },
     { label: t("Opportunities"), icon: <Handshake />, route: { view: "opportunities" } },
+    { label: t("Pipeline"), icon: <Gauge />, route: { view: "dashboard", params: { app: "crm", id: "pipeline" } } },
   ] }],
 });
