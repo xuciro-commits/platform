@@ -1,7 +1,6 @@
 import { definitionPresentation, useDefinitions, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { useMemo } from "react";
-import type { Project } from "./project";
 import { kindOfType, matchesResourceKind, publishedResourceKind, refKey, resourceKinds, resourceRef, type ResourceKindInfo, type ResourceRecord } from "./resources";
 
 export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; installed: boolean; missing: boolean };
@@ -10,14 +9,15 @@ const inventoryTypes = [...new Set(resourceKinds.map(kind => kind.type))];
 
 /** Inventories of every resource type, keyed by kind, resolved to the records a project names — and to
  * what the host has installed, so a published resource without a tenant draft is never called missing. */
-export function useProjectResources(project?: Project) {
+export function useProjectResources(project?: Pick<import("@platform/kernel").Api.Application, "pages" | "resources" | "concepts">, owner = "build", editable = true) {
   const definitionQuery = useDefinitions();
   const definitions = definitionQuery.data ?? [];
-  const byType = Object.fromEntries(inventoryTypes.map(type => [type, useRecordInventory<ResourceRecord>(type, 1000, !!project)]));
+  const readDrafts = !!project && owner === "build" && editable;
+  const byType = Object.fromEntries(inventoryTypes.map(type => [type, useRecordInventory<ResourceRecord>(type, 1000, readDrafts)]));
   const inventories = Object.fromEntries(resourceKinds.map(kind => [kind.kind, byType[kind.type]!]));
-  const records = useMemo(() => resourceKinds.flatMap(kind => (inventories[kind.kind]?.data?.records ?? [])
+  const records = useMemo(() => !readDrafts ? [] : resourceKinds.flatMap(kind => (inventories[kind.kind]?.data?.records ?? [])
     .filter(record => !record.archived && record.name && matchesResourceKind(kind, record))
-    .map(record => ({ kind, record, ref: resourceRef(kind, record.name) }))), [...inventoryTypes.map(type => byType[type]?.data)]);
+    .map(record => ({ kind, record, ref: resourceRef(kind, record.name) }))), [readDrafts, ...inventoryTypes.map(type => byType[type]?.data)]);
   const owned = useMemo(() => {
     const items: OwnedResource[] = [];
     if (!project) return items;
@@ -30,8 +30,8 @@ export function useProjectResources(project?: Project) {
       return { kind, record, ref, title, installed: !!definition, missing: !record && !definition && loaded };
     };
     for (const name of project.pages ?? []) {
-      const ref = { app: "build", kind: "page", name };
-      items.push(resolve(kindOfType("build.page")!, ref, drafts.get(refKey(ref))?.record, inventories.page?.isSuccess === true));
+      const ref = { app: owner, kind: "page", name };
+      items.push(resolve(kindOfType("build.page")!, ref, drafts.get(refKey(ref))?.record, readDrafts ? inventories.page?.isSuccess === true : definitionQuery.isSuccess));
     }
     for (const ref of project.resources ?? []) {
       const candidates = resourceKinds.filter((item) => (item.ref ?? item.kind) === ref.kind);
@@ -39,10 +39,10 @@ export function useProjectResources(project?: Project) {
       const kind = draft?.kind
         ?? candidates.find(kind => kind.kind === "table" && definition?.operation?.binding.kind === "native" && definition.operation.rules)
         ?? candidates[0] ?? publishedResourceKind;
-      items.push(resolve(kind, ref, draft?.record, kind === publishedResourceKind ? definitionQuery.isSuccess : inventories[kind.kind]?.isSuccess === true));
+      items.push(resolve(kind, ref, draft?.record, kind === publishedResourceKind || !readDrafts ? definitionQuery.isSuccess : inventories[kind.kind]?.isSuccess === true));
     }
     return items;
-  }, [project, definitions, definitionQuery.isSuccess, records, ...inventoryTypes.map(type => byType[type]?.isSuccess)]);
+  }, [project, owner, readDrafts, definitions, definitionQuery.isSuccess, records, ...inventoryTypes.map(type => byType[type]?.isSuccess)]);
   /** Records of every kind that exist but are not in the project yet: what "Add existing" offers. */
   const available = useMemo(() => {
     const held = new Set(owned.map((item) => refKey(item.ref)));
@@ -56,7 +56,7 @@ export function useProjectResources(project?: Project) {
       .map((d) => ({ ref: d.ref, title: definitionPresentation(d).title, app: d.ref.app }))
       .sort((a, b) => (a.app === "core" ? 0 : 1) - (b.app === "core" ? 0 : 1) || a.title.localeCompare(b.title));
   }, [owned, available, definitions]);
-  const loading = definitionQuery.isLoading || Object.values(byType).some(inventory => inventory.isLoading);
-  const unavailable = definitionQuery.isError || Object.values(byType).some(inventory => inventory.isError);
+  const loading = definitionQuery.isLoading || readDrafts && Object.values(byType).some(inventory => inventory.isLoading);
+  const unavailable = definitionQuery.isError || readDrafts && Object.values(byType).some(inventory => inventory.isError);
   return { inventories, owned, available, shared, loading, unavailable };
 }

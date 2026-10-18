@@ -309,6 +309,39 @@ test("a slow incoming alias cannot undo a newer explicit application choice", as
   expect(location.hash).toBe("#/knowledge");
 });
 
+test("programmatic opens use published route replacements and retain the original editor draft", async () => {
+  const input = await start({ resolveRoute: route => route.view === "original-page" ? { view: "flow", params: { id: "B" } } : route });
+  fireEvent.change(input, { target: { value: "retain draft" } });
+  act(() => api.open({ view: "original-page" }, { ifCurrent: { view: "flow", params: { id: "A" } } }));
+  expect(await screen.findByRole("textbox", { name: "Draft B" })).toBeTruthy();
+  expect(observed.dock!.getPanel("flow?id=A")).toBeTruthy();
+  act(() => api.open({ view: "flow", params: { id: "A" } }));
+  expect((await screen.findByRole("textbox", { name: "Draft A" }) as HTMLInputElement).value).toBe("retain draft");
+});
+
+test("a delayed programmatic replacement cannot reopen its saved result after another document is selected", async () => {
+  let finish!: (route: Route) => void;
+  const pending = new Promise<Route>(resolve => { finish = resolve; });
+  await start({ resolveRoute: route => route.view === "original-page" ? pending : route });
+  act(() => api.open({ view: "original-page" }, { ifCurrent: { view: "flow", params: { id: "A" } } }));
+  act(() => api.open({ view: "flow", params: { id: "B" } }));
+  expect(await screen.findByRole("textbox", { name: "Draft B" })).toBeTruthy();
+  await act(async () => finish({ view: "flow", params: { id: "C" } }));
+  expect(observed.dock!.getPanel("flow?id=C")).toBeUndefined();
+  expect(observed.dock!.activePanel?.id).toBe("flow?id=B");
+});
+
+test("a newly published replacement follows the current link while retaining its draft", async () => {
+  const mounted = render(<Shell resolveRoute={route => route} />);
+  const input = await screen.findByRole("textbox", { name: "Draft A" });
+  fireEvent.change(input, { target: { value: "retain original input" } });
+  mounted.rerender(<Shell resolveRoute={route => route.view === "flow" && route.params?.id === "A" ? { view: "flow", params: { id: "B" } } : route} />);
+  expect(await screen.findByRole("textbox", { name: "Draft B" })).toBeTruthy();
+  expect(observed.dock!.getPanel("flow?id=A")).toBeTruthy();
+  act(() => observed.dock!.getPanel("flow?id=A")!.api.setActive());
+  expect((await screen.findByRole("textbox", { name: "Draft A" }) as HTMLInputElement).value).toBe("retain original input");
+});
+
 test("strict effect replay still opens the incoming entity", async () => {
   render(<StrictMode><Shell /></StrictMode>);
   expect(await screen.findByRole("textbox", { name: "Draft A" })).toBeTruthy();

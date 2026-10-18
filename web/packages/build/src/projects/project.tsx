@@ -23,37 +23,43 @@ export type { OwnedResource } from "./resource-inventory";
 import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
 import { StudioGuide } from "./studio-guide";
+import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
+import { InstalledApplicationHome } from "./InstalledApplicationHome";
+import { ExtensionSettings } from "./ExtensionSettings";
 
 /** Every project the builder may open, with what each holds. */
 export function ProjectsList() {
-  const { role, me } = useHost();
+  const { role, me, definitions } = useHost();
   const { open } = useWorkspace();
   const projects = useRecordInventory<Project>("build.app");
+  const installedApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   // A builder role held only through projects (#141): the Studio opens, edits stay within the assets they name.
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
   const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));
   const builder = role("build") === "builder";
-  const rows = (projects.data?.records ?? []).filter((project) => !project.archived && `${project.title} ${project.name}`.toLowerCase().includes(search.toLowerCase()));
+  const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
+    .filter(item => `${item.title} ${item.ref.app} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid min-w-0 gap-4">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-xl font-semibold tracking-tight">{t("Applications")}</h1><p className="text-sm text-muted">{t("Projects organize drafts. Applications are delivered as one closed artifact.")}</p></div>
+      <div><h1 className="text-xl font-semibold tracking-tight">{t("Applications")}</h1><p className="text-sm text-muted">{t("Inspect installed applications and extend them through the same drafts and releases.")}</p></div>
       <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 basis-56 sm:w-56 sm:flex-none" />
         {builder && create.available && <Button className="shrink-0" variant="primary" onClick={() => create.take()}><Plus />{t("New application")}</Button>}
       </div>
     </div>
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
-    {projects.isLoading && <p className="text-sm text-muted">{t("Loading…")}</p>}
-    {projects.isError && <Notice tone="warning" role="alert" message={t("Applications could not be loaded.")} />}
-    {!projects.isError && !projects.isLoading && !rows.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">{search ? t("No project matches.") : t("No projects yet. Create one to start building.")}</div>}
+    {(projects.isLoading || installedApps.isLoading) && <p className="text-sm text-muted">{t("Loading…")}</p>}
+    {(projects.isError || installedApps.isError) && <Notice tone="warning" role="alert" message={t("Applications could not be loaded.")} />}
+    {!projects.isError && !installedApps.isError && !projects.isLoading && !installedApps.isLoading && !rows.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">{search ? t("No project matches.") : t("No projects yet. Create one to start building.")}</div>}
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {rows.map((project) => <li key={project.id}>
-        <Button variant="row" type="button" onClick={() => open({ view: "project", params: { id: project.id } })} className="grid w-full gap-2 border border-border bg-surface rounded-md p-4 text-left hover:border-primary focus-visible:outline-ring">
-          <div className="flex items-center gap-2"><FolderKanban className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate font-semibold">{project.title || project.name}</span><DraftStatus state={project.state} /></div>
-          {project.description && <p className="line-clamp-2 text-xs text-muted">{project.description}</p>}
-          <p className="text-[11px] text-muted">{t("{pages} pages · {resources} resources", { pages: project.pages?.length ?? 0, resources: project.resources?.length ?? 0 })}{project.changed?.at && ` · ${new Date(project.changed.at).toLocaleDateString()}`}</p>
+      {rows.map((item) => <li key={refKey(item.ref)}>
+        <Button variant="row" type="button" onClick={() => open({ view: "project", params: { id: item.id } })} className="grid w-full gap-2 border border-border bg-surface rounded-md p-4 text-left hover:border-primary focus-visible:outline-ring">
+          <div className="flex items-center gap-2"><FolderKanban className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate font-semibold">{item.title}</span><DraftStatus state={item.project?.state} /></div>
+          {item.description && <p className="line-clamp-2 text-xs text-muted">{item.description}</p>}
+          <p className="text-xs text-muted">{item.project ? t(item.project.extends ? "Application extension" : "Build application") : t(item.definition?.source === "code" || item.ref.app !== "build" ? "Native code" : "Published application")} · {item.ref.app}</p>
+          <p className="text-[11px] text-muted">{t("{pages} pages · {resources} resources", { pages: (item.project ?? item.definition?.application)?.pages?.length ?? 0, resources: (item.project ?? item.definition?.application)?.resources?.length ?? 0 })}</p>
         </Button>
       </li>)}
     </ul>
@@ -84,6 +90,11 @@ function NewResourceMenu({ application, onCreated, children, disabled, area }: {
 
 /** The project home: resource tree, what changed, settings. */
 export function ProjectHome({ id, area, initialSelected, initialSection, initialPlan }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string }) {
+  return installedStudioRef(id) ? <InstalledApplicationHome id={id} area={area} selected={initialSelected} />
+    : <BuildProjectHome id={id} area={area} initialSelected={initialSelected} initialSection={initialSection} initialPlan={initialPlan} />;
+}
+
+function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string }) {
   const activeArea = studioArea(area);
   const { client, decide, role, definitions, me } = useHost();
   const { open } = useWorkspace();
@@ -106,7 +117,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
     setTab(initialTab);
     if (initialSelected !== undefined) setSelected(initialSelected);
   }, [activeArea, initialSection, initialSelected, initialPlan, initialTab]);
-  const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile }>();
+  const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile; extends?: Api.AssetRef; entry: string; replacements: NonNullable<Api.Application["replacements"]> }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
   const [importedDependencies, setImportedDependencies] = useState<ApplicationImportDependency[]>([]);
@@ -123,7 +134,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
   const [edited, setEdited] = useState(false);
   const lock = useRef(false);
   const baseline = useRef<{ values: NonNullable<typeof settings>; revision: number } | undefined>(undefined);
-  const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes", profile: structuredClone(p.profile ?? {}) });
+  const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes", profile: structuredClone(p.profile ?? {}), extends: p.extends, entry: p.entry ?? "", replacements: structuredClone(p.replacements ?? []) });
   useEffect(() => {
     if (project && !edited) {
       const values = fromRecord(project);
@@ -138,6 +149,9 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
     const out: Partial<Api.Application> = {};
     for (const key of ["title", "name", "description", "icon"] as const) if (settings[key] !== current[key]) out[key] = settings[key];
     if (JSON.stringify(settings.profile) !== JSON.stringify(current.profile)) out.profile = settings.profile;
+    if (JSON.stringify(settings.extends) !== JSON.stringify(current.extends)) Object.assign(out, { extends: settings.extends ?? null });
+    if (settings.entry !== current.entry) out.entry = settings.entry;
+    if (JSON.stringify(settings.replacements) !== JSON.stringify(current.replacements)) out.replacements = settings.replacements;
     return out;
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
@@ -213,7 +227,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
     const current = latestProject.current;
     if (!current) return;
     const changes = ref.kind === "page"
-      ? { pages: (current.pages ?? []).filter(name => name !== ref.name), groups: (current.groups ?? []).map(group => ({ ...group, pages: group.pages.filter(name => name !== ref.name) })).filter(group => group.pages.length) }
+      ? { pages: (current.pages ?? []).filter(name => name !== ref.name), groups: (current.groups ?? []).map(group => ({ ...group, pages: group.pages.filter(name => name !== ref.name) })).filter(group => group.pages.length), replacements: (current.replacements ?? []).filter(mapping => mapping.page !== ref.name) }
       : { resources: (current.resources ?? []).filter(item => refKey(item) !== refKey(ref)) };
     if (await patch(changes, current.revision)) setSelected(undefined);
   };
@@ -272,6 +286,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {resourcesUnavailable && <Notice tone="warning" role="alert" message={t("Some project assets are unreadable. Membership and release selection must not be inferred from an empty inventory.")} />}
+        {project.extends && <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-xs"><span>{t("Application extension")} · {project.extends.app}</span><Button size="sm" variant="ghost" onClick={() => open(studioRoute(installedStudioID(project.extends!), activeArea))}>{t("Open original application")}</Button></div>}
         {error && tab !== "settings" && <p role="alert" className="p-3 text-sm text-danger">{error}</p>}
         {pendingPatch && <div className="grid gap-2 p-3"><Notice tone="warning" role="alert" message={t("An application update may already have been accepted. Retry its original payload; leaving does not undo accepted changes.")} />
           <div><Button disabled={saving} onClick={() => void retryPatch()}>{t("Retry original application update")}</Button></div></div>}
@@ -368,6 +383,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
         {tab === "roles" && <ProjectRoles owned={owned} />}
         {tab === "settings" && settings && <fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
+          <ExtensionSettings value={settings} pages={project.pages ?? []} disabled={!builder} onChange={extension => editSettings({ ...settings, ...extension, entry: extension.entry ?? "", replacements: extension.replacements ?? [] })} />
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Icon")}<IconPicker value={settings.icon} disabled={!builder} onChange={(icon) => editSettings({ ...settings, icon })} /></label>

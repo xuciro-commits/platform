@@ -124,6 +124,21 @@ func (h *Host) routesCore(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+	rt.handle(Route{Pattern: "GET /v1/apps/{app}/reads/{read}", Summary: "A named read selected by its original app; the same owner authorization and field filtering apply"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		name := r.PathValue("read")
+		out, err := t.ReadFrom(m, r.PathValue("app"), name)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		if declarationReads[name] {
+			out = t.i18n.Translate(out, t.Language(m, r))
+		}
+		if messageReads[name] {
+			out = t.i18n.TranslateMessages(out, t.Language(m, r))
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	rt.public(Route{Pattern: "GET /v1/sign-in", Summary: "How the workspace signs in: the OpenID issuer and client, or development identities", Answer: SignIn{}}, func(w http.ResponseWriter, _ *http.Request) {
 		out := SignIn{}
 		if h.Issuer != "" {

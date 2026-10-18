@@ -366,9 +366,6 @@ func (t *Tenant) registerDefinitions() error {
 				resources = append(resources, definition.Ref)
 			}
 		}
-		if len(pages) == 0 && len(resources) == 0 {
-			continue
-		}
 		declaration := platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)}
 		if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetApp, Name: manifest.ID}, Source: "code", Version: manifest.Version, ContractVersion: 1, Application: &declaration}); err != nil {
 			return err
@@ -1214,7 +1211,7 @@ func (t *Tenant) visibleApplication(registered platform.Definition, m platform.M
 		return !opens[platform.AssetRef{App: def.Ref.App, Kind: platform.AssetPage, Name: name}]
 	}
 	application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), closed)
-	if len(application.Pages) == 0 && len(application.Resources) == 0 {
+	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
 		return platform.Definition{}, false
 	}
 	// A heading over none of this member's pages is not in their navigation.
@@ -1232,9 +1229,12 @@ func (t *Tenant) visibleApplication(registered platform.Definition, m platform.M
 		}
 		return !visibleResources[ref]
 	})
-	if len(application.Pages) == 0 && len(application.Resources) == 0 {
+	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
 		return platform.Definition{}, false
 	}
+	application.Replacements = slices.DeleteFunc(slices.Clone(application.Replacements), func(replacement platform.ApplicationPageReplacement) bool {
+		return !slices.Contains(application.Pages, replacement.Page)
+	})
 	application.Queries = maps.Clone(application.Queries)
 	application.Variables = maps.Clone(application.Variables)
 	for id, q := range application.Queries {

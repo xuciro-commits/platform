@@ -9,6 +9,7 @@ import { BarChart3, LayoutDashboard } from "lucide-react";
 import { IconGlyph } from "@platform/ui";
 
 type Definition = Api.Definition;
+export { pageApplication } from "./host/applications";
 
 /**
  * The applications this member may open, as the workspace's own app entries.
@@ -18,7 +19,7 @@ type Definition = Api.Definition;
 export function tenantApps(definitions: Definition[], context?: { application?: string; instance?: string }): AppUI[] {
   return definitions.flatMap((definition) => {
     const application = definition.application;
-    if (definition.ref.kind !== "app" || !application || definition.source === "code") return [];
+    if (definition.ref.kind !== "app" || !application || definition.source === "code" || application.extends) return [];
     const pages = new Map(definitions.filter((d) => d.ref.kind === "page" && d.ref.app === definition.ref.app).map((d) => [d.ref.name, d.page]));
     const held = application.pages.filter((name) => pages.has(name));
     if (held.length === 0 && !application.resources?.length) return [];
@@ -52,25 +53,4 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
       nav,
     }];
   });
-}
-
-/** Shared page views follow explicit application membership, not just `page`.
- * A page reused by several apps retains its chosen app; an old unambiguous
- * deep link can still resolve its owner without a second route or asset copy.
- */
-export function pageApplication(route: Route, definitions: Definition[], current?: string): string | undefined {
-  if (route.view === "application-runs" || route.view === "application-overview") {
-    const { app, name, application } = route.params ?? {};
-    const definition = definitions.find((item) => item.ref.kind === "app" && item.ref.app === app && item.application?.name === name);
-    const id = definition?.application && `${definition.ref.app}:${definition.application.name}`;
-    return id && (!application || application === id) ? id : undefined;
-  }
-  if (route.view !== "page" || route.params?.kind !== "page") return undefined;
-  const { app, name, application } = route.params;
-  const holders = definitions.filter((d) => d.ref.kind === "app" && d.ref.app === app && d.application?.pages.includes(name ?? ""))
-    .map((d) => `${d.ref.app}:${d.application!.name}`);
-  if (application && holders.includes(application)) return application;
-  if (current && holders.includes(current)) return current;
-  if (holders.length === 1) return holders[0];
-  return holders.length === 0 ? app : undefined;
 }

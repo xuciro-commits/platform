@@ -14,6 +14,17 @@ import (
 
 func (h hostView) Apps() []platform.App       { return slices.Clone(h.t.apps) }
 func (h hostView) App(id string) platform.App { return h.t.app(id) }
+func (h hostView) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
+	var assets []platform.ReleaseAsset
+	for _, app := range h.t.apps {
+		owned, err := h.t.codeReleaseAssetsLocked(app)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, owned...)
+	}
+	return assets, nil
+}
 func (h hostView) ConsoleSetting(name string) string {
 	return h.t.setting(h.t.automation(PlatformApp, false), name)
 }

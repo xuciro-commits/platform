@@ -19,16 +19,19 @@ import (
 // Application is an application this organisation hands to its people.
 type Application struct {
 	platform.Record
-	Profile     *platform.ApplicationProfile     `json:"profile,omitempty" field:"aside" type:"json" title:"Application profile" help:"Expected records and runs, retention and recovery declarations; actual guarantees require environment evidence"`
-	Header      *platform.ApplicationHeader      `json:"header,omitempty" field:"aside" type:"json" title:"Application header"`
-	UIProfile   string                           `json:"uiProfile,omitempty" field:"aside" title:"UI profile"`
-	Queries     map[string]platform.PageQuery    `json:"queries,omitempty" field:"aside" type:"json" title:"Application queries"`
-	Variables   map[string]platform.PageVariable `json:"variables,omitempty" field:"aside" type:"json" title:"Application variables"`
-	Name        string                           `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
-	Title       string                           `json:"title" field:"required,search" title:"What people call it" example:"Front desk"`
-	Description string                           `json:"description,omitempty" type:"longtext" help:"What people do in it"`
-	Icon        string                           `json:"icon,omitempty" help:"How it is drawn in the launcher"`
-	Pages       []string                         `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
+	Profile      *platform.ApplicationProfile          `json:"profile,omitempty" field:"aside" type:"json" title:"Application profile" help:"Expected records and runs, retention and recovery declarations; actual guarantees require environment evidence"`
+	Header       *platform.ApplicationHeader           `json:"header,omitempty" field:"aside" type:"json" title:"Application header"`
+	UIProfile    string                                `json:"uiProfile,omitempty" field:"aside" title:"UI profile"`
+	Queries      map[string]platform.PageQuery         `json:"queries,omitempty" field:"aside" type:"json" title:"Application queries"`
+	Extends      *platform.AssetRef                    `json:"extends,omitempty" field:"aside" type:"json"`
+	Entry        string                                `json:"entry,omitempty" field:"aside"`
+	Replacements []platform.ApplicationPageReplacement `json:"replacements,omitempty" field:"aside" type:"json"`
+	Variables    map[string]platform.PageVariable      `json:"variables,omitempty" field:"aside" type:"json" title:"Application variables"`
+	Name         string                                `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
+	Title        string                                `json:"title" field:"required,search" title:"What people call it" example:"Front desk"`
+	Description  string                                `json:"description,omitempty" type:"longtext" help:"What people do in it"`
+	Icon         string                                `json:"icon,omitempty" help:"How it is drawn in the launcher"`
+	Pages        []string                              `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
 	// Groups are the headings of its navigation (17b); a page in none of them
 	// sits under the application's own name.
 	Resources []platform.AssetRef   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
@@ -48,6 +51,9 @@ func (b *Build) applicationEntity() platform.Entity {
 				return nil
 			}
 			a := record.(*Application)
+			if err := applicationDescriptor(*a).CheckExtension(); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
 			if err := applicationDescriptor(*a).CheckConcepts(); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
@@ -108,7 +114,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
+	return platform.Application{Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
 }
 
 // checkApplication refuses an application people could not open: a name that is

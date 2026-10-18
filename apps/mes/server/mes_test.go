@@ -91,8 +91,11 @@ func plantTenantOf(t *testing.T, seed []platform.Membership, disable ...string) 
 			t.Fatalf("no capability %s", c)
 		}
 	}
-	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, platformserver.Seat{Subjects: []string{"admin"},
-		Member: platform.Member{ID: "admin", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, ai.ID: ai.Admin}}}), enterprise.New(tenant, DemoOrganization(seed)), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), p)
+	seats := []platformserver.Seat{{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, ai.ID: ai.Admin}}}}
+	for _, who := range []platform.Member{sup.Member, op1.Member, op2.Member, qa1.Member, qa2.Member, gw.Member, {ID: "agent-l1", Roles: map[string]string{ID: string(Assistant)}}} {
+		seats = append(seats, platformserver.Seat{Subjects: []string{who.ID}, Member: who})
+	}
+	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seats...), enterprise.New(tenant, DemoOrganization(seed)), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), p)
 	if err == nil {
 		err = tn.Connect(DemoConnectors(tenant)...)
 	}

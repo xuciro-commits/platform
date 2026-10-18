@@ -104,7 +104,11 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if !ok {
 		return answer, fmt.Errorf("this tenant has no Build draft owner")
 	}
-	candidate, err := blueprint.candidate(owner)
+	code, err := (hostView{t: t}).CodeReleaseAssets()
+	if err != nil {
+		return answer, err
+	}
+	candidate, err := blueprint.candidate(owner, code)
 	if err != nil {
 		return answer, err
 	}

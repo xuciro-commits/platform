@@ -98,6 +98,7 @@ export type Action = {
   uses?: string[];
   needsApproval?: boolean;
   new?: boolean;
+  idPrefix?: string;
   automation?: boolean;
 };
 
@@ -295,6 +296,9 @@ export type Application = {
   uiProfile?: string;
   variables?: Record<string, PageVariable>;
   queries?: Record<string, PageQuery>;
+  extends?: AssetRef;
+  entry?: string;
+  replacements?: ApplicationPageReplacement[];
   name: string;
   title: string;
   description?: string;
@@ -428,6 +432,11 @@ export type ApplicationMonitoring = {
   runs: ApplicationRunSummary;
   memberQuota?: AIQuota;
   agentBudgets: ApplicationAgentBudget[];
+};
+
+export type ApplicationPageReplacement = {
+  view: string;
+  page: string;
 };
 
 export type ApplicationProfile = {
@@ -1701,6 +1710,8 @@ export type Field = {
   choices?: string[];
   ref?: string;
   stereotype?: string;
+  stereotypes?: string[];
+  default?: unknown;
   from?: string;
   key?: string;
   label?: string;

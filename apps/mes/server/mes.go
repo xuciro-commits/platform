@@ -236,8 +236,15 @@ type Plant struct {
 }
 
 func New(tenant string, master MasterData) *Plant {
+	catalog := Actions()
+	if len(master.Products) > 0 {
+		release, _ := catalog.Action(SchemaRelease)
+		release.Payload = slices.Clone(release.Payload)
+		release.Payload[0].Default = platform.Raw(master.Products[0].ID)
+		catalog.Add(release)
+	}
 	p := &Plant{tenant: tenant, master: master,
-		ledger:   platform.NewLedger(tenant, ID, Actions(), OrderType, SFCType, DowntimeType),
+		ledger:   platform.NewLedger(tenant, ID, catalog, OrderType, SFCType, DowntimeType),
 		facts:    kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}}, nil)),
 		identity: kernel.NewIdentity(nil), downtime: map[string][]Downtime{}}
 	p.ledger.SetFacts(func(tenant, id string) bool {
@@ -758,7 +765,7 @@ func (p *Plant) Manifest() platform.Manifest {
 			Layout: "list-detail", ListFields: []string{"product", "quantity", "status", "erp"},
 			DetailFields: []string{"product", "quantity", "status", "planned", "sfcs", "erp", "confirmation", "erpDetail"},
 			Actions:      []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: SchemaRelease}, {App: ID, Kind: platform.AssetAction, Name: SchemaResend}}}},
-		Reads: []string{"master", "products", "planned-orders", "downtime"}, Entities: p.entities,
+		Reads: []string{"master", "products", "planned-orders", "available-planned-orders", "downtime"}, Entities: p.entities,
 		ReadSources: map[string]string{"master": "record", "products": "record"},
 		Consumes:    []platform.Consumption{{Protocol: production.ID, Optional: true}},
 		Inputs:      map[string]bool{"states": true},
@@ -797,6 +804,8 @@ func (p *Plant) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return p.Master().Products, nil
 	case "planned-orders": // the orders of production.orders/1's providers
 		return planned(c), nil
+	case "available-planned-orders":
+		return availablePlanned(c)
 	}
 	return p.Downtime(), nil
 }

@@ -21,7 +21,7 @@ import { resolveLegacyRoute, shellViews } from "./shell/legacy";
 import { categories, portalEntry } from "./shell/registry";
 import { pageApplication, tenantApps } from "./tenantApps";
 import { routeApplication, sharedViewApplication } from "./shell/navigation";
-import { composeApplications } from "./host/applications";
+import { composeApplications, extendApplications, resolveApplicationRoute } from "./host/applications";
 
 export type { Identity } from "./session/identity";
 
@@ -89,7 +89,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [packageScope]);
 
   // --- Host: reads, decisions and the record source every view shares.
-  const { host, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
+  const { host, metadataReady, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
   const apps = useMemo(() => loadedApps ? composeApplications(loadedApps) : undefined, [loadedApps]);
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
@@ -106,8 +106,12 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // applications this tenant handed to its people (ADR-0046). The Host
   // Console is a host-level application: it appears only for host administrators.
   const [activeRoute, setActiveRoute] = useState<Route>();
-  const all = useMemo(() => [...(apps ?? []).map(app => ({ ...app, home: host ? app.homeFor(host) : app.home })), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })]
-    .filter((app) => (!app.for || !!host && app.for(host)) && (app.id !== "host-console" || hostAdmin)), [apps, definitions, host, hostAdmin, activeRoute?.params?.application, activeRoute?.params?.instance]);
+  const all = useMemo(() => {
+    const context = { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance };
+    const native = (apps ?? []).filter(app => (!app.for || !!host && app.for(host)) && (app.id !== "host-console" || hostAdmin))
+      .map(app => ({ ...app, home: host ? app.homeFor(host) : app.home }));
+    return [...extendApplications(native, definitions, host?.applications ?? [], context), ...tenantApps(definitions, context)];
+  }, [apps, definitions, host, hostAdmin, activeRoute?.params?.application, activeRoute?.params?.instance]);
   const entries = useRef(all);
   entries.current = all;
   const registry = useRef(definitions); // tab titles read current definitions without replacing registered views
@@ -119,7 +123,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const applicationOf = useCallback((route: Route, choice?: string) => {
     const sharedOwner = owner.get(route.view) ?? sharedViewApplication(route);
     if (shellViews.includes(route.view) && !sharedOwner) return undefined;
-    const owned = pageApplication(route, definitions, current) ?? sharedOwner
+    const owned = pageApplication(route, definitions, current, all) ?? sharedOwner
       ?? (route.view === "dashboard" ? route.params?.app : undefined)
       ?? (["records", "definitions"].includes(route.view) ? all.find((entry) => entry.surface === "developer")?.id : undefined);
     const id = routeApplication(route, all, owned, choice);
@@ -156,17 +160,16 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (id && id !== current && all.some((a) => a.id === id)) select(id);
   }, [activeRoute, applicationOf, current, select]);
   const selectedEntry = useRef(current); selectedEntry.current = current;
-  const resolveRoute = useCallback(async (route: Route, layout?: string) => {
-    const resolved = await resolveLegacyRoute(route, {
+  const resolveRoute = useCallback((route: Route, layout?: string) => {
+    const resolved = resolveLegacyRoute(route, {
       builder: owner.get("flow") === "build", application: layout ?? selectedEntry.current,
       read: (type, id) => client.record(type, id),
     });
-    // Old page links become explicit once their chosen membership is known.
-    // Reusing that page in another app must not reassign a saved tab later.
-    const application = pageApplication(resolved, definitions, layout ?? selectedEntry.current);
-    return resolved.view === "page" && application && !resolved.params?.application
-      ? { ...resolved, params: { ...resolved.params, application } } : resolved;
-  }, [client, definitions, owner]);
+    // Published replacement pages keep their runtime application while the
+    // original code entry continues to own their restored tabs and menus.
+    const take = (resolved: Route) => resolveApplicationRoute(resolved, definitions, host?.applications ?? [], layout ?? selectedEntry.current);
+    return resolved instanceof Promise ? resolved.then(take) : take(resolved);
+  }, [client, definitions, host?.applications, owner]);
   const views = useMemo(() => {
     const views = [...chromeViews(() => entries.current, () => registry.current), ...(apps ?? []).flatMap((a) => a.views)];
     const seen = new Set<string>();
@@ -186,7 +189,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       : t("The host is unreachable.");
     return <SignInProblem problem={problem} email={signedIn?.session.email} signingOut={signingOut} error={signOutError} onSignOut={() => void leaveSession()} />;
   }
-  if (!host || !apps || !ready) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+  if (!host || !apps || !ready || !metadataReady) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
   // The portal (ADR-0018 §3.2): every application this member may open, by
   // category; and the projections they may switch between. Both only group

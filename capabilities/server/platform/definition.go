@@ -292,14 +292,17 @@ var Filterable = []string{"choice", "boolean", "reference"}
 // name, an icon from the platform's set, and the pages it holds in order. It
 // grants nothing; each page is offered to whoever may read what it shows.
 type Application struct {
-	Profile     *ApplicationProfile     `json:"profile,omitempty"`
-	Header      *ApplicationHeader      `json:"header,omitempty"`
-	UIProfile   string                  `json:"uiProfile,omitempty"`
-	Variables   map[string]PageVariable `json:"variables,omitempty"`
-	Queries     map[string]PageQuery    `json:"queries,omitempty"`
-	Name        string                  `json:"name"`
-	Title       string                  `json:"title"`
-	Description string                  `json:"description,omitempty"`
+	Profile      *ApplicationProfile          `json:"profile,omitempty"`
+	Header       *ApplicationHeader           `json:"header,omitempty"`
+	UIProfile    string                       `json:"uiProfile,omitempty"`
+	Variables    map[string]PageVariable      `json:"variables,omitempty"`
+	Queries      map[string]PageQuery         `json:"queries,omitempty"`
+	Extends      *AssetRef                    `json:"extends,omitempty"`
+	Entry        string                       `json:"entry,omitempty"`
+	Replacements []ApplicationPageReplacement `json:"replacements,omitempty"`
+	Name         string                       `json:"name"`
+	Title        string                       `json:"title"`
+	Description  string                       `json:"description,omitempty"`
 	// Icon is one of Icons: the workspace draws it in the launcher and the navigation.
 	Icon  string   `json:"icon,omitempty"`
 	Pages []string `json:"pages"` // page names, in the order people see them
@@ -317,6 +320,9 @@ type Application struct {
 // CheckResources checks explicit non-navigation resource membership. Assets
 // keep their existing owner and may be shared by several applications.
 func (a Application) CheckResources() error {
+	if err := a.CheckExtension(); err != nil {
+		return err
+	}
 	if a.Profile != nil {
 		if err := a.Profile.Check(); err != nil {
 			return err
@@ -345,11 +351,50 @@ func (a Application) CheckResources() error {
 // releases. Page order affects navigation; dependency order is canonical.
 func (a Application) Dependencies(owner string) []AssetRef {
 	refs := append(slices.Clone(a.Resources), a.QueryPage().QueryReferences()...)
+	if a.Extends != nil {
+		refs = append(refs, *a.Extends)
+	}
 	for _, name := range a.Pages {
 		refs = append(refs, AssetRef{App: owner, Kind: AssetPage, Name: name})
 	}
 	slices.SortFunc(refs, compareRef)
 	return slices.Compact(refs)
+}
+
+// ApplicationPageReplacement routes an original code view to a page belonging
+// to this application. It neither copies nor changes the original page.
+type ApplicationPageReplacement struct {
+	View string `json:"view"`
+	Page string `json:"page"`
+}
+
+func (a Application) CheckExtension() error {
+	if a.Extends == nil {
+		if a.Entry != "" || len(a.Replacements) != 0 {
+			return fmt.Errorf("an application entry or page replacement needs an extended application")
+		}
+		return nil
+	}
+	if err := a.Extends.Check(); err != nil {
+		return err
+	}
+	if a.Extends.Kind != AssetApp {
+		return fmt.Errorf("an application can only extend an application")
+	}
+	if len(a.Replacements) != 0 && strings.TrimSpace(a.Entry) == "" {
+		return fmt.Errorf("application page replacements need an explicit entry")
+	}
+	views := map[string]bool{}
+	for _, replacement := range a.Replacements {
+		if strings.TrimSpace(replacement.View) == "" || !slices.Contains(a.Pages, replacement.Page) {
+			return fmt.Errorf("application replacement %q needs a view and one of its own pages", replacement.View)
+		}
+		if views[replacement.View] {
+			return fmt.Errorf("application view %q is replaced twice", replacement.View)
+		}
+		views[replacement.View] = true
+	}
+	return nil
 }
 
 // AppGroup is one heading in an application's navigation and the pages under it.

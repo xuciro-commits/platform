@@ -35,6 +35,10 @@
 | ERP | Accounting / 财务：凭证 `entries`、分录 `postings`、试算平衡 `trial-balance`、期间 `periods`；Production and supply / 生产与供应：生产订单 `production`、采购订单 `purchases`、现存量 `on-hand`、库存移动 `moves`；Master data / 主数据：科目 `erp-accounts`、物料 `products`、业务伙伴 `partners` |
 | MES | Planning and execution / 计划与执行：车间订单 `orders`、计划订单 `planned`、生产批次 `queue`；Craft and operations / 工艺与运营：工艺路线 `craft`、质量挂起 `holds`、设备停机 `equipment`、车间看板 `dashboard`（`app=mes&id=shop-floor`） |
 
+Application Studio 的 Applications 同时显示安装的代码应用与 Build 应用；原生应用可直接查看五个工作区，不创建草稿。Create extension / 创建扩展会创建原 `build.app`，在设置中选择原入口与页面替换，再沿原候选检查、保存和激活。应用不另占启动入口，业务数据与操作权限仍由原应用负责。
+
+MES 工单界面使用 `make packages` 分发的 `industry.mes-workspace@0.1.0`。在制造宿主以有包管理权限和 Build 构建权限的主管登录，打开 Control Panel 的 Packages，安装精确版本并选择 Create application drafts / 创建应用草稿；在 Studio 检查 `mesworkspace` 与 `mesorders`，将页面与应用选入同一候选后激活。新环境与已有环境步骤相同，不会在启动时自动发布。激活后原 `orders` 链接与菜单进入该可编辑页面，其他 MES 页面保持原入口。负责人确认任务等价前，手写 `ShopOrders` 仍保留。
+
 平台应用的功能归属与原入口如下。连接、数据处理和观测不再作为 Builder 的第二套菜单，Agent 定义与运行也只在 Agents 中组合；多个前端包向同一个大应用贡献功能，不产生第二个同名应用。菜单按当前角色过滤，隐藏入口不改变原授权。
 
 | 大应用 | 功能菜单 → 原 `view` |

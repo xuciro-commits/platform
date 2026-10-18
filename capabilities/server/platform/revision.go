@@ -149,6 +149,7 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 		return empty, err
 	}
 	var closed []ReleaseAsset
+	replacedViews := map[string]AssetRef{}
 	for _, ref := range refs {
 		asset := lookup[ref]
 		if asset.SourceVersion == "" || asset.ContractVersion <= 0 {
@@ -259,6 +260,22 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 			}
 			if err := application.CheckVariables(); err != nil {
 				return empty, err
+			}
+			if err := application.CheckExtension(); err != nil {
+				return empty, err
+			}
+			if application.Extends != nil {
+				entry := application.Entry
+				if entry == "" {
+					entry = application.Extends.App
+				}
+				for _, replacement := range application.Replacements {
+					key := entry + "/" + replacement.View
+					if previous, exists := replacedViews[key]; exists {
+						return empty, fmt.Errorf("application view %s/%s is replaced by both %s and %s", entry, replacement.View, previous, ref)
+					}
+					replacedViews[key] = ref
+				}
 			}
 			contracts := make([]ReleaseAsset, 0, len(lookup))
 			for _, asset := range lookup {

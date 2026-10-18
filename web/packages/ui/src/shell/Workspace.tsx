@@ -378,7 +378,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     syncLayout.current();
     if (options.window === "popout") popout(panel.id);
   }, [byId, compact, popout, placeBeside, keyOf]);
-  const open = useCallback((route: Route, options: OpenOptions = {}) => {
+  const openResolved = useCallback((route: Route, options: OpenOptions = {}) => {
     const api = dock.current;
     if (!api || !viewRegistry.current.has(route.view)) return;
     // A completed save may replace its own new-record tab, but must not
@@ -398,11 +398,27 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       unsaved.ask(api.panels.map((panel) => panel.id), () => { if (revision === incomingRevision.current) show(route, options); });
     } else show(route, options);
   }, [show, unsaved, keyOf]);
+  const open = useCallback((route: Route, options: OpenOptions = {}) => {
+    const resolve = routeReader.current;
+    if (!resolve) { openResolved(route, options); return; }
+    if (options.ifCurrent && dock.current?.activePanel?.id !== keyOf(options.ifCurrent)) return;
+    const revision = ++incomingRevision.current;
+    const take = (resolved: Route) => { if (revision === incomingRevision.current) openResolved(resolved, options); };
+    try {
+      const resolved = resolve(route);
+      if (resolved instanceof Promise) void resolved.then(take).catch(() => {
+        if (revision === incomingRevision.current) toast.error(t("Could not open this view."));
+      });
+      else take(resolved);
+    } catch {
+      if (revision === incomingRevision.current) toast.error(t("Could not open this view."));
+    }
+  }, [openResolved, keyOf]);
   const readLink = useCallback((route: Route) => {
     const revision = ++incomingRevision.current;
     void Promise.resolve().then(() => routeReader.current?.(route) ?? route).then((resolved) => {
       if (revision !== incomingRevision.current) return;
-      if (viewRegistry.current.has(resolved.view)) open(resolved);
+      if (viewRegistry.current.has(resolved.view)) openResolved(resolved);
       else if (!dock.current?.panels.length) open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home);
     }).catch(() => {
       if (revision !== incomingRevision.current) return;
@@ -410,7 +426,17 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       if (previous) history.replaceState(null, "", routeToHash(previous));
       toast.error(t("Could not open this view."));
     });
-  }, [open, home]);
+  }, [open, openResolved, home]);
+  useEffect(() => {
+    const linked = routeFromHash(location.hash);
+    if (!resolveRoute || !linked || !dock.current) return;
+    const revision = incomingRevision.current;
+    // A release can arrive after the original link opened. Follow its new
+    // route without closing the original tab or taking focus from a later link.
+    void Promise.resolve(resolveRoute(linked)).then(resolved => {
+      if (revision === incomingRevision.current && routeToHash(linked) === location.hash && routeKey(resolved) !== routeKey(linked)) openResolved(resolved);
+    }).catch(() => { /* An explicit navigation reports resolution failures. */ });
+  }, [resolveRoute, openResolved]);
   const beside = useCallback((id: string) => {
     placeBeside(id, id);
     dock.current?.getPanel(id)?.api.setActive();

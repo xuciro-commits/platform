@@ -14,13 +14,13 @@ func Actions() *platform.Catalog {
 		return out
 	}
 	return platform.NewCatalog(append(append(append(adviceActions(), []platform.Action{
-		{Schema: SchemaRelease, Target: OrderType, New: true, Capability: "orders", Title: "Release shop order",
+		{Schema: SchemaRelease, Target: OrderType, New: true, IDPrefix: "SO", Capability: "orders", Title: "Release shop order",
 			Description: "Release a shop order for a product; it splits into SFCs that start at the routing's first operation. Name the ERP planned order it fulfils.",
 			Payload: []platform.Field{{Name: "product", Type: "string", Required: true, Description: "Product ID", From: "products", Key: "id", Label: "name", Constraints: &platform.InputConstraints{}},
-				{Name: "quantity", Type: "integer", Required: true, Description: "Units to make", Constraints: &platform.InputConstraints{Min: &minimum}},
-				{Name: "sfcs", Type: "integer", Required: true, Description: "Number of SFCs (lots), at most the quantity", Constraints: &platform.InputConstraints{Min: &minimum, Before: "quantity", Inclusive: true}},
-				{Name: "planned", Type: "string", Description: "ERP planned order ID"},
-				{Name: "place", Type: "string", Ref: "enterprise.element", Description: "The place in the enterprise model this order runs at — a plant, line, workshop or warehouse (optional; ADR-0034)"}},
+				{Name: "quantity", Type: "integer", Required: true, Default: platform.Raw(1), Description: "Units to make", Constraints: &platform.InputConstraints{Min: &minimum}},
+				{Name: "sfcs", Type: "integer", Required: true, Default: platform.Raw(1), Description: "Number of SFCs (lots), at most the quantity", Constraints: &platform.InputConstraints{Min: &minimum, Before: "quantity", Inclusive: true}},
+				{Name: "planned", Type: "string", From: "available-planned-orders", Key: "erpId", Label: "number", Description: "ERP planned order ID"},
+				{Name: "place", Type: "string", Ref: "enterprise.element", Stereotypes: []string{"ActualLocation", "ActualOrganization"}, Description: "The place in the enterprise model this order runs at — a plant, line, workshop or warehouse (optional; ADR-0034)"}},
 			Roles: roles(Supervisor)},
 	}...), platform.EntityActions(Entities(nil)[1])...),
 		platform.Action{Schema: SchemaReason, Target: DowntimeType, Capability: "downtime-reasons", Title: "Assign downtime reason",

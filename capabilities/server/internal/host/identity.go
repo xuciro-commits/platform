@@ -36,6 +36,7 @@ type AppCatalog interface {
 // Member/session/access decisions remain in the identity owner.
 type ConsoleHost interface {
 	AppCatalog
+	CodeReleaseAssets() ([]platform.ReleaseAsset, error)
 	ConsoleSetting(name string) string
 	Languages() []string
 	TenantSuspended() bool

@@ -1,7 +1,8 @@
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
+import { useStudioApplication } from "../projects/use-studio-application";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
-  useReadQuery, type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
+  type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, PropertyList, RecordList, RelationCanvas, Select, Tag,
   t, type ColumnDef, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
@@ -28,10 +29,10 @@ export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: 
 function ModelInventory({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
   const host = useHost();
   const application = useApplicationScope();
-  const project = useReadQuery<{ record?: Api.Application }>(`/v1/records/build.app/${encodeURIComponent(application ?? "")}`, undefined, !!application);
-  const held = project.data?.record?.resources?.filter(ref => ref.kind === "object").map(ref => ref.name);
+  const { application: project, installed: installedApplication } = useStudioApplication(application);
+  const held = project?.resources?.filter(ref => ref.kind === "object").map(ref => ref.name);
   const { open } = useApplicationWorkspace();
-  const inventory = useRecordInventory<ObjectDraft>("build.object");
+  const inventory = useRecordInventory<ObjectDraft>("build.object", 1000, !installedApplication);
   const linkInventory=useRecordInventory<{id:string;name:string}>("build.linktype");
   const propertyInventory=useRecordInventory<{id:string;name:string}>("build.propertytype");
   const model = useMemo(() => semanticModelView(host.definitions), [host.definitions]);
@@ -43,13 +44,13 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const [seed, setSeed] = useState<PageSeed>();
   const resources = useMemo(() => {
     const all = new Map<string, Resource>(model.objects.map((installed) => [installed.ref.name, { ref: installed.ref, title: installed.entity!.title, source: installed.source, installed, fields: installed.entity!.fields }]));
-    for (const draft of inventory.data?.records ?? []) {
+    for (const draft of installedApplication ? [] : inventory.data?.records ?? []) {
       if (draft.archived) continue;
       const name = `build.${draft.name}`, installed = all.get(name)?.installed;
       all.set(name, { ref: { app: "build", kind: "object", name }, title: installed?.entity?.title ?? draft.title, source: "tenant", installed, draft, fields: installed?.entity?.fields ?? draft.fields });
     }
     return [...all.values()].filter(item => !application || held?.includes(item.ref.name)).sort((a, b) => a.title.localeCompare(b.title));
-  }, [model, inventory.data, application, project.data]);
+  }, [model, inventory.data, installedApplication, application, project]);
   const resource = resources.find((item) => item.ref.name === current);
   const visible = useMemo(() => resources.filter((item) => (origin === "all" || item.source === origin) && `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [resources, origin, search]);
   const projects = useProjectIndex();

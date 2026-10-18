@@ -165,24 +165,22 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			available = append(available, asset)
 		}
 	}
-	if len(available) > 0 {
-		pages := make([]string, len(manifest.Pages))
-		for i, page := range manifest.Pages {
-			pages[i] = page.Name
-		}
-		resources := []platform.AssetRef{}
-		for _, asset := range available {
-			if asset.Ref.Kind != platform.AssetPage && asset.Ref.Kind != platform.AssetApp {
-				resources = append(resources, asset.Ref)
-			}
-		}
-		asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
-			platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)})
-		if err != nil {
-			return nil, err
-		}
-		available = append(available, asset)
+	pages := make([]string, len(manifest.Pages))
+	for i, page := range manifest.Pages {
+		pages[i] = page.Name
 	}
+	resources := []platform.AssetRef{}
+	for _, asset := range available {
+		if asset.Ref.Kind != platform.AssetPage && asset.Ref.Kind != platform.AssetApp {
+			resources = append(resources, asset.Ref)
+		}
+	}
+	asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
+		platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)})
+	if err != nil {
+		return nil, err
+	}
+	available = append(available, asset)
 	for i := range available {
 		var err error
 		available[i], err = t.describeOwnedAsset(available[i])

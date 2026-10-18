@@ -1,5 +1,39 @@
 import { expect, slug, test, shots } from "./kit";
 
+test("installed native applications open without drafts and accept an explicitly published extension", async ({ page, builder }, info) => {
+  const definitions = await builder.definitions<any>();
+  const native = definitions.find(item => item.source === "code" && item.ref.kind === "app" && item.ref.app === "pms");
+  expect(native).toBeDefined();
+  const before = await builder.read<{ records: unknown[] }>("records/build.app?limit=1000");
+  await builder.open(page, "/projects");
+  await page.getByRole("searchbox", { name: "Search projects", exact: true }).fill(native.application.title);
+  await expect(page.getByRole("button").filter({ hasText: native.application.title }).filter({ hasText: "Native code" })).toBeVisible();
+  await builder.open(page, `/project?id=${encodeURIComponent(`installed/${native.ref.app}/${native.ref.name}`)}`);
+  await expect(page.getByRole("heading", { name: native.application.title, exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create extension", exact: true })).toBeEnabled();
+  expect((await builder.read<{ records: unknown[] }>("records/build.app?limit=1000")).records).toEqual(before.records);
+  await shots(page, page.locator("body"), "native-application-studio", info);
+
+  const baseObject = definitions.find(item => item.ref.app === native.ref.app && item.entity);
+  const extensionPage = await builder.page({ title: "Front desk extension", object: baseObject.ref.name });
+  await page.getByRole("button", { name: "Create extension", exact: true }).click();
+  const creation = page.getByRole("dialog");
+  const extension = { id: await creation.getByRole("textbox", { name: "ID *", exact: true }).inputValue(), name: slug("nativeextension") };
+  await creation.getByRole("textbox", { name: /^Name \*$/ }).fill(extension.name);
+  await creation.getByRole("textbox", { name: /^What people call it \*$/ }).fill("Front desk extension");
+  await creation.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(creation).toHaveCount(0);
+  expect((await builder.record("build.app", extension.id)).extends).toEqual(native.ref);
+  await builder.decide("build.app.edit", { type: "build.app", id: extension.id }, { pages: [extensionPage.name] });
+  await builder.open(page, `/project?id=${extension.id}`);
+  await expect(page.getByRole("button", { name: "Open original application", exact: true })).toBeVisible();
+  expect((await builder.definitions<any>()).some(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === extension.name)).toBe(false);
+  await builder.activate(await builder.candidate([{ kind: "page", id: extensionPage.id }, { kind: "app", id: extension.id }]));
+  const delivered = (await builder.definitions<any>()).find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === extension.name);
+  expect(delivered.application.extends).toEqual(native.ref);
+  expect((await builder.definitions<any>()).find(item => item.ref.app === "pms" && item.ref.kind === "app")).toEqual(native);
+});
+
 test("one application retains drafts across five workspaces and delivers grouped business assets", async ({ page, builder, operator }, testInfo) => {
   test.setTimeout(120_000);
   const application = await builder.application({ title: "Service application" });

@@ -63,6 +63,17 @@ export type Decision = {
   onOutcome?: (entry: Entry) => void;
 };
 
+/** Read-only navigation metadata from this member's loaded code UI contributions. */
+export type ApplicationUIInfo = {
+  id: string;
+  title: string;
+  serves: string[];
+  home: Route;
+  sections: NavSection[];
+  views: { id: string; title: string }[];
+  opens: Record<string, string>;
+};
+
 /** What an app's UI may use of the host, for the signed-in member. */
 export type Host = {
   client: EdgeClient;
@@ -84,6 +95,7 @@ export type Host = {
   /** The installed assets the member may discover, for navigation built from
    *  pages — a code page or one composed in this tenant (ADR-0020、ADR-0048). */
   definitions: Definition[];
+  applications?: ApplicationUIInfo[];
   source: RecordSource;
   /** Refresh original reads without submitting business actions or replacing drafts. */
   refresh?:()=>Promise<void>;

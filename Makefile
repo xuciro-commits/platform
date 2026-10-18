@@ -132,6 +132,9 @@ e2e: packages
 e2e: export PLATFORM_PACKAGES_DIR ?= $(GATEWAY_PACKAGES)
 e2e: export PROTOCOL_VERSION := $(PROTOCOL_VERSION)
 endif
+ifneq ($(filter mes-actions,$(SPEC)),)
+e2e: export PLATFORM_PACKAGES_DIR ?= $(ROOT)/deploy/packages
+endif
 e2e: ## 在开发宿主上运行 docs/Testing.md 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build
 	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts) $(E2E_ARGS)

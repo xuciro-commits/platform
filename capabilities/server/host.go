@@ -725,11 +725,24 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 // Read serves a named read of the app that declares it, to members holding a
 // role in that app or to everyone when the manifest says so; the app may refuse further.
 func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
+	return t.readFrom(m, t.owner["read:"+name], name)
+}
+
+// ReadFrom keeps a composed form's reads on the action's declared owner.
+// Authorization and result projection stay on Read's path.
+func (t *Tenant) ReadFrom(m platform.Member, app, name string) (any, *kernel.Error) {
+	a := t.app(app)
+	if a == nil || !slices.Contains(a.Manifest().Reads, name) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return t.readFrom(m, a, name)
+}
+
+func (t *Tenant) readFrom(m platform.Member, a platform.App, name string) (any, *kernel.Error) {
 	m = t.authorizationMember(m)
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	a := t.owner["read:"+name]
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}

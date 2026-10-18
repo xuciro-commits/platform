@@ -3,6 +3,7 @@ package platform
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -46,5 +47,65 @@ func TestApplicationConceptsOnlyOrganizeNavigation(t *testing.T) {
 				t.Fatal("invalid concept metadata accepted")
 			}
 		})
+	}
+}
+
+func TestApplicationExtensionKeepsOwnPagesAndOriginalDependency(t *testing.T) {
+	base := AssetRef{App: "mes", Kind: AssetApp, Name: "mes"}
+	application := Application{Name: "mesworkspace", Title: "Manufacturing", Pages: []string{"orders"}, Extends: &base,
+		Entry: "mes", Replacements: []ApplicationPageReplacement{{View: "orders", Page: "orders"}}}
+	if err := application.CheckResources(); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(application.Dependencies("build"), base) || !slices.Contains(application.Dependencies("build"), AssetRef{App: "build", Kind: AssetPage, Name: "orders"}) {
+		t.Fatal("an extension omitted its original application or owned page")
+	}
+	for name, change := range map[string]func(*Application){
+		"no base":            func(a *Application) { a.Extends = nil },
+		"not an application": func(a *Application) { a.Extends = &AssetRef{App: "mes", Kind: AssetPage, Name: "orders"} },
+		"missing entry":      func(a *Application) { a.Entry = "" },
+		"blank entry":        func(a *Application) { a.Entry = " " },
+		"foreign page":       func(a *Application) { a.Replacements = []ApplicationPageReplacement{{View: "orders", Page: "other"}} },
+		"duplicate view":     func(a *Application) { a.Replacements = append(slices.Clone(a.Replacements), a.Replacements[0]) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := application
+			change(&invalid)
+			if err := invalid.CheckExtension(); err == nil {
+				t.Fatal("invalid extension accepted")
+			}
+		})
+	}
+	page, err := PageReleaseAsset("build", "1", Page{Name: "orders", Title: "Orders"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	native, err := ApplicationReleaseAsset("mes", "1", Application{Name: "mes", Title: "Manufacturing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	extension, err := ApplicationReleaseAsset("build", "1", application)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := Candidate([]AssetRef{extension.Ref}, []ReleaseAsset{page, native, extension})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := ReadCandidate(candidate.ID, candidate.Bytes)
+	if err != nil || !reflect.DeepEqual(retained.Bytes, candidate.Bytes) || len(retained.Assets) != 3 {
+		t.Fatalf("extension closure was not retained: %v", err)
+	}
+	application.Name = "otherworkspace"
+	other, err := ApplicationReleaseAsset("build", "1", application)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Candidate([]AssetRef{extension.Ref, other.Ref}, []ReleaseAsset{page, native, extension, other}); err == nil || !strings.Contains(err.Error(), "replaced by both") {
+		t.Fatalf("two extensions replaced the same original view: %v", err)
+	}
+	application.Entry, application.Replacements = "", nil
+	if err := application.CheckExtension(); err != nil {
+		t.Fatalf("an extension without replacements cannot use its default entry: %v", err)
 	}
 }

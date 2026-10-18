@@ -2,6 +2,7 @@ import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 import { refKey, resourceRoute } from "./resources";
 import type { OwnedResource } from "./resource-inventory";
+import { installedStudioRef } from "./studio-applications";
 
 export const studioAreas = [
   { id: "model", title: "Model", description: "Objects, fields, relationships, versions and constraints", kinds: ["object", "link-type", "property-type", "query", "interface"] },
@@ -82,6 +83,7 @@ export function assetRoute(ref: Api.AssetRef, resources: readonly OwnedResource[
     if (object?.record?.actions?.some(action => action.name === name)) return { view: "action-type", params: { id: object.record.id, action: name!, application } };
   }
   if (ref.kind === "observation") return { view: "observations", params: { app: ref.app, name: ref.name, application } };
+  if (installedStudioRef(application)) return { view: "definition", params: { ...ref, surface: "studio", application } };
   if (ref.kind === "object") return { view: "object-type", params: { object: ref.name, application } };
   return { view: "definition", params: { ...ref, surface: "studio", application } };
 }

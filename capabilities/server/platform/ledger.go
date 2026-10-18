@@ -275,9 +275,9 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Cat
 				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.rt != nil && !c.rt.Readable(c, f.Ref+"/"+v) {
 					return nil, c.RefuseFields([]FieldIssue{{Code: "reference", Path: []string{f.Name}, Message: "Choose a readable listed value."}})
 				}
-				if f.Ref == "enterprise.element" && f.Stereotype != "" && c.rt != nil {
-					if el, ok := c.rt.Element(c, v, now); !ok || el.Stereotype != f.Stereotype {
-						return nil, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} names {element}, which is not a {stereotype}", f.Name, v, f.Stereotype)
+				if f.Ref == "enterprise.element" && (f.Stereotype != "" || len(f.Stereotypes) > 0) && c.rt != nil {
+					if el, ok := c.rt.Element(c, v, now); !ok || !(f.Stereotype != "" && el.Stereotype == f.Stereotype || slices.Contains(f.Stereotypes, el.Stereotype)) {
+						return nil, c.RefuseFields([]FieldIssue{{Code: "reference", Path: []string{f.Name}, Message: "Choose a readable listed value."}})
 					}
 				}
 			}

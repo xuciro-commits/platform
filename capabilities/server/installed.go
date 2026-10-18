@@ -902,6 +902,9 @@ func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
 // application to whoever may open one of its pages.
 func (t *Tenant) InstallApplication(app platform.App, a platform.Application) error {
 	id := app.Manifest().ID
+	if err := t.checkApplicationExtension(platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, a); err != nil {
+		return err
+	}
 	if a.Name == "" || a.Title == "" {
 		return fmt.Errorf("application %q: it needs a name and a title", a.Name)
 	}
@@ -962,5 +965,44 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 		return err
 	}
 	t.storeDefinition(slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }), def)
+	return nil
+}
+
+func (t *Tenant) checkApplicationExtension(ref platform.AssetRef, a platform.Application) error {
+	if err := a.CheckExtension(); err != nil {
+		return err
+	}
+	if a.Extends == nil {
+		return nil
+	}
+	if *a.Extends == ref {
+		return fmt.Errorf("an application cannot extend itself")
+	}
+	if !slices.ContainsFunc(t.definitions, func(definition platform.Definition) bool {
+		return definition.Ref == *a.Extends && definition.Source == "code" && definition.Application != nil
+	}) {
+		return fmt.Errorf("application %s can only extend an installed code application", ref)
+	}
+	entry := a.Entry
+	if entry == "" {
+		entry = a.Extends.App
+	}
+	for _, other := range t.definitions {
+		if other.Ref == ref || other.Application == nil || other.Application.Extends == nil {
+			continue
+		}
+		otherEntry := other.Application.Entry
+		if otherEntry == "" {
+			otherEntry = other.Application.Extends.App
+		}
+		if otherEntry != entry {
+			continue
+		}
+		for _, replacement := range a.Replacements {
+			if slices.ContainsFunc(other.Application.Replacements, func(previous platform.ApplicationPageReplacement) bool { return previous.View == replacement.View }) {
+				return fmt.Errorf("application view %s/%s is already replaced by %s", entry, replacement.View, other.Ref)
+			}
+		}
+	}
 	return nil
 }

@@ -37,6 +37,8 @@ type Action struct {
 	// caller gives: generated views offer it on the type's list; every other
 	// action on Target is offered on each record's page (F-33).
 	New bool `json:"new,omitempty"`
+	// IDPrefix is the suggested prefix for a new record's editable ID.
+	IDPrefix string `json:"idPrefix,omitempty"`
 	// Automation marks an action only the platform's own apps take, as
 	// automation: it has no roles and is in no member's catalog.
 	Automation bool `json:"automation,omitempty"`
@@ -98,6 +100,10 @@ type Field struct {
 	// Stereotype narrows a reference to the enterprise model (Ref
 	// "enterprise.element") to one UAF stereotype (ADR-0022 D8).
 	Stereotype string `json:"stereotype,omitempty"`
+	// Stereotypes accepts any of the named enterprise-model families.
+	Stereotypes []string `json:"stereotypes,omitempty"`
+	// Default initializes a newly opened form; it never overwrites its draft.
+	Default json.RawMessage `json:"default,omitempty"`
 	// From names a read of the declaring app whose items the field chooses
 	// from, when the values are not records here (an ERP's planned orders a
 	// plant reads through a protocol): Key is the item's value, Label what

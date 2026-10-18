@@ -3,8 +3,8 @@
 // membership stay visible without rebuilding the asset or its route.
 import { createContext, useContext, type ReactNode } from "react";
 import { Button, Select, t, useWorkspace, type Route } from "@platform/ui";
-import { useDependencies, useHost, useReadQuery } from "@platform/app";
-import type { Project } from "./project";
+import { useDependencies, useHost } from "@platform/app";
+import { useStudioApplication } from "./use-studio-application";
 import { useProjectResources } from "./resource-inventory";
 import { refKey } from "./resources";
 import { assetRoute, studioContext, studioRoute } from "./studio-model";
@@ -20,9 +20,8 @@ export function ApplicationScope({ application, route, children }: { application
 
 function ApplicationContextBar({ application, route }: { application: string; route: Route }) {
   const host = useHost(), { open } = useWorkspace();
-  const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(application)}`);
-  const project = query.data?.record;
-  const { owned } = useProjectResources(project);
+  const { application: project, owner, installed } = useStudioApplication(application);
+  const { owned } = useProjectResources(project, owner, !installed);
   const { selected, ref, area } = studioContext(route, owned, host.definitions);
   const dependencies = useDependencies(ref, undefined, !!ref);
   const links = dependencies.data;

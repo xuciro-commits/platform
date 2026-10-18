@@ -47,9 +47,9 @@ export const projectionOfSurface = (surface?: string): Projection | undefined =>
  * Exact builder records win; a readable runtime record keeps its old identity.
  * The legacy automation list uses its explicit surface / saved application,
  * or the operator-only package scope, because it has no entity to resolve. */
-export async function resolveLegacyRoute(route: Route, context: {
+export function resolveLegacyRoute(route: Route, context: {
   builder: boolean; application?: string; read: (type: string, id: string) => Promise<unknown>;
-}): Promise<Route> {
+}): Route | Promise<Route> {
   const retired = legacyRoute(route);
   if (retired) return retired;
   const params = route.params;
@@ -58,19 +58,22 @@ export async function resolveLegacyRoute(route: Route, context: {
     return { ...route, view: "automation-operations", params: keep(params, "tab") };
   }
   if (route.view !== "flow" || !params?.id || params.id === "new" || params.surface === "studio") return route;
-  const readableRecord = (value: unknown) => {
-    if (!value || typeof value !== "object") return false;
-    const record = (value as { record?: { id?: unknown } }).record;
-    return !!record && record.id === params.id;
-  };
-  if (context.builder) {
-    try { if (readableRecord(await context.read("build.process", params.id))) return route; }
-    catch (error) { if (!/HTTP (401|403|404)\b/.test(String(error))) throw error; }
-  }
-  try {
-    return readableRecord(await context.read("flow.instance", params.id)) ? { ...route, view: "flow-instance" } : route;
-  } catch (error) {
-    if (!/HTTP (401|403|404)\b/.test(String(error))) throw error;
-    return route; // missing or unreadable records keep the original refusal
-  }
+  const id = params.id;
+  return (async () => {
+    const readableRecord = (value: unknown) => {
+      if (!value || typeof value !== "object") return false;
+      const record = (value as { record?: { id?: unknown } }).record;
+      return !!record && record.id === id;
+    };
+    if (context.builder) {
+      try { if (readableRecord(await context.read("build.process", id))) return route; }
+      catch (error) { if (!/HTTP (401|403|404)\b/.test(String(error))) throw error; }
+    }
+    try {
+      return readableRecord(await context.read("flow.instance", id)) ? { ...route, view: "flow-instance" } : route;
+    } catch (error) {
+      if (!/HTTP (401|403|404)\b/.test(String(error))) throw error;
+      return route; // missing or unreadable records keep the original refusal
+    }
+  })();
 }

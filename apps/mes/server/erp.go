@@ -3,10 +3,12 @@ package mes
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 	"production"
 )
@@ -235,6 +237,17 @@ func planned(c platform.Caller) []PlannedOrder {
 		out = append(out, PlannedOrder{ERPID: o.ID, Number: o.Number, Product: o.Product, Quantity: int(o.Quantity), Due: o.Due, State: o.State, Source: o.Source})
 	}
 	return out
+}
+
+// availablePlanned is the same open, unclaimed plan choice used by the shop-order form.
+func availablePlanned(c platform.Caller) ([]PlannedOrder, *kernel.Error) {
+	orders, _, err := platform.Find[Order](c, platform.Query{Archived: true})
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(planned(c), func(plan PlannedOrder) bool {
+		return plan.State == "sent" || plan.State == "confirmed" || slices.ContainsFunc(orders, func(order Order) bool { return order.Planned == plan.ERPID })
+	}), nil
 }
 
 // fits says why an order cannot fulfil planned order id, or "" when it can: a

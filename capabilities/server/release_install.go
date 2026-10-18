@@ -202,6 +202,9 @@ func (t *Tenant) validateAssetSet() error {
 	}
 	for _, definition := range t.definitions {
 		if definition.Application != nil {
+			if err := t.checkApplicationExtension(definition.Ref, *definition.Application); err != nil {
+				return err
+			}
 			if err := t.checkPageQueries(definition.Application.QueryPage()); err != nil {
 				return err
 			}

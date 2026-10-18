@@ -1,12 +1,15 @@
 package mes
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"platformkernel/kernel"
 	"platformserver"
 	"platformserver/platform"
+	"production"
 )
 
 // schemas are the plant's and the platform's actions of a catalog; every member
@@ -82,6 +85,86 @@ func TestReleasePlacesOrderInModel(t *testing.T) {
 		t.Fatal("released order is not among the records")
 	}
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-71", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1, Place: "ghost"}), "ERROR_CODE_INVALID_ARGUMENT")
+}
+
+func TestReleaseFormUsesActualMasterDefaultsAndOriginalChoices(t *testing.T) {
+	master := DemoMaster()
+	slices.Reverse(master.Products)
+	plant := New(tenant, master)
+	action, ok := plant.Manifest().Actions.Action(SchemaRelease)
+	if !ok || action.IDPrefix != "SO" {
+		t.Fatalf("release form identity: %+v", action)
+	}
+	fields := map[string]platform.Field{}
+	for _, field := range action.Payload {
+		fields[field.Name] = field
+	}
+	if string(fields["product"].Default) != string(platform.Raw(master.Products[0].ID)) || string(fields["quantity"].Default) != "1" || string(fields["sfcs"].Default) != "1" {
+		t.Fatalf("release defaults did not follow the plant: %+v", action.Payload)
+	}
+	if fields["product"].From != "products" || fields["planned"].From != "available-planned-orders" || fields["planned"].Key != "erpId" || !slices.Equal(fields["place"].Stereotypes, []string{"ActualLocation", "ActualOrganization"}) {
+		t.Fatalf("release form lost an original choice: %+v", action.Payload)
+	}
+}
+
+func TestReleaseRejectsInvalidLotsAndExistingOrderWithoutChangingRecords(t *testing.T) {
+	p := newPlant(t)
+	for _, lots := range []int{0, -1, 3} {
+		expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-invalid", releasePayload{Product: "P-100", Quantity: 2, SFCs: lots}), "ERROR_CODE_INVALID_ARGUMENT")
+	}
+	if len(p.Orders()) != 0 || len(p.SFCs()) != 0 {
+		t.Fatal("invalid lot counts created records")
+	}
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-valid", releasePayload{Product: "P-100", Quantity: 2, SFCs: 1}), "ok")
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-valid", releasePayload{Product: "P-100", Quantity: 7, SFCs: 2}), "ERROR_CODE_CONFLICT")
+	if len(p.Orders()) != 1 || len(p.SFCs()) != 1 || p.Orders()[0].Quantity != 2 {
+		t.Fatal("an existing order was overwritten or split again")
+	}
+}
+
+type shopOrderChoiceRuntime struct {
+	platform.Runtime
+	plans  []production.Order
+	orders []Order
+	err    *kernel.Error
+}
+
+func (r *shopOrderChoiceRuntime) Query(platform.Caller, string, string, ...string) ([]platform.ProviderResult, *kernel.Error) {
+	return []platform.ProviderResult{{Result: r.plans}}, nil
+}
+
+func (r *shopOrderChoiceRuntime) Find(_ platform.Caller, typ reflect.Type, query platform.Query) ([]any, int, *kernel.Error) {
+	if typ != reflect.TypeFor[Order]() || !query.Archived {
+		panic("the shop-order chooser must inspect its original orders including archived ones")
+	}
+	rows := make([]any, len(r.orders))
+	for i, order := range r.orders {
+		rows[i] = order
+	}
+	return rows, len(rows), r.err
+}
+
+func TestAvailablePlannedOrdersKeepOpenUnclaimedOptionsAndReadFailures(t *testing.T) {
+	runtime := &shopOrderChoiceRuntime{
+		plans:  []production.Order{{ID: "open", State: "released"}, {ID: "sent", State: "sent"}, {ID: "confirmed", State: "confirmed"}, {ID: "claimed", State: "released"}, {ID: "retry", State: "refused"}},
+		orders: []Order{{Planned: "claimed"}},
+	}
+	caller := platform.NewCaller(runtime, sup.Member, ID, false, false)
+	options, err := New(tenant, DemoMaster()).Read(caller, "available-planned-orders")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, plan := range options.([]PlannedOrder) {
+		ids = append(ids, plan.ERPID)
+	}
+	if !slices.Equal(ids, []string{"open", "retry"}) {
+		t.Fatalf("unavailable plans were offered: %v", ids)
+	}
+	runtime.err = denied
+	if _, err := availablePlanned(caller); err != denied {
+		t.Fatal("an unavailable order read was shown as an empty option list")
+	}
 }
 
 // Deactivating a capability removes its actions and refuses new ones; what it

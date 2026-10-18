@@ -251,7 +251,7 @@ func (b PackageBlueprint) check() error {
 	return nil
 }
 
-func (b PackageBlueprint) candidate(owner host.ConstructionDrafts) (platform.ReleaseCandidate, error) {
+func (b PackageBlueprint) candidate(owner host.ConstructionDrafts, code []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
 	assets, err := owner.CompleteBlueprintAssets(b.Assets)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
@@ -266,7 +266,7 @@ func (b PackageBlueprint) candidate(owner host.ConstructionDrafts) (platform.Rel
 			return platform.ReleaseCandidate{}, err
 		}
 	}
-	return platform.Candidate(b.Roots, assets)
+	return platform.Candidate(b.Roots, append(assets, code...))
 }
 
 // latest picks the newest version of a package by version string order.
@@ -509,8 +509,14 @@ func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 		}
 		if owner == nil {
 			out.Problems = append(out.Problems, "application blueprints need the Build owner")
-		} else if _, err := p.Blueprint.candidate(owner); err != nil {
-			out.Problems = append(out.Problems, err.Error())
+		} else {
+			code, err := d.host.CodeReleaseAssets()
+			if err == nil {
+				_, err = p.Blueprint.candidate(owner, code)
+			}
+			if err != nil {
+				out.Problems = append(out.Problems, err.Error())
+			}
 		}
 	}
 	if p.Runtime != nil {

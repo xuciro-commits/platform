@@ -29,7 +29,7 @@ export function payloadSchema(fields: Field[]) {
 }
 
 /** Inputs for an action's declared payload fields. */
-export function PayloadFields({ fields, values, onChange, preview = false, submitted = false, issues = [] }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean; submitted?: boolean; issues?:Api.FieldIssue[] }) {
+export function PayloadFields({ fields, values, onChange, app, preview = false, submitted = false, issues = [] }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; app?:string; preview?: boolean; submitted?: boolean; issues?:Api.FieldIssue[] }) {
   const prefix = useId(), [touched, setTouched] = useState<Record<string, boolean>>({}),[units,setUnits]=useState<Record<string,string>>({});
   const knownUnit=Object.values(units).find(Boolean),hourly=knownUnit?knownUnit==="hour":fields.some(f=>f.constraints?.dateTime&&String(values[f.name]??"").includes("T"));
   const parsed = payloadSchema(fields).safeParse(values);
@@ -50,10 +50,10 @@ export function PayloadFields({ fields, values, onChange, preview = false, submi
         {range?<DateRangeInput id={id} start={String(value??"")} end={String(values[end!.name]??"")} startLabel={f.description||f.name} endLabel={end!.description||end!.name} inclusive={f.range?.inclusive} invalid={!!error||!!endError} describedBy={[error?`${id}-error`:undefined,endError?`${id}-end-error`:undefined].filter(Boolean).join(" ")||undefined} onChange={(start,finish)=>{setTouched(old=>({...old,[f.name]:true,[end!.name]:!!finish||old[end!.name]===true}));onChange({...values,[f.name]:start,[end!.name]:finish});}}/>:f.choices?.length ? <Select id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
             <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
           : f.ref ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
-            : f.ref === "enterprise.element" ? <ElementPicker id={id} stereotype={f.stereotype} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
+            : f.ref === "enterprise.element" ? <ElementPicker id={id} stereotype={f.stereotype} stereotypes={f.stereotypes} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
             : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
-            : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} onUnit={unit=>setUnits(old=>({...old,[f.name]:unit}))} />
+            : <ReadPicker id={id} field={f} app={app} value={String(value ?? "")} onChange={(v) => set(v || undefined)} onUnit={unit=>setUnits(old=>({...old,[f.name]:unit}))} />
           : f.type === "datetime" ? <DateTimeInput title={f.description||f.name} value={String(value??"")} offset="Z" onChange={set}/>
           : f.type === "json" ? <JsonInput id={id} value={value} onChange={set} />
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
@@ -78,9 +78,10 @@ function JsonInput({ id, value, onChange }: { id: string; value: unknown; onChan
 }
 
 /** A list of the items of an app's read, for a payload field whose values are not records here (#129). */
-function ReadPicker({ id, field, value, onChange, onUnit }: { id: string; field: Field; value: string; onChange: (key: string) => void; onUnit?:(unit:string)=>void }) {
+function ReadPicker({ id, field, app, value, onChange, onUnit }: { id: string; field: Field; app?:string; value: string; onChange: (key: string) => void; onUnit?:(unit:string)=>void }) {
  const {client,source}=useHost();
- const query=useQuery({queryKey:[client.connection.token,client.connection.tenant,source.scope,"read",field.from],queryFn:()=>client.get<Record<string,unknown>[]|Api.InputOptions>(`/v1/${field.from}`)});
+ const path=app?`/v1/apps/${encodeURIComponent(app)}/reads/${encodeURIComponent(field.from!)}`:`/v1/${field.from}`;
+ const query=useQuery({queryKey:[client.connection.token,client.connection.tenant,source.scope,"read",app,field.from],queryFn:()=>client.get<Record<string,unknown>[]|Api.InputOptions>(path)});
  if(query.isError)return <p role="alert">{t("The options could not be loaded. Try again.")} <Button size="sm" onClick={()=>void query.refetch()}>{t("Retry")}</Button></p>;
  if(query.isPending)return <p role="status">{t("Loading…")}</p>;
  if(!Array.isArray(query.data)&&query.data.manual&&field.manual)return <label className="grid gap-1">{t("Manual source: no room-type directory is connected.")}<Input id={id} value={value} onChange={e=>onChange(e.target.value)}/></label>;
@@ -92,11 +93,12 @@ function ReadPicker({ id, field, value, onChange, onUnit }: { id: string; field:
 /** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
  * field tagged ref:"enterprise.element" (ADR-0022 D8) — read through the typed query and
  * resolve contracts (ADR-0034), never the whole graph. The model is every member's to read. */
-function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereotype?: string; value: string; onChange: (id: string) => void }) {
+function ElementPicker({ id, stereotype, stereotypes, value, onChange }: { id: string; stereotype?: string; stereotypes?:string[]; value: string; onChange: (id: string) => void }) {
   const { client, source } = useHost();
+  const families=[...(stereotype?[stereotype]:[]),...(stereotypes??[])];
   const query = useQuery({
-    queryKey: [client.connection.token, client.connection.tenant, source.scope, "enterprise", "query", stereotype ?? ""],
-    queryFn: () => queryElements(client.get, stereotype ? { stereotype: stereotype as EnterpriseStereotype } : {}),
+    queryKey: [client.connection.token, client.connection.tenant, source.scope, "enterprise", "query", families],
+    queryFn: () => queryElements(path => client.get(path), families.length ? { stereotype: families as EnterpriseStereotype[] } : {}),
   });
   const items = query.isError ? [] : query.data?.elements ?? [];
   // A record keeps naming what it named: an element that has since been closed
@@ -105,7 +107,7 @@ function ElementPicker({ id, stereotype, value, onChange }: { id: string; stereo
   const resolved = useQuery({
     queryKey: [client.connection.token, client.connection.tenant, source.scope, "enterprise", "resolve", value],
     enabled: !!value && !items.some((e) => e.id === value),
-    queryFn: () => resolveElements(client.get, [value]),
+    queryFn: () => resolveElements(path => client.get(path), [value]),
   });
   const kept = resolved.isError ? undefined : resolved.data?.elements[0];
   return (
@@ -132,14 +134,22 @@ export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(
 
 /** One submission state for generated record forms, declared payloads and inline hosts. */
 export function DeclaredActionForm({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
- const {decide,catalog}=useHost(),lock=useRef(false);
- const [values,setValues]=useState<Record<string,unknown>>({...initial,...fixed}),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN"),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>(originalOutcome?.issues??[]);
- const [attempt,setAttempt]=useState<{entry:Entry;values:Record<string,unknown>}|undefined>(()=>originalOutcome?{entry:originalOutcome,values:actionEntryInputs(originalOutcome,{...initial,...fixed})}:undefined);
+ const {decide,catalog,source}=useHost(),lock=useRef(false);
+ const [startingValues]=useState<Record<string,unknown>>(()=>({...Object.fromEntries(openedDeclaration.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial,...fixed}));
+ const [values,setValues]=useState<Record<string,unknown>>(startingValues),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN"),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>(originalOutcome?.issues??[]);
+ const [attempt,setAttempt]=useState<{entry:Entry;values:Record<string,unknown>}|undefined>(()=>originalOutcome?{entry:originalOutcome,values:actionEntryInputs(originalOutcome,startingValues)}:undefined);
  const current=catalog.find(action=>action.schema===openedDeclaration.schema&&action.target===target.type);
  const refused=attempt&&["SUBMISSION_STATE_REJECTED","SUBMISSION_STATE_CONFLICT"].includes(attempt.entry.state);
  const attemptedVersion=attempt?.entry.schemaVersion??openedDeclaration.schemaVersion;
  const schemaChanged=!!refused&&!!attemptedVersion&&!!current?.schemaVersion&&actionInputSignature(current.schemaVersion)!==actionInputSignature(attemptedVersion);
  const declared=schemaChanged&&current?current:openedDeclaration;
+ // Generated actions omit editor-owned fields from their visible payload.
+ // Explicit initial model values still belong in the same owner submission.
+ const generatedInputs=(next:Record<string,unknown>)=>{
+  const inputs={...startingValues,...next,...fixed},model=source.entity(target.type)?.fields??[];
+  const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&Object.hasOwn(startingValues,field.name)).map(field=>field.name)]);
+  return Object.fromEntries(Object.entries(inputs).filter(([name])=>allowed.has(name)&&!model.some(field=>field.name===name&&field.readOnly)));
+ };
  const sameTarget=attempt?.entry.submission.target?.type===target.type&&attempt.entry.submission.target.id===target.id;
  const changed=!!attempt&&(!sameTarget||schemaChanged||actionInputSignature(values)!==actionInputSignature(attempt.values));
  const submit=async(inputs=values,original=false)=>{
@@ -164,13 +174,13 @@ export function DeclaredActionForm({declared:openedDeclaration,target,revision,o
  const refusalView=refusal&&<ActionRefusal entry={attempt?.entry} message={refusal} original={!pending?attempt?.values:undefined}/>;
  const retry=attempt&&!pending&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
  const label=submitting?t("Executing…"):pending?t("Retry confirmation"):schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
- if(generated)return <div className="grid gap-3">{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={initial} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onValuesChange={change} onSubmit={async inputs=>await submit(inputs as Record<string,unknown>)||undefined}/>{retry}</div>;
+ if(generated)return <div className="grid gap-3">{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await submit(generatedInputs(inputs as Record<string,unknown>))||undefined}/>{retry}</div>;
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusalView}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
- <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name))} values={values} onChange={change} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
+ <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name))} app={declared.schema.split(".")[0]} values={values} onChange={change} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
  <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button>{retry}<Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting||!!attempt&&!pending&&!changed}>{label}</Button></div>
  </Form>;
 }
@@ -179,7 +189,7 @@ export function DeclaredActionForm({declared:openedDeclaration,target,revision,o
 function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, prefix }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; prefix?:string }) {
  const {source}=useHost(),info=source.entity(type);
  const [baseline]=useState(record);
- const [id,setId]=useState(()=>prefix===""?"":newId(prefix??prefixOf(type))),[submitting,setSubmitting]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN");
+ const [id,setId]=useState(()=>prefix===""?"":newId(prefix??declared.idPrefix??prefixOf(type))),[submitting,setSubmitting]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN");
  const target={type,id:baseline?.id??id},generated=[`${type}.create`,`${type}.edit`].includes(declared.schema)&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">

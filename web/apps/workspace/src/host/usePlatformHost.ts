@@ -7,6 +7,7 @@ import type { EdgeClient, ActionDeclaration, Entry, Api } from "@platform/kernel
 import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { applicationUIInfo } from "./applications";
 
 type Notification = Api.Notification;
 type ProtocolInfo = Api.ProtocolInfo;
@@ -16,6 +17,8 @@ const offline = (error: unknown) => /live connection unavailable|HTTP (400|413)/
 
 export type PlatformHost = {
   host?: Host;
+  /** Initial route resolution waits for this identity's original discovery reads. */
+  metadataReady: boolean;
   release: UseQueryResult<Api.ReleaseActive>;
   unread: number;
   saved: SavedView[];
@@ -32,11 +35,18 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     const keepMetadata = metadataPaths.includes(path) && offline(query.error);
     return { ...query, data: query.isError && !keepMetadata ? undefined : query.data } as UseQueryResult<T>;
   };
-  const actions = read<ActionDeclaration[]>("/v1/actions").data;
-  const entities = read<EntityInfo[]>("/v1/entities").data ?? [];
+  const actionQuery = read<ActionDeclaration[]>("/v1/actions");
+  const actions = actionQuery.data;
+  const entityQuery = read<EntityInfo[]>("/v1/entities");
+  const entities = entityQuery.data ?? [];
   // The installed assets, so an app's navigation can offer the pages it has —
   // a code page, or one someone composed in this tenant (ADR-0020、ADR-0048).
-  const definitions = read<Definition[]>("/v1/definitions").data ?? [];
+  const definitionQuery = read<Definition[]>("/v1/definitions");
+  const definitions = definitionQuery.data ?? [];
+  const initialMetadata = useRef({ scope: "", ready: false });
+  const metadataScope = JSON.stringify([token, tenant, me?.principalId]);
+  if (initialMetadata.current.scope !== metadataScope) initialMetadata.current = { scope: metadataScope, ready: false };
+  if (actionQuery.isSuccess && entityQuery.isSuccess && definitionQuery.isSuccess) initialMetadata.current.ready = true;
   const release = read<Api.ReleaseActive>("/v1/releases/active", false, { retry: false });
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const unread = (read<Notification[]>("/v1/notifications").data ?? []).filter((n) => !n.read).length;
@@ -139,7 +149,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
         if (own || protocols.some((p) => p.id.startsWith(`${type}/`) && p.bound === app.id)) opens.set(type, view);
       }
     }
-    return {
+    const host: Host = {
       client, me, entities, definitions, source, opens, outbox, decide, refresh,
       role: (app) => me.profile.roles[app] || undefined,
       can: (schema) => !!actions?.some((a) => a.schema === schema),
@@ -147,7 +157,9 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       catalog: actions ?? [],
       resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await refresh(); },
     };
-  }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, refresh, source]);
+    host.applications = applicationUIInfo((apps ?? []).filter(app => app.id !== "host-console" || hostMe.isSuccess), host);
+    return host;
+  }, [actions, apps, client, decide, definitions, entities, hostMe.isSuccess, me, outbox, protocols, refresh, source]);
 
-  return { host, release, unread, saved, hostAdmin: hostMe.isSuccess };
+  return { host, metadataReady: initialMetadata.current.ready, release, unread, saved, hostAdmin: hostMe.isSuccess };
 }
