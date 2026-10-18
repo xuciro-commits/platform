@@ -88,6 +88,8 @@ Connection/Source/Dataset/Pipeline 的**定义描述符**及选定任务必需�
 
 ## 7. As built
 
+**声明编辑与决定试运行。** Visual 与 JSON/YAML 源码共用原字段声明、草稿与动作提交；输入检查不执行业务规则，模式和语法不构成新的 schema 或保存入口。当前成员的业务试运行使用原私有决定上下文，返回接受/拒绝及可读变更，不接受到正式账本，不发送外部效果，也不缓存为正式提交的许可。正式提交继续使用原版本、预期 revision、幂等身份、拒绝输入与纠正关系。可写字段和业务约束分别由共享输入组件与原 owner 检查，不能由一次前端解析替代授权或接受结果。
+
 **唯一新写管线。** Submit、记录型 Input、审批/协议、订阅/作业、外部应答、Agent 步骤及模型计量都先暂存，再经 `Tenant.acceptResult` 接受，最后纯应用。Compute、连续来源、候选保存/激活、组合编辑及宿主管理使用同一接受边界。内存、Record、AcceptResult 只决定存储方式；内存没有进程崩溃持久性，Record 保留追加失败停服的义务。删除 `acceptsGenerated`、动作/工作名单、直接提交后记录输入及第二协议应答协调器；普通 live Runtime 拒绝新决定和管理写入，仅保留历史重放与读取。
 
 **正式契约和私有上下文。** App 必须提供非空账本，组合期检查；ResultApp、AcceptedActionApp、AcceptedWorker 已退出。Runtime 按决策、读取、操作、函数、审批、通知、诊断和管理提供必需的具名角色，Caller 不再匿名探测能力。状态、事实、输入和发布的纯验证/恢复职责保留；DecisionForkApp 隔离只读声明与单次执行上下文。AI/Enterprise 新增完整私有状态，原 Console/MES/PMS/Relations 状态参与者继续复用；Build/Work/Flow/Agent/Files/Knowledge 的私有 Host 读取同一父视图。

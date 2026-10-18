@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import {formulaText} from "../editor/rule-text";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -84,7 +85,7 @@ export function PipelineEditor({ id }: { id: string }) {
   // The enterprise model's own kinds and elements, so a pipeline writing into
   // it chooses them rather than spelling their ids.
   const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.pipeline", kind: "pipeline", view: "pipeline", empty, normalize: record => ({ ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }),
     failure: t("The pipeline could not be saved or loaded. Your draft is still here."),
     payload: draft => {
@@ -107,8 +108,8 @@ export function PipelineEditor({ id }: { id: string }) {
   const last = draft.last, input = datasets.find((d) => d.id === draft.input);
   const columns = input?.schema?.map((f) => f.name) ?? [];
   const setSteps = (steps: Step[]) => patch({ steps });
-  const setStep = (i: number, change: Partial<Step>) => setSteps(draft.steps.map((s, j) => j === i ? { ...s, ...change } : s));
-  const move = (i: number, by: number) => { const steps = [...draft.steps]; const [s] = steps.splice(i, 1); if (s) steps.splice(i + by, 0, s); setSteps(steps); };
+  const setStep = (i: number, change: Partial<Step>) => setSteps((draft.steps ?? []).map((s, j) => j === i ? { ...s, ...change } : s));
+  const move = (i: number, by: number) => { const steps = [...(draft.steps ?? [])]; const [s] = steps.splice(i, 1); if (s) steps.splice(i + by, 0, s); setSteps(steps); };
   const setExpectations = (expectations: Expectation[]) => patch({ expectations });
   const out = draft.outputEnterprise ? "enterprise" : draft.outputObject ? "object" : "dataset";
   const ent = draft.outputEnterprise ?? EMPTY_ENTERPRISE;
@@ -121,7 +122,7 @@ export function PipelineEditor({ id }: { id: string }) {
   const others = datasets.filter((d) => d.id !== draft.input);
   const stepNodes: FlowNode[] = [
     { id: "in", kind: "dataset", label: input?.title || draft.input || t("Input dataset"), detail: t("The dataset this pipeline reads"), position: { x: 0, y: 0 } },
-    ...draft.steps.map((s, i) => ({ id: `s${i}`, kind: s.kind, label: `${i + 1}. ${t(s.kind)}`, detail: stepDetail(s, others), position: { x: 0, y: 0 } })),
+    ...(draft.steps ?? []).map((s, i) => ({ id: `s${i}`, kind: s.kind, label: `${i + 1}. ${t(s.kind)}`, detail: stepDetail(s, others), position: { x: 0, y: 0 } })),
     { id: "out", kind: "output", label: out === "enterprise" ? t("The enterprise model") : out === "object" ? (target?.title ?? draft.outputObject ?? t("An object")) : (datasets.find((d) => d.id === draft.outputDataset)?.title ?? t("A dataset (next version)")),
       detail: out === "object" && draft.key ? `${t("Record id column")} ${draft.key}` : undefined, position: { x: 0, y: 0 } },
   ].map((node, i) => ({ ...node, position: { x: i * 268, y: 0 } }));
@@ -154,7 +155,7 @@ export function PipelineEditor({ id }: { id: string }) {
         ]} />
       </div>}
     </Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Input")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Pipeline name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="cleanmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Pipeline title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -201,32 +202,32 @@ export function PipelineEditor({ id }: { id: string }) {
         description={t("Drag a step from the library onto the line, or insert one on the arrow where it belongs. Choose a step to edit its fields below.")}>
         <FlowCanvas catalog={stepCatalog()} nodes={stepNodes} edges={stepEdges} selected={picked} onSelect={setPicked}
           mode={busy ? "view" : "edit"} direction="right" height={280} label={t("Steps")} storeKey={`pipeline:${id}`}
-          onAdd={(kind) => { setSteps([...draft.steps, { kind }]); setPicked(`s${draft.steps.length}`); }}
-          onInsert={(edge, kind) => { const at = edge.source === "in" ? 0 : Number(edge.source.slice(1)) + 1; setSteps([...draft.steps.slice(0, at), { kind }, ...draft.steps.slice(at)]); setPicked(`s${at}`); }}
-          onDelete={(gone) => { const drop = gone.map((n) => Number(n.id.slice(1))).filter((i) => !Number.isNaN(i)).sort((a, b) => b - a); if (drop.length) { setSteps(draft.steps.filter((_, j) => !drop.includes(j))); setPicked(undefined); } }} />
-        {picked && picked.startsWith("s") && draft.steps[Number(picked.slice(1))] && <div className="grid gap-2 rounded border border-border p-2">
+          onAdd={(kind) => { setSteps([...(draft.steps ?? []), { kind }]); setPicked(`s${(draft.steps ?? []).length}`); }}
+          onInsert={(edge, kind) => { const at = edge.source === "in" ? 0 : Number(edge.source.slice(1)) + 1; setSteps([...(draft.steps ?? []).slice(0, at), { kind }, ...(draft.steps ?? []).slice(at)]); setPicked(`s${at}`); }}
+          onDelete={(gone) => { const drop = gone.map((n) => Number(n.id.slice(1))).filter((i) => !Number.isNaN(i)).sort((a, b) => b - a); if (drop.length) { setSteps((draft.steps ?? []).filter((_, j) => !drop.includes(j))); setPicked(undefined); } }} />
+        {picked && picked.startsWith("s") && (draft.steps ?? [])[Number(picked.slice(1))] && <div className="grid gap-2 rounded border border-border p-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="w-6 text-xs text-muted">{Number(picked.slice(1)) + 1}.</span>
-            <Select aria-label={t("Step kind")} value={draft.steps[Number(picked.slice(1))]!.kind} onChange={(e) => setStep(Number(picked.slice(1)), { kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{t(k)}</option>)}</Select>
-            <span className="text-[11px] text-muted">{kindHelp(draft.steps[Number(picked.slice(1))]!.kind)}</span>
+            <Select aria-label={t("Step kind")} value={(draft.steps ?? [])[Number(picked.slice(1))]!.kind} onChange={(e) => setStep(Number(picked.slice(1)), { kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{t(k)}</option>)}</Select>
+            <span className="text-[11px] text-muted">{kindHelp((draft.steps ?? [])[Number(picked.slice(1))]!.kind)}</span>
             <span className="ml-auto flex gap-1">
               <Button size="sm" variant="ghost" aria-label={t("Move up")} disabled={picked === "s0"} onClick={() => move(Number(picked.slice(1)), -1)}><ArrowUp className="size-3" /></Button>
-              <Button size="sm" variant="ghost" aria-label={t("Move down")} disabled={Number(picked.slice(1)) === draft.steps.length - 1} onClick={() => move(Number(picked.slice(1)), 1)}><ArrowDown className="size-3" /></Button>
-              <Button size="sm" variant="ghost" onClick={() => { setSteps(draft.steps.filter((_, j) => j !== Number(picked.slice(1)))); setPicked(undefined); }}>{t("Remove")}</Button>
+              <Button size="sm" variant="ghost" aria-label={t("Move down")} disabled={Number(picked.slice(1)) === (draft.steps ?? []).length - 1} onClick={() => move(Number(picked.slice(1)), 1)}><ArrowDown className="size-3" /></Button>
+              <Button size="sm" variant="ghost" onClick={() => { setSteps((draft.steps ?? []).filter((_, j) => j !== Number(picked.slice(1)))); setPicked(undefined); }}>{t("Remove")}</Button>
             </span>
           </div>
-          <StepFields step={draft.steps[Number(picked.slice(1))]!} datasets={datasets.filter((d) => d.id !== draft.input)} onChange={(change) => setStep(Number(picked.slice(1)), change)} />
+          <StepFields step={(draft.steps ?? [])[Number(picked.slice(1))]!} datasets={datasets.filter((d) => d.id !== draft.input)} onChange={(change) => setStep(Number(picked.slice(1)), change)} />
         </div>}
       </Panel>
       <Panel title={t("Expectations")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         <p className="text-xs text-muted">{t("Checked on the final rows. A row that fails is quarantined on the run and not written; the rest still are.")}</p>
-        {draft.expectations.map((x, i) => <div key={i} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
-          <Input value={x.column} placeholder={t("column")} onChange={(e) => setExpectations(draft.expectations.map((y, j) => j === i ? { ...y, column: e.target.value } : y))} />
-          <Select value={x.rule} onChange={(e) => setExpectations(draft.expectations.map((y, j) => j === i ? { ...y, rule: e.target.value } : y))}>{RULES.map((r) => <option key={r} value={r}>{t(r)}</option>)}</Select>
-          <Input disabled={x.rule === "notnull" || x.rule === "unique"} value={x.value ?? ""} placeholder={x.rule === "in" ? "A, B, C" : x.rule === "matches" ? "^[A-Z]{3}-\\d+$" : x.rule === "range" ? "0..100" : ""} onChange={(e) => setExpectations(draft.expectations.map((y, j) => j === i ? { ...y, value: e.target.value } : y))} />
-          <Button size="sm" variant="ghost" onClick={() => setExpectations(draft.expectations.filter((_, j) => j !== i))}>{t("Remove")}</Button>
+        {(draft.expectations ?? []).map((x, i) => <div key={i} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
+          <Input value={x.column} placeholder={t("column")} onChange={(e) => setExpectations((draft.expectations ?? []).map((y, j) => j === i ? { ...y, column: e.target.value } : y))} />
+          <Select value={x.rule} onChange={(e) => setExpectations((draft.expectations ?? []).map((y, j) => j === i ? { ...y, rule: e.target.value } : y))}>{RULES.map((r) => <option key={r} value={r}>{t(r)}</option>)}</Select>
+          <Input disabled={x.rule === "notnull" || x.rule === "unique"} value={x.value ?? ""} placeholder={x.rule === "in" ? "A, B, C" : x.rule === "matches" ? "^[A-Z]{3}-\\d+$" : x.rule === "range" ? "0..100" : ""} onChange={(e) => setExpectations((draft.expectations ?? []).map((y, j) => j === i ? { ...y, value: e.target.value } : y))} />
+          <Button size="sm" variant="ghost" onClick={() => setExpectations((draft.expectations ?? []).filter((_, j) => j !== i))}>{t("Remove")}</Button>
         </div>)}
-        <div><Button size="sm" onClick={() => setExpectations([...draft.expectations, { column: columns[0] ?? "", rule: "notnull" }])}>{t("Add expectation")}</Button></div>
+        <div><Button size="sm" onClick={() => setExpectations([...(draft.expectations ?? []), { column: columns[0] ?? "", rule: "notnull" }])}>{t("Add expectation")}</Button></div>
       </Panel>
       <Panel title={t("Last run")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not run yet.")}</p> : <>
@@ -239,7 +240,7 @@ export function PipelineEditor({ id }: { id: string }) {
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}
         </>}
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div>;
 }
 

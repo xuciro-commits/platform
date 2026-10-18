@@ -21,4 +21,4 @@ export function previewSection(section: AuthoringSection): Api.Section {
   };
 }
 
-export type PageDraft = {sections:AuthoringSection[];document:Api.PageDocument;selections:Api.SelectionVariable[];title:string;description:string};
+export type PageDraft = {name?:string;object?:string;list?:string[];detail?:string[];actions?:string[];sections:AuthoringSection[];document:Api.PageDocument;selections:Api.SelectionVariable[];title:string;description:string};

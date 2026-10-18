@@ -8,12 +8,12 @@ import {reduceDraft,type DraftEdit} from "./draft-history";
 export function useDraftSession<T, C = never>(initial: T, scope?: string) {
   const inherited=useInputDrafts(),own=useInputBuffers(),buffers=inherited??own;
   const [state,dispatch]=useReducer(reduceDraft<T,typeof buffers.values>,{draft:initial,saved:JSON.stringify(initial),past:[],future:[]});
-  const raw=useRef(buffers.values);raw.current=buffers.values;
+  const raw=useRef(buffers.snapshot);raw.current=buffers.snapshot;
   const [rawRedo,setRawRedo]=useState<typeof buffers.values>();
   const [copied, setCopied] = useState<{scope?:string;value:C}>();
   useEffect(() => setCopied(undefined), [scope]);
   const copy = useCallback((value:C) => setCopied({scope,value}), [scope]);
-  const edit = useCallback((edit: DraftEdit<T>, key?: string) => (setRawRedo(undefined),dispatch({ type: "edit", edit, key,inputs:raw.current })), []);
+  const edit = useCallback((edit: DraftEdit<T>, key?: string) => (setRawRedo(undefined),dispatch({ type: "edit", edit, key,inputs:raw.current() })), []);
   const load = useCallback((draft: T) => { buffers.clear();setRawRedo(undefined); dispatch({ type: "load", draft }); }, [buffers.clear]);
   const saved = useCallback((draft: T, normalized?: T) => dispatch({ type: "saved", draft, normalized }), []);
   const undo = () => {if(buffers.dirty){setRawRedo(buffers.values);buffers.clear();}else {const prior=state.past.at(-1)?.inputs;dispatch({type:"undo",inputs:buffers.values});buffers.clear();if(prior)for(const [key,value] of Object.entries(prior))buffers.set(key,value);setRawRedo(undefined);}};

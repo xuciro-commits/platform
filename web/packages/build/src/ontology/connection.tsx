@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -29,7 +30,7 @@ export function ConnectionEditor({ id }: { id: string }) {
   const { client, role } = useHost(), { open } = useApplicationWorkspace();
   const fieldID = useId();
   const kinds = useReadQuery<{ items: Api.ConnectionKind[] }>("/v1/connection-kinds");
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition, createID } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition, createID } = useDefinitionDraft<Draft>({
     id, type: "build.connection", kind: "connection", view: "connection", empty,
     failure: t("The connection could not be saved or loaded. Your draft is still here."),
     payload: draft => {
@@ -71,7 +72,7 @@ export function ConnectionEditor({ id }: { id: string }) {
         {draft.state === "ready" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("retire"))}>{t("Retire")}</Button>}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("System")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Connection name")}<Input disabled={draft.state === "ready"} value={draft.name} placeholder="sap" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Connection title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -103,6 +104,6 @@ export function ConnectionEditor({ id }: { id: string }) {
         <ProtocolSamples samples={preview.check.samples ?? []} />
         <p className="text-xs text-muted">{t("Preview reads only. It does not publish the connection, start continuous sampling or send device commands.")}</p>
       </Panel>}
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div>;
 }

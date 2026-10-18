@@ -8,6 +8,7 @@ import { Barcode } from "./barcode";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { useViewVisible } from "../shell/ViewVisibility";
+import {StructuredEditor} from "../components/StructuredEditor";
 import {RecordCards} from "./RecordCards";
 import {RecordComments} from "./RecordComments";
 import {RecordUploader} from "./RecordUploader";
@@ -602,6 +603,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={relInfo.fields.filter(f=>f.name!=="base"&&!(detailPresentation?.hideNull&&(row[f.name]===undefined||row[f.name]===null||row[f.name]==="")))
             .map(f=>[f.title,relEntity.fields[f.name]!.display(row[f.name] as never,row)] as [string,ReactNode])}/>
         </div>)}
+        {!detailOnly && <div className="mt-3 border-t border-border pt-3"><StructuredEditor key={type+":"+id} scope={type+":"+id} value={Object.fromEntries(Object.entries(r).filter(([name])=>["id","revision","created","changed","archived"].includes(name)||info.fields.some(field=>field.name===name)))} readOnly><span className="text-xs text-muted">{t("View the readable record as JSON or YAML.")}</span></StructuredEditor></div>}
       </section>);
   const groups=detailOnly&&!recordTabs&&!linksOnly?[]:recordLinks===undefined?[...view.related,...(view.linked??[])].map(rel=>({rel,title:undefined as string|undefined})):recordLinks.flatMap(group=>{const target=source.entity(group.object.name),field=target?.fields.find(f=>f.name===group.field&&f.type==="reference"&&f.ref===type&&!!f.inverse),rel=view.related.find(r=>r.type===group.object.name&&r.field===group.field);return field&&target?.app===group.object.app&&rel?[{rel,title:group.title}]:[];});
   const related=detailOnly&&!recordTabs&&!linksOnly?[]:groups.filter(({rel})=>!extensions.some(x=>x.rel===rel)).flatMap(({rel,title}) => {

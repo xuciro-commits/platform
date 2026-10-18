@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Keep the selected source and target releases.": "保留所选的来源和目标发布版本。",
   "Enterprise element types": "企业元素类型",
   "Choose the enterprise families this reference accepts. No selection accepts every readable enterprise element.": "选择此引用接受的企业元素类型；不选则允许所有可读取的企业元素。",
   "Enterprise element types could not be loaded.": "无法读取企业元素类型。",

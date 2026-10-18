@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import {useInputBuffers} from "@platform/ui";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -124,6 +128,8 @@ export function FlowEditor({ id }: { id: string }) {
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
   const catalogQuery = useAuthoringCapabilities<Capability>();
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
+  const authoringHost = useHost(), trial = useActionTrial();
+  const declarationFields = authoringHost.source.entity("build.process")?.fields ?? [];
   const session=useDraftSession<WorkflowDraft>(empty());
   const [createID]=useState(()=>crypto.randomUUID());
   const {draft,dirty}=session;
@@ -379,7 +385,7 @@ export function FlowEditor({ id }: { id: string }) {
       ] }}>
       {importingFlow && <FlowImportDialog name={draft.name || "importedflow"} capabilities={capabilities} onClose={() => setImportingFlow(false)} onApply={(next) => { change(next); setChosen(""); setImportingFlow(false); }} />}
       {run && !matchingRun && <Panel role="status" className="m-2 text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
-      <fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
+      <StructuredEditor expectedRevision={draft.id ? baseRevision.current : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.process:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { session.edit(() => ({ ...empty(), ...replaceDeclaration(draft, next, declarationFields) })); setValidation(undefined); }} onTrial={next => trial(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: draft.id || createID }, next, draft.id ? baseRevision.current : 0)}><fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
         onSelect={(name) => setChosen(name)} onOpen={(name) => setChosen(name)} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
         onPositionsChange={(positions) => change((current) => ({ ...current, layout: { ...current.layout, ...positions } }))} onLayout={(positions) => change({ layout: positions })}
         lanes={(draft.lanes ?? []).map((lane) => ({ id: lane.name, title: lane.title || lane.name }))}
@@ -391,7 +397,7 @@ export function FlowEditor({ id }: { id: string }) {
           const seen = new Set<string>(), pending = [connection.target];
           while (pending.length) { const next = pending.pop()!; if (next === connection.source) return false; if (seen.has(next)) continue; seen.add(next); pending.push(...(successors.get(next) ?? [])); }
           return true;
-        }} /></fieldset>
+        }} /></fieldset></StructuredEditor>
     </Workbench>
   </>;
 }

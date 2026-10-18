@@ -331,8 +331,8 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/simulate", Summary: "Builder-only dry run: decide an action as a member in a private staged decision and discard it (ADR-0047 21d)",
-		Query: []Param{{"as", "the member it is tried as; empty: the builder"}}, Body: []byte{}, Answer: Simulation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "POST /v1/simulate", Summary: "Try an authorized action as yourself in a private decision; only a builder may choose another member",
+		Query: []Param{{"as", "the member it is tried as; empty: yourself; another member requires a builder"}}, Body: []byte{}, Answer: Simulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		s := &pb.Submission{}
 		if protojson.Unmarshal(body, s) != nil || s.GetSchema() == nil || s.GetTarget() == nil {

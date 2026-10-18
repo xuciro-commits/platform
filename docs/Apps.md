@@ -99,6 +99,14 @@ Flow/Automation 的发布审阅先确认当前草稿，再进入原候选审阅�
 
 ## 构建者路径与当前边界
 
+通用创建/动作表单以及构建声明编辑器提供 `Visual / 可视化` 与 `Source / 源码`。源码模式在 `Source format / 源码格式` 选择 JSON 或 YAML；`Apply source / 应用源码` 只把校验后的值交回当前草稿，不保存、不发布。返回可视化继续编辑同一值，仍使用原来的 Save / Create / 动作按钮提交。标识、目标、预期版本和只读状态保留在原上下文，不允许用源码伪造。应用、对象、关系、动作、流程及页面沿原编辑器保存，动作仍保存在所属对象中。
+
+无效源码保留原文并阻止提交；修正后重新应用，不用切换模式覆盖它。JSON 和 YAML 共享可写字段及类型检查，保留 `null`、空字符串、`false`、`0` 与空数组的区别。YAML 仅接受单份 JSON 兼容配置，不支持标签、锚点或别名；不要把任意 Go/React 实现当成可反向编辑的声明。
+
+编辑时源码带入当前动作的可写已有值；创建时沿原声明初值，不会为了展示字段而自动填入虚构数据。字段指南说明哪些字段必填、类型、可选值及原声明示例。引用字段从当前成员有权读取的原选择器中选取，写入对应 ID；显示名称便于识别，不需要猜 ID。检查通过也不代表引用在正式提交时仍然有效。
+
+`Check inputs / 检查输入` 只检查输入声明。可用时，`Try operation / 业务试运行` 以当前成员和原目标执行一次私有业务决定，显示结果但不保存正式记录、不发送外部效果。试运行通过后，正式提交仍重新检查；发生拒绝时保留输入，通过原表单重试同一请求或提交纠正，不把试运行当作授权或发布。
+
 模型绑定（[ADR-0048](ADR/0048-model-driven-ui.md#5-as-built)）：页面组件选中后打开 Data / 数据，在 Model binding / 模型绑定选择模型、逐段字段路径与原声明集合。Inferred from model / 从模型推导显示当前默认；Add model field / 添加模型字段改成显式覆盖，Use model field defaults / 使用模型字段默认值恢复推导。选择器的 Original action criteria / 原动作条件指向 Behavior 中已有动作，并将其所需输入映射到页面变量；原规则只在动作里修改。Model predicates / 模型过滤条件与 Model label expression / 模型显示标签表达式使用原 Expr 编辑器。Partial visibility / 部分可见行为默认隐藏整个组件，也可显示明确标记。关系字段只读、逐跳加载，读取失败时移除旧值；不可写单元格显示原授权原因。保存、审查候选、激活沿原发布流程，历史页面在保存时升级绑定，已冻结字节保持原样。
 
 专业视图（[ADR-0049](ADR/0049-professional-components.md#5-as-built)）：添加 Layered graph / 分层有向图或 Model matrix / 模型矩阵，在 Data 的 Composite model bindings / 复合模型绑定切换来源并绑定模型。图的 nodes、edges 为必需，layers、overlay 按需；将引用字段映射到层级、端点与叠加目标，将字段或表达式映射到标签、详情、状态及当前位置。单据谱系勾选 Require an acyclic graph / 要求有向无环图。矩阵绑定 rows、columns 后，用 Cell expression / 单元格表达式的 `input.row` / `input.column` 读取原模型路径；不在客户端计算。每来源最多 200 条，矩阵最多 1600 格，较大集合用原声明集合/固定查询收窄。Catalog 搜索 `layered graph` 或 `matrix` 可运行完整合成配置样例；换成租户模型后仍走原保存/候选/激活。工作站将表格、模型详情、共享动作规则选择器、状态条与内联动作排在同一页。

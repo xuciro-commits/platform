@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
@@ -33,6 +37,7 @@ export function CodeFunctions() {
 
 export function CodeEditor({ id }: { id: string }) {
   const { decide, client, role } = useHost(), { open, close } = useApplicationWorkspace(), invoke = useInvokeCapability();
+  const authoringHost = useHost(), trial = useActionTrial(), declarationFields = authoringHost.source.entity("build.code")?.fields ?? [];
   const [draft, setDraft] = useState<CodeDraft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
  const [createID]=useState(()=>crypto.randomUUID());
  const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
@@ -62,7 +67,7 @@ export function CodeEditor({ id }: { id: string }) {
     if (inputs?.invalid) return;
     const submitted = structuredClone(draft), target = submitted.id || createID, expected = submitted.id ? baseRevision.current : 0;
     const { abi, name, title, description, language, source, input, output, roles, limits } = submitted;
-    if (!await decide(`build.code.${submitted.id ? "edit" : "create"}`, { type: "build.code", id: target }, { abi, name, title, description, language, source, input, output, roles, limits },
+    if (!await decide(`build.code.${submitted.id ? "edit" : "create"}`, { type: "build.code", id: target }, { ...declarationValue(submitted, declarationFields), abi, name, title, description, language, source, input, output, roles, limits },
       { expectedRevision: submitted.id ? expected : undefined, quiet: true, onRefused: setError })) return;
     const revision = expected + 1;
     baseRevision.current = revision; loaded.current = `${target}:${revision}`;
@@ -115,7 +120,7 @@ export function CodeEditor({ id }: { id: string }) {
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <StructuredEditor expectedRevision={draft.id ? draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.code:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setDirty(true); setError(""); setSDK(""); }} onTrial={next => trial(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: draft.id || createID }, next, draft.id ? draft.revision : 0)}><fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
         <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("Code function editor")}>
           {(["source", "contract", "sdk", "test"] as const).map((key) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(({ source: "Source code", contract: "Input and output", sdk: "Generated SDK", test: "Test published version" })[key])}</Button>)}
@@ -174,6 +179,6 @@ export function CodeEditor({ id }: { id: string }) {
           {draft.diagnostics && <pre className="whitespace-pre-wrap text-danger">{draft.diagnostics}</pre>}
         </div>
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div></Workbench>;
 }

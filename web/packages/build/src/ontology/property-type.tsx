@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -37,7 +38,7 @@ export function PropertyTypeEditor({id}:{id:string}) {
  {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  {dirty&&<Panel role="status">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
- <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+ <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
  <Panel title={t("Shared property settings")} className="grid min-w-0 grid-cols-1 content-start gap-3">
  <label className="grid min-w-0 gap-1 text-xs">{t("Shared property name")}<Input disabled={!!draft.published} value={draft.name} onChange={e=>patch({name:e.target.value})}/></label>
  <label className="grid min-w-0 gap-1 text-xs">{t("Shared property title")}<Input value={draft.title} onChange={e=>patch({title:e.target.value})}/></label>
@@ -45,5 +46,5 @@ export function PropertyTypeEditor({id}:{id:string}) {
  <label className="grid min-w-0 gap-1 text-xs">{t("Shared property type")}<Select disabled={!!draft.published} value={draft.type} onChange={e=>patch({type:e.target.value})}>{types.map(type=><option key={type} value={type}>{t(type)}</option>)}</Select></label>
  </Panel>
  <Panel role="region" aria-label={t("Published shared property versions")} title={t("Published shared property versions")} className="grid min-w-0 grid-cols-1 content-start gap-2"><p className="text-xs">{t("New publications do not replace object fields already bound to an older version.")}</p><p className="text-xs text-muted">{t("Local field names, required values and access belong to each object.")}</p>{versions.length?versions.map(p=><p key={p.binding.sourceVersion} className="break-all text-xs">{p.property.title} · {t(p.property.type)} · {p.binding.sourceVersion}</p>):<p className="text-xs text-muted">{t("No published shared property yet.")}</p>}</Panel>
- </fieldset></div>;
+ </fieldset></StructuredEditor></div>;
 }

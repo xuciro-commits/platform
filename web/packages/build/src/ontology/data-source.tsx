@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
@@ -38,7 +39,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired");
   const datasetQuery = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200");
   const datasets = datasetQuery.data?.records ?? [];
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.source", kind: "source", view: "data-source", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [] }),
     failure: t("The data source could not be saved or loaded. Your draft is still here."),
     payload: draft => {
@@ -71,7 +72,7 @@ export function DataSourceEditor({ id }: { id: string }) {
     {datasetQuery.isError && <Panel role="alert" className="text-danger">{t("The datasets could not be loaded.")}</Panel>}
     {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
     {conn && conn.state !== "ready" && <Panel role="status" className="text-xs text-warning">{t("This saved connection is not ready. Check the connection before publishing or running this integration.")}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Endpoint")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Source name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="erpitems" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Source title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -98,13 +99,13 @@ export function DataSourceEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Row id field")}<Input value={draft.key} placeholder="id" onChange={(e) => patch({ key: e.target.value })} /><span className="text-[11px] text-muted">{t("The row field whose value becomes the record id; the same id edits the existing record.")}</span></label>
         <div className="grid gap-2">
           <div className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2 text-[11px] font-medium text-muted"><span>{t("Row field")}</span><span>{t("Object field")}</span><span>{t("Convert")}</span><span /></div>
-          {draft.mapping.map((m, i) => <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2">
-            <Input aria-label={t("Row field")} value={m.from} placeholder="sku" onChange={(e) => setMapping(draft.mapping.map((x, j) => j === i ? { ...x, from: e.target.value } : x))} />
-            <Select aria-label={t("Object field")} value={m.to} onChange={(e) => setMapping(draft.mapping.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}><option value="">{t("Choose a field")}</option>{writable.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select>
-            <Select aria-label={t("Convert")} value={m.convert ?? ""} onChange={(e) => setMapping(draft.mapping.map((x, j) => j === i ? { ...x, convert: e.target.value } : x))}>{conversions.map((c) => <option key={c} value={c}>{c ? t(c) : t("as is")}</option>)}</Select>
-            <Button size="sm" variant="ghost" onClick={() => setMapping(draft.mapping.filter((_, j) => j !== i))}>{t("Remove")}</Button>
+          {(draft.mapping ?? []).map((m, i) => <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2">
+            <Input aria-label={t("Row field")} value={m.from} placeholder="sku" onChange={(e) => setMapping((draft.mapping ?? []).map((x, j) => j === i ? { ...x, from: e.target.value } : x))} />
+            <Select aria-label={t("Object field")} value={m.to} onChange={(e) => setMapping((draft.mapping ?? []).map((x, j) => j === i ? { ...x, to: e.target.value } : x))}><option value="">{t("Choose a field")}</option>{writable.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select>
+            <Select aria-label={t("Convert")} value={m.convert ?? ""} onChange={(e) => setMapping((draft.mapping ?? []).map((x, j) => j === i ? { ...x, convert: e.target.value } : x))}>{conversions.map((c) => <option key={c} value={c}>{c ? t(c) : t("as is")}</option>)}</Select>
+            <Button size="sm" variant="ghost" onClick={() => setMapping((draft.mapping ?? []).filter((_, j) => j !== i))}>{t("Remove")}</Button>
           </div>)}
-          <div><Button size="sm" disabled={!draft.object} onClick={() => setMapping([...draft.mapping, { from: "", to: writable.find((f) => !draft.mapping.some((m) => m.to === f.name))?.name ?? "", convert: "" }])}>{t("Add mapping")}</Button></div>
+          <div><Button size="sm" disabled={!draft.object} onClick={() => setMapping([...(draft.mapping ?? []), { from: "", to: writable.find((f) => !(draft.mapping ?? []).some((m) => m.to === f.name))?.name ?? "", convert: "" }])}>{t("Add mapping")}</Button></div>
         </div></>}
       </Panel>
       {!draft.stream && <Panel title={t("Last pull")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
@@ -115,6 +116,6 @@ export function DataSourceEditor({ id }: { id: string }) {
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}
         </>}
       </Panel>}
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div>;
 }

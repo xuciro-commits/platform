@@ -422,6 +422,7 @@ register("zh-CN", {
   "{accepted} accepted · {refused} refused · {constraints} constraint failures": "{accepted} 次接受 · {refused} 次拒绝 · {constraints} 次约束失败",
   "{tokens} AI tokens · {pending} pending effects · {waiting} waiting workflows": "{tokens} 个 AI token · {pending} 个待处理效果 · {waiting} 个滞留流程",
   "Reported AI cost: ${cost}; {unknown} runs lack complete cost reporting.": "已报告 AI 费用：${cost}；{unknown} 个运行的费用报告不完整。",
+  "The original action is unavailable.": "原操作已不可用。",
   "An earlier runtime decision is unconfirmed. Retry it before changing the operation.": "此前的运行决策尚未确认，请先重试，再更改操作。",
   "The runtime decision is unconfirmed. Retry the original operation.": "运行决策尚未确认，请重试原操作。",
   "A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.": "运行决策尚未确认，请重试原操作；离开不会取消已接收的工作。",

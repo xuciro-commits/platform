@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import {formulaText} from "../editor/rule-text";
 import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
@@ -162,9 +163,9 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    <ContentTabs compact wrap label={t("Object sections")} value={tab} onChange={value => setTab(value as Tab)} items={objectSections.map(section => ({
+    <StructuredEditor {...draft.structured}><ContentTabs compact wrap label={t("Object sections")} value={tab} onChange={value => setTab(value as Tab)} items={objectSections.map(section => ({
       id: section.id, title: t(section.title), content: <fieldset disabled={busy || blocked} className="flex h-full min-h-0 min-w-0 flex-col">{main[section.id]}</fieldset>,
-    }))} />
+    }))} /></StructuredEditor>
   </Workbench>;
 }
 

@@ -18,6 +18,9 @@ import (
 // in a private staged decision that is then discarded (ADR-0047 21d): no
 // journal entry, no record, notice, effect or delivery leaves it.
 type Simulation struct {
+	Issues          []platform.FieldIssue    `json:"issues,omitempty"`
+	RefusalCode     string                   `json:"refusalCode,omitempty"`
+	Unsupported     bool                     `json:"unsupported,omitempty"`
 	TraceTruncated  bool                     `json:"traceTruncated,omitempty"`
 	Input           *SimulationStep          `json:"input,omitempty"`
 	Trace           []platform.DecisionTrace `json:"trace,omitempty"`
@@ -55,24 +58,32 @@ type SimulatedChange struct {
 	Record json.RawMessage `json:"record"`
 }
 
-// Simulate lets a builder try an action as another member would take it,
+// Simulate lets a member try their own action, or a builder try another member's action,
 // against the tenant's current records, without any of it being kept. Only
 // actions that take the accepted-result path can be staged; others are refused
 // rather than run for real.
-func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, now time.Time) (Simulation, *kernel.Error) {
-	if err := t.admits(builder); err != nil {
+func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, now time.Time) (Simulation, *kernel.Error) {
+	if err := t.admits(member); err != nil {
 		return Simulation{}, err
-	}
-	if builder.Roles[build.ID] != build.Builder {
-		return Simulation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	member = t.authorizationMember(member)
+	if !member.Active() {
+		return Simulation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	if s == nil || s.GetSchema() == nil || s.GetTarget() == nil {
+		return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "a submission with a schema and a target is required")
+	}
 	if t.quarantined() {
 		return Simulation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	m := builder
-	if as != "" {
+	m := member
+	if as != "" && as != member.ID {
+		caller := platform.NewCaller(runtime{t}, member, build.ID, false, false)
+		if refusal := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true)); refusal != nil {
+			return Simulation{}, refusal
+		}
 		other, ok := t.member(as)
 		if !ok {
 			return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", as)
@@ -85,6 +96,10 @@ func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, 
 	}
 	s = proto.Clone(s).(*pb.Submission)
 	s.TenantId, s.PrincipalId, s.Authority = t.ID, m.ID, a.Manifest().ID
+	s = t.currentSubmissionSchema(a, s)
+	if err := t.delegatedBound(m, s); err != nil {
+		return Simulation{}, err
+	}
 	if s.GetIdempotencyKey() == "" {
 		s.IdempotencyKey = "simulate"
 	}
@@ -94,11 +109,14 @@ func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, 
 	out := Simulation{Changes: []SimulatedChange{}}
 	if refusal != nil {
 		out.Refusal = explained(refusal, a, s.GetSchema().GetName(), target(s)).Message
+		out.RefusalCode = refusal.Code.String()
+		out.Issues = t.readableFieldIssues(member, draft.inputIssues[refusal], now)
+		out.Unsupported = refusal.Code == pb.ErrorCode_ERROR_CODE_CONFLICT && refusal.Message == "This action uses an effect outside the accepted-result boundary"
 		return out, nil
 	}
 	out.Accepted = true
 	// Use the member-facing read contract on the private records, so scope,
-	// field masks and source-derived restrictions all apply to the builder.
+	// field masks and source-derived restrictions all apply to the requester.
 	// Privacy read auditing is private to this view and is discarded too.
 	view := &Tenant{ID: t.ID, identity: t.identity, apps: t.apps, owner: t.owner, records: draft.records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
@@ -110,7 +128,7 @@ func (t *Tenant) Simulate(builder platform.Member, as string, s *pb.Submission, 
 	}) {
 		typ, id, _ := strings.Cut(ref, "/")
 		domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-		page, err := view.Records(builder, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
+		page, err := view.Records(member, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
 		if err != nil || len(page.Records) == 0 {
 			continue
 		}

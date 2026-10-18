@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:c1285a2df0b35558",
+  "revision": "sha256:ee0342c41078722e",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -851,6 +851,20 @@
           "isSlot": false
         },
         {
+          "name": "onTrial",
+          "type": "(values:Record<string,unknown>)=>Promise<Api.Simulation>",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "context",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
           "name": "issues",
           "type": "Api.FieldIssue[]",
           "optional": true,
@@ -935,7 +949,15 @@
           "isSlot": false
         }
       ],
+      "slots": [
+        {
+          "name": "context",
+          "type": "ReactNode",
+          "optional": true
+        }
+      ],
       "composed": [
+        "app/record-actions",
         "ui/record-form"
       ]
     },
@@ -1257,7 +1279,10 @@
         "PayloadFields",
         "InlineActionForm",
         "DeclaredActionForm",
-        "DeclaredActionDialog"
+        "DeclaredActionDialog",
+        "SourceFieldInput",
+        "sourceFieldInput",
+        "useActionTrial"
       ],
       "example": "ActionsExample",
       "constraints": [
@@ -4833,6 +4858,20 @@
           "isSlot": false
         },
         {
+          "name": "onTrial",
+          "type": "(values: Record<string, unknown>) => Promise<Api.Simulation>",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "context",
+          "type": "React.ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
           "name": "submitLabel",
           "type": "string",
           "optional": true,
@@ -4847,6 +4886,13 @@
           "isSlot": false
         }
       ],
+      "slots": [
+        {
+          "name": "context",
+          "type": "React.ReactNode",
+          "optional": true
+        }
+      ],
       "composed": [
         "ui/input-drafts"
       ],
@@ -4854,7 +4900,7 @@
         {
           "name": "Props",
           "kind": "type",
-          "signature": "type Props<S extends z.ZodType<FieldValues, FieldValues>> = {\n  schema: S;\n  fields: Field<z.infer<S>>[];\n  defaultValues?: DefaultValues<z.infer<S>>;\n  onSubmit: (values: z.infer<S>) => void | boolean | Promise<void | boolean>;\n  onBusy?: (busy: boolean) => void;\n  locked?: boolean;\n  submitLabel?: string;\n  onCancel?: () => void;\n};"
+          "signature": "type Props<S extends z.ZodType<FieldValues, FieldValues>> = {\n  schema: S;\n  fields: Field<z.infer<S>>[];\n  defaultValues?: DefaultValues<z.infer<S>>;\n  onSubmit: (values: z.infer<S>) => void | boolean | Promise<void | boolean>;\n  onBusy?: (busy: boolean) => void;\n  locked?: boolean;\n  onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>;\n  context?: React.ReactNode;\n  submitLabel?: string;\n  onCancel?: () => void;\n};"
         },
         {
           "name": "Field",
@@ -8591,8 +8637,36 @@
       ],
       "props": [
         {
+          "name": "fieldInput",
+          "type": "(field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": true
+        },
+        {
           "name": "issues",
           "type": "Api.FieldIssue[]",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onTrial",
+          "type": "(values: Record<string, unknown>) => Promise<Api.Simulation>",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "context",
+          "type": "React.ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "sourceFields",
+          "type": "Api.FieldInfo[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -8666,6 +8740,18 @@
           "optional": true,
           "isCallback": true,
           "isSlot": false
+        }
+      ],
+      "slots": [
+        {
+          "name": "fieldInput",
+          "type": "(field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode",
+          "optional": true
+        },
+        {
+          "name": "context",
+          "type": "React.ReactNode",
+          "optional": true
         }
       ],
       "composed": [
@@ -9798,7 +9884,8 @@
         "ui/content-tabs",
         "ui/data-table",
         "ui/entity-card",
-        "ui/status"
+        "ui/status",
+        "ui/structured-editor"
       ],
       "relatedTypes": [
         {
@@ -11180,6 +11267,146 @@
       ]
     },
     {
+      "id": "ui/structured-editor",
+      "owner": "@platform/ui",
+      "name": "Visual and source editor",
+      "summary": "Edit one declaration through its original visual editor or JSON/YAML, with field guidance and explicit draft application.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/StructuredEditor.tsx",
+      "exports": [
+        "StructuredEditor",
+        "structuredIssues",
+        "parseStructuredSource",
+        "formatStructuredSource"
+      ],
+      "example": "StructuredEditorExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "forms",
+        "json",
+        "yaml",
+        "source",
+        "validation"
+      ],
+      "constraints": [
+        "Examples do not initialize business data. Reference selection, permission checks, trials and submission remain with the original application owner."
+      ],
+      "props": [
+        {
+          "name": "value",
+          "type": "StructuredValue",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onChange",
+          "type": "(value: StructuredValue) => void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "scope",
+          "type": "string",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "fields",
+          "type": "Api.FieldInfo[]",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "fieldInput",
+          "type": "(field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>ReactNode",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": true
+        },
+        {
+          "name": "validate",
+          "type": "(value: StructuredValue) => Api.FieldIssue[]",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "onTrial",
+          "type": "(value: StructuredValue) => Promise<Api.Simulation>",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "readOnly",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "context",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "expectedRevision",
+          "type": "number",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        }
+      ],
+      "slots": [
+        {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
+          "name": "fieldInput",
+          "type": "(field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>ReactNode",
+          "optional": true
+        },
+        {
+          "name": "context",
+          "type": "ReactNode",
+          "optional": true
+        }
+      ],
+      "composed": [
+        "ui/button",
+        "ui/input"
+      ]
+    },
+    {
       "id": "ui/summary-statistics",
       "owner": "@platform/ui",
       "name": "Authorized summary statistics",
@@ -12014,6 +12241,7 @@
       "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.": "编辑调用方拥有的时刻文本，不应用浏览器时区转换或精度截断。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
+      "Edit one declaration through its original visual editor or JSON/YAML, with field guidance and explicit draft application.": "通过原可视化编辑器或 JSON/YAML 编辑同一份声明，提供字段指南并明确应用到草稿。",
       "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",
       "Edit the original page draft with layout gestures, scoped commands, inspectors and undo history.": "通过布局手势、作用域命令、检查器和撤销历史编辑原页面草稿。",
       "Edit two original text drafts on an exact decimal tick grid and clear them atomically.": "在精确十进制刻度上编辑两个原文本草稿并原子清空。",
@@ -12025,6 +12253,7 @@
       "Error": "错误",
       "Exact decimal progress": "精确十进制进度",
       "Exact decimal range input": "精确十进制范围输入",
+      "Examples do not initialize business data. Reference selection, permission checks, trials and submission remain with the original application owner.": "示例不初始化业务数据。引用选择、权限检查、试运行和提交仍由原应用负责。",
       "Expanded": "展开",
       "Explore and arrange things and what holds them together, with zoom, pan, layouts, linking and caller-owned operations.": "通过缩放、平移、排布、连线与调用方管理的操作，探索并安排事物及其关联。",
       "Explore original record coordinates with a bundled world background and stable record selection.": "通过本地世界底图与稳定记录选择探索原记录坐标。",
@@ -12342,6 +12571,7 @@
       "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.": "右键菜单、键盘与触控入口使用同一组命令。",
       "Virtual item list": "虚拟条目列表",
       "Visibility and allowed actions come from the scoped source and caller.": "可见范围与允许的动作来自限定范围的数据源和调用方。",
+      "Visual and source editor": "可视化与源码编辑器",
       "WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used.": "需要WebGL2。调用方提供确认资产和附件；样本映射需要实际资产引用。不使用模拟数据、默认资产或外部模型资源。",
       "Workbench": "工作台",
       "Workshop module migration": "Workshop 模块迁移",
@@ -12518,6 +12748,7 @@
       "web/packages/ui/src/components/NotificationList.tsx",
       "web/packages/ui/src/components/RangeInput.tsx",
       "web/packages/ui/src/components/SegmentedChoice.tsx",
+      "web/packages/ui/src/components/StructuredEditor.tsx",
       "web/packages/ui/src/components/TagCounts.tsx",
       "web/packages/ui/src/fields/entity.tsx",
       "web/packages/ui/src/layout/ApplicationHeader.tsx",
@@ -12781,6 +13012,37 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "ui/structured-editor": [
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/build/src/automate/automation.tsx",
+      "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
+      "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/functions/decision-table.tsx",
+      "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/ontology/action-type.tsx",
+      "web/packages/build/src/ontology/connection.tsx",
+      "web/packages/build/src/ontology/data-source.tsx",
+      "web/packages/build/src/ontology/dataset.tsx",
+      "web/packages/build/src/ontology/link-type.tsx",
+      "web/packages/build/src/ontology/match.tsx",
+      "web/packages/build/src/ontology/observation.tsx",
+      "web/packages/build/src/ontology/pipeline.tsx",
+      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/ontology/property-type.tsx",
+      "web/packages/build/src/ontology/query.tsx",
+      "web/packages/build/src/ontology/writeback.tsx",
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/releases/migration.tsx",
+      "web/packages/build/src/releases/samples.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/build/src/workshop/editor.tsx",
+      "web/packages/ui/src/catalog.examples.tsx",
+      "web/packages/ui/src/components/EntityForm.tsx",
+      "web/packages/ui/src/records/Records.tsx"
+    ],
     "ui/datetime-input": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/exploration/observation-reader.ts",
@@ -12965,6 +13227,7 @@
       "web/packages/ui/src/components/GroupedList.tsx",
       "web/packages/ui/src/components/InspectorControls.tsx",
       "web/packages/ui/src/components/SearchInput.tsx",
+      "web/packages/ui/src/components/StructuredEditor.tsx",
       "web/packages/ui/src/fields/entity.tsx",
       "web/packages/ui/src/fields/types.tsx",
       "web/packages/ui/src/layout/ApplicationHeader.tsx",
@@ -13101,6 +13364,27 @@
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx"
     ],
+    "ui/input-drafts": [
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/automation/capability.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/build/src/automate/workflow-binding.tsx",
+      "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/ontology/TransactionEditor.tsx",
+      "web/packages/build/src/ontology/constraints.tsx",
+      "web/packages/build/src/ontology/object-protocols.tsx",
+      "web/packages/build/src/ontology/record-sets.tsx",
+      "web/packages/build/src/releases/samples.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/build/src/workshop/editor.tsx",
+      "web/packages/ui/src/catalog.examples.tsx",
+      "web/packages/ui/src/components/EntityForm.tsx",
+      "web/packages/ui/src/layout/Workbench.tsx",
+      "web/packages/ui/src/primitives/controls.tsx",
+      "web/packages/ui/src/primitives/dialog.tsx",
+      "web/packages/ui/src/spatial/ImageAnnotation.tsx"
+    ],
     "ui/record-lookup": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/observations/Observations.tsx",
@@ -13206,16 +13490,26 @@
       "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx",
       "web/packages/app/src/widgets/listing-plugins.ts",
+      "web/packages/build/src/automate/automation.tsx",
+      "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/dataset.tsx",
+      "web/packages/build/src/ontology/object-draft.ts",
+      "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/InstalledApplicationHome.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/projects/studio-guide.tsx",
+      "web/packages/build/src/releases/migration.tsx",
+      "web/packages/build/src/releases/samples.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/releases/test-inputs.tsx",
+      "web/packages/build/src/session/definition-draft.ts",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/build/src/workshop/editor.tsx",
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/operations.tsx"
@@ -13255,25 +13549,6 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
-    ],
-    "ui/input-drafts": [
-      "web/packages/app/src/automation/capability.tsx",
-      "web/packages/app/src/index.tsx",
-      "web/packages/build/src/automate/workflow-binding.tsx",
-      "web/packages/build/src/functions/code.tsx",
-      "web/packages/build/src/ontology/TransactionEditor.tsx",
-      "web/packages/build/src/ontology/constraints.tsx",
-      "web/packages/build/src/ontology/object-protocols.tsx",
-      "web/packages/build/src/ontology/record-sets.tsx",
-      "web/packages/build/src/releases/samples.tsx",
-      "web/packages/build/src/releases/simulate.tsx",
-      "web/packages/build/src/workshop/ModuleWorkbench.tsx",
-      "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/ui/src/components/EntityForm.tsx",
-      "web/packages/ui/src/layout/Workbench.tsx",
-      "web/packages/ui/src/primitives/controls.tsx",
-      "web/packages/ui/src/primitives/dialog.tsx",
-      "web/packages/ui/src/spatial/ImageAnnotation.tsx"
     ],
     "ui/flow": [
       "web/packages/app/src/automation/flows.tsx",
@@ -14021,11 +14296,13 @@
         "SearchAroundWindow",
         "Session",
         "ShellCommand",
+        "SourceFormat",
         "State",
         "StaticImageConfig",
         "StaticImageProps",
         "StatisticsValue",
         "StatusRegistry",
+        "StructuredValue",
         "TermCount",
         "TimeUnit",
         "TimelineFields",

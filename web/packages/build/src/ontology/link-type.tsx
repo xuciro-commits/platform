@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -43,7 +44,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  {dirty&&<Panel role="status">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
- <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+ <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
  <Panel title={t("Relationship settings")} className="grid min-w-0 grid-cols-1 content-start gap-3">
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship name")}<Input disabled={!!draft.published} value={draft.name} onChange={e=>patch({name:e.target.value})}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship title")}<Input value={draft.title} onChange={e=>patch({title:e.target.value})}/></label>
@@ -64,7 +65,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  {draft.deletePolicy==="restrict-active"&&<p className="text-xs text-muted">{t("Active children prevent parent archiving. Archived children keep their references. New or restored active children need an unarchived parent. Published protection cannot be relaxed.")}</p>}
  {draft.storage!=="edge"&&<p className="text-sm">{t("One child has at most one parent reference. The original field controls required values; the object owner controls archive behavior.")}</p>}
  <p className="text-xs text-muted">{t(draft.storage==="edge"?"Relationship instances commit in the object owner with the records they connect.":"Instances stay in the original reference field. This profile does not enable cascade deletion.")}</p>
- </Panel></fieldset>
+ </Panel></fieldset></StructuredEditor>
  {draft.storage==="edge"&&installed&&<Panel title={t("Historical relationship migration")} className="grid gap-2">
    <p className="text-xs text-muted">{t("Preview historical links, then move them in one accepted decision. Original history remains readable.")}</p>
    <Button disabled={busy||dirty} onClick={()=>void perform(async()=>setMigration(await client.get<Api.RelationMigrationPlan>(`/v1/relation-migrations/preview\n${JSON.stringify({ref:installed.ref,sourceVersion:installed.version})}`,true)))}>{t("Preview relationship migration")}</Button>

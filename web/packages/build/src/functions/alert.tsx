@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 // Alert rules (ADR-0008): when a record of an object comes to match a
 // condition, a role is told - once per record or every time. The operations
 // face's "situation": nobody has to keep a page open to see it.
@@ -27,7 +28,7 @@ export function Alerts() {
 
 export function AlertEditor({ id }: { id: string }) {
   const { role } = useHost(), { open } = useApplicationWorkspace();
-  const { draft, query, dirty, joining, busy, error, inputs, patch: change, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, joining, busy, error, inputs, patch: change, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.alertrule", kind: "alert", view: "alert", empty,
     failure: t("The alert rule could not be saved. Your draft is still here."),
     payload: ({ name, title, object, field, operator, value, message, role, every, active }) => ({
@@ -52,7 +53,7 @@ export function AlertEditor({ id }: { id: string }) {
       </div>} />
     <p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    <fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Rule")} className="grid content-start gap-3">
         <label className={fieldClass}>{t("Rule name")}<Input disabled={!!draft.version} value={draft.name} placeholder="lateorder" onChange={(e) => change({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Rule title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
@@ -72,6 +73,6 @@ export function AlertEditor({ id }: { id: string }) {
         <Checkbox checked={!!draft.every} onChange={(every) => change({ every })}>{t("Every time it matches, not once per record")}</Checkbox>
         <Checkbox checked={draft.active} onChange={(active) => change({ active })}>{t("Active")}</Checkbox>
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div>;
 }

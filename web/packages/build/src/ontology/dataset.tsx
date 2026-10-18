@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
@@ -32,7 +33,7 @@ export function Datasets() {
 export function DatasetEditor({ id }: { id: string }) {
   const host = useHost(), { decide, role } = host, { open } = useApplicationWorkspace();
   const application = useApplicationScope();
-  const { draft, query, dirty, busy, error, setError, inputs, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, busy, error, setError, inputs, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.dataset", kind: "dataset", view: "dataset", empty,
     failure: t("The dataset could not be saved or loaded. Your draft is still here."),
     payload: draft => {
@@ -84,7 +85,7 @@ export function DatasetEditor({ id }: { id: string }) {
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Dataset")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Dataset name")}<Input disabled={!!draft.producer} value={draft.name} placeholder="sapmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Dataset title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -109,7 +110,7 @@ export function DatasetEditor({ id }: { id: string }) {
             {rows.length > PREVIEW && <p className="px-2 py-1 text-[11px] text-muted">{t("First {n} of {rows} rows", { n: PREVIEW, rows: rows.length })}</p>}
           </div>}
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div>;
 }
 

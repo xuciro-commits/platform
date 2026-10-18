@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, replaceDeclaration } from "../editor/declaration";
 // Automations (ADR-0047): a rule reads as one sentence - when a record of
 // an object type reaches a state, [if a condition holds,] run these effects.
 // An automation is a build.process authored as `kind: "automation"`: the host
@@ -86,6 +90,9 @@ export function AutomationEditor({ id }: { id: string }) {
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`, undefined, id !== "new");
   const catalogQuery = useAuthoringCapabilities<Capability>();
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
+  const authoringHost = useHost(), trial = useActionTrial();
+  const declarationFields = authoringHost.source.entity("build.process")?.fields ?? [];
+  const [sourceApplied, setSourceApplied] = useState(false);
   const session = useDraftSession<WorkflowDraft>(empty());
   const [createID]=useState(()=>crypto.randomUUID());
   const { draft, dirty } = session;
@@ -104,7 +111,7 @@ export function AutomationEditor({ id }: { id: string }) {
   const capabilities = catalogQuery.data;
   const offered = capabilities.filter((capability) => (capability.kind === "action" || capability.kind === "ai") && (!draft.object || capability.ref.name.startsWith(draft.object + ".") || capability.kind === "ai"));
   const { condition, effects } = parts(draft.steps);
-  const change = (patch: Partial<WorkflowDraft>) => { if (!lock.current) { session.edit(patch); setError(""); } };
+  const change = (patch: Partial<WorkflowDraft>) => { if (!lock.current) { setSourceApplied(false); session.edit(patch); setError(""); } };
   const setSteps = (nextCondition: WorkflowStep | undefined, nextEffects: WorkflowStep[]) => change({ steps: relink(nextCondition, nextEffects) });
   const addEffect = (capability: Capability) => {
     const step = { ...initialStep(capability, draft.steps), name: nextStepName(draft.steps, capability.ref.name.split(".").at(-1) ?? capability.kind), target: { source: "subject" as const } };
@@ -135,7 +142,7 @@ export function AutomationEditor({ id }: { id: string }) {
     open({ view: "release-review", params: { kind: "flow", id: target } });
   };
   const saveRef = useRef<() => Promise<unknown>>(async () => false); saveRef.current = () => perform(save);
-  useAutoSave({ generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
+  useAutoSave({enabled: !sourceApplied, generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (role("build") !== "builder") return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{query.isError ? t("The automation could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const chosenStep = effects.find((step) => step.name === chosen);
@@ -177,6 +184,7 @@ export function AutomationEditor({ id }: { id: string }) {
       { id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} empty={t("No problems. The automation can be published.")} /> },
       { id: "runs", title: t("Runs"), content: <div className="p-3">{draft.id ? <WorkflowRuns name={draft.name} versions={draft.versions} onStepSelect={(name) => setChosen(name)} /> : <p className="text-xs text-muted">{t("Runs appear once the automation is saved and published.")}</p>}</div> },
     ] }}>
+    <StructuredEditor expectedRevision={draft.id ? baseRevision.current : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.process:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...empty(), ...replaceDeclaration(draft, next, declarationFields) })); setChosen("trigger"); }} onTrial={next => trial(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: draft.id || createID }, next, draft.id ? baseRevision.current : 0)}>
     <div className="mx-auto grid w-full max-w-2xl content-start gap-2 p-4">
       {card("trigger", t("When"), <p className="text-sm">{draft.object && draft.when ? sentence((type) => objects.find((item) => item.type === type)?.title ?? type, (type, name) => objects.find((item) => item.type === type)?.states.find((state) => state.name === name)?.title ?? name, draft) : <span className="text-muted">{t("Choose the object type and the state that start it.")}</span>}</p>)}
       {condition ? card("condition", t("If"), <p className="text-sm">{conditionText || <span className="text-muted">{t("Choose a field to compare.")}</span>}</p>)
@@ -190,5 +198,6 @@ export function AutomationEditor({ id }: { id: string }) {
       {draft.object && offered.length > 0 && <div className="w-fit"><ActionMenu label={t("Add an effect")} icon={<Plus />} commands={offered.map((capability) => ({ id: capabilityKey(capability), label: `${t(capability.title)} · ${capability.ref.app}`, icon: capability.kind === "ai" ? <Brain /> : <Zap />, run: () => addEffect(capability) }))}>{t("Add an effect")}</ActionMenu></div>}
       {draft.object && !offered.length && !catalogQuery.isLoading && !catalogQuery.isError && <p className="text-xs text-muted">{t("No actions yet.")}</p>}
     </div>
+    </StructuredEditor>
   </Workbench>;
 }

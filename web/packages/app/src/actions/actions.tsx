@@ -1,3 +1,4 @@
+import {useActionTrial} from "./trial";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
 import {type Api} from "@platform/kernel";
 // Every declared action has an entry in the generated views (F-33): an action
@@ -6,7 +7,7 @@ import {type Api} from "@platform/kernel";
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Checkbox, DateRangeInput, DateTimeInput, Dialog, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
+import { Button, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, Dialog, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
@@ -104,12 +105,31 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
   return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} />;
 }
 
+/** Source mode inserts the same authorized values as the visual form, never sample record IDs. */
+export function SourceFieldInput({field,value,onChange,app,input,preview=false}:{field:Api.FieldInfo;value:unknown;onChange:(value:unknown)=>void;app?:string;input?:Field;preview?:boolean}) {
+ const {source}=useHost(),id=useId();
+ if(preview||field.readOnly)return null;
+ if(field.choices?.length)return <Select id={id} aria-label={field.title||field.name} value={typeof value==="string"?value:""} onChange={event=>onChange(event.target.value||undefined)}><option value="">—</option>{field.choices.map((choice,index)=><option key={choice} value={choice}>{t(field.choiceTitles?.[index]||choice)} · {choice}</option>)}</Select>;
+ if(input?.from)return <ReadPicker id={id} field={input} app={app} value={typeof value==="string"?value:""} onChange={next=>onChange(next||undefined)}/>;
+ if(!field.ref)return null;
+ const stereotypes=[...(field.stereotype?[field.stereotype]:[]),...(field.stereotypes??[])];
+ if(field.type==="references"){
+  const selected=Array.isArray(value)?value.filter((item):item is string=>typeof item==="string"):[];
+  return <div className="grid gap-2">{selected.map((item,index)=><div key={index} className="flex items-center gap-2"><span className="min-w-0 flex-1"><RecordLookup source={source} type={field.ref!} stereotypes={stereotypes} ariaLabel={field.title||field.name} value={item} onChange={next=>onChange(next?selected.map((old,at)=>at===index?next:old):selected.filter((_,at)=>at!==index))}/></span><Button size="sm" onClick={()=>onChange(selected.filter((_,at)=>at!==index))}>{t("Remove")}</Button></div>)}<RecordLookup source={source} type={field.ref} stereotypes={stereotypes} ariaLabel={field.title||field.name} onChange={next=>{if(next&&!selected.includes(next))onChange([...selected,next]);}}/></div>;
+ }
+ return <RecordLookup id={id} source={source} type={field.ref} stereotypes={stereotypes} ariaLabel={field.title||field.name} value={typeof value==="string"?value:undefined} onChange={onChange}/>;
+}
+export const sourceFieldInput=(field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=><SourceFieldInput field={field} value={value} onChange={onChange}/>;
+
 /** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** One submission state for generated record forms, declared payloads and inline hosts. */
-export function DeclaredActionForm({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
- const {decide,catalog,source}=useHost(),lock=useRef(false);
+export function DeclaredActionForm(props:Parameters<typeof DeclaredActionFormBody>[0]) {
+ return <InputDraftProvider isolated scope={props.declared.schema+":"+props.target.id}><DeclaredActionFormBody {...props}/></InputDraftProvider>;
+}
+function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
+ const {decide,catalog,source}=useHost(),lock=useRef(false),inputsDraft=useInputDrafts(),trial=useActionTrial();
  const [startingValues]=useState<Record<string,unknown>>(()=>({...Object.fromEntries(openedDeclaration.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial,...fixed}));
  const [values,setValues]=useState<Record<string,unknown>>(startingValues),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN"),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>(originalOutcome?.issues??[]);
  const [attempt,setAttempt]=useState<{entry:Entry;values:Record<string,unknown>}|undefined>(()=>originalOutcome?{entry:originalOutcome,values:actionEntryInputs(originalOutcome,startingValues)}:undefined);
@@ -121,14 +141,14 @@ export function DeclaredActionForm({declared:openedDeclaration,target,revision,o
  // Generated actions omit editor-owned fields from their visible payload.
  // Explicit initial model values still belong in the same owner submission.
  const generatedInputs=(next:Record<string,unknown>)=>{
-  const inputs={...startingValues,...next,...fixed},model=source.entity(target.type)?.fields??[];
-  const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&Object.hasOwn(startingValues,field.name)).map(field=>field.name)]);
+  const inputs={...next,...fixed},model=source.entity(target.type)?.fields??[];
+  const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&(field.aside||Object.hasOwn(startingValues,field.name))).map(field=>field.name)]);
   return Object.fromEntries(Object.entries(inputs).filter(([name])=>allowed.has(name)&&!model.some(field=>field.name===name&&field.readOnly)));
  };
  const sameTarget=attempt?.entry.submission.target?.type===target.type&&attempt.entry.submission.target.id===target.id;
  const changed=!!attempt&&(!sameTarget||schemaChanged||actionInputSignature(values)!==actionInputSignature(attempt.values));
  const submit=async(inputs=values,original=false)=>{
-  if(!enabled||preview||lock.current)return false;
+  if(!enabled||preview||lock.current||inputsDraft?.invalid&&!original)return false;
   setSubmitted(true);
   if(!original&&!generated&&!payloadSchema(declared.payload).safeParse(inputs).success)return false;
   const same=!!attempt&&(original||!schemaChanged&&sameTarget&&actionInputSignature(inputs)===actionInputSignature(attempt.values));
@@ -149,14 +169,16 @@ export function DeclaredActionForm({declared:openedDeclaration,target,revision,o
  const refusalView=refusal&&<ActionRefusal entry={attempt?.entry} message={refusal} original={!pending?attempt?.values:undefined}/>;
  const retry=attempt&&!pending&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
  const label=submitting?t("Executing…"):pending?t("Retry confirmation"):schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
- if(generated)return <div className="grid gap-3">{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await submit(generatedInputs(inputs as Record<string,unknown>))||undefined}/>{retry}</div>;
+ if(generated)return <div className="grid gap-3">{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onTrial={preview?undefined:next=>trial(declared.schema,target,generatedInputs(next),revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await submit(generatedInputs(inputs as Record<string,unknown>))||undefined}/>{retry}</div>;
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusalView}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
+ <StructuredEditor scope={declared.schema} value={Object.fromEntries(Object.entries(values).filter(([key])=>!Object.hasOwn(fixed,key)))} disabled={submitting||pending||!enabled} fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name)).map(field=>({name:field.name,title:field.description,type:({string:field.ref?"reference":"text",number:"decimal","string[]":field.ref?"references":"tags"} as Record<string,string>)[field.type]??field.type,required:field.required,choices:field.choices,constraints:field.constraints,ref:field.ref,stereotype:field.stereotype,stereotypes:field.stereotypes} as Api.FieldInfo))} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={declared.payload.find(input=>input.name===field.name)} app={declared.schema.split(".")[0]} preview={preview}/>} onChange={change} onTrial={preview?undefined:next=>trial(declared.schema,target,{...next,...fixed},revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`}>
  <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name))} app={declared.schema.split(".")[0]} values={values} onChange={change} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
- <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button>{retry}<Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting||!!attempt&&!pending&&!changed}>{label}</Button></div>
+ </StructuredEditor>
+ <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{pending?t("Close"):t("Cancel")}</Button>{retry}<Button type="submit" variant="primary" disabled={!enabled||preview||!target.id||submitting||inputsDraft?.invalid||!!attempt&&!pending&&!changed}>{label}</Button></div>
  </Form>;
 }
 

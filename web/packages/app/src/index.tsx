@@ -4,7 +4,7 @@ import {RefusalHistory} from "./actions/RefusalHistory";
 export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
 import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
-export { useTransition } from "./actions/actions";
+export { useTransition, SourceFieldInput, sourceFieldInput } from "./actions/actions";
 export { Observations, ObservationRead, ObservationWindowResult, RecordObservations } from "./observations/Observations";
 import { RecordObservations } from "./observations/Observations";
 export { ApplicationRuns, ApplicationRuntimePanel, OperationRunView } from "./automation/application-runs";
@@ -29,7 +29,7 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 export {boundQueryDefinition} from "./runtime/query-plans";
 export {interfaceQueryForSection} from "./runtime/ontology-interface";
 import { readPlaceholder } from "./runtime/read-placeholder";
-import { DeclaredActionDialog, NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
+import { DeclaredActionDialog, NewActions, RecordActions, SourceFieldInput, useTransition, useRecordArchive } from "./actions/actions";
 import {recordKanbanMoves} from "./actions/record-actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./automation/capability";
@@ -275,8 +275,9 @@ export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(vie
 // Generated pages (ADR-0046), for any app's entity types.
 
 /** A form generated from an entity's declaration; submits only editable fields. */
-export function GeneratedForm({ type, record, initial, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema }: {
+export function GeneratedForm({ type, record, initial, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema, onTrial, context }: {
   initial?: Record<string, unknown>;
+  onTrial?: (values:Record<string,unknown>)=>Promise<Api.Simulation>; context?:ReactNode;
   issues?:Api.FieldIssue[]; type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void; locked?: boolean;
   onValuesChange?: (values: Record<string, unknown>) => void;
   submitDisabled?: boolean;
@@ -291,9 +292,10 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0048).
   const inputs = new Set(action.payload.map((field) => field.name));
   const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
-  return <RecordForm entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record ?? initial} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
-    onValuesChange={onValuesChange ? v => onValuesChange(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k)))) : undefined}
-    onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
+  const defaults=record??{...Object.fromEntries(action.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial};
+  return <RecordForm sourceFields={info.fields.filter(f=>!f.readOnly&&(inputs.has(f.name)||f.aside)&&(!fields||fields.includes(f.name))).map(f=>{const input=action.payload.find(i=>i.name===f.name);return {...f,required:input?.required??false,constraints:input?.constraints??f.constraints,choices:input?.choices??f.choices,ref:input?.ref??f.ref,stereotype:input?.stereotype??f.stereotype,stereotypes:input?.stereotypes??f.stereotypes};})} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={action.payload.find(input=>input.name===field.name)} app={action.schema.split(".")[0]}/>} onTrial={onTrial} context={context} entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={defaults} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
+    onValuesChange={onValuesChange ? v => onValuesChange(Object.fromEntries(Object.entries(v).filter(([k]) => info.fields.some(f=>f.name===k&&!f.readOnly&&(inputs.has(k)||f.aside)&&(!fields||fields.includes(k)))))) : undefined}
+    onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => info.fields.some(f=>f.name===k&&!f.readOnly&&(inputs.has(k)||f.aside)&&(!fields||fields.includes(k))))))} />;
 }
 
 /** A member's saved view of a list (the work app's `views` read). */
@@ -521,5 +523,6 @@ export {pageLayoutDiagnostics} from "./pages/layout";
 export {tableEditableFields} from "./widgets/table-edit";
 
 export {createRecordActionSubmitter} from "./actions/record-actions";
+export {useActionTrial} from './actions/trial';
 export {createObservationStatisticsReader} from "./exploration/observation-reader";
 export type {ObservationStatisticsRequest,ObservationStatisticsRead} from "./exploration/observation-reader";

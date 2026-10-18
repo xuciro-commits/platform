@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, declarationChanges } from "../editor/declaration";
 // The Workshop module (ADR-0047, D1): a project's pages, navigation,
 // header and module-level variables, edited in one Workbench. With a page in
 // hand the main view is that page's canvas (PageEditor); without one it is the
@@ -18,7 +22,7 @@ import { StudioTemplates } from "./template-ui";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 
 type PageRecord = { id: string; name: string; title: string; state: string; object: string; archived?: boolean };
-type ModuleDraft = Pick<Api.Application, "header" | "uiProfile" | "variables" | "queries" | "pages" | "groups" | "title" | "description" | "icon" | "replacements">;
+type ModuleDraft = Partial<Api.Application> & Pick<Api.Application, "title">;
 
 /** What a page editor needs to know about the module it belongs to. */
 export type ModuleContext = {
@@ -27,7 +31,7 @@ export type ModuleContext = {
 };
 type ModuleFocus = "navigation" | "header" | "variables" | "queries" | "settings";
 
-const hydrate = (project: Project): ModuleDraft => ({ header: project.header, uiProfile: project.uiProfile, variables: project.variables, queries: project.queries, pages: project.pages ?? [], groups: project.groups ?? [], title: project.title, description: project.description, icon: project.icon, replacements: project.replacements });
+const hydrate = (project: Project, fields: Api.FieldInfo[] = []): ModuleDraft => ({ ...declarationValue(project, fields), pages: project.pages ?? [], groups: project.groups ?? [], title: project.title });
 
 // Omitted fields keep their saved value on edit; null explicitly removes the header.
 const moduleChanges = (draft: ModuleDraft) => ({ ...draft, header: draft.header ?? null, variables: draft.variables ?? null, queries: draft.queries ?? null });
@@ -69,7 +73,9 @@ function ModulesList() {
 }
 
 function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?: string; openPage: (id: string) => void; initialFocus?: string }) {
-  const { decide, role, client } = useHost();
+  const { decide, role, client, source } = useHost();
+  const declarationFields = source.entity("build.app")?.fields ?? [], trial = useActionTrial();
+  const [sourceApplied, setSourceApplied] = useState(false);
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
@@ -83,25 +89,25 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const [focus, setFocus] = useState<ModuleFocus>(isModuleFocus(initialFocus) ? initialFocus : "navigation");
   const [templates, setTemplates] = useState(false), [templateBusy, setTemplateBusy] = useState(false);
   const templateClose = useRef<(() => void) | undefined>(undefined);
-  useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project));baseRevision.current=project.revision; loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
+  useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project,declarationFields));baseRevision.current=project.revision; loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
   const canEdit = role("build") === "builder";
   const pages = useMemo(() => (draft.pages ?? []).map((name) => { const record = pageRecords.data?.records.find((item) => item.name === name && !item.archived); return { name, title: record?.title ?? name, id: record?.id, state: record?.state }; }), [draft.pages, pageRecords.data]);
   const invalid = session.inputs.invalid;
   const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!createdPage, () => {
-    if (project) { session.load(hydrate(project)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
+    if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
     setCreatedPage(undefined); setError(undefined);
   }, saving || templateBusy);
   // Only the captured document is acknowledged. A later edit or failed read
   // never replaces it with a different revision or repeats an accepted write.
   const persist = async (submitted: ModuleDraft) => {
     const expected = baseRevision.current;
-    if (!await decide("build.app.edit", { type: "build.app", id }, moduleChanges(submitted), { expectedRevision: expected, quiet: true, onRefused: setError })) return false;
+    if (!await decide("build.app.edit", { type: "build.app", id }, declarationChanges(moduleChanges(submitted), declarationValue(project!, declarationFields)), { expectedRevision: expected, quiet: true, onRefused: setError })) return false;
     baseRevision.current = expected + 1; loaded.current = `${id}:${expected + 1}`;
     session.saved(submitted); markSaved();
     try {
       const refreshed = await query.refetch();
       const next = refreshed.isSuccess && refreshed.data?.record?.revision === expected + 1 ? refreshed.data.record : undefined;
-      if (next) session.saved(submitted, hydrate(next));
+      if (next) session.saved(submitted, hydrate(next,declarationFields));
       else setError(t("The module was saved, but its current record could not be reloaded."));
     } catch { setError(t("The module was saved, but its current record could not be reloaded.")); }
     return true;
@@ -113,8 +119,8 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     catch { setError(t("The module could not be saved.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
-  useAutoSave({ generation: JSON.stringify(draft), invalid, enabled: canEdit && !createdPage && !templates, dirty, busy: saving || templateBusy, save });
-  const edit = (patch: Partial<ModuleDraft>) => { if (canEdit && !lock.current && !createdPage) session.edit(old => ({ ...old, ...patch })); };
+  useAutoSave({ generation: JSON.stringify(draft), invalid, enabled: !sourceApplied && canEdit && !createdPage && !templates, dirty, busy: saving || templateBusy, save });
+  const edit = (patch: Partial<ModuleDraft>) => { if (canEdit && !lock.current && !createdPage) { setSourceApplied(false); session.edit(old => ({ ...old, ...patch })); } };
   const attachCreatedPage = async (target: { type: string; id: string }) => {
     setCreatedPage(target);
     if (!project || !canEdit || lock.current || invalid) return;
@@ -132,7 +138,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const createPage = useNewRecord("build.page", target => { void attachCreatedPage(target); });
   const addPage = () => { if (!lock.current && !createdPage && !invalid) createPage.take(); };
   const reload = () => confirmDiscard(() => {
-    if (project) { session.load(hydrate(project)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
+    if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
     setError(undefined); void query.refetch();
   });
   const pendingPage = createdPage && <div role="alert" className="grid gap-2 border border-warning/30 p-3 text-sm">
@@ -207,6 +213,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
       left={{ label: t("Module structure"), content: <ModuleTree context={context} focus={focus} onFocus={setFocus} /> }}
       right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: <fieldset disabled={!canEdit || saving || !!createdPage} className="contents">{inspector[tab.id]}</fieldset> })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
       dock={{ label: t("Module dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
+      <StructuredEditor expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${source.scope}`} readOnly={!canEdit} disabled={saving || !!createdPage} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...next, title: next.title as string, pages: next.pages as string[] ?? [], groups: next.groups as Api.AppGroup[] ?? [] })); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, declarationValue(project, declarationFields)), baseRevision.current)}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-canvas p-4">
         <div className="mx-auto w-full max-w-5xl overflow-hidden border border-border bg-surface rounded-md shadow-sm">
           {draft.header ? <ApplicationHeader header={draft.header} pages={pages} currentPage={previewPage} onPage={() => setFocus("navigation")} onTheme={() => {}}>
@@ -218,6 +225,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
         </div>
         {error && <p role="alert" className="mx-auto mt-3 text-xs text-danger">{error}</p>}
       </div>
+      </StructuredEditor>
     </Workbench>
     {pendingPage}
     {createPage.dialog}

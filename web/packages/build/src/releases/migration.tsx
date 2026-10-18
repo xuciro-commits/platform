@@ -1,6 +1,9 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
 import { createRecordActionSubmitter, newId, useHost, useRecordInventory } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, Select, Textarea, Toggles, t, useInputDrafts, useUnsavedChanges, type EntityInfo } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, Select, Toggles, t, useInputDrafts, useUnsavedChanges, type EntityInfo } from "@platform/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 
@@ -27,6 +30,9 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
   onChanged: () => Promise<void>; onLock: (locked: boolean) => void;
 }) {
   const host = useHost(), inputs = useInputDrafts();
+  const trial = useActionTrial(), declarationFields = host.source.entity("build.migration-plan")?.fields ?? [];
+  const [createID] = useState(() => newId("MPLAN"));
+  const [planTitle, setPlanTitle] = useState(""), [planName, setPlanName] = useState("");
   const inventory = useRecordInventory<Migration>("build.migration");
   const plans = useRecordInventory<PlanRecord>("build.migration-plan");
   const objects = assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "object");
@@ -49,7 +55,7 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
   const savedPlans = (plans.data?.records ?? []).filter(item => item.plan.from === from && item.plan.to === to);
   const savedPlan = savedPlans.find(item => item.id === planID);
   const pinned: Api.ReleaseAsset | undefined = savedPlan?.published ? JSON.parse(savedPlan.published) : undefined;
-  const saved = signature === savedSignature;
+  const saved = signature === savedSignature && (!planName || planName === savedPlan?.name) && (!planTitle || planTitle === savedPlan?.title);
   const published = pinned && planSignature((pinned.body as { plan: Api.MigrationPlan }).plan) === signature;
   const pending = host.outbox.some(entry => ["build.migration", "build.migration-plan"].includes(entry.submission.target?.type ?? "")
     && ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(entry.state));
@@ -58,7 +64,7 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
   const submit = useMemo(() => createRecordActionSubmitter(host, () => live.current), [host.client]);
   const { markSaved, discardChanges } = useUnsavedChanges(dirty || uncertain, () => {
     setSteps([]); setStepsValid(true); setWhere(undefined); setReview(undefined); setError(""); setUncertain(false);
-    setPlanID(""); setSavedSignature("");
+    setPlanID(""); setSavedSignature(""); setPlanName(""); setPlanTitle("");
   }, busy);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, [host.client]);
   useEffect(() => { onLock(blocked || dirty); return () => onLock(false); }, [blocked, dirty, onLock]);
@@ -94,14 +100,15 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
     return decide("build.migration.start", target, 0, { asset: { ref: pinned.ref, sourceVersion: pinned.sourceVersion }, review: review.id, reviewedAt: review.at });
   };
   const choosePlan = (item?: PlanRecord) => {
+    setPlanTitle(item?.title ?? ""); setPlanName(item?.name ?? "");
     setPlanID(item?.id ?? ""); setReview(undefined); setError("");
     if (!item) { setSavedSignature(""); return; }
     setType(item.plan.scope.type); setSteps(item.plan.steps); setStepsValid(true); setWhere(item.plan.scope.where);
     setSavedSignature(planSignature(item.plan)); markSaved();
   };
   const savePlan = (publish = false) => perform(async () => {
-    const target = planID || newId("MPLAN"); setPlanID(target);
-    const payload = publish ? {} : { plan, ...(savedPlan ? {} : { name: target.toLowerCase().replace(/[^a-z0-9]/g, ""), title: `${t("Migration plan")} · ${type}` }) };
+    const target = planID || createID; setPlanID(target);
+    const payload = publish ? {} : { plan, name: planName || savedPlan?.name || target.toLowerCase().replace(/[^a-z0-9]/g, ""), title: planTitle || savedPlan?.title || `${t("Migration plan")} · ${type}` };
     const schema = `build.migration-plan.${publish ? "publish" : savedPlan ? "edit" : "create"}`;
     const answer = await submit(schema, { type: "build.migration-plan", id: target }, savedPlan?.revision ?? 0, payload);
     if (!live.current) return;
@@ -113,11 +120,6 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
     const refreshed = await plans.refetch();
     choosePlan(refreshed.data?.records.find(item => item.id === target));
   });
-  const editSteps = (value: string) => {
-    const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed)) { setStepsValid(false); setReview(undefined); setError(t("Migration steps must be an array.")); return; }
-    setStepsValid(true); setSteps(parsed as Api.MigrateStep[]); setError("");
-  };
   return <Card className="grid gap-3 p-3" role="region" aria-label={t("Data migration")}>
     <h3 className="text-sm font-semibold">{t("Data migration")}</h3>
     <p className="text-xs text-muted">{t("Declare the changes between these sealed releases. Each accepted batch saves its data and progress; the source remains read only until activation or cancellation.")}</p>
@@ -127,7 +129,7 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
       {!runs.some(item => item.state !== "cancelled") && <option value="">{t("New migration")}</option>}
       {runs.map(item => <option key={item.id} value={item.id}>{item.id} · {t(item.state)}</option>)}
     </Select></label>}
-    {!run && <>
+    {!run && <StructuredEditor expectedRevision={savedPlan?.revision ?? 0} fieldInput={sourceFieldInput} value={{ name: planName || savedPlan?.name || createID.toLowerCase().replace(/[^a-z0-9]/g, ""), title: planTitle || savedPlan?.title || `${t("Migration plan")} · ${type}`, plan }} fields={declarationFields} scope={`build.migration-plan:${planID || createID}:${host.source.scope}`} disabled={blocked} validate={value => { const candidate = value.plan as Api.MigrationPlan; return candidate?.from !== from || candidate?.to !== to ? [{ path: ["plan"], code: "release", message: t("Keep the selected source and target releases.") }] : []; }} onChange={value => { const candidate = value.plan as Api.MigrationPlan; setType(candidate.scope.type); setWhere(candidate.scope.where); setSteps(candidate.steps); setPlanName(value.name as string); setPlanTitle(value.title as string); setStepsValid(true); setError(""); }} onTrial={value => trial(`build.migration-plan.${savedPlan ? "edit" : "create"}`, { type: "build.migration-plan", id: planID || createID }, value, savedPlan?.revision ?? 0)}>
       <label className="grid gap-1 text-xs">{t("Saved migration plan")}<Select aria-label={t("Saved migration plan")} disabled={blocked} value={planID} onChange={event => choosePlan(savedPlans.find(item => item.id === event.target.value))}>
         <option value="">{t("New migration plan")}</option>
         {savedPlans.map(item => <option key={item.id} value={item.id}>{item.title} · {item.definitionVersion ?? 0}</option>)}
@@ -139,9 +141,6 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
       <MigrationStepsEditor value={steps} onChange={value => { setSteps(value); setStepsValid(true); setError(""); }} type={type} entities={host.entities} assets={objects} disabled={blocked} />
       <Checkbox checked={!!where} disabled={blocked} onChange={enabled => setWhere(enabled ? literalExpression("boolean") : undefined)}>{t("Filter migration records")}</Checkbox>
       {where && <fieldset disabled={blocked} className="min-w-0"><legend className="mb-2 text-xs">{t("Record filter expression")}</legend><ExpressionEditor value={where} onChange={setWhere} choices={migrationChoices(host.entities.find(entity => entity.type === type))} /></fieldset>}
-      <Disclosure summary={t("Migration source")}>
-        <label className="grid gap-1 text-xs">{t("Migration steps")}<Textarea aria-label={t("Migration steps")} disabled={blocked} parse="json" rows={12} value={JSON.stringify(steps, null, 2)} onChange={event => editSteps(event.target.value)} /></label>
-      </Disclosure>
       <div className="flex flex-wrap gap-2">
         <Button variant="ghost" disabled={!type || !steps.length || !stepsValid || blocked || plans.isError || plans.isPending} onClick={() => void savePlan()}>{t("Save migration plan")}</Button>
         <Button variant="ghost" disabled={!savedPlan || !saved || blocked} onClick={() => void savePlan(true)}>{t("Publish migration plan")}</Button>
@@ -154,7 +153,7 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
         {review.issues.length > 0 && <ul className="grid gap-1 text-warning" aria-label={t("Migration issues")}>{review.issues.map((issue, index) => <li key={index}>{issue.type}/{issue.record} · {t("Step {number}", { number: issue.step })}: {issue.reason}</li>)}</ul>}
         <Button disabled={!saved || !published || blocked || inventory.isError || inventory.isPending || !!inputs?.invalid} onClick={() => void start()}>{t("Start reviewed migration")}</Button>
       </div>}
-    </>}
+    </StructuredEditor>}
     {run && <div className="grid gap-2" role="region" aria-label={t("Migration progress")}>
       <p className="text-sm" role="status">{t("Migration state")}: {t(run.state)} · {t("Processed")}: {run.processed} · {t("Migrated")}: {run.migrated}</p>
       <p className="break-all text-xs">{t(run.state === "complete" ? "Completed steps" : "Next step")}: {run.state === "complete" ? run.step : Math.min(run.step + 1, run.plan.steps.length)} / {run.plan.steps.length}{run.cursor ? ` · ${run.cursor}` : ""}</p>

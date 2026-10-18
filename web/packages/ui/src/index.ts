@@ -37,6 +37,8 @@ export { Dialog } from "./primitives/dialog";
 export { StatusTag, Tag, defineStatuses, submissionStatuses, type StatusRegistry, type Tone } from "./components/StatusTag";
 export { DataTable, type DataTableProps } from "./components/DataTable";
 export { EntityForm, RecordForm, type Field } from "./components/EntityForm";
+export { StructuredEditor } from './components/StructuredEditor';
+export { structuredIssues, parseStructuredSource, formatStructuredSource, type SourceFormat, type StructuredValue } from './fields/structured-source';
 export { Markdown, MarkdownEditor, parseInline } from "./components/Markdown";
 export * as field from "./fields/types";
 export type { FieldType, EditorProps, Operator, Option, Attachment } from "./fields/types";

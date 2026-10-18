@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 // Agents a builder declares over the ontology (ADR-0008): instructions, the
 // published actions and queries they may use, a budget, checkpoints and the
@@ -47,9 +48,9 @@ export function AgentEditor({ id }: { id: string }) {
   });
   const { draft, query, dirty, busy, error, setError, patch: change, perform, save, discardChanges } = editor;
   const issues: string[] = [];
-  if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !draft.title.trim() || !draft.description.trim()) issues.push(t("Give the agent a lower-case name, a title and a description."));
-  if (!draft.instructions.trim()) issues.push(t("Write its instructions."));
-  if (!draft.tools.length) issues.push(t("Give it at least one action or query."));
+  if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !(draft.title ?? "").trim() || !(draft.description ?? "").trim()) issues.push(t("Give the agent a lower-case name, a title and a description."));
+  if (!(draft.instructions ?? "").trim()) issues.push(t("Write its instructions."));
+  if (!(draft.tools ?? []).length) issues.push(t("Give it at least one action or query."));
   const review = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
     const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
@@ -75,7 +76,7 @@ export function AgentEditor({ id }: { id: string }) {
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {(model.drafts.isError || queries.isError) && <Panel role="alert">{t("The capability library could not be loaded.")}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Agent")} className="grid content-start gap-3">
         <label className={fieldClass}>{t("Agent name")}<Input disabled={!!draft.published} value={draft.name} placeholder="expediter" onChange={(e) => change({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Agent title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
@@ -87,10 +88,10 @@ export function AgentEditor({ id }: { id: string }) {
       </Panel>
       <Panel title={t("Tools and budget")} className="grid content-start gap-3">
         <fieldset className={fieldClass}><legend className="mb-1">{t("Actions and queries it may use")}</legend>
-          {tools.length ? <Toggles options={tools} value={draft.tools} onChange={(next) => change({ tools: next, checkpoints: (draft.checkpoints ?? []).filter((c) => next.includes(c)) })} /> : <p className="text-muted">{t("No actions or queries yet.")}</p>}
+          {tools.length ? <Toggles options={tools} value={(draft.tools ?? [])} onChange={(next) => change({ tools: next, checkpoints: (draft.checkpoints ?? []).filter((c) => next.includes(c)) })} /> : <p className="text-muted">{t("No actions or queries yet.")}</p>}
           <span className="text-[11px] text-muted">{t("It also always has: context, search, knowledge, remember, ask and finish.")}</span></fieldset>
-        {draft.tools.length > 0 && <fieldset className={fieldClass}><legend className="mb-1">{t("Checkpoints")}</legend>
-          <Toggles options={tools.filter((x) => draft.tools.includes(x.value))} value={draft.checkpoints ?? []} onChange={(checkpoints) => change({ checkpoints })} />
+        {(draft.tools ?? []).length > 0 && <fieldset className={fieldClass}><legend className="mb-1">{t("Checkpoints")}</legend>
+          <Toggles options={tools.filter((x) => (draft.tools ?? []).includes(x.value))} value={draft.checkpoints ?? []} onChange={(checkpoints) => change({ checkpoints })} />
           <span className="text-[11px] text-muted">{t("Tools that always wait for a person to confirm, even when the agent runs on its own: the irreversible ones.")}</span></fieldset>}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <label className={fieldClass}>{t("Model turns")}<Input draftKey="model-turns" type="number" min={1} value={draft.steps ?? ""} placeholder="10" onChange={(e) => change({ steps: Number(e.target.value) || undefined })} /></label>
@@ -115,12 +116,12 @@ export function AgentEditor({ id }: { id: string }) {
           <label className={fieldClass}>{t("Result must say")}<Input value={c.expect ?? ""} onChange={(e) => setCase(i, { expect: e.target.value || undefined })} /></label>
           <Button size="sm" variant="ghost" className="self-end" onClick={() => change({ cases: cases.filter((_, at) => at !== i) })}><Trash2 className="size-3" />{t("Remove")}</Button>
           <Checkbox checked={!!c.asks} onChange={(asks) => setCase(i, { asks: asks || undefined })}>{t("Must ask a person")}</Checkbox>
-          <label className={`${fieldClass} sm:col-span-2`}>{t("Must take")}<Toggles options={tools.filter((x) => draft.tools.includes(x.value))} value={c.takes ?? []} onChange={(takes) => setCase(i, { takes })} /></label>
-          <label className={`${fieldClass} sm:col-span-2`}>{t("Must not take")}<Toggles options={tools.filter((x) => draft.tools.includes(x.value))} value={c.avoids ?? []} onChange={(avoids) => setCase(i, { avoids })} /></label>
+          <label className={`${fieldClass} sm:col-span-2`}>{t("Must take")}<Toggles options={tools.filter((x) => (draft.tools ?? []).includes(x.value))} value={c.takes ?? []} onChange={(takes) => setCase(i, { takes })} /></label>
+          <label className={`${fieldClass} sm:col-span-2`}>{t("Must not take")}<Toggles options={tools.filter((x) => (draft.tools ?? []).includes(x.value))} value={c.avoids ?? []} onChange={(avoids) => setCase(i, { avoids })} /></label>
         </div>)}
         <Button size="sm" className="justify-self-start" onClick={() => change({ cases: [...cases, { name: t("Case {n}", { n: cases.length + 1 }), goal: "" }] })}><Plus className="size-3" />{t("Add a case")}</Button>
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div></Workbench>;
 }
 

@@ -3,6 +3,7 @@ import {t} from "../i18n";
 
 export type InputDraft = {text: string; source: string; problem: string; reveal?: (path?:string) => void};
 export type InputBuffers = {
+  snapshot: () => Record<string, InputDraft>;
   scope: string; values: Record<string, InputDraft>; set: (key: string, value?: InputDraft) => boolean;
   clear: (prefix?: string) => void; dirty: boolean; invalid: boolean; limit?: string;
   busy: boolean; failure?: string; reject: (message?: string) => void; pending: (change: number) => void;
@@ -29,7 +30,7 @@ export function useInputBuffers(): InputBuffers {
     const next = prefix ? Object.fromEntries(Object.entries(current.current).filter(([key]) => !key.startsWith(prefix))) : {};
     current.current = next; setValues(next); setLimit(undefined); reject(undefined);
   }, []);
-  return {scope: "", values, set, clear, failure, reject, busy: running > 0, pending,
+  return {scope: "", snapshot: () => current.current, values, set, clear, failure, reject, busy: running > 0, pending,
     dirty: Object.keys(values).length > 0 || !!limit, invalid: !!limit || Object.values(values).some(value => !!value.problem), limit};
 }
 export function InputDraftProvider({children, scope = "", isolated = false, reveal}: {children: ReactNode; scope?: string; isolated?: boolean; reveal?: (path?:string) => void}) {
@@ -46,7 +47,7 @@ export function InputProblems() {
     {Object.entries(owner.values).filter(([, value]) => value.problem).map(([key, value]) => <div key={key} className="flex gap-2">
       <button type="button" className="text-left underline" onClick={() => {
         value.reveal?.(key); requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>("[data-draft-key]")].find(node=>node.dataset.draftKey===key)?.focus());
-      }}>{key.split("/").at(-1)}: {value.problem}</button>
+      }}>{key.split("/").at(-1)?.startsWith("source:")?t("Configuration source"):key.split("/").at(-1)}: {value.problem}</button>
       <button type="button" className="ml-auto underline" disabled={owner.busy} onClick={() => owner.set(key)}>{t("Discard")}</button>
     </div>)}
   </div>;

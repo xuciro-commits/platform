@@ -1,3 +1,5 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
 import { TransactionEditor } from "./TransactionEditor";
 import {ConfirmationEditor} from "./ConfirmationEditor";
 import { DispatchEditor } from "./DispatchEditor";
@@ -159,7 +161,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
     right={{ label: t("Action inspector"), scope: JSON.stringify([at, pick]), locate: path => { const scope = path?.split("/").find(part => part.startsWith("[")); setPick(scope ? (JSON.parse(scope) as [number, Pick])[1] : pick); }, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Action dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The action can be published with its object type.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    {action ? <fieldset disabled={busy || blocked} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[section]}</fieldset> : <WorkbenchMessage>{process.actions.length ? t("Choose an action on the left.") : t("This object type has no actions yet.")}</WorkbenchMessage>}
+    {action ? <StructuredEditor expectedRevision={draft.structured.expectedRevision} fieldInput={sourceFieldInput} value={{ ...action }} fields={draft.structured.fields.find(field => field.name === "actions")?.fields} scope={`build.object:${id}:action:${name}`} disabled={busy || blocked} onTrial={next => draft.structured.onTrial({ ...process, actions: process.actions.map((item, index) => index === at ? next as Action : item) })} onChange={next => { change({ ...process, actions: process.actions.map((item, index) => index === at ? next as Action : item) }); if (typeof next.name === "string") setName(next.name); }}><fieldset disabled={busy || blocked} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{main[section]}</fieldset></StructuredEditor> : <WorkbenchMessage>{process.actions.length ? t("Choose an action on the left.") : t("This object type has no actions yet.")}</WorkbenchMessage>}
   </Workbench>;
 }
 

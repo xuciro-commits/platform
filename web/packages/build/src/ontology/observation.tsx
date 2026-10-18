@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { ObservationRead, SemanticObjectSelect, SemanticPropertySelect, useHost, useProvidedCapabilities, useReadQuery, useRecordInventory, useTransition } from "@platform/app";
@@ -27,6 +31,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   const ownerApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   const published = useReadQuery<Api.ObservationInfo[]>("/v1/observations");
   const transitions = useTransition("build.observation");
+  const authoringHost = useHost(), trial = useActionTrial(), declarationFields = authoringHost.source.entity("build.observation")?.fields ?? [];
   const [draft, setDraft] = useState<ObservationDraft>(empty), [edited, setEdited] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [createID] = useState(() => crypto.randomUUID());
   const inputDrafts = useInputDrafts(), dirty = edited || !!inputDrafts?.dirty;
@@ -40,7 +45,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
     if (inputDrafts?.invalid) return;
     const snapshot = structuredClone(draft), target = snapshot.id || createID;
     const { name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, decision, scheduled, requireComplete } = snapshot;
-    const payload = { name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, scheduled: !!decision && !!scheduled, decision: decision ?? null, requireComplete: !!requireComplete };
+    const payload = { ...declarationValue(snapshot, declarationFields), name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, scheduled: !!decision && !!scheduled, decision: decision ?? null, requireComplete: !!requireComplete };
     if (!await decide(`build.observation.${snapshot.id ? "edit" : "create"}`, { type: "build.observation", id: target }, payload, { expectedRevision: snapshot.id ? snapshot.revision : 0, quiet: true, onRefused: setError })) return;
     load({ ...snapshot, id: target, revision: (snapshot.id ? snapshot.revision : 0) + 1 }); markSaved(); setEdited(false);
     if (!snapshot.id) { open({ view: "observation-source", params: { id: target } }); close({ view: "observation-source", params: { id } }); }
@@ -69,7 +74,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
       {draft.state === "published" && can("build.observation.retire") && <Button disabled={busy || dirty} onClick={() => transitions.take("build.observation.retire", { ...draft, created: draft.created ?? {}, changed: draft.changed ?? {} })}>{t("Retire source")}</Button>}
     </>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    <fieldset disabled={busy || !editable} className="grid min-w-0 gap-3 lg:grid-cols-2">
+    <StructuredEditor expectedRevision={draft.id ? draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.observation:${id}:${authoringHost.source.scope}`} readOnly={!editable} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setEdited(true); setError(""); }} onTrial={next => trial(`build.observation.${draft.id ? "edit" : "create"}`, { type: "build.observation", id: draft.id || createID }, next, draft.id ? draft.revision : 0)}><fieldset disabled={busy || !editable} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Observation source")} className="grid content-start gap-3">
         <label className="grid gap-1 text-xs">{t("Observation name")}<Input value={draft.name} disabled={!!draft.published} onChange={event => patch({ name: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Observation title")}<Input value={draft.title} onChange={event => patch({ title: event.target.value })} /></label>
@@ -113,7 +118,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
           <p className="text-xs text-muted">{t("Rules see the external summary and original record fields. Only compact scalar inputs reach the original action; record state and permissions still decide the result.")}</p>
         </>}
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
     {installed && <ObservationRead info={installed} />}
     {transitions.dialog}
   </div>;

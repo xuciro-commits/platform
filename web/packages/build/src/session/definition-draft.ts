@@ -1,10 +1,12 @@
+import { sourceFieldInput } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { useHost, useReadQuery } from "@platform/app";
+import { useActionTrial, useHost, useReadQuery } from "@platform/app";
 import { t, useInputDrafts, useUnsavedChanges, type EntityRecord } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
 import { kindOfType, resourceRef } from "../projects/resources";
+import { declarationValue, replaceDeclaration } from "../editor/declaration";
 
 type DefinitionDraft = { id: string; revision: number; name: string };
 type Saved = { id: string; revision: number; reloaded?: boolean };
@@ -22,6 +24,25 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [joining, setJoining] = useState(false);
   const [createID] = useState(() => crypto.randomUUID());
+  const trial = useActionTrial();
+  const fields = host.source.entity(type)?.fields ?? [];
+  const declaration = (value: T) => declarationValue(value, fields);
+  const replace = (value: Record<string, unknown>) => {
+    if (lock.current) return;
+    setDraft(current => replaceDeclaration(current, value, fields));
+    setDirty(true); setError("");
+  };
+  const ownerPayload = (value: T) => {
+    const current = declaration(value), result = { ...current, ...(payload(value) as Record<string, unknown>) };
+    for (const field of fields) if (!field.readOnly) {
+      if (!Object.hasOwn(current, field.name)) delete result[field.name];
+      else if (current[field.name] === null) result[field.name] = null;
+    }
+    for (const key of Object.keys(declaration(confirmed.current))) if (!(key in declaration(value))) result[key] = null;
+    return result;
+  };
+  const structured = { expectedRevision: draft.id ? draft.revision : 0, fieldInput: sourceFieldInput, value: declaration(draft), onChange: replace, fields, scope: `${type}:${id}:${host.source.scope}`, disabled: busy,
+    onTrial: (value: Record<string, unknown>) => trial(type + "." + (draft.id ? "edit" : "create"), { type, id: draft.id || createID }, ownerPayload(replaceDeclaration(draft, value, fields)), draft.id ? draft.revision : 0) };
   const inputs = useInputDrafts(), changed = edited || !!inputs?.dirty, dirty = changed || joining;
   const loaded = useRef(""), confirmed = useRef(draft), lock = useRef(false);
   const load = (record: T) => {
@@ -66,7 +87,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     const submitted = structuredClone(draft), target = submitted.id || createID;
     let revision = confirmed.current.revision;
     if (changed || !submitted.id) {
-      if (!await host.decide(type + "." + (submitted.id ? "edit" : "create"), { type, id: target }, payload(submitted),
+      if (!await host.decide(type + "." + (submitted.id ? "edit" : "create"), { type, id: target }, ownerPayload(submitted),
         { expectedRevision: submitted.id ? revision : 0, quiet: true, onRefused: setError })) return;
       revision += 1; load({ ...submitted, id: target, revision });
       inputs?.clear(); markSaved(); setDirty(false);
@@ -98,5 +119,5 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     const saved = dirty || id === "new" ? await save() : confirmed.current;
     if (saved?.id) open({ view: "release-review", params: { kind, id: saved.id } }, { ifCurrent: { view, params: { id: saved.id } } });
   };
-  return { draft, createID, query, dirty, joining, busy, error, setError, inputs, patch, perform, save, transition, review, reload, discardChanges, confirmDiscard };
+  return { draft, structured, createID, query, dirty, joining, busy, error, setError, inputs, patch, perform, save, transition, review, reload, discardChanges, confirmDiscard };
 }

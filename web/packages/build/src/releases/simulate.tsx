@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue } from "../editor/declaration";
 import type { Project } from "../projects/project";
 import { ApplicationSamples, type SampleSetRecord } from "./samples";
 import { TestPayload } from "./test-inputs";
@@ -28,6 +32,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   applicationId?: string; processId?: string; functionId?: string; objectId?: string; planId?: string; embedded?: boolean; evaluationSet?: boolean; onStepSelect?: (step: string) => void;
 }) {
   const host = useHost(), { client, role, decide, action } = host;
+  const trial = useActionTrial(), declarationFields = host.source.entity("build.testplan")?.fields ?? [];
   const constructionApplication = useApplicationScope();
   const { open } = useApplicationWorkspace();
   const objects = useRecordInventory<ObjectDraft>("build.object");
@@ -41,7 +46,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const [planID, setPlanID] = useState(""),[createID,setCreateID]=useState(()=>crypto.randomUUID());
   const [revision, setRevision] = useState(0);
   const [title, setTitle] = useState("");
-  const [setName,setSetName]=useState("");
+  const [setName,setSetName]=useState(""), [functionVersion,setFunctionVersion]=useState<number>();
   const [edited, setDirty] = useState(false);
  const inputDrafts=useInputDrafts(),dirty=edited||!!inputDrafts?.dirty;
   const [saved, setSaved] = useState(false);
@@ -142,9 +147,9 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     clear();
     setSteps((old) => old.map((step, i) => i === index ? { ...step, ...patch } : step));
   };
-  const load = (plan: TestPlan, initial = false) => {
+  const load = (plan: TestPlan, initial = false, sourceApply = false) => {
     if (lock.current || inputDrafts?.busy || !initial && !matchesAsset(plan)) return;
-    clear(); inputDrafts?.clear(); acceptedPlan.current = plan; setPlanID(plan.id); setRevision(plan.revision);
+    clear(); inputDrafts?.clear(); if (!sourceApply) acceptedPlan.current = plan; setFunctionVersion(plan.functionVersion); setPlanID(plan.id); setRevision(plan.revision);
     setTitle(plan.title);setSetName(plan.name??""); setRoots(plan.roots ?? []); setIncludeInReleases(!!plan.roots?.length); setKind(plan.roots?.length || plan.application ? "app" : plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.application || plan.function || plan.process || plan.object || (plan.roots?.length ? applicationId : "")); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
     setSample(plan.sample??"");setMembers((plan.actors??[]).join(", "));setCandidateID(plan.candidateId??"");
     setSteps(plan.steps); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setSampleOverride(plan.samples !== undefined); setDirty(false);
@@ -194,6 +199,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     })),...(kind==="app"?{actors:members.split(",").map(id=>id.trim()).filter(Boolean),sample:planRoots.length?undefined:sample}:{}),
     ...(planRoots.length || sampleOverride || !sample ? { samples: JSON.parse(samples) as Api.SimulationSample[] } : {}),
   });
+  const definitionValue = () => ({ ...declarationValue(acceptedPlan.current ?? {}, declarationFields), functionVersion, name:setName.trim()||undefined,title, roots:planRoots, application:!planRoots.length&&kind==="app"?id:"",candidateId:!planRoots.length&&kind==="app"?candidateID:"",actors:!planRoots.length&&kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:!planRoots.length&&kind==="app"?sample:"", object: !planRoots.length&&kind === "object" ? id : "", process: !planRoots.length&&kind === "flow" ? id : "", function: !planRoots.length&&kind === "function" ? id : "", model: !planRoots.length&&kind !== "object" ? model : "", as: planRoots.length?"":member, at, steps:planRoots.length?steps.map(step=>({...step,as:undefined})):steps, ...(planRoots.length || sampleOverride || !sample ? { samples: (() => { try { return JSON.parse(samples); } catch { return undefined; } })() } : {}), evaluation: kind === "function" && evaluationEnabled ? [{minQuality,maxCostUsd,maxLatencyMillis,cases:cases.map(item => ({...item,input:(() => {try{return JSON.parse(item.input);}catch{return undefined;}})(),expected:(() => {try{return JSON.parse(item.expected);}catch{return undefined;}})()}))}] : null });
   const save = async () => {
     if (lock.current || blocked || inputDrafts?.invalid || sampleInvalid) return;
     setError(""); setSaved(false);
@@ -214,7 +220,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     lock.current = true; setBusy(true);
     try {
       if (!planID || dirty) {
-        const definition = { name:setName.trim()||undefined,title, roots:planRoots, application:!planRoots.length&&kind==="app"?id:"",candidateId:!planRoots.length&&kind==="app"?candidateID:"",actors:!planRoots.length&&kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:!planRoots.length&&kind==="app"?sample:"", object: !planRoots.length&&kind === "object" ? id : "", process: !planRoots.length&&kind === "flow" ? id : "", function: !planRoots.length&&kind === "function" ? id : "", model: !planRoots.length&&kind !== "object" ? model : "", as: planRoots.length?"":member, at: new Date(at).toISOString(), steps:planRoots.length?steps.map(step=>({...step,as:undefined})):steps,
+        const definition = { ...declarationValue(acceptedPlan.current ?? {}, declarationFields), functionVersion, name:setName.trim()||undefined,title, roots:planRoots, application:!planRoots.length&&kind==="app"?id:"",candidateId:!planRoots.length&&kind==="app"?candidateID:"",actors:!planRoots.length&&kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:!planRoots.length&&kind==="app"?sample:"", object: !planRoots.length&&kind === "object" ? id : "", process: !planRoots.length&&kind === "flow" ? id : "", function: !planRoots.length&&kind === "function" ? id : "", model: !planRoots.length&&kind !== "object" ? model : "", as: planRoots.length?"":member, at: new Date(at).toISOString(), steps:planRoots.length?steps.map(step=>({...step,as:undefined})):steps,
           ...(planRoots.length || sampleOverride || !sample ? { samples: JSON.parse(samples) as Api.SimulationSample[] } : {}), evaluation };
         if (!await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target }, definition,
           { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) return;
@@ -318,7 +324,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     {kind==="app" && <PageHeader title={t("Draft trial")} description={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
     {!!planRoots.length && <p className="text-xs text-muted">{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</p>}
  <Card className="p-3">
-      <fieldset disabled={blocked} className="grid gap-3">
+      <StructuredEditor expectedRevision={planID ? revision : 0} fieldInput={sourceFieldInput} value={definitionValue()} fields={declarationFields} scope={`build.testplan:${planID || createID}:${host.source.scope}`} disabled={blocked} onChange={next => { load({ ...next, id: planID, revision } as TestPlan, true, true); setDirty(true); }} onTrial={next => trial(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: planID || createID }, next, planID ? revision : 0)}>      <fieldset disabled={blocked} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">{t("Saved test plan")}
             <Select value={planID} onChange={(event) => {
@@ -507,7 +513,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           <Button onClick={newPlan}>{t("New test plan")}</Button>
           <Button variant="primary" disabled={sampleInvalid || !!inputDrafts?.invalid || (kind!=="app" && !object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
         </div>
-      </fieldset>
+      </fieldset></StructuredEditor>
     </Card>
     {saved && <p role="status" className="text-sm">{t("Test plan saved. Reload it to repeat these fixed inputs.")}</p>}
     {planID && dirty && <p className="text-sm text-warning">{t("This plan has unsaved changes.")}</p>}

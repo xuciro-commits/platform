@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -50,14 +51,14 @@ export function FunctionEditor({ id }: { id: string }) {
   const source = objects.find((object) => `build.${object.name}` === draft.object);
   const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)&&field.aiInput!==false) ?? [];
   const roles = [...new Set(["builder", ...(source?.access?.length ? source.access.filter((access) => access.read !== "none").map((access) => access.role) : ["user"])])];
-  const updateOutput = (index: number, patch: Partial<Api.Field>) => change({ output: draft.output.map((field, i) => i === index ? { ...field, ...patch } : field) });
+  const updateOutput = (index: number, patch: Partial<Api.Field>) => change({ output: (draft.output ?? []).map((field, i) => i === index ? { ...field, ...patch } : field) });
   // Hints never replace the owner's authoritative publication validation.
   const issues: string[] = [];
-  if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !draft.title.trim() || !draft.description.trim()) issues.push(t("Give the function a lower-case name, title and description."));
-  if (!source || !draft.fields.length || draft.fields.some((name) => !fields.some((field) => field.name === name))) issues.push(t("Choose direct scalar fields from a saved object."));
-  if (!draft.roles.length || draft.roles.some((role) => !roles.includes(role))) issues.push(t("Choose at least one callable role of the source object."));
-  if (!draft.instructions.trim()) issues.push(t("Write instructions for the model stage."));
-  if (!draft.output.length || draft.output.some((field) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.name) || !field.description?.trim()) || new Set(draft.output.map((field) => field.name)).size !== draft.output.length)
+  if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !(draft.title ?? "").trim() || !(draft.description ?? "").trim()) issues.push(t("Give the function a lower-case name, title and description."));
+  if (!source || !(draft.fields ?? []).length || (draft.fields ?? []).some((name) => !fields.some((field) => field.name === name))) issues.push(t("Choose direct scalar fields from a saved object."));
+  if (!(draft.roles ?? []).length || (draft.roles ?? []).some((role) => !roles.includes(role))) issues.push(t("Choose at least one callable role of the source object."));
+  if (!(draft.instructions ?? "").trim()) issues.push(t("Write instructions for the model stage."));
+  if (!(draft.output ?? []).length || (draft.output ?? []).some((field) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.name) || !field.description?.trim()) || new Set((draft.output ?? []).map((field) => field.name)).size !== (draft.output ?? []).length)
     issues.push(t("Give every output a unique field name, scalar type and description."));
   const save = async () => {
     const saved = await editor.save();
@@ -92,7 +93,7 @@ export function FunctionEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {dirty && issues.length > 0 && <Panel aria-live="polite" className="text-xs text-muted">{issues.join(" ")}</Panel>}
     {inventory.isError && <Panel role="alert">{t("The function sources could not be loaded.")}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 gap-3 xl:grid-cols-[12rem_minmax(0,1fr)_22rem]">
+    <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 xl:grid-cols-[12rem_minmax(0,1fr)_22rem]">
       <Panel role="region" aria-label={t("Function stages")} className="grid content-start gap-2 p-3">
         {stages.map((stage) => <Button key={stage.id} aria-pressed={chosen === stage.id} variant={chosen === stage.id ? "primary" : "ghost"} onClick={() => setChosen(stage.id)}>{stage.title}</Button>)}
         <p className="text-xs text-muted">{t("Select a stage or use these buttons to edit its properties. Source permissions are checked on every call.")}</p>
@@ -104,7 +105,7 @@ export function FunctionEditor({ id }: { id: string }) {
  {draft.proposal&&<fieldset className="grid gap-2 rounded border border-border p-2"><legend className="text-xs">{t("Proposal review policy")}</legend>
  <label className="grid gap-1 text-xs">{t("Proposal expiry (seconds)")}<Input type="number" min={1} max={604800} value={draft.proposal.expiresAfterSeconds} onChange={event=>change({proposal:{...draft.proposal!,expiresAfterSeconds:Number(event.target.value)}})}/></label>
  <label className="grid gap-1 text-xs">{t("Handover role")}<Select value={draft.proposal.handoffRole??""} onChange={event=>change({proposal:{...draft.proposal!,handoffRole:event.target.value||undefined,confidenceField:undefined,minimumConfidence:0}})}><option value="">{t("Original adoption action roles")}</option>{roles.map(role=><option key={role} value={role}>{role}</option>)}</Select></label>
- {draft.proposal.handoffRole&&<><label className="grid gap-1 text-xs">{t("Confidence output")}<Select value={draft.proposal.confidenceField??""} onChange={event=>change({proposal:{...draft.proposal!,confidenceField:event.target.value||undefined,minimumConfidence:event.target.value?0.5:0}})}><option value="">{t("Always hand over")}</option>{draft.output.filter(field=>field.required&&["decimal","integer"].includes(field.type)).map(field=><option key={field.name} value={field.name}>{field.name}</option>)}</Select></label>
+ {draft.proposal.handoffRole&&<><label className="grid gap-1 text-xs">{t("Confidence output")}<Select value={draft.proposal.confidenceField??""} onChange={event=>change({proposal:{...draft.proposal!,confidenceField:event.target.value||undefined,minimumConfidence:event.target.value?0.5:0}})}><option value="">{t("Always hand over")}</option>{(draft.output ?? []).filter(field=>field.required&&["decimal","integer"].includes(field.type)).map(field=><option key={field.name} value={field.name}>{field.name}</option>)}</Select></label>
  {!!draft.proposal.confidenceField&&<label className="grid gap-1 text-xs">{t("Minimum confidence")}<Input type="number" min={0} max={1} step={0.05} value={draft.proposal.minimumConfidence??0} onChange={event=>change({proposal:{...draft.proposal!,minimumConfidence:Number(event.target.value)}})}/></label>}</>}
  </fieldset>}
 
@@ -112,7 +113,7 @@ export function FunctionEditor({ id }: { id: string }) {
           <label className="grid gap-1 text-xs">{t("Function title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Function description")}<Textarea rows={3} value={draft.description} onChange={(e) => change({ description: e.target.value })} /></label>
           <fieldset className="grid gap-2"><legend className="mb-2 text-xs">{t("Callable by")}</legend>
-            {[...new Set([...roles, ...draft.roles])].map((role) => <Checkbox key={role} checked={draft.roles.includes(role)} onChange={(enabled) => change({ roles: toggle(draft.roles, role, enabled) })}>{role}</Checkbox>)}
+            {[...new Set([...roles, ...(draft.roles ?? [])])].map((role) => <Checkbox key={role} checked={(draft.roles ?? []).includes(role)} onChange={(enabled) => change({ roles: toggle((draft.roles ?? []), role, enabled) })}>{role}</Checkbox>)}
           </fieldset>
         </>}
         {chosen === "source" && <>
@@ -120,7 +121,7 @@ export function FunctionEditor({ id }: { id: string }) {
             <option value="">{t("Choose an object")}</option>{objects.map((object) => <option key={object.id} value={`build.${object.name}`}>{object.title}</option>)}
           </Select></label>
           <fieldset className="grid gap-2"><legend className="mb-2 text-xs">{t("Input fields")}</legend>
-            {fields.map((field) => <Checkbox key={field.name} checked={draft.fields.includes(field.name)} onChange={(enabled) => change({ fields: toggle(draft.fields, field.name, enabled) })}>{field.title} · {field.type}</Checkbox>)}
+            {fields.map((field) => <Checkbox key={field.name} checked={(draft.fields ?? []).includes(field.name)} onChange={(enabled) => change({ fields: toggle((draft.fields ?? []), field.name, enabled) })}>{field.title} · {field.type}</Checkbox>)}
           </fieldset>
           <label className="grid gap-1 text-xs">{t("Maximum input bytes")}<Input draftKey="maximum-input-bytes" type="number" min={1} max={32768} value={draft.maxInputBytes} onChange={(e) => change({ maxInputBytes: Number(e.target.value) })} /></label>
         </>}
@@ -133,7 +134,7 @@ export function FunctionEditor({ id }: { id: string }) {
         </>}
         {chosen === "output" && <>
           <label className="grid gap-1 text-xs">{t("Maximum output bytes")}<Input draftKey="maximum-output-bytes" type="number" min={1} max={32768} value={draft.maxOutputBytes} onChange={(e) => change({ maxOutputBytes: Number(e.target.value) })} /></label>
-          {draft.output.map((field, index) => <Card key={index} role="group" aria-label={t("Output field {n}", { n: index + 1 })} className="grid gap-2 p-2">
+          {(draft.output ?? []).map((field, index) => <Card key={index} role="group" aria-label={t("Output field {n}", { n: index + 1 })} className="grid gap-2 p-2">
             <label className="grid gap-1 text-xs">{t("Output field name")}<Input value={field.name} onChange={(e) => updateOutput(index, { name: e.target.value })} /></label>
             <label className="grid gap-1 text-xs">{t("Output type")}<Select value={field.type} onChange={(e) => updateOutput(index, { type: e.target.value, choices: undefined })}>
               <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="integer">{t("Integer")}</option><option value="decimal">{t("Decimal")}</option>
@@ -141,12 +142,12 @@ export function FunctionEditor({ id }: { id: string }) {
             <label className="grid gap-1 text-xs">{t("Output description")}<Textarea rows={2} value={field.description ?? ""} onChange={(e) => updateOutput(index, { description: e.target.value })} /></label>
             <Checkbox checked={!!field.required} onChange={(required) => updateOutput(index, { required })}>{t("Required")}</Checkbox>
             {field.type === "string" && <label className="grid gap-1 text-xs">{t("Allowed text values (one per line, optional)")}<Textarea rows={2} value={field.choices?.join("\n") ?? ""} onChange={(e) => updateOutput(index, { choices: e.target.value ? e.target.value.split("\n") : undefined })} /></label>}
-            <Button disabled={draft.output.length === 1} onClick={() => change({ output: draft.output.filter((_, i) => i !== index) })}>{t("Remove output")}</Button>
+            <Button disabled={(draft.output ?? []).length === 1} onClick={() => change({ output: (draft.output ?? []).filter((_, i) => i !== index) })}>{t("Remove output")}</Button>
           </Card>)}
-          <Button disabled={draft.output.length >= 16} onClick={() => change({ output: [...draft.output, { name: "", type: "string", required: true, description: "" }] })}>{t("Add output field")}</Button>
+          <Button disabled={(draft.output ?? []).length >= 16} onClick={() => change({ output: [...(draft.output ?? []), { name: "", type: "string", required: true, description: "" }] })}>{t("Add output field")}</Button>
         </>}
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div></Workbench>;
 }
 
@@ -157,9 +158,9 @@ function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft
     { id: "output", title: t("Strict output"), class: "document", group: t("Function"), inputs: [{ id: "answer", label: t("Typed answer"), type: "answer" }], outputs: [] },
   ];
   const nodes: FlowNode[] = [
-    { id: "source", kind: "source", label: source || t("Choose an object"), detail: draft.fields.join(", ") || t("Choose input fields"), position: { x: 0, y: 0 } },
+    { id: "source", kind: "source", label: source || t("Choose an object"), detail: (draft.fields ?? []).join(", ") || t("Choose input fields"), position: { x: 0, y: 0 } },
     { id: "model", kind: "model", label: draft.model || t("Application default model"), detail: t("Up to {n} output tokens", { n: draft.maxTokens }), position: { x: 0, y: 150 } },
-    { id: "output", kind: "output", label: t("Strict JSON object"), detail: draft.output.map((field) => `${field.name}: ${field.type}`).join(", "), position: { x: 0, y: 300 } },
+    { id: "output", kind: "output", label: t("Strict JSON object"), detail: (draft.output ?? []).map((field) => `${field.name}: ${field.type}`).join(", "), position: { x: 0, y: 300 } },
   ];
   return <Card className="min-w-0 p-3">
     <FlowCanvas label={t("Function map")} catalog={catalog} nodes={nodes} selected={chosen} onSelect={(id) => onChoose(id as Stage)} height={460}

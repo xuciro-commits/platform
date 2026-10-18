@@ -101,6 +101,12 @@ test("MES shop orders move to a published editable page while retaining the orig
   await page.getByRole("button", { name: "Release shop order", exact: true }).click();
   await identity.focus();
   await identity.press("Tab");
+  const visualMode = form.getByRole("button", { name: "Visual", exact: true });
+  const sourceMode = form.getByRole("button", { name: "Source editor", exact: true });
+  await expect(visualMode).toBeFocused();
+  await visualMode.press("Tab");
+  await expect(sourceMode).toBeFocused();
+  await sourceMode.press("Tab");
   await expect(product).toBeFocused();
   await product.press("Tab");
   await expect(quantity).toBeFocused();

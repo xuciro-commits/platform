@@ -1,3 +1,4 @@
+import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
@@ -35,7 +36,7 @@ export function WritebackEditor({ id }: { id: string }) {
   const connectionQuery = useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100");
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired" && c.kind !== "postgres");
   const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 5000).data ?? [];
-  const { draft, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
+  const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.writeback", kind: "writeback", view: "writeback", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [], result: record.result ?? [] }),
     failure: t("The writeback could not be saved or loaded. Your draft is still here."),
     payload: draft => {
@@ -74,7 +75,7 @@ export function WritebackEditor({ id }: { id: string }) {
     {connectionQuery.isError && <Panel role="alert" className="text-danger">{t("The connections could not be loaded.")}</Panel>}
     {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
     {connection && connection.state !== "ready" && <Panel role="status" className="text-xs text-warning">{t("This saved connection is not ready. Check the connection before publishing or running this integration.")}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Trigger")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Writeback name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="grtosap" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Writeback title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -92,11 +93,11 @@ export function WritebackEditor({ id }: { id: string }) {
       </Panel>
       <Panel title={t("Body")} className="grid min-w-0 content-start gap-2">
         <p className="text-[11px] text-muted">{t("Payload field → key in the request body. Empty sends the whole payload with its id.")}</p>
-        {rows("mapping", draft.mapping, ["id", ...fields.map((f) => f.name)], undefined, t("Payload field"), t("Body key"))}
+        {rows("mapping", draft.mapping ?? [], ["id", ...fields.map((f) => f.name)], undefined, t("Payload field"), t("Body key"))}
       </Panel>
       <Panel title={t("Answer")} className="grid min-w-0 content-start gap-2">
         <p className="text-[11px] text-muted">{t("Key in the answer (dotted; OData's d is unwrapped) → field written onto the record once delivered.")}</p>
-        {rows("result", draft.result, undefined, writable.map((f) => f.name), t("Answer key"), t("Record field"))}
+        {rows("result", draft.result ?? [], undefined, writable.map((f) => f.name), t("Answer key"), t("Record field"))}
       </Panel>
       <Panel title={t("Deliveries")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         <p className="flex flex-wrap items-center gap-2 text-xs">
@@ -108,6 +109,6 @@ export function WritebackEditor({ id }: { id: string }) {
           <Tag label={a.result} tone={a.result === "delivered" ? "success" : "danger"} /><span>{new Date(a.at).toLocaleString()}</span><span>{a.target}</span>{a.detail && <span className="text-danger">{a.detail}</span>}{a.answer && <span className="text-muted">{a.answer.slice(0, 160)}</span>}
         </li>)}</ul> : <p className="text-xs text-muted">{t("Nothing sent yet.")}</p>}
       </Panel>
-    </fieldset>
+    </fieldset></StructuredEditor>
   </div>;
 }

@@ -7,9 +7,15 @@ import { Building2, Plus, Users } from "lucide-react";
 import {AlignLeft,AlignCenter,AlignRight} from "lucide-react";
 import {InspectorField,InspectorSection} from "./components/InspectorControls";
 import {SegmentedChoice} from "./components/SegmentedChoice";
+import {StructuredEditor} from "./components/StructuredEditor";
+import {InputDraftProvider} from "./fields/draft";
 import { IconPicker, IconGlyph } from "./components/IconPicker";
 import { GroupedList } from "./components/GroupedList";
 import { z } from "zod";
+export function StructuredEditorExample(){
+ const [value,setValue]=useState<Record<string,unknown>>({name:"example",enabled:false,quantity:0});
+ return <InputDraftProvider scope="catalog-source"><StructuredEditor scope="catalog-source" value={value} onChange={setValue} fields={[{name:"name",title:t("Name"),type:"text",required:true,example:"example"},{name:"enabled",title:t("Enabled"),type:"boolean"},{name:"quantity",title:t("Quantity"),type:"integer",constraints:{min:0}}]}><Input aria-label={t("Name")} value={String(value.name??"")} onChange={event=>setValue({...value,name:event.target.value})}/></StructuredEditor></InputDraftProvider>;
+}
 import {
   AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,

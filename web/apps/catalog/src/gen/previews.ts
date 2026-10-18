@@ -137,6 +137,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/sheet": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Sheets })),
   "ui/static-image": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.StaticImageExample })),
   "ui/status": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Statuses })),
+  "ui/structured-editor": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.StructuredEditorExample })),
   "ui/summary-statistics": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SummaryStatisticsExample })),
   "ui/switch": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SwitchExample })),
   "ui/tag-counts": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.TagCountsExample })),

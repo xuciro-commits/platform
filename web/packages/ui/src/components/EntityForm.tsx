@@ -4,6 +4,8 @@ import type {Api} from "@platform/kernel";
 import type { z } from "zod";
 import { useEffect, useId, useRef, useState } from "react";
 import {InputDraftProvider,useInputDrafts,InputProblems} from "../fields/draft";
+import {StructuredEditor} from "./StructuredEditor";
+import {structuredIssues} from "../fields/structured-source";
 import {DateRangeInput} from "./DateRangeInput";
 import { Button } from "../primitives/button";
 import { activeValues, recordSchema, type Entity } from "../fields/entity";
@@ -45,6 +47,8 @@ type Props<S extends z.ZodType<FieldValues, FieldValues>> = {
   onSubmit: (values: z.infer<S>) => void | boolean | Promise<void | boolean>;
   onBusy?: (busy: boolean) => void;
   locked?: boolean;
+  onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>;
+  context?: React.ReactNode;
   submitLabel?: string;
   onCancel?: () => void;
 };
@@ -55,8 +59,9 @@ export function EntityForm<S extends z.ZodType<FieldValues, FieldValues>>({ sche
 }
 
 /** A form for an entity's editable fields, validated by their field types. */
-export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues, locked, onValuesChange, submitDisabled }: {
-  issues?:Api.FieldIssue[]; entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
+export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, onTrial, context, sourceFields, fieldInput }: {
+  fieldInput?: (field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode;
+  issues?:Api.FieldIssue[]; onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>; context?: React.ReactNode; sourceFields?:Api.FieldInfo[]; entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
   onBusy?: (busy: boolean) => void;
   onValuesChange?: (values: Partial<R>) => void;
   submitDisabled?: boolean;
@@ -66,10 +71,12 @@ export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLab
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
   // A conditional field (#138) that does not apply is kept in the form's state but not sent.
   return <InputDraftProvider isolated scope="record-form"><FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
-    defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} onValuesChange={onValuesChange ? v => onValuesChange(activeValues(entity, v) as Partial<R>) : undefined} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
+    sourceFields={sourceFields} fieldInput={fieldInput} onTrial={onTrial} context={context} defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} onValuesChange={onValuesChange ? v => onValuesChange(activeValues(entity, v) as Partial<R>) : undefined} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
 }
 
-function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked, onValuesChange, submitDisabled }: {
+function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, onTrial, context, sourceFields, fieldInput }: {
+  fieldInput?: (field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode;
+  onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>; context?: React.ReactNode; sourceFields?:Api.FieldInfo[];
   issues?:Api.FieldIssue[]; schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
   onSubmit: (values: any, event?: unknown) => void | boolean | Promise<void | boolean>; submitLabel?: string; onCancel?: () => void; onBusy?: (busy: boolean) => void; locked?: boolean;
   onValuesChange?: (values: Record<string, unknown>) => void;
@@ -77,6 +84,8 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
 }) {
   const inputs=useInputDrafts();
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
+  const visualCleared=useRef(new Set<string>());
+  const declarations:Api.FieldInfo[]=sourceFields??fields.filter(field=>!field.type.readOnly).map(({name,type})=>({name,title:type.label,type:({number:'decimal',currency:'money',checkbox:'boolean',select:'choice',longText:'longtext'} as Record<string,Api.FieldInfo['type']>)[type.type]??type.type as Api.FieldInfo['type'],required:type.required,help:type.help,choices:type.input?.choices,constraints:type.input?.constraints,when:type.when}));
   const resolve = zodResolver(schema as z.ZodType<Record<string, unknown>, Record<string, unknown>>, { error: issue => {
     switch (issue.code) {
       case "invalid_type": return t(issue.input === undefined ? "Enter a value." : "Enter a valid value.");
@@ -93,33 +102,41 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
     return t("Enter a valid value.");
   } });
   // Controller falls back to defaultValues for undefined; keep cleared editors as null until validation.
-  const { control, handleSubmit, setValue, setError, trigger, reset, formState: { errors, isSubmitting, isDirty } } =
+  const { control, handleSubmit, getValues, setValue, setError, trigger, reset, formState: { errors, isSubmitting, isDirty } } =
     useForm<Record<string, unknown>>({ mode: "onTouched", resolver: (values, context, options) =>
-      resolve(Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value === null ? undefined : value])), context, options), defaultValues: defaultValues as never });
+      resolve(Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value === null ? undefined : value])), context, options), defaultValues: Object.fromEntries(Object.entries(defaultValues ?? {}).filter(([key]) => (sourceFields ?? fields).some(field => field.name === key))) as never });
   const { confirmOwnDiscard, markSaved } = useUnsavedChanges(isDirty || !!locked, () => {
     reset(defaultValues as never); setFailure(""); inputs?.reject();
   }, isSubmitting);
   useEffect(()=>{for(const issue of issues??[])if(issue.path.length===1&&fields.some(f=>f.name===issue.path[0]))setError(issue.path[0]!,{type:"owner",message:issue.message});},[issues,setError]);
   // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
-  const conditions = [...new Set(fields.flatMap(({name,type}) => [name,...(type.when ? [type.when.field] : [])]))];
-  const watched = useWatch({ control, name: conditions });
-  const current = Object.fromEntries(conditions.map((name, i) => [name, watched[i] ?? undefined]));
+  const current = useWatch({control}) as Record<string, unknown>;
+  const sourceValidate = (values:Record<string,unknown>):Api.FieldIssue[] => {
+    const readonly=Object.fromEntries(fields.filter(field=>field.type.readOnly).map(field=>[field.name,(defaultValues as Record<string,unknown>|undefined)?.[field.name]]));
+    const found:Api.FieldIssue[] = sourceFields ? structuredIssues(values,sourceFields) : Object.keys(values).filter(key=>!fields.some(field=>field.name===key&&(!field.type.readOnly||JSON.stringify(values[key])===JSON.stringify(readonly[key])))).map(key=>({path:[key],code:"unknown",message:t("This field is not declared.")}));
+    const checked = schema.safeParse(Object.fromEntries(Object.entries({...readonly,...values}).map(([key,value])=>[key,value===null?undefined:value])));
+    if (!checked.success) for (const issue of checked.error.issues) found.push({path:issue.path.map(String),code:issue.code,message:issue.message});
+    return found;
+  };
   const valuesChanged = useRef(onValuesChange); valuesChanged.current = onValuesChange;
   const valueSignature = JSON.stringify(current);
   useEffect(() => { valuesChanged.current?.(JSON.parse(valueSignature)); }, [valueSignature]);
   return (
-    <form onSubmit={handleSubmit(async (values, event) => {
+    <form onSubmit={handleSubmit(async (_values, event) => {
       if (lock.current||inputs?.invalid||submitDisabled) return; lock.current = true; setFailure("");inputs?.reject();inputs?.pending(1); onBusy?.(true);
       try {
-        const confirmed = await onSubmit(values, event);
+        const submitted = Object.fromEntries(Object.entries(getValues()).map(([key,value])=>[key,visualCleared.current.has(key)&&value===null?undefined:value]));
+        if (sourceValidate(submitted).length) return;
+        const confirmed = await onSubmit(submitted, event);
         if (confirmed === false) setFailure(t("The request was not confirmed. Your input is retained."));
-        else if (confirmed === true) { reset(values); inputs?.clear(); markSaved(); }
+        else if (confirmed === true) { reset(submitted); visualCleared.current.clear(); inputs?.clear(); markSaved(); }
         // A void callback owns its own outcome; it is not proof of acceptance.
       }
       catch (error) { setFailure(error instanceof Error ? error.message : t("The request was not confirmed. Your input is retained.")); }
       finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }
     })} className="grid gap-3" noValidate>
       <InputProblems/>{failure && <p role="alert" className="text-sm text-danger">{failure}</p>}
+      <StructuredEditor scope="form" value={Object.fromEntries(Object.entries(current).filter(([name])=>declarations.some(field=>field.name===name)))} fields={declarations} fieldInput={fieldInput??((field,value,onChange)=>fields.find(item=>item.name===field.name)?.type.editor?.({value,onChange}))} validate={sourceValidate} onChange={next=>{visualCleared.current.clear();for(const key of new Set([...declarations.map(field=>field.name),...Object.keys(next)]))setValue(key,next[key],{shouldDirty:true});void trigger();}} onTrial={onTrial} context={context} disabled={isSubmitting||locked}>
       <fieldset disabled={isSubmitting || locked} className="grid gap-3">
       {fields.map(({ name, type }) => {
         if (!applies(type, current)) return null;
@@ -148,7 +165,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
                     {type.display(field.value, (defaultValues ?? {}) as never)}
                   </div>
                 ) : (
-                  range&&endField?<DateRangeInput id={id} start={String(field.value??"")} end={String(current[endField.name]??"")} startLabel={type.label} endLabel={endField.type.label} inclusive={range.inclusive} invalid={!!error||!!endError} describedBy={ariaDescribedBy} onChange={(start,end)=>{setValue(name,start,{shouldTouch:true,shouldDirty:true});setValue(endField.name,end,{shouldTouch:!!end,shouldDirty:true});void trigger(end?[name,endField.name]:[name]);}}/>:type.editor?.({ id, value: field.value ?? undefined, onChange: value=>{field.onChange(value ?? null);const dependent=fields.filter(f=>errors[f.name]&&(f.type.input?.constraints?.before===name||f.type.input?.constraints?.after===name||issues?.some(issue=>issue.path[0]===f.name&&issue.relatedPaths?.some(path=>path[0]===name)))).map(f=>f.name);if(dependent.length)void trigger(dependent);}, invalid: !!error, describedBy: ariaDescribedBy }) ??
+                  range&&endField?<DateRangeInput id={id} start={String(field.value??"")} end={String(current[endField.name]??"")} startLabel={type.label} endLabel={endField.type.label} inclusive={range.inclusive} invalid={!!error||!!endError} describedBy={ariaDescribedBy} onChange={(start,end)=>{setValue(name,start,{shouldTouch:true,shouldDirty:true});setValue(endField.name,end,{shouldTouch:!!end,shouldDirty:true});void trigger(end?[name,endField.name]:[name]);}}/>:type.editor?.({ id, value: field.value ?? undefined, onChange: value=>{if(value===undefined)visualCleared.current.add(name);else visualCleared.current.delete(name);field.onChange(value ?? null);const dependent=fields.filter(f=>errors[f.name]&&(f.type.input?.constraints?.before===name||f.type.input?.constraints?.after===name||issues?.some(issue=>issue.path[0]===f.name&&issue.relatedPaths?.some(path=>path[0]===name)))).map(f=>f.name);if(dependent.length)void trigger(dependent);}, invalid: !!error, describedBy: ariaDescribedBy }) ??
                   type.display(field.value, (defaultValues ?? {}) as never)
                 )}
               </span>
@@ -160,9 +177,10 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
         );
       })}
       </fieldset>
+      </StructuredEditor>
       <div className="mt-1 flex justify-end gap-2">
         {onCancel && <Button onClick={() => confirmOwnDiscard(onCancel)} disabled={isSubmitting}>{t("Cancel")}</Button>}
-        <Button type="submit" variant="primary" disabled={isSubmitting||submitDisabled}>{isSubmitting ? t("Saving…") : submitLabel}</Button>
+        <Button type="submit" variant="primary" disabled={isSubmitting||submitDisabled||inputs?.invalid}>{isSubmitting ? t("Saving…") : submitLabel}</Button>
       </div>
     </form>
   );

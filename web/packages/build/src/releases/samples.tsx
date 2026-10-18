@@ -1,3 +1,6 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useRecordInventory } from "@platform/app";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
@@ -25,6 +28,8 @@ function ApplicationSampleForm({ application, selected, samples: suppliedSamples
     onInvalidChange?.(!!inputs?.invalid);
     return () => onInvalidChange?.(false);
   }, [inputs?.invalid, onInvalidChange]);
+  const trial = useActionTrial(), declarationFields = host.source.entity("build.sample-set")?.fields ?? [];
+  let parsedSamples: unknown; try { parsedSamples = JSON.parse(suppliedSamples); } catch { /* The existing sample fields retain incomplete JSON. */ }
   const record = inventory.data?.records.find(record => record.name === selected);
   const base = useRef(record), selection = useRef(selected), lock = useRef(false);
   const samples = useSavedValues && selected
@@ -98,7 +103,7 @@ function ApplicationSampleForm({ application, selected, samples: suppliedSamples
   return <Card className="grid gap-2 p-3" role="region" aria-label={t("Application samples")}>
     <strong className="text-sm">{t("Application samples")}</strong>
     <p className="text-xs text-muted">{t("Prepare synthetic records and references. Trial edits remain temporary until you explicitly save the sample.")}</p>
-    <fieldset disabled={busy || missing} className="grid gap-2">
+    <StructuredEditor expectedRevision={base.current?.revision ?? 0} fieldInput={sourceFieldInput} value={{ name, title, samples: parsedSamples ?? [] }} fields={declarationFields} scope={`build.sample-set:${base.current?.id ?? createId}:${host.source.scope}`} disabled={busy || missing} onChange={next => { setName(next.name as string); setTitle(next.title as string); change(); onChange(next.name as string, JSON.stringify(next.samples ?? [], null, 2)); }} onTrial={next => trial(`build.sample-set.${base.current ? "edit" : "create"}`, { type: "build.sample-set", id: base.current?.id ?? createId }, next, base.current?.revision ?? 0)}>    <fieldset disabled={busy || missing} className="grid gap-2">
       {!document && <label className="grid gap-1 text-xs">{t("Sample set")}<Select value={selected} onChange={event => {
         const next = inventory.data?.records.find(record => record.name === event.target.value);
         confirmOwnDiscard(() => { inputs?.clear(); setCreateId(crypto.randomUUID()); load(next); markSaved(); });
@@ -115,7 +120,7 @@ function ApplicationSampleForm({ application, selected, samples: suppliedSamples
         <Button disabled={!name.trim() || !title.trim()} onClick={() => void save()}>{t(joining && !dirty ? "Retry adding sample to application" : "Save application sample")}</Button>
         {dirty && <Button variant="ghost" onClick={discardChanges}>{t("Discard")}</Button>}
       </div>
-    </fieldset>
+    </fieldset></StructuredEditor>
     {base.current?.definitionVersion ? <p className="text-xs">{t("Published sample version")}: {base.current.definitionVersion}</p> : null}
     {saved && <p role="status" className="text-xs">{t("Application sample saved. Release review retains its version.")}</p>}
     {(error || membershipError || inventory.isError || missing) && <p role="alert" className="text-sm text-danger">{error || membershipError || t("The application sample could not be loaded.")}</p>}

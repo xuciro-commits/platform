@@ -428,6 +428,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	defer func() { r.sandbox.simulationTrace = nil }()
 	var read json.RawMessage
 	var refusal *kernel.Error
+	var issues []platform.FieldIssue
 	var sub *pb.Submission
 	if step.Read {
 		if step.Action != "" || step.Answer != "" || step.AdvanceSeconds != 0 || step.ID == "" || !slices.ContainsFunc(r.candidate.Assets, func(a platform.ReleaseAsset) bool {
@@ -518,7 +519,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	}
 	if sub != nil {
 		sub.TenantId, sub.PrincipalId, sub.IdempotencyKey = r.sandbox.ID, actor.ID, fmt.Sprintf("test-%d", i+1)
-		_, refusal = r.sandbox.Submit(actor, sub, r.now)
+		_, refusal, issues = r.sandbox.submitDiagnosed(actor, sub, r.now)
 	}
 	if step.AdvanceSeconds > 0 {
 		r.now = r.now.Add(time.Duration(step.AdvanceSeconds) * time.Second)
@@ -558,6 +559,9 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	}
 	if refusal != nil {
 		result.Refusal = refusal.Message
+		result.RefusalCode = refusal.Code.String()
+		result.Issues = issues
+		result.Unsupported = refusal.Code == pb.ErrorCode_ERROR_CODE_CONFLICT && refusal.Message == "This action uses an effect outside the accepted-result boundary"
 	} else {
 		for _, change := range r.visibleChanges(actor) {
 			prior, exists := before[change.Type+"/"+change.ID]

@@ -4295,6 +4295,9 @@ export type SimulatedFlow = {
 };
 
 export type Simulation = {
+  issues?: FieldIssue[];
+  refusalCode?: string;
+  unsupported?: boolean;
   traceTruncated?: boolean;
   input?: SimulationStep;
   trace?: DecisionTrace[];

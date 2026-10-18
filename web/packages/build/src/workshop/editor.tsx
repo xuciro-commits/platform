@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, declarationChanges } from "../editor/declaration";
 import {recordComparisonSource} from "./page-editor/record-comparison";
 import {pageDraftDiagnostics} from "./page-editor/diagnostics";
 import {CompositeBindingInspector} from "./page-editor/CompositeBindingInspector";
@@ -61,14 +65,14 @@ const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetCont
 
 type StudioSelection = { kind: "page" | "variables" | "interface" | "queries" } | { kind: "widget" | "container"; id: string };
 const emptyDraft = (): PageDraft => ({ sections: [], document: pageDocumentFromSections<Draft>([]).document, selections: [], title: "", description: "" });
-const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined=()=>undefined): PageDraft => {
+const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined=()=>undefined, fields: HostApi.FieldInfo[] = []): PageDraft => {
   const shorthand: Draft[] = (record.list ?? []).length ? [
     { widget: "table", title: t("Table"), width: "half", fields: record.list },
     { widget: "detail", title: t("Detail"), width: "half", fields: record.detail },
     ...((record.actions ?? []).length ? [{ widget: "actions", title: t("Actions"), actions: record.actions }] : []),
   ] : [];
   const lifted = pageDocumentFromSections(record.sections?.length ? record.sections : shorthand);
-  return { sections: (record.document ? record.sections ?? [] : lifted.sections).map(s=>materializeModelSection(s,lookup,true)), document: record.document ?? lifted.document,
+  return { ...declarationValue(record, fields), sections: (record.document ? record.sections ?? [] : lifted.sections).map(s=>materializeModelSection(s,lookup,true)), document: record.document ?? lifted.document,
     selections: record.selections ?? [], title: record.title, description: record.description ?? "" };
 };
 /** The field types a filter offers: values that repeat (the host's platform.Filterable). */
@@ -90,8 +94,11 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(id)}`);
   const model = useAuthoringModel(), authoringEntity = model.entity;
-  const page = query.data?.record;
+  const savedPage = query.data?.record;
+  const declarationFields = source.entity("build.page")?.fields ?? [], trial = useActionTrial();
+  const [sourceApplied, setSourceApplied] = useState(false);
   const session = useDraftSession<PageDraft,LayoutClipboard<Draft>>(emptyDraft(),JSON.stringify([id,source.scope]));
+  const page = savedPage ? { ...savedPage, ...session.draft } : undefined;
   const [clipboardNotice,setClipboardNotice]=useState<{scope:string;error?:boolean;text:string}>();
   const clipboardScope=JSON.stringify([id,source.scope]);
   useEffect(()=>{setClipboardNotice(undefined);setImportPackage(undefined);setImporting(false);setCompatibilityOpen(false);},[clipboardScope]);
@@ -110,12 +117,12 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0);
   const busy = saving || publishing;
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
-    if (page) { session.load(loadDraft(page,authoringEntity)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
+    if (page) { session.load(loadDraft(savedPage!,authoringEntity,declarationFields)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`; }
     select({ kind: "page" }); setRefused(undefined);
   }, busy);
   useEffect(() => {
     if (!page || dirty || busy || loaded.current === `${page.id}:${page.revision}`) return;
-    session.load(loadDraft(page,authoringEntity)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`;
+    session.load(loadDraft(savedPage!,authoringEntity,declarationFields)); baseRevision.current = page.revision; loaded.current = `${page.id}:${page.revision}`;
   }, [page, dirty, busy, session.load]);
   useEffect(() => {
     if (selection.kind === "widget" && !sections.some((section) => section.id === selection.id) ||
@@ -126,7 +133,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! });  };
   // A native input event can already be in flight when autosave locks the UI.
   // The draft history preserves it when the older submission is acknowledged.
-  const edit: typeof session.edit = (update, key) => { session.edit((old) => {
+  const edit: typeof session.edit = (update, key) => { setSourceApplied(false); session.edit((old) => {
     const next = typeof update === "function" ? update(old) : { ...old, ...update };
     // Profile changes are explicit reviewed commands; ordinary editing retains
     // the original profile even when a layout helper returns the latest one.
@@ -159,7 +166,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
   const saveRef = useRef<() => Promise<unknown>>(async () => false);
-  useAutoSave({ generation:JSON.stringify(session.draft), dirty, invalid, busy, save: () => saveRef.current() });
+  useAutoSave({ enabled: !sourceApplied, generation:JSON.stringify(session.draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (!page) return <Workbench storageKey="page" title={t("Page")}><WorkbenchMessage>{query.isError ? t("The page could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const info = authoringEntity(page.object);
 const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
@@ -224,12 +231,12 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     const expectedRevision = baseRevision.current;
     try {
       const payload={...submitted,document:{...submitted.document,uiProfile:submitted.sections.some(s=>s.composite)?pageVariableContract.composite.requiredUIProfile:pageVariableContract.modelBinding.requiredUIProfile},sections:submitted.sections.map(canonicalModelSection)};
-      const ok = await decide("build.page.edit", { type: "build.page", id }, payload, { expectedRevision, onRefused: setRefused });
+      const ok = await decide("build.page.edit", { type: "build.page", id }, declarationChanges(payload, declarationValue(savedPage!, declarationFields)), { expectedRevision, onRefused: setRefused });
       if (ok) {
         const result = await query.refetch();
         const confirmed = result.isSuccess && result.data?.record?.revision === expectedRevision + 1 ? result.data.record : undefined;
         baseRevision.current = expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
-        session.saved(submitted, confirmed ? loadDraft(confirmed,authoringEntity) : undefined); markSaved();
+        session.saved(submitted, confirmed ? loadDraft(confirmed,authoringEntity,declarationFields) : undefined); markSaved();
       }
       return ok;
     } catch { setRefused(t("The page could not be saved. Your draft is still here.")); return false; }
@@ -339,7 +346,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
           { id: "compatibility", label: t("Review page compatibility…"), disabled: busy, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
         ]} />
-        <ResourceControls type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} onReview={() => void review()} onInstall={() => void publish()} onCancel={discardChanges} route={canvasRoute} />
+        <ResourceControls type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} onSave={() => void save()} onReview={() => void review()} onInstall={() => void publish()} onCancel={discardChanges} route={canvasRoute} />
       </>}
       onKeyDown={(event) => {
         const command = event.metaKey || event.ctrlKey;
@@ -380,7 +387,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
       {importing && <ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope === clipboardScope ? importPackage.pack : undefined} object={page.object} profile={pageUIProfile} onClose={() => setImporting(false)} onApply={(draft, pack) => { setImportPackage({ scope: clipboardScope, pack }); edit(draft, "module-import"); select({ kind: "page" }); setRefused(undefined); }} />}
       {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setRefused(undefined); }} />}
-      <fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <StructuredEditor expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue({ ...session.draft, sections: sections.map(canonicalModelSection) }, declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...emptyDraft(), ...next }) as PageDraft); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
         <CanvasEditor model={canvasModel(document, sections, { ...Object.fromEntries(Object.entries(widgetTitles).map(([id, title]) => [id, title()])), rows: t("Rows"), columns: t("Columns"), tabs: t("Tabs"), flow: t("Flow layout"), toolbar: t("Toolbar"), loop: t("Loop") })} selected={preview ? undefined : nodeID} revision={session.draft} zoom={zoom / 100} disabled={busy || incompatible || preview}
           commands={selectionCommands} icon={canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : <LayoutGlyph kind={document.nodes[nodeID ?? ""]?.kind ?? "rows"} />}
           onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id, delta) => canvasEdit(canvasMove(document, id, delta, sections))}
@@ -417,7 +424,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
           </div>
           <div className="flex items-center gap-2 border-t border-border px-3 py-1 text-[11px] text-muted" role="status">{preview ? t("Preview: your records as they are; actions run for real.") : t("Design: your records as they are. Actions do not run while you compose.")}</div>
         </CanvasEditor>
-      </fieldset>
+      </fieldset></StructuredEditor>
     </Workbench>
   </>;
 }

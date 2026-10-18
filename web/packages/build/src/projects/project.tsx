@@ -1,3 +1,7 @@
+import { sourceFieldInput } from "@platform/app";
+import { StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // ADR-0047: one application, five workspaces and builder-named concepts.
@@ -117,7 +121,10 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     setTab(initialTab);
     if (initialSelected !== undefined) setSelected(initialSelected);
   }, [activeArea, initialSection, initialSelected, initialPlan, initialTab]);
-  const [settings, setSettings] = useState<{ title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile; extends?: Api.AssetRef; entry: string; replacements: NonNullable<Api.Application["replacements"]> }>();
+  const trial = useActionTrial(), declarationHost = useHost();
+  const declarationFields = declarationHost.source.entity("build.app")?.fields ?? [];
+  const [sourceApplied, setSourceApplied] = useState(false);
+  const [settings, setSettings] = useState<Partial<Api.Application> & { title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile; entry: string; replacements: NonNullable<Api.Application["replacements"]> }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [importing, setImporting] = useState(false);
   const [importedDependencies, setImportedDependencies] = useState<ApplicationImportDependency[]>([]);
@@ -134,7 +141,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const [edited, setEdited] = useState(false);
   const lock = useRef(false);
   const baseline = useRef<{ values: NonNullable<typeof settings>; revision: number } | undefined>(undefined);
-  const fromRecord = (p: Project) => ({ title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes", profile: structuredClone(p.profile ?? {}), extends: p.extends, entry: p.entry ?? "", replacements: structuredClone(p.replacements ?? []) });
+  const fromRecord = (p: Project) => ({ ...declarationValue(p, declarationFields), title: p.title, name: p.name, description: p.description ?? "", icon: p.icon ?? "boxes", profile: structuredClone(p.profile ?? {}), extends: p.extends, entry: p.entry ?? "", replacements: structuredClone(p.replacements ?? []) });
   useEffect(() => {
     if (project && !edited) {
       const values = fromRecord(project);
@@ -146,12 +153,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (!settings || !edited) return {} as Partial<Api.Application>;
     const current = baseline.current?.values;
     if (!current) return {} as Partial<Api.Application>;
-    const out: Partial<Api.Application> = {};
-    for (const key of ["title", "name", "description", "icon"] as const) if (settings[key] !== current[key]) out[key] = settings[key];
-    if (JSON.stringify(settings.profile) !== JSON.stringify(current.profile)) out.profile = settings.profile;
-    if (JSON.stringify(settings.extends) !== JSON.stringify(current.extends)) Object.assign(out, { extends: settings.extends ?? null });
-    if (settings.entry !== current.entry) out.entry = settings.entry;
-    if (JSON.stringify(settings.replacements) !== JSON.stringify(current.replacements)) out.replacements = settings.replacements;
+    const out = declarationChanges(settings, current) as Partial<Api.Application>;
     return out;
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
@@ -195,7 +197,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     // Diff against the snapshot actually displayed, not a newer read that
     // arrived before this event. The owner's revision gate decides conflicts.
     if (!baseline.current) baseline.current = { values: settings ?? fromRecord(project), revision: project.revision };
-    setEdited(true); setSettings(next);
+    setSourceApplied(false); setEdited(true); setSettings(next);
   };
   const saveSettings = async () => {
     if (!dirty || !baseline.current) return !dirty;
@@ -203,7 +205,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (confirmed) { baseline.current = undefined; setEdited(false); markSaved(); }
     return confirmed;
   };
-  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !pendingPatch && !createdResource && !importing, busy: saving, save: saveSettings });
+  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !sourceApplied && !pendingPatch && !createdResource && !importing, busy: saving, save: saveSettings });
   const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord) => projectResourceChange(current, resourceRef(kind, record.name));
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     setCreatedResource({ kind, target });
@@ -382,7 +384,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         </div></ViewVisibilityContext.Provider></div>}
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
         {tab === "roles" && <ProjectRoles owned={owned} />}
-        {tab === "settings" && settings && <fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
+        {tab === "settings" && settings && <StructuredEditor expectedRevision={baseline.current?.revision ?? project.revision} fieldInput={sourceFieldInput} value={declarationValue(settings, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${declarationHost.source.scope}`} readOnly={!builder} disabled={saving || !!pendingPatch || !!createdResource} onChange={next => { editSettings({ ...next, title: next.title as string, name: next.name as string, description: next.description as string ?? "", icon: next.icon as string ?? "boxes", profile: next.profile as Api.ApplicationProfile ?? {}, entry: next.entry as string ?? "", replacements: next.replacements as NonNullable<Api.Application["replacements"]> ?? [] }); setSourceApplied(true); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, baseline.current?.values ?? {}), baseline.current?.revision ?? project.revision)}><fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <ExtensionSettings value={settings} pages={project.pages ?? []} disabled={!builder} onChange={extension => editSettings({ ...settings, ...extension, entry: extension.entry ?? "", replacements: extension.replacements ?? [] })} />
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
@@ -417,7 +419,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             <Button size="sm" disabled={!dirty || saving} onClick={() => void saveSettings()}>{t("Save")}</Button>
             <Button size="sm" variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => { baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); void query.refetch(); })}>{t("Reload current project settings")}</Button>
           </div>
-        </fieldset>}
+        </fieldset></StructuredEditor>}
       </div>
     </Workbench>
     {installed?.application && <WorkshopApplicationImport key={JSON.stringify([project.id, me])} open={importing} onClose={() => setImporting(false)} application={{ ref: installed.ref, sourceVersion: installed.version }}

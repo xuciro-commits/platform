@@ -1,19 +1,22 @@
+import { sourceFieldInput } from "@platform/app";
 // One draft session over a `build.object` record, shared by the object type
 // workbench and the action type workbench (ADR-0047§6): both edit the same
 // record through its own action, explicitly save it and publish it; the host checks
 // everything again at publication.
-import { useHost, useReadQuery } from "@platform/app";
+import { useActionTrial, useHost, useReadQuery } from "@platform/app";
 import { notify, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDraftSession } from "../session/DraftSession";
 import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
 import { useAuthoringModel } from "./authoring-model";
-
-const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], createTransaction: record.createTransaction, dispatchCommands: record.dispatchCommands ?? [], protocols: record.protocols ?? [], access: record.access ?? [], fields: record.fields ?? [], scope: record.scope, implements: record.implements ?? [], extends: record.extends ?? "", constraints: record.constraints ?? [], sets: record.sets ?? [], reads: record.reads, versioning: record.versioning, versionPins: record.versionPins ?? [], enterpriseUse:record.enterpriseUse });
+import { declarationValue } from "../editor/declaration";
 
 export function useObjectDraft(id: string, onReset?: () => void) {
-  const { decide, definitions } = useHost();
+  const { decide, definitions, source } = useHost();
+  const fields = source.entity("build.object")?.fields ?? [];
+  const trial = useActionTrial();
+  const hydrate = (record: ObjectRecord): Process => ({ ...declarationValue(record, fields), states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], implements: record.implements ?? [], extends: record.extends ?? "" });
   const { entities, drafts } = useAuthoringModel();
   const { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: ObjectRecord; valueErrors?: Record<string, string> }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
@@ -72,7 +75,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     });
     for(const move of moves)session.inputs.set(move.key);
     for(const move of moves)if(move.next)session.inputs.set(move.next,move.value);
-    session.edit(next);
+    session.edit(() => next);
   };
   const save = async () => {
     setRefused(undefined);
@@ -108,5 +111,9 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   };
   const roles = process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none");
   const approverRoles = ["builder", ...(process.access.length ? process.access.map((a) => a.role) : [])];
-  return { object, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
+  const fromSource = (next: Record<string, unknown>): Process => ({ states: [], actions: [], access: [], fields: [], ...next } as Process);
+  const trialObject = (next: Process) => trial("build.object.edit", { type: "build.object", id }, objectChanges(next, baseline.current), baseRevision.current);
+  const structured = { expectedRevision: baseRevision.current, fieldInput: sourceFieldInput, value: { ...process }, onChange: (next: Record<string, unknown>) => change(fromSource(next)), fields, scope: `build.object:${id}:${source.scope}`, disabled: busy || !!conversionError,
+    onTrial: (next: Record<string, unknown>) => trialObject(fromSource(next)) };
+  return { object, structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
 }
