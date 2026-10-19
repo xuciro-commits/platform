@@ -21,6 +21,24 @@ test("new application visual, JSON and YAML edit one payload without implicit wr
   }
   await dialog.getByRole("textbox", { name: /^Name \*$/ }).fill(name);
   await dialog.getByRole("textbox", { name: /^What people call it \*$/ }).fill(title);
+  const creation = page.getByRole("dialog", { name: "Create application", exact: true });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 720 });
+    const helpTrigger = creation.getByRole("button", { name: "About Name", exact: true });
+    await helpTrigger.click();
+    const nameHelp = page.getByRole("dialog", { name: "Name", exact: true });
+    await nameHelp.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(nameHelp).toHaveCount(0);
+    await expect(creation).toBeVisible();
+    await expect(creation.getByRole("textbox", { name: /^Name \*$/ })).toHaveValue(name);
+    await expect(helpTrigger).toBeFocused();
+    await helpTrigger.click();
+    await page.keyboard.press("Escape");
+    await expect(nameHelp).toHaveCount(0);
+    await expect(creation).toBeVisible();
+    await expect(creation.getByRole("textbox", { name: /^What people call it \*$/ })).toHaveValue(title);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
   await dialog.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
   const source = dialog.getByRole("textbox", { name: "Configuration source", exact: true });
   await dialog.getByText("Fields and examples", { exact: true }).click();
