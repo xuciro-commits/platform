@@ -1,5 +1,5 @@
 import {useMemo} from "react";
-import {Panel,CollectionCounts,CountTreemap,TagCounts,TermCounts,useChartData,t,type ChartSource,type ChartSpec,type EntityInfo} from "@platform/ui";
+import {ContextHelp,Panel,CollectionCounts,CountTreemap,TagCounts,TermCounts,useChartData,t,type ChartSource,type ChartSpec,type EntityInfo} from "@platform/ui";
 import {pageUIManifest,type Api} from "@platform/kernel";
 import type {QueryWindow} from "./QueryWindowFrame";
 import {termCounts} from "./terms";
@@ -18,6 +18,6 @@ function CompleteTerms({spec,source,field,label,treemap,tags,bars,steps,selected
  const terms=termCounts(data,field,!!bars||!!steps);if(!terms)return <Panel role="alert">{t("Term counts are invalid or exceed their budget.")}</Panel>;
  if(bars||steps)return <CollectionCounts terms={terms} steps={steps} label={label}/>;
  if(treemap)return <CountTreemap terms={terms} label={label} selected={selected} enabled={enabled} onSelect={onSelect}/>;
- if(tags)return <div className="grid min-w-0 gap-2"><p className="text-xs text-muted">{t("Counts cover all matching authorized records; ties keep host group order.")}</p><TagCounts terms={terms} label={label} selected={selected} enabled={enabled} onSelect={onSelect}/></div>;
- return <div className="grid min-w-0 gap-2"><p className="text-xs text-muted">{t("Counts cover all matching authorized records; ties keep host group order.")}</p><TermCounts terms={terms} label={label}/></div>;
+ if(tags)return <div className="grid min-w-0 gap-2"><ContextHelp title={label||t("Term counts")}>{t("Counts cover all matching authorized records; ties keep host group order.")}</ContextHelp><TagCounts terms={terms} label={label} selected={selected} enabled={enabled} onSelect={onSelect}/></div>;
+ return <div className="grid min-w-0 gap-2"><ContextHelp title={label||t("Term counts")}>{t("Counts cover all matching authorized records; ties keep host group order.")}</ContextHelp><TermCounts terms={terms} label={label}/></div>;
 }

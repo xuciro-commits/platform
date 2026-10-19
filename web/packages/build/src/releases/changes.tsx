@@ -44,7 +44,7 @@ export function Changes({ initialKind, initialID }: { initialKind?: string; init
   ];
   const kind = current && resourceKinds.find(kind => kind.kind === (current.variant === "automation" ? "automation" : draftChangeKind(current)));
   return <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-    <PageHeader title={t("Changes")} description={t("Saved changes compared with retained publications. Unsaved editor input is not included.")} />
+    <PageHeader title={t("Changes")} help={t("Saved changes compared with retained publications. Unsaved editor input is not included.")} />
     <div className="flex flex-wrap items-center gap-2">
       <Button variant="primary" disabled={!selected.length || selected.length > 32 || query.isError} onClick={() => review(selected)}>{t("Review selected changes")}</Button>
       <Button variant="ghost" onClick={() => open({ view: "release-history" })}>{t("Release history")}</Button>

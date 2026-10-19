@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 // Agents a builder declares over the ontology (ADR-0008): instructions, the
 // published actions and queries they may use, a budget, checkpoints and the
@@ -23,7 +23,7 @@ export function Agents() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (role("build") !== "builder") return <PageHeader title={t("Agents")} description={t("Only a builder can edit agents.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Agents")} description={t("An agent works on the ontology with the actions and queries you give it, within a budget. What it cannot take back waits for a person; every step is kept.")}
+    <PageHeader title={t("Agents")} help={t("An agent works on the ontology with the actions and queries you give it, within a budget. What it cannot take back waits for a person; every step is kept.")}
       actions={<Button onClick={() => open({ view: "agent", params: { id: "new" } })}>{t("New agent")}</Button>} />
     <ResourceList source={source} type="build.agent" fields={["title", "name", "state", "version"]} onOpen={(record) => open({ view: "agent", params: { id: record.id } })} />
   </div>;
@@ -72,7 +72,7 @@ export function AgentEditor({ id }: { id: string }) {
       <Button size="sm" disabled={busy || (!dirty && id !== "new")} onClick={() => void perform(save)}>{t("Save agent")}</Button>
       <ResourceControls type="build.agent" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "agent", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
-    <p className="text-xs text-muted">{t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}</p>
+    <ContextHelp title={t("Agent")}><p className="text-xs text-muted">{t("Save the declaration, then publish it: people ask it from any record it may read and flows give it steps. Evaluate its declared cases in Agents.")}</p></ContextHelp>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {(model.drafts.isError || queries.isError) && <Panel role="alert">{t("The capability library could not be loaded.")}</Panel>}
@@ -101,7 +101,7 @@ export function AgentEditor({ id }: { id: string }) {
         </div>
       </Panel>
       <Panel title={t("Evaluation cases")} className="grid content-start gap-2 lg:col-span-2">
-        <p className="text-xs text-muted">{t("Each case is a goal about a record and what a dry run must come to. Run the declared suite in Agents to evaluate a model; publishing does not run it automatically.")}</p>
+        <ContextHelp title={t("Evaluation cases")}><p className="text-xs text-muted">{t("Each case is a goal about a record and what a dry run must come to. Run the declared suite in Agents to evaluate a model; publishing does not run it automatically.")}</p></ContextHelp>
         {cases.map((c, i) => <div key={i} className="grid gap-2 rounded-md border border-border p-2 sm:grid-cols-[1fr_2fr_1fr_1fr_auto]">
           <label className={fieldClass}>{t("Case")}<Input value={c.name} onChange={(e) => setCase(i, { name: e.target.value })} /></label>
           <label className={fieldClass}>{t("Goal")}<Input value={c.goal} onChange={(e) => setCase(i, { goal: e.target.value })} /></label>

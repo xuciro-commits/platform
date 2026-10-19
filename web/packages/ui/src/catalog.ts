@@ -9,6 +9,7 @@ const asset = (id: string, name: string, summary: string, layer: CatalogEntry["l
 });
 
 export const entries: CatalogEntry[] = [
+ asset("ui/context-help","Contextual explanation","Open supporting explanations from a consistent entry beside the task title.",2,"components/ContextHelp.tsx",["ContextHelp"],"ContextHelpExample",{tags:["help","information","disclosure"],constraints:["Keep current errors, warnings and action consequences visible. Help does not replace status or required decisions."]}),
  asset("ui/structured-editor","Visual and source editor","Edit one declaration through its original visual editor or JSON/YAML, with field guidance and explicit draft application.",3,"components/StructuredEditor.tsx",["StructuredEditor","structuredIssues","parseStructuredSource","formatStructuredSource"],"StructuredEditorExample",{tags:["forms","json","yaml","source","validation"],constraints:["Examples do not initialize business data. Reference selection, permission checks, trials and submission remain with the original application owner."]}),
  asset("ui/icon-picker","Icon picker","Choose a shared icon by group or translated name.",2,"components/IconPicker.tsx",["IconPicker","IconGlyph"],"IconPickerExample",{tags:["icons","search","selection"]}),
  asset("ui/grouped-list","Grouped resource list","Search and fold resource groups while preserving caller-owned selection.",2,"components/GroupedList.tsx",["GroupedList"],"GroupedListExample",{tags:["tree","resources","search","groups"]}),

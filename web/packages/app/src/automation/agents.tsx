@@ -4,7 +4,7 @@ import { useRunControl } from "./use-run-control";
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "../i18n";
-import { Button, Card, Disclosure, inputIssues, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, RelationCanvas, relationNodeClasses, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
+import { Button, Card, Disclosure, inputIssues, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, PropertyList, RelationCanvas, relationNodeClasses, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
   type FlowStepEdge, type FlowStepNode, type RelationEdge, type RelationNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
@@ -78,17 +78,31 @@ export function RunView({ id, compact, application, project }: { id: string; com
       {control.error && <Panel role="alert" className="text-sm text-danger">{control.error}</Panel>}
       {control.pending && <Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p>
         <Button disabled={control.busy} onClick={() => void control.retry()}>{t("Retry original operation")}</Button></Panel>}
-      {run.definitionVersion&&<p className="break-all font-mono text-xs">{t("Startup definition")}: {run.definitionVersion}</p>}
-      <p className="break-all font-mono text-xs">{t("Startup release")}: {run.release||t("No startup activation recorded")}</p>
-      {!compact && <PageHeader title={run.title} description={`${run.agent}${run.onBehalf ? ` for ${run.onBehalf}` : ""}${run.flow ? `, in the flow ${run.flow}` : ""}`}
+      {!compact && <PageHeader title={run.title}
         actions={live && (mine || role("agent") === "admin") && can("agent.run.cancel")
           ? <Button size="sm" variant="danger" disabled={control.busy || !!control.pending} onClick={() => void control.control("agent.run.cancel")}>{t("Stop")}</Button> : undefined} />}
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      <div className="flex flex-wrap items-center gap-2">
         <StatusTag status={run.state} registry={runStates} />
-        {run.ref && <Button variant="link" className="font-mono text-xs" onClick={() => openRecord(run.ref!)}>{run.ref}</Button>}
-        <span>{run.stepsUsed} {t("turns ·")} {run.tokensUsed} {t("tokens ·")} {run.actionsUsed} actions{run.cost ? ` · $${run.cost.toFixed(4)}` : ""}</span>
-        {run.model && <span className="font-mono">{run.model}</span>}
+        {run.ref && <Button variant="link" className="break-all font-mono text-xs" onClick={() => openRecord(run.ref!)}>{run.ref}</Button>}
       </div>
+      <PropertyList columns={3} items={[
+        [t("Steps"),run.stepsUsed],
+        [t("Tokens"),run.tokensUsed],
+        [t("Actions"),run.actionsUsed],
+      ]}/>
+      <Disclosure summary={t("Run details")}><div className="grid gap-3 py-3">
+        <PropertyList columns={2} items={[
+          [t("Agent"),run.agent],
+          [t("On behalf of"),run.onBehalf||"—"],
+          [t("Workflow"),run.flow||"—"],
+          [t("Model"),run.model||"—"],
+          [t("Reported AI cost"),run.cost?"$"+run.cost.toFixed(4):"—"],
+        ]}/>
+        <PropertyList items={[
+          [t("Startup definition"),<code className="select-all break-all">{run.definitionVersion||t("Not recorded")}</code>],
+          [t("Startup release"),<code className="select-all break-all">{run.release||t("No startup activation recorded")}</code>],
+        ]}/>
+      </div></Disclosure>
       {run.withheld && <Panel role="status" className="text-xs text-muted">{t("Part of this trace came from records you may no longer read, and is left out.")}</Panel>}
       {!compact && <p className="whitespace-pre-wrap text-sm">{run.goal}</p>}
       {run.draft?.[0] && run.state === "waiting" && (mine ? <DraftCard key={run.draft[0].step} run={run} draft={run.draft[0]} />
@@ -196,23 +210,16 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
 
 /** Every model call of a run in full, for agent administrators (ADR-0009). */
 function Transcripts({ run }: { run: string }) {
-  const [shown, setShown] = useState(false);
   const calls = useReadQuery<Transcript[]>(`/v1/transcripts?run=${encodeURIComponent(run)}`).data;
   if (!calls?.length) return null;
-  return (
-    <div className="grid gap-1">
-      <Button variant="link" className="justify-start text-xs text-muted" onClick={() => setShown(!shown)}>
-        {shown ? t("Hide") : t("Show")} the {calls.length} {t("model calls in full")}
-      </Button>
-      {shown && calls.map((c, i) => (
-        <Card key={i} className="px-2 py-1 text-xs">
-          <Disclosure summary={<>{c.at} · {c.model} · {c.outcome}</>}>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono">{JSON.stringify({ request: c.request, answer: c.answer }, null, 2)}</pre>
-          </Disclosure>
-        </Card>
-      ))}
-    </div>
-  );
+  return <Disclosure summary={t("Model calls in full")}>
+    <div className="grid gap-2 py-3">{calls.map((c, i) => (
+      <Disclosure key={i} summary={<span>{c.at} · {c.model} · {c.outcome}</span>}>
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono text-xs">{JSON.stringify({ request: c.request, answer: c.answer }, null, 2)}</pre>
+      </Disclosure>
+    ))}</div>
+  </Disclosure>;
+
 }
 
 /**
@@ -237,7 +244,9 @@ export function Assistant({ about }: { about?: string }) {
   const earlier = runs.filter((r) => r.id !== current && (!about || r.ref === about));
   return (
     <div className="grid max-w-3xl gap-3">
-      <PageHeader title={t("Assistant")} description={about ? `Ask an agent about ${about}. It drafts; you confirm.` : t("Ask one of your apps' agents. It works on your behalf, within what you may do; you confirm what it drafts.")} />
+      <PageHeader title={t("Assistant")} help={t("Ask one of your apps' agents. It works on your behalf, within what you may do; you confirm what it drafts.")} />
+      {about&&<PropertyList items={[[t("Related record"),<code className="break-all">{about}</code>]]}/>}
+
       {agents.length === 0 ? <p className="text-sm text-muted">{t("None of your apps declares an agent.")}</p> : (
         <Form className="grid gap-2" onSubmit={() => { if (goal.trim()) return start(); }}>
           <Select aria-label={t("Agent")} value={chosen} onChange={(e) => setAgent(e.target.value)}>
@@ -298,7 +307,7 @@ export function Search({ initial = "" }: { initial?: string }) {
   const title = (type: string) => entities.find((e) => e.type === type)?.title ?? type;
   return (
     <div className="grid max-w-3xl gap-3">
-      <PageHeader title={t("Search")} description={t("Records of every app you work in, and the knowledge you may read, by text, within what you may see.")} />
+      <PageHeader title={t("Search")} help={t("Records of every app you work in, and the knowledge you may read, by text, within what you may see.")} />
       <Form onSubmit={() => run(q)}>
         <Input aria-label={t("Search")} autoFocus placeholder={t("Search records")} value={q} onChange={(e) => setQ(e.target.value)} />
       </Form>

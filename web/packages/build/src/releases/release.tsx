@@ -1,7 +1,7 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, Disclosure, PageHeader, Panel, Select, StatusTag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { matchesResourceKind, refKey, resourceKinds, resourceRef, type ResourceKind } from "../projects/resources";
@@ -269,7 +269,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </div>
   );
   return <div className="grid gap-3">
-    {!embedded && <PageHeader title={t("Release review")} description={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
+    {!embedded && <PageHeader title={t("Release review")} help={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
       actions={builder && scope && <Button onClick={() => open({ view: "project", params: { id: scope } })}>{t("Back to project")}</Button>} />}
     <Card className="grid gap-3 p-3" aria-label={t("Saved releases")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -285,9 +285,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </Select>
       </label>}
       {promoted.length > 0 && <div className="grid gap-2 rounded border border-border p-3" role="region" aria-label={t("Promoted into this environment")}>
-        <div>
+        <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">{t("Promoted into this environment")} · {promoted.length}</h3>
-          <p className="text-xs text-muted">{t("Candidates another environment promoted here and that still wait for review. Open one to check its upgrade plan and activate it.")}</p>
+          <ContextHelp title={t("Promoted into this environment")}>{t("Candidates another environment promoted here and that still wait for review. Open one to check its upgrade plan and activate it.")}</ContextHelp>
         </div>
         <ul className="grid gap-1">
           {promoted.map((candidate) => <li key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -319,9 +319,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       <Button disabled={!!selectionError || !id || locked} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
     </Card>
     <Card className="grid gap-3 p-3" aria-label={t("Deliver drafts together")}>
-      <div>
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("Deliver drafts together")}</h2>
-        <p className="text-xs text-muted">{t("An object, the page over it and the application holding the page can be delivered as one candidate; nothing has to be published first.")}</p>
+        <ContextHelp title={t("Deliver drafts together")}>{t("An object, the page over it and the application holding the page can be delivered as one candidate; nothing has to be published first.")}</ContextHelp>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={!id || locked} onClick={() => {
@@ -363,9 +363,11 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         {promotedTo.map((target) => <li key={target.tenant}>{t("Promoted to {tenant} by {member} · {when} · {state}", { tenant: target.tenant, member: target.member, when: new Date(target.at).toLocaleString(), state: target.active ? t("active there") : t("not activated there yet; its release holder reviews the upgrade plan in that environment") })}</li>)}
       </ul>}
       {savedReview && origin && activeID !== savedID && <p className="text-xs text-muted" role="status">{t("This candidate was promoted from {tenant}{when}. It is not active here: review the differences and the storage upgrade plan below, then activate it.", { tenant: origin.from, when: origin.at ? ` · ${new Date(origin.at).toLocaleString()}` : "" })}</p>}
-      {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
-      {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}
-      {savedReview && hostAdmin && <div className="flex flex-wrap items-center gap-2"><Button size="sm" disabled={locked} onClick={() => open({ view: "host-promotions", params: { from: client.connection.tenant, candidate: savedID } })}>{t("Promote to another environment…")}</Button><span className="text-xs text-muted">{t("Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.")}</span></div>}
+      {(review.currentId || review.candidateId) && <Disclosure summary={t("Candidate identity")}><PropertyList items={[
+        ...(review.currentId ? [[t("Installed candidate"), <code>{review.currentId}</code>] as [string, React.ReactNode]] : []),
+        ...(review.candidateId ? [[savedReview ? t("Saved candidate") : t("Draft candidate"), <code>{review.candidateId}</code>] as [string, React.ReactNode]] : []),
+      ]} /></Disclosure>}
+      {savedReview && hostAdmin && <div className="flex flex-wrap items-center gap-2"><Button size="sm" disabled={locked} onClick={() => open({ view: "host-promotions", params: { from: client.connection.tenant, candidate: savedID } })}>{t("Promote to another environment…")}</Button><ContextHelp title={t("Promote to another environment…")}>{t("Development → test → production: the sealed bytes of this candidate move into another tenant through the host console.")}</ContextHelp></div>}
       {savedReview && <Disclosure className="rounded border border-border p-3" summary={<span className="text-sm font-semibold">{t("Sealed definitions")} · {assets.length}</span>}>
         <p className="my-2 text-xs text-muted">{t("These definitions come from this immutable candidate, including its original versions and dependencies.")}</p>
         {assets.map(asset => <Disclosure key={`${asset.ref.app}/${asset.ref.kind}/${asset.ref.name}`} className="my-2" summary={<span className="font-mono text-xs">{asset.ref.app}/{asset.ref.kind}/{asset.ref.name}</span>}><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(asset, null, 2)}</pre></Disclosure>)}
@@ -373,20 +375,18 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {savedReview && <p className="text-sm" role="status">{runningDiagnostic ? t("Current definitions could not be compared with this candidate.") : runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
       {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation installs the candidate's included objects, pages, applications, workflows, AI functions and code functions together.")}</p>}
       {savedReview && activationDiagnostic && <p role="alert" className="text-sm text-warning">{activationDiagnostic}</p>}
-      {savedReview && extensions.length > 0 && <Card role="region" aria-label={t("Customer extensions")} className="grid gap-2 p-3">
+      {savedReview && extensions.length > 0 && <section role="region" aria-label={t("Customer extensions")} className="grid gap-3 border-t border-border pt-3">
         <h3 className="text-sm font-medium">{t("Customer extensions")}</h3>
         {extensions.map(extension => <div key={extension.type} className="grid gap-1 text-xs">
-          <span>{extension.type} · {extension.base.ref.name} · {extension.base.sourceVersion || t("Original version not recorded")} → {extension.targetVersion}</span>
-          <span>{t("Retained fields")}: {extension.fields.join(", ")}</span>
+          <PropertyList columns={2} items={[[t("Object type"), extension.type], [t("Extension of"), extension.base.ref.name], [t("Source version"), extension.base.sourceVersion || t("Original version not recorded")], [t("Target version"), extension.targetVersion], [t("Retained fields"), extension.fields.join(", ")]]} />
           {extension.issue && <p role="alert" className="text-warning">{extension.issue}</p>}
         </div>)}
-      </Card>}
-      {savedReview && upgradePlan && <Card role="group" className="grid gap-2 p-3" aria-label={t("Storage upgrade plan")}>
-        <h3 className="text-sm font-semibold">{t("Storage upgrade plan")}</h3>
-        <p className="text-xs text-muted">{t("Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.")}</p>
+      </section>}
+      {savedReview && upgradePlan && <section role="group" className="grid gap-3 border-t border-border pt-3" aria-label={t("Storage upgrade plan")}>
+        <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Storage upgrade plan")}</h3><ContextHelp title={t("Storage upgrade plan")}>{t("Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.")}</ContextHelp></div>
         <ul className="grid gap-1 text-xs">{upgradePlan.additions.map(addition => <li key={`${addition.type}/${addition.field}`}>{addition.type} · {addition.field} · {t(addition.kind)} · {t("{count} existing records", { count: addition.records })}</li>)}</ul>
         <Checkbox disabled={locked} checked={confirmedUpgrade === upgradePlan.id} onChange={checked => setConfirmedUpgrade(checked ? upgradePlan.id : "")}>{t("Confirm this optional field upgrade plan")}</Checkbox>
-      </Card>}
+      </section>}
       {builder && savedReview && savedID && activeID && activeID !== savedID && <MigrationWorkbench from={activeID} to={savedID} assets={assets} onChanged={async () => { await inventory.refetch(); await readSaved(savedID); }} onLock={setMigrationLocked} />}
       {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
       {review.diagnostic && (() => { const d = diagnose(review.diagnostic, { application: scope || (kind === "app" ? id : undefined) }); return <div className="grid gap-2">
@@ -416,8 +416,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         {!savedReview && <Button disabled={locked || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
         {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
         {builder && savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
-          <div className="text-sm font-semibold">{t("Measured function evaluation")}</div>
-          <p className="text-xs text-muted">{t("A saved synthetic plan runs real model calls. A passing report for each included function is required before activation.")}</p>
+          <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Measured function evaluation")}</h3><ContextHelp title={t("Measured function evaluation")}>{t("A saved synthetic plan runs real model calls. A passing report for each included function is required before activation.")}</ContextHelp></div>
           <label className="grid gap-1 text-xs">{t("Evaluation plan")}
             <Select disabled={locked} value={planID} onChange={(event) => { setPlanID(event.target.value); setReportID(""); }}>
               <option value="">{t("Choose an evaluation plan")}</option>
@@ -430,13 +429,13 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           </div>
           {reports.isError && <p role="alert" className="text-xs text-warning">{t("Evaluation reports are unavailable. Cached results do not grant activation.")}</p>}
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: <code>{reportID}</code></p>}
-          {report && <p className="text-sm" role="status">{t("Report state")}: {t(report.state)} · {t("Quality")}: {Math.round(report.quality * 100)}% · {t("Reported USD cost")}: {report.costComplete ? report.costUsd : t("Unknown")} · {t("Peak latency (ms)")}: {report.peakLatencyMillis} · {t("Calls")}: {report.attempts.length}</p>}
+          {report && <div role="status"><PropertyList columns={3} items={[[t("Report state"),t(report.state)],[t("Quality"),Math.round(report.quality*100)+"%"],[t("Reported USD cost"),report.costComplete?report.costUsd:t("Unknown")],[t("Peak latency (ms)"),report.peakLatencyMillis],[t("Calls"),report.attempts.length]]}/></div>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
         {builder && savedID && agentNames.length > 0 && <Panel title={t("Agent candidate evaluations")} role="region" aria-label={t("Agent candidate evaluations")} className="grid gap-2">
           <p className="text-xs text-muted">{t("Each candidate agent must pass its declared cases three times with the current agent model before activation.")}</p>
           {agentNames.map(name => <div key={name} className="grid gap-1 text-xs"><div className="flex flex-wrap items-center gap-2"><strong>{name}</strong><Button size="sm" disabled={locked} onClick={() => void evaluateAgent(name)}>{t("Run declared cases")}</Button></div>
-            {candidateAI.filter(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name).flatMap(item => item.evaluations.filter(report => report.candidate === savedID).map(report => <p key={report.id}>{report.id} · {t(report.state)} · {report.model} · {Math.round(report.quality * 100)}%</p>))}
+            {candidateAI.filter(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name).flatMap(item => item.evaluations.filter(report => report.candidate === savedID).map(report => <PropertyList key={report.id} columns={2} items={[[t("Report"),<code>{report.id}</code>],[t("Report state"),t(report.state)],[t("Model"),report.model],[t("Quality"),Math.round(report.quality*100)+"%"]]}/>))}
           </div>)}
           <Button disabled={locked} onClick={() => void perform(() => readSaved(savedID))}>{t("Refresh evaluation reports")}</Button>
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: {reportID}</p>}

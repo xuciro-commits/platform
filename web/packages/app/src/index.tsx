@@ -317,7 +317,7 @@ export type SavedView = Api.SavedView;
  * A type's generated list. It offers every action that makes a new record of
  * the type (F-33); an app that offers one itself names it in `covers`.
  */
-export function Records({ type, description, actions, covers, saved, kanban }: { type: string; description?: string; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"] }) {
+export function Records({ type, description, help, actions, covers, saved, kanban }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"] }) {
   const { source, decide, client, can, catalog } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
@@ -345,7 +345,7 @@ export function Records({ type, description, actions, covers, saved, kanban }: {
   return (
     <>
       <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} /></>}
-        description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
+        description={description} help={help ?? (saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see."))} />
       <RecordList
         key={saved?.id ?? type}
         source={source}

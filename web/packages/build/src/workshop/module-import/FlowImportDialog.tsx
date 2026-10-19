@@ -1,7 +1,7 @@
 import {apiErrorMessage} from "@platform/kernel";
 import type {Api} from "@platform/kernel";
 import {useEffect,useMemo,useRef,useState} from "react";
-import {Button,Dialog,Input,Panel,Select,Textarea,t} from "@platform/ui";
+import { ContextHelp,Button,Dialog,Input,Panel,Select,Textarea,t} from "@platform/ui";
 import {useHost,useReadQuery} from "@platform/app";
 import type {Capability,WorkflowDraft} from "../../automate/workflow-model";
 import {compileFlowSource,flowPorts,parseFlowSource,type FlowBindings,type FlowCapabilityBinding,type FlowImportReport,type FlowIntakeBinding,type SourceFlowNode} from "./flows";
@@ -59,7 +59,7 @@ export function FlowImportDialog({capabilities,name,onClose,onApply}:{capabiliti
   <Textarea aria-label={t("Flow source JSON")} rows={5} value={source} onChange={e=>{setSource(e.target.value);resetSource();}}/>
   {!!parsed.flows.length&&<label className="grid gap-1 text-xs">{t("Source flow")}<Select value={flow?.id??""} onChange={e=>{setSelected(e.target.value);setBindings({});setBindingText({});setBindingTextError({});}}>{parsed.flows.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</Select></label>}
   <label className="grid gap-1 text-xs">{t("Imported workflow name")}<Input value={destination} onChange={e=>setDestination(e.target.value)}/></label>
-  {flow&&<Panel className="grid gap-2"><strong>{flow.name}</strong><p>{flow.execution.mode} · {flow.nodes.length} {t("Nodes")} · {flow.edges.length} {t("Connections")}</p><p className="text-xs text-muted">{t("The complete event-time window, aggregate/threshold path, alert action, output and dead-letter edge must map to their native owners. Browser run history is not imported.")}</p>
+  {flow&&<Panel className="grid gap-2"><strong>{flow.name}</strong><p>{flow.execution.mode} · {flow.nodes.length} {t("Nodes")} · {flow.edges.length} {t("Connections")}</p><ContextHelp title={t("Flow import")}><p className="text-xs text-muted">{t("The complete event-time window, aggregate/threshold path, alert action, output and dead-letter edge must map to their native owners. Browser run history is not imported.")}</p></ContextHelp>
    {flow.nodes.map(node=>{
     const list=choices(node.type),currentBinding=bindings[node.id],capBinding=currentBinding?.kind!=="source"?currentBinding:undefined;
     if(continuous&&node.type==="telemetrySource"){
@@ -82,7 +82,7 @@ export function FlowImportDialog({capabilities,name,onClose,onApply}:{capabiliti
       <label className="grid gap-1 text-xs">{t("Triggered alert target binding · JSON")}<Textarea rows={2} value={bindingText[node.id]?.target??JSON.stringify(capBinding.target??{source:"item",path:["id"]},null,2)} onChange={e=>updateActionText(node.id,"target",e.target.value)}/></label>
       <label className="grid gap-1 text-xs">{t("Action payload bindings · JSON")}<Textarea rows={4} value={bindingText[node.id]?.inputs??JSON.stringify(capBinding.inputs??{},null,2)} onChange={e=>updateActionText(node.id,"inputs",e.target.value)}/></label>
       {bindingTextError[node.id]&&<Panel role="alert">{bindingTextError[node.id]}</Panel>}
-      <p className="text-[11px] text-muted">{t("Bind values from the current triggered item with source item and a field path, or provide an explicit literal. Required action fields are checked before import.")}</p>
+      <ContextHelp title={t("Action inputs")}><p className="text-[11px] text-muted">{t("Bind values from the current triggered item with source item and a field path, or provide an explicit literal. Required action fields are checked before import.")}</p></ContextHelp>
      </>}
      {node.type==="objectSource"&&<label className="grid gap-1 text-xs">{t("Native source object")}<Select value={capBinding?.object??""} onChange={e=>setBindings(old=>({...old,[node.id]:{...capBinding!,object:e.target.value}}))} disabled={!capBinding}><option value="">{t("Choose an object")}</option>{entities.map(entity=><option key={entity.type} value={entity.type}>{entity.title} · {entity.type}</option>)}</Select></label>}
      <pre className="max-h-28 overflow-auto text-[10px]">{JSON.stringify(node.config,null,2)}</pre>

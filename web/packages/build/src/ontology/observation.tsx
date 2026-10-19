@@ -18,7 +18,7 @@ const empty = (): ObservationDraft => ({ id: "", revision: 0, name: "", title: "
 
 export function ObservationSources() {
   const { source, can } = useHost(), { open } = useApplicationWorkspace();
-  return <div className="grid gap-3"><PageHeader title={t("Observation sources")} description={t("Declare external time-series reads and the business decision that may consume their summary.")} actions={<><Button variant="ghost" onClick={() => open({ view: "observations" })}>{t("Read observations")}</Button>{can("build.observation.create") && <Button variant="primary" onClick={() => open({ view: "observation-source", params: { id: "new" } })}>{t("New observation source")}</Button>}</>} />
+  return <div className="grid gap-3"><PageHeader title={t("Observation sources")} help={t("Declare external time-series reads and the business decision that may consume their summary.")} actions={<><Button variant="ghost" onClick={() => open({ view: "observations" })}>{t("Read observations")}</Button>{can("build.observation.create") && <Button variant="primary" onClick={() => open({ view: "observation-source", params: { id: "new" } })}>{t("New observation source")}</Button>}</>} />
     <ResourceList source={source} type="build.observation" fields={["title", "name", "object", "signal", "state", "definitionVersion"]} onOpen={record => open({ view: "observation-source", params: { id: record.id } })} />
   </div>;
 }
@@ -68,7 +68,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
   if (id !== "new" && !draft.id) return <PageHeader title={t("Observation source")} description={query.isError ? t("The observation source could not be loaded.") : t("Loading…")} />;
   const editable = can(`build.observation.${draft.id ? "edit" : "create"}`);
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title={draft.title || t("New observation source")} description={t("The source stores a portable declaration. Connection addresses, credentials and original points stay outside the artifact.")} actions={<>
+    <PageHeader title={draft.title || t("New observation source")} help={t("The source stores a portable declaration. Connection addresses, credentials and original points stay outside the artifact.")} actions={<>
       <Button variant="ghost" onClick={() => open({ view: "observation-source" })}>{t("Observation sources")}</Button>
       <ResourceControls type="build.observation" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} onSave={editable ? () => void perform(save) : undefined} onReview={editable ? () => void perform(review) : undefined} onInstall={editable ? () => void perform(install) : undefined} invalid={!!inputDrafts?.invalid} route={{ view: "observation-source", params: { id } }} />
       {draft.state === "published" && can("build.observation.retire") && <Button disabled={busy || dirty} onClick={() => transitions.take("build.observation.retire", { ...draft, created: draft.created ?? {}, changed: draft.changed ?? {} })}>{t("Retire source")}</Button>}

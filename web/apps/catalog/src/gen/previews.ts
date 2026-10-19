@@ -55,6 +55,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/collection-title": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.CollectionTitles })),
   "ui/command-menu": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContextCommands })),
   "ui/content-tabs": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContentTabsExample })),
+  "ui/context-help": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContextHelpExample })),
   "ui/count-matrix": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.CountMatrixExample })),
   "ui/count-treemap": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.CountTreemapExample })),
   "ui/data-table": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Tables })),

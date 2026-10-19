@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PayloadFields } from "@platform/app";
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Textarea, t } from "@platform/ui";
+import { ContextHelp, Button, Textarea, t } from "@platform/ui";
 
 /** One fixed payload serves both fields and the explicit advanced editor.
  * Preview fields never look up production records for synthetic references. */
@@ -30,6 +30,6 @@ export function TestPayload({ fields, payload, onChange }: { fields?: ActionDecl
       : <label className="grid gap-1 text-xs">{t("Test inputs (JSON)")}
         <Textarea parse="json" rows={3} value={payload} onChange={(event) => onChange(event.target.value)} className="font-mono" />
       </label>}
-    <p className="text-xs text-muted">{t("Reference values are fixed test record IDs. Complex values and deliberate invalid inputs use advanced JSON.")}</p>
+    <ContextHelp title={t("Test input")}><p className="text-xs text-muted">{t("Reference values are fixed test record IDs. Complex values and deliberate invalid inputs use advanced JSON.")}</p></ContextHelp>
   </fieldset>;
 }

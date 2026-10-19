@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { useEffect, useId, useRef, useState } from "react";
 import {InputDraftProvider,useInputDrafts,InputProblems} from "../fields/draft";
 import {StructuredEditor} from "./StructuredEditor";
+import {ContextHelp} from './ContextHelp';
 import {structuredIssues} from "../fields/structured-source";
 import {DateRangeInput} from "./DateRangeInput";
 import { Button } from "../primitives/button";
@@ -134,15 +135,16 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
         const ariaDescribedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
         return (
           <div key={name} data-field-name={name} className="grid min-w-0 gap-1">
-            <div className="flex items-baseline justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <label htmlFor={id} className="text-xs font-medium text-muted">
                 {type.label}{type.required ? " *" : ""}
               </label>
+              {type.help&&<ContextHelp title={type.label}>{type.help}</ContextHelp>}
               {type.readOnly && (
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted/70">{t("Read only")}</span>
               )}
             </div>
-            {type.help && <p id={helpId} className="-mt-0.5 text-xs text-muted/80">{type.help}</p>}
+            {type.help && <span id={helpId} className="sr-only">{type.help}</span>}
             <Controller control={control} name={name} render={({ field }) => (
               <span onBlurCapture={field.onBlur} ref={node => field.ref(node ? { focus: () => node.querySelector<HTMLElement>("input,select,textarea,[role=combobox]")?.focus() } : null)}>
                 {type.readOnly ? (

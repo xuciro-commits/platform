@@ -23,6 +23,13 @@ test("new application visual, JSON and YAML edit one payload without implicit wr
   await dialog.getByRole("textbox", { name: /^What people call it \*$/ }).fill(title);
   await dialog.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
   const source = dialog.getByRole("textbox", { name: "Configuration source", exact: true });
+  await dialog.getByText("Fields and examples", { exact: true }).click();
+  const fieldHelp=dialog.getByRole("button",{name:"About Fields and examples",exact:true});
+  await fieldHelp.click();
+  await expect(page.getByRole("dialog",{name:"Fields and examples",exact:true})).toContainText("Optional fields may be omitted.");
+  await page.keyboard.press("Escape");
+  await expect(fieldHelp).toBeFocused();
+  await expect(source).toBeVisible();
   const original = JSON.parse(await source.inputValue());
   expect(original).toMatchObject({ name, title });
   expect(original).not.toHaveProperty("id");
@@ -162,7 +169,9 @@ test("editing starts from writable values and the source guide selects real refe
   await expect(dialog.locator("pre")).toContainText('"name": "<Item name>"');
   await expect(dialog.locator("pre")).toContainText('"supplier": "<select a permitted record>"');
   expect(JSON.parse(await source.inputValue()).name).toBe("Existing item");
+  await dialog.getByRole("combobox", { name: "Field reference", exact: true }).selectOption("priority");
   await dialog.getByRole("combobox", { name: "Priority", exact: true }).selectOption("urgent");
+  await dialog.getByRole("combobox", { name: "Field reference", exact: true }).selectOption("supplier");
   await dialog.getByRole("combobox", { name: "Supplier", exact: true }).fill(secondSupplier!);
   await dialog.getByRole("option", { name: new RegExp(secondSupplier!) }).click();
   const changed = { ...original, priority: "urgent", supplier: secondSupplier };

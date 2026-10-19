@@ -27,7 +27,7 @@ function GlossaryReach() {
   const byRef = reached.filter((r) => r.term.refersTo).length;
   const byName = reached.filter((r) => r.names > 0).length;
   return <Panel className="grid gap-1" title={t("Where these words work")}
-    description={t("{byRef} of {total} name a declaration the host checked when it was saved; {byName} are words a declared name or synonym also uses, so Search proposes them. A term with neither is documentation: it teaches people, and no query reads it.", { byRef, byName, total: reached.length })}>
+    help={t("{byRef} of {total} name a declaration the host checked when it was saved; {byName} are words a declared name or synonym also uses, so Search proposes them. A term with neither is documentation: it teaches people, and no query reads it.", { byRef, byName, total: reached.length })}>
     {reached.map(({ term, matched, names: n }) => <p key={term.id} className="flex flex-wrap items-baseline gap-2 text-xs">
       <span className="font-medium">{term.term}</span>
       {term.refersTo && <Tag label={t("names {ref}", { ref: term.refersTo })} tone="info" />}
@@ -44,7 +44,7 @@ export function Glossary() {
   return (
     <>
       <GlossaryReach />
-      <Records type="knowledge.term" description={t("Jargon of this organisation and what it refers to (an object type, a field or an action). Three things read it: Search, which finds records by the term; agents, whose prompts carry it; and anyone asking what a word means here. It does not rename anything — to change how a name reads in a language, use Control Panel → Languages and words.")} />
+      <Records type="knowledge.term" help={t("Jargon of this organisation and what it refers to (an object type, a field or an action). Three things read it: Search, which finds records by the term; agents, whose prompts carry it; and anyone asking what a word means here. It does not rename anything — to change how a name reads in a language, use Control Panel → Languages and words.")} />
     </>
   );
 }
@@ -57,7 +57,7 @@ export function Knowledge() {
   const [found, setFound] = useState<Passage[]>();
   return (
     <>
-      <Records type="knowledge.document" description={t("House rules, manuals, FAQs. Agents search them with their knowledge tool and cite what they used; members find them in Search. Set the embedding model in App settings → Knowledge to search by meaning as well as by words.")} />
+      <Records type="knowledge.document" help={t("House rules, manuals, FAQs. Agents search them with their knowledge tool and cite what they used; members find them in Search. Set the embedding model in App settings → Knowledge to search by meaning as well as by words.")} />
       <h2 className="mb-2 mt-4 text-sm font-semibold">{t("Try a search")}</h2>
       <Form className="flex max-w-2xl gap-2" onSubmit={async () => { setFound(await client.get<Passage[]>(`/v1/knowledge?q=${encodeURIComponent(q)}`)); }}>
         <Input aria-label={t("Question")} placeholder={t("What an agent might ask")} value={q} onChange={(e) => setQ(e.target.value)} />

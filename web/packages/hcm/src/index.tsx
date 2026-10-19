@@ -6,7 +6,7 @@ import { t } from "@platform/ui";
 import { CalendarDays, Users } from "lucide-react";
 
 function LeaveRequests() {
-  return <Records type="hcm.leave" description={t("Your leave requests, and those you may see. Submitting one sends it to your approvers.")} />;
+  return <Records type="hcm.leave" help={t("Your leave requests, and those you may see. Submitting one sends it to your approvers.")} />;
 }
 
 export default defineApp({

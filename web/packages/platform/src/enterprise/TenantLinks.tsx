@@ -1,5 +1,5 @@
 import { useHost, useRecordInventory } from "@platform/app";
-import { Button, DataTable, Dialog, Form, Input, Notice, Select, t, useUnsavedChanges } from "@platform/ui";
+import { ContextHelp, Button, DataTable, Dialog, Form, Input, Notice, Select, t, useUnsavedChanges } from "@platform/ui";
 import { useState } from "react";
 import { MODEL, live, type Model, type TenantLink } from "./model";
 
@@ -23,7 +23,7 @@ export function TenantLinks({ model, day }: { model: Model; day: string }) {
     finally { setBusy(false); }
   };
   return <div className="grid content-start gap-4 p-4">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold">{t("Tenant links")}</h2><p className="max-w-2xl text-sm text-muted">{t("Link an organisation to another tenant through an authorized connection. Preview changes before importing its published enterprise structure.")}</p></div>{host.can("enterprise.tenant-link.save") && <Button onClick={() => { setExistingID(undefined); setEditing({ id: "", organization: "", tenant: "", root: "", connection: "" }); }}>{t("Add tenant link")}</Button>}</div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex flex-wrap items-center gap-3"><h2 className="text-base font-semibold">{t("Tenant links")}</h2><ContextHelp title={t("Tenant links")}>{t("Link an organisation to another tenant through an authorized connection. Preview changes before importing its published enterprise structure.")}</ContextHelp></div>{host.can("enterprise.tenant-link.save") && <Button onClick={() => { setExistingID(undefined); setEditing({ id: "", organization: "", tenant: "", root: "", connection: "" }); }}>{t("Add tenant link")}</Button>}</div>
     {error && <Notice tone="warning" message={error} />}
     {connections.isError && <Notice tone="info" message={t("Connections are not readable with your current access. Ask a builder to configure a connection.")} />}
     <DataTable data={model.tenantLinks ?? []} getRowId={link => link.id} searchable={false} height={320} columns={[

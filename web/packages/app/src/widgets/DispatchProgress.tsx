@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { Button, Card, DataTable, Disclosure, Select, Tag, Textarea, t, type ColumnDef } from "@platform/ui";
+import { Button, Card, ContextHelp, DataTable, Disclosure, PropertyList, Select, Tag, Textarea, t, type ColumnDef } from "@platform/ui";
 import { useState } from "react";
 import { useHost, useOpenRecord, useReadQuery } from "../index";
 import { useRunControl } from "../automation/use-run-control";
@@ -44,20 +44,32 @@ function DispatchCard({ run, onChanged }: { run: Api.DispatchRun; onChanged: () 
   };
   return <Card className="grid min-w-0 gap-3 p-3">
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-2"><strong className="min-w-0 break-words">{run.command.title || run.command.name}</strong><Tag label={stateName(run.state)} tone={run.state === "cancelled" ? "neutral" : terminalStates.includes(run.state) ? "success" : run.state === "failed" ? "danger" : "warning"} /></div>
-    <p className="text-xs text-muted">{t("Control loops stay in the device, gateway or PLC. The platform dispatches and reads status.")}</p>
-    <dl className="grid min-w-0 gap-2 text-xs sm:grid-cols-2">
-      <div><dt className="text-muted">{t("Dispatch target")}</dt><dd className="break-all font-mono">{run.target}</dd></div>
-      <div><dt className="text-muted">{t("Stable business key")}</dt><dd className="break-all font-mono">{run.key}</dd></div>
-      <div><dt className="text-muted">{t("Business deadline")}</dt><dd><time dateTime={run.deadline}>{new Date(run.deadline).toLocaleString()}</time></dd></div>
-      <div><dt className="text-muted">{t("Attempts")}</dt><dd>{run.attempt}</dd></div>
-    </dl>
+    <ContextHelp title={t("Device dispatch progress")}>{t("Control loops stay in the device, gateway or PLC. The platform dispatches and reads status.")}</ContextHelp>
+    <PropertyList columns={2} items={[
+      [t("Dispatch target"),<code className="break-all">{run.target}</code>],
+      [t("Stable business key"),<code className="select-all break-all">{run.key}</code>],
+      [t("Business deadline"),<time dateTime={run.deadline}>{new Date(run.deadline).toLocaleString()}</time>],
+      [t("Attempts"),run.attempt],
+    ]}/>
     {!terminalStates.includes(run.state) && <p role="status" className="text-xs">{t("Elapsed: {seconds} seconds", { seconds: elapsed(run.startedAt) })}{run.state === "stuck" ? ` · ${t("Stuck for {seconds} seconds", { seconds: elapsed(run.stateAt) })}` : ""}</p>}
     {run.reason && <p className="whitespace-pre-wrap break-words text-sm">{run.reason}</p>}
     {run.state === "unknown" && <p role="status" className="text-xs text-warning">{t("The result is unknown. The target may already have acted; status readback continues.")}</p>}
-    {reading && <p className="break-words text-xs text-muted">{t("Latest status read")}: {new Date(reading.at).toLocaleString()} · {stateName(reading.state)}{reading.value ? ` · ${reading.value}` : ""}{reading.reason && reading.reason !== run.reason ? ` · ${reading.reason}` : ""}</p>}
+    {reading&&<PropertyList columns={2} items={[
+      [t("Latest status read"),new Date(reading.at).toLocaleString()],
+      [t("State"),stateName(reading.state)],
+      ...(reading.value?[[t("Value"),reading.value] as [string,string]]:[]),
+      ...(reading.reason&&reading.reason!==run.reason?[[t("Reason"),reading.reason] as [string,string]]:[]),
+    ]}/>}
     <div className="flex min-w-0 flex-wrap gap-2"><Button size="sm" variant="ghost" onClick={() => openRecord(run.subject)}>{t("Open business record")}</Button><Tag className="h-auto max-w-full whitespace-normal py-1 leading-tight" label={t(safe ? run.command.idempotent ? "Idempotent command" : "Target deduplicates by business key" : "Unsafe to resend automatically")} tone={safe ? "info" : "warning"} /></div>
     {!!run.attempts?.length && <Disclosure summary={t("Dispatch attempts")}><DataTable data={run.attempts} columns={attemptColumns} getRowId={attempt => attempt.intent} searchable={false} height={200} /></Disclosure>}
-    {!!run.readback?.length && <Disclosure summary={t("Status read history")}><ol className="grid min-w-0 gap-2 pt-2 text-xs">{[...run.readback].reverse().map((entry, index) => <li key={`${entry.at}:${index}`} className="grid gap-1 break-words"><span><time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time> · {stateName(entry.state)}{entry.value ? ` · ${entry.value}` : ""}</span>{entry.reason && <span className="text-muted">{entry.reason}</span>}</li>)}</ol></Disclosure>}
+    {!!run.readback?.length&&<Disclosure summary={t("Status read history")}>
+      <div className="py-2"><DataTable data={[...run.readback].reverse().map((entry,index)=>({...entry,rowId:String(index)}))} columns={[
+        {accessorKey:"at",header:t("Time"),cell:cell=>new Date(cell.row.original.at).toLocaleString()},
+        {accessorKey:"state",header:t("State"),cell:cell=>stateName(cell.row.original.state)},
+        {accessorKey:"value",header:t("Value")},
+        {accessorKey:"reason",header:t("Reason")},
+      ]} getRowId={entry=>entry.rowId} searchable={false} height={200}/></div>
+    </Disclosure>}
     {canReview && <fieldset disabled={control.busy || !!control.pending} className="grid min-w-0 gap-3 rounded border border-border p-3"><legend className="px-1 text-xs font-medium">{t("Human intervention")}</legend>
       <p className="text-xs text-muted">{t("Dispatch reviewer role")}: {run.definition.reviewerRole}</p>
       <label className="grid gap-1 text-xs">{t("Dispatch decision")}<Select value={decision} onChange={event => setDecision(event.target.value)}>{Object.entries(decisions).map(([value, title]) => <option key={value} value={value}>{t(title)}</option>)}</Select></label>

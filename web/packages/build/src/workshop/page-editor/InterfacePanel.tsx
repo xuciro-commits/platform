@@ -1,6 +1,6 @@
 import type { Api } from "@platform/kernel";
 import { pageUIProfile, SemanticObjectSelect } from "@platform/app";
-import { Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
+import { ContextHelp, Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
 import { layoutID } from "../page-layout";
 
 export function InterfacePanel({ document, object, onChange }: { document: Api.PageDocument; object: Api.AssetRef; onChange: (document: Api.PageDocument) => void }) {
@@ -30,6 +30,6 @@ export function InterfacePanel({ document, object, onChange }: { document: Api.P
         update({ ...iface, [direction]: { ...iface[direction], [id]: { variable, type, object: type === "record" || type==="object-set" ? object : undefined, required: direction === "inputs" } } }, direction === "inputs" ? { ...variables, [variable]: { title: id, scope: "page", type, mode: "input" } } : variables);
       }}>{t(direction === "inputs" ? "Add input" : "Add output")}</Button>
     </div>)}
-    <p className="text-xs text-muted">{t("Inputs carry values or record references. The receiver reads records using the current member's permissions.")}</p>
+    <ContextHelp title={t("Page interface")}><p className="text-xs text-muted">{t("Inputs carry values or record references. The receiver reads records using the current member's permissions.")}</p></ContextHelp>
   </Card>;
 }

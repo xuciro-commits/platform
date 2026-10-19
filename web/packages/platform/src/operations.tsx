@@ -1,7 +1,7 @@
 // Settings: owned work, integrations, app settings and the audit trail (ADR-0027、ADR-0004).
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, Checkbox, DataTable, Dialog, Input, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
 
@@ -26,7 +26,7 @@ export function Automation() {
   ];
   const subscriptions = apps.flatMap((a) => a.subscribes.map((action) => ({ app: a.id, action })));
   return <>
-    <PageHeader title={t("Work queue")} description={t("Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision.")} />
+    <PageHeader title={t("Work queue")} help={t("Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision.")} />
       <div className="mb-3 flex flex-wrap gap-2 text-sm">
         {subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
           subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
@@ -57,19 +57,17 @@ export function SystemHealth() {
     <PageHeader title={t("Health")} />
       {health && <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
         {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Tag label={health.status === "quarantined" ? t("Quarantined") : health.status === "ok" ? t("Healthy") : t("Needs attention")}
-            tone={health.status === "quarantined" ? "danger" : health.status === "ok" ? "success" : "warning"} />
-          <Tag label={t("Waiting: {n}", { n: health.queues.reduce((n, q) => n + q.depth, 0) })} tone="info" />
-          <Tag label={t("Gave up: {n}", { n: health.failed })} tone={health.failed > 0 ? "danger" : "neutral"} />
-          <Tag label={t("Past their quota: {n}", { n: health.deferred.length })} tone={health.deferred.length > 0 ? "warning" : "neutral"} />
-          <Tag label={t("Open breakers: {n} of {m}", { n: health.openBreakers, m: health.breakers.length })} tone={health.openBreakers > 0 ? "danger" : "neutral"} />
-          <Tag label={t("Failing connectors: {n}", { n: health.connectorsFailing })} tone={health.connectorsFailing > 0 ? "danger" : "neutral"} />
-          <Tag label={t("Failing endpoints: {n}", { n: health.endpointsFailing })} tone={health.endpointsFailing > 0 ? "danger" : "neutral"} />
-          {/* Which code answers: a host still running yesterday's build reads as such. */}
-          <span className="text-muted">{t("Host started {at}", { at: new Date(health.started).toLocaleString() })}
-            {health.built ? ` · ${t("built from {revision}", { revision: health.built })}` : ""}</span>
-        </div>
+        <Tag label={health.status === "quarantined" ? t("Quarantined") : health.status === "ok" ? t("Healthy") : t("Needs attention")}
+          tone={health.status === "quarantined" ? "danger" : health.status === "ok" ? "success" : "warning"} />
+        <PropertyList columns={3} items={[
+          [t("Waiting work"), health.queues.reduce((n, q) => n + q.depth, 0)],
+          [t("Failed work"), health.failed],
+          [t("Applications over quota"), health.deferred.length],
+          [t("Open breakers"), `${health.openBreakers} / ${health.breakers.length}`],
+          [t("Failing connectors"), health.connectorsFailing],
+          [t("Failing endpoints"), health.endpointsFailing],
+        ]} />
+        <Disclosure summary={t("Details")}><PropertyList columns={2} items={[[t("Host started"), new Date(health.started).toLocaleString()], [t("Version"), <code key="version" className="break-all">{health.built || "—"}</code>]]} /></Disclosure>
         {health.status === "quarantined" && <div role="alert" className="text-danger">
           {t("This tenant is quarantined. Inputs and work are stopped. Repair its journal or restore a valid backup, then retry recovery.")}
           {health.recoveryError && <code className="block break-all">{health.recoveryError}</code>}
@@ -105,7 +103,7 @@ export function Integrations() {
   ];
   return (
     <>
-      <PageHeader title={t("Connectors")} description={t("Connectors bring facts in, with health, cursors and the last refused input.")} />
+      <PageHeader title={t("Connectors")} help={t("Connectors bring facts in, with health, cursors and the last refused input.")} />
       {connectors.error ? <p className="text-sm text-[var(--tone-danger)]">{String(connectors.error)} {t("— administrators only.")}</p> :
         <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height={180} searchable={false} empty={t("No connectors in this tenant")} />}
     </>
@@ -129,7 +127,7 @@ export function Endpoints() {
   const events = [...apps.flatMap((a) => a.capabilities.flatMap((c) => c.actions)).filter((x) => !x.startsWith("platform.")),
     ...protocols.flatMap((p) => (p.events ?? []).map((e) => `${p.id}#${e.name}`))];
   return <>
-    <PageHeader title={t("Endpoints")} description={t("Webhooks send events and effects signed (Standard Webhooks); email endpoints mail members their notifications. At least once, with a key receivers deduplicate by.")}
+    <PageHeader title={t("Endpoints")} help={t("Webhooks send events and effects signed (Standard Webhooks); email endpoints mail members their notifications. At least once, with a key receivers deduplicate by.")}
       actions={<Button variant="primary" onClick={() => { setDraft(blank); setAdding(true); }}>{t("Add endpoint")}</Button>} />
       <div className="grid gap-2">
         {endpoints.data?.length === 0 && <p className="text-sm text-muted">{t("No endpoints.")}</p>}
@@ -237,7 +235,7 @@ export function AppSettingsView() {
     decide("platform.setting.set", { type: "platform.setting", id: `${app}/${s.name}` }, { value });
   return (
     <>
-      <PageHeader title={t("App settings")} description={t("Values within the rules each app's code defines: thresholds, switches, choices. Rules themselves are code.")} />
+      <PageHeader title={t("App settings")} help={t("Values within the rules each app's code defines: thresholds, switches, choices. Rules themselves are code.")} />
       {settings.data?.filter((a) => a.app !== "platform").length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
       <div className="grid max-w-3xl gap-3">
         {settings.data?.filter((a) => a.app !== "platform").map((a) => ( // the tenant's own settings are the Organisation page's
@@ -246,10 +244,10 @@ export function AppSettingsView() {
               {a.settings.map((s) => {
                 const key = `${a.app}/${s.name}`;
                 return (
-                  <div key={s.name} className="grid grid-cols-[1fr_14rem] items-center gap-3 text-sm">
+                  <div key={s.name} className="grid gap-3 text-sm sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center">
                     <div>
-                      <p className="font-medium">{s.title}</p>
-                      <p className="text-xs text-muted">{s.description}{s.value !== s.default ? ` (default ${s.default})` : ""}</p>
+                      <div className="flex items-center justify-between gap-2"><span className="font-medium">{s.title}</span>{s.description && <ContextHelp title={s.title}>{s.description}</ContextHelp>}</div>
+                      {s.value !== s.default && <p className="text-xs text-muted">{t("default")}: {s.default}</p>}
                     </div>
                     {s.type === "boolean" || s.type === "choice" ? (
                       <Select aria-label={s.title} value={s.value} onChange={(e) => void set(a.app, s, e.target.value)}>
@@ -296,7 +294,7 @@ export function Audit() {
   ];
   return (
     <>
-      <PageHeader title={t("Audit")} description={t("Accepted inputs of this tenant, newest first, rebuilt from the journal.")} />
+      <PageHeader title={t("Audit")} help={t("Accepted inputs of this tenant, newest first, rebuilt from the journal.")} />
       <DataTable data={[...(audit.data ?? [])].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Reads of personal data")}</h2>
       <DataTable data={personal} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />

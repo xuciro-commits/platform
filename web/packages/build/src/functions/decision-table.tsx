@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { cellRuleText } from "../editor/rule-text";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDefinitionDraft } from "../session/definition-draft";
@@ -23,7 +23,7 @@ export function DecisionTables() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (role("build") !== "builder") return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Decision tables")} description={t("Condition columns to result columns; the first matching row decides. A published table is an operation any process step, page or caller can use.")}
+    <PageHeader title={t("Decision tables")} help={t("Condition columns to result columns; the first matching row decides. A published table is an operation any process step, page or caller can use.")}
       actions={<Button onClick={() => open({ view: "decision-table", params: { id: "new" } })}>{t("New decision table")}</Button>} />
     <ResourceList source={source} type="build.table" fields={["title", "name", "version", "state"]} onOpen={(record) => open({ view: "decision-table", params: { id: record.id } })} />
   </div>;
@@ -79,14 +79,14 @@ export function DecisionTableEditor({ id }: { id: string }) {
   if (role("build") !== "builder") return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Decision tables")} description={query.isError ? t("The decision table could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New decision table")} description={t("A condition cell is empty for any value, or = v, != v, < v, <= v, > v, >= v, a..b, a|b|c. The first row whose conditions all hold decides.")}
+    <PageHeader title={draft.title || t("New decision table")} help={t("A condition cell is empty for any value, or = v, != v, < v, <= v, > v, >= v, a..b, a|b|c. The first row whose conditions all hold decides.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "decision-table" })}>{t("Decision tables")}</Button>
         <Button disabled={busy || !!inputDrafts?.invalid || !dirty && !!draft.id} onClick={() => void perform(save)}>{t("Save decision table")}</Button>
         <ResourceControls type="build.table" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "decision-table", params: { id } }} />
         <DraftStatus state={dirty ? "draft" : draft.state} />
       </div>} />
-    <p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p>
+    <ContextHelp title={t("Decision table")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     <StructuredEditor {...structured} value={{ ...structured.value, ...(draft.rows?{rows: draft.rows.map(row => row.expressions?.length ? { expressions: row.expressions, then: row.then } : { when: row.when, then: row.then })}:{}) }}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3">
       <Panel title={t("Table")} className="grid min-w-0 gap-3 lg:grid-cols-3">

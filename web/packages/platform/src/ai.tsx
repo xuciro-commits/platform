@@ -1,6 +1,6 @@
 // Settings: AI providers, the playground and usage (ADR-0008).
 import { useHost, MemberSelect, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
+import { PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
@@ -51,7 +51,7 @@ export function AIProviders() {
   ];
   return (
     <>
-      <PageHeader title={t("AI providers and models")} description={t("Sources of models: vendors, third-party OpenAI-compatible APIs, and local model servers. A model can be called only once enabled: for everyone in the tenant, or for members holding a role in the ai app. Keys are named here and kept in the secret store.")}
+      <PageHeader title={t("AI providers and models")} help={t("Sources of models: vendors, third-party OpenAI-compatible APIs, and local model servers. A model can be called only once enabled: for everyone in the tenant, or for members holding a role in the ai app. Keys are named here and kept in the secret store.")}
         actions={<Button variant="primary" onClick={() => setAdding(true)}>{t("Add provider")}</Button>} />
       {providers.error ? <p className="text-sm text-[var(--tone-danger)]">{String(providers.error)} {t("— ai administrators only.")}</p> : (
         <div className="grid gap-2">
@@ -60,7 +60,7 @@ export function AIProviders() {
             <Card key={p.id} className="flex flex-wrap items-center gap-2 p-2 text-sm">
               <span className="font-semibold">{p.id}</span><Tag label={p.vendor ?? p.kind} tone="info" />
               <span className="font-mono text-xs">{p.baseUrl}</span>
-              <span className="text-xs text-muted">{p.secret ? `key “${p.secret}”` : "no key"} · {enabled.filter((m) => m.provider === p.id).length} enabled</span>
+              <span className="flex flex-wrap items-center gap-2 text-xs text-muted"><span>{t("Key name")}: {p.secret || "—"}</span><span>{t("Enabled")}: {enabled.filter((m) => m.provider === p.id).length}</span></span>
               <span className="ml-auto flex gap-1">
                 <Button size="sm" onClick={() => void load(p.id)}>{t("Models")}</Button>
                 <Button size="sm" variant="danger" onClick={() => void decide("ai.provider.remove", { type: "ai.provider", id: p.id }, {})}>{t("Remove")}</Button>
@@ -101,7 +101,7 @@ export function AIProviders() {
           </>)}
           <Input aria-label={t("Key name")} placeholder={draft.kind === "local" ? t("Key name in the secret store (optional)") : t("Key name in the secret store, e.g. openrouter")}
             value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} />
-          <p className="text-xs text-muted">{t("The host reads the key from PLATFORM_SECRET_&lt;NAME&gt; or a file named after it in PLATFORM_SECRETS_DIR.")}</p>
+          <ContextHelp title={t("Key name")}>{t("The host reads the key from PLATFORM_SECRET_&lt;NAME&gt; or a file named after it in PLATFORM_SECRETS_DIR.")}</ContextHelp>
           <span className="mt-2 flex justify-end gap-2">
             <Button onClick={() => setAdding(false)}>{t("Cancel")}</Button>
             <Button variant="primary" disabled={!draft.id || (draft.kind !== "vendor" && !draft.baseUrl) || (draft.kind !== "local" && !draft.secret)}
@@ -147,7 +147,7 @@ export function AIPlayground() {
   };
   return (
     <>
-      <PageHeader title={t("AI playground")} description={t("Call a model you may use, as yourself: the host checks access, calls the provider and meters the call. Prompts and answers are not kept.")} />
+      <PageHeader title={t("AI playground")} help={t("Call a model you may use, as yourself: the host checks access, calls the provider and meters the call. Prompts and answers are not kept.")} />
       <div className="grid max-w-3xl gap-2 text-sm">
         {models.length === 0 ? <p className="text-muted">{t("No model is enabled for you.")}</p> : (
           <Select aria-label={t("Model")} value={chosen} onChange={(e) => setModel(e.target.value)}>
@@ -161,7 +161,7 @@ export function AIPlayground() {
           <Card key={i} className="p-3">
             <p className="mb-2 text-xs text-muted">{turn.prompt}</p>
             {turn.error ? <p className="text-[var(--tone-danger)]">{turn.error}</p> : <p className="whitespace-pre-wrap">{turn.answer}</p>}
-            {turn.usage && <p className="mt-2 text-xs text-muted">{turn.usage.served ?? turn.usage.model} · {turn.usage.input} {t("in ·")} {turn.usage.output} {t("out ·")} {turn.usage.millis} ms{turn.usage.cost ? ` · $${turn.usage.cost.toFixed(6)}` : ""}</p>}
+            {turn.usage && <Disclosure summary={t("AI usage")}><PropertyList columns={3} items={[[t("Model"), turn.usage.served ?? turn.usage.model], [t("Tokens in"), turn.usage.input], [t("Tokens out"), turn.usage.output], [t("Duration"), `${turn.usage.millis} ms`], [t("Cost (USD)"), turn.usage.cost === undefined ? "—" : turn.usage.cost.toFixed(6)]]} /></Disclosure>}
           </Card>
         ))}
       </div>
@@ -192,7 +192,7 @@ export function AIUsage() {
   ];
   return (
     <>
-      <PageHeader title={t("AI usage")} description={t("Every model call, metered from the journal: per day, member and model. Administrators of the ai app see everyone's; others see their own.")} />
+      <PageHeader title={t("AI usage")} help={t("Every model call, metered from the journal: per day, member and model. Administrators of the ai app see everyone's; others see their own.")} />
       <DataTable data={usage?.totals ?? []} columns={totals} getRowId={(t) => `${t.day}${t.member}${t.model}`} height={220} searchable={false} empty={t("No calls yet")} />
       <AILimits />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Recent calls")}</h2>
@@ -219,8 +219,7 @@ function AILimits() {
   ];
   return (
     <>
-      <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Limits")}</h2>
-      <p className="mb-2 text-xs text-muted">{t("A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.")}</p>
+      <div className="mb-2 mt-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Limits")}</h2><ContextHelp title={t("Limits")}>{t("A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.")}</ContextHelp></div>
       <Form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={async () => {
         if(await decide("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 })){setWho("");setDaily("");setMinute("");}
       }}>

@@ -1,6 +1,6 @@
 // Settings: members and the organisation (ADR-0022).
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Form, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t } from "@platform/ui";
+import { ContextHelp, Button, Form, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, type Chart, type Member } from "./shared";
@@ -25,7 +25,7 @@ export function Members() {
   ];
   return (
     <>
-      <PageHeader title={t("Members and access")} description={t("People, services and AI agents of this tenant, with their role in each app. Changes apply on the next request.")}
+      <PageHeader title={t("Members and access")} help={t("People, services and AI agents of this tenant, with their role in each app. Changes apply on the next request.")}
         actions={<span className="flex gap-2">
           {can("platform.member.invite") && <Button onClick={() => setInviting(true)}>{t("Invite member")}</Button>}
           {can("platform.member.add") && <Button variant="primary" onClick={() => setAdding(true)}>{t("Add member")}</Button>}
@@ -41,7 +41,7 @@ export function Members() {
           onSubmit={async (v) => { if (await decide("platform.member.add", { type: "platform.member", id: v.id }, { subject: v.subject, agent: v.agent })) setAdding(false); }} />
       </Dialog>}
       {can("platform.member.invite") && <Dialog open={inviting} onOpenChange={setInviting} title={t("Invite member")}>
-        <p className="mb-2 text-xs text-muted">{t("Add a member who has not signed in yet: they stand invited until they first do, and may be granted roles meanwhile.")}</p>
+        <div className="mb-2 flex justify-end"><ContextHelp title={t("Invite member")}>{t("Add a member who has not signed in yet: they stand invited until they first do, and may be granted roles meanwhile.")}</ContextHelp></div>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t("Lower case, digits, dashes")), subject: z.string().regex(/^user:.+/, t("user:<email>")) })}
           defaultValues={{ id: "", subject: "" }} submitLabel={t("Invite")} onCancel={() => setInviting(false)}
           fields={[{ name: "id", label: t("Member ID") }, { name: "subject", label: t("Signs in as (user:<email>)") }]}
@@ -88,14 +88,18 @@ export function MemberDetail({ id }: { id: string }) {
         </div>
       </Panel>}
       {can("platform.member.offboard") && <Dialog open={leaving} onOpenChange={setLeaving} title={t("Offboard member")}>
-        <p className="mb-2 text-xs text-muted">{t("The member leaves: their subjects and tokens go, their grants end, their record and history stay; their enterprise memberships end today and what they own passes to the successor, when named. Not reversible; add them again if they return.")}</p>
+        <ul className="mb-3 grid list-disc gap-1 pl-5 text-sm">
+          <li>{t("Sign-in identities, tokens and role grants are removed. Enterprise memberships end today.")}</li>
+          <li>{t("The member's record and history stay. A named successor takes over what they own.")}</li>
+          <li>{t("This cannot be undone. Add the member again if they return.")}</li>
+        </ul>
         <EntityForm schema={z.object({ successor: z.string(), reason: z.string() })} defaultValues={{ successor: "", reason: "" }} submitLabel={t("Offboard member")} onCancel={() => setLeaving(false)}
           fields={[{ name: "successor", label: t("Successor"), kind: "select", help: t("The member who takes over their delegations and open items"),
             options: [{ value: "", label: t("none") }, ...members.filter((m) => m.id !== member.id && (m.status ?? "active") === "active").map((m) => ({ value: m.id, label: m.profile.displayName ? `${m.profile.displayName} (${m.id})` : m.id }))] },
             { name: "reason", label: t("Reason (optional)") }]}
           onSubmit={async (v) => { if (await decide("platform.member.offboard", { type: "platform.member", id: member.id }, { reason: v.reason, successor: v.successor })) setLeaving(false); }} />
       </Dialog>}
-      <Panel title={t("Roles")} actions={can("platform.member.grant") && <Button size="sm" onClick={() => setGranting(true)}>{t("Add role")}</Button>}>
+      <Panel title={t("Roles")} help={t("A member may hold several roles in an app; what any of them allows, the member may do. Changes apply on the next request.")} actions={can("platform.member.grant") && <Button size="sm" onClick={() => setGranting(true)}>{t("Add role")}</Button>}>
         {grants.length === 0 && <p className="text-xs text-muted">{t("Holds no role.")}</p>}
         <div className="grid gap-1.5 text-sm">
           {grants.map((g) => (
@@ -111,7 +115,6 @@ export function MemberDetail({ id }: { id: string }) {
             </p>
           ))}
         </div>
-        <p className="mt-2 text-xs text-muted">{t("A member may hold several roles in an app; what any of them allows, the member may do. Changes apply on the next request.")}</p>
       </Panel>
       {can("platform.member.grant") && <Dialog open={granting} onOpenChange={setGranting} title={t("Add role")}>
         <GrantForm apps={apps.filter((a) => a.roles.length)} onCancel={() => setGranting(false)}

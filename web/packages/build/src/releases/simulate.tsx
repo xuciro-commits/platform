@@ -11,7 +11,7 @@ import { refKey, resourceKinds, resourceRef, resourceRoute } from "../projects/r
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { AppSelect, useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, PageHeader, PropertyList, Select, StatusTag, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
 import { useEffect, useRef, useState } from "react";
@@ -294,18 +294,18 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
       <pre className="overflow-x-auto rounded bg-muted/10 p-2">{JSON.stringify(change.record, null, 2)}</pre>
     </div>);
     return <div key={index} className="grid gap-2 border-t border-border pt-2">
-    <p className="text-sm font-medium">{t("Test step {n}", { n: index + 1 })} · {step.accepted ? t("Accepted") : t("Refused")}</p>
+    <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-medium">{t("Test step {n}", { n: index + 1 })}</h3><StatusTag status={step.accepted ? "accepted" : "refused"} registry={{ accepted: { label: t("Accepted"), tone: "success" }, refused: { label: t("Refused"), tone: "danger" } }} /></div>
     {step.matched !== undefined && <p className={`text-xs${step.matched ? "" : " text-danger"}`}>{step.matched ? t("Expected outcome matched") : t("Expected outcome did not match")}</p>}
     {step.functionMatched !== undefined && <p className={`text-xs${step.functionMatched ? "" : " text-danger"}`}>{step.functionMatched ? t("Function expectation matched") : t("Function expectation did not match")}</p>}
     {step.computeMatched !== undefined && <p className={`text-xs${step.computeMatched ? "" : " text-danger"}`}>{step.computeMatched ? t("Computation expectation matched") : t("Computation expectation did not match")}</p>}
     {resultDefinitions(step)}
-    {step.functions?.map(call => <Card key={call.id} className="min-w-0 grid gap-1 p-2 text-xs">
-      <p>{call.function} · {t("Version")} {call.version} · {call.state === "ready" ? t("Ready") : call.state === "rejected" ? t("Rejected") : t("Pending")}</p>
-      <p className="break-all">{call.source} · {call.model}</p>
-      {call.output && <pre className="whitespace-pre-wrap break-words">{call.output}</pre>}
+    {step.functions?.map(call => <section key={call.id} className="grid min-w-0 gap-3 border-t border-border pt-3 text-xs">
+      <PropertyList columns={3} items={[[t("Function"), call.function], [t("Version"), call.version], [t("State"), call.state === "ready" ? t("Ready") : call.state === "rejected" ? t("Rejected") : t("Pending")]]} />
+      <Disclosure summary={t("Call details")}><PropertyList items={[[t("Source"), call.source], [t("Model"), call.model]]} /></Disclosure>
+      {call.output && <Disclosure summary={t("Output")}><pre className="whitespace-pre-wrap break-words">{call.output}</pre></Disclosure>}
       {call.reason && <p className="text-danger">{call.reason}</p>}
       {call.withheld && <p>{t("Some sources cannot be read")}</p>}
-    </Card>)}
+    </section>)}
     {step.refusal && <p className="text-sm text-danger">{step.refusal}</p>}
     <SimulationExplanation step={step}/>
     {step.flows?.map(flow => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
@@ -313,16 +313,16 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
       {flow.outputs && <Disclosure summary={<span className="text-xs font-medium">{t("Accepted block outputs")}</span>}><pre className="mt-2 overflow-auto rounded bg-background p-2 text-[11px]">{JSON.stringify(flow.outputs, null, 2)}</pre></Disclosure>}
     </Card>)}
     {step.tasks?.map(task => <p key={task.id} className="text-xs">{t("Human task")}: {task.title}</p>)}
-    {comparison ? <Disclosure summary={`${t("Record changes")} · ${step.changes.length}`}>{changes}</Disclosure> : changes}
+    <Disclosure summary={`${t("Record changes")} · ${step.changes.length}`} defaultOpen={!comparison && !step.accepted}>{changes}</Disclosure>
     </div>;
   };
   if (role("build") !== "builder") return <PageHeader title={t("Test a candidate")} description={t("Only a builder can test saved definitions.")} />;
   return <div className="grid gap-3">
-    {!embedded && <PageHeader title={t("Test a candidate")} description={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
+    {!embedded && <PageHeader title={t("Test a candidate")} help={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
       actions={<Button disabled={!id || blocked} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}
     {!embedded && !planId && <SystemDefinitionReferences type={evaluationSet ? "build.evaluation-set" : "build.testplan"} />}
-    {kind==="app" && <PageHeader title={t("Draft trial")} description={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
-    {!!planRoots.length && <p className="text-xs text-muted">{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</p>}
+    {kind==="app" && <PageHeader title={t("Draft trial")} help={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
+    {!!planRoots.length && <ContextHelp title={t("Test plan scope")}>{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</ContextHelp>}
  <Card className="p-3">
       <StructuredEditor expectedRevision={planID ? revision : 0} fieldInput={sourceFieldInput} value={definitionValue()} fields={declarationFields} scope={`build.testplan:${planID || createID}:${host.source.scope}`} disabled={blocked} onChange={next => { load({ ...next, id: planID, revision } as TestPlan, true, true); setDirty(true); }} onTrial={next => trial(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: planID || createID }, next, planID ? revision : 0)}>      <fieldset disabled={blocked} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -360,7 +360,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           </div>}
         </div>}
         {kind === "flow" && <Disclosure summary={<span className="text-xs font-medium">{t("Synthetic query samples")}</span>}><div className="mt-2 grid gap-2">
-          <p className="text-[11px] leading-5 text-muted">{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</p>
+          <ContextHelp title={t("Synthetic query samples")}>{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</ContextHelp>
           <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); setSampleOverride(true); clear(); }} />
         </div></Disclosure>}
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
@@ -399,18 +399,18 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
         }
         {(kind === "function" || process?.steps.some((step) => step.kind === "ai")) && <>
           <label className="grid gap-1 text-xs">{t("Model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>
-          <p className="text-xs text-muted">{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</p>
+          <ContextHelp title={t("Model identifier")}>{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</ContextHelp>
         </>}
         {kind === "function" && <div className="grid gap-3 rounded border border-border p-3">
           <Checkbox checked={evaluationEnabled} onChange={(enabled) => { setEvaluationEnabled(enabled); clear(); }}>{t("Require a measured release evaluation")}</Checkbox>
           {evaluationEnabled && <>
-            <p className="text-xs text-muted">{t("These synthetic cases run three times each against the enabled model. Reported USD cost and per-call latency must stay within the limits.")}</p>
+            <ContextHelp title={t("Require a measured release evaluation")}>{t("These synthetic cases run three times each against the enabled model. Reported USD cost and per-call latency must stay within the limits.")}</ContextHelp>
             <div className="grid gap-2 sm:grid-cols-3">
               <label className="grid gap-1 text-xs">{t("Minimum exact-match quality")}<Input draftKey="minimum-exact-match-quality" type="number" min={0.01} max={1} step={0.01} value={minQuality} onChange={(e) => { setMinQuality(Number(e.target.value)); clear(); }} /></label>
               <label className="grid gap-1 text-xs">{t("Maximum total USD cost")}<Input draftKey="maximum-total-usd-cost" type="number" min={0.000001} step={0.01} value={maxCostUsd} onChange={(e) => { setMaxCostUsd(Number(e.target.value)); clear(); }} /></label>
               <label className="grid gap-1 text-xs">{t("Maximum latency per call (ms)")}<Input draftKey="maximum-latency-per-call-ms" type="number" min={1} max={300000} value={maxLatencyMillis} onChange={(e) => { setMaxLatencyMillis(Number(e.target.value)); clear(); }} /></label>
             </div>
-            {fn?.conversation&&<p className="text-xs text-muted">{t("For a conversation, provide record fields, a question and synthetic question/answer history in record/question/history. No production call IDs are used.")}</p>}
+            {fn?.conversation&&<ContextHelp title={t("Synthetic input (JSON object)")}>{t("For a conversation, provide record fields, a question and synthetic question/answer history in record/question/history. No production call IDs are used.")}</ContextHelp>}
             {cases.map((item, index) => <Card key={index} className="grid gap-2 p-2">
               <div className="flex items-center justify-between"><span className="text-xs font-medium">{t("Evaluation case {n}", { n: index + 1 })}</span><Button disabled={cases.length === 1} onClick={() => { setCases((old) => old.filter((_, i) => i !== index)); clear(); }}>{t("Remove")}</Button></div>
               <label className="grid gap-1 text-xs">{t("Case name")}<Input value={item.name} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, name: e.target.value } : c)); clear(); }} /></label>
@@ -520,12 +520,12 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     {error && <Card role="alert" className="p-3 text-sm text-danger">{error}</Card>}
     {result?.actors?.length ? <Card className="grid gap-3 p-3" role="region" aria-label={t("Role comparison")}>
       {result.actors.every(actor => actor.passed !== undefined) && <p role="status" className="text-sm font-medium">{result.actors.every(actor => actor.passed) ? t("All expected outcomes matched.") : t("Some expected outcomes did not match.")}</p>}
-      <p className="break-all text-xs">{t("Tested candidate")}: <code>{result.candidateId}</code></p>
+      <Disclosure summary={t("Test details")}><PropertyList items={[[t("Tested candidate"), <code>{result.candidateId}</code>]]} /></Disclosure>
       <div className="grid min-w-0 gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
         {result.actors.map(actor => <div key={actor.member} className="min-w-0 grid content-start gap-2" role="region" aria-label={actor.member}>
           <h3 className="font-medium">{actor.member}</h3>
           {actor.passed !== undefined && <p role="status" className={`text-sm font-medium${actor.passed ? "" : " text-danger"}`}>{actor.passed ? t("All expected outcomes matched.") : t("Some expected outcomes did not match.")}</p>}
-          <p className="break-all text-xs">{t("Fixed test identity")}: {actor.testId}</p>
+          <Disclosure summary={t("Test details")}><PropertyList items={[[t("Fixed test identity"), <code>{actor.testId}</code>]]} /></Disclosure>
           {actor.recovered && <p className="text-xs">{t("Test state recovered exactly. Sample records stayed isolated.")}</p>}
           {actor.steps.map((step, index) => simulationResult(step, index, true))}
         </div>)}
@@ -533,12 +533,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     </Card> : null}
  {result && !result.actors?.length && <Card className="grid gap-3 p-3" aria-live="polite">
       {result.passed !== undefined && <p role="status" className="text-sm font-medium">{result.passed ? t("All expected outcomes matched.") : t("Some expected outcomes did not match.")}</p>}
-      <p className="break-all text-xs">{t("Tested candidate")}: <code>{result.candidateId}</code></p>
-      {result.fixture && <>
-        <p className="text-sm">{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</p>
-        <p className="break-all text-xs">{t("Fixed test identity")}: <code>{result.testId}</code></p>
-        <p className="text-xs">{t("Fixture model identifier")}: {result.model || t("No model bound")}</p>
-      </>}
+      <Disclosure summary={t("Test details")}><div className="grid gap-3"><PropertyList items={[[t("Tested candidate"), <code>{result.candidateId}</code>], ...(result.fixture ? [[t("Fixed test identity"), <code>{result.testId}</code>], [t("Fixture model identifier"), result.model || t("No model bound")]] as [string, React.ReactNode][] : [])]} />{result.fixture && <ContextHelp title={t("Fixture model identifier")}>{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</ContextHelp>}</div></Disclosure>
       {result.recovered && <p role="status" className="text-sm">{t("Test state recovered exactly. Sample records stayed isolated.")}</p>}
       {result.steps.map((step, index) => simulationResult(step, index))}
     </Card>}

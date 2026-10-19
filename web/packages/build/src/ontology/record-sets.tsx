@@ -1,6 +1,6 @@
 import type { Api } from "@platform/kernel";
 import { useHost } from "@platform/app";
-import { Button, Input, InputDraftProvider, Panel, Select, Textarea, t, type EntityInfo } from "@platform/ui";
+import { ContextHelp, Button, Input, InputDraftProvider, Panel, Select, Textarea, t, type EntityInfo } from "@platform/ui";
 import { nameOf, type Process } from "./object-model";
 
 type Source = Pick<Api.RecordSet, "from" | "direction" | "object" | "binding"> & {title:string};
@@ -32,7 +32,7 @@ export function RecordSetsEditor({process,parent,entities,onChange}:{process:Pro
     <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Record sets")}</h2>
       <Button size="sm" disabled={!sources.length||sets.length>=64} onClick={()=>{const {title,...source}=sources[0]!;onChange({...process,sets:[...sets,{...source,name:nameOf("set",sets.map(set=>set.name)),order:[{expr:{op:"",kind:"text",ref:"id"}}],limit:1000}]});}}>{t("Add a record set")}</Button>
     </div>
-    <p className="text-sm text-muted">{t("Declare a bounded, ordered collection once and use it in conditions, calculations, constraints and transaction iteration.")}</p>
+    <ContextHelp title={t("Record sets")}><p className="text-sm text-muted">{t("Declare a bounded, ordered collection once and use it in conditions, calculations, constraints and transaction iteration.")}</p></ContextHelp>
     {sets.map((set,at)=><InputDraftProvider key={at} scope={JSON.stringify({kind:"recordSet",at})}><Panel title={set.name}>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-xs">{t("Set name")}<Input value={set.name} onChange={event=>patch(at,{name:event.target.value})}/></label>

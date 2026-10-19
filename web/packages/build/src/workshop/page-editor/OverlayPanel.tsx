@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
+import { ContextHelp, Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
 
 export function OverlayProperties({ overlay, onChange, onRemove }: {
   overlay: Api.PageOverlay; onChange: (patch: Partial<Api.PageOverlay>) => void; onRemove: () => void;
@@ -12,7 +12,7 @@ export function OverlayProperties({ overlay, onChange, onRemove }: {
     <label className="grid gap-1 text-xs">{t("Overlay size")}<Select value={value.size} onChange={e=>update({size:e.target.value,customWidth:e.target.value==="custom"?value.customWidth??420:undefined})}>{["small","medium","large","custom"].map(size=><option key={size} value={size}>{t(size)}</option>)}</Select></label>
     {value.size==="custom"&&<label className="grid gap-1 text-xs">{t("Overlay custom width")}<Input draftKey="overlay-custom-width" type="number" min={240} max={1200} value={value.customWidth??420} onChange={e=>update({customWidth:e.target.valueAsNumber})}/></label>}
     <Checkbox checked={value.backdrop} onChange={backdrop=>update({backdrop})}>{t("Show overlay backdrop")}</Checkbox><Checkbox checked={value.closeOnBackdrop} onChange={closeOnBackdrop=>update({closeOnBackdrop})}>{t("Close on backdrop")}</Checkbox><Checkbox checked={value.closeOnEsc} onChange={closeOnEsc=>update({closeOnEsc})}>{t("Close on Escape")}</Checkbox>
-    <p className="text-xs text-muted">{t("Closing clears local inputs. The page selection stays available.")}</p>
+    <ContextHelp title={t("Overlay")}><p className="text-xs text-muted">{t("Closing clears local inputs. The page selection stays available.")}</p></ContextHelp>
     <Button onClick={onRemove}>{t("Remove overlay and its triggers")}</Button>
   </Card>;
 }

@@ -1,7 +1,7 @@
 // Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0016、ADR-0006).
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
+import { PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
 import { Fragment, useRef, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";
 
@@ -24,9 +24,9 @@ export function Apps() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   return (
     <>
-      <PageHeader title={t("Packages")} description={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
+      <PageHeader title={t("Packages")} help={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
       {packages.isError ? <p role="alert">{t("Package inventory could not be loaded.")}</p> : <PackageList items={packages.data ?? []} />}
-      {role("platform") === "admin" && <><h2 className="mb-1 mt-4 text-sm font-semibold">{t("Built-in application modules")}</h2><p className="mb-3 text-xs text-muted">{t("Modules the host ships; they are not installed or retired here. What each provides and uses is on the Capability matrix.")}</p><div className="flex gap-6 overflow-x-auto">
+      {role("platform") === "admin" && <><div className="mb-3 mt-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Built-in application modules")}</h2><ContextHelp title={t("Built-in application modules")}>{t("Modules the host ships; they are not installed or retired here. What each provides and uses is on the Capability matrix.")}</ContextHelp></div><div className="flex gap-6 overflow-x-auto">
         {tiers(apps).map((tier, i) => (
           <div key={i} className="grid content-start gap-3">
             <h2 className="text-xs uppercase text-muted">{i === 0 ? t("Platform and business modules") : i === 1 ? t("Consumers of their protocols") : t("Tier {n}", { n: i + 1 })}</h2>
@@ -34,7 +34,7 @@ export function Apps() {
               <Panel key={a.id} className="w-64">
                 <div className="flex flex-wrap items-baseline gap-2"><span className="font-semibold">{a.title || a.id}</span><span className="font-mono text-xs text-muted">{a.id} · v{a.version}</span></div>
                 {a.consumes.length > 0 && <p className="mt-1 text-xs text-muted">{t("Consumes")} {a.consumes.join(", ")}</p>}
-                <p className="mt-2 text-xs text-muted">{a.capabilities.map((c) => capabilityTitle(c.name)).join(" · ")}</p>
+                <div className="mt-2 flex flex-wrap gap-1">{a.capabilities.map((c) => <Tag key={c.name} label={capabilityTitle(c.name)} />)}</div>
               </Panel>
             ))}
           </div>
@@ -96,7 +96,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
               {d.runtime && <Tag label={d.runtime.profiles.some(profile => profile.simulation) ? t("Simulation protocol package") : t("Device protocol package")} tone={d.runtime.profiles.some(profile => profile.simulation) ? "warning" : "neutral"} />}
               {d.blueprint && <Tag label={t("Application blueprint")} tone="info" />}
             </div>
-            {d.description && <p className="text-xs text-muted">{d.description}</p>}
+            {(d.description || d.runtime || d.blueprint) && <div className="flex justify-end"><ContextHelp title={d.title || held?.title || id}>{d.description && <p>{d.description}</p>}{d.runtime && <p>{t("Installing makes this exact version available to Connections. Configure and check a connection before publishing it; installation does not enable device writes.")}</p>}{d.blueprint && <p>{t("Install this version, then create editable application drafts from its blueprint. Review and publish those drafts in Application Studio. Creating drafts does not create business records or grant access.")}</p>}</ContextHelp></div>}
             {(protocol || blueprint || available.length > 1) && <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select value={version} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
               <option value="">{t("Choose an exact version")}</option>{available.map(item => <option key={item.descriptor.version} value={item.descriptor.version}>{item.descriptor.version}{item.descriptor.version === held?.version ? ` · ${t(state === "retired" ? "Last installed" : "Installed")}` : ""}</option>)}
             </Select></label>}
@@ -115,9 +115,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
                 <dt className="text-muted">{t("Driver profiles")}</dt><dd className="grid gap-1">{d.runtime.profiles.map(profile => <span key={profile.id}>{t(profile.title)} · {profile.operations.map(operation => t(operation)).join(", ")}</span>)}</dd>
               </>}
             </dl>
-            {d.runtime && <p className="text-xs text-muted">{t("Installing makes this exact version available to Connections. Configure and check a connection before publishing it; installation does not enable device writes.")}</p>}
             {d.blueprint && <div className="grid gap-2 text-xs">
-              <p className="text-muted">{t("Install this version, then create editable application drafts from its blueprint. Review and publish those drafts in Application Studio. Creating drafts does not create business records or grant access.")}</p>
               <p className="text-muted">{t("{count} definitions in the blueprint", { count: d.blueprint.assets.length })}</p>
               {d.blueprint.guide && <Disclosure summary={t("Build guide")}><p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{d.blueprint.guide}</p></Disclosure>}
               {can("build.app.create") && <div><Button size="sm" variant="primary" disabled={busy === id || state !== "active" || held?.version !== d.version || !chosen} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
@@ -199,9 +197,9 @@ export function Matrix() {
   const capabilities = apps.reduce((n, a) => n + a.capabilities.length, 0);
   return (
     <>
-      <PageHeader title={t("Capability matrix")} description={t("What each module provides (capabilities and their actions, roles, reads, protocols) and what it uses (protocols, actions, events, connector inputs), read live from the host's registry. Packages are installed on the Packages page; this page explains what they bring.")}
+      <PageHeader title={t("Capability matrix")} help={t("What each module provides (capabilities and their actions, roles, reads, protocols) and what it uses (protocols, actions, events, connector inputs), read live from the host's registry. Packages are installed on the Packages page; this page explains what they bring.")}
         actions={<Input aria-label={t("Filter modules")} placeholder={t("Filter by module, capability, protocol or role")} value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />} />
-      <p className="mb-3 text-xs text-muted">{t("{apps} modules · {capabilities} capabilities", { apps: apps.length, capabilities })}</p>
+      <div className="mb-3"><PropertyList columns={2} items={[[t("Modules"), apps.length], [t("Capabilities"), capabilities]]} /></div>
       <div className="grid max-w-6xl gap-3">
         {shown.map((a) => <ModuleCard key={a.id} app={a} />)}
         {!shown.length && <p className="text-sm text-muted">{t("No module matches.")}</p>}
@@ -216,7 +214,7 @@ export function Protocols() {
   const { decide } = useHost();
   return (
     <>
-      <PageHeader title={t("Protocols")} description={t("Interfaces apps provide and consume. A consumer depends on the protocol; new calls go to the chosen provider, and what every provider holds stays readable.")} />
+      <PageHeader title={t("Protocols")} help={t("Interfaces apps provide and consume. A consumer depends on the protocol; new calls go to the chosen provider, and what every provider holds stays readable.")} />
       <div className="grid max-w-5xl gap-3">
         {protocols.length === 0 && <p className="text-sm text-muted">{t("No protocols in this tenant.")}</p>}
         {protocols.map((p) => (

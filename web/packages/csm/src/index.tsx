@@ -16,7 +16,7 @@ function Tickets() {
   const [opening, setOpening] = useState(false),[id,setId]=useState(()=>newId("T"));
   return (
     <>
-      <Records type="csm.ticket" description={t("Customers' tickets. The triage agent classifies and answers new ones; a reply it writes is mailed once a person approves it. Late tickets go to the desk's leads.")}
+      <Records type="csm.ticket" help={t("Customers' tickets. The triage agent classifies and answers new ones; a reply it writes is mailed once a person approves it. Late tickets go to the desk's leads.")}
         actions={can("csm.ticket.open") && <Button variant="primary" onClick={() => setOpening(true)}><Ticket />{t("Open ticket")}</Button>} />
       <Dialog open={opening} onOpenChange={setOpening} title={t("Open ticket")}>
         <EntityForm schema={ticket} defaultValues={{ subject: "", customer: "", account: "", body: "" }} submitLabel={t("Open")} onCancel={() => setOpening(false)}

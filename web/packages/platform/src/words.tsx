@@ -32,7 +32,7 @@ export function Words() {
   };
   const appTitle = (id: string) => apps.find((a) => a.id === id)?.title || id;
   return <>
-    <PageHeader title={t("Languages and words")} description={t("What the names this organisation defined read as in each language: object types, fields, states, actions, applications and pages written in Build, and any shipped text you want said differently. Write a name once in one language and translate it here; never put two languages in one name.")} />
+    <PageHeader title={t("Languages and words")} help={t("What the names this organisation defined read as in each language: object types, fields, states, actions, applications and pages written in Build, and any shipped text you want said differently. Write a name once in one language and translate it here; never put two languages in one name.")} />
     <Panel className="mb-3">
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="grid gap-1">{t("Texts of")}<Select value={app} onChange={(e) => setApp(e.target.value)} className="w-56">

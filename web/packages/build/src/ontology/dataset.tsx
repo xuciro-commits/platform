@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { PropertyList, StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
@@ -24,7 +24,7 @@ export function Datasets() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Datasets")} description={t("Rows as they came, in versions. A source loads a dataset instead of mapping straight to an object; a pipeline reads one and writes another or an object.")}
+    <PageHeader title={t("Datasets")} help={t("Rows as they came, in versions. A source loads a dataset instead of mapping straight to an object; a pipeline reads one and writes another or an object.")}
       actions={<Button onClick={() => open({ view: "dataset", params: { id: "new" } })}>{t("New dataset")}</Button>} />
     <ResourceList source={source} type="build.dataset" fields={["title", "name", "producer", "version", "marking"]} onOpen={(record) => open({ view: "dataset", params: { id: record.id } })} />
   </div>;
@@ -75,7 +75,7 @@ export function DatasetEditor({ id }: { id: string }) {
   const versions = Array.from({ length: Math.min(latest, keep) }, (_, i) => latest - i);
   const rows = versionQuery.data?.record?.data ?? [], columns = draft.schema?.map((f) => f.name) ?? Object.keys(rows[0] ?? {});
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New dataset")} description={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
+    <PageHeader title={draft.title || t("New dataset")} help={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "dataset" })}>{t("Datasets")}</Button>
         {role("build") === "builder" && !!draft.schema?.length && <Button disabled={busy || dirty || !!inputs?.invalid} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
@@ -97,8 +97,8 @@ export function DatasetEditor({ id }: { id: string }) {
       <Panel title={t("Schema")} className="grid min-w-0 content-start gap-2">
         {!draft.schema?.length ? <p className="text-xs text-muted">{t("Inferred from the first load.")}</p> :
           <ul className="grid gap-1 text-xs">{draft.schema.map((f) => <li key={f.name} className="flex items-center gap-2"><span className="font-mono">{f.name}</span><Tag label={f.type} /></li>)}</ul>}
-        {last && <p className="flex flex-wrap items-center gap-2 text-xs"><span>{t("Latest load")}: v{last.version} · {new Date(last.at).toLocaleString()} · {t("{rows} rows", { rows: last.rows })} · {Math.round(last.bytes / 1024)} KB</span>
-          {last.drift?.length ? <Tag label={`${t("Drift")}: ${last.drift.join(" ")}`} tone="warning" /> : null}</p>}
+        {last && <div className="grid gap-3 border-t border-border pt-3"><h3 className="text-xs font-medium">{t("Latest load")}</h3><PropertyList columns={2} items={[[t("Version"), last.version], [t("Loaded at"), new Date(last.at).toLocaleString()], [t("Rows"), last.rows], [t("Size"), `${Math.round(last.bytes / 1024)} KB`]]} />
+          {last.drift?.length ? <Tag label={`${t("Drift")}: ${last.drift.join(" ")}`} tone="warning" /> : null}</div>}
       </Panel>
       {draft.id && <div className="lg:col-span-2"><DatasetLineage dataset={draft.id} /></div>}
       <Panel title={t("Rows")} className="grid min-w-0 content-start gap-2 lg:col-span-2"

@@ -7,6 +7,7 @@ import { Building2, Plus, Users } from "lucide-react";
 import {AlignLeft,AlignCenter,AlignRight} from "lucide-react";
 import {InspectorField,InspectorSection} from "./components/InspectorControls";
 import {SegmentedChoice} from "./components/SegmentedChoice";
+import {ContextHelp} from "./components/ContextHelp";
 import {StructuredEditor} from "./components/StructuredEditor";
 import {InputDraftProvider} from "./fields/draft";
 import { IconPicker, IconGlyph } from "./components/IconPicker";
@@ -184,7 +185,8 @@ export function MarkdownContent() {
   const [value, setValue] = useState<string | undefined>("## Sample notes\n\nA **shared** editor with a [reference](https://example.com).\n\n- Read\n- Edit");
   return <div className="grid gap-3 sm:grid-cols-2"><Markdown content={value ?? ""} /><MarkdownEditor value={value} onChange={setValue} /></div>;
 }
-export function Headers() { return <div className="grid gap-3"><PageHeader title={t("Records")} description={t("Browse declared records and their available work.")} actions={<Button variant="primary">{t("Add")}</Button>}/><PageHeader compact level={2} title="Operational overview"/></div>; }
+export function ContextHelpExample(){return <ContextHelp title={t("Records")}>{t("Browse declared records and their available work.")}</ContextHelp>;}
+export function Headers() { return <div className="grid gap-3"><PageHeader title={t("Records")} help={t("Browse declared records and their available work.")} actions={<Button variant="primary">{t("Add")}</Button>}/><PageHeader compact level={2} title="Operational overview"/></div>; }
 export function CollectionTitles(){return <div className="grid gap-3"><CollectionTitle title="Permitted assets" value="620"/><CollectionTitle title="Permitted assets"/><CollectionTitle title="Permitted assets" error={t("Resource read failed")}/></div>;}
 
 const fieldSamples: [string, FieldType, unknown][] = [

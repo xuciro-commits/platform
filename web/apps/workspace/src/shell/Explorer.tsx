@@ -41,7 +41,7 @@ export function ObjectExplorer({ type: requested }: { type?: string }) {
           {[...groups.entries()].map(([app, list]) => <optgroup key={app} label={app}>{list.map(entity => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</optgroup>)}
         </Select>
       </label>
-      <PageHeader title={entity?.title ?? chosen} description={entity?.description || chosen}
+      <PageHeader title={entity?.title ?? chosen} help={entity?.description} description={chosen}
         actions={<OpenIn type={chosen} exclude={["explorer"]} />} />
       <RecordList source={source} type={chosen} height="calc(100dvh - 250px)" onOpen={(r) => openRecord({ type: chosen, id: r.id })} />
     </div>

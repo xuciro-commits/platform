@@ -54,7 +54,7 @@ function ControlPanelOverview() {
     .map((section) => ({ ...section, items: navigationLinks(section.items).filter((item) => item.route.view !== "control-panel") }))
     .filter((section) => section.items.length > 0);
   return <>
-    <PageHeader title={t("Control Panel")} description={t("Members, organisation, installed packages, settings and the audit trail of {tenant}.", { tenant: host.me.tenantId })} />
+    <PageHeader title={t("Control Panel")} help={t("Members, organisation, installed packages, settings and the audit trail of {tenant}.", { tenant: host.me.tenantId })} />
     <div className="grid max-w-5xl gap-4 md:grid-cols-2">
       {sections.map((section) => <Card key={section.label} className="grid content-start gap-3 p-4">
         <h2 className="text-sm font-semibold">{section.label}</h2>

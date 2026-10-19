@@ -69,7 +69,7 @@ ${t("Created from template {template} (revision {revision}).", { template: templ
     } finally { lock.current = false; setBusy(false); }
   };
   return <div className="grid max-w-5xl gap-4">
-    <PageHeader title={t("Studio templates")} description={t("Start with an existing controlled page. Bind your object before creating its draft.")} />
+    <PageHeader title={t("Studio templates")} help={t("Start with an existing controlled page. Bind your object before creating its draft.")} />
     {!host.can("build.page.create") ? <Panel role="status" className="text-sm text-muted">{t("Creating a page draft requires the original build.page.create permission.")}</Panel> : <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{pageTemplates.map((item) => <div key={item.id} role="button" tabIndex={0} onClick={() => { if (!locked) setTemplateId(item.id); }} onKeyDown={(e) => { if (!locked && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setTemplateId(item.id); } }} aria-pressed={item.id === template.id} aria-disabled={locked}
         className={`grid cursor-pointer gap-1 rounded-lg border p-3 text-left ${item.id === template.id ? "border-accent bg-accent/5" : "border-border hover:bg-surface-raised"}`}>

@@ -1,5 +1,5 @@
 import { sourceFieldInput } from "@platform/app";
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, PageHeader, PropertyList, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
@@ -46,13 +46,10 @@ export function ProjectsList() {
   const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
     .filter(item => `${item.title} ${item.ref.app} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid min-w-0 gap-4">
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-xl font-semibold tracking-tight">{t("Applications")}</h1><p className="text-sm text-muted">{t("Inspect installed applications and extend them through the same drafts and releases.")}</p></div>
-      <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+    <PageHeader title={t("Applications")} help={t("Inspect installed applications and extend them through the same drafts and releases.")} actions={<div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 basis-56 sm:w-56 sm:flex-none" />
         {builder && create.available && <Button className="shrink-0" variant="primary" onClick={() => create.take()}><Plus />{t("New application")}</Button>}
-      </div>
-    </div>
+      </div>} />
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
     {(projects.isLoading || installedApps.isLoading) && <p className="text-sm text-muted">{t("Loading…")}</p>}
     {(projects.isError || installedApps.isError) && <Notice tone="warning" role="alert" message={t("Applications could not be loaded.")} />}
@@ -308,7 +305,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             {current ? <div className="rounded-md border border-border p-4">
               <div className="flex items-center gap-2">{kindIcon[current.kind.kind]}<h2 className="min-w-0 flex-1 truncate font-semibold">{current.title}</h2><DraftStatus state={current.record?.state} /></div>
               <p className="mt-1 text-xs text-muted">{t(current.kind.label)} · {current.ref.name}</p>
-              {!current.record && current.installed && <p className="mt-2 text-xs text-muted">{t("This application references a published asset. Adding or removing the reference does not change its owner, definition or permissions.")}</p>}
+              {!current.record && current.installed && <ContextHelp title={t("Published resource")}>{t("This application references a published asset. Adding or removing the reference does not change its owner, definition or permissions.")}</ContextHelp>}
               {current.missing && <p className="mt-2 text-xs text-danger">{t("{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.", { title: current.title })}</p>}
               {current.ref.kind === "object" && current.record && <div className="mt-2 flex flex-wrap gap-1">
                 {(["actions", "lifecycle", "constraints", "sets", "data"] as const).map(section => <Button size="sm" variant="ghost" key={section} onClick={() => open({ view: "object-type", params: { id: current.record!.id, application: id, tab: section } })}>{t(section === "actions" ? "Actions and rules" : section === "lifecycle" ? "States" : section === "constraints" ? "Business constraints" : section === "sets" ? "Record sets" : "Record samples")}</Button>)}
@@ -317,7 +314,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
                 {[{ title: "Uses", refs: dependencies.requires }, { title: "Used by", refs: dependencies.usedBy }].map(group => <div key={group.title}><strong>{t(group.title)}</strong><div className="flex flex-wrap gap-1">{group.refs.map(ref => <Button key={refKey(ref)} size="sm" variant="ghost" onClick={() => open(assetRoute(ref, owned, definitions, id))}>{ref.name}</Button>)}</div></div>)}
               </div>}
               {dependencyQuery.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}
-              {!current.installed && <p className="text-xs text-muted">{t("Draft dependencies are checked by the release owner. Published links use declared dependencies.")}</p>}
+              {!current.installed && <ContextHelp title={t("Dependencies")}>{t("Draft dependencies are checked by the release owner. Published links use declared dependencies.")}</ContextHelp>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {(current.record || current.installed) && <Button size="sm" variant="primary" onClick={() => open(assetRoute(current.ref, owned, definitions, project.id))}>{t(!current.record && current.ref.kind === "object" ? "Open in object model" : "Open")}</Button>}
                 {builder && current.missing && current.kind !== publishedResourceKind && <NewResourceMenu application={id} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
@@ -347,20 +344,18 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
               </dl>
             </div>
             <div role="region" aria-label={t("Application progress")} className="rounded-md border border-border p-3 text-xs">
-              <h3 className="font-semibold">{t("Application progress")}</h3>
-              <p className="mt-2">{t("{models} models · {pages} pages · {drafts} saved changes", { models: owned.filter(item => item.ref.kind === "object").length, pages: owned.filter(item => item.ref.kind === "page").length, drafts: unpublished.length })}</p>
-              <p>{t("{count} missing assets", { count: problems.length })}</p>
-              <p className="mt-2 text-muted">{t("The release owner checks model completeness, rules and page bindings before delivery.")}</p>
+              <div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-semibold">{t("Application progress")}</h3><ContextHelp title={t("Application progress")}>{t("The release owner checks model completeness, rules and page bindings before delivery.")}</ContextHelp></div>
+              <PropertyList columns={2} items={[[t("Models"), owned.filter(item => item.ref.kind === "object").length], [t("Pages"), owned.filter(item => item.ref.kind === "page").length], [t("Saved changes"), unpublished.length], [t("Missing assets"), problems.length]]} />
               <Button size="sm" className="mt-2" onClick={() => open(studioRoute(id, "verify", selected))}>{t("Verify application")}</Button>
             </div>
             <div className="rounded-md border border-border p-3 text-xs text-muted">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Release")}</h3>
-              <p className="mt-2">{installed ? t("A published version is in the Applications portal. Saved edits remain drafts until the next release.") : t("Not published yet. Publish reviews every draft in this project and activates them together.")}</p>
+              <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold text-muted">{t("Release")}</h3><ContextHelp title={t("Release")}>{installed ? t("A published version is in the Applications portal. Saved edits remain drafts until the next release.") : t("Not published yet. Publish reviews every draft in this project and activates them together.")}</ContextHelp></div>
+              <p className="mt-2">{t(installed ? "Published" : "Draft")}</p>
             </div>
           </aside>
         </div>}
         {tab === "concepts" && <div className="grid gap-3 p-4" role="region" aria-label={t("Business concepts")}>
-          <p className="text-xs text-muted">{t("Name groups in your business vocabulary. Moving an asset changes navigation only.")}</p>
+          <div className="flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Business concepts")}</h2><ContextHelp title={t("Business concepts")}>{t("Name groups in your business vocabulary. Moving an asset changes navigation only.")}</ContextHelp></div>
           {(project.concepts ?? []).map((group, at) => <div key={group.id} className="grid gap-2 rounded-md border border-border p-3">
             <div className="flex flex-wrap gap-2"><ConceptTitle group={group} disabled={!builder || locked} onRename={title => conceptPatch(project.concepts!.map(item => item.id === group.id ? { ...item, title } : item))} />
               <Button size="sm" variant="ghost" aria-label={t("Move concept up")} disabled={!builder || locked || at === 0} onClick={() => { const groups = [...project.concepts!]; [groups[at - 1], groups[at]] = [groups[at]!, groups[at - 1]!]; conceptPatch(groups); }}><ArrowUp /></Button>
@@ -390,11 +385,10 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Icon")}<IconPicker value={settings.icon} disabled={!builder} onChange={(icon) => editSettings({ ...settings, icon })} /></label>
           <label className="grid gap-1 text-xs">{t("Description")}<Textarea rows={3} value={settings.description} disabled={!builder} onChange={(event) => editSettings({ ...settings, description: event.target.value })} /></label>
-          <PanelSection title={t("Capacity and recovery declarations")}>
-            <p className="text-xs text-muted">{t("Declare the expected scale and retention for this application. Recovery targets require evidence from its environment.")}</p>
+          <PanelSection title={t("Capacity and recovery declarations")} actions={<ContextHelp title={t("Capacity and recovery declarations")}><p>{t("Declare the expected scale and retention for this application. Recovery targets require evidence from its environment.")}</p><p>{t("Use durations such as 24h, 168h or 30m. These declarations do not delete data or grant access.")}</p></ContextHelp>}>
             {owned.filter(resource => resource.ref.kind === "object").map(resource => <label className="grid gap-1 text-xs" key={refKey(resource.ref)}>
               {t("Expected records: {type}", { type: resource.title })}
-              <Input type="number" optional step={1} max={Number.MAX_SAFE_INTEGER} min={1} value={settings.profile.expectedRecords?.[resource.ref.name] ?? ""} disabled={!builder} onChange={event => {
+              <Input aria-label={t("Expected records: {type}", { type: resource.title })} draftKey={`expected-records:${resource.ref.name}`} type="number" optional step={1} max={Number.MAX_SAFE_INTEGER} min={1} value={settings.profile.expectedRecords?.[resource.ref.name] ?? ""} disabled={!builder} onChange={event => {
                 const expectedRecords = { ...settings.profile.expectedRecords };
                 if (event.target.value) expectedRecords[resource.ref.name] = event.target.valueAsNumber; else delete expectedRecords[resource.ref.name];
                 editSettings({ ...settings, profile: { ...settings.profile, expectedRecords } });
@@ -411,7 +405,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             </label>)}
             <label className="grid gap-1 text-xs">{t("Maximum acceptable data loss period")}<Input value={settings.profile.rpo ?? ""} placeholder="1h" disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, rpo: event.target.value } })} /></label>
             <label className="grid gap-1 text-xs">{t("Target recovery time")}<Input value={settings.profile.rto ?? ""} placeholder="4h" disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, rto: event.target.value } })} /></label>
-            <p className="text-xs text-muted">{t("Use durations such as 24h, 168h or 30m. These declarations do not delete data or grant access.")}</p>
           </PanelSection>
           {error && <p role="alert" className="text-xs text-danger">{error}</p>}
           <p className="text-xs text-muted">{t("Changes save automatically.")}</p>

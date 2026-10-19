@@ -4,7 +4,7 @@ import { useActionTrial } from "@platform/app";
 import { useEffect, useRef, useState } from "react";
 import { useHost, useRecordInventory } from "@platform/app";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
-import { Button, Card, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, ContextHelp, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import type { Project } from "../projects/project";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
@@ -101,8 +101,7 @@ function ApplicationSampleForm({ application, selected, samples: suppliedSamples
   };
   const missing = !!selected && !record && !base.current;
   return <Card className="grid gap-2 p-3" role="region" aria-label={t("Application samples")}>
-    <strong className="text-sm">{t("Application samples")}</strong>
-    <p className="text-xs text-muted">{t("Prepare synthetic records and references. Trial edits remain temporary until you explicitly save the sample.")}</p>
+    <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Application samples")}</h3><ContextHelp title={t("Application samples")}>{t("Prepare synthetic records and references. Trial edits remain temporary until you explicitly save the sample.")}</ContextHelp></div>
     <StructuredEditor expectedRevision={base.current?.revision ?? 0} fieldInput={sourceFieldInput} value={{ name, title, samples: parsedSamples ?? [] }} fields={declarationFields} scope={`build.sample-set:${base.current?.id ?? createId}:${host.source.scope}`} disabled={busy || missing} onChange={next => { setName(next.name as string); setTitle(next.title as string); change(); onChange(next.name as string, JSON.stringify(next.samples ?? [], null, 2)); }} onTrial={next => trial(`build.sample-set.${base.current ? "edit" : "create"}`, { type: "build.sample-set", id: base.current?.id ?? createId }, next, base.current?.revision ?? 0)}>    <fieldset disabled={busy || missing} className="grid gap-2">
       {!document && <label className="grid gap-1 text-xs">{t("Sample set")}<Select value={selected} onChange={event => {
         const next = inventory.data?.records.find(record => record.name === event.target.value);
@@ -219,7 +218,7 @@ export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
   const projects = useRecordInventory<Project>("build.app"), inventory = useRecordInventory<SampleSetRecord>("build.sample-set");
   const project = projects.data?.records.find(record => record.id === application), record = inventory.data?.records.find(record => record.id === id);
   if (!application) return <div className="grid max-w-xl content-start gap-4 p-4">
-    <PageHeader title={t("Sample sets")} description={t("Choose an application to prepare its sample records.")} />
+    <PageHeader title={t("Sample sets")} help={t("Choose an application to prepare its sample records.")} />
     <SystemDefinitionReferences type="build.sample-set" />
     <label className="grid gap-1 text-sm">{t("Application")}<Select value="" disabled={projects.isPending} onChange={event => {
       if (event.target.value) open({ view: "sample-set", params: { id, application: event.target.value } });

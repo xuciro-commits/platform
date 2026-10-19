@@ -111,7 +111,7 @@ function PlannedOrders() {
   ];
   return (
     <>
-      <PageHeader title={t("Planned orders")} description={t("Production orders the ERP released to the plant (production.orders/1); release a shop order against one.")} />
+      <PageHeader title={t("Planned orders")} help={t("Production orders the ERP released to the plant (production.orders/1); release a shop order against one.")} />
       <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height="calc(100dvh - 190px)" loading={!plannedOrders} />
       <Dialog open={!!releasing} onOpenChange={(o) => !o && setReleasing(undefined)} title={t("Release {id}", { id: releasing?.number ?? "" })}>
         {releasing && (<>
@@ -344,7 +344,7 @@ function Craft() {
   ];
   return (
     <>
-      <PageHeader title={t("Craft")} description={t("Products, versioned routings, work centers and resources; which equipment can run an operation is computed from what it requires.")}
+      <PageHeader title={t("Craft")} help={t("Products, versioned routings, work centers and resources; which equipment can run an operation is computed from what it requires.")}
         actions={<Select aria-label={t("Routing")} value={key} onChange={(e) => setChosen(e.target.value)} className="w-72">
           {routings.map((r) => <option key={`${r.id}@${r.version}`} value={`${r.id}@${r.version}`}>{r.name} · {r.id} v{r.version}</option>)}
         </Select>} />
@@ -376,7 +376,7 @@ function Equipment() {
   ];
   return (
     <>
-      <PageHeader title={t("Equipment downtime")} description={t("Derived from gateway state batches; each stop is an entity, so its reason survives late data.")} />
+      <PageHeader title={t("Equipment downtime")} help={t("Derived from gateway state batches; each stop is an entity, so its reason survives late data.")} />
       <DataTable data={events} columns={columns} getRowId={(d) => d.id} height="calc(100dvh - 190px)" loading={!data} empty={t("No downtime yet — run gateway-sim")} />
       <Dialog open={!!assigning} onOpenChange={(o) => !o && setAssigning(undefined)} title={t("Reason for {resource} stop", { resource: assigning?.resource ?? "" })}>
         {assigning && declared && (

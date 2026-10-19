@@ -26,7 +26,7 @@ export function Lineage({ ref: requested }: { ref?: string }) {
   };
   const focused = descriptors.find(d => assetKey(d.ref) === focus);
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title={t("Lineage")} description={t("Declared dependencies, reverse impact and available capabilities share one versioned description. Select an asset to see what it uses and what a change reaches.")}
+    <PageHeader title={t("Lineage")} help={t("Declared dependencies, reverse impact and available capabilities share one versioned description. Select an asset to see what it uses and what a change reaches.")}
       actions={<>
         <Select aria-label={t("App")} value={scopeApp} className="w-40" onChange={event => { setApp(event.target.value); setPicked(""); }}>{apps.map(id => <option key={id} value={id}>{id}</option>)}</Select>
         <Select aria-label={t("Asset")} value={focus} className="w-72" onChange={event => setPicked(event.target.value)}>
@@ -42,7 +42,7 @@ export function Lineage({ ref: requested }: { ref?: string }) {
     </Panel>
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(16rem,1fr)]">
       <CapabilityDiscovery app={scopeApp} focus={focused?.ref} onOpen={openAsset} />
-      <Panel title={t("Runtime evidence")} description={t("This graph describes declared relationships. Recorded runs, delivered effects and source results remain in their original diagnostics.")}>
+      <Panel title={t("Runtime evidence")} help={t("This graph describes declared relationships. Recorded runs, delivered effects and source results remain in their original diagnostics.")}>
         {focused && <Button size="sm" onClick={() => openAsset(focused.ref)}>{t("Open asset")}</Button>}
         <Button size="sm" variant="ghost" onClick={() => open({ view: "integration-health" })}>{t("Integration health")}</Button>
         {focused?.ref.kind === "object" && <Button size="sm" variant="ghost" onClick={() => open({ view: "object-type", params: { object: focused.ref.name, tab: "data" } })}>{t("Object data and evidence")}</Button>}
@@ -58,7 +58,7 @@ function CapabilityDiscovery({ app, focus, onOpen }: { app: string; focus?: Asse
   const query = useProvidedCapabilities(kind, side);
   const rows = (query.data ?? []).filter(item => focus ? assetKey(item.ref) === assetKey(focus) : item.ref.app === app);
   const chosen = rows.find(item => capabilityKey(item) === selected);
-  return <Panel title={t("Available capabilities")} description={t("The host lists capabilities available to you. Choose a kind or invocation type to inspect their owner, version and typed inputs.")} className="grid min-w-0 gap-3">
+  return <Panel title={t("Available capabilities")} help={t("The host lists capabilities available to you. Choose a kind or invocation type to inspect their owner, version and typed inputs.")} className="grid min-w-0 gap-3">
     <div className="flex flex-wrap gap-2">
       <Select aria-label={t("Capability kind")} value={kind} onChange={event => setKind(event.target.value)}><option value="">{t("All capability kinds")}</option>{["action", "query", "function", "operation", "protocol", "interface"].map(value => <option key={value} value={value}>{kindLabel(value)}</option>)}</Select>
       <Select aria-label={t("Invocation type")} value={side} onChange={event => setSide(event.target.value)}><option value="">{t("All invocation types")}</option>{Object.entries(sideLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</Select>

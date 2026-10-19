@@ -1,6 +1,6 @@
 // Settings: flows (ADR-0007), agents and their evaluations (ADR-0054).
 import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
@@ -21,14 +21,14 @@ export function Flows() {
   ];
   return (
     <>
-      <PageHeader title={t("Workflow runs")} description={t("Long-running processes the apps declare. Each instance is a record: open one to see where it stands and why it moved.")} />
+      <PageHeader title={t("Workflow runs")} help={t("Long-running processes the apps declare. Each instance is a record: open one to see where it stands and why it moved.")} />
       <DataTable data={flows} columns={columns} getRowId={(f) => `${f.id}@${f.version}`} height={180} empty={t("No app declares a flow")}
         selectedId={shown} onRowClick={(f) => setShown(shown === `${f.id}@${f.version}` ? undefined : `${f.id}@${f.version}`)} />
       {definition
         ? <div className="mt-3 grid gap-1"><h2 className="text-sm font-semibold">{definition.title} <span className="font-mono text-xs text-muted">{definition.id} v{definition.version}</span></h2><FlowGraph definition={definition} /></div>
         : flows.length > 0 && <p className="mt-2 text-xs text-muted">{t("Click a flow to see its steps.")}</p>}
       <h2 className="mt-4 mb-2 text-sm font-semibold">{t("Instances")}</h2>
-      <Records type="flow.instance" description={t("Every run of every flow, newest changes first.")} />
+      <Records type="flow.instance" help={t("Every run of every flow, newest changes first.")} />
     </>
   );
 }
@@ -42,11 +42,13 @@ export function Agents() {
     { accessorKey: "title", header: t("Agent") },
     { accessorKey: "id", header: "ID", meta: { width: 200 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "tools", header: t("Tools"), meta: { width: 320 }, accessorFn: (a) => a.tools.join(", ") },
-    { id: "budget", header: t("Budget per run"), meta: { width: 220 }, accessorFn: (a) => `${a.budget.Steps} turns, ${a.budget.Tokens} tokens, ${a.budget.Actions} actions` },
+    { id: "steps", header: t("Steps"), meta: { width: 90, align: "right" }, accessorFn: (a) => a.budget.Steps },
+    { id: "tokens", header: t("Tokens"), meta: { width: 100, align: "right" }, accessorFn: (a) => a.budget.Tokens },
+    { id: "actions", header: t("Actions"), meta: { width: 100, align: "right" }, accessorFn: (a) => a.budget.Actions },
   ];
   return (
     <>
-      <PageHeader title={t("Agents")} description={t("Agents the apps declare. Each is a principal of its own: it does what its tools allow and, for a person, only what they may do; people confirm its drafts. The model is an app setting of Agents.")} />
+      <PageHeader title={t("Agents")} help={t("Agents the apps declare. Each is a principal of its own: it does what its tools allow and, for a person, only what they may do; people confirm its drafts. The model is an app setting of Agents.")} />
       <DataTable data={agents} columns={columns} getRowId={(a) => a.id} height={180} empty={t("No app declares an agent")} />
       <AgentsOverview />
     </>
@@ -54,11 +56,11 @@ export function Agents() {
 }
 
 export function AgentRuns() {
-  return <Records type="agent.run" description={t("Every run: open one for its steps, the rationale of each, and what people made of it.")} />;
+  return <Records type="agent.run" help={t("Every run: open one for its steps, the rationale of each, and what people made of it.")} />;
 }
 
 export function AgentMemories() {
-  return <Records type="agent.memory" description={t("What agents keep across runs: facts they chose to remember, and proposals from people's corrections, which count once someone keeps them. Open one to keep or forget it.")} />;
+  return <Records type="agent.memory" help={t("What agents keep across runs: facts they chose to remember, and proposals from people's corrections, which count once someone keeps them. Open one to keep or forget it.")} />;
 }
 
 export function Evaluations() {
@@ -71,7 +73,7 @@ export function Evaluations() {
   const chosen = agent || agents[0]?.id || "";
   return (
     <>
-      <PageHeader title={t("Evaluations")} description={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected.")} />
+      <PageHeader title={t("Evaluations")} help={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected.")} />
       {can("agent.evaluation.start") && (
         <Form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={async () => {const ok=await decide("agent.evaluation.start",{type:"agent.evaluation",id:evaluation},{agent:chosen,model,suite});if(ok)setEvaluation(newId("EVAL"));return ok;}}>
           <Select aria-label={t("Agent")} className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
@@ -87,7 +89,7 @@ export function Evaluations() {
           <Button type="submit" variant="primary" disabled={!chosen || !model}>{t("Evaluate")}</Button>
         </Form>
       )}
-      <Records type="agent.evaluation" description={t("Reports, newest first; open one for each case.")} />
+      <Records type="agent.evaluation" help={t("Reports, newest first; open one for each case.")} />
     </>
   );
 }
@@ -117,8 +119,7 @@ function AgentsOverview() {
   ];
   return (
     <>
-      <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Overview")}</h2>
-      <p className="mb-2 text-xs text-muted">{t("Every agent, the apps' and those outside that act as one: what it did, what it cost from the usage kept, and what people made of its work. Suspending one stops its runs at their next step and refuses its calls.")}</p>
+      <div className="mb-2 mt-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Overview")}</h2><ContextHelp title={t("Overview")}>{t("Every agent, the apps' and those outside that act as one: what it did, what it cost from the usage kept, and what people made of its work. Suspending one stops its runs at their next step and refuses its calls.")}</ContextHelp></div>
       <DataTable data={rows.data ?? []} columns={columns} getRowId={(o) => o.member} height={220} empty={t("No agent yet")} />
     </>
   );

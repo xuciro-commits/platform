@@ -28,7 +28,7 @@ export default defineApp({
   opens: { "crm.opportunity": "crm-opportunity" },
   views: [
     { id: "crm-opportunity", title: (p) => p.id ?? t("Opportunities"), render: (p) => <RecordDetail type="crm.opportunity" id={p.id ?? ""} advice={{ action: "crm.opportunity.advise", fields: ["advice", "adviceCategory", "adviceReview", "adviceState", "adviceWithheld"] }} /> },
-    { id: "accounts", title: () => t("Accounts"), render: () => <Records type="crm.account" description={t("Customers, companies or people, each with their opportunities and the stays booked for them.")} /> },
+    { id: "accounts", title: () => t("Accounts"), render: () => <Records type="crm.account" help={t("Customers, companies or people, each with their opportunities and the stays booked for them.")} /> },
     { id: "opportunities", title: () => t("Opportunities"), render: () => <Records type="crm.opportunity" /> },
   ],
   nav: () => [{ label: t("CRM"), items: [

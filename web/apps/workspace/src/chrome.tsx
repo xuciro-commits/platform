@@ -43,7 +43,7 @@ function MyInbox() {
   const approval = (task: InboxTask) => task.ref?.startsWith("work.approval/") ? task.ref.slice("work.approval/".length) : undefined;
   return (
     <>
-      <PageHeader title={t("Inbox")} description={t("Approvals waiting for you and tasks offered to you, from every app.")} />
+      <PageHeader title={t("Inbox")} help={t("Approvals waiting for you and tasks offered to you, from every app.")} />
       <Inbox tasks={tasks} onOpen={(task) => task.ref && openRecord(task.ref, { window: "tab" })}
         actions={(task) => approval(task) ? <>
           <Button size="sm" variant="primary" onClick={() => void decide("work.approval.approve", { type: "work.approval", id: approval(task)! }, {})}>{t("Approve")}</Button>
@@ -75,7 +75,7 @@ function MyRequests() {
   ];
   return (
     <>
-      <PageHeader title={t("My requests")} description={t("What you asked for that waits for approvers, and how it ended.")} />
+      <PageHeader title={t("My requests")} help={t("What you asked for that waits for approvers, and how it ended.")} />
       <DataTable data={requests} columns={columns} getRowId={(r) => r.id} height="calc(100dvh - 190px)" empty={t("No requests")} onRowClick={(r) => openRecord(r.target)} />
     </>
   );
@@ -86,7 +86,7 @@ function Notifications() {
   const { decide } = useHost();
   const openRecord = useOpenRecord();
   return <>
-    <PageHeader title={t("Notifications")} description={t("What your apps tell you.")} />
+    <PageHeader title={t("Notifications")} help={t("What your apps tell you.")} />
     <NotificationList items={items} onRead={(n) => void decide("platform.notification.read", { type: "platform.notification", id: n.id }, {})}
       onOpen={(n) => {
         if (!n.read) void decide("platform.notification.read", { type: "platform.notification", id: n.id }, {}, { quiet: true }); // opened is read
@@ -104,7 +104,7 @@ function Outbox() {
     { accessorKey: "outcome", header: t("Answer"), meta: { width: 260 }, cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
   ];
   return <>
-    <PageHeader title={t("Outbox")} description={t("K5: every decision waits here until the host answers; unanswered ones are sent again with the same key.")}
+    <PageHeader title={t("Outbox")} help={t("K5: every decision waits here until the host answers; unanswered ones are sent again with the same key.")}
       actions={<Button onClick={() => void resend()}>{t("Send again")}</Button>} />
     <DataTable data={[...outbox].reverse()} columns={columns} getRowId={(e) => e.submission.idempotencyKey ?? ""} height="calc(100dvh - 190px)" />
   </>;
@@ -117,7 +117,7 @@ function AllRecords() {
   const chosen = type || entities[0]?.type || "";
   return (
     <>
-      <PageHeader title={t("Records")} description={t("Every entity type of the apps you hold a role in, with the host's search, sort and pages. Records change only through their apps' actions.")} />
+      <PageHeader title={t("Records")} help={t("Every entity type of the apps you hold a role in, with the host's search, sort and pages. Records change only through their apps' actions.")} />
       {entities.length === 0 ? <p className="text-sm text-muted">{t("No entity types in apps you hold a role in.")}</p> : (
         <RecordList source={source} type={chosen} height="calc(100dvh - 260px)" onOpen={(r) => openRecord({ type: chosen, id: r.id })}
           toolbar={<Select aria-label={t("Entity type")} value={chosen} className="w-56" onChange={(e) => setType(e.target.value)}>
@@ -141,7 +141,7 @@ function DefinitionsCatalog() {
       cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
   ];
   return <>
-    <PageHeader title={t("Definitions")} description={t("Published assets from your applications. Inspect their owner, version, capabilities and declared dependencies.")} />
+    <PageHeader title={t("Definitions")} help={t("Published assets from your applications. Inspect their owner, version, capabilities and declared dependencies.")} />
     {error ? <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>
       : isPending ? <p className="text-sm text-muted">{t("Loading…")}</p>
         : <DataTable data={data ?? []} columns={columns} getRowId={(d) => assetKey(d.ref)} height="calc(100dvh - 190px)"
@@ -165,7 +165,7 @@ function DefinitionView({ ref, application }: { ref: AssetRef; application?: str
   if (definition.observation) return <Observations app={ref.app} name={ref.name} />;
   if (definition.entity) return <>
     <p className="mb-2 font-mono text-xs text-muted">{assetKey(definition.ref)}</p>
-    <Records type={definition.entity.type} description={definition.entity.description} />
+    <Records type={definition.entity.type} help={definition.entity.description} />
   </>;
   const action = definition.action;
   const presentation = definitionPresentation(definition);
@@ -221,7 +221,7 @@ function ApplicationOverview({ owner, name }: { owner: string; name: string }) {
   const application = definitions.find((definition) => definition.ref.kind === "app" && definition.ref.app === owner && definition.application?.name === name)?.application;
   if (!application) return <p role="alert" className="text-sm text-danger">{t("This application is unavailable.")}</p>;
   return <>
-    <PageHeader title={application.title} description={application.description} />
+    <PageHeader title={application.title} help={application.description} />
     <Panel className="grid max-w-2xl gap-3 text-sm">
       <h2 className="font-medium">{t("Application overview")}</h2>
       <p className="text-muted">{t("No business pages are available in this application. You can view its activity and diagnose problems from application runs.")}</p>

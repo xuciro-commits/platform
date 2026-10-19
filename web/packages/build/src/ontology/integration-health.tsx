@@ -38,7 +38,7 @@ export function IntegrationHealth() {
     { id: "when", header: t("Last activity"), accessorFn: (r) => r.when ?? "" },
   ];
   return <div className="grid gap-3">
-    <PageHeader title={t("Integration health")} description={t("Every connection, source, pipeline, writeback and journal delivery with its last outcome. Red needs a hand; amber is partial; attempts themselves are in Settings → Integrations.")}
+    <PageHeader title={t("Integration health")} help={t("Every connection, source, pipeline, writeback and journal delivery with its last outcome. Red needs a hand; amber is partial; attempts themselves are in Settings → Integrations.")}
       actions={<div className="flex gap-2"><Tag label={t("{n} failing", { n: bad })} tone={bad ? "danger" : undefined} /><Tag label={t("{n} partial", { n: warn })} tone={warn ? "warning" : undefined} /></div>} />
     <Panel>
       {rows.length === 0 ? <p className="text-xs text-muted">{t("No integrations yet. Start with a connection.")}</p> :

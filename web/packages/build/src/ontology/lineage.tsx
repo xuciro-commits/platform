@@ -56,18 +56,18 @@ export function ObjectLineage({ object, fields }: { object: string; fields: { na
     ...pipes.map(pipeline => `${t("Pipeline")} ${pipeline.title} ${producedBy(pipeline, field)}`.trim()),
   ];
   return <div className="grid gap-3">
-    <Panel title={t("Declared dependencies")} description={t("Published dependencies and reverse impact come from the shared asset description.")}>
+    <Panel title={t("Declared dependencies")} help={t("Published dependencies and reverse impact come from the shared asset description.")}>
       <DependencyGraph asset={ref} labels={presentation.labels} onOpen={openAsset} />
       <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref) } })}>{t("Dependencies and capabilities")}</Button>
     </Panel>
-    <Panel title={t("Field by field")} description={t("Current source mappings for the published dependencies. Open the original integration to inspect its configuration and recorded outcome.")}>
+    <Panel title={t("Field by field")} help={t("Current source mappings for the published dependencies. Open the original integration to inspect its configuration and recorded outcome.")}>
       <DataTable data={fields} getRowId={field => field.name} searchable={false} height={Math.min(360, 40 + fields.length * 28)} columns={[
         { id: "title", header: t("Field"), accessorFn: field => field.title },
         { id: "name", header: t("Name"), accessorFn: field => field.name },
         { id: "origin", header: t("Comes from"), accessorFn: field => feeders(field.name).join(" · ") || t("entered here") },
       ]} />
     </Panel>
-    <Panel title={t("Runtime evidence")} description={t("Recorded integration outcomes remain separate from declared dependencies.")}>
+    <Panel title={t("Runtime evidence")} help={t("Recorded integration outcomes remain separate from declared dependencies.")}>
       <Button size="sm" onClick={() => open({ view: "integration-health" })}>{t("Integration health")}</Button>
     </Panel>
   </div>;
@@ -79,7 +79,7 @@ export function DatasetLineage({ dataset }: { dataset: string }) {
   const record = useReadQuery<{ record?: Ds }>(`/v1/records/build.dataset/${encodeURIComponent(dataset)}`).data?.record;
   if (!record) return null;
   const ref = { app: "build", kind: "dataset", name: record.name };
-  return <Panel title={t("Declared dependencies")} className="grid gap-2 text-xs" description={t("Published dependencies and reverse impact come from the shared asset description.")}>
+  return <Panel title={t("Declared dependencies")} className="grid gap-2 text-xs" help={t("Published dependencies and reverse impact come from the shared asset description.")}>
     <DependencyGraph asset={ref} labels={presentation.labels} onOpen={asset => open(presentation.route(asset))} height={320} />
     <p>{t("Dataset version")}: {record.version ?? "—"}</p>
     <Button size="sm" variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(ref) } })}>{t("Dependencies and capabilities")}</Button>

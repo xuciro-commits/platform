@@ -45,7 +45,7 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
   const role = (id: string) => me.apps.find((e) => e.id === id)?.role;
   return (
     <>
-      <PageHeader title={t("Applications")} description={t("Every application you may open in {tenant}: the ones your organisation runs, and the platform's own tools your role allows.", { tenant: me.tenantId })} />
+      <PageHeader title={t("Applications")} help={t("Every application you may open in {tenant}: the ones your organisation runs, and the platform's own tools your role allows.", { tenant: me.tenantId })} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Find an application…")} aria-label={t("Find an application…")} className="w-72" />
         <div className="flex items-center gap-1 text-xs">

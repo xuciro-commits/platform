@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { PropertyList, ContextHelp, StructuredEditor } from "@platform/ui";
 import {formulaText} from "../editor/rule-text";
 import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
@@ -92,10 +92,10 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
           <span className="text-xs text-muted">{t(label)}</span><span className="text-xl font-semibold">{count}</span>
         </Button>)}
       </div>
-      <p className="text-sm text-muted">{t("Properties describe a record; the lifecycle says which states it passes through; actions are the governed steps people take; permissions say who may read and change it. Preview shows the object as people will see it.")}</p>
+      <ContextHelp title={t("Object type")}><p className="text-sm text-muted">{t("Properties describe a record; the lifecycle says which states it passes through; actions are the governed steps people take; permissions say who may read and change it. Preview shows the object as people will see it.")}</p></ContextHelp>
       <ShapeEditor process={process} parent={parent} entities={entities} source={object.extensionSource} onChange={change} />
       <fieldset className="grid gap-2"><Checkbox checked={!!process.enterpriseUse} onChange={enabled => change({ ...process, enterpriseUse: enabled ? { op: "", kind: "boolean", lit: { value: true } } : undefined })}>{t("Declare when records currently use enterprise elements")}</Checkbox>
-        <p className="text-xs text-muted">{t("A true result marks the current record as active use. Without a rule, every unarchived record counts. Only this record's fields are available.")}</p>
+        <ContextHelp title={t("Declare when records currently use enterprise elements")}><p className="text-xs text-muted">{t("A true result marks the current record as active use. Without a rule, every unarchived record counts. Only this record's fields are available.")}</p></ContextHelp>
         {process.enterpriseUse && <ExpressionEditor value={process.enterpriseUse} onChange={enterpriseUse => change({ ...process, enterpriseUse })} choices={[...process.fields, ...(process.states.length ? [{ name: "state", title: t("State"), type: "choice" }] : [])].filter(field => !field.readOnly).map(field => ({ value: field.name, label: field.title, type: field.type, ref: field.ref }))} />}
       </fieldset>
       {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
@@ -112,7 +112,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
           { id: "required", header: t("Required"), accessorFn: ({ field }) => field.required ? "✓" : "" },
           { id: "property", header: t("Shared property"), accessorFn: ({ field }) => field.property ? assetBindingKey(field.property) : "" },
         ]} />
-      <Disclosure summary={t("Creation transaction")}><div className="grid gap-3 pt-2"><p className="text-xs text-muted">{t("The new subject exists in the private view. Use a sequence step and assign its result to the number field in an update step.")}</p><Checkbox checked={!!process.createTransaction} onChange={enabled => change({...process,createTransaction:enabled?{subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}]}:undefined})}>{t("Apply a transaction when creating records")}</Checkbox>{process.createTransaction&&<TransactionEditor value={process.createTransaction} onChange={createTransaction=>change({...process,createTransaction})} process={process} roles={[...new Set(["builder",...process.access.map(access=>access.role)])]}/>}</div></Disclosure>
+      <Disclosure summary={t("Creation transaction")}><div className="grid gap-3 pt-2"><ContextHelp title={t("Creation transaction")}><p className="text-xs text-muted">{t("The new subject exists in the private view. Use a sequence step and assign its result to the number field in an update step.")}</p></ContextHelp><Checkbox checked={!!process.createTransaction} onChange={enabled => change({...process,createTransaction:enabled?{subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}]}:undefined})}>{t("Apply a transaction when creating records")}</Checkbox>{process.createTransaction&&<TransactionEditor value={process.createTransaction} onChange={createTransaction=>change({...process,createTransaction})} process={process} roles={[...new Set(["builder",...process.access.map(access=>access.role)])]}/>}</div></Disclosure>
     </div>,
     links: <div className="grid content-start gap-4 p-4">
       <div className="grid gap-2"><h2 className="text-sm font-semibold">{t("References from this object")}</h2>
@@ -177,7 +177,7 @@ export function EnterpriseReferenceTypes({ value, onChange }: { value: { stereot
   const selected = [...new Set([value.stereotype, ...value.stereotypes ?? []].filter((entry): entry is string => !!entry))];
   const labels: Record<string, string> = { ActualOrganization: "Organisation", ActualPerson: "Person", ActualPost: "Post", ActualLocation: "Location" };
   return <fieldset className="grid gap-1 text-xs"><legend className="mb-1 font-medium">{t("Enterprise element types")}</legend>
-    <p className="text-muted">{t("Choose the enterprise families this reference accepts. No selection accepts every readable enterprise element.")}</p>
+    <ContextHelp title={t("Enterprise element types")}><p className="text-muted">{t("Choose the enterprise families this reference accepts. No selection accepts every readable enterprise element.")}</p></ContextHelp>
     {[...new Set([...available, ...selected])].map(stereotype => <Checkbox key={stereotype} checked={selected.includes(stereotype)} onChange={checked => { const next = checked ? [...selected, stereotype] : selected.filter(entry => entry !== stereotype); onChange(next.length === 1 ? { stereotype: next[0], stereotypes: undefined } : { stereotype: undefined, stereotypes: next.length ? next : undefined }); }}>{t(labels[stereotype] ?? stereotype)}</Checkbox>)}
     {metadata.isError && <p role="alert" className="text-danger">{t("Enterprise element types could not be loaded.")}</p>}
   </fieldset>;
@@ -215,7 +215,7 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
   const selected = chosen?.kind === "state" ? `state:${process.states[chosen.at]?.name}` : chosen?.kind === "action" ? `action:${process.actions[chosen.at]?.name}` : undefined;
   return <div className="mb-4 grid gap-2">
     <div><h3 className="text-sm font-semibold">{t("Process map")}</h3>
-      <p className="text-xs text-muted">{t("Connect a state to an action to allow it; connect an action to a state for its result. Select a node to edit it. Delete a selected line to remove it.")}</p></div>
+      <ContextHelp title={t("States and actions")}><p className="text-xs text-muted">{t("Connect a state to an action to allow it; connect an action to a state for its result. Select a node to edit it. Delete a selected line to remove it.")}</p></ContextHelp></div>
     <FlowCanvas label={t("Process map")} catalog={graphCatalog} nodes={nodes} edges={edges} selected={selected} storeKey={`process:${objectId}`}
       onAdd={(kind) => { if (kind === "state") onAddState(); else if (process.states.length) onAddAction(); }}
       onSelect={(id) => {
@@ -264,7 +264,7 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
   return <Card className="grid content-start gap-3 p-3">
     <div className="text-xs font-semibold text-muted">{t("Field")}</div>
     <Label text={t("Shared property version")}><SemanticPropertyTypeSelect label={t("Shared property version")} value={field.property} filter={p=>p.definition.source==="tenant"&&p.binding.ref.app==="build"} onChange={p=>onChange(p?{property:p.binding,type:p.property.type,title:p.property.title,choices:undefined,ref:undefined,inverse:undefined}:{property:undefined})}/></Label>
-    {field.property&&<><p className="break-all text-xs text-muted">{field.property.ref.name}@{field.property.sourceVersion}</p><p className="text-xs text-muted">{t("The shared source controls type and title. Local names, required values and access stay with this object.")}</p>{!bound&&<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
+    {field.property&&<><p className="break-all text-xs text-muted">{field.property.ref.name}@{field.property.sourceVersion}</p><ContextHelp title={t("Shared property")}><p className="text-xs text-muted">{t("The shared source controls type and title. Local names, required values and access stay with this object.")}</p></ContextHelp>{!bound&&<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
     <Label text={t("What people call it")}><Input disabled={!!field.property} value={field.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
     <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
     <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value, ref:undefined, inverse:undefined, stereotype:undefined, stereotypes:undefined })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
@@ -273,7 +273,7 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     {field.type === "reference" && field.ref === "enterprise.element" && <EnterpriseReferenceTypes value={field} onChange={onChange} />}
     {field.type === "reference" && field.ref !== "enterprise.element" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
     {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? (field.formulaExpr?formulaText(field.formulaExpr):"")} onChange={(e) => onChange({ formula: e.target.value || undefined,formulaExpr:undefined })} /></Label>}
-    {(field.formula||field.formulaExpr) && <p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p>}
+    {(field.formula||field.formulaExpr) && <ContextHelp title={t("Calculated value")}><p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p></ContextHelp>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
     <Checkbox disabled={!!field.aliasOf} checked={!!field.readOnly || !!field.aliasOf} onChange={(readOnly) => onChange({ readOnly })}>{t("Read only")}</Checkbox>
@@ -282,7 +282,7 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
       {others.filter(other => !other.aliasOf && other.type === field.type && (other.ref ?? "") === (field.ref ?? "") && !!other.required === !!field.required).map(other => <option key={other.name} value={other.name}>{other.title} · {other.name}</option>)}
     </Select><span className="text-xs text-muted">{t("Keep an old field name readable after migration. It follows the selected field and cannot be edited directly.")}</span></Label>
 	<Label text={t("AI context policy")}><Select value={field.aiInput===false?"deny":field.aiInput===true?"allow":"declared"} onChange={event=>onChange({aiInput:event.target.value==="declared"?undefined:event.target.value==="allow"})}><option value="declared">{t("Only fields selected by a function")}</option><option value="allow">{t("Allow declared AI functions")}</option><option value="deny">{t("Exclude from AI context")}</option></Select></Label>
- {["text","longtext","integer","decimal","boolean","reference","choice"].includes(field.type)&&<Label text={t("Text source type")}><Select value={field.sourceType??""} onChange={event=>onChange({sourceType:event.target.value||undefined})}><option value="">{t("Undeclared source")}</option><option value="record">{t("Original record")}</option><option value="user-input">{t("User input")}</option><option value="external-input">{t("External input")}</option><option value="generated">{t("Generated from declared sources")}</option></Select><p className="text-xs text-muted">{t("Undeclared text is withheld from derived reads. Generated text also requires record provenance.")}</p></Label>}
+ {["text","longtext","integer","decimal","boolean","reference","choice"].includes(field.type)&&<Label text={t("Text source type")}><Select value={field.sourceType??""} onChange={event=>onChange({sourceType:event.target.value||undefined})}><option value="">{t("Undeclared source")}</option><option value="record">{t("Original record")}</option><option value="user-input">{t("User input")}</option><option value="external-input">{t("External input")}</option><option value="generated">{t("Generated from declared sources")}</option></Select><ContextHelp title={t("Text source type")}><p className="text-xs text-muted">{t("Undeclared text is withheld from derived reads. Generated text also requires record provenance.")}</p></ContextHelp></Label>}
     {conditions.length > 0 && <Label text={t("Only when")}>
       <Select value={on?.name ?? ""} onChange={(e) => onChange({ when: e.target.value ? `${e.target.value}=` : undefined })}>
         <option value="">{t("Always")}</option>{conditions.map((f) => <option key={f.name} value={f.name}>{f.title || f.name}</option>)}
@@ -359,7 +359,7 @@ function ScopeFields({ process, onChange }: { process: Process; onChange: (scope
   const pick = (value: string | undefined, onPick: (v: string | undefined) => void, empty: string) => <Select value={value ?? ""} onChange={(e) => onPick(e.target.value || undefined)}>
     <option value="">{empty}</option>{candidates.map((f) => <option key={f.name} value={f.name}>{f.title || f.name}{f.type === "reference" && f.ref ? ` → ${f.ref}` : ""}</option>)}</Select>;
   return <Card className="grid gap-3 p-3">
-    <div><h3 className="text-sm font-semibold">{t("What places a record")}</h3><p className="text-xs text-muted">{t("Row scopes read these fields: own = the owner field (or whoever created it); unit and below = the unit field, following a structure of the organisation.")}</p></div>
+    <div><h3 className="text-sm font-semibold">{t("What places a record")}</h3><ContextHelp title={t("What places a record")}><p className="text-xs text-muted">{t("Row scopes read these fields: own = the owner field (or whoever created it); unit and below = the unit field, following a structure of the organisation.")}</p></ContextHelp></div>
     <div className="grid gap-3 sm:grid-cols-3">
       <Label text={t("Owner field")}>{pick(scope.owner, (owner) => set({ owner }), t("Whoever created it"))}</Label>
       <Label text={t("Unit field")}>{pick(scope.unit, (unit) => set({ unit }), byUnit ? t("Required for unit and below") : t("None"))}</Label>
@@ -426,7 +426,7 @@ function ActionSummary({ action, states, issues, onOpen, onRemove }: { action: A
     <div className="font-medium">{action.title || action.name}</div>
     {action.description && <p className="text-xs text-muted">{action.description}</p>}
     <p className="text-xs text-muted">{action.from.map(named).join(", ") || t("any state")} → {actionResultEdges(action).map(named).join(", ") || t("same state")}</p>
-    <p className="text-xs text-muted">{t("{inputs} parameters · {steps} transaction steps", {inputs:action.inputs?.length??0,steps:action.transaction?.steps.length??0})}</p>
+    <PropertyList columns={2} items={[[t("Parameters"), action.inputs?.length ?? 0], [t("Transaction steps"), action.transaction?.steps.length ?? 0]]} />
     {issues > 0 && <p className="text-xs text-danger">{t("{n} problems", { n: issues })}</p>}
     <div className="flex gap-2"><Button size="sm" variant="primary" onClick={onOpen}><Zap />{t("Open action type")}</Button><Button size="sm" variant="ghost" onClick={onRemove}><Trash2 />{t("Remove")}</Button></div>
   </Card>;

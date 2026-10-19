@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { PropertyList, StructuredEditor } from "@platform/ui";
 import {formulaText} from "../editor/rule-text";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -72,7 +72,7 @@ export function Pipelines() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Pipelines")} description={t("Transform a dataset into another dataset or into records of an object, step by step, with expectations that quarantine bad rows instead of writing them.")}
+    <PageHeader title={t("Pipelines")} help={t("Transform a dataset into another dataset or into records of an object, step by step, with expectations that quarantine bad rows instead of writing them.")}
       actions={<Button onClick={() => open({ view: "pipeline", params: { id: "new" } })}>{t("New pipeline")}</Button>} />
     <ResourceList source={source} type="build.pipeline" fields={["title", "name", "input", "outputDataset", "outputObject", "state"]} onOpen={(record) => open({ view: "pipeline", params: { id: record.id } })} />
   </div>;
@@ -128,7 +128,7 @@ export function PipelineEditor({ id }: { id: string }) {
   ].map((node, i) => ({ ...node, position: { x: i * 268, y: 0 } }));
   const stepEdges: FlowEdge[] = stepNodes.slice(0, -1).map((node, i) => ({ id: `${node.id}>${stepNodes[i + 1]!.id}`, source: node.id, sourcePort: "rows", target: stepNodes[i + 1]!.id, targetPort: "rows" }));
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New pipeline")} description={t("Input → steps → expectations → output. Publish lets the host run it whenever the input gains a version; Run now asks for one run within seconds.")}
+    <PageHeader title={draft.title || t("New pipeline")} help={t("Input → steps → expectations → output. Publish lets the host run it whenever the input gains a version; Run now asks for one run within seconds.")}
       actions={<div className="flex min-w-0 flex-wrap items-center gap-2">
         <MarkingTag marking={draft.marking} />
         <Button onClick={() => open({ view: "pipeline" })}>{t("Pipelines")}</Button>
@@ -199,7 +199,7 @@ export function PipelineEditor({ id }: { id: string }) {
         </>}
       </Panel>
       <Panel title={t("Steps")} className="grid min-w-0 content-start gap-2 lg:col-span-2"
-        description={t("Drag a step from the library onto the line, or insert one on the arrow where it belongs. Choose a step to edit its fields below.")}>
+        help={t("Drag a step from the library onto the line, or insert one on the arrow where it belongs. Choose a step to edit its fields below.")}>
         <FlowCanvas catalog={stepCatalog()} nodes={stepNodes} edges={stepEdges} selected={picked} onSelect={setPicked}
           mode={busy ? "view" : "edit"} direction="right" height={280} label={t("Steps")} storeKey={`pipeline:${id}`}
           onAdd={(kind) => { setSteps([...(draft.steps ?? []), { kind }]); setPicked(`s${(draft.steps ?? []).length}`); }}
@@ -219,8 +219,7 @@ export function PipelineEditor({ id }: { id: string }) {
           <StepFields step={(draft.steps ?? [])[Number(picked.slice(1))]!} datasets={datasets.filter((d) => d.id !== draft.input)} onChange={(change) => setStep(Number(picked.slice(1)), change)} />
         </div>}
       </Panel>
-      <Panel title={t("Expectations")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
-        <p className="text-xs text-muted">{t("Checked on the final rows. A row that fails is quarantined on the run and not written; the rest still are.")}</p>
+      <Panel title={t("Expectations")} className="grid min-w-0 content-start gap-2 lg:col-span-2" help={t("Checked on the final rows. A row that fails is quarantined on the run and not written; the rest still are.")}>
         {(draft.expectations ?? []).map((x, i) => <div key={i} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
           <Input value={x.column} placeholder={t("column")} onChange={(e) => setExpectations((draft.expectations ?? []).map((y, j) => j === i ? { ...y, column: e.target.value } : y))} />
           <Select value={x.rule} onChange={(e) => setExpectations((draft.expectations ?? []).map((y, j) => j === i ? { ...y, rule: e.target.value } : y))}>{RULES.map((r) => <option key={r} value={r}>{t(r)}</option>)}</Select>
@@ -231,10 +230,8 @@ export function PipelineEditor({ id }: { id: string }) {
       </Panel>
       <Panel title={t("Last run")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not run yet.")}</p> : <>
-          <p className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.quarantined || last.failed ? t("Partly written") : t("Written")} tone={last.error ? "danger" : last.quarantined || last.failed ? "warning" : "success"} />
-            <span>{new Date(last.at).toLocaleString()}</span><span>{t("input v{v}", { v: last.inputVersion })}</span>
-            <span>{t("{rows} rows · {written} written · {quarantined} quarantined · {failed} refused", { rows: last.rows, written: last.written, quarantined: last.quarantined, failed: last.failed })}{last.merged ? ` · ${t("{n} merged by the matching rule", { n: last.merged })}` : ""}</span>
-            {last.outputVersion ? <span>{t("output v{v}", { v: last.outputVersion })}</span> : null}</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.quarantined || last.failed ? t("Partly written") : t("Written")} tone={last.error ? "danger" : last.quarantined || last.failed ? "warning" : "success"} /><time>{new Date(last.at).toLocaleString()}</time></div>
+          <PropertyList columns={3} items={[[t("Rows"), last.rows], [t("Written"), last.written], [t("Quarantined"), last.quarantined], [t("Refused"), last.failed], [t("Input version"), last.inputVersion], [t("Output version"), last.outputVersion ?? "—"], ...(last.merged ? [[t("Merged"), last.merged] as [string, React.ReactNode]] : [])]} />
           {last.error && <p className="text-xs text-danger">{last.error}</p>}
           {last.quarantine?.length ? <ul className="grid gap-1 text-xs">{last.quarantine.map((q, i) => <li key={i} className="font-mono break-all"><span className="text-warning">{q.reason}</span> · {Object.entries(q.row).map(([k, v]) => `${k}=${cell(v)}`).join(" ")}</li>)}</ul> : null}
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}

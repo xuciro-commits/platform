@@ -1,1 +1,1 @@
-{"revision":"sha256:71168efbe272ee70","owner":"@pkg/build","pages":["build.0.json"],"api":{"source":"web/packages/build/src/index.tsx","symbols":["contributions","default"],"types":[]}}
+{"revision":"sha256:2e262e80fc234505","owner":"@pkg/build","pages":["build.0.json"],"api":{"source":"web/packages/build/src/index.tsx","symbols":["contributions","default"],"types":[]}}

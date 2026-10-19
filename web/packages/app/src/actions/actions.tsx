@@ -7,7 +7,7 @@ import {type Api} from "@platform/kernel";
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, Dialog, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
+import { Button, ContextHelp, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, Dialog, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
@@ -159,9 +159,9 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  const refusalView=refusal&&<ActionRefusal entry={attempt?.entry} message={refusal} original={!pending?attempt?.values:undefined}/>;
  const retry=attempt&&!pending&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
  const label=submitting?t("Executing…"):pending?t("Retry confirmation"):schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
- if(generated)return <div className="grid gap-3">{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onTrial={preview?undefined:next=>trial(declared.schema,target,generatedInputs(next),revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await submit(generatedInputs(inputs as Record<string,unknown>))||undefined}/>{retry}</div>;
+ if(generated)return <div className="grid gap-3">{declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onTrial={preview?undefined:next=>trial(declared.schema,target,generatedInputs(next),revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await submit(generatedInputs(inputs as Record<string,unknown>))||undefined}/>{retry}</div>;
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
- {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
+ {declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusalView}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}

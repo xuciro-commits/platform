@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Card, Disclosure, Select, t } from "@platform/ui";
+import { Button, Card, ContextHelp, Disclosure, PropertyList, Select, t } from "@platform/ui";
 import type { Api, ActionDeclaration } from "@platform/kernel";
 import { useHost } from "../index";
 import { DeclaredActionForm } from "../actions/actions";
@@ -29,13 +29,15 @@ export function ProposalReview({call,live,active=()=>true,onChanged}:{call?:Api.
   try{if(await host.decide("build.function-call.review",{type:"build.function-call",id:call.id},{decision},{expectedRevision:call.revision,quiet:true,onRefused:message=>{if(valid())setError(message);}})&&valid()){await host.refresh?.();onChanged?.();}}finally{if(valid())setBusy(false);}
  };
  return <Card className="grid gap-3 p-3" role="region" aria-label={t("Proposal review")}>
- <div className="flex flex-wrap justify-between gap-2"><strong>{t("Proposal review")}</strong><span className="text-xs">{t(call.decision||call.state)}</span></div>
- <p className="text-xs text-muted">{t("Review the suggestion and amend the action inputs. Adoption uses the original permissions, constraints and approval path.")}</p>
- {call.expiresAt&&<p className="text-xs">{t("Proposal expires at")}: {call.expiresAt}</p>}
- {call.decidedBy&&<p className="text-xs">{t("Decided by")}: {call.decidedBy} · {call.adoptedAction}</p>}
+ <div className="flex flex-wrap items-center gap-2"><strong>{t("Proposal review")}</strong><span className="text-xs">{t(call.decision||call.state)}</span><ContextHelp title={t("Proposal review")}>{t("Review the suggestion and amend the action inputs. Adoption uses the original permissions, constraints and approval path.")}</ContextHelp></div>
+ {(call.expiresAt||call.decidedBy)&&<PropertyList columns={2} items={[
+  ...(call.expiresAt?[[t("Proposal expires at"),call.expiresAt] as [string,string]]:[]),
+  ...(call.decidedBy?[[t("Decided by"),call.decidedBy] as [string,string],[t("Adoption action"),call.adoptedAction||"—"] as [string,string]]:[]),
+ ]}/>}
  {pending&&<fieldset disabled={!live||busy||requested} className="grid gap-2">
  <label className="grid gap-1 text-xs">{t("Adoption action")}<Select value={action?.schema??""} onChange={event=>{setSchema(event.target.value);setReset(n=>n+1);setRequested(false);}}><option value="">{t("Choose an action")}</option>{actions.map(action=><option key={action.schema} value={action.schema}>{action.title}</option>)}</Select></label>
- {action?.adoption&&<><p className="break-all text-xs">{t("Retained proposal")}: {call.id} · {t("Version")} {call.version}</p><DeclaredActionForm key={`${call.id}:${action.schema}:${reset}`} declared={action} target={{type:call.contract.object,id:source}} revision={record.data?.record.revision??0} initial={initial(action)} fixed={{[action.adoption.input]:call.id}} enabled={!!record.data?.record&&!record.isError&&valid()} onCancel={()=>setReset(n=>n+1)} onCompleted={()=>{if(valid()){setRequested(true);void host.refresh?.();onChanged?.();}}} submitLabel={t(action.needsApproval?"Request adoption approval":"Adopt proposal")}/></>}
+ {action?.adoption&&<><PropertyList columns={2} items={[[t("Retained proposal"),<code className="select-all break-all">{call.id}</code>],[t("Version"),call.version]]}/>
+<DeclaredActionForm key={`${call.id}:${action.schema}:${reset}`} declared={action} target={{type:call.contract.object,id:source}} revision={record.data?.record.revision??0} initial={initial(action)} fixed={{[action.adoption.input]:call.id}} enabled={!!record.data?.record&&!record.isError&&valid()} onCancel={()=>setReset(n=>n+1)} onCompleted={()=>{if(valid()){setRequested(true);void host.refresh?.();onChanged?.();}}} submitLabel={t(action.needsApproval?"Request adoption approval":"Adopt proposal")}/></>}
  {!actions.length&&<p className="text-xs">{t("No adoption action is available to this member.")}</p>}
  <div className="flex gap-2"><Button onClick={()=>void review("rejected")}>{t("Reject proposal")}</Button><Button onClick={()=>void review("expired")}>{t("Expire proposal")}</Button></div>
  </fieldset>}

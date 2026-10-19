@@ -2,7 +2,7 @@
 // against — per app, per role, the actions it may call — read from the host,
 // never written here. Holders counts who has each role today.
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Form, Checkbox, DataTable, type ColumnDef, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
+import { PropertyList, ContextHelp, Button, Form, Checkbox, DataTable, type ColumnDef, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import type { Member } from "./shared";
@@ -15,7 +15,7 @@ export function Permissions() {
   const catalog = useRead<AppPermissions[]>("/v1/permissions");
   return (
     <>
-      <PageHeader title={t("Roles and permissions")} description={t("What each role in each app may do, as the apps declare it. A member holds roles through grants; a permission's id names the action.")} />
+      <PageHeader title={t("Roles and permissions")} help={t("What each role in each app may do, as the apps declare it. A member holds roles through grants; a permission's id names the action.")} />
       {catalog.error && <p className="text-sm text-[var(--tone-danger)]">{String(catalog.error)} {t("— administrators only.")}</p>}
       <div className="grid max-w-5xl gap-4">
         <Explain catalog={catalog.data ?? []} />
@@ -35,8 +35,8 @@ function AppMatrix({ app }: { app: AppPermissions }) {
     ...app.roles.map((role): ColumnDef<Row, unknown> => ({ id: role.role, header: () => <span><span className="font-mono">{role.role}</span> <Tag label={String(role.holders)} tone={role.holders ? "info" : "neutral"} /></span>, meta: { width: 120 }, accessorFn: (row) => role.actions.some((action) => action.id === row.id), cell: ({ getValue }) => <span aria-label={getValue() ? t("allowed") : t("not allowed")}>{getValue() ? "●" : "·"}</span> })),
   ];
   return (
-    <Panel title={<span>{app.title} <span className="ml-1 font-mono text-xs text-muted">{app.app}</span></span>}
-      description={app.everyone.length ? t("Any member may read: {reads}", { reads: app.everyone.join(", ") }) : undefined}>
+    <Panel title={<span>{app.title} <span className="ml-1 font-mono text-xs text-muted">{app.app}</span></span>}>
+      {app.everyone.length > 0 && <div className="mb-3"><PropertyList items={[[t("Reads available to all members"), <span key="reads" className="flex flex-wrap gap-1">{app.everyone.map(read => <Tag key={read} label={read} />)}</span>]]} /></div>}
       {ids.length === 0 ? <p className="text-xs text-muted">{t("Declares no actions.")}</p> :
         <DataTable data={ids.map((id) => ({ id, title: title(id) }))} columns={columns} getRowId={(row) => row.id} searchable={false} height={Math.min(480, 40 + ids.length * 28)} />}
     </Panel>
@@ -87,12 +87,7 @@ function Explain({ catalog }: { catalog: AppPermissions[] }) {
         <Button type="submit" variant="primary" disabled={!member || (!permission && !object)}>{t("Explain")}</Button>
       </Form>
       {answer.error && <p className="mt-2 text-xs text-[var(--tone-danger)]">{String(answer.error)}</p>}
-      {answer.data && v && <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-        <Tag label={v.allow ? t("allowed") : t("not allowed")} tone={v.allow ? "success" : "danger"} />
-        <span>{t(v.reason)}</span>
-        <span className="text-xs text-muted">{t("rule")}: {v.rule}{v.role ? ` (${v.role})` : ""}{v.policy ? ` ${v.policy}` : ""}</span>
-        {explanation && <span className="text-xs text-muted">{t("holds")}: {(explanation.roles ?? []).join(", ") || t("none")} · {t("needs")}: {(explanation.allowed ?? []).join(", ") || "—"}</span>}
-      </p>}
+      {answer.data && v && <div className="my-3 grid gap-3"><div className="flex flex-wrap items-center gap-2 text-sm"><Tag label={v.allow ? t("allowed") : t("not allowed")} tone={v.allow ? "success" : "danger"} /><span>{t(v.reason)}</span></div><PropertyList columns={3} items={[[t("rule"), v.rule], [t("Role"), v.role || "—"], [t("Policy"), v.policy || "—"], ...(explanation ? [[t("holds"), (explanation.roles ?? []).join(", ") || t("none")], [t("needs"), (explanation.allowed ?? []).join(", ") || "—"]] as [string, string][] : [])]} /></div>}
       {v && <DataTable data={v.layers} columns={columns} getRowId={(layer) => layer.name} searchable={false} height={Math.min(360, 40 + v.layers.length * 32)} />}
       {!!v?.withheld?.length && <p className="mt-2 text-xs text-muted">{t("Withheld fields")}: {v.withheld.join(", ")}</p>}
     </Panel>
@@ -127,7 +122,7 @@ function Access({ catalog }: { catalog: AppPermissions[] }) {
         <div className="grid gap-1.5">{access.teams.map((x) => <p key={x.id} className={row}><span className="font-medium">{x.name}</span><span className="text-xs text-muted">{x.members.length} {t("members")}</span>{x.grants.map((g) => <Tag key={g.app + g.role} label={`${g.app}: ${g.role}`} />)}{remove("platform.team.remove", "platform.team", x.id)}</p>)}</div>
       </Panel>
       <Panel title={t("Projects")} actions={can("platform.project.save") && <Button size="sm" onClick={() => { setEditing(undefined); setAdding("project"); }}>{t("Add")}</Button>}>
-        <p className="mb-2 text-xs text-muted">{t("A project's editors hold the builder role within it: they open the Studio and may draft the assets it names, nothing else. Archiving it takes both away.")}</p>
+        <div className="mb-2 flex justify-end"><ContextHelp title={t("Projects")}>{t("A project's editors hold the builder role within it: they open the Studio and may draft the assets it names, nothing else. Archiving it takes both away.")}</ContextHelp></div>
         {projects.filter((p) => !p.archived).length === 0 && <p className="text-xs text-muted">{t("None.")}</p>}
         <div className="grid gap-1.5">{projects.filter((p) => !p.archived).map((p) => <p key={p.id} className={row}>
           <span className="font-medium">{p.title}</span><span className="font-mono text-xs text-muted">{p.name}</span>

@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useHost, useOpenRecord, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, useWorkspace, t, type ColumnDef, type CanvasAction, type WorkbenchTab } from "@platform/ui";
+import { PropertyList, ContextHelp, Button, Checkbox, DataTable, Dialog, Disclosure, Form, IconGlyph, Input, Panel, Select, Tag, Tree, Workbench, RecordTimeline, useUnsavedChanges, useWorkspace, t, type ColumnDef, type CanvasAction, type WorkbenchTab } from "@platform/ui";
 import { Copy, Link2, Network, Pencil, Pin as PinIcon, PinOff, Plus, Puzzle, Save, Table2, Trash2, Workflow, CalendarDays } from "lucide-react";
 import { Canvas, STEREOTYPE_DROP, elementIconName, type CanvasPin, type Positions } from "./canvas";
 import { ElementProperties, type ElementEdit } from "./properties";
@@ -54,7 +54,7 @@ function SeedWizard({ decide, admin }: { decide: Decide; admin: boolean }) {
   const scale = +v.headcount <= 100 ? "S" : +v.headcount <= 1000 ? "M" : +v.headcount <= 10000 ? "L" : "XL";
   const shapes: Record<string, string> = { S: t("One company with a few teams and one site."), M: t("A plant: departments, workshops, lines, stations and machines."), L: t("Business units each with a plant, shared services, cost centres and projects."), XL: t("A group: subsidiaries with ownership shares, regions, a board and committees.") };
   return <div className="mx-auto grid max-w-xl gap-4">
-    <Panel title={t("Model your enterprise")} description={t("Answer a few questions and start from a template sized to your organisation — every element can be renamed, moved or closed afterwards.")}>
+    <Panel title={t("Model your enterprise")} help={t("Answer a few questions and start from a template sized to your organisation — every element can be renamed, moved or closed afterwards.")}>
       <div className="grid gap-3">
         {field(t("The enterprise's name"), <Input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
         {field(t("People, roughly"), <Input type="number" value={v.headcount} onChange={(e) => setV({ ...v, headcount: e.target.value })} />)}
@@ -70,7 +70,7 @@ function SeedWizard({ decide, admin }: { decide: Decide; admin: boolean }) {
         {!admin && <p className="text-xs text-muted">{t("An enterprise administrator seeds the model.")}</p>}
       </div>
     </Panel>
-    <Panel title={t("Or start from one piece")} description={t("A single company, plant, hotel or warehouse to try the modeler with; add more pieces later from the Patterns tab.")}>
+    <Panel title={t("Or start from one piece")} help={t("A single company, plant, hotel or warehouse to try the modeler with; add more pieces later from the Patterns tab.")}>
       <div className="grid gap-1">{patterns.filter((p) => p.level <= 2).map((p) => <Button key={p.id} variant="row" disabled={!admin} onClick={() => setPattern(p)} className="justify-between border border-border">
         <span>{t(p.title)}</span><span className="text-[10px] text-muted">{t(p.levelName)} · {t("{n} elements", { n: p.preview.elements })}</span></Button>)}</div>
     </Panel>
@@ -285,14 +285,13 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
   });
   const tabs: WorkbenchTab[] = [
     { id: "viewpoint", title: t("Viewpoints"), badge: m.views.length, content: <div className="grid gap-1 p-2">
-      <p className="px-1 text-[11px] text-muted">{t("Five views over one model: who is where, what it holds, what it can do, what it offers, how it is run. Switching views changes where the drawing starts; the model itself never changes.")}</p>
+      <div className="flex justify-end"><ContextHelp title={t("Viewpoints")}><p>{t("Five views over one model: who is where, what it holds, what it can do, what it offers, how it is run. Switching views changes where the drawing starts; the model itself never changes.")}</p><p>{t("A view is a drawing over the whole model: which elements it shows, where, which records are pinned beside them, and which question it answers. Saving writes the open view; the other operations are on each row.")}</p><p>{t("Deleting a view discards a picture, not a fact: the elements, their relationships and the records that name them stay as they are.")}</p></ContextHelp></div>
       {meta.views.map((v) => <Button key={v.id} variant="row" aria-pressed={working.viewpoint === v.id}
         onClick={() => changeViewpoint(v.id)} className={working.viewpoint === v.id ? "bg-row-selected" : ""} title={t(v.note)}>
         <span className="grid min-w-0 flex-1 text-left"><span className="truncate text-xs font-medium">{t(v.title)}</span>
           <span className="truncate text-[10px] text-muted">{t(v.note)}</span></span>
         <span className="text-[10px] text-muted">{viewpointElements(m, v, day).length}</span>
       </Button>)}
-      <p className="px-1 pt-2 text-[11px] text-muted">{t("A view is a drawing over the whole model: which elements it shows, where, which records are pinned beside them, and which question it answers. Saving writes the open view; the other operations are on each row.")}</p>
       {m.views.map((v) => <div key={v.id} className={activeId === v.id ? "grid gap-1 rounded bg-row-selected p-1" : "grid gap-1 p-1"}>
         <Button variant="row" aria-pressed={activeId === v.id} onClick={() => openView(v.id)}>
           <span className="truncate">{v.name}</span>
@@ -306,7 +305,6 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
         </div>}
       </div>)}
       {host.can("enterprise.view.save") && <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "view", mode: "create" })}><Plus />{t("New view")}</Button>}
-      <p className="px-1 text-[11px] text-muted">{t("Deleting a view discards a picture, not a fact: the elements, their relationships and the records that name them stay as they are.")}</p>
       <RegistryPane meta={meta} />
     </div> },
     { id: "patterns", title: t("Model patterns"), content: <div className="grid gap-1 p-2">
@@ -399,7 +397,7 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
             <span className="ml-auto text-xs text-muted">{m.relationships.filter((r) => r.stereotype === MEMBERSHIP && r.target === e.id && live(r, day)).length || ""}</span></>} />
       </div>}
       {mode === "timeline" && <div className="grid gap-3 p-3">
-        <p className="text-xs text-muted">{t("Dates belong to the model. Select a project or milestone to edit its dates and related resource; canvas, tree and roadmap read the same elements.")}</p>
+        <div className="flex justify-end"><ContextHelp title={t("Roadmap")}>{t("Dates belong to the model. Select a project or milestone to edit its dates and related resource; canvas, tree and roadmap read the same elements.")}</ContextHelp></div>
         <RecordTimeline records={timeline} fields={{ start: "start", end: "end", label: "name", group: "group", kind: "date" }} selected={selected} onSelect={(r) => setSelected(r?.id)} label={t("Roadmap")} />
       </div>}
       {mode === "table" && <DataTable data={shownElements} columns={tableColumns} getRowId={(e) => e.id} selectedId={selected} onRowClick={(e) => setSelected(e.id)} height={560} />}
@@ -473,7 +471,7 @@ function AddPane({ meta, viewpoint, admin, onAdd }: {
     <span className="font-mono text-[10px] text-muted">{r.p.stereotype}</span>
   </Button>;
   return <div className="grid gap-2 p-2">
-    <p className="px-1 text-[11px] text-muted">{t("Elements the model can hold, from the UAF metamodel. Drag one onto the canvas, or click to add it. One drawing may hold any of them: the viewpoint says where it starts, not a fence.")}</p>
+    <div className="flex justify-end"><ContextHelp title={t("Elements")}>{t("Elements the model can hold, from the UAF metamodel. Drag one onto the canvas, or click to add it. One drawing may hold any of them: the viewpoint says where it starts, not a fence.")}</ContextHelp></div>
     <Input placeholder={t("Find an element type…")} aria-label={t("Find an element type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
     <p className="px-1 text-[11px] text-muted">{viewpoint ? <>{t(viewpoint.title)}</> : null} · {t("UAF {version}, {n} types here, {all} in the whole profile.", { version: meta.version, n: here.length, all: usable.length })}</p>
     <div className="grid gap-1">
@@ -572,7 +570,7 @@ function People({ element: el, model: m, day, admin, decide, post, setPost, hold
         </Form>
       : <Button size="sm" variant="ghost" disabled={!openPosts.length} title={openPosts.length ? undefined : t("Add a post first.")}
           onClick={() => setHolder({ person: "", post: openPosts[0]?.id ?? "" })}><Plus />{t("Fill a post")}</Button>)}
-    <p className="text-[11px] text-muted">{t("An account signs someone in; a person is who they are in this model. Accounts join an organisation under Members; people join posts here.")}</p>
+    <div className="flex justify-end"><ContextHelp title={t("Posts and people")}>{t("An account signs someone in; a person is who they are in this model. Accounts join an organisation under Members; people join posts here.")}</ContextHelp></div>
   </div>;
 }
 
@@ -732,11 +730,11 @@ function PatternDialog({ pattern: p, organisations, under, decide, onClose }: { 
   const params = Object.fromEntries(Object.entries(v.params).filter(([, x]) => x !== "").map(([k, x]) => [k, +x]));
   return <Dialog open onOpenChange={(o) => !o && onClose()} title={t("Add a {thing}", { thing: t(p.title) })}>
     <Form className="grid gap-3" onSubmit={async () => { if (await decide("enterprise.pattern.apply", { type: MODEL, id: "model" }, { pattern: p.id, name: v.name, under: v.under || undefined, params: Object.keys(params).length ? params : undefined })) onClose(); }}>
-      <p className="text-xs text-muted">{t(p.description)}</p>
+      <div className="flex justify-end"><ContextHelp title={t(p.title)}>{t(p.description)}</ContextHelp></div>
       {field(t("Name"), <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />)}
       {p.params.length > 0 && <div className="grid grid-cols-2 gap-3">{p.params.map((k) => <div key={k.name}>{field(t(k.description), <Input type="number" min="0" value={v.params[k.name] ?? ""} onChange={(e) => setV({ ...v, params: { ...v.params, [k.name]: e.target.value } })} />)}</div>)}</div>}
       {organisations.length > 0 && field(t("Under"), <Select value={v.under} onChange={(e) => setV({ ...v, under: e.target.value })}><option value="">{t("— top level")}</option>{organisations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>)}
-      <Disclosure summary={<span className="text-xs text-muted">{t("Adds by default")}: {t("{n} elements", { n: p.preview.elements })} · {p.preview.organisations} {t("organisations")} · {p.preview.posts} {t("posts")} · {p.preview.locations} {t("locations")} · {p.preview.resources} {t("resources")}</span>}>
+      <Disclosure summary={t("Adds by default")}><PropertyList columns={3} items={[[t("Elements"), p.preview.elements], [t("organisations"), p.preview.organisations], [t("posts"), p.preview.posts], [t("locations"), p.preview.locations], [t("resources"), p.preview.resources]]} />
         <pre className="mt-1 max-h-48 overflow-auto text-[11px] text-muted">{p.preview.outline.join("\n")}</pre>
       </Disclosure>
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button><Button type="submit" disabled={!v.name}>{t("Add")}</Button></div>
@@ -849,12 +847,11 @@ function Inspector({ element: el, model: m, view, meta, day, admin, decide, titl
     <UsedBy element={el} onPin={admin && onPin ? (ref, label) => onPin(ref, el.id, label) : undefined} />
     {(el.stereotype === ORGANIZATION || el.stereotype === POST) && <People element={el} model={m} day={day} admin={!el.owner && live(el, day) && host.can("enterprise.element.add") && host.can("enterprise.relationship.add")} decide={decide} post={post} setPost={setPost} holder={holder} setHolder={setHolder} />}
     <PinnedRecords element={el} view={view} onUnpin={onUnpin} />
-    <p className="text-xs text-muted">{st?.description}</p>
+    <div className="flex justify-end"><ContextHelp title={el.name}>{st?.description}<p>{t("Hiding is a view decision. Closing is a model decision: use the canvas or the element's operations to close it with a date.")}</p></ContextHelp></div>
     <div className="grid gap-1">
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="ghost" title={t("Only this view changes. The element and its relationships stay in the model.")} onClick={onRemove}>{t("Hide in this view")}</Button>
       </div>
-      <p className="text-[11px] text-muted">{t("Hiding is a view decision. Closing is a model decision: use the canvas or the element's operations to close it with a date.")}</p>
     </div>
   </div>;
 }

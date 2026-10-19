@@ -155,7 +155,9 @@ test('empty drafts show declared field guidance and copying an example never ini
   expect(screen.getByText('Fields and examples').closest('details')?.open).toBe(true);
   expect(screen.getByText('Choose a unique name.')).toBeTruthy();
   expect(screen.getByText('text · Required')).toBeTruthy();
+  fireEvent.change(screen.getByRole('combobox',{name:'Field reference'}),{target:{value:'state'}});
   expect(screen.getByText('Allowed values: draft, ready')).toBeTruthy();
+  fireEvent.change(screen.getByRole('combobox',{name:'Field reference'}),{target:{value:'rows.[].amount'}});
   expect(screen.getByText('rows.[].amount')).toBeTruthy();
   expect(screen.queryByText('Not writable')).toBeNull();
   expect(JSON.parse(source().value)).toEqual({});

@@ -117,7 +117,7 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
 
 export function Flows() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  return <div className="grid gap-3 p-4"><PageHeader title={t("Flows")} description={t("Branching logic: native capabilities, typed code, human tasks and AI on one map. For a plain trigger → effects rule, create an automation instead.")}
+  return <div className="grid gap-3 p-4"><PageHeader title={t("Flows")} help={t("Branching logic: native capabilities, typed code, human tasks and AI on one map. For a plain trigger → effects rule, create an automation instead.")}
     actions={role("build") === "builder" && <Button onClick={() => open({ view: "flow", params: { id: "new" } })}>{t("New flow")}</Button>} />
     <ResourceList source={source} type="build.process" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "flow", params: { id: record.id } })} /></div>;
 }

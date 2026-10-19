@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { PropertyList, StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
@@ -25,7 +25,7 @@ export function DataSources() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Data sources")} description={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Each row is the object's own create or edit, decided once per content.")}
+    <PageHeader title={t("Data sources")} help={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Each row is the object's own create or edit, decided once per content.")}
       actions={<Button onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
     <ResourceList source={source} type="build.source" fields={["title", "name", "object", "dataset", "every", "state"]} onOpen={(record) => open({ view: "data-source", params: { id: record.id } })} />
   </div>;
@@ -56,7 +56,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const last = draft.last;
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New data source")} description={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Endpoint → rows → mapping → period. Publish lets the host pull it; Pull now asks for one pull within seconds.")}
+    <PageHeader title={draft.title || t("New data source")} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Endpoint → rows → mapping → period. Publish lets the host pull it; Pull now asks for one pull within seconds.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "data-source" })}>{t("Data sources")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
@@ -110,8 +110,8 @@ export function DataSourceEditor({ id }: { id: string }) {
       </Panel>
       {!draft.stream && <Panel title={t("Last pull")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not pulled yet.")}</p> : <>
-          <p className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.failed ? t("Partly applied") : t("Applied")} tone={last.error ? "danger" : last.failed ? "warning" : "success"} />
-            <span>{new Date(last.at).toLocaleString()}</span><span>{t("{rows} rows · {applied} applied · {failed} failed", { rows: last.rows, applied: last.applied, failed: last.failed })}</span></p>
+          <div className="flex flex-wrap items-center gap-2 text-xs"><Tag label={last.error ? t("Failed") : last.failed ? t("Partly applied") : t("Applied")} tone={last.error ? "danger" : last.failed ? "warning" : "success"} /><time>{new Date(last.at).toLocaleString()}</time></div>
+          <PropertyList columns={3} items={[[t("Rows"), last.rows], [t("Applied"), last.applied], [t("Failed"), last.failed]]} />
           {last.error && <p className="text-xs text-danger">{last.error}</p>}
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}
         </>}

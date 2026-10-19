@@ -6,7 +6,7 @@ import {useInputDrafts} from "@platform/ui";
 // call them is decided by the host (`HostAdmins`), not by this file.
 import {apiErrorMessage,type Api} from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Panel, Select, Tag, Textarea, notify, useUnsavedChanges, useWorkspace, type ColumnDef, t } from "@platform/ui";
+import { Button, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Form, Input, PageHeader, Panel, PropertyList, Select, Tag, Textarea, notify, useUnsavedChanges, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { when } from "./shared";
@@ -59,25 +59,20 @@ export function HostOverview() {
     { accessorKey: "support", header: t("Support sessions"), meta: { width: 130, align: "right" } },
     { id: "release", header: t("Active release"), meta: { width: 150 }, accessorFn: (r) => r.activeRelease?.split(":").at(-1)?.slice(0, 10) ?? "—", cell: (c) => <code className="text-xs">{c.getValue()}</code> },
   ];
-  const faults = tenants.filter((tenant) => tenant.quarantined || tenant.failedWork > 0);
   return <>
-    <PageHeader title={t("Host Console")} description={t("Every tenant this host runs: health, lifecycle, support and the artifacts it trusts. Actions here are recorded in the tenant's audit.")}
+    <PageHeader title={t("Host Console")} help={t("Every tenant this host runs: health, lifecycle, support and the artifacts it trusts. Actions here are recorded in the tenant's audit.")}
       actions={!overview.isError && <Button variant="primary" onClick={() => setCreating(true)}>{t("Create tenant")}</Button>} />
     <CreateTenantDialog open={creating} onOpenChange={setCreating} />
-    <div className="mb-4 grid gap-3 md:grid-cols-4">
-      <Metric label={t("Tenants")} value={tenants.length} />
-      <Metric label={t("Quarantined")} value={tenants.filter((tenant) => tenant.quarantined).length} tone={faults.length ? "danger" : undefined} />
-      <Metric label={t("Failed work")} value={tenants.reduce((sum, tenant) => sum + tenant.failedWork, 0)} />
-      <Metric label={t("Host administrators")} value={overview.data?.admins ?? 0} />
-    </div>
+    <div className="mb-4"><PropertyList columns={4} items={[
+      [t("Tenants"), tenants.length],
+      [t("Quarantined"), tenants.filter((tenant) => tenant.quarantined).length],
+      [t("Failed work"), tenants.reduce((sum, tenant) => sum + tenant.failedWork, 0)],
+      [t("Host administrators"), overview.data?.admins ?? 0],
+    ]} /></div>
     {overview.isError ? <p role="alert" className="text-sm text-danger">{t("Only host administrators can open the Host Console.")}</p>
       : <DataTable data={tenants} columns={columns} getRowId={(r) => r.id} height="calc(100dvh - 330px)" empty={t("This host runs no tenants.")}
         onRowClick={(r) => open({ view: "host-tenant", params: { tenant: r.id } })} />}
   </>;
-}
-
-function Metric({ label, value, tone }: { label: string; value: number | string; tone?: "danger" }) {
-  return <Card className="p-3"><div className="text-xs text-muted">{label}</div><div className={`text-2xl font-semibold ${tone === "danger" ? "text-danger" : ""}`}>{value}</div></Card>;
 }
 
 export function HostTenant({ tenant }: { tenant: string }) {
@@ -120,7 +115,7 @@ export function HostTenant({ tenant }: { tenant: string }) {
     if (result) { notify.success(t("{tenant} is now {state}.", { tenant, state: lifecycleLabel(result).toLowerCase() })); setLifecycle(undefined); setReason(""); }
   };
   return <>
-    <PageHeader title={tenant} description={data ? `${lifecycleLabel(data)} · ${t("{n} members", { n: data.members })} · ${data.apps.join(", ")}` : t("Loading…")}
+    <PageHeader title={tenant} description={!data ? t("Loading…") : undefined}
       actions={<>
         <Button size="sm" variant="ghost" onClick={() => open({ view: "host-overview" })}>{t("All tenants")}</Button>
         <Button size="sm" variant="ghost" onClick={() => open({ view: "host-promotions", params: { tenant } })}>{t("Promote a release")}</Button>
@@ -130,6 +125,11 @@ export function HostTenant({ tenant }: { tenant: string }) {
           : <Button size="sm" onClick={() => setLifecycle("suspend")}>{t("Suspend")}</Button>}
         <Button size="sm" variant="ghost" onClick={() => setLifecycle("decommission")}>{t("Decommission")}</Button>
       </>} />
+    {data && <div className="mb-4"><PropertyList columns={3} items={[
+      [t("State"), <Tag key="state" label={lifecycleLabel(data)} tone={lifecycleTone(data)} />],
+      [t("Members"), data.members],
+      [t("Apps"), <span key="apps" className="flex flex-wrap gap-1">{data.apps.map(app => <Tag key={app} label={app} />)}</span>],
+    ]} /></div>}
     {data?.fault && <p role="alert" className="mb-3 text-sm text-danger">{data.fault}</p>}
     <div className="grid gap-4">
       <Panel className="grid gap-2 p-3">
@@ -172,7 +172,7 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   };
   return <Dialog open={open} onOpenChange={onOpenChange} title={t("Create tenant")}>
     <Form className="grid gap-3" onSubmit={() => submit()}>
-      <p className="text-sm text-muted">{t("A tenant is a hard boundary: its own members, records, settings and audit. Subsidiaries and sites normally live inside one tenant's enterprise model.")}</p>
+      <div className="flex justify-end"><ContextHelp title={t("Create tenant")}>{t("A tenant is a hard boundary: its own members, records, settings and audit. Subsidiaries and sites normally live inside one tenant's enterprise model.")}</ContextHelp></div>
       <label className="grid gap-1 text-sm">{t("Tenant ID")}<Input required pattern="[a-z][a-z0-9-]{1,31}" value={id} onChange={(e) => setId(e.target.value)} placeholder="acme" />
         <span className="text-xs text-muted">{t("Lower case, digits, dashes; it cannot change later.")}</span></label>
       <label className="grid gap-1 text-sm">{t("Organisation name")}<Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Ltd" /></label>
@@ -249,7 +249,7 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
     } finally { lock.current = false; setBusy(false); }
   };
   return <>
-    <PageHeader title={t("Promote a release")} description={t("Move a sealed candidate from one tenant into another — development to test, test to production — through a support session on the target.")} />
+    <PageHeader title={t("Promote a release")} help={t("Move a sealed candidate from one tenant into another — development to test, test to production — through a support session on the target.")} />
     <Form className="grid max-w-2xl gap-3" onSubmit={() => submit()}>
       <fieldset disabled={locked} className="grid gap-3">
       <div className="grid gap-3 md:grid-cols-2">
@@ -265,21 +265,22 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
         {availableGrants.map((g) => <option key={g.id} value={g.id}>{g.id} · {g.member} · {t("until {time}", { time: when(g.expires) })}</option>)}
       </Select>{!availableGrants.length && <span className="text-xs text-muted">{t("Open a support session on the target tenant first.")}</span>}</label>
       <Checkbox checked={activate} onChange={setActivate}>{t("Activate after promotion")}</Checkbox>
-      <span className="text-xs text-muted">{t("Repeating the same promotion answers as the first time. A candidate that changes storage cannot be activated here: promote it without activation, then a release holder in the target reviews the upgrade plan in its release workbench.")}</span>
+      <ContextHelp title={t("Activate after promotion")}>{t("Repeating the same promotion answers as the first time. A candidate that changes storage cannot be activated here: promote it without activation, then a release holder in the target reviews the upgrade plan in its release workbench.")}</ContextHelp>
       </fieldset>
       <div><Button type="submit" variant="primary" disabled={locked || overview.isError || artifacts.isError || grants.isError || !chosenArtifact?.verified || !source || !target || source === target || !chosenCandidate || !chosenGrant}>{busy ? t("Promoting…") : t("Promote")}</Button></div>
     </Form>
     {(overview.isError || artifacts.isError || grants.isError) && <Panel role="alert" className="mt-3 p-3">{t("Environment, artifact or support-session reads are unavailable. Promotion is not enabled from cached data.")}</Panel>}
     {pending && <Panel role="alert" className="mt-3 grid gap-2 p-3">
       <p>{t("Promotion is unconfirmed. Retry the captured candidate and support session with the same key. Leaving does not undo a promotion already accepted by the target.")}</p>
-      <code className="break-all text-xs">{pending.source} → {pending.target} · {pending.candidate} · {pending.key}</code>
+      <PropertyList columns={2} items={[[t("From tenant"), pending.source], [t("Into tenant"), pending.target], [t("Candidate"), pending.candidate], [t("Idempotency key"), pending.key]]} />
       <div className="flex gap-2"><Button disabled={busy} onClick={() => void submit()}>{t("Retry original promotion")}</Button>
         <Button variant="ghost" disabled={busy} onClick={() => confirmDiscard(() => remember())}>{t("Forget local request")}</Button></div>
     </Panel>}
     {result && <Panel className="mt-4 grid max-w-2xl gap-1 p-3 text-sm">
-      <div className="flex items-center gap-2"><strong>{t("Last promotion")}</strong><Tag label={result.active ? t("Active") : t("Promoted")} tone={result.active ? "success" : "info"} /></div>
-      <div className="font-mono text-xs">{result.from} → {result.to} · {result.candidate} · {t("{n} assets", { n: result.assets })} · {result.digest.slice(0, 12)}</div>
-      <div className="text-xs text-muted">{t("Idempotency key")}: <code>{result.key}</code>{!result.active && ` · ${t("The target's own activation and business permissions are unchanged.")} ${t("Activate it in the target's release workbench.")}`}</div>
+      <div className="flex flex-wrap items-center gap-2"><strong>{t("Last promotion")}</strong><Tag label={result.active ? t("Active") : t("Promoted")} tone={result.active ? "success" : "info"} />{!result.active && <ContextHelp title={t("Last promotion")}>{t("The target's own activation and business permissions are unchanged.")}</ContextHelp>}</div>
+      <PropertyList columns={3} items={[[t("From tenant"), result.from], [t("Into tenant"), result.to], [t("Assets"), result.assets]]} />
+      {!result.active && <p className="text-xs text-muted">{t("Activate it in the target's release workbench.")}</p>}
+      <Disclosure summary={t("Details")}><PropertyList items={[[t("Candidate"), <code key="candidate" className="break-all">{result.candidate}</code>], [t("Digest"), <code key="digest" className="break-all">{result.digest}</code>], [t("Idempotency key"), <code key="key" className="break-all">{result.key}</code>]]} /></Disclosure>
     </Panel>}
   </>;
 }
@@ -338,7 +339,7 @@ export function HostMigrations({ tenant }: { tenant?: string }) {
   const refusedRows = (result?.types ?? []).flatMap((type) => (type.refused ?? []).map((row) => ({ ...row, type: type.type })));
   const grantOptions = (grants?: Grant[]) => (grants ?? []).map((g) => <option key={g.id} value={g.id}>{g.id} · {g.member}</option>);
   return <>
-    <PageHeader title={t("Migrate records")} description={t("Copy records of chosen types from one tenant into another through its own actions, under a support session on each side.")} />
+    <PageHeader title={t("Migrate records")} help={t("Copy records of chosen types from one tenant into another through its own actions, under a support session on each side.")} />
     <Form className="grid max-w-2xl gap-3" onSubmit={() => submit()}>
       <fieldset disabled={locked} className="grid gap-3">
       <div className="grid gap-3 md:grid-cols-2">
@@ -354,12 +355,14 @@ export function HostMigrations({ tenant }: { tenant?: string }) {
     {(overview.isError || sourceGrants.isError || targetGrants.isError) && <Panel role="alert" className="mt-3 p-3">{t("Environment or support-session reads are unavailable. Migration is not enabled from cached data.")}</Panel>}
     {pending && <Panel role="alert" className="mt-3 grid gap-2 p-3">
       <p>{t("Migration is unconfirmed. Retry the original environments, types and support sessions. The owner re-reads source rows and preserves their original import receipts; this is not a cross-environment rollback.")}</p>
-      <code className="break-all text-xs">{pending.source} → {pending.target} · {pending.types.join(", ")}</code>
+      <PropertyList columns={3} items={[[t("From tenant"), pending.source], [t("Into tenant"), pending.target], [t("Record types"), pending.types.join(", ")]]} />
       <div className="flex gap-2"><Button disabled={busy} onClick={() => void submit()}>{t("Retry original migration")}</Button>
         <Button variant="ghost" disabled={busy} onClick={() => confirmDiscard(() => remember())}>{t("Forget local request")}</Button></div>
     </Panel>}
     {result && <Panel className="mt-4 grid max-w-3xl gap-2 p-3 text-sm">
-      <div className="flex items-center gap-2"><strong>{t("Last migration")}</strong><span className="font-mono text-xs">{result.from} → {result.to}</span><span className="text-xs text-muted">{t("Idempotency key")}: <code>{result.key}</code> · {t("Run again, the same rows answer as they did the first time; nothing is written twice.")}</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><strong>{t("Last migration")}</strong><ContextHelp title={t("Last migration")}>{t("Run again, the same rows answer as they did the first time; nothing is written twice.")}</ContextHelp></div>
+      <PropertyList columns={2} items={[[t("From tenant"), result.from], [t("Into tenant"), result.to]]} />
+      <Disclosure summary={t("Details")}><PropertyList items={[[t("Idempotency key"), <code key="key" className="break-all">{result.key}</code>]]} /></Disclosure>
       <ul className="grid gap-1 font-mono text-xs">
         {result.types.map((type) => <li key={type.type} className="flex items-center gap-2">
           <span>{type.type}</span><Tag label={t("{written} of {rows} written", { written: type.written, rows: type.rows })} tone={type.refused?.length ? "warning" : "success"} />

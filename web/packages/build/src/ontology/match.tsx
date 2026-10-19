@@ -24,7 +24,7 @@ export function Matches() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Matching rules")} description={t("Say when rows from different systems are the same party, material or site, and whose value wins per field. One published rule per object; it applies to every source and pipeline writing it.")}
+    <PageHeader title={t("Matching rules")} help={t("Say when rows from different systems are the same party, material or site, and whose value wins per field. One published rule per object; it applies to every source and pipeline writing it.")}
       actions={<Button onClick={() => open({ view: "match", params: { id: "new" } })}>{t("New matching rule")}</Button>} />
     <ResourceList source={source} type="build.match" fields={["title", "object", "state"]} onOpen={(record) => open({ view: "match", params: { id: record.id } })} />
   </div>;
@@ -52,7 +52,7 @@ export function MatchEditor({ id }: { id: string }) {
   const producers = [...pipelines, ...sources];
   const setKey = (i: number, change: Partial<Key>) => patch({ keys: (draft.keys ?? []).map((k, j) => j === i ? { ...k, ...change } : k) });
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New matching rule")} description={t("Object → keys that mean the same thing → whose value wins per field. Publish applies it to every row landing in the object from then on.")}
+    <PageHeader title={draft.title || t("New matching rule")} help={t("Object → keys that mean the same thing → whose value wins per field. Publish applies it to every row landing in the object from then on.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "match" })}>{t("Matching rules")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>

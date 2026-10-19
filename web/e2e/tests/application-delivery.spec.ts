@@ -25,6 +25,7 @@ test("shared published resources retain their owners through application discove
     const navigation = page.getByRole("navigation", { name: "Main", exact: true });
     const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
     if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+    await navigation.getByRole("button", { name: resource.definition.ref.kind === "action" ? "Behavior" : "Assemble", exact: true }).click();
     await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: new RegExp(`^${resource.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) }).click();
     await expect(page.getByRole("heading", { name: resource.title, exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Published resource", exact: true })).toBeVisible();
@@ -235,11 +236,23 @@ test("application capacity, original decisions and headless runtime remain visib
   await expect(page.getByRole("heading", { name: "Application overview", exact: true })).toBeVisible();
   await expect(page.getByText("No business pages are available in this application. You can view its activity and diagnose problems from application runs.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "View application runs", exact: true }).click();
-  await expect(page.getByText("Current content version", { exact: true })).toBeVisible();
+  const artifact=page.getByLabel("Application artifact",{exact:true});
+  await expect(artifact.getByText("Current content version",{exact:true})).toHaveCount(0);
+  const explanation=artifact.getByRole("button",{name:"About Application artifact",exact:true});
+  await explanation.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog",{name:"Application artifact",exact:true})).toContainText("Counts and diagnostics follow your authorized scope.");
+  await page.keyboard.press("Escape");
+  await expect(explanation).toBeFocused();
+  await shots(page,artifact,"application-runtime-summary",testInfo);
+  await artifact.getByRole("button",{name:"Versions and recovery",exact:true}).click();
+  await expect(artifact.getByText("Current content version", { exact: true })).toBeVisible();
   await expect(page.getByRole("alert").filter({ hasText: "scale exceeded: 2 / 1" })).toBeVisible();
   await page.getByText("Diagnose a record", { exact: true }).click();
   await page.getByRole("textbox", { name: "Record ID", exact: true }).fill(first);
+  const diagnostic = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/records/${object.type}/${first}/diagnostic`));
   await page.getByRole("button", { name: "Diagnose", exact: true }).click();
+  expect((await diagnostic).ok()).toBe(true);
   await expect(page.getByText(`${object.type}.create`, { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/^Definition content: schema.sha256\./)).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Run kind", exact: true })).toBeVisible();
@@ -248,6 +261,8 @@ test("application capacity, original decisions and headless runtime remain visib
   await selected.getByRole("button", { name: "Open run", exact: true }).click();
   await expect(runView.getByRole("button", { name: "Back to project", exact: true })).toHaveCount(0);
   await runView.getByRole("button", { name: "Back to application runs", exact: true }).click();
+  const versions=artifact.getByRole("button",{name:"Versions and recovery",exact:true});
+  if(await versions.getAttribute("aria-expanded")!=="true")await versions.click();
   await expect(page.getByText("Current content version", { exact: true })).toBeVisible();
   await expect(selected).toContainText(`${workflow.title} ${first}`);
   await shots(page, page.locator("body"), "application-runtime", testInfo);
@@ -275,4 +290,30 @@ test("published evaluation sets open in their original test-plan editor and rele
   await expect(page.getByRole("button", { name: "Publish evaluation set", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Publish evaluation set", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Release review", exact: true })).toBeVisible();
+});
+
+
+test("page explanations share one entry across Studio and tenant management",async({page,builder},info)=>{
+  for(const [route,title] of [["/projects","Applications"],["/control-panel","Control Panel"]]){
+    await builder.open(page,route!);
+    const help=page.getByRole("button",{name:"About "+title,exact:true});
+    await help.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog",{name:title,exact:true})).toBeVisible();
+    await shots(page,page.locator("body"),"context-help-"+title!.toLowerCase().replaceAll(" ","-"),info);
+    await page.keyboard.press("Escape");
+    await expect(help).toBeFocused();
+  }
+  const me=await builder.read<any>("me");
+  await builder.decide("platform.profile.update",{type:"platform.profile",id:me.principalId},{language:"zh-CN"},"platform");
+  try{
+    await builder.open(page,"/control-panel");
+    await page.getByRole("button",{name:"控制面板说明",exact:true}).click();
+    await expect(page.getByRole("dialog",{name:"控制面板",exact:true})).toBeVisible();
+    await shots(page,page.locator("body"),"context-help-zh",info);
+    await page.keyboard.press("Escape");
+  }finally{
+    await builder.decide("platform.profile.update",{type:"platform.profile",id:me.principalId},{language:"en"},"platform");
+    await page.evaluate(()=>localStorage.setItem("platform.language","en"));
+  }
 });

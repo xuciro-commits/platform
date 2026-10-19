@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, StructuredEditor } from "@platform/ui";
 // Alert rules (ADR-0008): when a record of an object comes to match a
 // condition, a role is told - once per record or every time. The operations
 // face's "situation": nobody has to keep a page open to see it.
@@ -20,7 +20,7 @@ export function Alerts() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (role("build") !== "builder") return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Alert rules")} description={t("Tell a role when a record comes to match a condition: a late order, a stock below its minimum, a receipt without a supplier.")}
+    <PageHeader title={t("Alert rules")} help={t("Tell a role when a record comes to match a condition: a late order, a stock below its minimum, a receipt without a supplier.")}
       actions={<Button onClick={() => open({ view: "alert", params: { id: "new" } })}>{t("New alert rule")}</Button>} />
     <ResourceList source={source} type="build.alertrule" fields={["title", "object", "field", "operator", "value", "role", "active", "state", "version"]} onOpen={(record) => open({ view: "alert", params: { id: record.id } })} />
   </div>;
@@ -44,14 +44,14 @@ export function AlertEditor({ id }: { id: string }) {
   if (role("build") !== "builder") return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Alert rules")} description={query.isError ? t("The alert rule could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New alert rule")} description={t("Checked after every change to a record of the object. People holding the role get a notification that opens the record.")}
+    <PageHeader title={draft.title || t("New alert rule")} help={t("Checked after every change to a record of the object. People holding the role get a notification that opens the record.")}
       actions={<div className="flex flex-wrap gap-2">
         <Button variant="ghost" onClick={() => open({ view: "alert" })}>{t("Alert rules")}</Button>
         <Button disabled={busy || !!inputs?.invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save alert rule")}</Button>
         <ResourceControls type="build.alertrule" record={draft} dirty={dirty} busy={busy} onReview={() => void perform(review)} onCancel={discardChanges} route={{ view: "alert", params: { id } }} />
         <DraftStatus state={dirty ? "draft" : draft.state} />
       </div>} />
-    <p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p>
+    <ContextHelp title={t("Alert rule")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Rule")} className="grid content-start gap-3">

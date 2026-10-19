@@ -1,5 +1,5 @@
 import { sourceFieldInput } from "@platform/app";
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -29,7 +29,7 @@ export function CodeFunctions() {
   const { source, role } = useHost();
   const { open } = useApplicationWorkspace();
   if (role("build") !== "builder") return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
-  return <div className="grid gap-3"><PageHeader title={t("Code functions")} description={t("Package a typed Go or TinyGo algorithm for pages and workflows.")}
+  return <div className="grid gap-3"><PageHeader title={t("Code functions")} help={t("Package a typed Go or TinyGo algorithm for pages and workflows.")}
     actions={<Button onClick={() => open({ view: "code", params: { id: "new" } })}>{t("New code function")}</Button>} />
     <ResourceList source={source} type="build.code" fields={["title", "name", "language", "state", "version"]} onOpen={(record) => open({ view: "code", params: { id: record.id } })} />
   </div>;
@@ -118,7 +118,7 @@ export function CodeEditor({ id }: { id: string }) {
         <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
         <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
-    <p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p>
+    <ContextHelp title={t("Code function")}><p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <StructuredEditor expectedRevision={draft.id ? draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.code:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setDirty(true); setError(""); setSDK(""); }} onTrial={next => trial(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: draft.id || createID }, next, draft.id ? draft.revision : 0)}><fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
@@ -126,7 +126,7 @@ export function CodeEditor({ id }: { id: string }) {
           {(["source", "contract", "sdk", "test"] as const).map((key) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(({ source: "Source code", contract: "Input and output", sdk: "Generated SDK", test: "Test published version" })[key])}</Button>)}
         </div>
         {tab === "source" && <>
-          <p className="text-xs text-muted">{t("Implement Run(input Input) (Output, error). The SDK generates the command wrapper from your schema.")}</p>
+          <ContextHelp title={t("Source code")}><p className="text-xs text-muted">{t("Implement Run(input Input) (Output, error). The SDK generates the command wrapper from your schema.")}</p></ContextHelp>
           <label className="grid gap-1 text-xs">{t("Source code")}<Textarea spellCheck={false} rows={22} className="font-mono text-xs leading-6" value={draft.source} onChange={(event) => change({ source: event.target.value })} /></label>
         </>}
         {tab === "contract" && <div className="grid min-w-0 gap-4 xl:grid-cols-2">

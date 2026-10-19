@@ -1,5 +1,5 @@
 import { sourceFieldInput } from "@platform/app";
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 // Automations (ADR-0047): a rule reads as one sentence - when a record of
@@ -56,7 +56,7 @@ export function Automations() {
   const titleOf = (type: string) => entities.find((entity) => entity.type === type)?.title ?? type;
   const stateOf = (type: string, name: string) => entities.find((entity) => entity.type === type)?.lifecycle?.states.find((state) => state.name === name)?.title ?? name;
   return <div className="grid content-start gap-3 p-4">
-    <PageHeader title={t("Automations")} description={t("When a record reaches a state, run effects. Each automation is one sentence; open it to shape the effects on the map.")}
+    <PageHeader title={t("Automations")} help={t("When a record reaches a state, run effects. Each automation is one sentence; open it to shape the effects on the map.")}
       actions={role("build") === "builder" && <Button onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
     <div className="flex flex-wrap items-center gap-2">
       <Input type="search" aria-label={t("Filter automations")} placeholder={t("Filter automations")} value={search} onChange={(event) => setSearch(event.target.value)} className="max-w-xs" />
@@ -164,10 +164,10 @@ export function AutomationEditor({ id }: { id: string }) {
       {chosen === "trigger" && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
         <label className="grid gap-1 text-xs">{t("Start kind")}<Select value={draft.every ? draft.every : ""} disabled={!!draft.published} onChange={(event) => change(event.target.value ? { every: event.target.value, object: "", when: "" } : { every: undefined })}><option value="">{t("When a record reaches a state")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
-        {draft.every && <p className="text-[11px] text-muted">{t("A scheduled automation has no subject record; each period starts one run, acting as the member who published it.")}</p>}
+        {draft.every && <ContextHelp title={t("Schedule")}><p className="text-[11px] text-muted">{t("A scheduled automation has no subject record; each period starts one run, acting as the member who published it.")}</p></ContextHelp>}
         {!draft.every && <label className="grid gap-1 text-xs">{t("Object type")}<Select value={draft.object} disabled={!!draft.published} onChange={(event) => change({ object: event.target.value, when: objects.find((item) => item.type === event.target.value)?.states[0]?.name ?? "" })}><option value="">{t("Choose an object type")}</option>{objects.map((item) => <option key={item.type} value={item.type}>{item.title}</option>)}</Select></label>}
         {!draft.every && <label className="grid gap-1 text-xs">{t("When it reaches")}<Select value={draft.when} onChange={(event) => change({ when: event.target.value })}><option value="">{t("Choose a state")}</option>{object?.states.map((state) => <option key={state.name} value={state.name}>{state.title}</option>)}</Select></label>}
-        {!draft.every && <p className="text-[11px] text-muted">{t("The record that reached the state is the subject of every effect: actions run on it, functions read it.")}</p>}
+        {!draft.every && <ContextHelp title={t("Trigger")}><p className="text-[11px] text-muted">{t("The record that reached the state is the subject of every effect: actions run on it, functions read it.")}</p></ContextHelp>}
       </div>}
       {chosen === "condition" && condition && <div className="grid gap-3">
         <label className="grid gap-1 text-xs">{t("Field")}<Select value={condition.condition?.left?.path?.[0] ?? ""} onChange={(event) => setSteps({ ...condition, condition: { ...condition.condition!, left: { source: "subject", path: [event.target.value] } } }, effects)}><option value="">{t("Choose a field")}</option>{object?.fields.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select></label>

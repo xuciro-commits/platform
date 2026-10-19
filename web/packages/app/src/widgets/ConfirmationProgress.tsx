@@ -1,6 +1,6 @@
 import type { Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, Select, Tag, t } from "@platform/ui";
-import { useState } from "react";
+import { Button, Card, Checkbox, Disclosure, Input, PropertyList, Select, Tag, t } from "@platform/ui";
+import { useState, type ReactNode } from "react";
 import { useHost, useReadQuery } from "../index";
 
 export function ConfirmationProgress({ type, id }: { type: string; id: string }) {
@@ -44,22 +44,31 @@ function ConfirmationCard({ run, onChanged }: { run: Api.ConfirmationRun; onChan
       <strong>{t("Business confirmation progress")}</strong>
       <Tag label={t(run.state)} tone={run.state === "confirmed" || run.state === "compensated" ? "success" : run.state === "rejected" ? "danger" : "warning"} />
     </div>
-    <p className="text-xs">{t("Business deadline")}: {new Date(run.deadline).toLocaleString()}</p>
+    <PropertyList items={[[t("Business deadline"),new Date(run.deadline).toLocaleString()]]}/>
     {run.partial && <p role="status" className="text-sm text-warning">{t("This confirmation has a visible partial outcome.")}</p>}
     {run.escalated && <p role="status" className="text-sm text-warning">{t("The business deadline was escalated to its declared reviewers.")}</p>}
-    {run.parties?.map(p => <div key={p.name} className="grid gap-1 rounded border border-border p-2 text-xs" aria-label={p.title}>
+    {run.parties?.map(p => <div key={p.name} className="grid min-w-0 gap-2 border-b border-border pb-3 text-xs last:border-b-0" aria-label={p.title}>
       <strong>{p.title}</strong>
       <div className="flex flex-wrap gap-2"><span>{t(p.state)}</span>{p.at && <time dateTime={p.at}>{new Date(p.at).toLocaleString()}</time>}</div>
       {(p.state === "pending" || p.state === "unknown") && run.created.at && <p>{t("Waiting {n} minutes", { n: Math.max(0, Math.floor((Date.now() - Date.parse(run.created.at)) / 60000)) })}</p>}
       {p.reason && <p>{p.reason}</p>}
-      <code className="break-all">{p.intent}</code>
-      {p.compensation && <div className="grid gap-1">
-        <p>{t("Compensation")}: {t(p.compensationState ?? "pending")} · {p.compensation}</p>
-        {p.compensationReason && <p>{p.compensationReason}</p>}
-        {p.compensationAt && <p>{new Date(p.compensationAt).toLocaleString()}</p>}
+      {p.compensation&&<div className="grid gap-2">
+        <PropertyList columns={2} items={[
+          [t("Compensation"),t(p.compensationState??"pending")],
+          ...(p.compensationAt?[[t("Time"),new Date(p.compensationAt).toLocaleString()] as [string,string]]:[]),
+        ]}/>
+        {p.compensationReason&&<p>{p.compensationReason}</p>}
       </div>}
-      {p.differences?.map((d, i) => <p key={i}>{t("Source reconciliation")}: {d.matched ? t("Matched") : t("Difference")} · {new Date(d.at).toLocaleString()} · {JSON.stringify(d.observed)} {d.error}</p>)}
+      {p.differences?.map((d,i)=><div key={i} className="grid gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{t("Source reconciliation")}</span><Tag label={d.matched?t("Matched"):t("Difference")} tone={d.matched?"success":"warning"}/>
+          <time dateTime={d.at}>{new Date(d.at).toLocaleString()}</time>
+        </div>
+        {d.error&&<p role="alert">{d.error}</p>}
+        <Disclosure summary={t("Observed values")}><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(d.observed,null,2)}</pre></Disclosure>
+      </div>)}
       <Disclosure summary={t("Frozen request evidence")}>
+        <PropertyList items={[[t("Intent"),<code className="select-all break-all">{p.intent}</code>],...(p.compensation?[[t("Compensation"),<code className="select-all break-all">{p.compensation}</code>] as [string,ReactNode]]:[])]}/>
         <pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify({ key: p.key, requestVersion: p.requestVersion, sourceVersion: p.sourceVersion, protocol: p.protocol, answer: p.answer, compensationAnswer: p.compensationAnswer }, null, 2)}</pre>
       </Disclosure>
     </div>)}

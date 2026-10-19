@@ -3,7 +3,7 @@
 // its standing on the host. Each value is a platform setting, decided with
 // platform.setting.set like any app setting, so it is journaled and audited.
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
+import { ContextHelp, Button, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { queryElements, resolveElements } from "@platform/kernel";
 import { useState } from "react";
@@ -46,12 +46,11 @@ export function Organisation() {
   };
   return (
     <>
-      <PageHeader title={record?.name ?? t("Organisation")} description={t("The tenant's record: who it is, the defaults every member inherits, how people sign in. Members override language, timezone and formats in their own account.")}
+      <PageHeader title={record?.name ?? t("Organisation")} help={t("The tenant's record: who it is, the defaults every member inherits, how people sign in. Members override language, timezone and formats in their own account.")}
         actions={record && <span className="flex gap-1"><Tag label={record.id} /><Tag label={t(record.status)} tone={record.status === "active" ? "success" : "warning"} /></span>} />
       <datalist id="platform-tenant-timezones">{timezones().map((z) => <option key={z} value={z} />)}</datalist>
       <div className="grid max-w-3xl gap-3">
-        {byName.enterpriseRoot && <Panel title={t("Representative organization")}><div className="grid gap-3">
-          <p className="text-xs text-muted">{t("Choose the enterprise organisation represented by this tenant. Changing the tenant name does not rename the model.")}</p>
+        {byName.enterpriseRoot && <Panel title={t("Representative organization")} help={t("Choose the enterprise organisation represented by this tenant. Changing the tenant name does not rename the model.")}><div className="grid gap-3">
           {organisations.isError ? <p role="alert">{t("Organisation choices could not be loaded.")}</p> : <Select aria-label={t("Representative organization")} value={root} disabled={!can("platform.setting.set")} onChange={event => setDraft({ ...draft, enterpriseRoot: event.target.value })}><option value="">{t("Not linked")}</option>{organisations.data?.elements.map(element => <option key={element.id} value={element.id}>{element.name}</option>)}{root && !organisations.data?.elements.some(element => element.id === root) && <option value={root}>{chosenRoot.data?.elements[0]?.name ?? root}</option>}</Select>}
           <div className="flex flex-wrap gap-2"><Button disabled={!can("platform.setting.set") || root === byName.enterpriseRoot.value} onClick={async () => { if (await set(byName.enterpriseRoot!, root)) setDraft(({ enterpriseRoot: _, ...rest }) => rest); }}>{t("Save")}</Button><Button disabled={!root} onClick={() => open({ view: "enterprise", params: { element: root, section: "organization" } })}>{t("Open organisation node")}</Button></div>
         </div></Panel>}
@@ -60,10 +59,10 @@ export function Organisation() {
           <Panel key={g.title} title={t(g.title)}>
             <div className="grid gap-3">
               {g.names.flatMap((name) => byName[name] ? [byName[name]] : []).map((s) => (
-                <div key={s.name} className="grid grid-cols-[1fr_16rem] items-center gap-3 text-sm">
+                <div key={s.name} className="grid gap-3 text-sm sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center">
                   <div>
-                    <p className="font-medium">{s.title}</p>
-                    <p className="text-xs text-muted">{s.description}{s.value !== s.default && s.default ? ` (${t("default")} ${s.default})` : ""}</p>
+                    <div className="flex items-center justify-between gap-2"><span className="font-medium">{s.title}</span>{s.description && <ContextHelp title={s.title}>{s.description}</ContextHelp>}</div>
+                    {s.value !== s.default && s.default && <p className="text-xs text-muted">{t("default")}: {s.default}</p>}
                   </div>
                   {field(s)}
                 </div>
@@ -78,7 +77,7 @@ export function Organisation() {
             <dt className="text-muted">{t("Apps")}</dt><dd className="flex flex-wrap gap-1">{record.apps.map((a) => <Tag key={a} label={a} />)}</dd>
             <dt className="text-muted">{t("Status")}</dt><dd>{t(record.status)}</dd>
           </dl>
-          <p className="mt-2 text-xs text-muted">{t("Lifecycle, quotas and support sessions are the host administrator's, in the Host Console.")}</p>
+          <div className="mt-3 flex justify-end"><ContextHelp title={t("On this host")}>{t("Lifecycle, quotas and support sessions are the host administrator's, in the Host Console.")}</ContextHelp></div>
         </Panel>}
       </div>
     </>

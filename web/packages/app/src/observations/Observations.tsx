@@ -21,7 +21,7 @@ export function Observations({ app, name, record }: { app?: string; name?: strin
   const rows = query.data ?? [];
   const selected = rows.find(item => assetKey(item.ref) === picked || !picked && item.ref.app === app && item.ref.name === name) ?? (!name ? rows[0] : undefined);
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title={t("Observations")} description={t("Read current device values or external time-series windows, and apply window decisions to business records.")} actions={can("build.observation.create") && <Button onClick={() => open({ view: "observation-source", params: { id: "new" } })}>{t("New observation source")}</Button>} />
+    <PageHeader title={t("Observations")} help={t("Read current device values or external time-series windows, and apply window decisions to business records.")} actions={can("build.observation.create") && <Button onClick={() => open({ view: "observation-source", params: { id: "new" } })}>{t("New observation source")}</Button>} />
     {query.isError && <Notice tone="danger" role="alert" message={t("Observation sources could not be loaded.")} />}
     {query.isPending && <p role="status">{t("Loading…")}</p>}
     <label className="grid gap-1 text-xs">{t("Published observation source")}<Select aria-label={t("Published observation source")} value={selected ? assetKey(selected.ref) : ""} onChange={event => pick(event.target.value)}>
@@ -87,12 +87,10 @@ export function ObservationRead({ info, initialRecord = "" }: { info: Api.Observ
   const locked = busy || !!pending.current;
   const metadata: [string, string][] = [[t("Object"), source.entity(definition.object.name)?.title ?? definition.object.name], [t("Signal"), definition.signal], [t("Unit"), definition.unit], [t("Version"), info.version]];
   return <div className="grid min-w-0 gap-4">
-    <Panel title={definition.title} description={definition.description} className="grid gap-3">
-      {mode !== "latest" && <>
-        <PropertyList items={[...metadata, [t("Decision window (seconds)"), String(definition.windowSeconds)]]} />
-        <p className="text-xs text-muted">{t("Raw points and their retention remain in the external store. Reading a window does not create platform records; only accepted decisions and compact values are retained.")}</p>
-        <p className="text-xs text-muted">{t("Expected external retention: {retention}s · granularity: {granularity}s", { retention: definition.expectedRetentionSeconds, granularity: definition.expectedGranularitySeconds })}</p>
-      </>}
+    <Panel title={definition.title} help={<>
+      {definition.description&&<p>{definition.description}</p>}
+      <p>{mode==="latest"?t("Current readings come from the device connection with their quality and timestamps. Use a historical window for business decisions."):t("Raw points and their retention remain in the external store. Reading a window does not create platform records; only accepted decisions and compact values are retained.")}</p>
+    </>} className="grid gap-3">
       <fieldset disabled={locked} className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1 text-xs"><span>{t("Observation record")}</span><RecordLookup source={source} type={definition.object.name} value={record} onChange={value => setRecord(value ?? "")} ariaLabel={t("Observation record")} /></div>
         <label className="grid gap-1 text-xs">{t("Observation read mode")}<Select value={mode} onChange={event => setMode(event.target.value)}>{info.supportsLatest && <option value="latest">{t("Current device reading")}</option>}<option value="summary">{t("External summary")}</option><option value="points">{t("Original points")}</option></Select></label>
@@ -104,7 +102,16 @@ export function ObservationRead({ info, initialRecord = "" }: { info: Api.Observ
         {mode === "points" && <label className="grid gap-1 text-xs">{t("Point limit")}<Input type="number" min={1} max={5000} value={limit} onChange={event => setLimit(Number(event.target.value))} /></label>}
       </fieldset>
       <div className="flex flex-wrap gap-2"><Button disabled={locked || !record || mode !== "latest" && (!since || !until)} onClick={() => void read()}>{mode === "latest" ? t("Read current value") : t("Read observation window")}</Button>{offered && mode !== "latest" && <Button variant="primary" disabled={busy || !record || !until} onClick={() => void evaluate()}>{pending.current ? t("Retry original observation decision") : t("Evaluate declared decision")}</Button>}{can("build.observation.edit") && <Button variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(info.ref) } })}>{t("Dependencies and capabilities")}</Button>}</div>
-      {mode === "latest" && <Disclosure summary={t("Observation source details")}><PropertyList items={metadata} /><p className="mt-2 text-xs text-muted">{t("Current readings come from the device connection with their quality and timestamps. Use a historical window for business decisions.")}</p></Disclosure>}
+      <Disclosure summary={t("Observation source details")}><div className="grid gap-3 py-3">
+        <PropertyList columns={3} items={[
+          ...metadata,
+          ...(mode!=="latest"?[
+            [t("Decision window (seconds)"),String(definition.windowSeconds)] as [string,string],
+            [t("External retention (seconds)"),String(definition.expectedRetentionSeconds)] as [string,string],
+            [t("Granularity (seconds)"),String(definition.expectedGranularitySeconds)] as [string,string],
+          ]:[]),
+        ]}/>
+      </div></Disclosure>
       {error && <Notice tone="danger" role="alert" message={error} />}
       {busy && <p role="status">{t("Reading observation source…")}</p>}
       {pending.current && <p role="status" className="text-xs text-warning">{t("The decision answer is unconfirmed. Retry keeps the same record, time window and request key.")}</p>}
@@ -132,7 +139,7 @@ export function ObservationWindowResult({ result }: { result: Api.ObservationRes
       <PropertyList items={[[t("Device"), result.device], [t("Signal"), result.signal], [t("Window start"), window.since], [t("Window end"), window.until], [t("Sample count"), String(window.count)], ...statistics]} />
       {!window.count && <p role="status" className="text-sm text-muted">{t("No observations in this window. Missing values are not zero.")}</p>}
     </Panel>
-    {points.length > 0 && <Panel role="region" aria-label={t("Original observation points")} title={t("Original observation points")} description={t("The table retains exact values. The chart uses those bounded points for display only.")} className="grid min-w-0 gap-3">
+    {points.length > 0 && <Panel role="region" aria-label={t("Original observation points")} title={t("Original observation points")} help={t("The table retains exact values. The chart uses those bounded points for display only.")} className="grid min-w-0 gap-3">
       <Chart spec={{ title: `${result.signal} · ${window.unit}`, rowIdentity: "row", mark: "line", data: { values: points.map((point, index) => ({ row: index, at: point.at, value: Number(point.value) })) }, encoding: { x: { field: "at", type: "temporal", title: t("Time") }, y: { field: "value", type: "quantitative", title: window.unit } } }} height={260} />
       <DataTable data={points.map((point, index) => ({ ...point, index }))} getRowId={point => String(point.index)} height={260} columns={[{ id: "at", header: t("Time"), accessorFn: point => point.at }, { id: "value", header: `${t("Value")} · ${window.unit}`, accessorFn: point => point.value }]} />
     </Panel>}

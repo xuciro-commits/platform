@@ -34,7 +34,7 @@ function OnHand() {
   ];
   return (
     <>
-      <PageHeader title={t("On hand")} description={t("What is in stock: the sum of each product's moves, valued at standard cost.")} />
+      <PageHeader title={t("On hand")} help={t("What is in stock: the sum of each product's moves, valued at standard cost.")} />
       <DataTable data={rows} columns={columns} getRowId={(r) => r.product} height="calc(100dvh - 190px)" searchable={false} loading={!data} empty={t("Nothing in stock")} />
     </>
   );
@@ -69,7 +69,7 @@ function TrialBalance() {
   ];
   return (
     <>
-      <PageHeader title={t("Trial balance")} description={t("Every account with postings: the sums of its debits and credits, and its balance. Debits equal credits when the books balance.")} />
+      <PageHeader title={t("Trial balance")} help={t("Every account with postings: the sums of its debits and credits, and its balance. Debits equal credits when the books balance.")} />
       <DataTable data={shown} columns={columns} getRowId={(r) => r.account || "total"} height="calc(100dvh - 190px)" searchable={false} loading={!data} empty={t("Nothing posted")} />
     </>
   );

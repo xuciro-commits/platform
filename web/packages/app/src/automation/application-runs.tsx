@@ -1,7 +1,7 @@
 import { useRunControl } from "./use-run-control";
 import type { Api } from "@platform/kernel";
-import { Card, Button, DataTable, Disclosure, PageHeader, Panel, Input, Select, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
-import { useState } from "react";
+import { Button, ContextHelp, DataTable, Disclosure, PageHeader, Panel, PropertyList, Input, Select, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
+import { useState, type ReactNode } from "react";
 import { ChainGraph, useHost, useOpenRecord, useReadQuery, useRecordInventory } from "../index";
 import {refusalCategoryName} from "../actions/refusal";
 
@@ -40,7 +40,7 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
  const source=selected?.kind==="flow"?processes.data?.records.find(record=>`build.${record.name}`===selected.resource?.name):selected?.kind==="compute"?computations.data?.records.find(record=>record.name===selected.resource?.name):selected?.kind==="function"?functions.data?.records.find(record=>record.name===selected.resource?.name):selected?.kind==="agent"?agents.data?.records.find(record=>record.name===selected.resource?.name):undefined;
  const draft=applications.data?.records.find(record=>record.name===name);
  return <div className="grid min-w-0 gap-3">
-  <PageHeader title={query.data?.title ?? name} description={t("Runs related to this application's referenced resources. Shared use does not establish which application started a run.")} />
+  <PageHeader title={query.data?.title ?? name} help={t("Runs related to this application's referenced resources. Shared use does not establish which application started a run.")} />
   <ApplicationRuntimePanel owner={owner} name={name}/>
   <div className="flex flex-wrap gap-2">
    <Select aria-label={t("Run kind")} value={kind} onChange={event=>{setKind(event.target.value);setOffset(0);setChosen(undefined);}}><option value="">{t("All run kinds")}</option>{["flow","agent","function","compute","effect","job","dispatch"].map(value=><option key={value} value={value}>{kindName(value)}</option>)}</Select>
@@ -66,10 +66,17 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
     {source&&<Button onClick={()=>open({view:({flow:"flow",compute:"code",function:"function",agent:"agent"} as Record<string,string>)[selected.kind]!,params:{id:source.id,...(draft?{application:draft.id}:{})}},{window:"beside"})}>{t("Open current source editor")}</Button>}
     {selected.kind==="agent"&&!source&&<Button onClick={()=>open({view:"agents",params:{surface:"tenant"}},{window:"beside"})}>{t("Current agent registry")}</Button>}
    </div>
-   <p className="text-xs text-muted">{t("The editor opens the current saved source. The startup binding below belongs to this run.")}</p>
-   <RunBinding run={selected}/>
-   {selected.subject&&<p className="break-all font-mono text-xs">{t("Related record")}: {selected.subject}</p>}
-   {!!selected.applications?.length&&<ul className="grid gap-1 text-xs">{selected.applications.map(binding=><li key={`${binding.ref.app}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.app} · {binding.ref.name} @ {binding.sourceVersion}</li>)}</ul>}
+   <Disclosure summary={t("Run details")}>
+    <div className="grid gap-3 py-3">
+     <ContextHelp title={t("Run details")}>{t("The editor opens the current saved source. The startup binding below belongs to this run.")}</ContextHelp>
+     <RunBinding run={selected}/>
+     {selected.subject&&<PropertyList items={[[t("Related record"),<code className="select-all break-all">{selected.subject}</code>]]}/>}
+     {!!selected.applications?.length&&<DataTable data={selected.applications} columns={[
+      {id:"app",header:t("Application"),cell:cell=>cell.row.original.ref.app+":"+cell.row.original.ref.name},
+      {accessorKey:"sourceVersion",header:t("Startup version"),cell:cell=><code className="select-all break-all">{cell.row.original.sourceVersion}</code>},
+     ]} getRowId={binding=>binding.ref.app+":"+binding.ref.name} height={160} searchable={false}/>}
+    </div>
+   </Disclosure>
    {selected.error&&<p role="alert">{selected.node?`${t("Failed node")}: ${selected.node} · `:""}{selected.error}</p>}
    {!!selected.shared.length&&<p role="status" className="text-xs text-muted">{t("Also referenced by: {applications}",{applications:selected.shared.join(", ")})}</p>}
    {selected.kind==="function"?<ChainGraph of={`build.function-call/${selected.id}`}/>:selected.kind==="effect"?<ChainGraph of={`platform.effect/${selected.id}`}/>:null}
@@ -78,37 +85,169 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
 }
 
 export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string}) {
- const query=useReadQuery<Api.ApplicationRuntime>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/runtime`),runtime=query.isError?undefined:query.data;
+ const query=useReadQuery<Api.ApplicationRuntime>("/v1/applications/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name)+"/runtime"),runtime=query.isError?undefined:query.data;
  if(query.isError)return <Panel role="alert">{t("Application runtime is unavailable. Refresh after publishing the application.")}</Panel>;
  if(!runtime)return <p role="status">{t("Loading…")}</p>;
+ const monitoring=runtime.monitoring,runs=monitoring.runs;
  const refusalColumns:ColumnDef<Api.RefusalCodeCount,any>[]=[
   {accessorKey:"category",header:t("Result category"),cell:cell=>refusalCategoryName(cell.getValue())},
   {accessorKey:"type",header:t("Object type")},
   {accessorKey:"code",header:t("Refusal code"),cell:cell=><span className="break-all font-mono">{cell.getValue()}</span>},
   {accessorKey:"count",header:t("Count"),meta:{align:"right",width:80}},
  ];
- return <Panel className="grid min-w-0 gap-3" aria-label={t("Application artifact")}>
-  <div className="flex flex-wrap gap-2"><strong>{t("Application artifact")}</strong><Tag label={t(runtime.state)} tone={runtime.state==="isolated"?"danger":runtime.state==="degraded"?"warning":"success"}/><span className="text-xs text-muted">{t("Counts and diagnostics follow your authorized scope.")}</span></div>
-  <dl className="grid gap-2 text-xs"><div><dt>{t("Current content version")}</dt><dd className="break-all font-mono">{runtime.artifact.version}</dd></div>{runtime.previous&&<div><dt>{t("Previous content version")}</dt><dd className="break-all font-mono">{runtime.previous}</dd></div>}<div><dt>{t("Recovery")}</dt><dd>{t(runtime.recovery.state)} · {t("Predecessors")}: {t(runtime.recovery.predecessors)} · {t("{pending} pending effects · {failed} failed runs",{pending:runtime.recovery.pendingEffects,failed:runtime.recovery.failedRuns})}</dd></div></dl>
-  <p className="text-xs">{t("{accepted} accepted · {refused} refused · {constraints} constraint failures",{accepted:runtime.monitoring.accepted,refused:runtime.monitoring.refused,constraints:runtime.monitoring.constraintFailures})} · {t("{tokens} AI tokens · {pending} pending effects · {waiting} waiting workflows",{tokens:runtime.monitoring.runs.aiTokens,pending:runtime.monitoring.runs.pendingEffects,waiting:runtime.monitoring.runs.waitingFlows})}</p>
-  <p className="text-xs">{t("{count} business refusals · {rate}% refusal rate",{count:runtime.monitoring.businessRefusals,rate:(runtime.monitoring.refusalRate*100).toFixed(1)})}</p>
-  <Disclosure summary={t("Refusal codes by object type")}><DataTable data={runtime.monitoring.refusalCodes??[]} columns={refusalColumns} getRowId={entry=>`${entry.category}/${entry.type}/${entry.code}`} height={180} searchable={false} empty={t("No recorded refusals in this application.")}/></Disclosure>
-  <p className="text-xs text-muted">{t("Reported AI cost: ${cost}; {unknown} runs lack complete cost reporting.",{cost:runtime.monitoring.runs.aiUsd.toFixed(4),unknown:runtime.monitoring.runs.unmeteredAI})}</p>
-  {runtime.monitoring.memberQuota&&<p className="text-xs">{t("Your shared AI quota: {tokens} / {daily} tokens today; {calls} / {minute} calls this minute.",{tokens:runtime.monitoring.memberQuota.usedTokens,daily:runtime.monitoring.memberQuota.dailyTokens||t("No limit"),calls:runtime.monitoring.memberQuota.usedCalls,minute:runtime.monitoring.memberQuota.perMinute||t("No limit")})}</p>}
-  {!!runtime.monitoring.agentBudgets?.length&&<Disclosure summary={t("Agent budgets per run")}><ul className="grid gap-1 text-xs">{runtime.monitoring.agentBudgets.map(item=><li key={item.resource.ref.name}>{item.resource.ref.name} · {t("{steps} steps · {tokens} tokens · {actions} actions · ${cost}",{steps:item.budget.Steps||t("Owner default"),tokens:item.budget.Tokens||t("Owner default"),actions:item.budget.Actions||t("Owner default"),cost:item.budget.Cost||t("No limit")})}</li>)}</ul></Disclosure>}
+ const bindings=[...runtime.artifact.model,...runtime.artifact.rules,...runtime.artifact.pages,...runtime.artifact.flows,...runtime.artifact.ai,...runtime.artifact.integrations,...(runtime.artifact.samples??[])];
+ return <Panel className="grid min-w-0 gap-4" aria-label={t("Application artifact")}>
+  <div className="flex flex-wrap items-center gap-2">
+   <h2 className="text-sm font-semibold">{t("Application artifact")}</h2>
+   <Tag label={t(runtime.state)} tone={runtime.state==="isolated"?"danger":runtime.state==="degraded"?"warning":"success"}/>
+   <ContextHelp title={t("Application artifact")}>{t("Counts and diagnostics follow your authorized scope.")}</ContextHelp>
+  </div>
+  <PropertyList columns={4} items={[
+   [t("Accepted"),monitoring.accepted],
+   [t("Refused"),monitoring.refused],
+   [t("Pending effects"),runs.pendingEffects],
+   [t("Waiting workflows"),runs.waitingFlows],
+  ]}/>
+  {(monitoring.constraintFailures>0||runtime.recovery.failedRuns>0)&&<div role="alert">
+   <PropertyList columns={2} items={[
+    [t("Constraint failures"),monitoring.constraintFailures],
+    [t("Failed runs"),runtime.recovery.failedRuns],
+   ]}/>
+  </div>}
   {runtime.warnings.map((warning,index)=><p role="alert" className="text-sm text-warning" key={index}>{t("Declared {resource} scale exceeded: {actual} / {expected}",{resource:warning.resource||t("Runs"),actual:warning.actual,expected:warning.expected})}</p>)}
-  <ul className="grid gap-1 text-xs">{runtime.data.map(data=><li key={`${data.ref.app}:${data.ref.name}`}><span className="font-mono">{data.ref.name}</span> · {data.records}{data.expected?` / ${data.expected}`:""}</li>)}</ul>
-  {!!runtime.ai?.length&&<Disclosure summary={t("AI placement and evaluations")}><div className="grid gap-2 py-2">{runtime.ai.map(item=><Card key={item.resource.ref.name} className="grid gap-1 p-2 text-xs"><strong>{item.resource.ref.name} · {placementName(item.placement)}</strong><p>{item.model||t("Application default model")}</p><p>{t("{calls} calls · {input} input tokens · {output} output tokens",{calls:item.calls,input:item.input,output:item.output})}</p><p>{t("Reported AI cost: ${cost}; {unknown} runs lack complete cost reporting.",{cost:item.cost.toFixed(4),unknown:item.costUnknown})}</p>{!!item.sharedCalls&&<p>{t("Shared calls are attributed to each declaring application.")}</p>}{item.adoptions.map(action=><p key={action}>{t("Adoption action")}: {action}</p>)}{!!item.checkpoints.length&&<p>{t("Approval checkpoints")}: {item.checkpoints.join(", ")}</p>}{item.handoffRole&&<p>{t("Handover role")}: {item.handoffRole}</p>}{item.evaluations.map(report=><p key={report.id}>{t("Evaluation")}: {report.id} · {t(report.state)} · {report.model} · {report.quality}</p>)}</Card>)}</div></Disclosure>}
-  <Disclosure summary={t("Artifact contents and dependencies")}><ul className="mt-2 grid gap-1 text-xs">{[...runtime.artifact.model,...runtime.artifact.rules,...runtime.artifact.pages,...runtime.artifact.flows,...runtime.artifact.ai,...runtime.artifact.integrations,...(runtime.artifact.samples??[])].map(binding=><li key={`${binding.ref.app}:${binding.ref.kind}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.app} · {binding.ref.kind} · {binding.ref.name} @ {binding.sourceVersion}</li>)}</ul></Disclosure>
-  {!!runtime.artifact.environment.length&&<Disclosure summary={t("Required environment bindings")}><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.environment.map(binding=><li key={`${binding.ref.app}:${binding.ref.name}`}>{binding.ref.name} · {binding.kind}{binding.name?` · ${binding.name}`:""} · {binding.credential?t("Credential required"):t("No credential required")}</li>)}</ul></Disclosure>}
-  {!!runtime.artifact.roles.length&&<Disclosure summary={t("Declared roles and scopes")}><ul className="mt-2 grid gap-1 text-xs">{runtime.artifact.roles.map((role,index)=><li key={index}>{role.resource.ref.name} · {role.role} · {role.scope||t("Declared action role")}{role.readFields?.length?` · ${t("Read fields")}: ${role.readFields.join(", ")}`:""}{role.writeFields?.length?` · ${t("Write fields")}: ${role.writeFields.join(", ")}`:""}</li>)}</ul></Disclosure>}
-  <RecordDiagnostic owner={owner} name={name} types={runtime.data.map(data=>data.ref.name)}/>
-  {runtime.artifact.profile&&<Disclosure summary={t("Operating declarations")}><p className="text-xs text-muted">{t("Declared retention and recovery targets require environment evidence.")}</p><pre className="overflow-auto text-xs">{JSON.stringify(runtime.artifact.profile,null,2)}</pre></Disclosure>}
-  {runtime.maintenance&&<Disclosure summary={t("Application maintenance")}>
-    <ul className="grid gap-1 text-xs">{runtime.versions.map(version=><li key={`${version.release}:${version.version}`} className="break-all">{version.version} · {version.active?t("Current content version"):t("Previous content version")}{version.at?` · ${version.at}`:""}</li>)}</ul>
-    <ul className="mt-2 grid gap-1 text-xs">{runtime.maintenance.migrations.map(migration=><li key={migration.id}>{t("Migration")} {migration.id} · {t(migration.state)}</li>)}{runtime.maintenance.retired.map((item,index)=><li key={index}>{t("Retirement")} · {item.type} · {item.name} · {t(item.state)}</li>)}{runtime.maintenance.extensions.map(item=><li key={item.resource.ref.name}>{t("Extension")} · {item.resource.ref.name} → {item.base}</li>)}{runtime.maintenance.retention.map(item=><li key={item.category}>{t("Retention declaration")} · {t(item.category)} · {item.duration}</li>)}</ul>
-    {!!runtime.maintenance.retention.length&&<p className="text-xs text-muted">{t("Retention is declared; automatic deletion is not enabled by this declaration.")}</p>}
-  </Disclosure>}
+  <div className="grid min-w-0 gap-2 border-t border-border pt-3">
+   <Disclosure summary={t("Versions and recovery")}>
+    <div className="grid gap-3 py-3">
+     <PropertyList items={[
+      [t("Current content version"),<code className="select-all break-all">{runtime.artifact.version}</code>],
+      ...(runtime.previous?[[t("Previous content version"),<code className="select-all break-all">{runtime.previous}</code>] as [string,ReactNode]]:[]),
+     ]}/>
+     <PropertyList columns={2} items={[
+      [t("Recovery"),t(runtime.recovery.state)],
+      [t("Predecessors"),t(runtime.recovery.predecessors)],
+      [t("Pending effects"),runtime.recovery.pendingEffects],
+      [t("Failed runs"),runtime.recovery.failedRuns],
+     ]}/>
+    </div>
+   </Disclosure>
+   <Disclosure summary={t("Refusal codes by object type")}>
+    <div className="grid gap-3 py-3">
+     <PropertyList columns={3} items={[
+      [t("Business refusals"),monitoring.businessRefusals],
+      [t("Refusal rate"),(monitoring.refusalRate*100).toFixed(1)+"%"],
+      [t("Constraint failures"),monitoring.constraintFailures],
+     ]}/>
+     <DataTable data={monitoring.refusalCodes??[]} columns={refusalColumns} getRowId={entry=>entry.category+"/"+entry.type+"/"+entry.code} height={180} searchable={false} empty={t("No recorded refusals in this application.")}/>
+    </div>
+   </Disclosure>
+   <Disclosure summary={t("AI usage and budgets")}>
+    <div className="grid gap-4 py-3">
+     <PropertyList columns={3} items={[
+      [t("AI tokens"),runs.aiTokens],
+      [t("Reported AI cost"),"$"+runs.aiUsd.toFixed(4)],
+      [t("Runs without complete cost reporting"),runs.unmeteredAI],
+     ]}/>
+     {monitoring.memberQuota&&<div className="grid gap-2">
+      <h3 className="text-sm font-medium">{t("Your shared AI quota")}</h3>
+      <PropertyList columns={2} items={[
+       [t("Tokens today"),monitoring.memberQuota.usedTokens+" / "+(monitoring.memberQuota.dailyTokens||t("No limit"))],
+       [t("Calls this minute"),monitoring.memberQuota.usedCalls+" / "+(monitoring.memberQuota.perMinute||t("No limit"))],
+      ]}/>
+     </div>}
+     {!!monitoring.agentBudgets?.length&&<div className="grid gap-2">
+      <h3 className="text-sm font-medium">{t("Agent budgets per run")}</h3>
+      <DataTable data={monitoring.agentBudgets} columns={[
+       {id:"resource",header:t("Resource"),cell:cell=><code className="break-all">{cell.row.original.resource.ref.name}</code>},
+       {id:"steps",header:t("Steps"),cell:cell=>cell.row.original.budget.Steps||t("Owner default")},
+       {id:"tokens",header:t("Tokens"),cell:cell=>cell.row.original.budget.Tokens||t("Owner default")},
+       {id:"actions",header:t("Actions"),cell:cell=>cell.row.original.budget.Actions||t("Owner default")},
+       {id:"cost",header:t("Cost"),cell:cell=>cell.row.original.budget.Cost||t("No limit")},
+      ]} getRowId={item=>item.resource.ref.name} height={180} searchable={false}/>
+     </div>}
+    </div>
+   </Disclosure>
+   <Disclosure summary={t("Application data")}>
+    <div className="py-3"><DataTable data={runtime.data} columns={[
+     {id:"resource",header:t("Object type"),cell:cell=><code className="break-all">{cell.row.original.ref.name}</code>},
+     {accessorKey:"records",header:t("Records"),meta:{align:"right"}},
+     {accessorKey:"expected",header:t("Declared records"),cell:cell=>cell.row.original.expected||"—",meta:{align:"right"}},
+    ]} getRowId={item=>item.ref.app+":"+item.ref.name} height={200} searchable={false}/></div>
+   </Disclosure>
+   {!!runtime.ai?.length&&<Disclosure summary={t("AI placement and evaluations")}>
+    <div className="grid gap-4 py-3">{runtime.ai.map(item=><section key={item.resource.ref.name} className="grid min-w-0 gap-3 border-b border-border pb-4 last:border-b-0 last:pb-0">
+     <h3 className="break-all text-sm font-medium">{item.resource.ref.name}</h3>
+     <PropertyList columns={3} items={[
+      [t("Placement"),placementName(item.placement)],
+      [t("Model"),item.model||t("Application default model")],
+      [t("Calls"),item.calls],
+      [t("Input tokens"),item.input],
+      [t("Output tokens"),item.output],
+      [t("Reported AI cost"),"$"+item.cost.toFixed(4)],
+      [t("Runs without complete cost reporting"),item.costUnknown],
+     ]}/>
+     {!!item.sharedCalls&&<ContextHelp title={t("Shared calls")}>{t("Shared calls are attributed to each declaring application.")}</ContextHelp>}
+     {(!!item.adoptions?.length||!!item.checkpoints?.length||!!item.handoffRole)&&<PropertyList items={[
+      ...(item.adoptions?.length?[[t("Adoption action"),<ul className="grid gap-1">{item.adoptions.map(action=><li className="break-all font-mono text-xs" key={action}>{action}</li>)}</ul>] as [string,ReactNode]]:[]),
+      ...(item.checkpoints?.length?[[t("Approval checkpoints"),item.checkpoints.join(", ")] as [string,ReactNode]]:[]),
+      ...(item.handoffRole?[[t("Handover role"),item.handoffRole] as [string,ReactNode]]:[]),
+     ]}/>}
+     {!!item.evaluations?.length&&<DataTable data={item.evaluations} columns={[
+      {accessorKey:"id",header:t("Evaluation"),cell:cell=><code className="select-all break-all">{cell.row.original.id}</code>},
+      {accessorKey:"state",header:t("State"),cell:cell=>t(cell.row.original.state)},
+      {accessorKey:"model",header:t("Model")},
+      {accessorKey:"quality",header:t("Quality")},
+     ]} getRowId={report=>report.id} height={180} searchable={false}/>}
+    </section>)}</div>
+   </Disclosure>}
+   <Disclosure summary={t("Artifact contents and dependencies")}>
+    <div className="py-3"><DataTable data={bindings} columns={[
+     {id:"app",header:t("Application"),cell:cell=>cell.row.original.ref.app},
+     {id:"kind",header:t("Kind"),cell:cell=>cell.row.original.ref.kind},
+     {id:"name",header:t("Resource"),cell:cell=><code className="break-all">{cell.row.original.ref.name}</code>},
+     {accessorKey:"sourceVersion",header:t("Version"),cell:cell=><code className="select-all break-all">{cell.row.original.sourceVersion}</code>},
+    ]} getRowId={binding=>binding.ref.app+":"+binding.ref.kind+":"+binding.ref.name} height={240} searchable={false}/></div>
+   </Disclosure>
+   {!!runtime.artifact.environment.length&&<Disclosure summary={t("Required environment bindings")}>
+    <div className="py-3"><DataTable data={runtime.artifact.environment} columns={[
+     {id:"resource",header:t("Resource"),cell:cell=>cell.row.original.ref.name},
+     {accessorKey:"kind",header:t("Kind")},
+     {accessorKey:"name",header:t("Name")},
+     {id:"credential",header:t("Credentials"),cell:cell=>cell.row.original.credential?t("Credential required"):t("No credential required")},
+    ]} getRowId={binding=>binding.ref.app+":"+binding.ref.name} height={180} searchable={false}/></div>
+   </Disclosure>}
+   {!!runtime.artifact.roles.length&&<Disclosure summary={t("Declared roles and scopes")}>
+    <div className="py-3"><DataTable data={runtime.artifact.roles.map((role,index)=>({...role,rowId:String(index)}))} columns={[
+     {id:"resource",header:t("Resource"),cell:cell=>cell.row.original.resource.ref.name},
+     {accessorKey:"role",header:t("Role")},
+     {accessorKey:"scope",header:t("Scope"),cell:cell=>cell.row.original.scope||t("Declared action role")},
+     {id:"readFields",header:t("Read fields"),cell:cell=><span className="break-all">{cell.row.original.readFields?.join(", ")||"—"}</span>},
+     {id:"writeFields",header:t("Write fields"),cell:cell=><span className="break-all">{cell.row.original.writeFields?.join(", ")||"—"}</span>},
+    ]} getRowId={role=>role.rowId} height={200} searchable={false}/></div>
+   </Disclosure>}
+   <RecordDiagnostic owner={owner} name={name} types={runtime.data.map(data=>data.ref.name)}/>
+   {runtime.artifact.profile&&<Disclosure summary={t("Operating declarations")}>
+    <div className="grid gap-3 py-3">
+     <ContextHelp title={t("Operating declarations")}>{t("Declared retention and recovery targets require environment evidence.")}</ContextHelp>
+     <pre className="overflow-auto text-xs">{JSON.stringify(runtime.artifact.profile,null,2)}</pre>
+    </div>
+   </Disclosure>}
+   {runtime.maintenance&&<Disclosure summary={t("Application maintenance")}>
+    <div className="grid gap-4 py-3">
+     <DataTable data={runtime.versions} columns={[
+      {accessorKey:"version",header:t("Version"),cell:cell=><code className="select-all break-all">{cell.row.original.version}</code>},
+      {id:"active",header:t("State"),cell:cell=>cell.row.original.active?t("Current content version"):t("Previous content version")},
+      {accessorKey:"at",header:t("Time")},
+     ]} getRowId={version=>version.release+":"+version.version} height={180} searchable={false}/>
+     {!!runtime.maintenance.migrations.length&&<div className="grid gap-2"><h3 className="text-sm font-medium">{t("Migration")}</h3><PropertyList items={runtime.maintenance.migrations.map(migration=>[migration.id,t(migration.state)])}/></div>}
+     {!!runtime.maintenance.retired.length&&<div className="grid gap-2"><h3 className="text-sm font-medium">{t("Retirement")}</h3><PropertyList items={runtime.maintenance.retired.map(item=>[item.type+"/"+item.name,t(item.state)])}/></div>}
+     {!!runtime.maintenance.extensions.length&&<div className="grid gap-2"><h3 className="text-sm font-medium">{t("Extensions")}</h3><PropertyList items={runtime.maintenance.extensions.map(item=>[item.resource.ref.name,item.base])}/></div>}
+     {!!runtime.maintenance.retention.length&&<div className="grid gap-2">
+      <div className="flex items-center gap-2"><h3 className="text-sm font-medium">{t("Retention declaration")}</h3><ContextHelp title={t("Retention declaration")}>{t("Retention is declared; automatic deletion is not enabled by this declaration.")}</ContextHelp></div>
+      <PropertyList items={runtime.maintenance.retention.map(item=>[t(item.category),item.duration])}/>
+     </div>}
+    </div>
+   </Disclosure>}
+  </div>
  </Panel>;
 }
 
@@ -132,12 +271,13 @@ function RecordDiagnostic({owner,name,types}:{owner:string;name:string;types:str
 }
 
 function RunBinding({run}:{run:Pick<Run,"release"|"version"|"dependencies"|"module">}) {
- return <dl className="grid min-w-0 gap-1 text-xs">
-  <div><dt className="text-muted">{t("Startup version")}</dt><dd className="break-all font-mono">{run.version||t("Not recorded")}</dd></div>
-  <div><dt className="text-muted">{t("Startup release")}</dt><dd className="break-all font-mono">{run.release||t("No startup activation recorded")}</dd></div>
-  {run.dependencies&&<div><dt className="text-muted">{t("Dependency release")}</dt><dd className="break-all font-mono">{run.dependencies}</dd></div>}
-  {run.module&&<div><dt className="text-muted">{t("Module")}</dt><dd className="break-all font-mono">{run.module}</dd></div>}
- </dl>;
+ return <PropertyList items={[
+  [t("Startup version"),<code className="select-all break-all">{run.version||t("Not recorded")}</code>],
+  [t("Startup release"),<code className="select-all break-all">{run.release||t("No startup activation recorded")}</code>],
+  ...(run.dependencies?[[t("Dependency release"),<code className="select-all break-all">{run.dependencies}</code>] as [string,ReactNode]]:[]),
+  ...(run.module?[[t("Module"),<code className="select-all break-all">{run.module}</code>] as [string,ReactNode]]:[]),
+ ]}/>;
+
 }
 
 /** The original compute read and effect retry action, including source checks. */
@@ -152,9 +292,11 @@ export function OperationRunView({id,application,project,subject}:{id:string;app
   {subject?.startsWith("flow.instance/")&&<Button variant="ghost" onClick={()=>open({view:"flow-instance",params:{id:subject.slice("flow.instance/".length),...(application?{application}:{}),...(project?{project}:{})}},{window:"beside"})}>{t("Open related workflow run")}</Button>}
   {control.error&&<Panel role="alert" className="text-sm text-danger">{control.error}</Panel>}
   {control.pending&&<Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p><Button disabled={control.busy} onClick={()=>void control.retry()}>{t("Retry original operation")}</Button></Panel>}
-  <p>{stateName(answer.state)}</p>
-  <RunBinding run={{version:answer.version?String(answer.version):answer.ownerVersion?`code:${answer.ownerVersion}`:undefined,release:answer.release,dependencies:answer.dependencies,module:answer.module}}/>
-  {answer.definition&&<p className="break-all font-mono text-xs">{t("Startup definition")}: {answer.definition}</p>}
+  <Tag label={stateName(answer.state)} tone={answer.state==="failed"?"danger":"neutral"}/>
+  <Disclosure summary={t("Run details")}><div className="grid gap-3 py-3">
+   <RunBinding run={{version:answer.version?String(answer.version):answer.ownerVersion?"code:"+answer.ownerVersion:undefined,release:answer.release,dependencies:answer.dependencies,module:answer.module}}/>
+   {answer.definition&&<PropertyList items={[[t("Startup definition"),<code className="select-all break-all">{answer.definition}</code>]]}/>}
+  </div></Disclosure>
   {answer.error&&<Panel role="alert">{answer.error}</Panel>}
   {answer.state==="failed"&&can("platform.effect.retry")&&<Button disabled={control.busy||!!control.pending} onClick={()=>void control.control("platform.effect.retry")}>{t("Retry")}</Button>}
   {answer.output!==undefined&&<pre className="max-h-80 overflow-auto text-xs">{JSON.stringify(answer.output,null,2)}</pre>}

@@ -273,6 +273,8 @@ Shell 采用“顶栏切换大应用 → 左侧当前应用菜单 → 中央工�
 
 功能归属为：Builder 管应用、本体、业务逻辑、测试和发布；Data Connection 管连接、来源、数据处理、观测和 Lineage；Agents 将 Design 定义与可用智能体、运行、记忆、评测和获权 Assistant 组合在一起；AI 管体验、模型配置与用量；Enterprise 为独立应用；Master data 管共享 core 资料、Object Explorer 与保存的视图；Knowledge 归知识与数据；Control Panel 管人员、权限、安装、设置与审计；Runs 管流程运行、工作队列、投递与健康；Host Console 管宿主；Asset Library 是唯一开发参考入口。已有功能和原路由的完整对应见 [Apps](../Apps.md)，应用内的业务概念树仍服务当前应用资源，不取代这些直接入口。没有 core 角色但有可读实体的成员可从 Master data 进入 Object Explorer，并以其为主页，不开放受限 core 记录；有原主数据角色的成员保留原菜单和主页。
 
+界面信息按任务分层：当前状态、关键计数、待处理问题和操作保持可见；版本标识、依赖和诊断按语义分组展开。统计使用共享 `PropertyList` 或原表格展示标签和值，避免把多个计数拼成一长句。补充解释统一由 `ContextHelp` 提供标题旁的“说明”入口，`PageHeader`、`Panel` 和通用表单复用同一交互；支持键盘、触屏、Escape 关闭及焦点返回。错误、权限拒绝、等待结果和必须确认的操作后果不能藏入说明。字段参考按所选字段展示，不默认铺开整份声明。说明展开不触发业务操作，不增加读取权限或更改原执行入口。
+
 现行实现沿原组件组合：
 
 - `@platform/ui` `shell/Workspace.tsx`：原顶栏应用切换、当前应用菜单、Dock 与 Inspector；菜单子项沿原路由，辅助 Rail 不承担第二套应用选择。旧标签按现行功能归属恢复，其他应用的标签不接管当前首页；应用切换与文档保护共用原工作区状态，窄屏沿原抽屉。

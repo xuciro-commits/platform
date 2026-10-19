@@ -1,5 +1,5 @@
 import { sourceFieldInput } from "@platform/app";
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, PropertyList, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { createRecordActionSubmitter, newId, useHost, useRecordInventory } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
@@ -121,9 +121,8 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
     choosePlan(refreshed.data?.records.find(item => item.id === target));
   });
   return <Card className="grid gap-3 p-3" role="region" aria-label={t("Data migration")}>
-    <h3 className="text-sm font-semibold">{t("Data migration")}</h3>
-    <p className="text-xs text-muted">{t("Declare the changes between these sealed releases. Each accepted batch saves its data and progress; the source remains read only until activation or cancellation.")}</p>
-    <p className="break-all text-xs">{t("Source release")}: <code>{from}</code><br />{t("Target release")}: <code>{to}</code></p>
+    <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Data migration")}</h3><ContextHelp title={t("Data migration")}>{t("Declare the changes between these sealed releases. Each accepted batch saves its data and progress; the source remains read only until activation or cancellation.")}</ContextHelp></div>
+    <Disclosure summary={t("Release versions")}><PropertyList items={[[t("Source release"), <code>{from}</code>], [t("Target release"), <code>{to}</code>]]} /></Disclosure>
     {inventory.isError && <p role="alert" className="text-sm text-danger">{t("Migration progress could not be loaded. Refresh before starting or continuing.")}</p>}
     {runs.length > 0 && <label className="grid gap-1 text-xs">{t("Saved migration")}<Select aria-label={t("Saved migration")} disabled={blocked} value={run?.id ?? ""} onChange={event => setID(event.target.value)}>
       {!runs.some(item => item.state !== "cancelled") && <option value="">{t("New migration")}</option>}
@@ -149,14 +148,14 @@ export function MigrationWorkbench({ from, to, assets, onChanged, onLock }: {
       </div>
       {review && <div className="grid gap-2 text-xs" role="region" aria-label={t("Migration review")}>
         <ul className="grid gap-1">{review.types.map(item => <li key={item.type}>{item.type} · {t("{count} existing records", { count: item.records })}</li>)}</ul>
-        <p>{t("{count} migration steps", { count: review.steps })} · {new Date(review.at).toLocaleString()}</p>
+        <PropertyList columns={2} items={[[t("Migration steps"), review.steps], [t("Reviewed at"), new Date(review.at).toLocaleString()]]} />
         {review.issues.length > 0 && <ul className="grid gap-1 text-warning" aria-label={t("Migration issues")}>{review.issues.map((issue, index) => <li key={index}>{issue.type}/{issue.record} · {t("Step {number}", { number: issue.step })}: {issue.reason}</li>)}</ul>}
         <Button disabled={!saved || !published || blocked || inventory.isError || inventory.isPending || !!inputs?.invalid} onClick={() => void start()}>{t("Start reviewed migration")}</Button>
       </div>}
     </StructuredEditor>}
     {run && <div className="grid gap-2" role="region" aria-label={t("Migration progress")}>
-      <p className="text-sm" role="status">{t("Migration state")}: {t(run.state)} · {t("Processed")}: {run.processed} · {t("Migrated")}: {run.migrated}</p>
-      <p className="break-all text-xs">{t(run.state === "complete" ? "Completed steps" : "Next step")}: {run.state === "complete" ? run.step : Math.min(run.step + 1, run.plan.steps.length)} / {run.plan.steps.length}{run.cursor ? ` · ${run.cursor}` : ""}</p>
+      <div role="status"><PropertyList columns={3} items={[[t("Migration state"), t(run.state)], [t("Processed"), run.processed], [t("Migrated"), run.migrated]]} /></div>
+      <PropertyList columns={2} items={[[t(run.state === "complete" ? "Completed steps" : "Next step"), `${run.state === "complete" ? run.step : Math.min(run.step + 1, run.plan.steps.length)} / ${run.plan.steps.length}`], ...(run.cursor ? [[t("Cursor"), <code>{run.cursor}</code>] as [string, React.ReactNode]] : [])]} />
       <Disclosure summary={t("Accepted migration plan")}><pre className="max-h-72 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(run.plan, null, 2)}</pre></Disclosure>
       {run.failures?.length ? <ul className="grid gap-1 text-xs text-warning" aria-label={t("Migration failures")}>{run.failures.map((failure, index) => <li key={index}>{failure.type}/{failure.record} · {t("Step {number}", { number: failure.step })}: {failure.reason}</li>)}</ul> : null}
       {run.plan.steps.some(step => step.kind === "retire-action") && <p className="text-xs">{t("Already rejected approval requests remain rejected if this migration is cancelled.")}</p>}

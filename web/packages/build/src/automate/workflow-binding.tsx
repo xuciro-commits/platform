@@ -1,6 +1,6 @@
 import {schemaIssue} from "./workflow-schema";
 export {schemaIssue} from "./workflow-schema";
-import { InputDraftProvider, Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
+import { ContextHelp, InputDraftProvider, Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useDraftInput } from "../session/DraftSession";
@@ -108,7 +108,7 @@ export function SchemaEditor({ schema, onChange, depth = 0, fixedObject = false,
           const discriminator = schema.discriminator ?? "kind";
           onChange({ ...schema, variants: { ...schema.variants, [newName]: { type: "object", properties: { [discriminator]: { type: "string", enum: [newName] } }, required: [discriminator] } } }); setNewName("");
         }}><Plus className="size-3" /></Button></div>
-      <p className="text-[10px] leading-4 text-muted">{t("Each variant is a closed object with a required literal tag. Nullability is independent of required fields.")}</p>
+      <ContextHelp title={t("Variants")}><p className="text-[10px] leading-4 text-muted">{t("Each variant is a closed object with a required literal tag. Nullability is independent of required fields.")}</p></ContextHelp>
     </>}
     {schema.type === "object" && <>
       {Object.entries(schema.properties ?? {}).map(([name, property]) => <Disclosure key={name} className="rounded border border-border p-2" summary={<span className="text-xs font-medium">{name} <code className="ml-1 text-[10px] text-muted">{property.type}</code></span>}>

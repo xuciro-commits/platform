@@ -4,7 +4,7 @@
 // `base` reference. The host checks both again when the object is published.
 import { useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, Checkbox, Select, t, type EntityInfo } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, Select, t, type EntityInfo } from "@platform/ui";
 import { baseField, missingInterfaceFields, type Field, type ObjectRecord, type Process } from "./object-model";
 
 /** Every interface the tenant's apps declare, with the app declaring it. */
@@ -28,7 +28,7 @@ export function ShapeEditor({ process, parent, entities, source, onChange }: { p
   return <div className="grid gap-3 rounded-md border border-border p-3">
     <h3 className="text-sm font-semibold">{t("Shape")}</h3>
     <div className="grid gap-2">
-      <p className="text-xs text-muted">{t("Interfaces this object implements. Pages and queries written against an interface work for every object implementing it.")}</p>
+      <ContextHelp title={t("Interfaces")}><p className="text-xs text-muted">{t("Interfaces this object implements. Pages and queries written against an interface work for every object implementing it.")}</p></ContextHelp>
       {interfaces.length ? interfaces.map((shape) => {
         const on = implemented.includes(shape.name), missing = missingInterfaceFields(process.fields, shape);
         return <div key={shape.name} className="flex flex-wrap items-center gap-2 text-sm">

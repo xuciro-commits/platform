@@ -23,7 +23,7 @@ export function Writebacks() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Writebacks")} description={t("Declare the connection and request mapping for external writes. Accepted actions, business confirmations and device dispatches keep their own sending and retry rules.")}
+    <PageHeader title={t("Writebacks")} help={t("Declare the connection and request mapping for external writes. Accepted actions, business confirmations and device dispatches keep their own sending and retry rules.")}
       actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
     <ResourceList source={source} type="build.writeback" fields={["title", "object", "on", "connection", "sent", "failed", "state"]} onOpen={(record) => open({ view: "writeback", params: { id: record.id } })} />
   </div>;
@@ -62,7 +62,7 @@ export function WritebackEditor({ id }: { id: string }) {
     <div><Button size="sm" disabled={!draft.object} onClick={() => patch({ [key]: [...list, { from: "", to: "", convert: "" }] })}>{key === "mapping" ? t("Add body field") : t("Add answer field")}</Button></div>
   </div>;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New writeback")} description={t("Choose the original object, trigger, connection and request fields. Explicit confirmations and dispatches send only when their declared business operation runs.")}
+    <PageHeader title={draft.title || t("New writeback")} help={t("Choose the original object, trigger, connection and request fields. Explicit confirmations and dispatches send only when their declared business operation runs.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "writeback" })}>{t("Writebacks")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>

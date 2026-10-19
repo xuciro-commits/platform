@@ -1553,4 +1553,11 @@ export default {
   "Add the property or discard its name.": "请添加此属性，或放弃输入的属性名。",
   "This property already exists.": "此属性已存在。",
   "Advanced configuration": "高级配置",
+  "About {title}": "{title}说明",
+  "Contextual explanation": "上下文说明",
+  "Open supporting explanations from a consistent entry beside the task title.": "从任务标题旁的统一入口查看补充说明。",
+  "Keep current errors, warnings and action consequences visible. Help does not replace status or required decisions.": "当前错误、警告和操作后果应直接展示，说明不能代替状态或必要决策。",
+  "View help": "说明",
+  "Field reference": "字段参考",
+  "Operation details": "操作详情",
 } as Record<string, string>;

@@ -2,7 +2,7 @@ import type {AuthoringSection} from "./draft";
 import { useEffect, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, SemanticPropertySelect, pageUIProfile, pageVariableContract, useHost, useProvidedCapabilities, type PageVariableValue } from "@platform/app";
-import { Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
+import { ContextHelp, Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
 import { overlayOwner } from "../page-layout";
 import { layoutID } from "../page-layout";
 
@@ -22,7 +22,7 @@ export function QueriesPanel({ document, object, values, onChange, onPreviewOwne
   const aliases = Object.entries(document.variables ?? {}).filter(([,v])=>v.source?.kind==="plan"&&v.source.query===id), result = values[aliases[0]?.[0] ?? ""];
   const window = result && (result.status==="value"||result.status==="empty") && typeof result.value==="object" && result.value.kind==="object-set" ? result.value.window : undefined;
   return <Card className="grid content-start gap-3 p-3"><h3 className="text-sm font-semibold">{t("Query plans")}</h3>
-    <p className="text-xs text-muted">{t("Queries use the member's original record read and run without a table widget.")}</p>
+    <ContextHelp title={t("Page queries")}><p className="text-xs text-muted">{t("Queries use the member's original record read and run without a table widget.")}</p></ContextHelp>
     {capabilityQuery.isError && <p role="alert" className="text-xs text-danger">{t("Available capabilities could not be loaded.")}</p>}
     <Select aria-label={t("Choose query plan")} value={id} onChange={(event)=>choose(event.target.value)}><option value="">{t("Choose query plan")}</option>{Object.entries(plans).map(([id,p])=><option key={id} value={id}>{p.title||id}</option>)}</Select>
     <Button disabled={Object.keys(plans).length>=pageVariableContract.query.maxPlans} onClick={()=>{const query=layoutID("query"),variable=layoutID("window"),title=t("Query {n}",{n:Object.keys(plans).length+1});update({...plans,[query]:{title,object,limit:50,sort:["id"]}},{...document.variables,[variable]:{title,scope:application?"application":"page",type:"object-set",mode:"resource",source:{kind:"plan",query}}});choose(query);}}>{t("Add query plan")}</Button>

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:71168efbe272ee70",
+  "revision": "sha256:2e262e80fc234505",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -41,6 +41,7 @@
       ],
       "composed": [
         "ui/button",
+        "ui/entity-card",
         "ui/form",
         "ui/input",
         "ui/page-header",
@@ -114,6 +115,7 @@
       "composed": [
         "ui/button",
         "ui/disclosure",
+        "ui/entity-card",
         "ui/page-header",
         "ui/panels",
         "ui/status"
@@ -184,7 +186,10 @@
       ],
       "composed": [
         "ui/button",
+        "ui/context-help",
         "ui/data-table",
+        "ui/disclosure",
+        "ui/entity-card",
         "ui/input",
         "ui/page-header",
         "ui/panels",
@@ -1193,7 +1198,10 @@
       ],
       "composed": [
         "ui/button",
-        "ui/panels"
+        "ui/disclosure",
+        "ui/entity-card",
+        "ui/panels",
+        "ui/status"
       ]
     },
     {
@@ -1642,6 +1650,13 @@
           "isSlot": false
         },
         {
+          "name": "help",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
           "name": "actions",
           "type": "ReactNode",
           "optional": true,
@@ -1671,6 +1686,11 @@
         }
       ],
       "slots": [
+        {
+          "name": "help",
+          "type": "ReactNode",
+          "optional": true
+        },
         {
           "name": "actions",
           "type": "ReactNode",
@@ -3815,6 +3835,58 @@
           "name": "actions",
           "type": "ReactNode",
           "optional": true
+        }
+      ],
+      "composed": [
+        "ui/button"
+      ]
+    },
+    {
+      "id": "ui/context-help",
+      "owner": "@platform/ui",
+      "name": "Contextual explanation",
+      "summary": "Open supporting explanations from a consistent entry beside the task title.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/ContextHelp.tsx",
+      "exports": [
+        "ContextHelp"
+      ],
+      "example": "ContextHelpExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "help",
+        "information",
+        "disclosure"
+      ],
+      "constraints": [
+        "Keep current errors, warnings and action consequences visible. Help does not replace status or required decisions."
+      ],
+      "props": [
+        {
+          "name": "title",
+          "type": "string",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": true
+        }
+      ],
+      "slots": [
+        {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": false
         }
       ],
       "composed": [
@@ -7501,6 +7573,13 @@
           "isSlot": false
         },
         {
+          "name": "help",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
           "name": "actions",
           "type": "ReactNode",
           "optional": true,
@@ -7525,10 +7604,18 @@
       ],
       "slots": [
         {
+          "name": "help",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
           "name": "actions",
           "type": "ReactNode",
           "optional": true
         }
+      ],
+      "composed": [
+        "ui/context-help"
       ]
     },
     {
@@ -11403,6 +11490,8 @@
       ],
       "composed": [
         "ui/button",
+        "ui/context-help",
+        "ui/disclosure",
         "ui/input"
       ]
     },
@@ -12217,6 +12306,7 @@
       "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",
       "Content tabs": "内容标签页",
       "Context commands": "上下文命令",
+      "Contextual explanation": "上下文说明",
       "Controlled blank space": "受控空白",
       "Controlled page composition": "受控页面装配",
       "Counted tag groups": "带计数的标签分组",
@@ -12291,6 +12381,7 @@
       "Invalid": "无效",
       "Isolated": "隔离",
       "Isolated external document": "隔离的外部文档",
+      "Keep current errors, warnings and action consequences visible. Help does not replace status or required decisions.": "当前错误、警告和操作后果应直接展示，说明不能代替状态或必要决策。",
       "Keep record browsing and focused detail in one responsive task frame.": "在响应式任务框架中同时保留记录浏览与聚焦详情。",
       "Keep selection and detail together using the existing record workspace or controlled table/detail sections.": "使用原记录工作台或受控表格与详情区块，保持选择与详情连贯。",
       "Keep unparsed number and JSON text in its original document and block unsafe submissions.": "把未解析的数字和 JSON 原文保留在原文档中，并阻止无效提交。",
@@ -12323,6 +12414,7 @@
       "Only the canonical action owner may authorize and apply a transition.": "只有规范动作的归属方可以授权并应用状态跃迁。",
       "Only the source's declared summary rule can submit its original authorized business action. Retrying an unanswered decision retains its request key and time window.": "只有来源声明的汇总规则可以提交原受权业务动作。重试未答复判定时保留请求标识和时间窗口。",
       "Open": "打开",
+      "Open supporting explanations from a consistent entry beside the task title.": "从任务标题旁的统一入口查看补充说明。",
       "Open this full-window preview separately; its shell owns routes and saved layout.": "单独打开全窗口预览；外壳负责路由与保存的布局。",
       "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
       "Ordered record chart": "按序逐记录图表",
@@ -12739,6 +12831,7 @@
       "web/packages/ui/src/components/BreadcrumbTrail.tsx",
       "web/packages/ui/src/components/ButtonGroup.tsx",
       "web/packages/ui/src/components/CommandMenu.tsx",
+      "web/packages/ui/src/components/ContextHelp.tsx",
       "web/packages/ui/src/components/DateInput.tsx",
       "web/packages/ui/src/components/DateRangeInput.tsx",
       "web/packages/ui/src/components/DateTimeInput.tsx",
@@ -12888,7 +12981,6 @@
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
-      "web/packages/build/src/projects/studio-guide.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
@@ -12948,6 +13040,7 @@
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
       "web/packages/build/src/ontology/TransactionEditor.tsx",
       "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/projects/InstalledApplicationHome.tsx",
       "web/packages/build/src/projects/studio-navigation.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
@@ -12955,9 +13048,13 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
       "web/packages/build/src/workshop/page-editor/WidgetLibrary.tsx",
+      "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
       "web/packages/platform/src/enterprise/properties.tsx",
+      "web/packages/platform/src/host.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/ui/src/components/StructuredEditor.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
@@ -12985,6 +13082,7 @@
       "web/packages/build/src/ontology/writeback.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
@@ -13012,6 +13110,67 @@
       "web/apps/catalog/src/Inspector.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/context-help": [
+      "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
+      "web/packages/app/src/widgets/Histogram.tsx",
+      "web/packages/app/src/widgets/ProposalReview.tsx",
+      "web/packages/app/src/widgets/QueryWindowFrame.tsx",
+      "web/packages/app/src/widgets/RecordPicker.tsx",
+      "web/packages/app/src/widgets/RecordWork.tsx",
+      "web/packages/app/src/widgets/TermCounts.tsx",
+      "web/packages/build/src/automate/automation.tsx",
+      "web/packages/build/src/automate/workflow-binding.tsx",
+      "web/packages/build/src/automate/workflow-inspector.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/alert.tsx",
+      "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/functions/decision-table.tsx",
+      "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/TransactionEditor.tsx",
+      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/ontology/record-sets.tsx",
+      "web/packages/build/src/ontology/shape.tsx",
+      "web/packages/build/src/projects/ExtensionSettings.tsx",
+      "web/packages/build/src/projects/InstalledApplicationHome.tsx",
+      "web/packages/build/src/projects/project-roles.tsx",
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/projects/studio-guide.tsx",
+      "web/packages/build/src/releases/migration.tsx",
+      "web/packages/build/src/releases/release.tsx",
+      "web/packages/build/src/releases/samples.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/releases/test-inputs.tsx",
+      "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
+      "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
+      "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/DetailInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/HeatmapInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/NoticeInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/RangeInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/RecordListInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/ScatterInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/TermsInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/TitleInspectors.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/host.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/organisation.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/permissions.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/ui/src/catalog.examples.tsx",
+      "web/packages/ui/src/components/EntityForm.tsx",
+      "web/packages/ui/src/components/PageHeader.tsx",
+      "web/packages/ui/src/components/StructuredEditor.tsx",
+      "web/packages/ui/src/primitives/card.tsx"
     ],
     "ui/structured-editor": [
       "web/packages/app/src/actions/actions.tsx",
@@ -13445,6 +13604,7 @@
       "web/packages/build/src/ontology/property-type.tsx",
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
+      "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/samples.tsx",
@@ -13470,6 +13630,41 @@
       "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
+    ],
+    "ui/entity-card": [
+      "web/packages/app/src/automation/agents.tsx",
+      "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
+      "web/packages/app/src/widgets/ConfirmationProgress.tsx",
+      "web/packages/app/src/widgets/CreateForm.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
+      "web/packages/app/src/widgets/ProposalReview.tsx",
+      "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/build/src/ontology/data-source.tsx",
+      "web/packages/build/src/ontology/dataset.tsx",
+      "web/packages/build/src/ontology/pipeline.tsx",
+      "web/packages/build/src/ontology/process.tsx",
+      "web/packages/build/src/projects/InstalledApplicationHome.tsx",
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/releases/migration.tsx",
+      "web/packages/build/src/releases/release.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
+      "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/enterprise/index.tsx",
+      "web/packages/platform/src/host.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/permissions.tsx",
+      "web/packages/pms/src/index.tsx",
+      "web/packages/ui/src/records/RecordCard.tsx",
+      "web/packages/ui/src/records/RecordCards.tsx",
+      "web/packages/ui/src/records/RecordKanban.tsx",
+      "web/packages/ui/src/records/Records.tsx"
     ],
     "ui/flow-steps": [
       "web/packages/app/src/automation/agents.tsx",
@@ -13620,21 +13815,6 @@
     ],
     "ui/record-form": [
       "web/packages/app/src/index.tsx"
-    ],
-    "ui/entity-card": [
-      "web/packages/app/src/index.tsx",
-      "web/packages/app/src/observations/Observations.tsx",
-      "web/packages/app/src/widgets/CreateForm.tsx",
-      "web/packages/build/src/ontology/ModelWorkbench.tsx",
-      "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
-      "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
-      "web/packages/mes/src/index.tsx",
-      "web/packages/platform/src/people.tsx",
-      "web/packages/pms/src/index.tsx",
-      "web/packages/ui/src/records/RecordCard.tsx",
-      "web/packages/ui/src/records/RecordCards.tsx",
-      "web/packages/ui/src/records/RecordKanban.tsx",
-      "web/packages/ui/src/records/Records.tsx"
     ],
     "ui/record-list": [
       "web/packages/app/src/index.tsx",
@@ -13927,6 +14107,7 @@
       "web/packages/build/src/projects/ExtensionSettings.tsx",
       "web/packages/build/src/projects/InstalledApplicationHome.tsx",
       "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/projects/studio-guide.tsx",
       "web/packages/build/src/projects/studio-navigation.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",

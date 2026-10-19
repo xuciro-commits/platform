@@ -60,7 +60,7 @@ export function ActionTypes() {
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
   const objectRef = (object: ObjectDraft): Api.AssetRef => ({ app: "build", kind: "object", name: `build.${object.name}` });
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={t("Action types")} description={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one. The host already ships create, edit and archive for every object type and each module its own actions — they are listed below so you declare only what is missing.")} />
+    <PageHeader title={t("Action types")} help={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one. The host already ships create, edit and archive for every object type and each module its own actions — they are listed below so you declare only what is missing.")} />
     <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />
     <Panel title={t("Declared in this organisation")} description={t("{n} action types on {objects} object types", { n: rows.length, objects: drafts.filter((o) => o.actions?.length).length })}>
       <GroupedList<ActionRow> items={rows} id={(row) => row.key} text={(row) => `${row.action.title} ${row.action.name} ${row.object.title} ${row.object.name}`}
@@ -77,7 +77,7 @@ export function ActionTypes() {
           <DraftStatus state={row.object.state} /></>}
         empty={inventory.isLoading ? t("Loading…") : t("No action types yet. Add a lifecycle state and an action to an object type.")} />
     </Panel>
-    <Panel aria-label={t("Published action definitions")} title={t("Published action definitions")} description={t("Read-only action definitions. Open an action to inspect its parameters, rules and access.")}>
+    <Panel aria-label={t("Published action definitions")} title={t("Published action definitions")} help={t("Read-only action definitions. Open an action to inspect its parameters, rules and access.")}>
       <GroupedList<BuiltInRow> items={builtIn} id={(row) => row.key} text={(row) => `${row.definition.action!.title} ${row.key} ${row.object?.entity?.title ?? ""}`}
         onSelect={(row) => open({ view: "definition", params: { ...row.definition.ref, surface: "studio" } })}
         groupings={[

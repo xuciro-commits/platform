@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import { Button, Checkbox, DataTable, Select, t, type ColumnDef } from "@platform/ui";
+import { Button, Checkbox, ContextHelp, DataTable, Select, t, type ColumnDef } from "@platform/ui";
 import { useApplicationWorkspace } from "./application-scope";
 import { useMemo } from "react";
 import type { Access, ObjectRecord } from "../ontology/object-model";
@@ -50,9 +50,9 @@ export function ProjectRoles({ owned }: { owned: OwnedResource[] }) {
   ];
   if (!objects.length) return <p className="p-4 text-sm text-muted">{t("This project has no object drafts yet; their roles appear here.")}</p>;
   return <div className="grid content-start gap-4 p-4">
-    <div>
+    <div className="flex items-center justify-between gap-2">
       <h2 className="text-sm font-semibold">{t("Roles across the application")}</h2>
-      <p className="text-xs text-muted">{t("Each cell: which records the role reads (all · below · unit · own · none) and whether it may create, edit or archive. Objects without roles are open to builders and users alike. Field-level access and the scope fields live on each object.")}</p>
+      <ContextHelp title={t("Roles across the application")}>{t("Each cell: which records the role reads (all · below · unit · own · none) and whether it may create, edit or archive. Objects without roles are open to builders and users alike. Field-level access and the scope fields live on each object.")}</ContextHelp>
     </div>
     {!roles.length && <p className="text-sm text-muted">{t("No roles yet. Add a role on an object's Permissions tab; it then appears here for every object.")}</p>}
     {roles.length > 0 && <DataTable data={objects} columns={columns} getRowId={({ record }) => record.id} searchable={false} rowHeight={76} height={Math.min(480, 30 + objects.length * 76)} />}

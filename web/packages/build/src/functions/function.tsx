@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -29,7 +29,7 @@ export function Functions() {
   const { open } = useApplicationWorkspace();
   if (role("build") !== "builder") return <PageHeader title={t("AI functions")} description={t("Only a builder can edit AI functions.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("AI functions")} description={t("Turn readable record fields into typed suggestions for human review.")}
+    <PageHeader title={t("AI functions")} help={t("Turn readable record fields into typed suggestions for human review.")}
       actions={<Button onClick={() => open({ view: "function", params: { id: "new" } })}>{t("New AI function")}</Button>} />
     <ResourceList source={source} type="build.function" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "function", params: { id: record.id } })} />
   </div>;
@@ -87,7 +87,7 @@ export function FunctionEditor({ id }: { id: string }) {
         <Button size="sm" variant={testing ? "primary" : "ghost"} aria-pressed={testing} disabled={busy || !draft.id || dirty} onClick={() => setTesting(!testing)}>{t("Test")}</Button>
         <ResourceControls type="build.function" record={draft} dirty={dirty} busy={busy} invalid={issues.length > 0 || !draft.id} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
-    <p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p>
+    <ContextHelp title={t("AI function")}><p className="text-xs text-muted">{t("Save the declaration, test fixed cases, then review its release candidate.")}</p></ContextHelp>
     {testing && draft.id && !dirty && <Card className="p-3"><CandidateTest functionId={draft.id} embedded /></Card>}
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed function version {version}. Accepted calls keep their saved inputs and definition.", { version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
@@ -96,7 +96,7 @@ export function FunctionEditor({ id }: { id: string }) {
     <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 xl:grid-cols-[12rem_minmax(0,1fr)_22rem]">
       <Panel role="region" aria-label={t("Function stages")} className="grid content-start gap-2 p-3">
         {stages.map((stage) => <Button key={stage.id} aria-pressed={chosen === stage.id} variant={chosen === stage.id ? "primary" : "ghost"} onClick={() => setChosen(stage.id)}>{stage.title}</Button>)}
-        <p className="text-xs text-muted">{t("Select a stage or use these buttons to edit its properties. Source permissions are checked on every call.")}</p>
+        <ContextHelp title={t("Function stages")}><p className="text-xs text-muted">{t("Select a stage or use these buttons to edit its properties. Source permissions are checked on every call.")}</p></ContextHelp>
       </Panel>
       <FunctionMap draft={draft} source={source?.title} chosen={chosen} onChoose={setChosen} />
       <Panel role="region" aria-label={t("Function properties")} className="grid min-w-0 content-start gap-3 p-3">
@@ -128,7 +128,7 @@ export function FunctionEditor({ id }: { id: string }) {
         {chosen === "model" && <>
           <label className="grid gap-1 text-xs">{t("Model identifier (empty: application default)")}<Input value={draft.model ?? ""} onChange={(e) => change({ model: e.target.value })} placeholder="provider/model" /></label>
           <Checkbox disabled={!!draft.proposal} checked={draft.conversation??false} onChange={conversation=>change({conversation})}>{t("Accept conversation questions and retained call history")}</Checkbox>
-          {draft.conversation&&<p className="text-xs text-muted">{t("Conversation input contains the authorized record, current question and up to eight completed calls. The full input still uses the original byte and token budgets.")}</p>}
+          {draft.conversation&&<ContextHelp title={t("Conversation input")}><p className="text-xs text-muted">{t("Conversation input contains the authorized record, current question and up to eight completed calls. The full input still uses the original byte and token budgets.")}</p></ContextHelp>}
           <label className="grid gap-1 text-xs">{t("Model instructions")}<Textarea rows={8} value={draft.instructions} onChange={(e) => change({ instructions: e.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Maximum tokens")}<Input draftKey="maximum-tokens" type="number" min={1} max={4096} value={draft.maxTokens} onChange={(e) => change({ maxTokens: Number(e.target.value) })} /></label>
         </>}
@@ -166,6 +166,6 @@ function FunctionMap({ draft, source, chosen, onChoose }: { draft: FunctionDraft
     <FlowCanvas label={t("Function map")} catalog={catalog} nodes={nodes} selected={chosen} onSelect={(id) => onChoose(id as Stage)} height={460}
       storeKey={`function-map:${draft.id || "new"}`}
       edges={[{ id: "input", source: "source", sourcePort: "record", target: "model", targetPort: "record" }, { id: "answer", source: "model", sourcePort: "answer", target: "output", targetPort: "answer" }]} />
-    <p className="mt-2 text-xs text-muted">{t("The function returns a suggestion. Human review and business actions remain separate.")}</p>
+    <ContextHelp title={t("Strict output")}><p className="mt-2 text-xs text-muted">{t("The function returns a suggestion. Human review and business actions remain separate.")}</p></ContextHelp>
   </Card>;
 }

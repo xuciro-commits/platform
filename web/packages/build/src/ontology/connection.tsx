@@ -20,7 +20,7 @@ export function Connections() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Connections")} description={t("The systems this tenant reads from. A connection names its credential in the host's secret store; the credential itself never enters a definition or a release.")}
+    <PageHeader title={t("Connections")} help={t("The systems this tenant reads from. A connection names its credential in the host's secret store; the credential itself never enters a definition or a release.")}
       actions={<Button onClick={() => open({ view: "connection", params: { id: "new" } })}>{t("New connection")}</Button>} />
     <ResourceList source={source} type="build.connection" fields={["title", "name", "kind", "address", "state"]} onOpen={(record) => open({ view: "connection", params: { id: record.id } })} />
   </div>;
@@ -61,7 +61,7 @@ export function ConnectionEditor({ id }: { id: string }) {
     setPreview(undefined);
   };
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New connection")} description={t("Choose a built-in connection or an installed protocol package. Preview reads the current draft; Check confirms the saved connection before release.")}
+    <PageHeader title={draft.title || t("New connection")} help={t("Choose a built-in connection or an installed protocol package. Preview reads the current draft; Check confirms the saved connection before release.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "connection" })}>{t("Connections")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>

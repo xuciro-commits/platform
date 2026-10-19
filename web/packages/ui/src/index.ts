@@ -45,6 +45,7 @@ export type { FieldType, EditorProps, Operator, Option, Attachment } from "./fie
 export { defineEntity, columnsFor, recordSchema, inputIssues, activeValues, applyFilters, valueOf, FilterBar, type Entity, type Filter } from "./fields/entity";
 export { EntityCard, PropertyList } from "./components/EntityCard";
 export { PageHeader } from "./components/PageHeader";
+export { ContextHelp } from "./components/ContextHelp";
 export { NotificationList, type NotificationItem, type NotificationListProps } from "./components/NotificationList";
 export {BreadcrumbTrail,type BreadcrumbTrailItem,type BreadcrumbTrailProps} from "./components/BreadcrumbTrail";
 export {AssetDirectory,type AssetDirectoryItem,type AssetDirectoryProps} from "./components/AssetDirectory";

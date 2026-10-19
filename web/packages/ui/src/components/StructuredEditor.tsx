@@ -5,6 +5,8 @@ import { Select, Textarea } from '../primitives/input';
 import { useDraftInput, useInputDrafts } from '../fields/draft';
 import { formatStructuredSource, parseStructuredSource, structuredExample, structuredIssues, type SourceFormat, type StructuredValue } from '../fields/structured-source';
 import { t } from '../i18n';
+import {ContextHelp} from './ContextHelp';
+import {Disclosure} from '../primitives/controls';
 
 export function StructuredEditor({value,onChange,children,scope,fields,fieldInput,validate,onTrial,expectedRevision,readOnly=false,disabled=false,context}: {
   value: StructuredValue; onChange?: (value: StructuredValue) => void; children?: ReactNode; scope: string; fields?: Api.FieldInfo[];
@@ -18,6 +20,9 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
   const input = useDraftInput('source:'+scope,formatStructuredSource(value,format)), buffers=useInputDrafts();
   const [issues,setIssues]=useState<Api.FieldIssue[]>([]),[message,setMessage]=useState(''),[running,setRunning]=useState(false);
   const [trial,setTrial]=useState<{signature:string;result:Api.Simulation}>();
+  const [fieldPath,setFieldPath]=useState('');
+  const fieldEntries=(items:Api.FieldInfo[],prefix=''):{field:Api.FieldInfo;path:string;prefix:string}[]=>items.filter(field=>!field.readOnly).sort((a,b)=>Number(!!b.required)-Number(!!a.required)).flatMap(field=>[{field,path:prefix+field.name,prefix},...(field.fields?fieldEntries(field.fields,prefix+field.name+'.[].'):[])]);
+  const entries=fieldEntries(fields??[]),selectedField=entries.find(entry=>entry.path===fieldPath)??entries[0];
   const signature=JSON.stringify([scope,typeof context==='string'?context:'',expectedRevision,value]), latest=useRef(signature); latest.current=signature;
   const check = (next: StructuredValue) => [...(fields ? structuredIssues(next,fields) : []), ...(validate?.(next) ?? [])].filter((issue,index,all)=>all.findIndex(other=>other.code===issue.code&&other.path.join('.')===issue.path.join('.')&&other.message===issue.message)===index);
   const parse = () => { try { const next=parseStructuredSource(input.text,format), found=check(next);setIssues(found);if(found.length) return;return next; } catch(error) { setMessage(error instanceof Error?error.message:String(error)); } };
@@ -45,7 +50,6 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
       {field.choices?.length? <p className="break-words">{t('Allowed values')}: {field.choices.join(', ')}</p>:null}
       {field.ref&&<p className="break-words">{t('Reference to {type}. Select a record; the source stores its ID.',{type:field.ref})}</p>}
       {!path&&fieldInput&&<fieldset disabled={disabled||running||!sourceValue} className="min-w-0">{fieldInput(field,sourceValue?.[field.name],next=>writeField(field,next))}</fieldset>}
-      {field.fields&&<div className="pl-3">{guide(field.fields,path+field.name+'.[].')}</div>}
     </dd>
   </div>)}</dl>;
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" data-structured-editor={scope}>
@@ -60,13 +64,13 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
         <Button size="sm" onClick={async()=>{try{await navigator.clipboard.writeText(input.text);setMessage(t('Copied.'));}catch{setMessage(t('Copy failed. Select and copy the source.'));}}}>{t('Copy')}</Button>
       </div>}
     </div>
-    {context&&<div className="shrink-0 text-xs text-muted">{context}</div>}
+    {context&&<Disclosure className="shrink-0 text-xs text-muted" summary={t('Operation details')}><div className="py-2 break-words">{context}</div></Disclosure>}
     {mode==='visual'?<div className="flex min-h-0 flex-1 flex-col overflow-auto">{children}</div>:<div className="grid gap-2">
       {!readOnly&&!!fields?.length&&<details className="min-w-0 rounded-md border border-border p-3" open={!Object.values(value).some(item=>item!==undefined)||undefined}>
         <summary className="cursor-pointer text-sm font-medium">{t('Fields and examples')}</summary>
         <div className="mt-3 grid gap-4">
-          <p className="text-xs text-muted">{t('Existing values and declared defaults are included. Optional fields may be omitted. Examples are guidance and are never submitted automatically.')}</p>
-          {guide(fields)}
+          <div className="flex flex-wrap items-center gap-2"><label className="grid min-w-0 flex-1 gap-1 text-xs text-muted">{t('Field reference')}<Select value={selectedField?.path??''} onChange={event=>setFieldPath(event.target.value)}>{entries.map(entry=><option key={entry.path} value={entry.path}>{entry.field.title} · {entry.path}{entry.field.required?' *':''}</option>)}</Select></label><ContextHelp title={t('Fields and examples')}>{t('Existing values and declared defaults are included. Optional fields may be omitted. Examples are guidance and are never submitted automatically.')}</ContextHelp></div>
+          {selectedField&&guide([selectedField.field],selectedField.prefix)}
           <details><summary className="cursor-pointer text-xs font-medium">{t('Example document')}</summary><div className="mt-2 grid gap-2"><p className="text-xs text-muted">{t('Illustrative only. Replace placeholders and choose actual references before applying.')}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{formatStructuredSource(structuredExample(fields),format)}</pre><Button size="sm" className="w-fit" onClick={async()=>{try{await navigator.clipboard.writeText(formatStructuredSource(structuredExample(fields),format));setMessage(t('Copied.'));}catch{setMessage(t('Copy failed. Select and copy the source.'));}}}>{t('Copy example')}</Button></div></details>
         </div>
       </details>}

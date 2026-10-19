@@ -12,7 +12,7 @@ function Reservations() {
   const openRecord = useOpenRecord();
   return (
     <>
-      <PageHeader title={t("Reservations")} description={t("Every stay, from the front desk, the channel and the lodging protocol.")} />
+      <PageHeader title={t("Reservations")} help={t("Every stay, from the front desk, the channel and the lodging protocol.")} />
       <ReservationTable data={reservations} onOpen={(r) => openRecord({ type: "pms.reservation", id: r.id })} />
     </>
   );
