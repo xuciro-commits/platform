@@ -20,6 +20,7 @@ var stateSchema = []string{
 	`create table if not exists runtime_history (tenant text not null, type text not null, id text not null, pos integer not null, image bytea not null, query jsonb not null, primary key(tenant,type,id,pos))`,
 	`create table if not exists runtime_changes (tenant text not null, app text not null, id text not null, key text not null, num integer not null, image bytea not null, primary key(tenant,app,id), unique(tenant,app,key), unique(tenant,app,num))`,
 	`create table if not exists runtime_values (tenant text not null, owner text not null, key text not null, image bytea not null, query jsonb not null, primary key(tenant,owner,key))`,
+	`alter table runtime_values add column if not exists seq bigint not null default 0`,
 	`create table if not exists runtime_results (tenant text not null, app text not null, scope text not null, key text not null, hash text not null, seq bigint not null, body bytea not null, primary key(tenant,app,scope,key))`,
 }
 
@@ -183,7 +184,7 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 		}
 	}
 	for _, v := range d.Values {
-		if _, err := tx.Exec(ctx, `insert into runtime_values (tenant,owner,key,image,query) values ($1,$2,$3,$4,$5::jsonb) on conflict(tenant,owner,key) do update set image=excluded.image,query=excluded.query`, tenant, v.Owner, v.Key, []byte(v.Image), string(v.Image)); err != nil {
+		if _, err := tx.Exec(ctx, `insert into runtime_values (tenant,owner,key,image,query,seq) values ($1,$2,$3,$4,$5::jsonb,$6) on conflict(tenant,owner,key) do update set image=excluded.image,query=excluded.query,seq=excluded.seq`, tenant, v.Owner, v.Key, []byte(v.Image), string(v.Image), position); err != nil {
 			return err
 		}
 	}
@@ -237,16 +238,16 @@ func (j *Postgres) StateChanges(ctx context.Context, tenant, app, key, id string
 	}
 	return out, rows.Err()
 }
-func (j *Postgres) StateValue(ctx context.Context, tenant, owner, key string) (json.RawMessage, error) {
+func (j *Postgres) StateValue(ctx context.Context, tenant, owner, key string, through int64) (json.RawMessage, error) {
 	var raw []byte
-	err := j.pool.QueryRow(ctx, `select image from runtime_values where tenant=$1 and owner=$2 and key=$3`, tenant, owner, key).Scan(&raw)
+	err := j.pool.QueryRow(ctx, `select image from runtime_values where tenant=$1 and owner=$2 and key=$3 and ($4<0 or seq<=$4)`, tenant, owner, key, through).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
 	return raw, err
 }
-func (j *Postgres) StateValues(ctx context.Context, tenant, owner string) (map[string]json.RawMessage, error) {
-	rows, err := j.pool.Query(ctx, `select key,image from runtime_values where tenant=$1 and owner=$2`, tenant, owner)
+func (j *Postgres) StateValues(ctx context.Context, tenant, owner string, through int64) (map[string]json.RawMessage, error) {
+	rows, err := j.pool.Query(ctx, `select key,image from runtime_values where tenant=$1 and owner=$2 and ($3<0 or seq<=$3)`, tenant, owner, through)
 	if err != nil {
 		return nil, err
 	}

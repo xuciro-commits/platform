@@ -1,4 +1,5 @@
 import {widgetDeclarationIssues} from "./page-editor/widget-declaration";
+import {pageEditingProfile} from "./page-editor/compatibility";
 import { sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
@@ -146,7 +147,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
       const canonical=JSON.stringify(previous?.model)!==JSON.stringify(section.model)?canonicalModelSection(section):foldModelPorts(section,authoringEntity);
       return materializeModelSection(canonical,authoringEntity,true);
     });
-    return { ...next, ...synchronizeLoopBindings({...document,...sections.some(s=>s.composite)?{uiProfile:pageVariableContract.composite.requiredUIProfile}:sections.some(s=>s.model)?{uiProfile:pageVariableContract.modelBinding.requiredUIProfile}:{}}, sections) };
+    return { ...next, ...synchronizeLoopBindings({...document,uiProfile:pageEditingProfile({...next,document,sections})}, sections) };
   }, key); };
   const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setRefused(undefined); };
   const diagnostics = pageDraftDiagnostics(session.draft, { object: page?.object ?? "", entity: authoringEntity, catalog, definitions });
@@ -231,7 +232,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     const submitted = session.draft;
     const expectedRevision = baseRevision.current;
     try {
-      const payload={...submitted,document:{...submitted.document,uiProfile:submitted.sections.some(s=>s.composite)?pageVariableContract.composite.requiredUIProfile:pageVariableContract.modelBinding.requiredUIProfile},sections:submitted.sections.map(canonicalModelSection)};
+      const payload={...submitted,document:{...submitted.document,uiProfile:pageEditingProfile(submitted)},sections:submitted.sections.map(canonicalModelSection)};
       const ok = await decide("build.page.edit", { type: "build.page", id }, declarationChanges(payload, declarationValue(savedPage!, declarationFields)), { expectedRevision, onRefused: setRefused });
       if (ok) {
         const result = await query.refetch();

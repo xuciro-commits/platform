@@ -40,6 +40,10 @@ func TestModelBindingDefaultsMigrationAndDeclaredPaths(t *testing.T) {
 	if err := migrated.CheckModelBindings(lookup, nil); err != nil {
 		t.Fatal(err)
 	}
+	migrated.Document.UIProfile = PageUIProfile()
+	if err := migrated.NormalizeModelBindings(lookup); err != nil || migrated.Document.UIProfile != PageUIProfile() {
+		t.Fatal("saving model bindings downgraded a newer declared page profile")
+	}
 	for _, change := range []func(*ModelBinding){func(m *ModelBinding) { m.Type = "missing.type" }, func(m *ModelBinding) { m.Fields = []FieldRef{{Path: []string{"name", "name"}}} }, func(m *ModelBinding) { m.Fields = []FieldRef{{Path: slices.Repeat([]string{"parent"}, 17)}} }, func(m *ModelBinding) { m.Where = []Expr{ExprLiteralValue("text", "true")} }, func(m *ModelBinding) { value := ExprLiteralValue("boolean", true); m.Label = &value }, func(m *ModelBinding) {
 		m.Fields = []FieldRef{{Name: "name", Slot: "recordPicker.labelField"}, {Name: "parent", Slot: "recordPicker.labelField"}}
 	}} {

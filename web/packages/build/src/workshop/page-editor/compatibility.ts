@@ -6,6 +6,16 @@ import type {PageDraft} from "./draft";
 type CompatibilityIssue={section:string;widget:string;version?:number;code:"unknown-widget"|"unsupported-config"};
 export type ProfileUpgrade={baseline:string;from:string;to:string};
 
+/** Model bindings need a minimum profile; they never lower a newer author's
+ * declared profile. Unknown profiles remain errors for the original checker. */
+export function pageEditingProfile(draft:PageDraft):string{
+ const current=draft.document.uiProfile;
+ const required=draft.sections.some(section=>section.composite)?pageVariableContract.composite.requiredUIProfile:
+  draft.sections.some(section=>section.model)?pageVariableContract.modelBinding.requiredUIProfile:undefined;
+ if(!required||!supportsPageUIProfile(current))return current;
+ return Number(current.split('.').at(-1))>=Number(required.split('.').at(-1))?current:required;
+}
+
 /** Compatibility discovery cannot grant a renderer or migrate an unknown version. */
 export function pageCompatibility(draft:PageDraft){
  const issues:CompatibilityIssue[]=[];

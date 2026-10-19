@@ -149,3 +149,51 @@ func TestPostgresMigrationKeepsCurrentScopedIndex(t *testing.T) {
 		t.Fatalf("compatible startup rebuilt the journal index: %d -> %d", before, after)
 	}
 }
+
+func TestPostgresAcceptedRetryAdvancesPosition(t *testing.T) {
+	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
+	if dsn == "" {
+		t.Skip("PLATFORM_TEST_DATABASE not set")
+	}
+	ctx := context.Background()
+	tenant := fmt.Sprintf("retry-position-%d", time.Now().UnixNano())
+	identify := func(raw []byte) (Identity, error) {
+		var body struct {
+			Key string `json:"key"`
+		}
+		err := json.Unmarshal(raw, &body)
+		return Identity{Tenant: tenant, App: "test", Scope: "submission", Key: body.Key, Hash: body.Key}, err
+	}
+	j, err := OpenPostgres(ctx, dsn, identify)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		j.pool.Exec(ctx, `delete from runtime_results where tenant=$1`, tenant)
+		j.pool.Exec(ctx, `delete from journal where tenant=$1`, tenant)
+		j.Close()
+	}()
+	if _, err := j.Entries(ctx, tenant, 0); err != nil {
+		t.Fatal(err)
+	}
+	entry := func(key string) Entry {
+		body, _ := json.Marshal(map[string]string{"tenant": tenant, "app": "test", "kind": "record-batch", "key": key, "requestHash": key})
+		return Entry{App: "test", Kind: "accepted-result", Principal: json.RawMessage(`{}`), Body: body, At: time.Now().UTC()}
+	}
+	first := entry("one")
+	original, err := j.AppendAccepted(ctx, tenant, first, "one", "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A lost commit answer can leave the process's next position behind SQL.
+	j.next[tenant] = 1
+	if repeated, err := j.AppendAccepted(ctx, tenant, first, "one", "one"); err != nil || !bytes.Equal(repeated, original) || j.Position(tenant) != 1 {
+		t.Fatalf("retry did not recover the committed position: %v", err)
+	}
+	if _, err := j.AppendAccepted(ctx, tenant, entry("two"), "two", "two"); err != nil || j.Position(tenant) != 2 {
+		t.Fatalf("next accepted input could not follow the recovered position: %v", err)
+	}
+	if _, err := j.AppendAccepted(ctx, tenant, first, "one", "one"); err != nil || j.Position(tenant) != 2 {
+		t.Fatalf("older retry moved the current position backwards: %v", err)
+	}
+}

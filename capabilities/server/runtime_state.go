@@ -307,10 +307,12 @@ func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
 		a.AcceptedLedger().UseChangeArchive(changeArchive{store, t.ID, a.Manifest().ID})
 		if owner, ok := a.(platform.AcceptedHistoryApp); ok {
 			id := a.Manifest().ID
-			owner.UseAcceptedHistory(func() (json.RawMessage, error) { return store.StateValue(context.Background(), t.ID, "app-state", id) })
+			owner.UseAcceptedHistory(func() (json.RawMessage, error) {
+				return store.StateValue(context.Background(), t.ID, "app-state", id, -1)
+			})
 		}
 	}
-	t.committed.useStorage(store, t.ID)
+	t.committed.useStorage(store, t.ID, func() int64 { return j.Position(t.ID) })
 	return nil
 }
 func sameStoredJSON(a, b json.RawMessage) bool {

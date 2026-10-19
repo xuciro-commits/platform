@@ -334,9 +334,12 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 		}
 		p.Sections[i] = next
 	}
-	p.Document.UIProfile = PageModelProfile
+	required := PageModelProfile
 	if slices.ContainsFunc(p.Sections, func(s Section) bool { return s.Composite != nil }) {
-		p.Document.UIProfile = PageCompositeProfile
+		required = PageCompositeProfile
+	}
+	if !PageUIProfileSupports(p.Document.UIProfile, required) {
+		p.Document.UIProfile = required
 	}
 	return nil
 }

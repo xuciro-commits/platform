@@ -105,6 +105,15 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if len(row.recordHistory()) != 5 {
 		t.Fatal("committed future history leaked into the old working set")
 	}
+	if len(live.committed.answer("stock/"+next.GetSubmission().GetIdempotencyKey())) != 0 {
+		t.Fatal("unapplied SQL answer bypassed the original result application")
+	}
+	if got, refusal := live.Submit(memberOf(t, live, "ana"), next.GetSubmission(), at.Add(time.Minute)); refusal != nil || !proto.Equal(got, next) {
+		t.Fatalf("unknown-outcome retry did not apply its original result: %v", refusal)
+	}
+	if qty := live.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Qty; qty != 6 || j.Position(id) != position+1 {
+		t.Fatalf("unknown-outcome retry returned without applying or appended twice: %d", qty)
+	}
 	restored := compose()
 	deployment := Deployment{SnapshotEvery: 1}
 	if err = deployment.restoreTenants(ctx, j, "build-b", []*Tenant{restored}, map[string]int64{}, map[string]bool{}); err != nil || restored.quarantined() {

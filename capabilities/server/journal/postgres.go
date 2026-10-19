@@ -381,21 +381,28 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	read := func() ([]byte, error) {
 		var raw []byte
 		var priorHash string
-		lookupErr := j.pool.QueryRow(ctx, `select body,hash from runtime_results where tenant=$1 and app=$2 and scope=$3 and key=$4`, tenant, e.App, identity.Scope, key).Scan(&raw, &priorHash)
+		var priorPosition int64
+		advance := func() {
+			j.mu.Lock()
+			j.next[tenant] = max(j.next[tenant], priorPosition+1)
+			j.mu.Unlock()
+		}
+		lookupErr := j.pool.QueryRow(ctx, `select body,hash,seq from runtime_results where tenant=$1 and app=$2 and scope=$3 and key=$4`, tenant, e.App, identity.Scope, key).Scan(&raw, &priorHash, &priorPosition)
 		if lookupErr == nil {
 			if priorHash != hash {
 				return nil, ErrAcceptedConflict
 			}
+			advance()
 			return raw, nil
 		}
 		if !errors.Is(lookupErr, pgx.ErrNoRows) {
 			return nil, lookupErr
 		}
-		err := j.pool.QueryRow(ctx, `select body from journal where tenant=$1 and app=$2
+		err := j.pool.QueryRow(ctx, `select body,seq from journal where tenant=$1 and app=$2
 			and kind='accepted-result' and coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}',
 				body #>> '{receipt,submission,idempotencyKey}')=$3
 			and `+acceptedScopeSQL+`=$4`,
-			tenant, e.App, key, identity.Scope).Scan(&raw)
+			tenant, e.App, key, identity.Scope).Scan(&raw, &priorPosition)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
@@ -410,6 +417,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		if savedHash != hash {
 			return nil, ErrAcceptedConflict
 		}
+		advance()
 		return raw, nil
 	}
 	if prior, err := read(); err != nil || prior != nil {

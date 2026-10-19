@@ -3,7 +3,7 @@ import type * as Api from "../../packages/kernel/src/gen/host";
 
 test.use({ baseURL: "http://127.0.0.1:18497" });
 
-test("MES shop orders move to a published editable page while retaining the original actions", async ({ page, request }, info) => {
+test("MES shop orders move to a published editable page while retaining the original actions", async ({ page, request, editor }, info) => {
   test.setTimeout(120_000);
   const supervisor = new Builder(request, "supervisor");
   const master = await supervisor.read<{ products: { id: string }[] }>("master");
@@ -19,6 +19,26 @@ test("MES shop orders move to a published editable page while retaining the orig
   const drafts = await created.json() as Api.PackageDraftResult;
   const pageDraft = drafts.drafts.find(draft => draft.ref.kind === "page")!;
   expect((await supervisor.definitions<any>()).some(item => item.ref.app === "build" && item.ref.name === "mesworkspace")).toBe(false);
+  await editor.open(supervisor, pageDraft.id, "source");
+  const source = page.getByRole("textbox", { name: "Configuration source", exact: true });
+  const declaration = JSON.parse(await source.inputValue());
+  const original = structuredClone(declaration);
+  declaration.title = "Manufacturing orders";
+  await source.fill(JSON.stringify(declaration, null, 2));
+  await page.getByRole("button", { name: "Apply source", exact: true }).click();
+  await editor.visual();
+  await editor.save();
+  await expect.poll(async () => (await supervisor.record<any>("build.page", pageDraft.id)).title).toBe("Manufacturing orders");
+  const savedPage = await supervisor.record<any>("build.page", pageDraft.id);
+  expect(savedPage.object).toEqual(original.object);
+  // Saving this retained flat page applies the existing model-binding
+  // conversion. Check the whole converted declaration, including field order.
+  expect(savedPage.sections).toEqual(original.sections.map(({ fields, ...section }: any) => ({
+    ...section,
+    model: { type: original.object, ...(fields ? { fields: fields.map((name: string) => ({ name })) } : {}) },
+  })));
+  expect(savedPage.document).toEqual(original.document);
+  expect((await supervisor.definitions<any>()).some(item => item.ref.app === "build" && item.ref.kind === "page" && item.ref.name === "mesorders")).toBe(false);
   await supervisor.activate(await supervisor.candidate([{ kind: "page", id: pageDraft.id }, { kind: "app", id: drafts.applicationID }]));
   const installed = await supervisor.definitions<any>();
   expect(installed.find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === "mesworkspace")?.application.extends).toEqual({ app: "mes", kind: "app", name: "mes" });

@@ -15,6 +15,8 @@ import (
 // composite commands applied. Guarded by the tenant's lock; rebuilt by replay
 // and carried by snapshots. Retries read here before any decision runs.
 type committed struct {
+	position            func() int64
+	appliedPosition     int64
 	pending             map[string]bool
 	storage             journal.RuntimeState
 	tenant              string
@@ -28,6 +30,7 @@ type committed struct {
 }
 
 func (c *committed) saveAnswer(key string, raw json.RawMessage) {
+	c.advance()
 	if c.answers == nil {
 		c.answers = map[string]json.RawMessage{}
 	}
@@ -35,6 +38,7 @@ func (c *committed) saveAnswer(key string, raw json.RawMessage) {
 }
 
 func (c *committed) saveInput(key string, raw json.RawMessage) {
+	c.advance()
 	if c.inputs == nil {
 		c.inputs = map[string]json.RawMessage{}
 	}
@@ -42,6 +46,7 @@ func (c *committed) saveInput(key string, raw json.RawMessage) {
 }
 
 func (c *committed) saveCompositeAnswer(key string, raw json.RawMessage) {
+	c.advance()
 	if c.compositeAnswers == nil {
 		c.compositeAnswers = map[string]json.RawMessage{}
 	}
@@ -49,6 +54,7 @@ func (c *committed) saveCompositeAnswer(key string, raw json.RawMessage) {
 }
 
 func (c *committed) saveComposite(key, digest string) {
+	c.advance()
 	if c.composites == nil {
 		c.composites = map[string]string{}
 	}
@@ -79,6 +85,7 @@ func (c *committed) saveDecisionDefinition(app, change string, definition *Decis
 	if definition == nil {
 		return
 	}
+	c.advance()
 	if c.decisionDefinitions == nil {
 		c.decisionDefinitions = map[string]*DecisionDefinition{}
 	}
@@ -89,6 +96,7 @@ func (c *committed) saveSchemaVersion(app, key string, binding *platform.SchemaV
 	if binding == nil {
 		return
 	}
+	c.advance()
 	if c.schemaVersions == nil {
 		c.schemaVersions = map[string]platform.SchemaVersion{}
 	}
@@ -97,10 +105,17 @@ func (c *committed) saveSchemaVersion(app, key string, binding *platform.SchemaV
 
 // Historical answers are read only when requested. New committed images have
 // already been written in the accepted transaction before these save methods.
-func (c *committed) useStorage(s journal.RuntimeState, tenant string) {
+func (c *committed) useStorage(s journal.RuntimeState, tenant string, position func() int64) {
 	c.storage, c.tenant = s, tenant
+	c.position = position
+	c.advance()
 	c.answers, c.inputs, c.compositeAnswers = nil, nil, nil
 	c.refusals, c.composites, c.schemaVersions, c.decisionDefinitions = nil, nil, nil, nil
+}
+func (c *committed) advance() {
+	if c.position != nil {
+		c.appliedPosition = c.position()
+	}
 }
 func (c *committed) stored(owner, key string) json.RawMessage {
 	if c.pending[owner+"/"+key] {
@@ -109,7 +124,7 @@ func (c *committed) stored(owner, key string) json.RawMessage {
 	if c.storage == nil {
 		return nil
 	}
-	raw, err := c.storage.StateValue(context.Background(), c.tenant, owner, key)
+	raw, err := c.storage.StateValue(context.Background(), c.tenant, owner, key, c.appliedPosition)
 	if err != nil {
 		panic(err)
 	}
@@ -119,7 +134,7 @@ func storedValues[T any](c *committed, owner string, memory map[string]T) map[st
 	if c.storage == nil {
 		return maps.Clone(memory)
 	}
-	values, err := c.storage.StateValues(context.Background(), c.tenant, owner)
+	values, err := c.storage.StateValues(context.Background(), c.tenant, owner, c.appliedPosition)
 	if err != nil {
 		panic(err)
 	}
@@ -197,6 +212,7 @@ func (c *committed) allDecisionDefinitions() map[string]*DecisionDefinition {
 	return storedValues(c, "decision-definition", c.decisionDefinitions)
 }
 func (c *committed) saveRefusal(key string, r refusedResult) {
+	c.advance()
 	if c.refusals == nil {
 		c.refusals = map[string]refusedResult{}
 	}

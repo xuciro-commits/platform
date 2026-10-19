@@ -39,8 +39,8 @@ type RuntimeState interface {
 	StateCandidates(context.Context, string, string, []StateFilter, string, int, int64) ([]string, error)
 	StateHistory(context.Context, string, string, string, int, int) ([]json.RawMessage, error)
 	StateChanges(context.Context, string, string, string, string, int) ([][]byte, error)
-	StateValue(context.Context, string, string, string) (json.RawMessage, error)
-	StateValues(context.Context, string, string) (map[string]json.RawMessage, error)
+	StateValue(context.Context, string, string, string, int64) (json.RawMessage, error)
+	StateValues(context.Context, string, string, int64) (map[string]json.RawMessage, error)
 }
 
 // StateFilter only reduces the candidate IDs an owner examines. The original

@@ -2,7 +2,9 @@
 
 验证方法与人工走查入口。环境、账号和服务地址归 [部署说明](../deploy/local/README.md)。 本地业务入口固定为酒店 `8495`、制造 `8490`；WMS 复用所在工作区。酒店的 `hotel-a` → `hotel-test` 用于同宿主晋级；改存储的 v2 先晋级不激活，再到目标审阅升级计划。
 
-技术转型（ADR-0063 / ADR-0054）：`make test-go PKG='. ./platform ./journal' RUN='TestAgent|TestActionInputSchema|TestModelToolStream|TestAnthropicToolStream|TestMCP|TestKnowledge|TestPostgresVector|TestPostgresMigration|TestSnapshotRestoreFormats|TestProjection|TestPostgresProjection|TestPostgresRuntimeState'` 检查完整调用与重启、输入描述、工具流与用量、中文/JSON、兼容快照、投影表保留及历史后缀、SQL 状态与过滤后检索。PostgreSQL 相关项需要受控 `PLATFORM_TEST_DATABASE`；未配置时跳过，不能报告数据库通过。内核历史外置的等价检查用 `make test-go PKG=platformkernel/kernel RUN='TestChangeArchive|TestFactArchive|TestIdempotencySequences'`。浏览器复用 `dual-mode`、`application-studio`、`mes-actions`，不使用像素断言。
+技术转型（ADR-0063 / ADR-0054）：`make test-go PKG='. ./platform ./journal' RUN='TestAgent|TestActionInputSchema|TestModelToolStream|TestAnthropicToolStream|TestMCP|TestKnowledge|TestPostgresVector|TestPostgresMigration|TestPostgresAcceptedRetryAdvancesPosition|TestSnapshotRestoreFormats|TestProjection|TestPostgresProjection|TestPostgresRuntimeState'` 检查完整调用与重启、输入描述、工具流与用量、中文/JSON、兼容快照、投影表保留及历史后缀、SQL 状态与过滤后检索。PostgreSQL 相关项需要受控 `PLATFORM_TEST_DATABASE`；未配置时跳过，不能报告数据库通过。内核历史外置的等价检查用 `make test-go PKG=platformkernel/kernel RUN='TestChangeArchive|TestFactArchive|TestIdempotencySequences'`。浏览器复用 `dual-mode`、`application-studio`、`mes-actions`，不使用像素断言。
+
+MES 源码作者任务由 `mes-actions` 检查：打开 Package 生成的原页面草稿，修改源码标题，切回画布保存，核对对象、字段顺序、动作和布局按原绑定转换保留，且声明 profile 不下降；尚未发布时运行定义保持原状，再共同激活后沿原业务流程操作。
 
 组件作者声明（ADR-0048）：`pnpm --dir web --filter @platform/kernel test` 检查按 widget 区分的作者类型与保留的扁平 Section，Build 原 Node 检查覆盖清单派生的字段/端口/属性与注册表，UI 的 StructuredEditor 检查入口偏好。普通属性只维护运行声明和对应显示行为，作者类型、允许字段、普通 Inspector 和属性校验从同一清单生成；复杂业务绑定仍需要原专用编辑。任务耗时仅在实际计时后报告，不以自动测试时长冒充构建者操作时间。
 
