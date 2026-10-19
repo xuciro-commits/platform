@@ -5,10 +5,12 @@
 **状态：** 已接受 (2026-09-28, #135)。项目负责人按推荐方案接受了 D1–D4。ADR-0038 已经接受了基于结果的恢复、PostgreSQL 以及全新的一次性开发基准。本阶段准入关卡在实施前确定提交单元、状态暂存、故障边界和数据格式。接受本 ADR 并不直接改变当前运行的日志机制。
 
 **后继决定：** [ADR-0037](0037-submission-assets-and-host-boundaries.md) 收敛全部权威状态新写入口，取代本 ADR 的选择加入式增量迁移安排；本 ADR 的持久接受、纯应用、租户隔离、结果族格式及当前 As built 继续有效。七类接口退出须先迁移其账本/状态/事实/发布等义务；历史输入与旧结果格式的必要恢复保留，不删除 journal 存储，不把仅记录目标说成已统一实现。
+**恢复存储后继：** [ADR-0063](0063-postgresql-runtime-state.md) 规定 PostgreSQL 正式状态与按需历史、显式宿主/owner 快照格式及兼容恢复；本 ADR 的持久接受、旧结果读取、纯应用和权限保证继续有效。构建摘要不再单独决定新版快照资格，未声明恢复格式的 owner 与旧快照仍保留原资格。
+
 
 ## 背景
 
-目前 `Tenant.Submit`（`capabilities/server/host.go`）允许应用修改租户状态，随后才调用 `journal`，其 `Record` 回调将 `Entry` 追加到 PostgreSQL（`deploy.go`，`journal.go`）。`Entry` 保存输入、成员和流转版本；`Tenant.Replay` 再次调用当前的应用代码。`CheckReplay` 验证同代码重构与出站静默，快照绑定到写入它们的代码（`snapshot.go`）。追加失败会通过 `log.Fatalf` 终止进程，而不会回滚内存中的更改。审批、工作任务、出站效果、序列号、动态定义和智能体执行结果目前已经跨越输入路径，因此单记录补丁无法建立目标保证。当前的代码事实与目标承诺在 Platform §2.7–2.9 与 §10.3 D 中作了区分。
+目前 `Tenant.Submit`（`capabilities/server/host.go`）允许应用修改租户状态，随后才调用 `journal`，其 `Record` 回调将 `Entry` 追加到 PostgreSQL（`deploy.go`，`journal.go`）。`Entry` 保存输入、成员和流转版本；`Tenant.Replay` 再次调用当前的应用代码。`CheckReplay` 验证同代码重构与出站静默，当时快照绑定到写入它们的代码；现行兼容恢复见 ADR-0063（`snapshot.go`）。追加失败会通过 `log.Fatalf` 终止进程，而不会回滚内存中的更改。审批、工作任务、出站效果、序列号、动态定义和智能体执行结果目前已经跨越输入路径，因此单记录补丁无法建立目标保证。当前的代码事实与目标承诺在 Platform §2.7–2.9 与 §10.3 D 中作了区分。
 
 | 当前参考依据 (2026-09-28 调研) | 对此处的贡献 |
 |---|---|

@@ -234,7 +234,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		et := d.records.of(c, reflect.TypeOf(entity))
 		id := recordOf(copyOf(et.info.Go, entity)).ID
 		ref := et.info.Type + "/" + id
-		history := len(et.rows.get(id).history)
+		history := et.rows.get(id).historyLength()
 		d.records.mu.Unlock()
 		if origin := d.callbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
 			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&

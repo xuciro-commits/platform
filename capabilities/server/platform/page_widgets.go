@@ -4,7 +4,9 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
+	"strings"
 )
 
 // The application API owns this build-time UI contract (ADR-0015). The same
@@ -26,19 +28,20 @@ type pageModelPort struct {
 }
 
 type pageWidgetContract struct {
-	ModelPorts        []pageModelPort   `json:"modelPorts,omitempty"`
-	ComponentID       string            `json:"componentID"`
-	ConfigVersion     int               `json:"configVersion"`
-	RequiredUIProfile string            `json:"requiredUIProfile"`
-	SelectionMode     string            `json:"selectionMode"`
-	BindingKinds      []string          `json:"bindingKinds"`
-	PropsSchema       ValueSchema       `json:"propsSchema"`
-	Defaults          map[string]any    `json:"defaults"`
-	InputPorts        []pageWidgetPort  `json:"inputPorts"`
-	OutputPorts       []pageWidgetPort  `json:"outputPorts"`
-	Events            []pageWidgetEvent `json:"events"`
-	Slots             []pageWidgetSlot  `json:"slots"`
-	LayoutPreferences struct {
+	ModelPorts          []pageModelPort   `json:"modelPorts,omitempty"`
+	ConfigurationFields []string          `json:"configurationFields,omitempty"`
+	ComponentID         string            `json:"componentID"`
+	ConfigVersion       int               `json:"configVersion"`
+	RequiredUIProfile   string            `json:"requiredUIProfile"`
+	SelectionMode       string            `json:"selectionMode"`
+	BindingKinds        []string          `json:"bindingKinds"`
+	PropsSchema         ValueSchema       `json:"propsSchema"`
+	Defaults            map[string]any    `json:"defaults"`
+	InputPorts          []pageWidgetPort  `json:"inputPorts"`
+	OutputPorts         []pageWidgetPort  `json:"outputPorts"`
+	Events              []pageWidgetEvent `json:"events"`
+	Slots               []pageWidgetSlot  `json:"slots"`
+	LayoutPreferences   struct {
 		Frame string `json:"frame"`
 	} `json:"layoutPreferences"`
 	LifecyclePolicy *struct {
@@ -75,6 +78,7 @@ type pageWidgetPort struct {
 	Type              string `json:"type"`
 	RequiredUIProfile string `json:"requiredUIProfile"`
 	Writable          bool   `json:"writable"`
+	StateWritable     bool   `json:"stateWritable,omitempty"`
 }
 type pageWidgetEvent struct {
 	RequiredUIProfile string `json:"requiredUIProfile,omitempty"`
@@ -85,7 +89,14 @@ type pageWidgetEvent struct {
 }
 
 type pageUIContract struct {
-	Layout struct {
+	// Documentless freezes the retained flat Section reader. New components
+	// and properties use documents; this list does not grow with authoring.
+	Documentless struct {
+		Widgets []string `json:"widgets"`
+		Fields  []string `json:"fields"`
+	} `json:"documentless"`
+	Features map[string]string `json:"features"`
+	Layout   struct {
 		PresentationProfile string `json:"presentationProfile"`
 		MaxPadding          int    `json:"maxPadding"`
 		RequiredUIProfile   string `json:"requiredUIProfile"`
@@ -114,6 +125,11 @@ var pageWidgets = func() pageUIContract {
 			panic("invalid page widget contract identity")
 		}
 		seen[widget.ComponentID] = true
+		for _, name := range widget.ConfigurationFields {
+			if _, ok := sectionJSONField(reflect.TypeFor[Section](), []string{name}); !ok {
+				panic("unknown page widget configuration field " + name)
+			}
+		}
 		slots := map[string]bool{}
 		for _, slot := range widget.Slots {
 			if slot.ID == "" || slots[slot.ID] || slot.Title == "" || !slices.Contains([]string{"before", "after"}, slot.Placement) || !slices.Contains(manifest.SupportedProfiles, slot.RequiredUIProfile) || len(slot.AllowedLayouts) == 0 || len(widget.Slots) > 4 {
@@ -128,7 +144,8 @@ var pageWidgets = func() pageUIContract {
 		}
 		fields := map[string]bool{}
 		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
-			if port.ID == "" || fields[port.BindingField] || !slices.Contains([]string{"collectionOutputVariable", "sceneSampleCollectionVariable", "sceneSampleVariable", "scenePartVariable", "observationHistoryVariable", "observationContextVariable", "observationSignalVariable", "observationThresholdVariable", "observationRowsVariable", "observationCountVariable", "observationMeanVariable", "notepadVariable", "analysisXVariable", "analysisYVariable", "analysisCountVariable", "analysisMeanVariable", "avatar.contextVariable", "avatar.contextCollectionVariable", "commentDraftVariable", "fileVariable", "pdfPageVariable", "recordSetVariable", "recordVariable", "collectionVariable", "selectionVariable", "filterVariable", "selectionSetVariable", "countVariable", "progressValueVariable", "progressTotalVariable", "gaugeValueVariable", "statisticsVariable", "rangeMinVariable", "rangeMaxVariable", "booleanVariable", "choiceVariable", "choiceSetVariable", "dateVariable", "alertValueVariable", "sparklineDecimalVariable", "sparklineNumberVariable", "groupValueVariable", "groupSetVariable", "rowValueVariable", "rowSetVariable", "columnValueVariable", "columnSetVariable", "pickerValueVariable", "enabledWhen"}, port.BindingField) || !slices.Contains([]string{"record", "record-set", "object-set", "filter", "boolean", "decimal", "number", "statistics", "string", "string-set"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) {
+			field, found := sectionJSONField(reflect.TypeFor[Section](), strings.Split(port.BindingField, "."))
+			if port.ID == "" || fields[port.BindingField] || (port.BindingField != "enabledWhen" && (!found || field.Kind() != reflect.String)) || !slices.Contains([]string{"record", "record-set", "object-set", "filter", "boolean", "decimal", "number", "statistics", "string", "string-set"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) || port.StateWritable && !port.Writable {
 				panic("invalid page widget port")
 			}
 			fields[port.BindingField] = true
@@ -156,12 +173,69 @@ var pageWidgets = func() pageUIContract {
 			panic(err)
 		}
 	}
+	for _, profile := range manifest.Features {
+		if !slices.Contains(manifest.SupportedProfiles, profile) {
+			panic("invalid page feature profile")
+		}
+	}
 	return manifest
 }()
 
-// PageUIManifest returns the exact descriptor used by api-types and Catalog.
-func PageUIManifest() string { return string(pageWidgetJSON) }
-func PageUIProfile() string  { return pageWidgets.UIProfile }
+// PageUIManifest exports the original declarations and their derived author
+// fields. Properties and ports need no second list when their shape grows.
+func PageUIManifest() string {
+	var manifest map[string]json.RawMessage
+	_ = json.Unmarshal(pageWidgetJSON, &manifest)
+	var widgets []map[string]json.RawMessage
+	_ = json.Unmarshal(manifest["widgets"], &widgets)
+	for i, widget := range pageWidgets.Widgets {
+		widgets[i]["authoringFields"], _ = json.Marshal(widget.authoringFields())
+	}
+	manifest["widgets"], _ = json.Marshal(widgets)
+	raw, _ := json.MarshalIndent(manifest, "", "  ")
+	return string(raw)
+}
+
+func (w pageWidgetContract) authoringFields() []string {
+	fields := append([]string{"id", "widget", "configVersion"}, w.ConfigurationFields...)
+	for field := range w.PropsSchema.Properties {
+		fields = append(fields, field)
+	}
+	for _, port := range append(slices.Clone(w.InputPorts), w.OutputPorts...) {
+		if port.BindingField != "enabledWhen" {
+			fields = append(fields, strings.Split(port.BindingField, ".")[0])
+		}
+	}
+	slices.Sort(fields)
+	return slices.Compact(fields)
+}
+
+// configVersion belongs to a component's configuration. requiredUIProfile and
+// feature profiles describe runtime semantics. An additive ordinary property
+// changes its component declaration, not the global UI profile or this reader.
+func checkDocumentlessSection(section Section) error {
+	if !slices.Contains(pageWidgets.Documentless.Widgets, section.Widget) {
+		return fmt.Errorf("widget %s requires a page document", section.Widget)
+	}
+	raw, err := json.Marshal(section)
+	if err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	for field := range fields {
+		if !slices.Contains(pageWidgets.Documentless.Fields, field) {
+			return fmt.Errorf("widget property %s requires a page document", field)
+		}
+	}
+	return nil
+}
+
+func pageFeatureSupported(profile, feature string) bool {
+	return PageUIProfileSupports(profile, pageWidgets.Features[feature])
+}
+
+func PageUIProfile() string { return pageWidgets.UIProfile }
 func WidgetWritesSelection(id string) bool {
 	w := pageWidget(id)
 	return w != nil && w.SelectionMode == "write"
@@ -210,12 +284,68 @@ func widgetEvent(id, event string) *pageWidgetEvent {
 	return nil
 }
 func (s Section) variablePorts() map[string]string {
-	ports := map[string]string{"collectionOutputVariable": s.CollectionOutputVariable, "sceneSampleCollectionVariable": s.SceneSampleCollectionVariable, "sceneSampleVariable": s.SceneSampleVariable, "scenePartVariable": s.ScenePartVariable, "observationHistoryVariable": s.ObservationHistoryVariable, "observationContextVariable": s.ObservationContextVariable, "observationSignalVariable": s.ObservationSignalVariable, "observationThresholdVariable": s.ObservationThresholdVariable, "observationRowsVariable": s.ObservationRowsVariable, "observationCountVariable": s.ObservationCountVariable, "observationMeanVariable": s.ObservationMeanVariable, "notepadVariable": s.NotepadVariable, "analysisXVariable": s.AnalysisXVariable, "analysisYVariable": s.AnalysisYVariable, "analysisCountVariable": s.AnalysisCountVariable, "analysisMeanVariable": s.AnalysisMeanVariable, "commentDraftVariable": s.CommentDraftVariable, "fileVariable": s.FileVariable, "pdfPageVariable": s.PdfPageVariable, "recordSetVariable": s.RecordSetVariable, "sparklineDecimalVariable": s.SparklineDecimalVariable, "sparklineNumberVariable": s.SparklineNumberVariable, "groupValueVariable": s.GroupValueVariable, "groupSetVariable": s.GroupSetVariable, "rowValueVariable": s.RowValueVariable, "rowSetVariable": s.RowSetVariable, "columnValueVariable": s.ColumnValueVariable, "columnSetVariable": s.ColumnSetVariable, "pickerValueVariable": s.PickerValueVariable, "alertValueVariable": s.AlertValueVariable, "dateVariable": s.DateVariable, "choiceSetVariable": s.ChoiceSetVariable, "choiceVariable": s.ChoiceVariable, "booleanVariable": s.BooleanVariable, "rangeMinVariable": s.RangeMinVariable, "rangeMaxVariable": s.RangeMaxVariable, "statisticsVariable": s.StatisticsVariable, "gaugeValueVariable": s.GaugeValueVariable, "progressValueVariable": s.ProgressValueVariable, "progressTotalVariable": s.ProgressTotalVariable, "countVariable": s.CountVariable, "recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable, "selectionSetVariable": s.SelectionSetVariable}
-	if s.Avatar != nil {
-		ports["avatar.contextVariable"] = s.Avatar.ContextVariable
-		ports["avatar.contextCollectionVariable"] = s.Avatar.ContextCollectionVariable
+	ports := map[string]string{}
+	for _, widget := range pageWidgets.Widgets {
+		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
+			if port.BindingField == "enabledWhen" {
+				continue // This port belongs to the layout node, not its Section.
+			}
+			if _, seen := ports[port.BindingField]; !seen {
+				ports[port.BindingField] = sectionJSONText(reflect.ValueOf(s), strings.Split(port.BindingField, "."))
+			}
+		}
 	}
 	return ports
+}
+
+// The retained Section wire format is flat. All manifest paths meet it here,
+// rather than requiring another field list whenever a widget gains a port.
+func sectionJSONField(typ reflect.Type, path []string) (reflect.Type, bool) {
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if len(path) == 0 {
+		return typ, true
+	}
+	if typ.Kind() != reflect.Struct {
+		return nil, false
+	}
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.Anonymous {
+			if found, ok := sectionJSONField(field.Type, path); ok {
+				return found, true
+			}
+		}
+		if strings.Split(field.Tag.Get("json"), ",")[0] == path[0] {
+			return sectionJSONField(field.Type, path[1:])
+		}
+	}
+	return nil, false
+}
+
+func sectionJSONText(value reflect.Value, path []string) string {
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return ""
+		}
+		value = value.Elem()
+	}
+	if len(path) == 0 {
+		return value.String()
+	}
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Type().Field(i)
+		if field.Anonymous {
+			if _, ok := sectionJSONField(field.Type, path); ok {
+				return sectionJSONText(value.Field(i), path)
+			}
+		}
+		if strings.Split(field.Tag.Get("json"), ",")[0] == path[0] {
+			return sectionJSONText(value.Field(i), path[1:])
+		}
+	}
+	return ""
 }
 
 // The same Section references drive member visibility and port validation.
@@ -243,7 +373,7 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 	if s.ChartVariant != "" && (s.Widget != "chart" || s.Mark != "arc" || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.ChartPresentation.RequiredUIProfile) || !slices.Contains(pageWidgets.Runtime.ChartPresentation.Variants, s.ChartVariant)) {
 		return fmt.Errorf("chart variant needs its pie profile and mark")
 	}
-	if s.Mark != "" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.24") {
+	if s.Mark != "" && !pageFeatureSupported(d.UIProfile, "chartMark") {
 		return fmt.Errorf("chart mark requires UI profile v2.24")
 	}
 	if w := pageWidget(s.Widget); w != nil && !PageUIProfileSupports(d.UIProfile, w.RequiredUIProfile) {
@@ -267,7 +397,7 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 		port := widgetPort(s.Widget, field)
 		v, ok := d.Variables[id]
 		readonlyIndexChoice := field == "choiceVariable" && s.ChoiceInput != nil && (s.ChoiceInput.Variant == "steps" || s.ChoiceInput.Variant == "tabs") && v.Mode == "constant"
-		if port == nil || !ok || !PageUIProfileSupports(d.UIProfile, port.RequiredUIProfile) || v.Type != port.Type || port.Writable && field != "selectionSetVariable" && !readonlyIndexChoice && !(v.Writable || (field == "observationSignalVariable" || field == "observationThresholdVariable" || field == "observationRowsVariable" || field == "notepadVariable" || field == "analysisXVariable" || field == "analysisYVariable" || field == "rangeMinVariable" || field == "rangeMaxVariable" || field == "booleanVariable" || field == "choiceVariable" || field == "choiceSetVariable" || field == "dateVariable" || field == "pickerValueVariable" || field == "rowValueVariable" || field == "rowSetVariable" || field == "columnValueVariable" || field == "columnSetVariable" || field == "groupValueVariable" || field == "groupSetVariable" || field == "commentDraftVariable" || field == "fileVariable" || field == "pdfPageVariable" || field == "scenePartVariable") && v.Mode == "state") {
+		if port == nil || !ok || !PageUIProfileSupports(d.UIProfile, port.RequiredUIProfile) || v.Type != port.Type || port.Writable && field != "selectionSetVariable" && !readonlyIndexChoice && !(v.Writable || port.StateWritable && v.Mode == "state") {
 			return fmt.Errorf("widget %s has an invalid %s port", s.Widget, field)
 		}
 	}
@@ -299,27 +429,19 @@ func checkPageWidget(section Section) error {
 		}
 		// Only presentation properties are validated here. Asset references,
 		// selections, queries and actions retain their original host owners.
-		values := map[string]string{"dateKind": section.DateKind, "dateOffset": section.DateOffset, "booleanVariant": section.BooleanVariant, "chartVariant": section.ChartVariant, "headingLevel": section.HeadingLevel, "title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "mark": section.Mark, "columnGroup": section.ColumnGroup, "measure": section.Measure, "timeStart": section.TimeStart, "timeEnd": section.TimeEnd, "timeLabel": section.TimeLabel, "timeGroup": section.TimeGroup, "cardLabel": section.CardLabel}
-		props := map[string]string{}
-		for key, value := range values {
-			if value != "" {
-				if _, declared := widget.PropsSchema.Properties[key]; !declared {
-					return fmt.Errorf("widget %s does not declare property %s", section.Widget, key)
+		rawSection, _ := json.Marshal(section)
+		var values map[string]json.RawMessage
+		_ = json.Unmarshal(rawSection, &values)
+		props := map[string]json.RawMessage{}
+		for _, contract := range pageWidgets.Widgets {
+			for key := range contract.PropsSchema.Properties {
+				if value, present := values[key]; present {
+					if _, declared := widget.PropsSchema.Properties[key]; !declared {
+						return fmt.Errorf("widget %s does not declare property %s", section.Widget, key)
+					}
+					props[key] = value
 				}
-				props[key] = value
 			}
-		}
-		if section.DateLabel != nil {
-			if _, declared := widget.PropsSchema.Properties["dateLabel"]; !declared {
-				return fmt.Errorf("date label needs its widget")
-			}
-			props["dateLabel"] = *section.DateLabel
-		}
-		if section.BooleanLabel != nil {
-			if _, declared := widget.PropsSchema.Properties["booleanLabel"]; !declared {
-				return fmt.Errorf("boolean label needs its widget")
-			}
-			props["booleanLabel"] = *section.BooleanLabel
 		}
 		raw, _ := json.Marshal(props)
 		return widget.PropsSchema.Validate(raw, 1<<20)

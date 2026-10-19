@@ -333,7 +333,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if t.quarantined() {
 		return "", fmt.Errorf("tenant is quarantined")
 	}
-	if prior := t.committed.answers["release:activate:"+key]; prior != nil {
+	if prior := t.committed.answer("release:activate:" + key); prior != nil {
 		saved, err := decodeAcceptedRelease(prior)
 		hash, hashErr := releaseRequestHash(t.ID, m.ID, "activate:"+key, candidateID, true, upgradeID)
 		if err != nil || hashErr != nil || hash != saved.RequestHash {

@@ -59,6 +59,7 @@ type AgentRunRecord struct {
 	State             string                  `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
 	Model             string                  `json:"model,omitempty" field:"readonly" source:"record"`
 	Steps             []RunStep               `json:"steps" field:"readonly"`
+	Pending           []ToolCall              `json:"pending,omitempty" field:"readonly"` // accepted calls still awaiting their own result
 	StepsUsed         int                     `json:"stepsUsed" field:"readonly" title:"Model turns"`
 	TokensUsed        int                     `json:"tokensUsed" field:"readonly" title:"Tokens"`
 	ActionsUsed       int                     `json:"actionsUsed" field:"readonly" title:"Actions"`
@@ -107,12 +108,15 @@ type Signal struct {
 
 // RunStep is one step the model chose, and what came of it: the decision trace.
 type RunStep struct {
-	At        time.Time `json:"at"`
-	Tool      string    `json:"tool"`
-	Arguments string    `json:"arguments,omitempty"`
-	Rationale string    `json:"rationale,omitempty"`
-	Outcome   string    `json:"outcome"`
-	Tokens    int       `json:"tokens,omitempty"`
+	At        time.Time  `json:"at"`
+	Tool      string     `json:"tool"`
+	Arguments string     `json:"arguments,omitempty"`
+	Rationale string     `json:"rationale,omitempty"`
+	Outcome   string     `json:"outcome"`
+	Tokens    int        `json:"tokens,omitempty"`
+	Calls     []ToolCall `json:"calls,omitempty"` // the complete model response, on the first call's step
+	CallID    string     `json:"callId,omitempty"`
+	Content   string     `json:"content,omitempty"`
 	// Sources are the records this step read, cited or acted on
 	// ("<type>/<id>", or "<type>/<id>#<field>" for one field): what the step
 	// says is read again only by a reader who may still read them (#130).
@@ -189,10 +193,10 @@ func agentEntities() []platform.Entity {
 			// Even a public document's association with this business task is
 			// derived from its record; reading the document is not that grant.
 			{From: "ref", Fields: []string{"seen", "citations"}},
-			{From: "steps.sources", Fields: []string{"arguments", "outcome"}},
+			{From: "steps.sources", Fields: []string{"arguments", "outcome", "calls", "content"}},
 			{From: "citations.document", Element: true},
 			{From: "draft.type/target", Element: true},
-			{From: "*", Fields: []string{"result"}}},
+			{From: "*", Fields: []string{"result", "pending"}}},
 		Withheld: "withheld", Scope: platform.Scope{Participants: func(record any) []string { return []string{record.(AgentRunRecord).OnBehalf} }}},
 		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}, memoryEntity(),
 		{Type: SwitchType, Title: "Agent switch", Model: Switch{}, Description: "An agent's off switch: suspended by an administrator, or working."}}
@@ -216,8 +220,10 @@ func (a *Agents) Manifest() platform.Manifest {
 
 func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 func (a *Agents) AcceptedLedger() *platform.Ledger         { return a.ledger }
-func (a *Agents) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
-func (a *Agents) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
+func (a *Agents) SnapshotFormat() string                   { return "platform.ledger.v1" }
+
+func (a *Agents) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
+func (a *Agents) Restore(raw json.RawMessage) error  { return a.ledger.Restore(raw) }
 
 var jsonTypes = map[string]string{"string": "string", "integer": "integer", "number": "number", "boolean": "boolean", "date": "string", "datetime": "string"}
 
@@ -351,14 +357,12 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 					}
 					action = own
 				}
-				props := map[string]any{"target": map[string]any{"type": "string", "description": "The ID of the " + cmp.Or(action.Target, "record") + " the action is about"}, "rationale": rationale()}
-				required := []string{"target", "rationale"}
-				for _, f := range action.Payload {
-					props[f.Name] = map[string]any{"type": cmp.Or(jsonTypes[f.Type], "string"), "description": f.Description}
-					if f.Required {
-						required = append(required, f.Name)
-					}
-				}
+				info, _ := a.host.Entity(action.Target)
+				schema := platform.ActionInputSchema(action, &info, nil)
+				props := schema["properties"].(map[string]any)
+				props["target"] = map[string]any{"type": "string", "description": "The ID of the " + cmp.Or(action.Target, "record") + " the action is about"}
+				props["rationale"] = rationale()
+				required := append(schema["required"].([]string), "target", "rationale")
 				tool = agentTool{kind: kind, schema: name, target: action.Target, tool: Tool{Description: action.Title + ": " + action.Description, Properties: props, Required: required}}
 			}
 			tool.tool.Name = agentToolName(name)

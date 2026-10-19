@@ -63,6 +63,7 @@ func (t *Tenant) markChanged(data bool, owner string) {
 		close(c.wake)
 		c.wake = nil
 	}
+	wakeWork()
 }
 
 // Changes is how many inputs the tenant has taken since it started serving,

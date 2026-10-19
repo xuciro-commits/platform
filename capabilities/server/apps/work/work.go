@@ -184,6 +184,8 @@ func (w *Work) entities() []platform.Entity {
 }
 
 // Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
+func (w *Work) SnapshotFormat() string { return "platform.ledger.v1" }
+
 func (w *Work) Snapshot() (json.RawMessage, error) { return w.ledger.Snapshot() }
 
 func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw) }

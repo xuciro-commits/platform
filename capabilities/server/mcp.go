@@ -14,12 +14,23 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
+const mcpProtocolVersion = "2025-06-18"
+
+// Both versions support the stateless HTTP tools surface served here.
+func supportedMCPVersion(version string) bool {
+	return version == mcpProtocolVersion || version == "2025-03-26"
+}
+
 // MCP serves a member's catalog as Model Context Protocol tools (ADR-0006): each
 // action it may call is a tool, and each read it may use is a "read_<name>" tool.
 // External agents (Claude Code, other MCP clients) discover and act with the
 // member's own grants through the same submission path as every other caller.
 // JSON-RPC over HTTP POST; answers are plain JSON (no streaming needed).
 func (h *Host) mcp(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	if version := r.Header.Get("MCP-Protocol-Version"); version != "" && !supportedMCPVersion(version) {
+		WriteJSON(w, http.StatusBadRequest, rpcError(nil, -32600, "unsupported MCP protocol version"))
+		return
+	}
 	var req struct {
 		ID     json.RawMessage `json:"id"`
 		Method string          `json:"method"`
@@ -29,7 +40,9 @@ func (h *Host) mcp(w http.ResponseWriter, r *http.Request, m platform.Member, t 
 			Arguments       map[string]any `json:"arguments"`
 		} `json:"params"`
 	}
-	if json.NewDecoder(r.Body).Decode(&req) != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.UseNumber()
+	if decoder.Decode(&req) != nil {
 		WriteJSON(w, http.StatusBadRequest, rpcError(nil, -32700, "parse error"))
 		return
 	}
@@ -42,9 +55,11 @@ func (h *Host) mcp(w http.ResponseWriter, r *http.Request, m platform.Member, t 
 	}
 	switch req.Method {
 	case "initialize":
+		// A client may ask for another version; advertise only the version this
+		// endpoint actually implements, so the client can accept it or disconnect.
 		version := req.Params.ProtocolVersion
-		if version == "" {
-			version = "2025-06-18"
+		if !supportedMCPVersion(version) {
+			version = mcpProtocolVersion
 		}
 		reply(map[string]any{"protocolVersion": version, "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}},
 			"serverInfo":   map[string]string{"name": "platform-host", "version": "1"},
@@ -70,24 +85,19 @@ func toolName(schema string) string {
 
 func toolsFor(t *Tenant, m platform.Member) []map[string]any {
 	tools := []map[string]any{}
+	entities := map[string]platform.EntityInfo{}
+	for _, info := range t.Entities(m) {
+		entities[info.Type] = info
+	}
 	for _, a := range t.Catalog(m) {
-		properties := map[string]any{"target": map[string]any{"type": "string", "description": "ID of the " + a.Target + " to act on (a new ID creates one)"}}
-		required := []string{"target"}
-		for _, f := range a.Payload {
-			schema := map[string]any{"type": "string", "description": f.Description}
-			switch f.Type {
-			case "integer":
-				schema["type"] = "integer"
-			case "string[]":
-				schema = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": f.Description}
-			}
-			properties[f.Name] = schema
-			if f.Required {
-				required = append(required, f.Name)
-			}
-		}
+		info := entities[a.Target]
+		schema := platform.ActionInputSchema(a, &info, append([]string{}, m.RolesIn(info.App)...))
+		properties := schema["properties"].(map[string]any)
+		properties["target"] = map[string]any{"type": "string", "description": "ID of the " + a.Target + " to act on (a new ID creates one)"}
+		properties["idempotencyKey"] = map[string]any{"type": "string", "description": "Reuse the same key when retrying this exact action after an unknown response"}
+		schema["required"] = append(schema["required"].([]string), "target")
 		tools = append(tools, map[string]any{"name": toolName(a.Schema), "title": a.Title, "description": a.Description,
-			"inputSchema": map[string]any{"type": "object", "properties": properties, "required": required}})
+			"inputSchema": schema})
 	}
 	for _, read := range readsFor(t, m) {
 		tools = append(tools, map[string]any{"name": "read_" + toolName(read), "title": "Read " + read,
@@ -100,7 +110,7 @@ func readsFor(t *Tenant, m platform.Member) []string {
 	var out []string
 	for _, a := range t.apps {
 		for _, read := range a.Manifest().Reads {
-			if m.Roles[a.Manifest().ID] != "" || slices.Contains(a.Manifest().Everyone, read) {
+			if len(m.RolesIn(a.Manifest().ID)) > 0 || slices.Contains(a.Manifest().Everyone, read) {
 				out = append(out, read)
 			}
 		}

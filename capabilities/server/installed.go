@@ -110,7 +110,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			}
 			platform.ApplyFieldAliases(info, v)
 			emptyLists(v)
-			installed := &row{value: v, history: r.history, projection: r.projection, extraction: r.extraction}
+			installed := &row{value: v, history: r.history, loadHistory: r.loadHistory, historyCount: r.historyCount, projection: r.projection, extraction: r.extraction}
 			installed.retainOriginal(raw)
 			entries = append(entries, recordEntry[*row]{id, installed})
 		}

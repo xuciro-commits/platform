@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"io"
+	"maps"
 	"net/http"
 	"slices"
 	"strconv"
@@ -131,7 +132,7 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 	if why := t.reserve(m, model, now); why != "" {
 		return ChatAnswer{}, nil, &AIError{Status: http.StatusTooManyRequests, Detail: why, Quota: true}
 	}
-	if len(delta) > 0 && len(req.Tools) == 0 {
+	if len(delta) > 0 {
 		req.Delta = delta[0]
 	}
 	answer, failure := t.call(pv, model, m, req, now)
@@ -169,9 +170,13 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 			said += string(c.Arguments)
 		}
 		u.Input, u.Output, u.TokensEstimated = estimateTokens(string(request)), estimateTokens(said), true
-	}
-	if req.Delta != nil && failure == nil && pv.Wire == "anthropic" { // no stream on this wire yet: the answer at once
-		req.Delta(answer.Content)
+		knownCache := 0
+		for _, count := range []*int{u.CacheReadInput, u.CacheWriteInput} {
+			if count != nil {
+				knownCache += *count
+			}
+		}
+		u.Input = max(u.Input, knownCache)
 	}
 	span.SetAttributes(attribute.Int("gen_ai.usage.input_tokens", u.Input), attribute.Int("gen_ai.usage.output_tokens", u.Output))
 	if failure != nil {
@@ -242,7 +247,7 @@ func (t *Tenant) complete(pv platform.AIProvider, model string, req ChatRequest)
 		tools := []map[string]any{}
 		for _, x := range req.Tools {
 			tools = append(tools, map[string]any{"type": "function", "function": map[string]any{"name": x.Name, "description": x.Description,
-				"parameters": map[string]any{"type": "object", "properties": x.Properties, "required": x.Required}}})
+				"parameters": map[string]any{"type": "object", "properties": x.Properties, "required": x.Required, "additionalProperties": false}}})
 		}
 		body["tools"] = tools
 	}
@@ -252,8 +257,8 @@ func (t *Tenant) complete(pv platform.AIProvider, model string, req ChatRequest)
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
-	if req.Delta != nil && pv.Wire != "anthropic" {
-		return t.completeStream(pv, model, body, req.Delta)
+	if req.Stream || req.Delta != nil || req.OnStream != nil {
+		return t.completeStream(pv, model, body, req)
 	}
 	raw, _ := json.Marshal(body)
 	status, answer, failure := t.aiRequest(pv, http.MethodPost, "/chat/completions", raw, aiTimeout)
@@ -263,12 +268,75 @@ func (t *Tenant) complete(pv platform.AIProvider, model string, req ChatRequest)
 	return completion(status, answer, model)
 }
 
+type completionUsage struct {
+	Prompt     *int     `json:"prompt_tokens"`
+	Completion *int     `json:"completion_tokens"`
+	Cost       *float64 `json:"cost"` // compatible providers may report it
+	Details    *struct {
+		Cached *int `json:"cached_tokens"`
+		Write  *int `json:"cache_write_tokens"`
+	} `json:"prompt_tokens_details"`
+}
+
+func reportedCompletionUsage(usage *completionUsage) (platform.AIUsage, *AIError) {
+	u := platform.AIUsage{}
+	if usage == nil {
+		return u, nil
+	}
+	for _, n := range []*int{usage.Prompt, usage.Completion} {
+		if n != nil && *n < 0 {
+			return u, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
+		}
+	}
+	if usage.Prompt != nil && usage.Completion != nil {
+		u.Input, u.Output, u.TokensReported = *usage.Prompt, *usage.Completion, true
+	}
+	if usage.Cost != nil {
+		if *usage.Cost < 0 {
+			return u, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
+		}
+		u.Cost, u.CostReported = *usage.Cost, true
+	}
+	if usage.Details != nil {
+		u.CacheReadInput, u.CacheWriteInput = usage.Details.Cached, usage.Details.Write
+		remaining := u.Input
+		for _, count := range []*int{u.CacheReadInput, u.CacheWriteInput} {
+			if count != nil {
+				if *count < 0 || u.TokensReported && *count > remaining {
+					return platform.AIUsage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
+				}
+				remaining -= *count
+			}
+		}
+	}
+	return u, nil
+}
+
+func streamText(req ChatRequest, text string) {
+	if text == "" {
+		return
+	}
+	if req.Delta != nil {
+		req.Delta(text)
+	}
+	if req.OnStream != nil {
+		req.OnStream(platform.ChatStreamEvent{Content: text})
+	}
+}
+
+func streamTool(req ChatRequest, call platform.ToolCallDelta) {
+	if req.OnStream != nil {
+		req.OnStream(platform.ChatStreamEvent{ToolCall: &call})
+	}
+}
+
 // completion reads a chat completion's answer on the OpenAI wire.
 func completion(status int, answer []byte, model string) (ChatAnswer, platform.AIUsage, *AIError) {
 	var out struct {
 		Model   string `json:"model"`
 		Choices []struct {
-			Message struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
 				Content   string `json:"content"`
 				ToolCalls []struct {
 					ID       string `json:"id"`
@@ -279,11 +347,7 @@ func completion(status int, answer []byte, model string) (ChatAnswer, platform.A
 				} `json:"tool_calls"`
 			} `json:"message"`
 		} `json:"choices"`
-		Usage *struct {
-			Prompt     *int     `json:"prompt_tokens"`
-			Completion *int     `json:"completion_tokens"`
-			Cost       *float64 `json:"cost"` // OpenRouter reports it
-		} `json:"usage"`
+		Usage *completionUsage `json:"usage"`
 		Error *struct {
 			Message string `json:"message"`
 		} `json:"error"`
@@ -298,27 +362,24 @@ func completion(status int, answer []byte, model string) (ChatAnswer, platform.A
 		}
 		return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: status, Detail: detail}
 	}
-	if out.Usage != nil && (out.Usage.Prompt != nil && *out.Usage.Prompt < 0 ||
-		out.Usage.Completion != nil && *out.Usage.Completion < 0 ||
-		out.Usage.Cost != nil && *out.Usage.Cost < 0) {
-		return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
-	}
-	u := platform.AIUsage{}
-	if out.Usage != nil {
-		if out.Usage.Prompt != nil && out.Usage.Completion != nil {
-			u.Input, u.Output, u.TokensReported = *out.Usage.Prompt, *out.Usage.Completion, true
-		}
-		if out.Usage.Cost != nil {
-			u.Cost, u.CostReported = *out.Usage.Cost, true
-		}
+	u, failure := reportedCompletionUsage(out.Usage)
+	if failure != nil {
+		return ChatAnswer{}, u, failure
 	}
 	if out.Model != "" && out.Model != model {
 		u.Served = out.Model
 	}
 	msg := out.Choices[0].Message
 	reply := ChatAnswer{Content: msg.Content}
+	if len(msg.ToolCalls) > 0 && out.Choices[0].FinishReason == "length" {
+		return reply, u, &AIError{Status: http.StatusBadGateway, Detail: "the model's tool calls were cut off"}
+	}
 	for _, c := range msg.ToolCalls {
-		reply.ToolCalls = append(reply.ToolCalls, ToolCall{ID: c.ID, Name: c.Function.Name, Arguments: json.RawMessage(cmp.Or(c.Function.Arguments, "{}"))})
+		args := json.RawMessage(cmp.Or(c.Function.Arguments, "{}"))
+		if c.ID == "" || c.Function.Name == "" || !json.Valid(args) {
+			return ChatAnswer{Content: msg.Content}, u, &AIError{Status: http.StatusBadGateway, Detail: "the provider returned an incomplete tool call"}
+		}
+		reply.ToolCalls = append(reply.ToolCalls, ToolCall{ID: c.ID, Name: c.Function.Name, Arguments: args})
 	}
 	return reply, u, nil
 }
@@ -326,7 +387,7 @@ func completion(status int, answer []byte, model string) (ChatAnswer, platform.A
 // completeStream asks for the answer as server-sent events on the OpenAI
 // wire, hands each piece of content to delta, and reads the usage the last
 // event carries (stream_options.include_usage).
-func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[string]any, delta func(string)) (ChatAnswer, platform.AIUsage, *AIError) {
+func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[string]any, req ChatRequest) (ChatAnswer, platform.AIUsage, *AIError) {
 	body["stream"], body["stream_options"] = true, map[string]any{"include_usage": true}
 	raw, _ := json.Marshal(body)
 	ctx, cancel := context.WithTimeout(context.Background(), aiTimeout)
@@ -336,64 +397,122 @@ func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[s
 		return ChatAnswer{}, platform.AIUsage{}, failure
 	}
 	defer resp.Body.Close()
-	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") { // a server that does not stream: the answer at once
+	if resp.StatusCode >= 300 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") { // a server that does not stream: the answer at once
 		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 		reply, u, failure := completion(resp.StatusCode, answer, model)
 		if failure == nil {
-			delta(reply.Content)
+			streamText(req, reply.Content)
+			for i, call := range reply.ToolCalls {
+				streamTool(req, platform.ToolCallDelta{Index: i, ID: call.ID, Name: call.Name, Arguments: string(call.Arguments)})
+			}
 		}
 		return reply, u, failure
 	}
 	var content strings.Builder
 	var u platform.AIUsage
+	calls := map[int]ToolCall{}
+	complete := false
+	cutOff := false
 	lines := bufio.NewScanner(resp.Body)
 	lines.Buffer(make([]byte, 64<<10), 1<<20)
 	for lines.Scan() {
 		data, ok := strings.CutPrefix(lines.Text(), "data:")
-		if !ok || strings.TrimSpace(data) == "[DONE]" {
+		if !ok {
 			continue
+		}
+		if strings.TrimSpace(data) == "[DONE]" {
+			complete = true
+			break
 		}
 		var chunk struct {
 			Model   string `json:"model"`
 			Choices []struct {
 				Delta struct {
-					Content string `json:"content"`
+					Content   string `json:"content"`
+					ToolCalls []struct {
+						Index    int    `json:"index"`
+						ID       string `json:"id"`
+						Function struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						} `json:"function"`
+					} `json:"tool_calls"`
 				} `json:"delta"`
+				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
-			Usage *struct {
-				Prompt     *int     `json:"prompt_tokens"`
-				Completion *int     `json:"completion_tokens"`
-				Cost       *float64 `json:"cost"`
-			} `json:"usage"`
+			Usage *completionUsage `json:"usage"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
 		}
 		if json.Unmarshal([]byte(data), &chunk) != nil {
-			continue
+			return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "unreadable stream event"}
 		}
-		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
-			content.WriteString(chunk.Choices[0].Delta.Content)
-			delta(chunk.Choices[0].Delta.Content)
+		if chunk.Error != nil {
+			return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: chunk.Error.Message}
 		}
 		if chunk.Usage != nil {
-			if chunk.Usage.Prompt != nil && *chunk.Usage.Prompt < 0 ||
-				chunk.Usage.Completion != nil && *chunk.Usage.Completion < 0 ||
-				chunk.Usage.Cost != nil && *chunk.Usage.Cost < 0 {
-				return ChatAnswer{Content: content.String()}, platform.AIUsage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
-			}
-			if chunk.Usage.Prompt != nil && chunk.Usage.Completion != nil {
-				u.Input, u.Output, u.TokensReported = *chunk.Usage.Prompt, *chunk.Usage.Completion, true
-			}
-			if chunk.Usage.Cost != nil {
-				u.Cost, u.CostReported = *chunk.Usage.Cost, true
+			served := u.Served
+			u, failure = reportedCompletionUsage(chunk.Usage)
+			u.Served = served
+			if failure != nil {
+				return ChatAnswer{Content: content.String()}, u, failure
 			}
 		}
 		if chunk.Model != "" && chunk.Model != model {
 			u.Served = chunk.Model
 		}
+		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+			content.WriteString(chunk.Choices[0].Delta.Content)
+			streamText(req, chunk.Choices[0].Delta.Content)
+		}
+		if len(chunk.Choices) > 0 {
+			choice := chunk.Choices[0]
+			for _, call := range choice.Delta.ToolCalls {
+				if call.Index < 0 {
+					return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "invalid tool call index"}
+				}
+				c := calls[call.Index]
+				c.ID += call.ID
+				c.Name += call.Function.Name
+				c.Arguments = append(c.Arguments, call.Function.Arguments...)
+				calls[call.Index] = c
+				streamTool(req, platform.ToolCallDelta{Index: call.Index, ID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments})
+			}
+			if choice.FinishReason != "" {
+				complete = true
+			}
+			if len(calls) > 0 && choice.FinishReason == "length" {
+				// The usage event can follow the finish reason. Read it before
+				// rejecting the incomplete calls so the incurred usage is kept.
+				cutOff = true
+			}
+		}
 	}
 	if err := lines.Err(); err != nil {
 		return ChatAnswer{Content: content.String()}, u, &AIError{Detail: "the stream broke: " + err.Error()}
 	}
-	return ChatAnswer{Content: content.String()}, u, nil
+	if !complete {
+		return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "the stream ended before the answer was complete"}
+	}
+	if cutOff {
+		return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "the model's tool calls were cut off"}
+	}
+	answer := ChatAnswer{Content: content.String()}
+	for _, index := range slices.Sorted(maps.Keys(calls)) {
+		if index != len(answer.ToolCalls) {
+			return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "invalid tool call index"}
+		}
+		call := calls[index]
+		if len(call.Arguments) == 0 {
+			call.Arguments = json.RawMessage("{}")
+		}
+		if call.ID == "" || call.Name == "" || !json.Valid(call.Arguments) {
+			return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "the provider returned an incomplete tool call"}
+		}
+		answer.ToolCalls = append(answer.ToolCalls, call)
+	}
+	return answer, u, nil
 }
 
 // aiRequest sends one request to a provider with its key, through the dialer

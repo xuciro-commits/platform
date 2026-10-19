@@ -155,6 +155,8 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 }
 
 // Snapshot and Restore: the model as decisions left it (ADR-0024).
+func (e *Enterprise) SnapshotFormat() string { return "enterprise.model.v1" }
+
 func (e *Enterprise) Snapshot() (json.RawMessage, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

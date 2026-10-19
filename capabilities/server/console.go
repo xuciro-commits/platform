@@ -186,6 +186,8 @@ func (d *Console) state() consoleState {
 	return s
 }
 
+func (d *Console) SnapshotFormat() string { return "platform.console.v1" }
+
 func (d *Console) Snapshot() (json.RawMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

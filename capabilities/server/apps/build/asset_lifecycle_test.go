@@ -68,6 +68,55 @@ func lifecycleBuild() (*Build, *lifecycleRows) {
 	return b, rows
 }
 
+func TestAssetEnvironmentResolutionUsesBuildConnectionRules(t *testing.T) {
+	ref := platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: "external"}
+	requirement := platform.AssetEnvironmentRequirement{Ref: ref, Profile: "http", Credential: true}
+	ready := Connection{Record: platform.Record{ID: "target"}, Name: ref.Name, Kind: "http", State: "ready", Secret: "target-credential"}
+	for _, test := range []struct {
+		name string
+		rows []Connection
+	}{
+		{"missing", nil},
+		{"archived", func() []Connection { c := ready; c.Archived = true; return []Connection{c} }()},
+		{"different name", func() []Connection { c := ready; c.Name = "other"; return []Connection{c} }()},
+		{"ambiguous", []Connection{ready, ready}},
+		{"not ready", func() []Connection { c := ready; c.State = "draft"; return []Connection{c} }()},
+		{"different kind", func() []Connection { c := ready; c.Kind = "odata"; return []Connection{c} }()},
+		{"missing credential", func() []Connection { c := ready; c.Secret = ""; return []Connection{c} }()},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			b, rows := lifecycleBuild()
+			for _, connection := range test.rows {
+				rows.rows[reflect.TypeFor[Connection]()] = append(rows.rows[reflect.TypeFor[Connection]()], connection)
+			}
+			if _, err := b.ResolveAssetEnvironment(requirement); err == nil {
+				t.Fatal("invalid local connection resolved")
+			}
+		})
+	}
+	b, rows := lifecycleBuild()
+	archived := ready
+	archived.ID, archived.Archived = "archived", true
+	rows.rows[reflect.TypeFor[Connection]()] = []any{archived, ready}
+	before := string(platform.Raw(rows.rows[reflect.TypeFor[Connection]()]))
+	target, err := b.ResolveAssetEnvironment(requirement)
+	if err != nil || target.TargetRecord != ready.ID || target.Credential != ready.Secret {
+		t.Fatal(target, err)
+	}
+	if string(platform.Raw(rows.rows[reflect.TypeFor[Connection]()])) != before {
+		t.Fatal("environment resolution changed the owner record")
+	}
+	requirement.Credential = false
+	target, err = b.ResolveAssetEnvironment(requirement)
+	if err != nil || target.Credential != "" {
+		t.Fatal("unneeded credential escaped local owner context", target, err)
+	}
+	requirement.Ref.App = "foreign"
+	if _, err := b.ResolveAssetEnvironment(requirement); err == nil {
+		t.Fatal("Build resolved a different owner's connection")
+	}
+}
+
 func TestNativeInstallationDecodePreservesOuterIdentityAndImage(t *testing.T) {
 	b, _ := lifecycleBuild()
 	for _, tc := range []struct {

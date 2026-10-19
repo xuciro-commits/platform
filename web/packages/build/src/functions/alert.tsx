@@ -53,7 +53,7 @@ export function AlertEditor({ id }: { id: string }) {
       </div>} />
     <ContextHelp title={t("Alert rule")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    <StructuredEditor {...structured}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">
+    <StructuredEditor initialMode="source" {...structured}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Rule")} className="grid content-start gap-3">
         <label className={fieldClass}>{t("Rule name")}<Input disabled={!!draft.version} value={draft.name} placeholder="lateorder" onChange={(e) => change({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Rule title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>

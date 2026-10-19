@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -23,6 +25,121 @@ func TestAgentStepUsesJournalJSONOrder(t *testing.T) {
 	if err != nil || string(got) != `{"a":9007199254740993,"z":{"x":1,"y":2}}` {
 		t.Fatalf("model step does not use stable JSONB-compatible bytes: %s, %v", got, err)
 	}
+}
+
+func TestAgentObservationBoundsPreserveJSONAndChinese(t *testing.T) {
+	for _, input := range []any{
+		map[string]any{"record": map[string]any{"id": "工单一", "note": strings.Repeat("中文备注", 2000)}, "links": []string{"a", "b"}},
+		[]any{map[string]any{"text": strings.Repeat("生产进度", 1000)}, map[string]any{"id": "next"}},
+	} {
+		raw, _ := json.Marshal(input)
+		got := clipObservation(string(raw), 256)
+		if !json.Valid([]byte(got)) || !utf8.ValidString(got) || len(got) > 256 || !strings.Contains(got, `"truncated":true`) {
+			t.Fatalf("invalid bounded observation (%d bytes): %s", len(got), got)
+		}
+	}
+	if got := clip(strings.Repeat("中文", 20), 5); !utf8.ValidString(got) || got != "中…" {
+		t.Fatalf("text cut inside a character: %q", got)
+	}
+	for _, args := range []string{`{"id":`, `{"id":1,"id":2}`, `[]`} {
+		if _, err := completeToolCalls([]ToolCall{{ID: "a", Name: "read", Arguments: json.RawMessage(args)}}, "r", 1); err == nil {
+			t.Fatalf("accepted incomplete or ambiguous tool input: %s", args)
+		}
+	}
+}
+
+func TestAgentMultipleCallsResumeAccepted(t *testing.T) {
+	now := time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC)
+	var modelCalls atomic.Int32
+	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		modelCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"处理两张工单","tool_calls":[{"id":"first","type":"function","function":{"name":"desk_ticket_answer","arguments":"{\"target\":\"T1\",\"reply\":\"第一张\",\"rationale\":\"answer first\"}"}},{"id":"second","type":"function","function":{"name":"desk_ticket_answer","arguments":"{\"target\":\"T2\",\"reply\":\"第二张\",\"rationale\":\"answer second\"}"}},{"id":"end","type":"function","function":{"name":"finish","arguments":"{\"result\":\"完成\",\"rationale\":\"finished\"}"}}]}}],"usage":{"prompt_tokens":100,"completion_tokens":20}}`)
+	}))
+	t.Cleanup(model.Close)
+	build := func() *Tenant {
+		return composeTenant(t, "t-1", []Seat{seatOf("ana", "desk:clerk", "platform:admin", "ai:admin", "agent:admin")},
+			ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
+	}
+	tn := build()
+	var entries []Entry
+	record := func(tn *Tenant) {
+		tn.Record = func(e Entry) { entries = append(entries, e) }
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+			entries = append(entries, e)
+			return e.Body, nil
+		}
+	}
+	record(tn)
+	for _, id := range []string{"T1", "T2"} {
+		decide(t, tn, "ana", "desk", "desk.ticket.open", "desk.ticket", id, map[string]any{"subject": id}, now)
+	}
+	decide(t, tn, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}, now)
+	decide(t, tn, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/scripted", map[string]any{"access": "users"}, now)
+	decide(t, tn, "ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "lm/scripted"}, now)
+	decide(t, tn, "ana", AgentApp, SchemaRunStart, RunType, "R1", map[string]any{"agent": "desk.triage", "goal": "answer both", "act": true}, now)
+	tn.Think(now)
+	run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "R1")
+	if run.StepsUsed != 1 || len(run.Pending) != 2 || len(run.Steps[0].Calls) != 3 || run.Steps[0].CallID != "first" {
+		t.Fatalf("model response was not retained: %+v", run)
+	}
+	checkpoint := slices.Clone(entries)
+	for _, interruption := range []string{"cancel", "revoke"} {
+		t.Run(interruption, func(t *testing.T) {
+			interrupted := build()
+			if err := interrupted.Replay(checkpoint); err != nil {
+				t.Fatal(err)
+			}
+			if interruption == "cancel" {
+				decide(t, interrupted, "ana", AgentApp, SchemaRunCancel, RunType, "R1", map[string]any{}, now)
+			} else {
+				console := testConsoleOf(interrupted)
+				console.mu.Lock()
+				delete(console.members["ana"].Roles, "desk")
+				console.mu.Unlock()
+			}
+			interrupted.Think(now.Add(time.Second))
+			stopped, _ := platform.Get[AgentRunRecord](interrupted.automation(AgentApp, false), "R1")
+			second, _ := platform.Get[Ticket](interrupted.automation("desk", false), "T2")
+			if stopped.State != "stopped" || len(stopped.Pending) != 0 || second.Revision != 1 || second.Status != "open" {
+				t.Fatalf("pending call executed after %s: %+v %+v", interruption, stopped, second)
+			}
+			results := map[string]bool{}
+			for _, step := range stopped.Steps {
+				if step.CallID != "" {
+					results[step.CallID] = true
+				}
+			}
+			if len(results) != 3 {
+				t.Fatalf("interrupted calls lost their results: %+v", stopped.Steps)
+			}
+		})
+	}
+	// Restart after the first action was accepted. The other calls resume from
+	// the saved response, without another model call or another first action.
+	restored := build()
+	if err := restored.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	record(restored)
+	restored.AIClient = func(*http.Request) (*http.Response, error) {
+		t.Fatal("resuming accepted calls requested the model again")
+		return nil, nil
+	}
+	restored.Think(now.Add(time.Second))
+	restored.Think(now.Add(2 * time.Second))
+	run, _ = platform.Get[AgentRunRecord](restored.automation(AgentApp, false), "R1")
+	first, _ := platform.Get[Ticket](restored.automation("desk", false), "T1")
+	second, _ := platform.Get[Ticket](restored.automation("desk", false), "T2")
+	if run.State != "done" || len(run.Pending) != 0 || run.StepsUsed != 1 || run.TokensUsed != 120 || modelCalls.Load() != 1 ||
+		first.Revision != 2 || second.Revision != 2 || first.Reply != "第一张" || second.Reply != "第二张" {
+		t.Fatalf("bad resumed run: %+v; tickets: %+v / %+v", run, first, second)
+	}
+	req := restored.agents.(*Agents).prompt(restored.automation(AgentApp, false), restored.agents.(*Agents).def(run.Agent), run, "lm/scripted", now)
+	if len(req.Messages) != 6 || len(req.Messages[2].ToolCalls) != 3 || req.Messages[3].ToolCallID != "first" || req.Messages[4].ToolCallID != "second" || req.Messages[5].ToolCallID != "end" {
+		t.Fatalf("model call/result pairing was lost: %+v", req.Messages)
+	}
+	CheckReplay(t, restored, entries, build)
 }
 
 // desk is a test app: tickets answered by people or by its triage agent.

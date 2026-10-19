@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b22e9cba2ed59542",
+  "revision": "sha256:40ed4f0dc57edadd",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -11469,6 +11469,14 @@
           "optional": true,
           "isCallback": false,
           "isSlot": false
+        },
+        {
+          "name": "initialMode",
+          "type": "'visual' | 'source'",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "'visual'"
         }
       ],
       "slots": [
@@ -13150,10 +13158,10 @@
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/HeatmapInspector.tsx",
-      "web/packages/build/src/workshop/page-editor/widgets/NoticeInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/RangeInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/ScatterInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/SchemaPropertyInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TermsInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TitleInspectors.tsx",
       "web/packages/platform/src/ai.tsx",
@@ -13332,7 +13340,6 @@
       "web/packages/build/src/workshop/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/MetricInspector.tsx",
-      "web/packages/build/src/workshop/page-editor/widgets/NoticeInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/ObservationInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/ProgressInspector.tsx",
@@ -13348,8 +13355,7 @@
       "web/packages/build/src/workshop/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/RecordWorkInspectors.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/ScatterInspector.tsx",
-      "web/packages/build/src/workshop/page-editor/widgets/SeparatorInspector.tsx",
-      "web/packages/build/src/workshop/page-editor/widgets/SpacerInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/SchemaPropertyInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/SparklineInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/SpatialInspectors.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/StatusTrackerInspector.tsx",
@@ -13460,8 +13466,7 @@
       "web/packages/build/src/workshop/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/MetricInspector.tsx",
-      "web/packages/build/src/workshop/page-editor/widgets/NoticeInspector.tsx",
-      "web/packages/build/src/workshop/page-editor/widgets/SeparatorInspector.tsx",
+      "web/packages/build/src/workshop/page-editor/widgets/SchemaPropertyInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/SpatialInspectors.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",

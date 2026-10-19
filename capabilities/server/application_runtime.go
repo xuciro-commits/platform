@@ -263,7 +263,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 	}
 	out.Monitoring.Accepted = len(accepted)
 	codeCounts := map[string]RefusalCodeCount{}
-	for _, refusal := range t.committed.refusals {
+	for _, refusal := range t.committed.allRefusals() {
 		var sub pb.Submission
 		if protojson.Unmarshal(refusal.Submission, &sub) != nil || !model[sub.GetTarget().GetType()] || sub.GetPrincipalId() != m.ID && !t.Readable(m, target(&sub), now) {
 			continue
@@ -282,7 +282,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 			out.Monitoring.ConstraintFailures++
 		}
 	}
-	for _, raw := range t.committed.answers {
+	for _, raw := range t.committed.allAnswers() {
 		var header struct{ Kind string }
 		if json.Unmarshal(raw, &header) != nil || header.Kind != "record-batch" {
 			continue
@@ -316,7 +316,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 	if count := out.Monitoring.Accepted + out.Monitoring.Refused; count > 0 {
 		out.Monitoring.RefusalRate = float64(out.Monitoring.Refused) / float64(count)
 	}
-	for key, raw := range t.committed.answers {
+	for key, raw := range t.committed.allAnswers() {
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
@@ -476,7 +476,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 	}
 	for _, change := range view.History {
 		trace := ApplicationDecisionTrace{Change: change.Change, Schema: change.Schema, At: change.At, Versions: []ApplicationVersion{}}
-		if definition := t.committed.decisionDefinitions[owner+"/"+change.Change]; definition != nil && definition.Definition.Ref.Name == change.Schema {
+		if definition := t.committed.decisionDefinition(owner + "/" + change.Change); definition != nil && definition.Definition.Ref.Name == change.Schema {
 			projection := *definition
 			if projection.Observation != nil {
 				projection.Observation = t.visibleObservationEvidence(m, projection.Observation, now)
@@ -494,7 +494,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 			if receipt.GetChangeId() != change.Change {
 				continue
 			}
-			if binding, exists := t.committed.schemaVersions[owner+"/"+receipt.GetSubmission().GetIdempotencyKey()]; exists && trace.Content == nil {
+			if binding, exists := t.committed.schemaVersion(owner + "/" + receipt.GetSubmission().GetIdempotencyKey()); exists && trace.Content == nil {
 				trace.Content = &binding
 			}
 			break

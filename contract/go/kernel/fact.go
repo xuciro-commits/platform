@@ -12,11 +12,20 @@ import (
 )
 
 // FactLog implements K2 and K3 (contract/spec/K2-K3-facts.md).
+type FactArchive interface {
+	Records(tenant string, through int) []*pb.FactRecord
+	Accepted(tenant, key string, through int) *pb.FactRecord
+	Contains(tenant, id string, through int) bool
+}
+
 type FactLog struct {
-	schemas *SchemaRegistry
-	logs    map[string][]*pb.FactRecord
-	byKey   map[string]map[string]*pb.FactRecord
-	next    int
+	schemas  *SchemaRegistry
+	logs     map[string][]*pb.FactRecord
+	byKey    map[string]map[string]*pb.FactRecord
+	next     int
+	archive  FactArchive
+	archived map[string]int
+	last     map[string]time.Time
 }
 
 func NewFactLog(schemas *SchemaRegistry) *FactLog {
@@ -24,7 +33,36 @@ func NewFactLog(schemas *SchemaRegistry) *FactLog {
 		byKey: map[string]map[string]*pb.FactRecord{}}
 }
 
-func (l *FactLog) Records(tenant string) []*pb.FactRecord { return l.logs[tenant] }
+func (l *FactLog) Records(tenant string) []*pb.FactRecord {
+	if l.archive == nil {
+		return l.logs[tenant]
+	}
+	return append(l.archive.Records(tenant, l.archived[tenant]), l.logs[tenant]...)
+}
+
+// Compact releases only a persisted immutable prefix. Facts remain available
+// for idempotency, derivation and current-claim selection through their owner.
+func (l *FactLog) Compact(archive FactArchive) {
+	if l.archived == nil {
+		l.archived = map[string]int{}
+	}
+	if l.last == nil {
+		l.last = map[string]time.Time{}
+	}
+	for tenant, records := range l.logs {
+		l.archived[tenant] += len(records)
+		if len(records) > 0 {
+			l.last[tenant] = records[len(records)-1].GetRecordedTime().AsTime()
+		}
+	}
+	l.archive = archive
+	l.logs = map[string][]*pb.FactRecord{}
+	l.byKey = map[string]map[string]*pb.FactRecord{}
+}
+
+func (l *FactLog) Contains(tenant, id string) bool {
+	return slices.ContainsFunc(l.logs[tenant], func(r *pb.FactRecord) bool { return r.GetFactId() == id }) || l.archive != nil && l.archive.Contains(tenant, id, l.archived[tenant])
+}
 
 func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 	invalid := errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
@@ -47,7 +85,11 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 	if !l.schemas.Accepts(f.GetSchema()) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA) // F2
 	}
-	if existing := l.byKey[f.GetTenantId()][f.GetIdempotencyKey()]; existing != nil {
+	existing := l.byKey[f.GetTenantId()][f.GetIdempotencyKey()]
+	if existing == nil && l.archive != nil {
+		existing = l.archive.Accepted(f.GetTenantId(), f.GetIdempotencyKey(), l.archived[f.GetTenantId()])
+	}
+	if existing != nil {
 		if !proto.Equal(existing.GetFact(), f) {
 			return nil, errorf(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT) // F3
 		}
@@ -55,11 +97,14 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 	}
 	log := l.logs[f.GetTenantId()]
 	for _, input := range f.GetDerivedFrom() {
-		if !slices.ContainsFunc(log, func(r *pb.FactRecord) bool { return r.GetFactId() == input }) {
+		if !l.Contains(f.GetTenantId(), input) {
 			return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // F7
 		}
 	}
 	recorded := now
+	if l.last[f.GetTenantId()].After(recorded) {
+		recorded = l.last[f.GetTenantId()]
+	}
 	if n := len(log); n > 0 && log[n-1].GetRecordedTime().AsTime().After(now) {
 		recorded = log[n-1].GetRecordedTime().AsTime() // P3
 	}
@@ -76,7 +121,8 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 // CurrentClaims returns, per source, its latest claim about subject and attribute, in recorded order (F5).
 func (l *FactLog) CurrentClaims(tenant string, subject *pb.EntityRef, attribute string) []*pb.FactRecord {
 	current := map[string]*pb.FactRecord{}
-	for _, r := range l.logs[tenant] {
+	records := l.Records(tenant)
+	for _, r := range records {
 		f := r.GetFact()
 		if f.GetKind() != pb.FactKind_FACT_KIND_CLAIM || f.GetAttribute() != attribute || !proto.Equal(f.GetSubject(), subject) {
 			continue
@@ -87,7 +133,7 @@ func (l *FactLog) CurrentClaims(tenant string, subject *pb.EntityRef, attribute 
 		}
 	}
 	var result []*pb.FactRecord
-	for _, r := range l.logs[tenant] {
+	for _, r := range records {
 		if current[source(r.GetFact().GetProvenance())] == r {
 			result = append(result, r)
 		}

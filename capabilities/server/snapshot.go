@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 
 	"google.golang.org/protobuf/proto"
 
@@ -25,8 +26,10 @@ import (
 // through platform.Snapshotter. Restored into a tenant composed as at start-up,
 // then given the entries after that position, it equals a full replay;
 // CheckReplay holds every composition to that. A snapshot is only a shortcut:
-// the journal stays the truth, and a snapshot of other code is never used.
+// the journal stays the truth. Explicit host/owner formats and the native
+// composition decide compatibility; the build digest is diagnostic metadata.
 type tenantState struct {
+	Checkpoint          *snapshotCheckpoint               `json:"checkpoint,omitempty"`
 	DecisionDefinitions map[string]*DecisionDefinition    `json:"decisionDefinitions,omitempty"`
 	SubmissionSchemas   map[string]platform.SchemaVersion `json:"submissionSchemas,omitempty"`
 	Apps                map[string]json.RawMessage        `json:"apps"`
@@ -70,6 +73,97 @@ type tenantState struct {
 	Sequences        map[string]int                   `json:"sequences,omitempty"`
 }
 
+const tenantSnapshotFormat = "platform.tenant.v1"
+
+var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })
+
+type snapshotCompatibility struct {
+	Host        string            `json:"host"`
+	Owners      map[string]string `json:"owners"`
+	Composition string            `json:"composition"`
+}
+
+type snapshotCheckpoint struct {
+	snapshotCompatibility
+	Tenant   string `json:"tenant"`
+	Position int64  `json:"position"`
+	Build    string `json:"build"`
+}
+
+// snapshotCompatibility describes only the startup composition. Published
+// tenant definitions belong to the saved state and are reinstalled by Restore.
+func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
+	if t.startupSnapshot != nil {
+		return *t.startupSnapshot, nil
+	}
+	compatibility := snapshotCompatibility{Host: tenantSnapshotFormat, Owners: map[string]string{}}
+	type compositionApp struct {
+		ID, Version string
+		Entities    []platform.EntityInfo
+		Provides    []platform.Provision
+		Consumes    []platform.Consumption
+	}
+	composition := make([]compositionApp, 0, len(t.apps))
+	for _, app := range t.apps {
+		manifest := app.Manifest()
+		format, declared := app.(platform.SnapshotFormatOwner)
+		if !declared || strings.TrimSpace(format.SnapshotFormat()) == "" {
+			return snapshotCompatibility{}, nil
+		}
+		compatibility.Owners[manifest.ID] = format.SnapshotFormat()
+		item := compositionApp{ID: manifest.ID, Version: manifest.Version, Provides: manifest.Provides, Consumes: manifest.Consumes}
+		own := map[reflect.Type]string{}
+		for _, entity := range manifest.Entities {
+			own[reflect.TypeOf(entity.Model)] = entity.Type
+		}
+		for _, entity := range manifest.Entities {
+			info, err := platform.Describe(manifest.ID, entity, func(goType reflect.Type) string { return own[goType] })
+			if err != nil {
+				return snapshotCompatibility{}, err
+			}
+			item.Entities = append(item.Entities, info)
+		}
+		slices.SortFunc(item.Entities, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
+		composition = append(composition, item)
+	}
+	slices.SortFunc(composition, func(a, b compositionApp) int { return strings.Compare(a.ID, b.ID) })
+	digest, err := canonicalDigest(composition)
+	compatibility.Composition = digest
+	return compatibility, err
+}
+
+// snapshotKey keeps the existing journal interface and legacy checkpoint names.
+// An undeclared owner retains exact-build eligibility; explicit formats select
+// a separate namespace and are verified again against the loaded checkpoint.
+func (t *Tenant) snapshotKey(code string) (string, error) {
+	compatibility, err := t.snapshotCompatibility()
+	if err != nil || compatibility.Host == "" {
+		return code, err
+	}
+	return canonicalDigest(compatibility)
+}
+
+func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
+	var header struct {
+		Checkpoint *snapshotCheckpoint `json:"checkpoint"`
+	}
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return err
+	}
+	if header.Checkpoint == nil { // legacy snapshots are selected by exact code
+		return nil
+	}
+	compatibility, err := t.snapshotCompatibility()
+	if err != nil {
+		return err
+	}
+	saved := header.Checkpoint
+	if saved.Tenant != t.ID || saved.Position != position || compatibility.Host == "" || !reflect.DeepEqual(saved.snapshotCompatibility, compatibility) {
+		return fmt.Errorf("tenant %s: checkpoint format, composition or position differs", t.ID)
+	}
+	return nil
+}
+
 type recordState struct {
 	Value      json.RawMessage   `json:"value"`
 	History    []RecordChange    `json:"history"`
@@ -97,9 +191,16 @@ type effectState struct {
 // Decisions wait only while the state is captured: records never change once
 // stored (a put stores a new row), so they are encoded after the lock.
 func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error) {
+	compatibility, err := t.snapshotCompatibility()
+	if err != nil {
+		return nil, 0, err
+	}
 	s, rows, seq, err := t.capture(position)
 	if err != nil {
 		return nil, 0, err
+	}
+	if compatibility.Host != "" {
+		s.Checkpoint = &snapshotCheckpoint{snapshotCompatibility: compatibility, Tenant: t.ID, Position: seq, Build: snapshotBuild()}
 	}
 	for typ, list := range rows {
 		saved := make([]recordState, len(list))
@@ -108,7 +209,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 			if err != nil {
 				return nil, 0, err
 			}
-			saved[i] = recordState{Value: raw, History: r.history, Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}
+			saved[i] = recordState{Value: raw, History: r.recordHistory(), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}
 		}
 		slices.SortFunc(saved, func(a, b recordState) int { return strings.Compare(string(a.Value), string(b.Value)) })
 		s.Records[typ] = saved
@@ -178,7 +279,12 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	}
 	t.console.snapshot(&s)
 	s.Staged = t.staged.snapshot()
-	return s, rows, position(), nil
+	seq := position()
+	if seq == 0 {
+		seq = t.snapshotPosition
+	}
+	t.snapshotPosition = seq
+	return s, rows, seq, nil
 }
 
 // restoreRecords restores the records of every type declared now, and hands
@@ -229,8 +335,16 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return err
 	}
+	if s.Checkpoint != nil {
+		if err := t.checkSnapshotCheckpoint(raw, s.Checkpoint.Position); err != nil {
+			return err
+		}
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if s.Checkpoint != nil {
+		t.snapshotPosition = s.Checkpoint.Position
+	}
 	t.records.readRelease = s.ActiveRelease
 	if len(s.Apps) != len(t.apps) {
 		return fmt.Errorf("tenant %s: the snapshot has %d apps, the tenant %d", t.ID, len(s.Apps), len(t.apps))
@@ -434,7 +548,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
 		}
-		if _, refused := t.committed.refusals[key]; refused {
+		if _, refused := t.committed.refusal(key); refused {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
 		}
 		binding, bound := s.SubmissionSchemas[key]

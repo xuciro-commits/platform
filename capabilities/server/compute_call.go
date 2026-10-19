@@ -122,11 +122,11 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		if !ok {
 			return platform.OperationCall{}, unknown()
 		}
-		_, refusedBefore := t.committed.refusals[PlatformApp+"/"+q.Key]
-		known := refusedBefore || len(t.committed.answers[PlatformApp+"/"+q.Key]) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
+		_, refusedBefore := t.committed.refusal(PlatformApp + "/" + q.Key)
+		known := refusedBefore || len(t.committed.answer(PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
 		retained = !known // an append error can have committed without its answer
 		if _, err := t.submitAccepted(owner, latest, s, now, false, prepared); err != nil {
-			if _, rejected := t.committed.refusals[PlatformApp+"/"+q.Key]; rejected {
+			if _, rejected := t.committed.refusal(PlatformApp + "/" + q.Key); rejected {
 				retained = false
 			}
 			return platform.OperationCall{}, err

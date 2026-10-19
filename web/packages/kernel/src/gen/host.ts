@@ -165,6 +165,7 @@ export type AgentRunRecord = {
   state: "running" | "waiting" | "done" | "stopped";
   model?: string;
   steps: RunStep[];
+  pending?: ToolCall[];
   stepsUsed: number;
   tokensUsed: number;
   actionsUsed: number;
@@ -863,6 +864,7 @@ export type ChatRequest = {
   tools?: Tool[];
   maxTokens?: number;
   temperature?: number;
+  promptCache?: boolean;
   stream?: boolean;
 };
 
@@ -4043,6 +4045,9 @@ export type RunStep = {
   rationale?: string;
   outcome: string;
   tokens?: number;
+  calls?: ToolCall[];
+  callId?: string;
+  content?: string;
   sources?: string[];
 };
 
@@ -4888,6 +4893,8 @@ export type Usage = {
   served?: string;
   input: number;
   output: number;
+  cacheReadInput?: number;
+  cacheWriteInput?: number;
   tokensReported?: boolean;
   tokensEstimated?: boolean;
   cost?: number;
@@ -5024,5501 +5031,107 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0015). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.111",
-  "widgets": [
-    {
-      "componentID": "inline-action",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.29",
-      "title": "Inline action",
-      "category": "Work",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "actions",
-        "selection",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "table",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Table",
-      "category": "Records",
-      "fieldPreset": "list",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "query",
-        "relation",
-        "selection",
-        "collection-variable",
-        "selection-variable",
-        "filter-variable",
-        "selection-set-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "tablePresentation": {
-            "type": "object",
-            "properties": {
-              "density": {
-                "type": "string",
-                "enum": [
-                  "compact",
-                  "normal"
-                ]
-              },
-              "showToolbar": {
-                "type": "boolean"
-              },
-              "titleTemplate": {
-                "type": "string",
-                "maxLength": 256
-              }
-            }
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.10"
-        },
-        {
-          "id": "filter",
-          "bindingField": "filterVariable",
-          "type": "filter",
-          "requiredUIProfile": "platform.page.v2.15"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.14",
-          "writable": true
-        },
-        {
-          "id": "selected-records",
-          "bindingField": "selectionSetVariable",
-          "type": "record-set",
-          "requiredUIProfile": "platform.page.v2.32",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      },
-      "events": [
-        {
-          "id": "select",
-          "payload": "void",
-          "required": false,
-          "maxBindings": 1,
-          "requiredUIProfile": "platform.page.v2.33"
-        }
-      ],
-      "slots": [
-        {
-          "id": "toolbar",
-          "title": "Toolbar",
-          "placement": "before",
-          "requiredUIProfile": "platform.page.v2.104",
-          "allowedLayouts": [
-            "rows",
-            "columns",
-            "flow",
-            "toolbar"
-          ]
-        },
-        {
-          "id": "footer",
-          "title": "Footer",
-          "placement": "after",
-          "requiredUIProfile": "platform.page.v2.104",
-          "allowedLayouts": [
-            "rows",
-            "columns",
-            "flow",
-            "toolbar"
-          ]
-        }
-      ]
-    },
-    {
-      "componentID": "detail",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Detail",
-      "category": "Records",
-      "fieldPreset": "list",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "selection",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "slots": [
-        {
-          "id": "actions",
-          "title": "Actions",
-          "placement": "after",
-          "requiredUIProfile": "platform.page.v2.104",
-          "allowedLayouts": [
-            "rows",
-            "columns",
-            "flow",
-            "toolbar"
-          ]
-        }
-      ]
-    },
-    {
-      "componentID": "actions",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Actions",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "actions",
-        "selection",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "chart",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Chart",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "measure": "count"
-      },
-      "bindingKinds": [
-        "object",
-        "relation",
-        "aggregate",
-        "filter-variable",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "group": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "measure": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "mark": {
-            "type": "string",
-            "enum": [
-              "bar",
-              "line",
-              "area",
-              "arc"
-            ]
-          },
-          "chartVariant": {
-            "type": "string",
-            "enum": [
-              "pie",
-              "donut"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.19"
-        },
-        {
-          "id": "filter",
-          "bindingField": "filterVariable",
-          "type": "filter",
-          "requiredUIProfile": "platform.page.v2.15"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "metric",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Metric",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "half",
-        "measure": "count"
-      },
-      "bindingKinds": [
-        "object",
-        "relation",
-        "aggregate",
-        "filter-variable",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "group": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "measure": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "metricPresentation": {
-            "type": "object",
-            "properties": {
-              "formatter": {
-                "type": "string",
-                "enum": [
-                  "number",
-                  "short"
-                ]
-              },
-              "variant": {
-                "type": "string",
-                "enum": [
-                  "card",
-                  "simple",
-                  "tag"
-                ]
-              },
-              "tone": {
-                "type": "string",
-                "enum": [
-                  "neutral",
-                  "warning",
-                  "danger",
-                  "success"
-                ]
-              },
-              "prefix": {
-                "type": "string",
-                "maxLength": 64
-              },
-              "suffix": {
-                "type": "string",
-                "maxLength": 64
-              },
-              "annotation": {
-                "type": "object",
-                "properties": {
-                  "direction": {
-                    "type": "string",
-                    "enum": [
-                      "up",
-                      "down",
-                      "flat"
-                    ]
-                  },
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.19"
-        },
-        {
-          "id": "filter",
-          "bindingField": "filterVariable",
-          "type": "filter",
-          "requiredUIProfile": "platform.page.v2.15"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "text",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Text",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 65536
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "filter",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Filter",
-      "category": "Records",
-      "fieldPreset": "filter",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "filter-variable",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.30"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "filter",
-          "bindingField": "filterVariable",
-          "type": "filter",
-          "requiredUIProfile": "platform.page.v2.15",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "form",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Form",
-      "category": "Records",
-      "fieldPreset": "create",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "relation",
-        "inputs"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "timeline",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Timeline",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "selection",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "historyLimit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "tasks",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Tasks",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "selection",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "function",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "AI function",
-      "category": "Logic",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "function",
-        "selection"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "compute",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.1",
-      "title": "Code function",
-      "category": "Logic",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "operation",
-        "inputs",
-        "selection"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "button",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.4",
-      "title": "Button",
-      "category": "Interaction",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "interaction"
-      ],
-      "selectionMode": "none",
-      "events": [
-        {
-          "id": "click",
-          "payload": "void",
-          "required": true,
-          "maxBindings": 1
-        }
-      ],
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "fieldPreset": "none",
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.4"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "input",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.7",
-      "title": "Text input",
-      "category": "Interaction",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "state-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "inputKind": {
-            "type": "string",
-            "enum": [
-              "search",
-              "scan"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.7"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "pivot",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.23",
-      "title": "Pivot table",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "measure": "count",
-        "group": ""
-      },
-      "bindingKinds": [
-        "object",
-        "relation",
-        "aggregate",
-        "filter-variable",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "group": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "measure": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "columnGroup": {
-            "type": "string",
-            "maxLength": 1024
-          }
-        },
-        "required": [
-          "group",
-          "measure"
-        ]
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.23"
-        },
-        {
-          "id": "filter",
-          "bindingField": "filterVariable",
-          "type": "filter",
-          "requiredUIProfile": "platform.page.v2.15"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-timeline",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.25",
-      "title": "Record timeline",
-      "category": "Scheduling",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "timeLabel": "id"
-      },
-      "bindingKinds": [
-        "object",
-        "selection",
-        "collection-variable",
-        "selection-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "timeStart": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "timeEnd": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "timeLabel": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "timeGroup": {
-            "type": "string",
-            "maxLength": 80
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.25"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.25",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "kanban",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.26",
-      "title": "Kanban board",
-      "category": "Work",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "cardLabel": "id"
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "actions",
-        "selection",
-        "collection-variable",
-        "selection-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "cardLabel": {
-            "type": "string",
-            "maxLength": 80
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.26"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.26",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-view",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.36",
-      "title": "Record view",
-      "category": "Records",
-      "fieldPreset": "list",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "selection",
-        "record-variable",
-        "actions"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "button-group",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.37",
-      "title": "Button group",
-      "category": "Interaction",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "interaction"
-      ],
-      "selectionMode": "none",
-      "events": [
-        {
-          "id": "click",
-          "payload": "void",
-          "required": true,
-          "maxBindings": 16,
-          "requiredUIProfile": "platform.page.v2.37"
-        }
-      ],
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "fieldPreset": "none",
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.4"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-links",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.38",
-      "title": "Record links",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "selection",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "status-tracker",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.39",
-      "title": "Status tracker",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "selection",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.5"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "heading",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.41",
-      "title": "Heading",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "headingLevel": "h2"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 4096
-          },
-          "headingLevel": {
-            "type": "string",
-            "enum": [
-              "h1",
-              "h2",
-              "h3"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      }
-    },
-    {
-      "componentID": "collection-title",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.41",
-      "title": "Collection title",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "count-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.41"
-        },
-        {
-          "id": "count",
-          "bindingField": "countVariable",
-          "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.41"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "record-list",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.42",
-      "title": "Record cards",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "cardLabel": "id",
-        "recordList": {
-          "layout": "grid"
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "selection",
-        "collection-variable",
-        "selection-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "cardLabel": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "recordList": {
-            "type": "object",
-            "properties": {
-              "layout": {
-                "type": "string",
-                "enum": [
-                  "grid",
-                  "list"
-                ]
-              }
-            },
-            "required": [
-              "layout"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.10"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.94",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-chart",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.43",
-      "title": "Record chart",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "recordChart": {
-          "mark": "line",
-          "xField": "id",
-          "yField": ""
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "recordChart": {
-            "type": "object",
-            "properties": {
-              "mark": {
-                "type": "string",
-                "enum": [
-                  "bar",
-                  "line"
-                ]
-              },
-              "xField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "yField": {
-                "type": "string",
-                "maxLength": 256
-              }
-            },
-            "required": [
-              "mark",
-              "xField",
-              "yField"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.43"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-events",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.45",
-      "title": "Record events",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "recordEvents": {
-          "timeField": "",
-          "titleField": "id",
-          "severityField": "",
-          "tones": []
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "recordEvents": {
-            "type": "object",
-            "properties": {
-              "timeField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "titleField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "severityField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "tones": {
-                "type": "array",
-                "maxItems": 32,
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "value": {
-                      "type": "string",
-                      "maxLength": 256
-                    },
-                    "tone": {
-                      "type": "string",
-                      "enum": [
-                        "neutral",
-                        "info",
-                        "success",
-                        "warning",
-                        "danger"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "tone"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "timeField",
-              "titleField",
-              "severityField",
-              "tones"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.45"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-calendar",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.46",
-      "title": "Record calendar",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "recordCalendar": {
-          "dateField": "",
-          "labelField": "id",
-          "initialMonth": ""
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "selection"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "recordCalendar": {
-            "type": "object",
-            "properties": {
-              "dateField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "labelField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "initialMonth": {
-                "type": "string",
-                "maxLength": 7
-              }
-            },
-            "required": [
-              "dateField",
-              "labelField",
-              "initialMonth"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.46"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-gantt",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.47",
-      "title": "Record Gantt",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "recordGantt": {
-          "startField": "",
-          "endField": "",
-          "titleField": "id",
-          "statusField": "",
-          "rangeStart": "",
-          "rangeEnd": "",
-          "tones": []
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "recordGantt": {
-            "type": "object",
-            "properties": {
-              "startField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "endField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "titleField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "statusField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "rangeStart": {
-                "type": "string",
-                "maxLength": 10
-              },
-              "rangeEnd": {
-                "type": "string",
-                "maxLength": 10
-              },
-              "tones": {
-                "type": "array",
-                "maxItems": 32,
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "value": {
-                      "type": "string",
-                      "maxLength": 256
-                    },
-                    "tone": {
-                      "type": "string",
-                      "enum": [
-                        "neutral",
-                        "info",
-                        "success",
-                        "warning",
-                        "danger"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "tone"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "startField",
-              "endField",
-              "titleField",
-              "statusField",
-              "rangeStart",
-              "rangeEnd",
-              "tones"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.47"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "progress",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.48",
-      "title": "Progress",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "progressTotal": "100"
-      },
-      "bindingKinds": [
-        "progress-value",
-        "progress-total"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "progressTotal": {
-            "type": "string",
-            "maxLength": 128
-          },
-          "progressLabel": {
-            "type": "string",
-            "maxLength": 1024
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "value",
-          "bindingField": "progressValueVariable",
-          "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.48"
-        },
-        {
-          "id": "total",
-          "bindingField": "progressTotalVariable",
-          "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.48"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "gauge",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.49",
-      "title": "Gauge",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "half",
-        "gauge": {
-          "max": 100
-        }
-      },
-      "bindingKinds": [
-        "gauge-value"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "gauge": {
-            "type": "object",
-            "properties": {
-              "max": {
-                "type": "number"
-              },
-              "warnAt": {
-                "type": "number"
-              },
-              "label": {
-                "type": "string",
-                "maxLength": 1024
-              },
-              "suffix": {
-                "type": "string",
-                "maxLength": 64
-              }
-            },
-            "required": [
-              "max"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "value",
-          "bindingField": "gaugeValueVariable",
-          "type": "number",
-          "requiredUIProfile": "platform.page.v2.49"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "summary-stats",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.50",
-      "title": "Summary statistics",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "statistics-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "summaryField": {
-            "type": "string",
-            "maxLength": 256
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.50"
-        },
-        {
-          "id": "statistics",
-          "bindingField": "statisticsVariable",
-          "type": "statistics",
-          "requiredUIProfile": "platform.page.v2.50"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-leaderboard",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.51",
-      "title": "Record leaderboard",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "leaderboard": {
-          "valueField": "",
-          "labelField": "id",
-          "limit": 8,
-          "ascending": false
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "selection",
-        "selection-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "leaderboard": {
-            "type": "object",
-            "properties": {
-              "valueField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "labelField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "limit": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 32
-              },
-              "ascending": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "valueField",
-              "labelField",
-              "limit",
-              "ascending"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.51"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.95",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "range-input",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.52",
-      "title": "Range input",
-      "category": "Inputs",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [
-        {
-          "id": "min",
-          "bindingField": "rangeMinVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.52"
-        },
-        {
-          "id": "max",
-          "bindingField": "rangeMaxVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.52"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "hidden": "retain",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ]
-      }
-    },
-    {
-      "componentID": "boolean-input",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.53",
-      "title": "Boolean switch",
-      "category": "Inputs",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "booleanLabel": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "booleanVariant": {
-            "type": "string",
-            "enum": [
-              "switch",
-              "checkbox"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.53"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "value",
-          "bindingField": "booleanVariable",
-          "type": "boolean",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.53"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "hidden": "retain",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ]
-      }
-    },
-    {
-      "componentID": "choice-input",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.55",
-      "title": "Choice input",
-      "category": "Inputs",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.55"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "value",
-          "bindingField": "choiceVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.55"
-        },
-        {
-          "id": "selection",
-          "bindingField": "choiceSetVariable",
-          "type": "string-set",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.56"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "hidden": "retain",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ]
-      }
-    },
-    {
-      "componentID": "date-input",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.57",
-      "title": "Date input",
-      "category": "Inputs",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "dateLabel": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "dateKind": {
-            "type": "string",
-            "enum": [
-              "date",
-              "datetime"
-            ]
-          },
-          "dateOffset": {
-            "type": "string",
-            "maxLength": 6
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.57"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "value",
-          "bindingField": "dateVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.57"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "hidden": "retain",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ]
-      }
-    },
-    {
-      "componentID": "record-picker",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.58",
-      "title": "Record picker",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "selection"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.58"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.58"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "value",
-          "bindingField": "pickerValueVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.64"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "hidden": "retain",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ]
-      }
-    },
-    {
-      "componentID": "alert-banner",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.60",
-      "title": "Alert banner",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "alertBanner": {
-          "threshold": "0",
-          "tone": "warning",
-          "message": "{value}"
-        }
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "alertBanner": {
-            "type": "object",
-            "properties": {
-              "threshold": {
-                "type": "string",
-                "maxLength": 128
-              },
-              "tone": {
-                "type": "string",
-                "enum": [
-                  "info",
-                  "warning",
-                  "danger"
-                ]
-              },
-              "message": {
-                "type": "string",
-                "maxLength": 4096
-              }
-            },
-            "required": [
-              "threshold",
-              "tone",
-              "message"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "value",
-          "bindingField": "alertValueVariable",
-          "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.60"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "hidden": "retain",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ]
-      }
-    },
-    {
-      "componentID": "notice",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.61",
-      "title": "Notice",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "notice": {
-          "tone": "info",
-          "message": ""
-        }
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "notice": {
-            "type": "object",
-            "properties": {
-              "title": {
-                "type": "string",
-                "maxLength": 1024
-              },
-              "message": {
-                "type": "string",
-                "maxLength": 4096
-              },
-              "tone": {
-                "type": "string",
-                "enum": [
-                  "info",
-                  "success",
-                  "warning",
-                  "danger"
-                ]
-              }
-            },
-            "required": [
-              "message",
-              "tone"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      }
-    },
-    {
-      "componentID": "separator",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.62",
-      "title": "Separator",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "separator": {}
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "separator": {
-            "type": "object",
-            "properties": {
-              "label": {
-                "type": "string",
-                "maxLength": 1024
-              }
-            }
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      }
-    },
-    {
-      "componentID": "spacer",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.63",
-      "title": "Spacer",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "spacer": {
-          "size": 16
-        }
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "spacer": {
-            "type": "object",
-            "properties": {
-              "size": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 4096
-              }
-            },
-            "required": [
-              "size"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      }
-    },
-    {
-      "componentID": "term-counts",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.67",
-      "title": "Term counts",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "group": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "records",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.67"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "hidden": "unmount",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ]
-      }
-    },
-    {
-      "componentID": "histogram",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.68",
-      "title": "Histogram",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "records",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.68"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "hidden": "unmount",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ]
-      }
-    },
-    {
-      "componentID": "record-scatter",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.69",
-      "title": "Record scatter plot",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "scatter": {
-          "xField": "",
-          "yField": "",
-          "colorField": "",
-          "labelField": "id"
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "selection",
-        "selection-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "scatter": {
-            "type": "object",
-            "properties": {
-              "xField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "yField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "colorField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "labelField": {
-                "type": "string",
-                "maxLength": 256
-              }
-            },
-            "required": [
-              "xField",
-              "yField",
-              "colorField",
-              "labelField"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.69"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.95",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "heatmap",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.70",
-      "title": "Heatmap",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "measure": "count",
-        "group": "",
-        "columnGroup": ""
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "aggregate"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "group": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "measure": {
-            "type": "string",
-            "enum": [
-              "count"
-            ]
-          },
-          "columnGroup": {
-            "type": "string",
-            "maxLength": 1024
-          }
-        },
-        "required": [
-          "group",
-          "columnGroup",
-          "measure"
-        ]
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.70"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "rowValue",
-          "bindingField": "rowValueVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
-        },
-        {
-          "id": "rowSet",
-          "bindingField": "rowSetVariable",
-          "type": "string-set",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
-        },
-        {
-          "id": "columnValue",
-          "bindingField": "columnValueVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
-        },
-        {
-          "id": "columnSet",
-          "bindingField": "columnSetVariable",
-          "type": "string-set",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "treemap",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.71",
-      "title": "Treemap",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "group": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "records",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.71"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "groupValue",
-          "bindingField": "groupValueVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.71"
-        },
-        {
-          "id": "groupSet",
-          "bindingField": "groupSetVariable",
-          "type": "string-set",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.71"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "hidden": "unmount",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ]
-      }
-    },
-    {
-      "componentID": "sparkline-kpi",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.72",
-      "title": "Sparkline KPI",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "sparkline": {}
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "sparkline": {
-            "type": "object",
-            "properties": {
-              "field": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "label": {
-                "type": "string",
-                "maxLength": 1024
-              },
-              "suffix": {
-                "type": "string",
-                "maxLength": 64
-              }
-            }
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.72"
-        },
-        {
-          "id": "sparklineDecimal",
-          "bindingField": "sparklineDecimalVariable",
-          "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.72"
-        },
-        {
-          "id": "sparklineNumber",
-          "bindingField": "sparklineNumberVariable",
-          "type": "number",
-          "requiredUIProfile": "platform.page.v2.72"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-card",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.73",
-      "title": "Record card",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "recordCard": {
-          "labelField": "id",
-          "tone": "info"
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "record-variable"
-      ],
-      "selectionMode": "read",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "recordCard": {
-            "type": "object",
-            "properties": {
-              "labelField": {
-                "type": "string",
-                "maxLength": 256
-              },
-              "tone": {
-                "type": "string",
-                "enum": [
-                  "neutral",
-                  "info",
-                  "success",
-                  "warning",
-                  "danger"
-                ]
-              }
-            },
-            "required": [
-              "labelField",
-              "tone"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.73"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      },
-      "slots": [
-        {
-          "id": "actions",
-          "title": "Actions",
-          "placement": "after",
-          "requiredUIProfile": "platform.page.v2.104",
-          "allowedLayouts": [
-            "rows",
-            "columns",
-            "flow",
-            "toolbar"
-          ]
-        }
-      ]
-    },
-    {
-      "componentID": "record-comparison",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.74",
-      "title": "Record comparison",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "recordComparison": {
-          "labelField": "id"
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "fields",
-        "record-set-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "recordComparison": {
-            "type": "object",
-            "properties": {
-              "labelField": {
-                "type": "string",
-                "maxLength": 256
-              }
-            },
-            "required": [
-              "labelField"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "records",
-          "bindingField": "recordSetVariable",
-          "type": "record-set",
-          "requiredUIProfile": "platform.page.v2.74"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "tag-counts",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.75",
-      "title": "Tag counts",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "group": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "records",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.75"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.75"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "groupValue",
-          "bindingField": "groupValueVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.75"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "hidden": "unmount",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ]
-      }
-    },
-    {
-      "componentID": "record-comments",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.76",
-      "title": "Record comments",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.76"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.76"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "draft",
-          "bindingField": "commentDraftVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.76",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "record-uploader",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.76",
-      "title": "Record uploader",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.76"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.76"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "file",
-          "bindingField": "fileVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.76",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "media-preview",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.76",
-      "title": "Media preview",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.76"
-        },
-        {
-          "id": "file",
-          "bindingField": "fileVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.76"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "pdf-viewer",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.76",
-      "title": "PDF viewer",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.76"
-        },
-        {
-          "id": "file",
-          "bindingField": "fileVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.76"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "page",
-          "bindingField": "pdfPageVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.76",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "approval-inbox",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.77",
-      "title": "Approval inbox",
-      "category": "Work",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.77"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "notification-feed",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.77",
-      "title": "Notification feed",
-      "category": "Work",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.77"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "breadcrumb",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.78",
-      "title": "Breadcrumbs",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.78"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.78"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      },
-      "events": [
-        {
-          "id": "click",
-          "payload": "void",
-          "required": true,
-          "maxBindings": 1,
-          "requiredUIProfile": "platform.page.v2.78"
-        }
-      ]
-    },
-    {
-      "componentID": "avatar-stack",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.78",
-      "title": "Avatar stack",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.78"
-        },
-        {
-          "id": "context",
-          "bindingField": "avatar.contextVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.78"
-        },
-        {
-          "id": "context-collection",
-          "bindingField": "avatar.contextCollectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.78"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "static-image",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.78",
-      "title": "Image",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "inline"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "resource-list",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.79",
-      "title": "Resource list",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "collection-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.79"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.79"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "asset-directory",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.79",
-      "title": "Asset directory",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.79"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      },
-      "events": [
-        {
-          "id": "click",
-          "payload": "void",
-          "required": false,
-          "maxBindings": 4,
-          "requiredUIProfile": "platform.page.v2.79"
-        }
-      ]
-    },
-    {
-      "componentID": "graph-explorer",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.79",
-      "title": "Search around",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.79"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.79"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "vertex-graph",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.79",
-      "title": "Neighborhood graph",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.79"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "collection-analysis",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.80",
-      "title": "Collection analysis",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "summaryField": {
-            "type": "string",
-            "maxLength": 256
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.80"
-        },
-        {
-          "id": "x",
-          "bindingField": "analysisXVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.80",
-          "writable": true
-        },
-        {
-          "id": "y",
-          "bindingField": "analysisYVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.80",
-          "writable": true
-        },
-        {
-          "id": "count",
-          "bindingField": "analysisCountVariable",
-          "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.80",
-          "writable": false
-        },
-        {
-          "id": "mean",
-          "bindingField": "analysisMeanVariable",
-          "type": "number",
-          "requiredUIProfile": "platform.page.v2.80",
-          "writable": false
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "action-table",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.81",
-      "title": "Record action table",
-      "category": "Work",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "actions",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "summaryField": {
-            "type": "string",
-            "maxLength": 256
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.81",
-          "writable": false
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "notepad",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.81",
-      "title": "Session notepad",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "summaryField": {
-            "type": "string",
-            "maxLength": 256
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "text",
-          "bindingField": "notepadVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.81",
-          "writable": true
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "observation",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.82",
-      "title": "Business observations",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.82"
-        },
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.82"
-        },
-        {
-          "id": "history",
-          "bindingField": "observationHistoryVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.82"
-        },
-        {
-          "id": "context",
-          "bindingField": "observationContextVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.82"
-        },
-        {
-          "id": "signal",
-          "bindingField": "observationSignalVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.82",
-          "writable": true
-        },
-        {
-          "id": "threshold",
-          "bindingField": "observationThresholdVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.82",
-          "writable": true
-        },
-        {
-          "id": "rows",
-          "bindingField": "observationRowsVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.82",
-          "writable": true
-        },
-        {
-          "id": "count",
-          "bindingField": "observationCountVariable",
-          "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.82"
-        },
-        {
-          "id": "mean",
-          "bindingField": "observationMeanVariable",
-          "type": "number",
-          "requiredUIProfile": "platform.page.v2.82"
-        },
-        {
-          "id": "enabled",
-          "bindingField": "enabledWhen",
-          "type": "boolean",
-          "requiredUIProfile": "platform.page.v2.82"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "embedded-page",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.83",
-      "title": "Embedded page",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "external-frame",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.84",
-      "title": "External document",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "ai-assistant",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.86",
-      "title": "AI assistant",
-      "category": "Content",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.73"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "record-map",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.87",
-      "title": "Record map",
-      "category": "Analysis",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "map": {
-          "latitudeField": "",
-          "longitudeField": "",
-          "labelField": "id",
-          "clusterEnabled": true
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable",
-        "selection",
-        "selection-variable"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "map": {
-            "type": "object",
-            "properties": {
-              "latitudeField": {
-                "type": "string"
-              },
-              "longitudeField": {
-                "type": "string"
-              },
-              "labelField": {
-                "type": "string"
-              },
-              "colorField": {
-                "type": "string"
-              },
-              "clusterEnabled": {
-                "type": "boolean"
-              }
-            }
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.87"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.101",
-          "writable": true
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "image-annotation",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.87",
-      "title": "Image annotation",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "object",
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.87"
-        },
-        {
-          "id": "file",
-          "bindingField": "fileVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.87"
-        }
-      ],
-      "outputPorts": [],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "scene-3d",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.87",
-      "title": "3D scene",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "scene": {
-          "background": "dark",
-          "showGrid": true,
-          "quality": "balanced",
-          "layers": [],
-          "mappings": []
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "record-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "scene": {
-            "type": "object",
-            "properties": {
-              "background": {
-                "type": "string"
-              },
-              "quality": {
-                "type": "string"
-              },
-              "showGrid": {
-                "type": "boolean"
-              },
-              "sampleAssetField": {
-                "type": "string"
-              },
-              "layers": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              },
-              "mappings": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              },
-              "sampleTimeField": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "record",
-          "bindingField": "recordVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.87"
-        },
-        {
-          "id": "file",
-          "bindingField": "fileVariable",
-          "type": "string",
-          "requiredUIProfile": "platform.page.v2.87"
-        },
-        {
-          "id": "sample",
-          "bindingField": "sceneSampleVariable",
-          "type": "record",
-          "requiredUIProfile": "platform.page.v2.87"
-        },
-        {
-          "id": "sample-window",
-          "bindingField": "sceneSampleCollectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.87"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "part",
-          "bindingField": "scenePartVariable",
-          "type": "string",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.87"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "widget-instance",
-        "clearOn": [
-          "record",
-          "member",
-          "definition",
-          "scope-close"
-        ],
-        "hidden": "unmount"
-      }
-    },
-    {
-      "componentID": "collection-builder",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.88",
-      "title": "Collection builder",
-      "category": "Data",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full",
-        "collectionBuilder": {
-          "fields": []
-        }
-      },
-      "bindingKinds": [
-        "object",
-        "collection-variable"
-      ],
-      "selectionMode": "none",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          },
-          "collectionBuilder": {
-            "type": "object",
-            "properties": {
-              "fields": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "minItems": 1,
-                "maxItems": 32
-              }
-            }
-          }
-        }
-      },
-      "inputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.88"
-        }
-      ],
-      "outputPorts": [
-        {
-          "id": "collection",
-          "bindingField": "collectionOutputVariable",
-          "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.88"
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      },
-      "lifecyclePolicy": {
-        "stateOwner": "page-session",
-        "clearOn": [
-          "scope-change",
-          "binding-change",
-          "close"
-        ],
-        "hidden": "retain"
-      }
-    },
-    {
-      "componentID": "layered-graph",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.111",
-      "title": "Layered graph",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "composite"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "modelPorts": [
-        {
-          "id": "nodes",
-          "roles": {
-            "label": {
-              "kinds": [
-                "text",
-                "choice",
-                "reference",
-                "integer",
-                "number",
-                "decimal"
-              ]
-            },
-            "detail": {
-              "kinds": [
-                "text",
-                "choice",
-                "reference",
-                "integer",
-                "number",
-                "decimal"
-              ]
-            },
-            "layer": {
-              "kinds": [
-                "reference"
-              ],
-              "target": "layers"
-            },
-            "state": {
-              "kinds": [
-                "text",
-                "choice"
-              ]
-            },
-            "current": {
-              "kinds": [
-                "boolean"
-              ]
-            },
-            "notation": {
-              "kinds": [
-                "text",
-                "choice"
-              ]
-            },
-            "order": {
-              "kinds": [
-                "integer",
-                "number",
-                "decimal"
-              ]
-            }
-          },
-          "required": true
-        },
-        {
-          "id": "layers",
-          "roles": {
-            "label": {
-              "kinds": [
-                "text",
-                "choice",
-                "reference",
-                "integer",
-                "number",
-                "decimal"
-              ]
-            }
-          }
-        },
-        {
-          "id": "edges",
-          "roles": {
-            "from": {
-              "kinds": [
-                "reference"
-              ],
-              "required": true,
-              "target": "nodes"
-            },
-            "to": {
-              "kinds": [
-                "reference"
-              ],
-              "required": true,
-              "target": "nodes"
-            },
-            "label": {
-              "kinds": [
-                "text",
-                "choice",
-                "reference",
-                "integer",
-                "number",
-                "decimal"
-              ]
-            },
-            "state": {
-              "kinds": [
-                "text",
-                "choice"
-              ]
-            },
-            "dashed": {
-              "kinds": [
-                "boolean"
-              ]
-            }
-          },
-          "required": true
-        },
-        {
-          "id": "overlay",
-          "roles": {
-            "node": {
-              "kinds": [
-                "reference"
-              ],
-              "required": true,
-              "target": "nodes"
-            },
-            "detail": {
-              "kinds": [
-                "text",
-                "choice",
-                "reference",
-                "integer",
-                "number",
-                "decimal"
-              ]
-            },
-            "state": {
-              "kinds": [
-                "text",
-                "choice"
-              ]
-            },
-            "current": {
-              "kinds": [
-                "boolean"
-              ]
-            }
-          }
-        }
-      ],
-      "inputPorts": [],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.111"
-        }
-      ],
-      "events": [
-        {
-          "id": "select",
-          "payload": "void",
-          "required": false,
-          "maxBindings": 1
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    },
-    {
-      "componentID": "model-matrix",
-      "configVersion": 1,
-      "requiredUIProfile": "platform.page.v2.111",
-      "title": "Model matrix",
-      "category": "Records",
-      "fieldPreset": "none",
-      "defaults": {
-        "width": "full"
-      },
-      "bindingKinds": [
-        "composite"
-      ],
-      "selectionMode": "write",
-      "propsSchema": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "width": {
-            "type": "string",
-            "enum": [
-              "full",
-              "half"
-            ]
-          }
-        }
-      },
-      "modelPorts": [
-        {
-          "id": "rows",
-          "roles": {
-            "label": {
-              "kinds": [
-                "text",
-                "choice",
-                "reference",
-                "integer",
-                "number",
-                "decimal"
-              ]
-            }
-          },
-          "required": true
-        },
-        {
-          "id": "columns",
-          "roles": {
-            "label": {
-              "kinds": [
-                "text",
-                "choice",
-                "reference",
-                "integer",
-                "number",
-                "decimal"
-              ]
-            }
-          },
-          "required": true
-        }
-      ],
-      "inputPorts": [],
-      "outputPorts": [
-        {
-          "id": "selection",
-          "bindingField": "selectionVariable",
-          "type": "record",
-          "writable": true,
-          "requiredUIProfile": "platform.page.v2.111"
-        }
-      ],
-      "events": [
-        {
-          "id": "select",
-          "payload": "void",
-          "required": false,
-          "maxBindings": 1
-        }
-      ],
-      "layoutPreferences": {
-        "frame": "card"
-      }
-    }
-  ],
-  "supportedProfiles": [
-    "platform.page.v2.1",
-    "platform.page.v2.2",
-    "platform.page.v2.3",
-    "platform.page.v2.4",
-    "platform.page.v2.5",
-    "platform.page.v2.6",
-    "platform.page.v2.7",
-    "platform.page.v2.8",
-    "platform.page.v2.9",
-    "platform.page.v2.10",
-    "platform.page.v2.11",
-    "platform.page.v2.12",
-    "platform.page.v2.13",
-    "platform.page.v2.14",
-    "platform.page.v2.15",
-    "platform.page.v2.16",
-    "platform.page.v2.17",
-    "platform.page.v2.18",
-    "platform.page.v2.19",
-    "platform.page.v2.20",
-    "platform.page.v2.21",
-    "platform.page.v2.22",
-    "platform.page.v2.23",
-    "platform.page.v2.24",
-    "platform.page.v2.25",
-    "platform.page.v2.26",
-    "platform.page.v2.27",
-    "platform.page.v2.28",
-    "platform.page.v2.29",
-    "platform.page.v2.30",
-    "platform.page.v2.31",
-    "platform.page.v2.32",
-    "platform.page.v2.33",
-    "platform.page.v2.34",
-    "platform.page.v2.35",
-    "platform.page.v2.36",
-    "platform.page.v2.37",
-    "platform.page.v2.38",
-    "platform.page.v2.39",
-    "platform.page.v2.40",
-    "platform.page.v2.41",
-    "platform.page.v2.42",
-    "platform.page.v2.43",
-    "platform.page.v2.44",
-    "platform.page.v2.45",
-    "platform.page.v2.46",
-    "platform.page.v2.47",
-    "platform.page.v2.48",
-    "platform.page.v2.49",
-    "platform.page.v2.50",
-    "platform.page.v2.51",
-    "platform.page.v2.52",
-    "platform.page.v2.53",
-    "platform.page.v2.54",
-    "platform.page.v2.55",
-    "platform.page.v2.56",
-    "platform.page.v2.57",
-    "platform.page.v2.58",
-    "platform.page.v2.59",
-    "platform.page.v2.60",
-    "platform.page.v2.61",
-    "platform.page.v2.62",
-    "platform.page.v2.63",
-    "platform.page.v2.64",
-    "platform.page.v2.65",
-    "platform.page.v2.66",
-    "platform.page.v2.67",
-    "platform.page.v2.68",
-    "platform.page.v2.69",
-    "platform.page.v2.70",
-    "platform.page.v2.71",
-    "platform.page.v2.72",
-    "platform.page.v2.73",
-    "platform.page.v2.74",
-    "platform.page.v2.75",
-    "platform.page.v2.76",
-    "platform.page.v2.77",
-    "platform.page.v2.78",
-    "platform.page.v2.79",
-    "platform.page.v2.80",
-    "platform.page.v2.81",
-    "platform.page.v2.82",
-    "platform.page.v2.83",
-    "platform.page.v2.84",
-    "platform.page.v2.85",
-    "platform.page.v2.86",
-    "platform.page.v2.87",
-    "platform.page.v2.88",
-    "platform.page.v2.89",
-    "platform.page.v2.90",
-    "platform.page.v2.91",
-    "platform.page.v2.92",
-    "platform.page.v2.93",
-    "platform.page.v2.94",
-    "platform.page.v2.95",
-    "platform.page.v2.96",
-    "platform.page.v2.97",
-    "platform.page.v2.98",
-    "platform.page.v2.99",
-    "platform.page.v2.100",
-    "platform.page.v2.101",
-    "platform.page.v2.102",
-    "platform.page.v2.103",
-    "platform.page.v2.104",
-    "platform.page.v2.105",
-    "platform.page.v2.106",
-    "platform.page.v2.107",
-    "platform.page.v2.108",
-    "platform.page.v2.109",
-    "platform.page.v2.110",
-    "platform.page.v2.111"
-  ],
+  "documentless": {
+    "widgets": [
+      "inline-action",
+      "table",
+      "detail",
+      "actions",
+      "chart",
+      "metric",
+      "text",
+      "filter",
+      "form",
+      "timeline",
+      "tasks",
+      "function",
+      "compute",
+      "button",
+      "input",
+      "pivot",
+      "record-timeline",
+      "kanban",
+      "record-view",
+      "button-group",
+      "external-frame",
+      "layered-graph",
+      "model-matrix"
+    ],
+    "fields": [
+      "actions",
+      "buttons",
+      "cardLabel",
+      "collectionVariable",
+      "columnGroup",
+      "composite",
+      "configVersion",
+      "detailPresentation",
+      "externalFrame",
+      "facets",
+      "fields",
+      "filterSearchVariable",
+      "filterVariable",
+      "function",
+      "group",
+      "id",
+      "inlineEdit",
+      "inputs",
+      "mark",
+      "measure",
+      "model",
+      "object",
+      "operation",
+      "parentSelection",
+      "query",
+      "recordVariable",
+      "recordView",
+      "relation",
+      "selection",
+      "selectionSetVariable",
+      "selectionVariable",
+      "showSearch",
+      "tableColumns",
+      "text",
+      "timeEnd",
+      "timeGroup",
+      "timeLabel",
+      "timeStart",
+      "title",
+      "widget",
+      "width"
+    ]
+  },
+  "features": {
+    "variables": "platform.page.v2.2",
+    "resourceVariables": "platform.page.v2.3",
+    "propertyVariables": "platform.page.v2.17",
+    "decimalVariables": "platform.page.v2.16",
+    "applicationFilters": "platform.page.v2.15",
+    "applicationRecords": "platform.page.v2.14",
+    "applicationCollections": "platform.page.v2.12",
+    "applicationBindings": "platform.page.v2.8",
+    "overlayFilters": "platform.page.v2.13",
+    "overlayResources": "platform.page.v2.11",
+    "overlayVariables": "platform.page.v2.7",
+    "loopVariables": "platform.page.v2.5",
+    "interactiveLayouts": "platform.page.v2.4",
+    "statefulLayouts": "platform.page.v2.2",
+    "layoutInput": "platform.page.v2.7",
+    "chartMark": "platform.page.v2.24",
+    "actionDefaults": "platform.page.v2.92"
+  },
+  "layout": {
+    "requiredUIProfile": "platform.page.v2.27",
+    "minSize": 32,
+    "maxSize": 4096,
+    "maxWeight": 24,
+    "maxGap": 64,
+    "stackBelow": 448,
+    "unusedProfile": "platform.page.v2.28",
+    "maxUnused": 128,
+    "presentationProfile": "platform.page.v2.93",
+    "maxPadding": 64
+  },
   "runtime": {
     "telemetry": {
       "sharedUIProfile": "platform.page.v2.103"
@@ -10808,10 +5421,10 @@ export const pageUIManifest = {
       "operators": [
         "=",
         "!=",
-        "<",
-        "<=",
-        ">",
-        ">=",
+        "\u003c",
+        "\u003c=",
+        "\u003e",
+        "\u003e=",
         "like",
         "in",
         "not in"
@@ -11277,19 +5890,6734 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.111"
     }
   },
-  "layout": {
-    "requiredUIProfile": "platform.page.v2.27",
-    "minSize": 32,
-    "maxSize": 4096,
-    "maxWeight": 24,
-    "maxGap": 64,
-    "stackBelow": 448,
-    "unusedProfile": "platform.page.v2.28",
-    "maxUnused": 128,
-    "presentationProfile": "platform.page.v2.93",
-    "maxPadding": 64
-  }
+  "supportedProfiles": [
+    "platform.page.v2.1",
+    "platform.page.v2.2",
+    "platform.page.v2.3",
+    "platform.page.v2.4",
+    "platform.page.v2.5",
+    "platform.page.v2.6",
+    "platform.page.v2.7",
+    "platform.page.v2.8",
+    "platform.page.v2.9",
+    "platform.page.v2.10",
+    "platform.page.v2.11",
+    "platform.page.v2.12",
+    "platform.page.v2.13",
+    "platform.page.v2.14",
+    "platform.page.v2.15",
+    "platform.page.v2.16",
+    "platform.page.v2.17",
+    "platform.page.v2.18",
+    "platform.page.v2.19",
+    "platform.page.v2.20",
+    "platform.page.v2.21",
+    "platform.page.v2.22",
+    "platform.page.v2.23",
+    "platform.page.v2.24",
+    "platform.page.v2.25",
+    "platform.page.v2.26",
+    "platform.page.v2.27",
+    "platform.page.v2.28",
+    "platform.page.v2.29",
+    "platform.page.v2.30",
+    "platform.page.v2.31",
+    "platform.page.v2.32",
+    "platform.page.v2.33",
+    "platform.page.v2.34",
+    "platform.page.v2.35",
+    "platform.page.v2.36",
+    "platform.page.v2.37",
+    "platform.page.v2.38",
+    "platform.page.v2.39",
+    "platform.page.v2.40",
+    "platform.page.v2.41",
+    "platform.page.v2.42",
+    "platform.page.v2.43",
+    "platform.page.v2.44",
+    "platform.page.v2.45",
+    "platform.page.v2.46",
+    "platform.page.v2.47",
+    "platform.page.v2.48",
+    "platform.page.v2.49",
+    "platform.page.v2.50",
+    "platform.page.v2.51",
+    "platform.page.v2.52",
+    "platform.page.v2.53",
+    "platform.page.v2.54",
+    "platform.page.v2.55",
+    "platform.page.v2.56",
+    "platform.page.v2.57",
+    "platform.page.v2.58",
+    "platform.page.v2.59",
+    "platform.page.v2.60",
+    "platform.page.v2.61",
+    "platform.page.v2.62",
+    "platform.page.v2.63",
+    "platform.page.v2.64",
+    "platform.page.v2.65",
+    "platform.page.v2.66",
+    "platform.page.v2.67",
+    "platform.page.v2.68",
+    "platform.page.v2.69",
+    "platform.page.v2.70",
+    "platform.page.v2.71",
+    "platform.page.v2.72",
+    "platform.page.v2.73",
+    "platform.page.v2.74",
+    "platform.page.v2.75",
+    "platform.page.v2.76",
+    "platform.page.v2.77",
+    "platform.page.v2.78",
+    "platform.page.v2.79",
+    "platform.page.v2.80",
+    "platform.page.v2.81",
+    "platform.page.v2.82",
+    "platform.page.v2.83",
+    "platform.page.v2.84",
+    "platform.page.v2.85",
+    "platform.page.v2.86",
+    "platform.page.v2.87",
+    "platform.page.v2.88",
+    "platform.page.v2.89",
+    "platform.page.v2.90",
+    "platform.page.v2.91",
+    "platform.page.v2.92",
+    "platform.page.v2.93",
+    "platform.page.v2.94",
+    "platform.page.v2.95",
+    "platform.page.v2.96",
+    "platform.page.v2.97",
+    "platform.page.v2.98",
+    "platform.page.v2.99",
+    "platform.page.v2.100",
+    "platform.page.v2.101",
+    "platform.page.v2.102",
+    "platform.page.v2.103",
+    "platform.page.v2.104",
+    "platform.page.v2.105",
+    "platform.page.v2.106",
+    "platform.page.v2.107",
+    "platform.page.v2.108",
+    "platform.page.v2.109",
+    "platform.page.v2.110",
+    "platform.page.v2.111"
+  ],
+  "uiProfile": "platform.page.v2.111",
+  "widgets": [
+    {
+      "authoringFields": [
+        "actionDefaults",
+        "actions",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "actions",
+        "selection",
+        "record-variable"
+      ],
+      "category": "Work",
+      "componentID": "inline-action",
+      "configVersion": 1,
+      "configurationFields": [
+        "actionDefaults",
+        "actions",
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.29",
+      "selectionMode": "read",
+      "title": "Inline action"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "facets",
+        "fields",
+        "filterSearchVariable",
+        "filterVariable",
+        "id",
+        "inlineEdit",
+        "model",
+        "object",
+        "parentSelection",
+        "query",
+        "relation",
+        "selection",
+        "selectionSetVariable",
+        "selectionVariable",
+        "showSearch",
+        "tableColumns",
+        "tablePresentation",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "query",
+        "relation",
+        "selection",
+        "collection-variable",
+        "selection-variable",
+        "filter-variable",
+        "selection-set-variable"
+      ],
+      "category": "Records",
+      "componentID": "table",
+      "configVersion": 1,
+      "configurationFields": [
+        "facets",
+        "fields",
+        "filterSearchVariable",
+        "inlineEdit",
+        "model",
+        "object",
+        "parentSelection",
+        "query",
+        "relation",
+        "selection",
+        "showSearch",
+        "tableColumns"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "events": [
+        {
+          "id": "select",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 1,
+          "requiredUIProfile": "platform.page.v2.33"
+        }
+      ],
+      "fieldPreset": "list",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.10"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.14",
+          "writable": true
+        },
+        {
+          "id": "selected-records",
+          "bindingField": "selectionSetVariable",
+          "type": "record-set",
+          "requiredUIProfile": "platform.page.v2.32",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "tablePresentation": {
+            "type": "object",
+            "properties": {
+              "density": {
+                "type": "string",
+                "enum": [
+                  "compact",
+                  "normal"
+                ]
+              },
+              "showToolbar": {
+                "type": "boolean"
+              },
+              "titleTemplate": {
+                "type": "string",
+                "maxLength": 256
+              }
+            }
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "write",
+      "slots": [
+        {
+          "id": "toolbar",
+          "title": "Toolbar",
+          "placement": "before",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        },
+        {
+          "id": "footer",
+          "title": "Footer",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
+      ],
+      "title": "Table"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "detailPresentation",
+        "fields",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "selection",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "detail",
+      "configVersion": 1,
+      "configurationFields": [
+        "detailPresentation",
+        "fields",
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "list",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "read",
+      "slots": [
+        {
+          "id": "actions",
+          "title": "Actions",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
+      ],
+      "title": "Detail"
+    },
+    {
+      "authoringFields": [
+        "actions",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "actions",
+        "selection",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "actions",
+      "configVersion": 1,
+      "configurationFields": [
+        "actions",
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "read",
+      "title": "Actions"
+    },
+    {
+      "authoringFields": [
+        "chartVariant",
+        "collectionVariable",
+        "configVersion",
+        "filterVariable",
+        "group",
+        "id",
+        "mark",
+        "measure",
+        "model",
+        "object",
+        "parentSelection",
+        "relation",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "relation",
+        "aggregate",
+        "filter-variable",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "chart",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ],
+      "defaults": {
+        "width": "full",
+        "measure": "count"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.19"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "mark": {
+            "type": "string",
+            "enum": [
+              "bar",
+              "line",
+              "area",
+              "arc"
+            ]
+          },
+          "chartVariant": {
+            "type": "string",
+            "enum": [
+              "pie",
+              "donut"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "none",
+      "title": "Chart"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "filterVariable",
+        "group",
+        "id",
+        "measure",
+        "metricPresentation",
+        "model",
+        "object",
+        "parentSelection",
+        "relation",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "relation",
+        "aggregate",
+        "filter-variable",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "metric",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ],
+      "defaults": {
+        "width": "half",
+        "measure": "count"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.19"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "metricPresentation": {
+            "type": "object",
+            "properties": {
+              "formatter": {
+                "type": "string",
+                "enum": [
+                  "number",
+                  "short"
+                ]
+              },
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "card",
+                  "simple",
+                  "tag"
+                ]
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "warning",
+                  "danger",
+                  "success"
+                ]
+              },
+              "prefix": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "suffix": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "annotation": {
+                "type": "object",
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down",
+                      "flat"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "none",
+      "title": "Metric"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "text",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "text",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "none",
+      "title": "Text"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "fields",
+        "filterVariable",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "filter-variable",
+        "collection-variable"
+      ],
+      "category": "Records",
+      "componentID": "filter",
+      "configVersion": 1,
+      "configurationFields": [
+        "fields",
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "filter",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.30"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "none",
+      "title": "Filter"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "fields",
+        "id",
+        "inputs",
+        "model",
+        "object",
+        "parentSelection",
+        "relation",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "relation",
+        "inputs"
+      ],
+      "category": "Records",
+      "componentID": "form",
+      "configVersion": 1,
+      "configurationFields": [
+        "fields",
+        "inputs",
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "create",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "none",
+      "title": "Form"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "historyLimit",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "selection",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "timeline",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "historyLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "read",
+      "title": "Timeline"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "selection",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "tasks",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "read",
+      "title": "Tasks"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "function",
+        "id",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "function",
+        "selection"
+      ],
+      "category": "Logic",
+      "componentID": "function",
+      "configVersion": 1,
+      "configurationFields": [
+        "function",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "read",
+      "title": "AI function"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "inputs",
+        "operation",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "operation",
+        "inputs",
+        "selection"
+      ],
+      "category": "Logic",
+      "componentID": "compute",
+      "configVersion": 1,
+      "configurationFields": [
+        "inputs",
+        "operation",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.1",
+      "selectionMode": "read",
+      "title": "Code function"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "interaction"
+      ],
+      "category": "Interaction",
+      "componentID": "button",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": true,
+          "maxBindings": 1
+        }
+      ],
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.4"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.4",
+      "selectionMode": "none",
+      "title": "Button"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "inputKind",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "state-variable"
+      ],
+      "category": "Interaction",
+      "componentID": "input",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.7"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "inputKind": {
+            "type": "string",
+            "enum": [
+              "search",
+              "scan"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.7",
+      "selectionMode": "none",
+      "title": "Text input"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "columnGroup",
+        "configVersion",
+        "filterVariable",
+        "group",
+        "id",
+        "measure",
+        "model",
+        "object",
+        "parentSelection",
+        "relation",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "relation",
+        "aggregate",
+        "filter-variable",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "pivot",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ],
+      "defaults": {
+        "width": "full",
+        "measure": "count",
+        "group": ""
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.23"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "columnGroup": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "group",
+          "measure"
+        ]
+      },
+      "requiredUIProfile": "platform.page.v2.23",
+      "selectionMode": "none",
+      "title": "Pivot table"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "selection",
+        "selectionVariable",
+        "timeEnd",
+        "timeGroup",
+        "timeLabel",
+        "timeStart",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "selection",
+        "collection-variable",
+        "selection-variable"
+      ],
+      "category": "Scheduling",
+      "componentID": "record-timeline",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full",
+        "timeLabel": "id"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.25"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.25",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "timeStart": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "timeEnd": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "timeLabel": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "timeGroup": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.25",
+      "selectionMode": "write",
+      "title": "Record timeline"
+    },
+    {
+      "authoringFields": [
+        "actions",
+        "cardLabel",
+        "collectionVariable",
+        "configVersion",
+        "fields",
+        "group",
+        "id",
+        "model",
+        "object",
+        "selection",
+        "selectionVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "actions",
+        "selection",
+        "collection-variable",
+        "selection-variable"
+      ],
+      "category": "Work",
+      "componentID": "kanban",
+      "configVersion": 1,
+      "configurationFields": [
+        "actions",
+        "fields",
+        "group",
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full",
+        "cardLabel": "id"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.26"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.26",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "cardLabel": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.26",
+      "selectionMode": "write",
+      "title": "Kanban board"
+    },
+    {
+      "authoringFields": [
+        "actions",
+        "configVersion",
+        "fields",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "recordView",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "selection",
+        "record-variable",
+        "actions"
+      ],
+      "category": "Records",
+      "componentID": "record-view",
+      "configVersion": 1,
+      "configurationFields": [
+        "actions",
+        "fields",
+        "model",
+        "object",
+        "recordView",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "list",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.36",
+      "selectionMode": "read",
+      "title": "Record view"
+    },
+    {
+      "authoringFields": [
+        "buttons",
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "interaction"
+      ],
+      "category": "Interaction",
+      "componentID": "button-group",
+      "configVersion": 1,
+      "configurationFields": [
+        "buttons"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": true,
+          "maxBindings": 16,
+          "requiredUIProfile": "platform.page.v2.37"
+        }
+      ],
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.4"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.37",
+      "selectionMode": "none",
+      "title": "Button group"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordLinks",
+        "recordVariable",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "selection",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-links",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "recordLinks",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.38",
+      "selectionMode": "read",
+      "title": "Record links"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "selection",
+        "statusTracker",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "selection",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "status-tracker",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection",
+        "statusTracker"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.39",
+      "selectionMode": "read",
+      "title": "Status tracker"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "headingLevel",
+        "id",
+        "text",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "heading",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full",
+        "headingLevel": "h2"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "outputPorts": [],
+      "propertyEditor": "schema",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4096,
+            "title": "Heading text",
+            "editor": "textarea"
+          },
+          "headingLevel": {
+            "type": "string",
+            "enum": [
+              "h1",
+              "h2",
+              "h3"
+            ],
+            "title": "Heading level"
+          }
+        },
+        "description": "Heading text is plain text; markup and scripts are not interpreted."
+      },
+      "requiredUIProfile": "platform.page.v2.41",
+      "selectionMode": "none",
+      "title": "Heading"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "countVariable",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "count-variable"
+      ],
+      "category": "Records",
+      "componentID": "collection-title",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.41"
+        },
+        {
+          "id": "count",
+          "bindingField": "countVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.41"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.41",
+      "selectionMode": "none",
+      "title": "Collection title"
+    },
+    {
+      "authoringFields": [
+        "cardLabel",
+        "collectionVariable",
+        "configVersion",
+        "fields",
+        "id",
+        "model",
+        "object",
+        "recordList",
+        "selection",
+        "selectionVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "selection",
+        "collection-variable",
+        "selection-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-list",
+      "configVersion": 1,
+      "configurationFields": [
+        "fields",
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full",
+        "cardLabel": "id",
+        "recordList": {
+          "layout": "grid"
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.10"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.94",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "cardLabel": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "recordList": {
+            "type": "object",
+            "properties": {
+              "layout": {
+                "type": "string",
+                "enum": [
+                  "grid",
+                  "list"
+                ]
+              }
+            },
+            "required": [
+              "layout"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.42",
+      "selectionMode": "write",
+      "title": "Record cards"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordChart",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "record-chart",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "recordChart": {
+          "mark": "line",
+          "xField": "id",
+          "yField": ""
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.43"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordChart": {
+            "type": "object",
+            "properties": {
+              "mark": {
+                "type": "string",
+                "enum": [
+                  "bar",
+                  "line"
+                ]
+              },
+              "xField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "yField": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "mark",
+              "xField",
+              "yField"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.43",
+      "selectionMode": "none",
+      "title": "Record chart"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordEvents",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-events",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "recordEvents": {
+          "timeField": "",
+          "titleField": "id",
+          "severityField": "",
+          "tones": []
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.45"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordEvents": {
+            "type": "object",
+            "properties": {
+              "timeField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "titleField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "severityField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "tones": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "tone": {
+                      "type": "string",
+                      "enum": [
+                        "neutral",
+                        "info",
+                        "success",
+                        "warning",
+                        "danger"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "tone"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "timeField",
+              "titleField",
+              "severityField",
+              "tones"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.45",
+      "selectionMode": "none",
+      "title": "Record events"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordCalendar",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "category": "Records",
+      "componentID": "record-calendar",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full",
+        "recordCalendar": {
+          "dateField": "",
+          "labelField": "id",
+          "initialMonth": ""
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.46"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordCalendar": {
+            "type": "object",
+            "properties": {
+              "dateField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "initialMonth": {
+                "type": "string",
+                "maxLength": 7
+              }
+            },
+            "required": [
+              "dateField",
+              "labelField",
+              "initialMonth"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.46",
+      "selectionMode": "write",
+      "title": "Record calendar"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordGantt",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-gantt",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "recordGantt": {
+          "startField": "",
+          "endField": "",
+          "titleField": "id",
+          "statusField": "",
+          "rangeStart": "",
+          "rangeEnd": "",
+          "tones": []
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.47"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordGantt": {
+            "type": "object",
+            "properties": {
+              "startField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "endField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "titleField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "statusField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "rangeStart": {
+                "type": "string",
+                "maxLength": 10
+              },
+              "rangeEnd": {
+                "type": "string",
+                "maxLength": 10
+              },
+              "tones": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "tone": {
+                      "type": "string",
+                      "enum": [
+                        "neutral",
+                        "info",
+                        "success",
+                        "warning",
+                        "danger"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "tone"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "startField",
+              "endField",
+              "titleField",
+              "statusField",
+              "rangeStart",
+              "rangeEnd",
+              "tones"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.47",
+      "selectionMode": "none",
+      "title": "Record Gantt"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "progressLabel",
+        "progressTotal",
+        "progressTotalVariable",
+        "progressValueVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "progress-value",
+        "progress-total"
+      ],
+      "category": "Analysis",
+      "componentID": "progress",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full",
+        "progressTotal": "100"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "value",
+          "bindingField": "progressValueVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.48"
+        },
+        {
+          "id": "total",
+          "bindingField": "progressTotalVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.48"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "progressTotal": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "progressLabel": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.48",
+      "selectionMode": "none",
+      "title": "Progress"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "gauge",
+        "gaugeValueVariable",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "gauge-value"
+      ],
+      "category": "Analysis",
+      "componentID": "gauge",
+      "configVersion": 1,
+      "defaults": {
+        "width": "half",
+        "gauge": {
+          "max": 100
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "value",
+          "bindingField": "gaugeValueVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.49"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "gauge": {
+            "type": "object",
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "warnAt": {
+                "type": "number"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "suffix": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "max"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.49",
+      "selectionMode": "none",
+      "title": "Gauge"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "statisticsVariable",
+        "summaryField",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "statistics-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "summary-stats",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.50"
+        },
+        {
+          "id": "statistics",
+          "bindingField": "statisticsVariable",
+          "type": "statistics",
+          "requiredUIProfile": "platform.page.v2.50"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.50",
+      "selectionMode": "none",
+      "title": "Summary statistics"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "leaderboard",
+        "model",
+        "object",
+        "selection",
+        "selectionVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection",
+        "selection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "record-leaderboard",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full",
+        "leaderboard": {
+          "valueField": "",
+          "labelField": "id",
+          "limit": 8,
+          "ascending": false
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.51"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.95",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "leaderboard": {
+            "type": "object",
+            "properties": {
+              "valueField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              },
+              "ascending": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "valueField",
+              "labelField",
+              "limit",
+              "ascending"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.51",
+      "selectionMode": "write",
+      "title": "Record leaderboard"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "rangeInput",
+        "rangeMaxVariable",
+        "rangeMinVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Inputs",
+      "componentID": "range-input",
+      "configVersion": 1,
+      "configurationFields": [
+        "rangeInput"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      },
+      "outputPorts": [
+        {
+          "id": "min",
+          "bindingField": "rangeMinVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.52",
+          "stateWritable": true
+        },
+        {
+          "id": "max",
+          "bindingField": "rangeMaxVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.52",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.52",
+      "selectionMode": "none",
+      "title": "Range input"
+    },
+    {
+      "authoringFields": [
+        "booleanLabel",
+        "booleanVariable",
+        "booleanVariant",
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Inputs",
+      "componentID": "boolean-input",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.53"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      },
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "booleanVariable",
+          "type": "boolean",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.53",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "booleanLabel": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "booleanVariant": {
+            "type": "string",
+            "enum": [
+              "switch",
+              "checkbox"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.53",
+      "selectionMode": "none",
+      "title": "Boolean switch"
+    },
+    {
+      "authoringFields": [
+        "choiceInput",
+        "choiceSetVariable",
+        "choiceVariable",
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Inputs",
+      "componentID": "choice-input",
+      "configVersion": 1,
+      "configurationFields": [
+        "choiceInput"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.55"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      },
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "choiceVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.55",
+          "stateWritable": true
+        },
+        {
+          "id": "selection",
+          "bindingField": "choiceSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.56",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.55",
+      "selectionMode": "none",
+      "title": "Choice input"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "dateKind",
+        "dateLabel",
+        "dateOffset",
+        "dateVariable",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Inputs",
+      "componentID": "date-input",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.57"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      },
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "dateVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.57",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "dateLabel": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "dateKind": {
+            "type": "string",
+            "enum": [
+              "date",
+              "datetime"
+            ]
+          },
+          "dateOffset": {
+            "type": "string",
+            "maxLength": 6
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.57",
+      "selectionMode": "none",
+      "title": "Date input"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "pickerValueVariable",
+        "recordPicker",
+        "selection",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "category": "Records",
+      "componentID": "record-picker",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "recordPicker",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.58"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.58"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      },
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "pickerValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.64",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.58",
+      "selectionMode": "write",
+      "title": "Record picker"
+    },
+    {
+      "authoringFields": [
+        "alertBanner",
+        "alertValueVariable",
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "alert-banner",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full",
+        "alertBanner": {
+          "threshold": "0",
+          "tone": "warning",
+          "message": "{value}"
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "value",
+          "bindingField": "alertValueVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.60"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "alertBanner": {
+            "type": "object",
+            "properties": {
+              "threshold": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "warning",
+                  "danger"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "threshold",
+              "tone",
+              "message"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.60",
+      "selectionMode": "none",
+      "title": "Alert banner"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "notice",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "notice",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full",
+        "notice": {
+          "tone": "info",
+          "message": ""
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "outputPorts": [],
+      "propertyEditor": "schema",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "notice": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 1024,
+                "title": "Notice title",
+                "presenceTitle": "Show notice title"
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096,
+                "title": "Notice text",
+                "editor": "textarea"
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "success",
+                  "warning",
+                  "danger"
+                ],
+                "title": "Notice tone"
+              }
+            },
+            "required": [
+              "message",
+              "tone"
+            ]
+          }
+        },
+        "description": "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions."
+      },
+      "requiredUIProfile": "platform.page.v2.61",
+      "selectionMode": "none",
+      "title": "Notice"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "separator",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "separator",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full",
+        "separator": {}
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "outputPorts": [],
+      "propertyEditor": "schema",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "separator": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "maxLength": 1024,
+                "title": "Separator label",
+                "presenceTitle": "Show separator label"
+              }
+            }
+          }
+        },
+        "description": "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity."
+      },
+      "requiredUIProfile": "platform.page.v2.62",
+      "selectionMode": "none",
+      "title": "Separator"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "spacer",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "spacer",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full",
+        "spacer": {
+          "size": 16
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "outputPorts": [],
+      "propertyEditor": "schema",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "spacer": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 4096,
+                "title": "Blank region size (px)"
+              }
+            },
+            "required": [
+              "size"
+            ]
+          }
+        },
+        "description": "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target."
+      },
+      "requiredUIProfile": "platform.page.v2.63",
+      "selectionMode": "none",
+      "title": "Spacer"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "group",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "term-counts",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.67"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.67",
+      "selectionMode": "none",
+      "title": "Term counts"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "histogram",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "histogram",
+      "configVersion": 1,
+      "configurationFields": [
+        "histogram",
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.68"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.68",
+      "selectionMode": "none",
+      "title": "Histogram"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "scatter",
+        "selection",
+        "selectionVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection",
+        "selection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "record-scatter",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full",
+        "scatter": {
+          "xField": "",
+          "yField": "",
+          "colorField": "",
+          "labelField": "id"
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.69"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.95",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "scatter": {
+            "type": "object",
+            "properties": {
+              "xField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "yField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "colorField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "xField",
+              "yField",
+              "colorField",
+              "labelField"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.69",
+      "selectionMode": "write",
+      "title": "Record scatter plot"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "columnGroup",
+        "columnSetVariable",
+        "columnValueVariable",
+        "configVersion",
+        "group",
+        "id",
+        "measure",
+        "model",
+        "object",
+        "rowSetVariable",
+        "rowValueVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "aggregate"
+      ],
+      "category": "Analysis",
+      "componentID": "heatmap",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "measure": "count",
+        "group": "",
+        "columnGroup": ""
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.70"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "rowValue",
+          "bindingField": "rowValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
+        },
+        {
+          "id": "rowSet",
+          "bindingField": "rowSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
+        },
+        {
+          "id": "columnValue",
+          "bindingField": "columnValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
+        },
+        {
+          "id": "columnSet",
+          "bindingField": "columnSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "enum": [
+              "count"
+            ]
+          },
+          "columnGroup": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "group",
+          "columnGroup",
+          "measure"
+        ]
+      },
+      "requiredUIProfile": "platform.page.v2.70",
+      "selectionMode": "none",
+      "title": "Heatmap"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "group",
+        "groupSetVariable",
+        "groupValueVariable",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "treemap",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.71"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      },
+      "outputPorts": [
+        {
+          "id": "groupValue",
+          "bindingField": "groupValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.71",
+          "stateWritable": true
+        },
+        {
+          "id": "groupSet",
+          "bindingField": "groupSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.71",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.71",
+      "selectionMode": "none",
+      "title": "Treemap"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "sparkline",
+        "sparklineDecimalVariable",
+        "sparklineNumberVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "sparkline-kpi",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "sparkline": {}
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.72"
+        },
+        {
+          "id": "sparklineDecimal",
+          "bindingField": "sparklineDecimalVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.72"
+        },
+        {
+          "id": "sparklineNumber",
+          "bindingField": "sparklineNumberVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.72"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "sparkline": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "suffix": {
+                "type": "string",
+                "maxLength": 64
+              }
+            }
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.72",
+      "selectionMode": "none",
+      "title": "Sparkline KPI"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordCard",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-card",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "recordCard": {
+          "labelField": "id",
+          "tone": "info"
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.73"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordCard": {
+            "type": "object",
+            "properties": {
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "danger"
+                ]
+              }
+            },
+            "required": [
+              "labelField",
+              "tone"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.73",
+      "selectionMode": "read",
+      "slots": [
+        {
+          "id": "actions",
+          "title": "Actions",
+          "placement": "after",
+          "requiredUIProfile": "platform.page.v2.104",
+          "allowedLayouts": [
+            "rows",
+            "columns",
+            "flow",
+            "toolbar"
+          ]
+        }
+      ],
+      "title": "Record card"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "fields",
+        "id",
+        "model",
+        "object",
+        "recordComparison",
+        "recordSetVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "fields",
+        "record-set-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-comparison",
+      "configVersion": 1,
+      "configurationFields": [
+        "fields",
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "recordComparison": {
+          "labelField": "id"
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "recordSetVariable",
+          "type": "record-set",
+          "requiredUIProfile": "platform.page.v2.74"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordComparison": {
+            "type": "object",
+            "properties": {
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "labelField"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.74",
+      "selectionMode": "none",
+      "title": "Record comparison"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "group",
+        "groupValueVariable",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "tag-counts",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.75"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.75"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      },
+      "outputPorts": [
+        {
+          "id": "groupValue",
+          "bindingField": "groupValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.75",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.75",
+      "selectionMode": "none",
+      "title": "Tag counts"
+    },
+    {
+      "authoringFields": [
+        "commentDraftVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-comments",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [
+        {
+          "id": "draft",
+          "bindingField": "commentDraftVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76",
+          "writable": true,
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.76",
+      "selectionMode": "none",
+      "title": "Record comments"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "fileVariable",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "record-uploader",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76",
+          "writable": true,
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.76",
+      "selectionMode": "none",
+      "title": "Record uploader"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "fileVariable",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "media-preview",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.76",
+      "selectionMode": "none",
+      "title": "Media preview"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "fileVariable",
+        "id",
+        "model",
+        "object",
+        "pdfPageVariable",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "pdf-viewer",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [
+        {
+          "id": "page",
+          "bindingField": "pdfPageVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76",
+          "writable": true,
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.76",
+      "selectionMode": "none",
+      "title": "PDF viewer"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Work",
+      "componentID": "approval-inbox",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.77"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.77",
+      "selectionMode": "none",
+      "title": "Approval inbox"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Work",
+      "componentID": "notification-feed",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.77"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.77",
+      "selectionMode": "none",
+      "title": "Notification feed"
+    },
+    {
+      "authoringFields": [
+        "breadcrumb",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "category": "Content",
+      "componentID": "breadcrumb",
+      "configVersion": 1,
+      "configurationFields": [
+        "breadcrumb",
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": true,
+          "maxBindings": 1,
+          "requiredUIProfile": "platform.page.v2.78"
+        }
+      ],
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.78"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.78"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.78",
+      "selectionMode": "none",
+      "title": "Breadcrumbs"
+    },
+    {
+      "authoringFields": [
+        "avatar",
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "collection-variable"
+      ],
+      "category": "Records",
+      "componentID": "avatar-stack",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.78"
+        },
+        {
+          "id": "context",
+          "bindingField": "avatar.contextVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.78"
+        },
+        {
+          "id": "context-collection",
+          "bindingField": "avatar.contextCollectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.78"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.78",
+      "selectionMode": "none",
+      "title": "Avatar stack"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "image",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "static-image",
+      "configVersion": 1,
+      "configurationFields": [
+        "image"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.78",
+      "selectionMode": "none",
+      "title": "Image"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "resourceList",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "collection-variable"
+      ],
+      "category": "Records",
+      "componentID": "resource-list",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "resourceList"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.79"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.79",
+      "selectionMode": "write",
+      "title": "Resource list"
+    },
+    {
+      "authoringFields": [
+        "assetDirectory",
+        "configVersion",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Records",
+      "componentID": "asset-directory",
+      "configVersion": 1,
+      "configurationFields": [
+        "assetDirectory"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 4,
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.79",
+      "selectionMode": "none",
+      "title": "Asset directory"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "graphExplorer",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "graph-explorer",
+      "configVersion": 1,
+      "configurationFields": [
+        "graphExplorer",
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.79"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.79",
+      "selectionMode": "none",
+      "title": "Search around"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "title",
+        "vertexGraph",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "vertex-graph",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "vertexGraph"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.79"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.79",
+      "selectionMode": "none",
+      "title": "Neighborhood graph"
+    },
+    {
+      "authoringFields": [
+        "analysis",
+        "analysisCountVariable",
+        "analysisMeanVariable",
+        "analysisXVariable",
+        "analysisYVariable",
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "summaryField",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "collection-analysis",
+      "configVersion": 1,
+      "configurationFields": [
+        "analysis",
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.80"
+        },
+        {
+          "id": "x",
+          "bindingField": "analysisXVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": true,
+          "stateWritable": true
+        },
+        {
+          "id": "y",
+          "bindingField": "analysisYVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": true,
+          "stateWritable": true
+        },
+        {
+          "id": "count",
+          "bindingField": "analysisCountVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": false
+        },
+        {
+          "id": "mean",
+          "bindingField": "analysisMeanVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.80",
+          "writable": false
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.80",
+      "selectionMode": "none",
+      "title": "Collection analysis"
+    },
+    {
+      "authoringFields": [
+        "actionTable",
+        "actions",
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "summaryField",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "actions",
+        "collection-variable"
+      ],
+      "category": "Work",
+      "componentID": "action-table",
+      "configVersion": 1,
+      "configurationFields": [
+        "actionTable",
+        "actions",
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.81",
+          "writable": false
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.81",
+      "selectionMode": "none",
+      "title": "Record action table"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "id",
+        "notepadVariable",
+        "summaryField",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "notepad",
+      "configVersion": 1,
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "text",
+          "bindingField": "notepadVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.81",
+          "writable": true,
+          "stateWritable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "summaryField": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.81",
+      "selectionMode": "none",
+      "title": "Session notepad"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "observation",
+        "observationContextVariable",
+        "observationCountVariable",
+        "observationHistoryVariable",
+        "observationMeanVariable",
+        "observationRowsVariable",
+        "observationSignalVariable",
+        "observationThresholdVariable",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "observation",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "observation"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "history",
+          "bindingField": "observationHistoryVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "context",
+          "bindingField": "observationContextVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "signal",
+          "bindingField": "observationSignalVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.82",
+          "writable": true,
+          "stateWritable": true
+        },
+        {
+          "id": "threshold",
+          "bindingField": "observationThresholdVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.82",
+          "writable": true,
+          "stateWritable": true
+        },
+        {
+          "id": "rows",
+          "bindingField": "observationRowsVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.82",
+          "writable": true,
+          "stateWritable": true
+        },
+        {
+          "id": "count",
+          "bindingField": "observationCountVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "mean",
+          "bindingField": "observationMeanVariable",
+          "type": "number",
+          "requiredUIProfile": "platform.page.v2.82"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.82"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.82",
+      "selectionMode": "none",
+      "title": "Business observations"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "embedding",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "embedded-page",
+      "configVersion": 1,
+      "configurationFields": [
+        "embedding"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.83",
+      "selectionMode": "none",
+      "title": "Embedded page"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "externalFrame",
+        "id",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "external-frame",
+      "configVersion": 1,
+      "configurationFields": [
+        "externalFrame"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.84",
+      "selectionMode": "none",
+      "title": "External document"
+    },
+    {
+      "authoringFields": [
+        "ai",
+        "configVersion",
+        "id",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [],
+      "category": "Content",
+      "componentID": "ai-assistant",
+      "configVersion": 1,
+      "configurationFields": [
+        "ai"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.73"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.86",
+      "selectionMode": "none",
+      "title": "AI assistant"
+    },
+    {
+      "authoringFields": [
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "map",
+        "model",
+        "object",
+        "selection",
+        "selectionVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection",
+        "selection-variable"
+      ],
+      "category": "Analysis",
+      "componentID": "record-map",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ],
+      "defaults": {
+        "width": "full",
+        "map": {
+          "latitudeField": "",
+          "longitudeField": "",
+          "labelField": "id",
+          "clusterEnabled": true
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.87"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.101",
+          "writable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "map": {
+            "type": "object",
+            "properties": {
+              "latitudeField": {
+                "type": "string"
+              },
+              "longitudeField": {
+                "type": "string"
+              },
+              "labelField": {
+                "type": "string"
+              },
+              "colorField": {
+                "type": "string"
+              },
+              "clusterEnabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.87",
+      "selectionMode": "write",
+      "title": "Record map"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "fileVariable",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "image-annotation",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.87"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.87",
+      "selectionMode": "none",
+      "title": "Image annotation"
+    },
+    {
+      "authoringFields": [
+        "configVersion",
+        "fileVariable",
+        "id",
+        "model",
+        "object",
+        "recordVariable",
+        "scene",
+        "scenePartVariable",
+        "sceneSampleCollectionVariable",
+        "sceneSampleVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "category": "Records",
+      "componentID": "scene-3d",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "scene": {
+          "background": "dark",
+          "showGrid": true,
+          "quality": "balanced",
+          "layers": [],
+          "mappings": []
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "sample",
+          "bindingField": "sceneSampleVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.87"
+        },
+        {
+          "id": "sample-window",
+          "bindingField": "sceneSampleCollectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.87"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "outputPorts": [
+        {
+          "id": "part",
+          "bindingField": "scenePartVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.87",
+          "stateWritable": true
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "scene": {
+            "type": "object",
+            "properties": {
+              "background": {
+                "type": "string"
+              },
+              "quality": {
+                "type": "string"
+              },
+              "showGrid": {
+                "type": "boolean"
+              },
+              "sampleAssetField": {
+                "type": "string"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "mappings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "sampleTimeField": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.87",
+      "selectionMode": "none",
+      "title": "3D scene"
+    },
+    {
+      "authoringFields": [
+        "collectionBuilder",
+        "collectionOutputVariable",
+        "collectionVariable",
+        "configVersion",
+        "id",
+        "model",
+        "object",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "category": "Data",
+      "componentID": "collection-builder",
+      "configVersion": 1,
+      "configurationFields": [
+        "model",
+        "object"
+      ],
+      "defaults": {
+        "width": "full",
+        "collectionBuilder": {
+          "fields": []
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.88"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      },
+      "outputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionOutputVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.88"
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "collectionBuilder": {
+            "type": "object",
+            "properties": {
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 32
+              }
+            }
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.88",
+      "selectionMode": "none",
+      "title": "Collection builder"
+    },
+    {
+      "authoringFields": [
+        "composite",
+        "configVersion",
+        "id",
+        "selectionVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "composite"
+      ],
+      "category": "Records",
+      "componentID": "layered-graph",
+      "configVersion": 1,
+      "configurationFields": [
+        "composite"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "events": [
+        {
+          "id": "select",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 1
+        }
+      ],
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "modelPorts": [
+        {
+          "id": "nodes",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "detail": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "layer": {
+              "kinds": [
+                "reference"
+              ],
+              "target": "layers"
+            },
+            "state": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "current": {
+              "kinds": [
+                "boolean"
+              ]
+            },
+            "notation": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "order": {
+              "kinds": [
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          },
+          "required": true
+        },
+        {
+          "id": "layers",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          }
+        },
+        {
+          "id": "edges",
+          "roles": {
+            "from": {
+              "kinds": [
+                "reference"
+              ],
+              "required": true,
+              "target": "nodes"
+            },
+            "to": {
+              "kinds": [
+                "reference"
+              ],
+              "required": true,
+              "target": "nodes"
+            },
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "state": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "dashed": {
+              "kinds": [
+                "boolean"
+              ]
+            }
+          },
+          "required": true
+        },
+        {
+          "id": "overlay",
+          "roles": {
+            "node": {
+              "kinds": [
+                "reference"
+              ],
+              "required": true,
+              "target": "nodes"
+            },
+            "detail": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            },
+            "state": {
+              "kinds": [
+                "text",
+                "choice"
+              ]
+            },
+            "current": {
+              "kinds": [
+                "boolean"
+              ]
+            }
+          }
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.111"
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.111",
+      "selectionMode": "write",
+      "title": "Layered graph"
+    },
+    {
+      "authoringFields": [
+        "composite",
+        "configVersion",
+        "id",
+        "selectionVariable",
+        "title",
+        "widget",
+        "width"
+      ],
+      "bindingKinds": [
+        "composite"
+      ],
+      "category": "Records",
+      "componentID": "model-matrix",
+      "configVersion": 1,
+      "configurationFields": [
+        "composite"
+      ],
+      "defaults": {
+        "width": "full"
+      },
+      "events": [
+        {
+          "id": "select",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 1
+        }
+      ],
+      "fieldPreset": "none",
+      "inputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "modelPorts": [
+        {
+          "id": "rows",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          },
+          "required": true
+        },
+        {
+          "id": "columns",
+          "roles": {
+            "label": {
+              "kinds": [
+                "text",
+                "choice",
+                "reference",
+                "integer",
+                "number",
+                "decimal"
+              ]
+            }
+          },
+          "required": true
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.111"
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "requiredUIProfile": "platform.page.v2.111",
+      "selectionMode": "write",
+      "title": "Model matrix"
+    }
+  ]
 } as const;
+
+/** Authoring narrows manifest-owned properties and ports by widget; Section retains the installed wire format. */
+export type { PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor } from '../widget-authoring';
 
 /** Files owns normalized raster region bounds (ADR-0015). */
 export const imageRegionLimits = {"maxIDBytes":128,"maxLabelBytes":256,"maxRegions":64} as const;

@@ -72,135 +72,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		sections = (Page{Document: d, Sections: sections}).EffectiveModelPage(nil).Sections
 	}
 	if d == nil {
-		for _, s := range sections {
-			if s.Widget == "collection-builder" || s.CollectionBuilder != nil || s.CollectionOutputVariable != "" {
-				return fmt.Errorf("collection builder requires a document")
-			}
-			if s.Map != nil || s.Scene != nil || s.SceneSampleCollectionVariable != "" || s.SceneSampleVariable != "" || s.ScenePartVariable != "" || s.Widget == "record-map" || s.Widget == "scene-3d" || s.Widget == "image-annotation" {
-				return fmt.Errorf("spatial views require a document")
-			}
-			if s.TablePresentation != nil {
-				return fmt.Errorf("table presentation requires a document")
-			}
-			if s.Widget == "ai-assistant" || s.AI != nil {
-				return fmt.Errorf("AI views require a document")
-			}
-			if s.Widget == "embedded-page" || s.Embedding != nil || s.Widget == "observation" || s.hasObservationConfiguration() || s.Widget == "action-table" || s.Widget == "notepad" || s.ActionTable != nil || s.NotepadVariable != "" {
-				return fmt.Errorf("record work requires a document")
-			}
-			if s.Widget == "collection-analysis" || s.Analysis != nil || s.AnalysisXVariable != "" || s.AnalysisYVariable != "" || s.AnalysisCountVariable != "" || s.AnalysisMeanVariable != "" {
-				return fmt.Errorf("analysis requires a page document")
-			}
-			if explorationWidget(s.Widget) || s.ResourceList != nil || s.AssetDirectory != nil || s.GraphExplorer != nil || s.VertexGraph != nil {
-				return fmt.Errorf("exploration requires a page document")
-			}
-			if contextView(s.Widget) || s.Breadcrumb != nil || s.Avatar != nil || s.Image != nil {
-				return fmt.Errorf("context views require a page document")
-			}
-			if workFeed(s.Widget) || s.HistoryLimit != 0 {
-				return fmt.Errorf("work views require a page document")
-			}
-			if collaborationWidget(s.Widget) || s.CommentDraftVariable != "" || s.FileVariable != "" || s.PdfPageVariable != "" {
-				return fmt.Errorf("collaboration requires a page document")
-			}
-			if s.Widget == "spacer" || s.Spacer != nil {
-				return fmt.Errorf("spacer requires a document")
-			}
-			if s.Widget == "separator" || s.Separator != nil {
-				return fmt.Errorf("separator requires a document")
-			}
-			if s.Widget == "notice" || s.Notice != nil {
-				return fmt.Errorf("notice requires a document")
-			}
-			if s.Widget == "alert-banner" || s.AlertValueVariable != "" || s.AlertBanner != nil {
-				return fmt.Errorf("alert banner requires a document")
-			}
-			if s.Widget == "record-picker" || s.RecordPicker != nil || s.PickerValueVariable != "" {
-				return fmt.Errorf("record picker requires a page document")
-			}
-			if s.InputKind != "" {
-				return fmt.Errorf("search input requires a page document")
-			}
-			if s.Widget == "date-input" || s.DateVariable != "" || s.DateLabel != nil || s.DateKind != "" || s.DateOffset != "" {
-				return fmt.Errorf("date input requires a page document")
-			}
-			if s.Widget == "choice-input" || s.ChoiceInput != nil || s.ChoiceVariable != "" || s.ChoiceSetVariable != "" {
-				return fmt.Errorf("choice input requires a page document")
-			}
-			if s.Widget == "boolean-input" || s.BooleanVariable != "" || s.BooleanLabel != nil || s.BooleanVariant != "" {
-				return fmt.Errorf("boolean input requires a page document")
-			}
-			if s.Widget == "range-input" || s.RangeInput != nil || s.RangeMinVariable != "" || s.RangeMaxVariable != "" {
-				return fmt.Errorf("range input requires a page document")
-			}
-			if s.Widget == "record-leaderboard" || s.Leaderboard != nil {
-				return fmt.Errorf("leaderboard needs a document")
-			}
-			if s.Widget == "histogram" || s.Histogram != nil {
-				return fmt.Errorf("histogram requires a page document")
-			}
-			if s.Widget == "term-counts" || s.Widget == "tag-counts" {
-				return fmt.Errorf("term counts require a page document")
-			}
-			if s.Widget == "summary-stats" || s.SummaryField != "" || s.StatisticsVariable != "" {
-				return fmt.Errorf("summary needs a document")
-			}
-			if s.Widget == "gauge" || s.Gauge != nil || s.GaugeValueVariable != "" {
-				return fmt.Errorf("gauge needs a document")
-			}
-			if s.Widget == "progress" || s.ProgressLabel != "" || s.ProgressValueVariable != "" || s.ProgressTotalVariable != "" || s.ProgressTotal != "" {
-				return fmt.Errorf("progress needs a document")
-			}
-			if s.Widget == "record-gantt" || s.RecordGantt != nil {
-				return fmt.Errorf("record gantt needs a document")
-			}
-			if s.Widget == "record-calendar" || s.RecordCalendar != nil {
-				return fmt.Errorf("record calendar requires a document")
-			}
-			if s.Widget == "record-events" || s.RecordEvents != nil {
-				return fmt.Errorf("record events require a document")
-			}
-			if s.ChartVariant != "" {
-				return fmt.Errorf("chart variant requires a document")
-			}
-			if s.Widget == "record-comparison" || s.RecordComparison != nil || s.RecordSetVariable != "" {
-				return fmt.Errorf("record comparison requires a page document")
-			}
-			if s.Widget == "record-card" || s.RecordCard != nil {
-				return fmt.Errorf("record card requires a page document")
-			}
-			if s.Widget == "sparkline-kpi" || s.Sparkline != nil || s.SparklineDecimalVariable != "" || s.SparklineNumberVariable != "" {
-				return fmt.Errorf("sparkline KPI requires a page document")
-			}
-			if s.Widget == "treemap" || s.GroupValueVariable != "" || s.GroupSetVariable != "" {
-				return fmt.Errorf("treemap requires a page document")
-			}
-			if s.Widget == "heatmap" || s.RowValueVariable != "" || s.RowSetVariable != "" || s.ColumnValueVariable != "" || s.ColumnSetVariable != "" {
-				return fmt.Errorf("heatmap requires a page document")
-			}
-			if s.Widget == "record-scatter" || s.Scatter != nil {
-				return fmt.Errorf("record scatter needs a document")
-			}
-			if s.Widget == "record-chart" || s.RecordChart != nil {
-				return fmt.Errorf("record chart requires a document")
-			}
-			if s.Widget == "record-list" || s.RecordList != nil {
-				return fmt.Errorf("record list requires a document")
-			}
-			if len(s.ActionDefaults) > 0 {
-				return fmt.Errorf("action defaults require a document")
-			}
-			if s.Widget == "heading" || s.Widget == "collection-title" || s.HeadingLevel != "" || s.CountVariable != "" {
-				return fmt.Errorf("titles require a document")
-			}
-			if s.MetricPresentation != nil {
-				return fmt.Errorf("metric presentation requires a document")
-			}
-			if s.Widget == "status-tracker" || s.StatusTracker != nil {
-				return fmt.Errorf("status tracker requires a document")
-			}
-			if s.Widget == "record-links" || len(s.RecordLinks) > 0 {
-				return fmt.Errorf("record links require a document")
+		for _, section := range sections {
+			if err := checkDocumentlessSection(section); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -214,41 +88,41 @@ func (d *PageDocument) Check(sections []Section) error {
 	if err := d.checkDevice(); err != nil {
 		return err
 	}
-	if d.UIProfile == "platform.page.v2.1" && len(d.Variables) > 0 {
+	if !pageFeatureSupported(d.UIProfile, "variables") && len(d.Variables) > 0 {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
-		if variable.Mode == "property" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.17") {
+		if variable.Mode == "property" && !pageFeatureSupported(d.UIProfile, "propertyVariables") {
 			return fmt.Errorf("property variable %s requires v2.17", id)
 		}
-		if variable.Type == "decimal" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.16") {
+		if variable.Type == "decimal" && !pageFeatureSupported(d.UIProfile, "decimalVariables") {
 			return fmt.Errorf("decimal variable %s requires v2.16", id)
 		}
-		if variable.Scope == "application" && variable.Type == "filter" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.15") {
+		if variable.Scope == "application" && variable.Type == "filter" && !pageFeatureSupported(d.UIProfile, "applicationFilters") {
 			return fmt.Errorf("shared filter %s requires v2.15", id)
 		}
-		if variable.Scope == "application" && variable.Type == "record" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.14") {
+		if variable.Scope == "application" && variable.Type == "record" && !pageFeatureSupported(d.UIProfile, "applicationRecords") {
 			return fmt.Errorf("shared record %s requires v2.14", id)
 		}
-		if variable.Scope == "application" && variable.Type == "object-set" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.12") {
+		if variable.Scope == "application" && variable.Type == "object-set" && !pageFeatureSupported(d.UIProfile, "applicationCollections") {
 			return fmt.Errorf("shared window %s requires v2.12", id)
 		}
-		if variable.Scope == "application" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.8") || variable.Mode != "shared") {
+		if variable.Scope == "application" && (!pageFeatureSupported(d.UIProfile, "applicationBindings") || variable.Mode != "shared") {
 			return fmt.Errorf("page variable %s needs v2.8 and a shared application binding", id)
 		}
-		if variable.Scope == "overlay" && variable.Type == "filter" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.13") {
+		if variable.Scope == "overlay" && variable.Type == "filter" && !pageFeatureSupported(d.UIProfile, "overlayFilters") {
 			return fmt.Errorf("overlay filter %s requires v2.13", id)
 		}
-		if variable.Scope == "overlay" && variable.Mode == "resource" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.11") {
+		if variable.Scope == "overlay" && variable.Mode == "resource" && !pageFeatureSupported(d.UIProfile, "overlayResources") {
 			return fmt.Errorf("overlay resource %s requires UI profile v2.11", id)
 		}
-		if variable.Scope == "overlay" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") {
+		if variable.Scope == "overlay" && !pageFeatureSupported(d.UIProfile, "overlayVariables") {
 			return fmt.Errorf("page variable %s requires UI profile v2.7", id)
 		}
-		if variable.Scope == pageWidgets.Runtime.Loop.Scope && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") {
+		if variable.Scope == pageWidgets.Runtime.Loop.Scope && !pageFeatureSupported(d.UIProfile, "loopVariables") {
 			return fmt.Errorf("page variable %s requires UI profile v2.5", id)
 		}
-		if variable.Mode == "resource" && (d.UIProfile == "platform.page.v2.1" || d.UIProfile == "platform.page.v2.2") {
+		if variable.Mode == "resource" && !pageFeatureSupported(d.UIProfile, "resourceVariables") {
 			return fmt.Errorf("page variable %s requires UI profile v2.3", id)
 		}
 	}
@@ -340,7 +214,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			}
 		}
 		if len(section.ActionDefaults) > 0 {
-			if section.Widget != "inline-action" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.92") || len(section.ActionDefaults) > 16 {
+			if section.Widget != "inline-action" || !pageFeatureSupported(d.UIProfile, "actionDefaults") || len(section.ActionDefaults) > 16 {
 				return fmt.Errorf("action defaults need their inline action profile and budget")
 			}
 			seen := map[string]bool{}
@@ -433,7 +307,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		if len(node.Title) > 1024 {
 			return fmt.Errorf("page node %s title is too long", id)
 		}
-		if d.UIProfile == "platform.page.v2.1" && (node.Kind == "tabs" || node.ActiveVariable != "" || node.VisibleWhen != "" || node.Title != "") {
+		if !pageFeatureSupported(d.UIProfile, "statefulLayouts") && (node.Kind == "tabs" || node.ActiveVariable != "" || node.VisibleWhen != "" || node.Title != "") {
 			return fmt.Errorf("page node %s requires UI profile v2.2", id)
 		}
 		if node.VisibleWhen != "" && d.Variables[node.VisibleWhen].Type != "boolean" {
@@ -442,7 +316,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		if node.Kind != "tabs" && node.ActiveVariable != "" {
 			return fmt.Errorf("page node %s is not tabs", id)
 		}
-		if (node.Kind == "flow" || node.Kind == "toolbar" || node.Align != "" || node.EnabledWhen != "") && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.4") {
+		if (node.Kind == "flow" || node.Kind == "toolbar" || node.Align != "" || node.EnabledWhen != "") && !pageFeatureSupported(d.UIProfile, "interactiveLayouts") {
 			return fmt.Errorf("page node %s requires UI profile v2.4", id)
 		}
 		if node.Align != "" && (node.Kind != "flow" && node.Kind != "toolbar" || !slices.Contains([]string{"start", "center", "end", "between"}, node.Align)) {
@@ -457,7 +331,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		input := slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && s.Widget == "input" })
 		if input || node.ValueVariable != "" {
 			v, ok := d.Variables[node.ValueVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") || node.Kind != "widget" || !input || !ok || (v.Type != "string" && (v.Type != "decimal" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.16"))) || !v.IsWritable() {
+			if !pageFeatureSupported(d.UIProfile, "layoutInput") || node.Kind != "widget" || !input || !ok || (v.Type != "string" && (v.Type != "decimal" || !pageFeatureSupported(d.UIProfile, "decimalVariables"))) || !v.IsWritable() {
 				return fmt.Errorf("page node %s input needs v2.7 and a text state binding", id)
 			}
 		}

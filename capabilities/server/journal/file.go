@@ -315,8 +315,8 @@ func (j *File) findAccepted(tenant, app, scope, key string) []byte {
 	return nil
 }
 
-// SaveSnapshot keeps a tenant's state at a position, compressed, with the code
-// that wrote it; the two newest are kept, as the PostgreSQL journal keeps them.
+// SaveSnapshot keeps a tenant's state at a position, compressed, under its
+// compatibility key; legacy callers use a code digest. The two newest are kept.
 func (j *File) SaveSnapshot(_ context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -344,7 +344,7 @@ func (j *File) RepairSnapshot(_ context.Context, tenant string, seq int64, code 
 	return WriteFileAtomic(filepath.Join(j.dir, "snapshots", snapshotName(tenant, seq, code)), packed)
 }
 
-// Snapshot is the tenant's newest snapshot written by this code, if any.
+// Snapshot is the tenant's newest checkpoint matching the compatibility key.
 func (j *File) Snapshot(_ context.Context, tenant, code string) (int64, []byte, bool, error) {
 	names := j.snapshotsOf(tenant)
 	for i := len(names) - 1; i >= 0; i-- {

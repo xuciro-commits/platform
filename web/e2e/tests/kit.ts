@@ -112,7 +112,14 @@ export class Editor {
     this.tree = page.getByRole("region", { name: "Page structure", exact: true });
     this.inspector = page.getByRole("region", { name: "Inspector", exact: true });
   }
-  open(builder: Builder, pageID: string) { return builder.open(this.page, `/module?page=${pageID}&surface=studio`); }
+  async open(builder: Builder, pageID: string, mode: "visual" | "source" = "visual") {
+    await builder.open(this.page, `/module?page=${pageID}&surface=studio`);
+    if (mode === "visual") await this.visual();
+  }
+  async visual() {
+    const mode = this.page.locator('[data-structured-editor^="build.page:"]').getByRole("group", { name: "Editing mode", exact: true });
+    await mode.getByRole("button", { name: "Visual", exact: true }).click();
+  }
   /** Imports a Workshop module through the dialog; `map` chooses object/field/metric targets. */
   async importModule(module: unknown, map?: (dialog: ReturnType<Page["getByRole"]>) => Promise<void>) {
     await this.page.getByRole("button", { name: "More page commands", exact: true }).click();
@@ -123,7 +130,10 @@ export class Editor {
     await dialog.getByRole("checkbox").check();
     await dialog.getByRole("button", { name: "Apply imported page draft", exact: true }).click();
   }
-  select(widgetTitle: string) { return this.tree.getByRole("button", { name: widgetTitle, exact: true }).click(); }
+  async select(widgetTitle: string) {
+    await this.visual();
+    await this.tree.getByRole("button", { name: widgetTitle, exact: true }).click();
+  }
   get publish() { return this.page.getByRole("button", { name: "Publish", exact: true }); }
   /** The current canvas saves valid edits after a pause; Cmd/Ctrl-S requests it immediately. */
   save() { return this.page.keyboard.press("ControlOrMeta+s"); }

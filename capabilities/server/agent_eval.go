@@ -498,23 +498,33 @@ func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel,
 			dry.Result, dry.State = answer.Content, "done"
 			break
 		}
-		call := answer.ToolCalls[0]
-		var args map[string]any
-		json.Unmarshal(call.Arguments, &args)
-		step := RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments)}
-		step.Rationale, _ = args["rationale"].(string)
-		tool, ok := d.tools[call.Name]
-		switch {
-		case !ok:
-			step.Outcome = "no tool " + call.Name
-		case tool.kind == "finish":
-			dry.Result, dry.State = fmt.Sprint(args["result"]), "done"
-		case tool.kind == "ask":
-			dry.State, dry.Result = "asked", "asks: "+fmt.Sprint(args["question"])
-		default:
-			step.Outcome = a.dryUse(d, run, dry, tool, args, call.Arguments, now)
+		calls, err := completeToolCalls(answer.ToolCalls, run.ID+":evaluation", dry.StepsUsed)
+		if err != nil {
+			return dry, err.Error()
 		}
-		dry.Steps = append(dry.Steps, step)
+		for i, call := range calls {
+			var args map[string]any
+			json.Unmarshal(call.Arguments, &args)
+			step := RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments), CallID: call.ID}
+			if i == 0 {
+				step.Calls, step.Content = calls, answer.Content
+			}
+			step.Rationale, _ = args["rationale"].(string)
+			tool, ok := d.tools[call.Name]
+			switch {
+			case dry.State != "":
+				step.Outcome = "not executed: the run " + dry.State
+			case !ok:
+				step.Outcome = "no tool " + call.Name
+			case tool.kind == "finish":
+				dry.Result, dry.State, step.Outcome = fmt.Sprint(args["result"]), "done", "finished"
+			case tool.kind == "ask":
+				dry.State, dry.Result, step.Outcome = "asked", "asks: "+fmt.Sprint(args["question"]), "asked"
+			default:
+				step.Outcome = clipObservation(a.dryUse(d, run, dry, tool, args, call.Arguments, now), outcomeLimit)
+			}
+			dry.Steps = append(dry.Steps, step)
+		}
 		if dry.State != "" {
 			break
 		}
@@ -526,7 +536,7 @@ func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel,
 // answer it got then; another read reads now; an action is probed, not taken.
 func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, args map[string]any, raw json.RawMessage, now time.Time) string {
 	strip := func(s string) string {
-		var m map[string]any
+		var m map[string]json.RawMessage
 		json.Unmarshal([]byte(s), &m)
 		delete(m, "rationale")
 		out, _ := json.Marshal(m)
@@ -551,7 +561,7 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 		return out
 	}
 	target, _ := args["target"].(string)
-	payload := map[string]any{}
+	payload := map[string]json.RawMessage{}
 	json.Unmarshal(raw, &payload)
 	delete(payload, "target")
 	delete(payload, "rationale")

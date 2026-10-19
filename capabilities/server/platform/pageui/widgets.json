@@ -55,7 +55,14 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "actionDefaults",
+        "actions",
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "table",
@@ -190,6 +197,20 @@
             "toolbar"
           ]
         }
+      ],
+      "configurationFields": [
+        "facets",
+        "fields",
+        "filterSearchVariable",
+        "inlineEdit",
+        "model",
+        "object",
+        "parentSelection",
+        "query",
+        "relation",
+        "selection",
+        "showSearch",
+        "tableColumns"
       ]
     },
     {
@@ -250,6 +271,13 @@
             "toolbar"
           ]
         }
+      ],
+      "configurationFields": [
+        "detailPresentation",
+        "fields",
+        "model",
+        "object",
+        "selection"
       ]
     },
     {
@@ -296,7 +324,13 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "actions",
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "chart",
@@ -383,7 +417,13 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ]
     },
     {
       "componentID": "metric",
@@ -499,7 +539,13 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ]
     },
     {
       "componentID": "text",
@@ -591,7 +637,12 @@
       ],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "fields",
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "form",
@@ -630,7 +681,15 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "fields",
+        "inputs",
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ]
     },
     {
       "componentID": "timeline",
@@ -680,7 +739,12 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "tasks",
@@ -725,7 +789,12 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "function",
@@ -762,7 +831,11 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "function",
+        "selection"
+      ]
     },
     {
       "componentID": "compute",
@@ -800,7 +873,12 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "inputs",
+        "operation",
+        "selection"
+      ]
     },
     {
       "componentID": "button",
@@ -990,7 +1068,13 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "parentSelection",
+        "relation"
+      ]
     },
     {
       "componentID": "record-timeline",
@@ -1070,7 +1154,12 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "kanban",
@@ -1140,7 +1229,15 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "actions",
+        "fields",
+        "group",
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "record-view",
@@ -1197,7 +1294,15 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "actions",
+        "fields",
+        "model",
+        "object",
+        "recordView",
+        "selection"
+      ]
     },
     {
       "componentID": "button-group",
@@ -1258,7 +1363,10 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "buttons"
+      ]
     },
     {
       "componentID": "record-links",
@@ -1313,7 +1421,13 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "recordLinks",
+        "selection"
+      ]
     },
     {
       "componentID": "status-tracker",
@@ -1368,7 +1482,13 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection",
+        "statusTracker"
+      ]
     },
     {
       "componentID": "heading",
@@ -1399,7 +1519,9 @@
           },
           "text": {
             "type": "string",
-            "maxLength": 4096
+            "maxLength": 4096,
+            "title": "Heading text",
+            "editor": "textarea"
           },
           "headingLevel": {
             "type": "string",
@@ -1407,15 +1529,18 @@
               "h1",
               "h2",
               "h3"
-            ]
+            ],
+            "title": "Heading level"
           }
-        }
+        },
+        "description": "Heading text is plain text; markup and scripts are not interpreted."
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
-      }
+      },
+      "propertyEditor": "schema"
     },
     {
       "componentID": "collection-title",
@@ -1476,7 +1601,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-list",
@@ -1563,7 +1692,13 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "fields",
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "record-chart",
@@ -1646,7 +1781,11 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-events",
@@ -1755,7 +1894,11 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-calendar",
@@ -1836,7 +1979,12 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "record-gantt",
@@ -1963,7 +2111,11 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "progress",
@@ -2154,7 +2306,11 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-leaderboard",
@@ -2250,7 +2406,12 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "range-input",
@@ -2287,14 +2448,16 @@
           "bindingField": "rangeMinVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.52"
+          "requiredUIProfile": "platform.page.v2.52",
+          "stateWritable": true
         },
         {
           "id": "max",
           "bindingField": "rangeMaxVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.52"
+          "requiredUIProfile": "platform.page.v2.52",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -2308,7 +2471,10 @@
           "binding-change",
           "close"
         ]
-      }
+      },
+      "configurationFields": [
+        "rangeInput"
+      ]
     },
     {
       "componentID": "boolean-input",
@@ -2363,7 +2529,8 @@
           "bindingField": "booleanVariable",
           "type": "boolean",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.53"
+          "requiredUIProfile": "platform.page.v2.53",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -2421,14 +2588,16 @@
           "bindingField": "choiceVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.55"
+          "requiredUIProfile": "platform.page.v2.55",
+          "stateWritable": true
         },
         {
           "id": "selection",
           "bindingField": "choiceSetVariable",
           "type": "string-set",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.56"
+          "requiredUIProfile": "platform.page.v2.56",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -2442,7 +2611,10 @@
           "binding-change",
           "close"
         ]
-      }
+      },
+      "configurationFields": [
+        "choiceInput"
+      ]
     },
     {
       "componentID": "date-input",
@@ -2501,7 +2673,8 @@
           "bindingField": "dateVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.57"
+          "requiredUIProfile": "platform.page.v2.57",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -2569,7 +2742,8 @@
           "bindingField": "pickerValueVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.64"
+          "requiredUIProfile": "platform.page.v2.64",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -2583,7 +2757,13 @@
           "binding-change",
           "close"
         ]
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "recordPicker",
+        "selection"
+      ]
     },
     {
       "componentID": "alert-banner",
@@ -2701,11 +2881,15 @@
             "properties": {
               "title": {
                 "type": "string",
-                "maxLength": 1024
+                "maxLength": 1024,
+                "title": "Notice title",
+                "presenceTitle": "Show notice title"
               },
               "message": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 4096,
+                "title": "Notice text",
+                "editor": "textarea"
               },
               "tone": {
                 "type": "string",
@@ -2714,7 +2898,8 @@
                   "success",
                   "warning",
                   "danger"
-                ]
+                ],
+                "title": "Notice tone"
               }
             },
             "required": [
@@ -2722,13 +2907,15 @@
               "tone"
             ]
           }
-        }
+        },
+        "description": "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions."
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
-      }
+      },
+      "propertyEditor": "schema"
     },
     {
       "componentID": "separator",
@@ -2762,17 +2949,21 @@
             "properties": {
               "label": {
                 "type": "string",
-                "maxLength": 1024
+                "maxLength": 1024,
+                "title": "Separator label",
+                "presenceTitle": "Show separator label"
               }
             }
           }
-        }
+        },
+        "description": "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity."
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
-      }
+      },
+      "propertyEditor": "schema"
     },
     {
       "componentID": "spacer",
@@ -2809,20 +3000,23 @@
               "size": {
                 "type": "number",
                 "minimum": 0,
-                "maximum": 4096
+                "maximum": 4096,
+                "title": "Blank region size (px)"
               }
             },
             "required": [
               "size"
             ]
           }
-        }
+        },
+        "description": "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target."
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
-      }
+      },
+      "propertyEditor": "schema"
     },
     {
       "componentID": "term-counts",
@@ -2880,7 +3074,11 @@
           "definition",
           "scope-close"
         ]
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "histogram",
@@ -2934,7 +3132,12 @@
           "definition",
           "scope-close"
         ]
-      }
+      },
+      "configurationFields": [
+        "histogram",
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-scatter",
@@ -3030,7 +3233,12 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "heatmap",
@@ -3100,28 +3308,32 @@
           "bindingField": "rowValueVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
         },
         {
           "id": "rowSet",
           "bindingField": "rowSetVariable",
           "type": "string-set",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
         },
         {
           "id": "columnValue",
           "bindingField": "columnValueVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
         },
         {
           "id": "columnSet",
           "bindingField": "columnSetVariable",
           "type": "string-set",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.70"
+          "requiredUIProfile": "platform.page.v2.70",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -3135,7 +3347,11 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "treemap",
@@ -3186,14 +3402,16 @@
           "bindingField": "groupValueVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.71"
+          "requiredUIProfile": "platform.page.v2.71",
+          "stateWritable": true
         },
         {
           "id": "groupSet",
           "bindingField": "groupSetVariable",
           "type": "string-set",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.71"
+          "requiredUIProfile": "platform.page.v2.71",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -3208,7 +3426,11 @@
           "definition",
           "scope-close"
         ]
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "sparkline-kpi",
@@ -3291,7 +3513,11 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-card",
@@ -3386,6 +3612,10 @@
             "toolbar"
           ]
         }
+      ],
+      "configurationFields": [
+        "model",
+        "object"
       ]
     },
     {
@@ -3456,7 +3686,12 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "fields",
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "tag-counts",
@@ -3513,7 +3748,8 @@
           "bindingField": "groupValueVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.75"
+          "requiredUIProfile": "platform.page.v2.75",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -3528,7 +3764,11 @@
           "definition",
           "scope-close"
         ]
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-comments",
@@ -3581,7 +3821,8 @@
           "bindingField": "commentDraftVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.76",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -3596,7 +3837,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "record-uploader",
@@ -3649,7 +3894,8 @@
           "bindingField": "fileVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.76",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -3664,7 +3910,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "media-preview",
@@ -3724,7 +3974,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "pdf-viewer",
@@ -3777,7 +4031,8 @@
           "bindingField": "pdfPageVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.76",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -3792,7 +4047,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "approval-inbox",
@@ -3962,6 +4221,11 @@
           "maxBindings": 1,
           "requiredUIProfile": "platform.page.v2.78"
         }
+      ],
+      "configurationFields": [
+        "breadcrumb",
+        "model",
+        "object"
       ]
     },
     {
@@ -4027,7 +4291,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "static-image",
@@ -4071,7 +4339,10 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "image"
+      ]
     },
     {
       "componentID": "resource-list",
@@ -4130,7 +4401,12 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "resourceList"
+      ]
     },
     {
       "componentID": "asset-directory",
@@ -4190,6 +4466,9 @@
           "maxBindings": 4,
           "requiredUIProfile": "platform.page.v2.79"
         }
+      ],
+      "configurationFields": [
+        "assetDirectory"
       ]
     },
     {
@@ -4249,7 +4528,12 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "graphExplorer",
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "vertex-graph",
@@ -4302,7 +4586,12 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "vertexGraph"
+      ]
     },
     {
       "componentID": "collection-analysis",
@@ -4351,14 +4640,16 @@
           "bindingField": "analysisXVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.80",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         },
         {
           "id": "y",
           "bindingField": "analysisYVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.80",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         },
         {
           "id": "count",
@@ -4387,7 +4678,12 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "analysis",
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "action-table",
@@ -4446,7 +4742,13 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "actionTable",
+        "actions",
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "notepad",
@@ -4486,7 +4788,8 @@
           "bindingField": "notepadVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.81",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         }
       ],
       "outputPorts": [],
@@ -4564,21 +4867,24 @@
           "bindingField": "observationSignalVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.82",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         },
         {
           "id": "threshold",
           "bindingField": "observationThresholdVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.82",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         },
         {
           "id": "rows",
           "bindingField": "observationRowsVariable",
           "type": "string",
           "requiredUIProfile": "platform.page.v2.82",
-          "writable": true
+          "writable": true,
+          "stateWritable": true
         },
         {
           "id": "count",
@@ -4611,7 +4917,12 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "observation"
+      ]
     },
     {
       "componentID": "embedded-page",
@@ -4654,7 +4965,10 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "embedding"
+      ]
     },
     {
       "componentID": "external-frame",
@@ -4697,7 +5011,10 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "externalFrame"
+      ]
     },
     {
       "componentID": "ai-assistant",
@@ -4747,7 +5064,10 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "ai"
+      ]
     },
     {
       "componentID": "record-map",
@@ -4836,7 +5156,12 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object",
+        "selection"
+      ]
     },
     {
       "componentID": "image-annotation",
@@ -4896,7 +5221,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "scene-3d",
@@ -5002,7 +5331,8 @@
           "bindingField": "scenePartVariable",
           "type": "string",
           "writable": true,
-          "requiredUIProfile": "platform.page.v2.87"
+          "requiredUIProfile": "platform.page.v2.87",
+          "stateWritable": true
         }
       ],
       "layoutPreferences": {
@@ -5017,7 +5347,11 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "collection-builder",
@@ -5093,7 +5427,11 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "configurationFields": [
+        "model",
+        "object"
+      ]
     },
     {
       "componentID": "layered-graph",
@@ -5292,7 +5630,10 @@
       ],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "composite"
+      ]
     },
     {
       "componentID": "model-matrix",
@@ -5378,7 +5719,10 @@
       ],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "configurationFields": [
+        "composite"
+      ]
     }
   ],
   "supportedProfiles": [
@@ -6263,5 +6607,94 @@
     "maxUnused": 128,
     "presentationProfile": "platform.page.v2.93",
     "maxPadding": 64
+  },
+  "documentless": {
+    "widgets": [
+      "inline-action",
+      "table",
+      "detail",
+      "actions",
+      "chart",
+      "metric",
+      "text",
+      "filter",
+      "form",
+      "timeline",
+      "tasks",
+      "function",
+      "compute",
+      "button",
+      "input",
+      "pivot",
+      "record-timeline",
+      "kanban",
+      "record-view",
+      "button-group",
+      "external-frame",
+      "layered-graph",
+      "model-matrix"
+    ],
+    "fields": [
+      "actions",
+      "buttons",
+      "cardLabel",
+      "collectionVariable",
+      "columnGroup",
+      "composite",
+      "configVersion",
+      "detailPresentation",
+      "externalFrame",
+      "facets",
+      "fields",
+      "filterSearchVariable",
+      "filterVariable",
+      "function",
+      "group",
+      "id",
+      "inlineEdit",
+      "inputs",
+      "mark",
+      "measure",
+      "model",
+      "object",
+      "operation",
+      "parentSelection",
+      "query",
+      "recordVariable",
+      "recordView",
+      "relation",
+      "selection",
+      "selectionSetVariable",
+      "selectionVariable",
+      "showSearch",
+      "tableColumns",
+      "text",
+      "timeEnd",
+      "timeGroup",
+      "timeLabel",
+      "timeStart",
+      "title",
+      "widget",
+      "width"
+    ]
+  },
+  "features": {
+    "variables": "platform.page.v2.2",
+    "resourceVariables": "platform.page.v2.3",
+    "propertyVariables": "platform.page.v2.17",
+    "decimalVariables": "platform.page.v2.16",
+    "applicationFilters": "platform.page.v2.15",
+    "applicationRecords": "platform.page.v2.14",
+    "applicationCollections": "platform.page.v2.12",
+    "applicationBindings": "platform.page.v2.8",
+    "overlayFilters": "platform.page.v2.13",
+    "overlayResources": "platform.page.v2.11",
+    "overlayVariables": "platform.page.v2.7",
+    "loopVariables": "platform.page.v2.5",
+    "interactiveLayouts": "platform.page.v2.4",
+    "statefulLayouts": "platform.page.v2.2",
+    "layoutInput": "platform.page.v2.7",
+    "chartMark": "platform.page.v2.24",
+    "actionDefaults": "platform.page.v2.92"
   }
 }

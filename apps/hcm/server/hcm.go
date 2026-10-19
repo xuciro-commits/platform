@@ -115,6 +115,8 @@ func New(tenant string) *App {
 }
 
 // Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
+func (a *App) SnapshotFormat() string { return "platform.ledger.v1" }
+
 func (a *App) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
 func (a *App) AcceptedLedger() *platform.Ledger   { return a.ledger }
 

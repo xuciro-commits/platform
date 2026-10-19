@@ -155,7 +155,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if err != nil {
 		return PackageDraftResult{}, err
 	}
-	if prior := t.committed.compositeAnswers[saved.Key]; len(prior) > 0 {
+	if prior := t.committed.compositeAnswer(saved.Key); len(prior) > 0 {
 		accepted, err := decodeAcceptedComposite(prior)
 		if err != nil || accepted.RequestHash != saved.RequestHash {
 			return PackageDraftResult{}, fmt.Errorf("package draft key belongs to another request")

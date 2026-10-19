@@ -49,6 +49,7 @@ test("definition editors retain accepted revisions through refusal, stale reads 
       ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: before }) })
       : route.continue());
     await builder.open(page, "/" + item.view + "?id=" + id);
+    await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
     const title = page.getByRole("textbox", { name: item.title, exact: true });
     await expect(title).toHaveValue(common.title);
     await title.fill("Accepted definition");

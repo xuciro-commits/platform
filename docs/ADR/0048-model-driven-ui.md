@@ -112,13 +112,17 @@ type ModelBinding struct {
 
 ## 5. As built
 
+组件清单现在从同一声明产生 `authoringFields`、允许字段、端口、配置版本及普通属性 Schema。Web 的作者类型按 `widget` 区分配置，运行期及历史仍读取原扁平 Section；不引入另一套 DSL。普通标题、说明、分隔与间距属性复用 Schema Inspector，专用业务绑定保留原编辑器。注册表只声明专用交互，不再逐项抄写普通属性和版本；原空文档校验的长分支由声明中冻结的历史允许字段代替，旧输入的接受/拒绝范围保留。
+
+页面能力与 profile 要求集中在原清单投影；新普通属性不要求修改全局微版本或另补字段名单。复杂业务约束仍由原编译器检查，历史 profile 与组件配置版本不改写。作者类型和普通属性由声明推导不代表全部复杂 Inspector 已生成，也不把 Go/React 实现反向转换为配置。JSON/YAML 与原画布共用草稿、撤销和正式发布路径。类型、端口、历史允许字段和 Schema Inspector 的检查与浏览器用法归 [Testing](../Testing.md)。
+
 PageEditor 的保存/发布禁用与 Problems 共用 `pageDraftDiagnostics`，错误带原组件或布局节点位置，点击后进入原检查器。原布尔标志、禁用长表达式和另一份提示映射已删除；作用域、节点查找与同类输入检查复用，组件自身约束和服务端发布检查保留。原来只有禁用、没有原因的组件配置现在给出可定位说明。行内编辑检查复用原模型字段展开，默认字段不会被误判为不可见；自动保存开始时已发生的输入仍进入原草稿历史，旧保存回复不会覆盖这些后续编辑。
 
 RecordList 的状态来自明确 lifecycle 或显式看板配置；应用层按当前动作目录提供迁移命令，展示层不从 choice 字段、参数名称猜业务状态，也不在空命令列表时补动作。保留已有列表、看板、聚合与原动作表单；失效的保存视图回到可用列表。页面内短表格随内容收缩，保留原 320px 滚动窗口上限，不再挤远下方的明细和操作。
 
 平台与构建器 Section 的前 100 个相同配置字段统一归 `platform.PageWidgetConfig`，后 33 个字段保留各自引用类型与编辑元数据。原 descriptor / pageDraft 直接传递共有配置，保留原切片克隆；前端构建期 Section 引用生成的 Api.Section，只区分 object / query / actions / function / inlineEdit 五种表示。新组件配置不再增加三份手写字段声明和前后端逐项复制清单。原 JSON 字段顺序、扁平形状、组件版本、API 输出和冻结历史不变；此整理不把通用模型绑定等同于全部组件配置规则。
 
-现有 `PageDocument` / `Section` 使用 `platform.page.v2.110`，对象绑定写入 `Section.model`。`FieldRef` 保留原组件端口，组件配置版本与执行 owner 不变；旧字段名只在解码和组件端口投影中出现。Build 保存 V2 时收敛绑定，V1 沿原 `pageDocumentFromSections` 提升后保存；历史发布、候选、接受结果不改写。冻结候选激活及恢复保留模型引用。
+现有 `PageDocument` / `Section` 使用 `platform.page.v2.111`，对象绑定写入 `Section.model`。`FieldRef` 保留原组件端口，组件配置版本与执行 owner 不变；旧字段名只在解码和组件端口投影中出现。Build 保存 V2 时收敛绑定，V1 沿原 `pageDocumentFromSections` 提升后保存；历史发布、候选、接受结果不改写。冻结候选激活及恢复保留模型引用。
 
 - **同一条规则**：`OptionsRef.rule` 引用原动作及页面输入映射。动作与候选读取共用 `RuleCriteria` / `EvaluateRule`；该计划是原动作 owner 的私有执行元数据，不增加 Action 发布字节。规则改动只修改原动作。候选成立不授予执行权限，状态、动作授权、审批及写入仍由原动作处理。
 - **默认与覆盖**：表格、详情、表单、过滤字段按可见模型推导，编辑器继续按原字段类型及动作 Payload 分派。状态跟随原 lifecycle；模型详情沿原记录页呈现属性与已声明关联。记录页、历史与待办共用 UI 的 `useRecordView`，历史/待办原独立读取 effect 已删除；记录页在同一记录刷新时保留原内容，历史/待办等待本次读取完成，切换记录或成员范围立即隐藏旧内容，隐藏页签释放订阅。读取仍归原 scoped `RecordSource` / PageSession，历史确认、条数限制、任务权限与预览只读不变。Data Inspector 显示推导来源，模型元素选择器逐段选择字段；显式字段和组件端口可覆盖默认。通用表达式编辑器编辑原 Expr，类型检查复用 Go/Wasm 编译器；动作条件与页面过滤/显示标签共用该编辑器。

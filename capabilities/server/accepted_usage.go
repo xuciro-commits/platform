@@ -40,6 +40,15 @@ func (t *Tenant) usagePredecessor() (string, error) {
 }
 
 func validUsage(u platform.AIUsage) bool {
+	remaining := u.Input
+	for _, count := range []*int{u.CacheReadInput, u.CacheWriteInput} {
+		if count != nil {
+			if *count < 0 || *count > remaining {
+				return false
+			}
+			remaining -= *count
+		}
+	}
 	return u.Member != "" && u.Model != "" && !u.At.IsZero() && u.Input >= 0 && u.Output >= 0 && u.Cost >= 0 && u.Millis >= 0
 }
 

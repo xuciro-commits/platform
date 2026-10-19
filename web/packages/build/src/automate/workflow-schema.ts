@@ -1,7 +1,7 @@
 import {t} from "@platform/ui";
 import type {ValueSchema} from "./workflow-model";
 
-export function schemaIssue(schema: ValueSchema, value: unknown): string | undefined {
+export function schemaIssue(schema: ValueSchema & {minimum?:number;maximum?:number}, value: unknown): string | undefined {
   if (value === null && schema.nullable) return undefined;
   if (schema.type === "variant") {
     if (!value || typeof value !== "object" || Array.isArray(value)) return t("Expected a tagged object.");
@@ -25,9 +25,10 @@ export function schemaIssue(schema: ValueSchema, value: unknown): string | undef
   } else if (schema.type === "string") {
     if (typeof value !== "string") return t("Expected text.");
     if (schema.enum?.length && !schema.enum.includes(value)) return t("Choose a declared option.");
-    if (schema.maxLength && value.length > schema.maxLength) return t("The text exceeds its limit.");
+    if (schema.maxLength && new TextEncoder().encode(value).length > schema.maxLength) return t("The text exceeds its limit.");
   } else if (schema.type === "boolean" && typeof value !== "boolean") return t("Expected true or false.");
   else if (schema.type === "number" && (typeof value !== "number" || !Number.isFinite(value))) return t("Expected a number.");
   else if (schema.type === "integer" && (typeof value !== "number" || !Number.isSafeInteger(value))) return t("Expected a safe integer.");
+  if ((schema.type === "number" || schema.type === "integer") && typeof value === "number" && (schema.minimum !== undefined && value < schema.minimum || schema.maximum !== undefined && value > schema.maximum)) return t("Enter a number within the allowed range.");
   return undefined;
 }

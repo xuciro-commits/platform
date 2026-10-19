@@ -99,7 +99,7 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, 
 	if key == "" {
 		return nil
 	}
-	prior, ok := t.committed.refusals[sub.GetAuthority()+"/"+key]
+	prior, ok := t.committed.refusal(sub.GetAuthority() + "/" + key)
 	var original pb.Submission
 	if !ok || key == sub.GetIdempotencyKey() || protojson.Unmarshal(prior.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetAuthority() != sub.GetAuthority() || original.GetSchema().GetName() != sub.GetSchema().GetName() || original.GetTarget().GetType() != sub.GetTarget().GetType() || original.GetTarget().GetId() != sub.GetTarget().GetId() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A correction needs the same applicant, action and target as its original refused request")
@@ -146,7 +146,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		if own && (!exists || readable) {
 			e.Inputs = slices.Clone(sub.GetPayload())
 			if e.CorrectionOf != "" {
-				if prior, ok := t.committed.refusals[e.App+"/"+e.CorrectionOf]; ok {
+				if prior, ok := t.committed.refusal(e.App + "/" + e.CorrectionOf); ok {
 					var old pb.Submission
 					if protojson.Unmarshal(prior.Submission, &old) == nil {
 						e.Changes = changedBusinessInputs(old.GetPayload(), sub.GetPayload())
@@ -163,7 +163,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		}
 		out.Records = append(out.Records, e)
 	}
-	for _, r := range t.committed.refusals {
+	for _, r := range t.committed.allRefusals() {
 		var sub pb.Submission
 		if protojson.Unmarshal(r.Submission, &sub) != nil {
 			continue
@@ -176,7 +176,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		}
 		add(&sub, e)
 	}
-	for _, raw := range t.committed.answers {
+	for _, raw := range t.committed.allAnswers() {
 		var kind struct{ Kind string }
 		if json.Unmarshal(raw, &kind) != nil || kind.Kind != "record-batch" {
 			continue

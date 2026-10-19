@@ -158,8 +158,10 @@ func (f *Flows) Manifest() platform.Manifest {
 
 func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
 func (f *Flows) AcceptedLedger() *platform.Ledger         { return f.ledger }
-func (f *Flows) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
-func (f *Flows) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
+func (f *Flows) SnapshotFormat() string                   { return "platform.ledger.v1" }
+
+func (f *Flows) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
+func (f *Flows) Restore(raw json.RawMessage) error  { return f.ledger.Restore(raw) }
 
 // Declare registers the flows of the tenant's apps, checking each (NewTenant).
 func (f *Flows) Declare(a platform.App) error {

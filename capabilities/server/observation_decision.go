@@ -78,7 +78,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 	for _, app := range t.apps {
 		var original *pb.Submission
 		var receipt *pb.ChangeRecord
-		if raw := t.committed.answers[app.Manifest().ID+"/"+key]; len(raw) > 0 {
+		if raw := t.committed.answer(app.Manifest().ID + "/" + key); len(raw) > 0 {
 			result, saved, err := decodeAcceptedBatch(raw)
 			if err != nil {
 				return nil, observationUnavailable(err), true
@@ -97,7 +97,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 			}
 			return receipt, nil, true
 		}
-		if saved, found := t.committed.refusals[app.Manifest().ID+"/"+key]; found {
+		if saved, found := t.committed.refusal(app.Manifest().ID + "/" + key); found {
 			var original pb.Submission
 			if len(saved.Submission) == 0 || protojson.Unmarshal(saved.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetCorrelationId() != identity {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true

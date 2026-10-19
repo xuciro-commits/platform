@@ -241,7 +241,7 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
 		return nil, migrationRefusal(err)
 	}
-	return &row{value: decoded.Elem(), history: value.history}, nil
+	return &row{value: decoded.Elem(), history: value.history, loadHistory: value.loadHistory, historyCount: value.historyCount}, nil
 }
 
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {

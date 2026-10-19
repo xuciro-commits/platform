@@ -104,8 +104,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	// Permit that read only when every receipt still equals the live ledger;
 	// a newly accepted decision without a published event cannot disappear.
 	for ledger, staged := range d.logs {
-		if !slices.EqualFunc(ledger.RecordsFor(d.tenant.ID), staged.Records(d.tenant.ID),
-			func(before, after *pb.ChangeRecord) bool { return proto.Equal(before, after) }) {
+		if !proto.Equal(ledger.LastAccepted(d.tenant.ID), staged.Last(d.tenant.ID)) {
 			return nil, fmt.Errorf("connector input contains an unpublished decision")
 		}
 	}
@@ -167,7 +166,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	key := "input:" + hash
-	if saved := t.committed.inputs[a.Manifest().ID+"/"+key]; len(saved) != 0 {
+	if saved := t.committed.input(a.Manifest().ID + "/" + key); len(saved) != 0 {
 		return t.answerAcceptedInput(a, saved)
 	}
 	draft := t.newStagedDecision()
@@ -317,7 +316,7 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedInput, bool, error) {
 			return result, false, fmt.Errorf("connector result has an invalid answer: %w", err)
 		}
 	}
-	if prior := t.committed.inputs[result.App+"/"+result.Key]; len(prior) > 0 {
+	if prior := t.committed.input(result.App + "/" + result.Key); len(prior) > 0 {
 		saved, err := decodeAcceptedInput(prior)
 		if err != nil || saved.Digest != result.Digest {
 			return result, false, fmt.Errorf("connector input key belongs to another result")

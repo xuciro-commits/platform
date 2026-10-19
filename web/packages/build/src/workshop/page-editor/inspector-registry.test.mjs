@@ -48,3 +48,9 @@ test("bindings and events load their requested exports while preserving a distin
  await assert.rejects(failing.load(),error=>error instanceof InspectorLoadError&&error.cause===original);
  assert.ok(widgetInspector("heading",1),"one module failure must not invalidate another registration");
 });
+
+test("ordinary widget properties share the schema inspector declared by the manifest",()=>{
+ const schemas=manifest.widgets.filter(contract=>contract.propertyEditor==='schema');
+ assert.deepEqual(schemas.map(contract=>contract.componentID).sort(),['heading','notice','separator','spacer']);
+ for(const contract of schemas)assert.equal(widgetInspector(contract.componentID,contract.configVersion).bindings,widgetInspector('heading',1).bindings);
+});

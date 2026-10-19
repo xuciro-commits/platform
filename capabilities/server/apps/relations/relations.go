@@ -87,6 +87,8 @@ type relationsState struct {
 	Notes []Note `json:"notes"`
 }
 
+func (r *Relations) SnapshotFormat() string { return "relations.state.v1" }
+
 func (r *Relations) Snapshot() (json.RawMessage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

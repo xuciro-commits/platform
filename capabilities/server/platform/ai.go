@@ -33,17 +33,21 @@ type AILimit struct {
 }
 
 type AIUsage struct {
-	Applications   []AssetBinding `json:"applications,omitempty"`
-	Resource       *AssetRef      `json:"resource,omitempty"`
-	Run            string         `json:"run,omitempty"`
-	At             time.Time      `json:"at"`
-	Member         string         `json:"member"`
-	Agent          bool           `json:"agent,omitempty"`
-	Model          string         `json:"model"`            // "<provider>/<model>"
-	Served         string         `json:"served,omitempty"` // the model that answered, when the provider routes
-	Input          int            `json:"input"`
-	Output         int            `json:"output"`
-	TokensReported bool           `json:"tokensReported,omitempty"`
+	Applications []AssetBinding `json:"applications,omitempty"`
+	Resource     *AssetRef      `json:"resource,omitempty"`
+	Run          string         `json:"run,omitempty"`
+	At           time.Time      `json:"at"`
+	Member       string         `json:"member"`
+	Agent        bool           `json:"agent,omitempty"`
+	Model        string         `json:"model"`            // "<provider>/<model>"
+	Served       string         `json:"served,omitempty"` // the model that answered, when the provider routes
+	Input        int            `json:"input"`
+	Output       int            `json:"output"`
+	// Cache counts are parts of Input, not additional tokens. Nil means the
+	// provider did not report that breakdown; a reported zero stays explicit.
+	CacheReadInput  *int `json:"cacheReadInput,omitempty"`
+	CacheWriteInput *int `json:"cacheWriteInput,omitempty"`
+	TokensReported  bool `json:"tokensReported,omitempty"`
 	// TokensEstimated marks usage the provider did not report: the numbers are
 	// the platform's conservative estimate, so an unknown call is never booked
 	// as a free one (ADR-0008, review AI-05).

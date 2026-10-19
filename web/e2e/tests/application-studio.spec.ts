@@ -99,6 +99,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   expect(definition(guided)).toEqual(definition(manual));
 
   const objectSections = page.getByRole("tablist", { name: "Object sections", exact: true });
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await objectSections.getByRole("tab", { name: "Properties", exact: true }).click();
   await page.getByRole("button", { name: "Add a property", exact: true }).click();
   const inspector = page.getByRole("region", { name: "Object inspector", exact: true });
@@ -111,6 +112,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   await expect(navigation.getByRole("button", { name: "Interface", exact: true })).toHaveAttribute("aria-current", "page");
   await navigation.getByRole("button", { name: "Model", exact: true }).click();
   await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: /^Service case/ }).click();
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   await objectSections.getByRole("tab", { name: "Properties", exact: true }).press("ArrowRight");
@@ -278,6 +280,7 @@ test("decision tables and alerts remain application members through editing and 
   });
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await page.getByRole("textbox", { name: "Rule name", exact: true }).fill(alertName);
   await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Low temperature");
   await page.getByRole("combobox", { name: "Object", exact: true }).selectOption(object.type);
@@ -302,6 +305,7 @@ test("decision tables and alerts remain application members through editing and 
   await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Heating control", exact: true }).click();
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "Decision table", exact: true }).click();
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   const retryTableName = slug("retrydecision"), retryTitle = page.getByRole("textbox", { name: "Table title", exact: true });
   await page.getByRole("textbox", { name: "Table name", exact: true }).fill(retryTableName);
   await retryTitle.fill("Membership retry decision");
@@ -328,6 +332,7 @@ test("decision tables and alerts remain application members through editing and 
   const assets = navigation.getByRole("region", { name: "Application assets", exact: true });
   await assets.getByRole("button", { name: /^Heating decision/ }).click();
   await expect(page.getByRole("heading", { name: "Heating decision", exact: true }).first()).toBeVisible();
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await expect(navigation.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(assets.getByRole("heading", { name: "Heating control", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Application context", exact: true })
@@ -349,6 +354,7 @@ test("decision tables and alerts remain application members through editing and 
   const heatingDecision = allTables.getByRole("treeitem").filter({ hasText: tableName }).last();
   await expect(heatingDecision).toContainText("Heating decision");
   await heatingDecision.click();
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`[?&]id=${tableID}(?:&|$)`));
   const globalParams = new URLSearchParams(new URL(page.url()).hash.split("?")[1]);
   expect(globalParams.get("id")).toBe(tableID);

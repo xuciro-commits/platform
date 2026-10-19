@@ -2,6 +2,12 @@
 
 验证方法与人工走查入口。环境、账号和服务地址归 [部署说明](../deploy/local/README.md)。 本地业务入口固定为酒店 `8495`、制造 `8490`；WMS 复用所在工作区。酒店的 `hotel-a` → `hotel-test` 用于同宿主晋级；改存储的 v2 先晋级不激活，再到目标审阅升级计划。
 
+技术转型（ADR-0063 / ADR-0054）：`make test-go PKG='. ./platform ./journal' RUN='TestAgent|TestActionInputSchema|TestModelToolStream|TestAnthropicToolStream|TestMCP|TestKnowledge|TestPostgresVector|TestPostgresMigration|TestSnapshotRestoreFormats|TestProjection|TestPostgresProjection|TestPostgresRuntimeState'` 检查完整调用与重启、输入描述、工具流与用量、中文/JSON、兼容快照、投影表保留及历史后缀、SQL 状态与过滤后检索。PostgreSQL 相关项需要受控 `PLATFORM_TEST_DATABASE`；未配置时跳过，不能报告数据库通过。内核历史外置的等价检查用 `make test-go PKG=platformkernel/kernel RUN='TestChangeArchive|TestFactArchive|TestIdempotencySequences'`。浏览器复用 `dual-mode`、`application-studio`、`mes-actions`，不使用像素断言。
+
+组件作者声明（ADR-0048）：`pnpm --dir web --filter @platform/kernel test` 检查按 widget 区分的作者类型与保留的扁平 Section，Build 原 Node 检查覆盖清单派生的字段/端口/属性与注册表，UI 的 StructuredEditor 检查入口偏好。普通属性只维护运行声明和对应显示行为，作者类型、允许字段、普通 Inspector 和属性校验从同一清单生成；复杂业务绑定仍需要原专用编辑。任务耗时仅在实际计时后报告，不以自动测试时长冒充构建者操作时间。
+
+原生模块旧检查：2026-10-19 对照改动前 `0f776d3f` 的独立源码副本确认，PMS 的七项角色/排程/通知检查与 MES 的 `TestDowntimeTellsSupervisors` 已在该版本失败。原断言未削弱；本次事实和连接器接受结果、故障重试及恢复按对应检查单独验证，不把组合检查报告为全通过。
+
 ## 检查选择与停止
 
 代码精简（ADR-0062）：`make code-size REVISION=e7b972ee` 与 `make code-size` 分开统计生产、测试、生成物和构建代码。集成编辑器用 `make e2e SPEC=integration-editors`，经正常界面分别创建 Connection / Source / Dataset / Pipeline / Matching / Writeback，确认关联被拒后只创建一次、原键继续使用、Discard 不改已存记录。`make e2e SPEC='application-authoring application-studio workspaces'` 检查建模、应用内草稿、规则发布及原生 PMS 工作区。Go 按 `make test-go PKG='./platform ./apps/build ./internal/rules'` 和宿主 Agent / Protocol / RecordedInput / Legacy / Accepted / Release / Candidate 对应测试检查；`TestPageModelSelectorAndStartShareOneRuleAndRecover` 保留筛选、动作和恢复断言，`TestRuleMigrationRetainsFrozenPublicationBytes` 检查旧条件进入 Transaction.Guard 后的历史字节。新应用模板以原生成器实际生成后执行 vet / test。Web 单元、`make check` 与 `scripts/verify.sh composition` 分别验证公共组件、类型与应用边界；原全根测试曾发现两处既有失败，修复后只重跑直接相关项，不把未重新完成的全根测试写为通过。

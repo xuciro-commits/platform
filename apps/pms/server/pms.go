@@ -142,6 +142,7 @@ type Hotel struct {
 	entities []platform.Entity
 	facts    *kernel.FactLog
 	ledger   *platform.Ledger
+	history  func() (json.RawMessage, error)
 }
 
 // RoomType is sellable inventory per night: physical rooms plus an overbooking
@@ -288,6 +289,8 @@ func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Decl
 // Manifest declares the hotel as an app (ADR-0016).
 // Snapshot and Restore: the channel's facts and the decisions; reservations
 // and room types are the host's records (ADR-0024).
+func (h *Hotel) SnapshotFormat() string { return "pms.facts.v1" }
+
 func (h *Hotel) Snapshot() (json.RawMessage, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

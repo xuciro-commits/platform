@@ -12,6 +12,7 @@ test("new application visual, JSON and YAML edit one payload without implicit wr
   await builder.open(page, "/projects");
   await page.getByRole("button", { name: "New application", exact: true }).click();
   const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true })).toHaveAttribute("aria-pressed", "true");
   const id = await dialog.getByRole("textbox", { name: "ID *", exact: true }).inputValue();
   const name = slug("sourcemodes"), title = `Source modes ${fresh("app")}`;
   await shots(page, dialog, "dual-application-basic-en", info);
@@ -131,6 +132,7 @@ test("business source trial stays private and formal refusal retries the origina
   await operator.open(page, `/definition?app=build&kind=object&name=${object.type}`);
   await page.getByRole("button", { name: /^Create [Ss]ource operation item$/, exact: true }).click();
   const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true })).toHaveAttribute("aria-pressed", "true");
   const id = fresh("DUAL");
   await dialog.getByRole("textbox", { name: "ID *", exact: true }).fill(id);
   await dialog.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
@@ -247,7 +249,7 @@ test("object, relationship, action, flow and page source return to the original 
   page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/v1/submissions") writes++; });
   await builder.open(page, `/object-type?id=${model.id}`);
   const objectRevision = (await builder.record("build.object", model.id)).revision;
-  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
+  await expect(page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true })).toHaveAttribute("aria-pressed", "true");
   const source = page.getByRole("textbox", { name: "Configuration source", exact: true });
   const objectDeclaration = JSON.parse(await source.inputValue());
   const originalObjectDeclaration = structuredClone(objectDeclaration);
@@ -296,8 +298,8 @@ test("object, relationship, action, flow and page source return to the original 
   await builder.decide("build.process.create", { type: "build.process", id: flowID }, { name: slug("sourceflow"), title: "Source flow", manual: true, steps: [{ name: "done", kind: "end" }] });
   await builder.open(page, `/flow?id=${flowID}`);
   const flowEditor = page.getByRole("region", { name: "Flows", exact: true });
-  await expect(flowEditor.getByRole("region", { name: "Flow map", exact: true })).toBeVisible();
-  await flowEditor.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
+  await expect(flowEditor.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(flowEditor.getByRole("region", { name: "Flow map", exact: true })).toHaveCount(0);
   const flow = JSON.parse(await source.inputValue());
   await source.fill(JSON.stringify({ ...flow, title: "Source-edited flow", input: { quantity: 0, enabled: false, tags: [], optional: null } }, null, 2));
   await page.getByRole("button", { name: "Apply source", exact: true }).click();
@@ -312,8 +314,9 @@ test("object, relationship, action, flow and page source return to the original 
   });
 
   const draft = await builder.page({ title: "Source page", object: model.type });
-  await editor.open(builder, draft.id);
-  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
+  await editor.open(builder, draft.id, "source");
+  await expect(page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await shots(page, page.locator("body"), "dual-declaration-page-source-en", info);
   const pageDeclaration = JSON.parse(await source.inputValue());
   pageDeclaration.title = "Source-edited page";
   pageDeclaration.sections[0].text = "Retained source content";

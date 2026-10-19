@@ -21,38 +21,20 @@ func (t *Tenant) assetReleaseContextLocked(registry *platform.AssetRegistry, ass
 		return context, err
 	}
 	for _, requirement := range requirements {
-		if requirement.Ref.App != build.ID {
-			return context, fmt.Errorf("environment binding %s has no supported owner", requirement.Ref)
+		owner, err := registry.Owner(requirement.Ref)
+		if err != nil {
+			return context, err
 		}
-		records, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{})
-		if refusal != nil {
-			return context, refusal
-		}
-		var matched []build.Connection
-		for _, record := range records {
-			if !record.Archived && record.Name == requirement.Ref.Name {
-				matched = append(matched, record)
-			}
-		}
-		if len(matched) == 0 {
-			return context, fmt.Errorf("release needs a target environment binding for %s", requirement.Ref)
-		}
-		if len(matched) != 1 {
-			return context, fmt.Errorf("target environment binding %s is ambiguous", requirement.Ref)
-		}
-		connection := matched[0]
-		if connection.State != "ready" || requirement.Profile != "" && connection.Kind != requirement.Profile {
-			return context, fmt.Errorf("target environment binding %s is not ready or has an incompatible connection kind", requirement.Ref)
+		target, err := owner.ResolveAssetEnvironment(requirement)
+		if err != nil {
+			return context, err
 		}
 		if requirement.Credential {
-			if connection.Secret == "" {
-				return context, fmt.Errorf("target environment binding %s needs its own credential", requirement.Ref)
-			}
-			if _, ok := t.secret(connection.Secret); !ok {
+			if _, ok := t.secret(target.Credential); !ok {
 				return context, fmt.Errorf("target environment binding %s has no credential", requirement.Ref)
 			}
 		}
-		context.Bindings = append(context.Bindings, platform.AssetEnvironmentBinding{Ref: requirement.Ref, TargetRecord: connection.ID})
+		context.Bindings = append(context.Bindings, platform.AssetEnvironmentBinding{Ref: requirement.Ref, TargetRecord: target.TargetRecord})
 	}
 	return context, nil
 }

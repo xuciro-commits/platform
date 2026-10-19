@@ -80,7 +80,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 	for _, et := range types {
 		for _, r := range rows[et.info.Type] {
 			paths := matchingRefsWithAccess(et.info.Fields, "", r.value, id, nil, true)
-			historical := historyNamesEnterprisePaths(historicalPaths[et.info.Type], r.history, id)
+			historical := historyNamesEnterprisePaths(historicalPaths[et.info.Type], r.recordHistory(), id)
 			if len(paths) == 0 && !historical {
 				continue
 			}

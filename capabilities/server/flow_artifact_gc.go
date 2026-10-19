@@ -151,7 +151,7 @@ func (s *recordStore) flowArtifactReferences(store flowFrameStore) (map[string]b
 		if err := visit(current, 0); err != nil {
 			return nil, err
 		}
-		for _, change := range row.history {
+		for _, change := range row.recordHistory() {
 			for _, field := range change.Fields {
 				if err := visit(field.Before, 0); err != nil {
 					return nil, err

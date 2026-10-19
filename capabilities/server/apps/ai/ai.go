@@ -116,6 +116,8 @@ type aiState struct {
 	Daily     map[string]int   `json:"daily,omitempty"`
 }
 
+func (a *AI) SnapshotFormat() string { return "ai.state.v1" }
+
 func (a *AI) Snapshot() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

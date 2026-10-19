@@ -21,7 +21,11 @@ type resultIdentity = journal.Identity
 
 // OpenJournal opens the PostgreSQL journal (ADR-0024).
 func OpenJournal(ctx context.Context, url string) (*journal.Postgres, error) {
-	return journal.OpenPostgres(ctx, url, acceptedIdentity)
+	j, err := journal.OpenPostgres(ctx, url, acceptedIdentity)
+	if err == nil {
+		j.Delta = acceptedStorageDelta
+	}
+	return j, err
 }
 
 // OpenFileJournal opens the one-file journal of the lightweight profile (ADR-0017 D2).

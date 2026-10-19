@@ -88,7 +88,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
       </div>} />
     <ContextHelp title={t("Decision table")}><p className="text-xs text-muted">{t("Saving keeps a draft. Review and publish it with the application to change the running rules.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    <StructuredEditor {...structured} value={{ ...structured.value, ...(draft.rows?{rows: draft.rows.map(row => row.expressions?.length ? { expressions: row.expressions, then: row.then } : { when: row.when, then: row.then })}:{}) }}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3">
+    <StructuredEditor initialMode="source" {...structured} value={{ ...structured.value, ...(draft.rows?{rows: draft.rows.map(row => row.expressions?.length ? { expressions: row.expressions, then: row.then } : { when: row.when, then: row.then })}:{}) }}><fieldset disabled={busy || joining} className="grid min-w-0 gap-3">
       <Panel title={t("Table")} className="grid min-w-0 gap-3 lg:grid-cols-3">
         <label className={fieldClass}>{t("Table name")}<Input disabled={!!draft.version} value={draft.name} placeholder="discount" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Table title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>

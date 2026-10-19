@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 )
@@ -24,6 +22,7 @@ type Ledger struct {
 	tenant       string
 	authority    string
 	declarations []*pb.AuthorityDeclaration
+	archive      kernel.ChangeArchive
 	changes      *kernel.ChangeLog
 	authorities  *kernel.Authorities
 	// schemas is the change log's registry, kept so the package can teach it a
@@ -114,7 +113,20 @@ func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declaratio
 func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.changes.ApplyAccepted(record)
+	changed, err := l.changes.ApplyAccepted(record)
+	if err == nil && l.archive != nil {
+		l.changes.Compact(l.archive)
+	}
+	return changed, err
+}
+
+// UseChangeArchive switches historical reads after a fixed-position copy has
+// been compared with this ledger. It changes storage, not acceptance rules.
+func (l *Ledger) UseChangeArchive(archive kernel.ChangeArchive) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.archive = archive
+	l.changes.Compact(archive)
 }
 
 // ForkAcceptedChanges validates a complete host batch without advancing the
@@ -133,6 +145,13 @@ func (l *Ledger) RecordsFor(tenant string) []*pb.ChangeRecord {
 	return l.changes.Records(tenant)
 }
 
+// LastAccepted reads only the latest receipt, including a compacted prefix.
+func (l *Ledger) LastAccepted(tenant string) *pb.ChangeRecord {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.changes.Last(tenant)
+}
+
 // SetFacts supplies the change log's tenant fact-check callback (K2, K4 C11).
 func (l *Ledger) SetFacts(facts func(tenant, factID string) bool) {
 	l.mu.Lock()
@@ -145,12 +164,7 @@ func (l *Ledger) SetFacts(facts func(tenant, factID string) bool) {
 func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, record := range l.changes.Records(tenant) {
-		if record.GetSubmission().GetIdempotencyKey() == key {
-			return proto.Clone(record).(*pb.ChangeRecord)
-		}
-	}
-	return nil
+	return l.changes.Accepted(tenant, key)
 }
 
 // Receive accepts s from c or refuses it: an action outside the enabled catalog

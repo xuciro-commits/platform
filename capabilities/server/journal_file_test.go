@@ -84,7 +84,7 @@ func journalsUnderTest(t *testing.T) []struct {
 func forgetJournal(t *testing.T, j Journals, tenant string) {
 	t.Helper()
 	if pg, ok := journalPool(j); ok {
-		for _, table := range []string{"journal", "snapshots", "embeddings", "transcripts"} {
+		for _, table := range []string{"runtime_results", "runtime_history", "runtime_records", "runtime_changes", "runtime_values", "runtime_tenants", "journal", "snapshots", "embeddings", "transcripts"} {
 			if _, err := pg.Exec(context.Background(), "delete from "+table+" where tenant=$1", tenant); err != nil {
 				t.Logf("cleanup %s: %v", table, err)
 			}

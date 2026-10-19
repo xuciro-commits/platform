@@ -103,10 +103,32 @@ func (p *Plant) ApplyAcceptedState(raw json.RawMessage) error {
 	if err := platform.RestoreFacts(p.facts, p.tenant, state.Facts); err != nil {
 		return err
 	}
+	if p.history != nil {
+		platform.CompactFacts(p.facts, p.loadHistoricalFacts)
+	}
 	p.identity.Restore(state.Identity)
 	p.downtime, p.nextEvent = state.Downtime, state.NextEvent
 	if p.downtime == nil {
 		p.downtime = map[string][]Downtime{}
 	}
 	return nil
+}
+
+func (p *Plant) loadHistoricalFacts() (json.RawMessage, error) {
+	raw, err := p.history()
+	if err != nil {
+		return nil, err
+	}
+	var state plantState
+	if err = json.Unmarshal(raw, &state); err != nil {
+		return nil, err
+	}
+	return state.Facts, nil
+}
+
+func (p *Plant) UseAcceptedHistory(load func() (json.RawMessage, error)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.history = load
+	platform.CompactFacts(p.facts, p.loadHistoricalFacts)
 }

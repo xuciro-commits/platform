@@ -982,5 +982,11 @@
         "tenant-a": 4
       }
     }
+  ],
+  "storageEquivalence": [
+    "Run every vector with in-memory history and history read at the applied position.",
+    "Forks share only the immutable historical prefix; discarded private writes do not change the source.",
+    "A committed record beyond the applied position must not satisfy replay or causation checks.",
+    "Preserve next change id, target revisions, last recorded time and original receipts after releasing resident history."
   ]
 }

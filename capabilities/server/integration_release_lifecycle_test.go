@@ -24,6 +24,54 @@ import (
 	"platformserver/platform"
 )
 
+type releaseEnvironmentOwner struct {
+	platform.AssetLifecycleOwner
+	ledger    *platform.Ledger
+	ref       platform.AssetRef
+	requested platform.AssetEnvironmentRequirement
+}
+
+func (o *releaseEnvironmentOwner) Manifest() platform.Manifest {
+	return platform.Manifest{ID: o.ref.App}
+}
+func (o *releaseEnvironmentOwner) AcceptedLedger() *platform.Ledger { return o.ledger }
+func (o *releaseEnvironmentOwner) AssetKinds() []platform.AssetKind {
+	return []platform.AssetKind{platform.AssetConnection}
+}
+func (o *releaseEnvironmentOwner) AssetEnvironmentRequirements(platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
+	return []platform.AssetEnvironmentRequirement{{Ref: o.ref, Profile: "owned-profile", Credential: true}}, nil
+}
+func (o *releaseEnvironmentOwner) ResolveAssetEnvironment(requirement platform.AssetEnvironmentRequirement) (platform.AssetEnvironmentTarget, error) {
+	o.requested = requirement
+	return platform.AssetEnvironmentTarget{TargetRecord: "owned-record", Credential: "local-credential"}, nil
+}
+
+func TestReleaseEnvironmentUsesOwnerDescriptorAndHostCredential(t *testing.T) {
+	ref := platform.AssetRef{App: "connection-owner", Kind: platform.AssetConnection, Name: "external"}
+	owner := &releaseEnvironmentOwner{ref: ref, ledger: platform.NewLedger("environment-target", ref.App, platform.NewCatalog())}
+	registry, err := platform.NewAssetRegistry(runtimeAssetOwner{App: owner, lifecycle: owner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset := platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: "1", Body: json.RawMessage(`{"name":"external"}`)}
+	var checked string
+	target := &Tenant{Secrets: func(name string) ([]byte, bool) { checked = name; return []byte("configured"), true }}
+	context, err := target.assetReleaseContextLocked(registry, []platform.ReleaseAsset{asset}, platform.Member{ID: "reviewer"}, time.Now(), false)
+	if err != nil || len(context.Bindings) != 1 || context.Bindings[0].Ref != ref || context.Bindings[0].TargetRecord != "owned-record" || checked != "local-credential" {
+		t.Fatal(context, checked, err)
+	}
+	if owner.requested.Profile != "owned-profile" || !owner.requested.Credential {
+		t.Fatal("host changed owner requirements", owner.requested)
+	}
+	if bytes.Contains(platform.Raw(context.Bindings), []byte("credential")) {
+		t.Fatal("transient credential name entered target bindings")
+	}
+	target.Secrets = func(string) ([]byte, bool) { return nil, false }
+	if _, err := target.assetReleaseContextLocked(registry, []platform.ReleaseAsset{asset}, platform.Member{}, time.Now(), false); err == nil || !strings.Contains(err.Error(), "has no credential") {
+		t.Fatal("host credential absence did not refuse release", err)
+	}
+}
+
 // The two domain tasks share the real source/pipeline/writeback and release
 // owners. Their complete definition closure is delivered into a clean target;
 // source data and environment credentials are never that closure.

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -13,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
@@ -23,13 +25,17 @@ import (
 // A projection into PostgreSQL (stage 3) will serve the same reads.
 
 type recordStore struct {
-	mu           sync.Mutex
-	readRelease  string // decoder context, derived from the release owner's pointer
-	liveVersions map[string]uint64
-	uniqueLinks  map[string]platform.LinkType
-	archiveLinks map[string]platform.LinkType
-	types        map[string]*entityType
-	byGo         map[reflect.Type]*entityType
+	historyStore    journal.RuntimeState
+	appliedPosition int64
+	currentPosition func() int64
+	tenant          string
+	mu              sync.Mutex
+	readRelease     string // decoder context, derived from the release owner's pointer
+	liveVersions    map[string]uint64
+	uniqueLinks     map[string]platform.LinkType
+	archiveLinks    map[string]platform.LinkType
+	types           map[string]*entityType
+	byGo            map[reflect.Type]*entityType
 	// A private 19a decision view has no projection callback. It may replace
 	// its parent only if no direct write reached that parent in the meantime.
 	parent         *recordStore
@@ -151,8 +157,10 @@ func maskedHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange
 // A row and its nested values are immutable once stored. Writers replace it;
 // readers that expose editable values copy them at the API boundary.
 type row struct {
-	value   reflect.Value // the entity struct, a private copy
-	history []RecordChange
+	value        reflect.Value // the entity struct, a private copy
+	history      []RecordChange
+	loadHistory  func(int) []RecordChange
+	historyCount int
 	// Recovery bytes preserve an accepted predecessor's identity when typed
 	// decoding normalises its definition. The next mutation writes only the
 	// current format; these bytes have no writable or executable API.
@@ -315,7 +323,7 @@ func (s *recordStore) forkRecords() *recordStore {
 }
 
 func (s *recordStore) forkRecordsLocked() *recordStore {
-	draft := &recordStore{readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{historyStore: s.historyStore, tenant: s.tenant, appliedPosition: s.appliedPosition, currentPosition: s.currentPosition, readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, changed: s.changed,
 		order: slices.Clone(s.order)}
@@ -367,6 +375,9 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	s.readRelease = draft.readRelease
 	s.dirty, s.changed, s.order = draft.dirty, draft.changed, draft.order
 	s.generation++
+	if s.parent == nil && s.currentPosition != nil {
+		s.appliedPosition = s.currentPosition()
+	}
 	draft.sealed = true
 	refs := make([]string, 0, len(draft.writes))
 	for ref := range draft.writes {
@@ -376,6 +387,11 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	for _, ref := range refs {
 		typ, _, _ := strings.Cut(ref, "/")
 		s.liveTouched(typ)
+		if s.parent == nil && s.historyStore != nil {
+			_, id, _ := strings.Cut(ref, "/")
+			et := s.types[typ]
+			s.attachHistory(et, id, et.rows.get(id), s.historyStore, s.tenant)
+		}
 		if s.touched != nil {
 			typ, id, _ := strings.Cut(ref, "/")
 			s.touched(typ, id)
@@ -542,7 +558,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	var history []RecordChange
 	if prev != nil {
 		old := recordOf(prev.value)
-		rec.Created, history, rec.Revision = old.Created, copyHistory(prev.history), old.Revision
+		rec.Created, history, rec.Revision = old.Created, copyHistory(prev.recordHistory()), old.Revision
 		if old.Archived != rec.Archived {
 			change.Fields = append(change.Fields, FieldChange{Field: "archived", Before: jsonOf(old.Archived), After: jsonOf(rec.Archived)})
 		}
@@ -891,7 +907,36 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 		}
 		out = append(out, v)
 	}
-	if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
+	if s.historyStore != nil {
+		filters := sqlRecordFilters(et.info, q.Domain)
+		seen := map[string]bool{}
+		after := ""
+		for {
+			ids, readErr := s.historyStore.StateCandidates(context.Background(), s.tenant, et.info.Type, filters, after, 256, s.appliedPosition)
+			if readErr != nil {
+				panic(fmt.Errorf("record candidates: %w", readErr))
+			}
+			for _, id := range ids {
+				seen[id] = true
+				visit(et.rows.get(id))
+			}
+			if len(ids) < 256 {
+				break
+			}
+			after = ids[len(ids)-1]
+		}
+		// Private writes may newly match a condition their committed predecessor
+		// did not. Include this decision's overlay before applying the same rules.
+		for overlay := s; overlay != nil; overlay = overlay.parent {
+			for ref := range overlay.writes {
+				typ, id, ok := strings.Cut(ref, "/")
+				if ok && typ == et.info.Type && !seen[id] {
+					seen[id] = true
+					visit(et.rows.get(id))
+				}
+			}
+		}
+	} else if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
 		for _, id := range ids {
 			visit(et.rows.get(id))
 		}
@@ -900,6 +945,7 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 			visit(r)
 		}
 	}
+
 	return out, nil
 }
 
@@ -1778,7 +1824,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 			view.Approvals = page.Records
 		}
 	}
-	history := maskedHistory(copyHistory(r.history), hidden)
+	history := maskedHistory(copyHistory(r.recordHistory()), hidden)
 	for i := len(history) - 1; i >= 0; i-- {
 		view.History = append(view.History, history[i])
 	}

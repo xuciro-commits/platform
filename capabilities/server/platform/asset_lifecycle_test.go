@@ -42,6 +42,9 @@ func (o *lifecycleFixture) ResolvePinned(AssetRef, string, ...string) (ReleaseAs
 func (o *lifecycleFixture) AssetEnvironmentRequirements(ReleaseAsset) ([]AssetEnvironmentRequirement, error) {
 	return o.requirements, nil
 }
+func (o *lifecycleFixture) ResolveAssetEnvironment(requirement AssetEnvironmentRequirement) (AssetEnvironmentTarget, error) {
+	return AssetEnvironmentTarget{TargetRecord: requirement.Ref.Name}, nil
+}
 func (o *lifecycleFixture) BeginAssetBootstrap(assets []ReleaseAsset) (func(), error) {
 	if o.bootstrap != nil {
 		return o.bootstrap(assets)

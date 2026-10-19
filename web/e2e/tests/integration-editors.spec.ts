@@ -25,6 +25,7 @@ test("integration editors retain one saved draft through refusal, membership ret
   for (const [index, item] of cases.entries()) {
     const name = slug("integration"), title = `Integration ${item.kind}`;
     await builder.open(page, `/${item.view}?id=new&application=${application.id}`);
+    await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
     await page.getByRole("textbox", { name: item.name, exact: true }).fill(name);
     await page.getByRole("textbox", { name: item.title, exact: true }).fill(title);
     if (item.type === "build.source") await page.getByRole("textbox", { name: "URL", exact: true }).fill("https://example.com/rows");

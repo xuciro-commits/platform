@@ -288,7 +288,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			if err != nil || json.Unmarshal(raw, v.Addr().Interface()) != nil {
 				return run, migrationRefusal(fmt.Errorf("migration value does not match its target shape"))
 			}
-			trialType.setRow(id, &row{value: v, history: copyHistory(et.rows.get(id).history)})
+			trialType.setRow(id, &row{value: v, history: copyHistory(et.rows.get(id).recordHistory())})
 			decision := d.tenant.authorizeFrom(prepared.trial.records, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: typ, Record: id, Fields: writeFields}, at, false)
 			if err := authorizationRefusal(decision); err != nil {
 				return run, err
@@ -536,7 +536,8 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 		return err
 	}
 	updated := *et.rows.get(id)
-	updated.history = copyHistory(updated.history)
+	updated.history = copyHistory(updated.recordHistory())
+	updated.loadHistory = nil
 	current := &updated
 	projection, err := json.Marshal(current.value.Interface())
 	if err != nil {

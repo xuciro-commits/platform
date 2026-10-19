@@ -15,12 +15,24 @@ function DraftState() {
   const drafts=useInputDrafts();
   return <><output data-testid="buffer">{JSON.stringify({dirty:drafts?.dirty,invalid:drafts?.invalid})}</output><button disabled={drafts?.invalid}>Save draft</button></>;
 }
-function Editor({initial,onChange=()=>{}}:{initial:StructuredValue;onChange?:(value:StructuredValue)=>void}) {
+function Editor({initial,onChange=()=>{},initialMode}:{initial:StructuredValue;onChange?:(value:StructuredValue)=>void;initialMode?:'visual'|'source'}) {
   const [value,setValue]=useState(initial);
-  return <InputDraftProvider scope="test"><StructuredEditor value={value} scope="document" onChange={next=>{setValue(next);onChange(next);}}><input aria-label="Name" value={String(value.name??'')} onChange={event=>setValue({...value,name:event.target.value})}/></StructuredEditor><output data-testid="value">{JSON.stringify(value)}</output><DraftState/></InputDraftProvider>;
+  return <InputDraftProvider scope="test"><StructuredEditor initialMode={initialMode} value={value} scope="document" onChange={next=>{setValue(next);onChange(next);}}><input aria-label="Name" value={String(value.name??'')} onChange={event=>setValue({...value,name:event.target.value})}/></StructuredEditor><output data-testid="value">{JSON.stringify(value)}</output><DraftState/></InputDraftProvider>;
 }
 const source=()=>screen.getByRole('textbox',{name:'Configuration source'}) as HTMLTextAreaElement;
 const buffer=()=>JSON.parse(screen.getByTestId('buffer').textContent!);
+
+test('authoring can start in source and switch to its original visual helper without changing the draft',()=>{
+  const change=vi.fn(),initial={name:'Same declaration',advanced:{binding:'retained'}};
+  render(<Editor initial={initial} initialMode="source" onChange={change}/>);
+  expect(JSON.parse(source().value)).toEqual(initial);
+  expect(screen.getByRole('button',{name:'Source editor'}).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.queryByRole('textbox',{name:'Name'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Visual'}));
+  expect((screen.getByRole('textbox',{name:'Name'}) as HTMLInputElement).value).toBe(initial.name);
+  expect(change).not.toHaveBeenCalled();
+  expect(buffer()).toEqual({dirty:false,invalid:false});
+});
 
 test('visual and source edits share one draft while preserving JSON values through YAML',()=>{
   const changes=vi.fn(),initial={name:'Original',zero:0,enabled:false,clear:null,empty:[],advanced:{nodes:[{id:'b'},{id:'a'}]}};

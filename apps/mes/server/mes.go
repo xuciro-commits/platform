@@ -233,6 +233,7 @@ type Plant struct {
 	identity  *kernel.Identity
 	downtime  map[string][]Downtime // resource → current derived events
 	nextEvent int
+	history   func() (json.RawMessage, error)
 }
 
 func New(tenant string, master MasterData) *Plant {
@@ -728,6 +729,8 @@ type plantState struct {
 	Downtime  map[string][]Downtime `json:"downtime"`
 	NextEvent int                   `json:"nextEvent"`
 }
+
+func (p *Plant) SnapshotFormat() string { return "mes.plant.v1" }
 
 func (p *Plant) Snapshot() (json.RawMessage, error) {
 	p.mu.Lock()

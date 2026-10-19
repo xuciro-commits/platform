@@ -19,6 +19,14 @@ type Snapshotter interface {
 	Restore(json.RawMessage) error
 }
 
+// SnapshotFormatOwner declares the persisted shape an owner's Restore reads.
+// Keep the format stable across implementation changes; change it when restoring
+// the previous shape would require a migration. Owners without this declaration
+// can still use snapshots, but only with the exact binary that wrote them.
+type SnapshotFormatOwner interface {
+	SnapshotFormat() string
+}
+
 // Snapshot saves the ledger's change log: an app whose other state lives in
 // the host's records (ADR-0046) snapshots with this alone.
 func (l *Ledger) Snapshot() (json.RawMessage, error) {

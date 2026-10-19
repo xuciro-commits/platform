@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
@@ -52,10 +53,13 @@ const (
 
 // index is the passages cut from the tenant's documents and knowledge fields.
 type index struct {
-	mu     sync.Mutex
-	docs   map[string]string   // source key → the revision indexed
-	chunks map[string][]*chunk // by source key
-	texts  map[string]string   // attached text files by content hash
+	mu          sync.Mutex
+	vectorMu    sync.Mutex // serialize derived source updates across search and embedding work
+	vectorModel string
+	vectorDirty map[string]bool
+	docs        map[string]string   // source key → the revision indexed
+	chunks      map[string][]*chunk // by source key
+	texts       map[string]string   // attached text files by content hash
 	// walked says the tenant was read once in full; after that the index
 	// follows the records the store marks dirty (ADR-0009 14b, #130), so a
 	// search costs nothing when nothing changed.
@@ -73,6 +77,10 @@ type index struct {
 
 // keep puts a source's chunks in the postings, and forgets what was there.
 func (k *index) keep(key string, cs []*chunk) {
+	if k.vectorDirty == nil {
+		k.vectorDirty = map[string]bool{}
+	}
+	k.vectorDirty[key] = true
 	for _, c := range k.chunks[key] {
 		c.gone = true
 		k.total, k.length, k.stale = k.total-1, k.length-c.length, k.stale+1
@@ -272,7 +280,7 @@ func (t *Tenant) sync() {
 func cut(s source) []*chunk {
 	var out []*chunk
 	for i, text := range passages(s.text) {
-		sum := sha256.Sum256([]byte(text))
+		sum := sha256.Sum256([]byte(s.title + "\n" + text))
 		c := &chunk{doc: s.key, title: s.title, text: text, hash: hex.EncodeToString(sum[:12]), scope: s.scope, n: i, apps: s.apps, terms: map[string]int{}}
 		for _, w := range words(s.title + " " + text) {
 			c.terms[w]++
@@ -436,7 +444,8 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 		found[c] = true
 		candidates = append(candidates, c)
 	}
-	if model == "" {
+	_, databaseSearch := t.store().(journal.VectorIndex)
+	if model == "" || databaseSearch {
 		for _, w := range asked {
 			for _, c := range k.postings[w] {
 				if !c.gone {
@@ -476,7 +485,7 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 			all = append(all, c)
 		}
 	}
-	if len(all) == 0 {
+	if len(all) == 0 && (model == "" || !databaseSearch) {
 		return out
 	}
 	var query []float32
@@ -495,7 +504,12 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 				}
 			}
 		})
-		slices.SortStableFunc(list, func(a, b *chunk) int { return cmpFloat(scored[b], scored[a]) })
+		slices.SortFunc(list, func(a, b *chunk) int {
+			if comparison := cmpFloat(scored[b], scored[a]); comparison != 0 {
+				return comparison
+			}
+			return strings.Compare(a.doc+fmt.Sprint(a.n), b.doc+fmt.Sprint(b.n))
+		})
 		for i, c := range list {
 			ranks[c] += 1 / float64(60+i+1) // reciprocal rank fusion
 		}
@@ -515,20 +529,29 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 	}
 	fuse(bm)
 	if query != nil {
-		hashes := make([]string, len(all))
-		for i, c := range all {
-			hashes[i] = c.hash
-		}
-		vectors := t.store().Vectors(t.ID, model, hashes)
 		cos := map[*chunk]float64{}
-		for _, c := range all {
-			if v := vectors[c.hash]; v != nil {
-				cos[c] = cosine(query, v)
+		if databaseSearch {
+			cos = t.nearestKnowledge(model, query, reader, app, limit, now)
+		} else {
+			// The lightweight file/memory profile retains its bounded local
+			// store; PostgreSQL search never enters this corpus-vector path.
+			hashes := make([]string, len(all))
+			for i, c := range all {
+				hashes[i] = c.hash
+			}
+			vectors := t.store().Vectors(t.ID, model, hashes)
+			for _, c := range all {
+				if v := vectors[c.hash]; v != nil {
+					cos[c] = cosine(query, v)
+				}
 			}
 		}
 		fuse(cos)
 	}
 	for c, r := range ranks {
+		if !t.currentPassageReadable(c, reader, app, now) {
+			continue
+		}
 		out = append(out, Passage{Document: c.doc, Title: c.title, Chunk: c.n, Text: c.text, Score: math.Round(r*10000) / 10000})
 	}
 	slices.SortStableFunc(out, func(a, b Passage) int {
@@ -594,11 +617,22 @@ func (t *Tenant) Embed(now time.Time) {
 	}
 	k.mu.Unlock()
 	slices.Sort(hashes)
-	have := t.store().Vectors(t.ID, model, hashes)
 	var missing []string
-	for _, h := range hashes {
-		if have[h] == nil {
-			missing = append(missing, h)
+	if search, ok := t.store().(journal.VectorIndex); ok {
+		if err := t.syncVectorSources(search, model); err != nil {
+			return
+		}
+		var err error
+		missing, err = search.MissingVectors(context.Background(), t.ID, model, hashes)
+		if err != nil {
+			return
+		}
+	} else {
+		have := t.store().Vectors(t.ID, model, hashes)
+		for _, h := range hashes {
+			if have[h] == nil {
+				missing = append(missing, h)
+			}
 		}
 	}
 	for len(missing) > 0 {

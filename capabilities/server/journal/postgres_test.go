@@ -119,3 +119,33 @@ func TestPostgresAcceptedResultScopes(t *testing.T) {
 		}
 	}
 }
+
+func TestPostgresMigrationKeepsCurrentScopedIndex(t *testing.T) {
+	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
+	if dsn == "" {
+		t.Skip("PLATFORM_TEST_DATABASE not set")
+	}
+	ctx := context.Background()
+	j, err := OpenPostgres(ctx, dsn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before uint32
+	if err = j.pool.QueryRow(ctx, `select 'journal_result_scoped_key'::regclass::oid`).Scan(&before); err != nil {
+		j.Close()
+		t.Fatal(err)
+	}
+	j.Close()
+	j, err = OpenPostgres(ctx, dsn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer j.Close()
+	var after uint32
+	if err = j.pool.QueryRow(ctx, `select 'journal_result_scoped_key'::regclass::oid`).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if before != after {
+		t.Fatalf("compatible startup rebuilt the journal index: %d -> %d", before, after)
+	}
+}

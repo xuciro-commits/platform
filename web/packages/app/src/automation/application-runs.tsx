@@ -174,7 +174,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
     ]} getRowId={item=>item.ref.app+":"+item.ref.name} height={200} searchable={false}/></div>
    </Disclosure>
    {!!runtime.ai?.length&&<Disclosure summary={t("AI placement and evaluations")}>
-    <div className="grid gap-4 py-3">{runtime.ai.map(item=><section key={item.resource.ref.name} className="grid min-w-0 gap-3 border-b border-border pb-4 last:border-b-0 last:pb-0">
+    <div className="grid gap-4 py-3">{runtime.ai.map(item=><Panel variant="plain" key={item.resource.ref.name} className="grid min-w-0 gap-3 border-b border-border pb-4 last:border-b-0 last:pb-0">
      <h3 className="break-all text-sm font-medium">{item.resource.ref.name}</h3>
      <PropertyList columns={3} items={[
       [t("Placement"),placementName(item.placement)],
@@ -197,7 +197,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
       {accessorKey:"model",header:t("Model")},
       {accessorKey:"quality",header:t("Quality")},
      ]} getRowId={report=>report.id} height={180} searchable={false}/>}
-    </section>)}</div>
+    </Panel>)}</div>
    </Disclosure>}
    <Disclosure summary={t("Artifact contents and dependencies")}>
     <div className="py-3"><DataTable data={bindings} columns={[

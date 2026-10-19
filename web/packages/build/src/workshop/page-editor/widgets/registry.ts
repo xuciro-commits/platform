@@ -1,9 +1,10 @@
-import { createWidgetDefinitions } from "@platform/app";
+import { createWidgetDefinitions,widgetContracts } from "@platform/app";
 import {lazyInspector} from "./lazy-inspector";
 import type {ComponentType} from "react";
 import type {Api} from "@platform/kernel";
 import type {EntityInfo} from "@platform/ui";
 import type {AuthoringSection} from "../draft";
+import type {ButtonInspectorPorts} from "./ButtonInspector";
 
 export type WidgetBindingInspectorPorts={section:AuthoringSection;sections:AuthoringSection[];document:Api.PageDocument;object:string;info?:EntityInfo;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void;onResourcesChange:(patch:Partial<AuthoringSection>,variables:Record<string,Api.PageVariable>)=>void};
 
@@ -37,9 +38,6 @@ const TreemapInspector=lazyInspector(()=>import("./TreemapInspector").then(modul
 const HeatmapInspector=lazyInspector(()=>import("./HeatmapInspector").then(module=>module.HeatmapInspector));
 const HistogramInspector=lazyInspector(()=>import("./HistogramInspector").then(module=>module.HistogramInspector));
 const TermsInspector=lazyInspector(()=>import("./TermsInspector").then(module=>module.TermsInspector));
-const SpacerInspector=lazyInspector(()=>import("./SpacerInspector").then(module=>module.SpacerInspector));
-const SeparatorInspector=lazyInspector(()=>import("./SeparatorInspector").then(module=>module.SeparatorInspector));
-const NoticeInspector=lazyInspector(()=>import("./NoticeInspector").then(module=>module.NoticeInspector));
 const AlertInspector=lazyInspector(()=>import("./AlertInspector").then(module=>module.AlertInspector));
 const RecordPickerInspector=lazyInspector(()=>import("./RecordPickerInspector").then(module=>module.RecordPickerInspector));
 const DateInspector=lazyInspector(()=>import("./DateInspector").then(module=>module.DateInspector));
@@ -56,7 +54,6 @@ const RecordGanttInspector=lazyInspector(()=>import("./RecordGanttInspector").th
 const RecordEventsInspector=lazyInspector(()=>import("./RecordEventsInspector").then(module=>module.RecordEventsInspector));
 const ScatterInspector=lazyInspector(()=>import("./ScatterInspector").then(module=>module.ScatterInspector));
 const RecordChartInspector=lazyInspector(()=>import("./RecordChartInspector").then(module=>module.RecordChartInspector));
-const HeadingInspector=lazyInspector(()=>import("./TitleInspectors").then(module=>module.HeadingInspector));
 const CollectionTitleInspector=lazyInspector(()=>import("./TitleInspectors").then(module=>module.CollectionTitleInspector));
 const MetricInspector=lazyInspector(()=>import("./MetricInspector").then(module=>module.MetricInspector));
 const StatusTrackerInspector=lazyInspector(()=>import("./StatusTrackerInspector").then(module=>module.StatusTrackerInspector));
@@ -74,86 +71,79 @@ const TableInspector=lazyInspector(()=>import("./TableInspector").then(module=>m
 const TableSelectionInspector=lazyInspector(()=>import("./TableInspector").then(module=>module.TableSelectionInspector));
 const ButtonInspector=lazyInspector(()=>import("./ButtonInspector").then(module=>module.ButtonInspector));
 
-/** Build owns editor implementations, keyed by the shared runtime identity. */
-const inspectors = createWidgetDefinitions({
- "layered-graph":{configVersion:1},
- "model-matrix":{configVersion:1},
- text:{configVersion:1},
- input:{configVersion:1},
- actions:{configVersion:1},
- form:{configVersion:1},
- tasks:{configVersion:1},
- function:{configVersion:1},
- compute:{configVersion:1},
- "collection-builder":{configVersion:1,bindings:CollectionBuilderInspector},
- "record-map":{configVersion:1,bindings:MapInspector},
- "image-annotation":{configVersion:1,bindings:AnnotationInspector},
- "scene-3d":{configVersion:1,bindings:SceneInspector},
- "ai-assistant":{configVersion:1,bindings:AIInspector},
- "external-frame":{configVersion:1,bindings:ExternalFrameInspector},
- "embedded-page":{configVersion:1,bindings:EmbeddingInspector},
- observation:{configVersion:1,bindings:ObservationInspector},
- "action-table":{configVersion:1,bindings:ActionTableInspector},
- notepad:{configVersion:1,bindings:NotepadInspector},
- "collection-analysis":{configVersion:1,bindings:CollectionAnalysisInspector},
- "resource-list":{configVersion:1,bindings:ResourceListInspector},
- "asset-directory":{configVersion:1,bindings:AssetDirectoryInspector},
- "graph-explorer":{configVersion:1,bindings:GraphExplorerInspector},
- "vertex-graph":{configVersion:1,bindings:VertexGraphInspector},
- breadcrumb:{configVersion:1,bindings:BreadcrumbInspector,events:BreadcrumbHomeInspector},
- "avatar-stack":{configVersion:1,bindings:AvatarInspector},
- "static-image":{configVersion:1,bindings:ImageInspector},
- "approval-inbox":{configVersion:1,bindings:WorkViewsInspector},
- "notification-feed":{configVersion:1,bindings:WorkViewsInspector},
- timeline:{configVersion:1,bindings:HistoryInspector},
- "record-comments":{configVersion:1,bindings:CollaborationInspector},
- "record-uploader":{configVersion:1,bindings:CollaborationInspector},
- "media-preview":{configVersion:1,bindings:CollaborationInspector},
- "pdf-viewer":{configVersion:1,bindings:CollaborationInspector},
- "tag-counts":{configVersion:1,bindings:TagCountsInspector},
- "record-comparison":{configVersion:1,bindings:RecordComparisonInspector},
- "record-card":{configVersion:1,bindings:RecordCardInspector},
- "sparkline-kpi":{configVersion:1,bindings:SparklineInspector},
- treemap:{configVersion:1,bindings:TreemapInspector},
- heatmap:{configVersion:1,bindings:HeatmapInspector},
- histogram:{configVersion:1,bindings:HistogramInspector},
- "term-counts":{configVersion:1,bindings:TermsInspector},
- "record-picker":{configVersion:1,bindings:RecordPickerInspector},
- spacer:{configVersion:1,bindings:SpacerInspector},
- separator:{configVersion:1,bindings:SeparatorInspector},
- notice:{configVersion:1,bindings:NoticeInspector},
- "alert-banner":{configVersion:1,bindings:AlertInspector},
- "date-input":{configVersion:1,bindings:DateInspector},
- "choice-input":{configVersion:1,bindings:ChoiceInspector},
- "boolean-input":{configVersion:1,bindings:BooleanInspector},
- "range-input":{configVersion:1,bindings:RangeInspector},
- "record-leaderboard":{configVersion:1,bindings:LeaderboardInspector},
- "summary-stats":{configVersion:1,bindings:SummaryInspector},
- gauge:{configVersion:1,bindings:GaugeInspector},
- progress:{configVersion:1,bindings:ProgressInspector},
- "record-gantt":{configVersion:1,bindings:RecordGanttInspector},
- "record-calendar":{configVersion:1,bindings:RecordCalendarInspector},
- "record-events":{configVersion:1,bindings:RecordEventsInspector},
- "record-scatter":{configVersion:1,bindings:ScatterInspector},
- "record-chart":{configVersion:1,bindings:RecordChartInspector},
- "record-list":{configVersion:1,bindings:RecordListInspector},
- heading:{configVersion:1,bindings:HeadingInspector},
- "collection-title":{configVersion:1,bindings:CollectionTitleInspector},
- metric:{configVersion:1,bindings:MetricInspector},
- "status-tracker":{configVersion:1,bindings:StatusTrackerInspector},
- "record-links":{configVersion:1,bindings:RecordLinksInspector},
- "button-group":{configVersion:1,events:ButtonGroupInspector},
- "record-view":{configVersion:1,bindings:RecordViewInspector},
- detail:{configVersion:1,bindings:DetailInspector},
- filter:{configVersion:1,bindings:FilterInspector},
- "inline-action":{configVersion:1,bindings:InlineActionInspector},
-  kanban:{configVersion:1,bindings:KanbanInspector},
-  "record-timeline":{configVersion:1,bindings:RecordTimelineInspector},
-  chart: {configVersion:1,bindings:ChartInspector},
-  pivot: {configVersion:1,bindings:PivotInspector},
-  table: { configVersion:1, bindings:TableInspector,events:TableSelectionInspector },
-  button: { configVersion:1, events:ButtonInspector },
-});
+const SchemaPropertyInspector=lazyInspector(()=>import("./SchemaPropertyInspector").then(module=>module.SchemaPropertyInspector));
+
+/** Only specialized behavior is registered here; identities, versions and ordinary
+ * property editors are derived from the same manifest as runtime validation. */
+type WidgetID=typeof widgetContracts[number]['componentID'];
+type Inspectors={bindings?:ComponentType<WidgetBindingInspectorPorts>;events?:ComponentType<ButtonInspectorPorts>};
+const specialized:Partial<Record<WidgetID,Inspectors>>= {
+ "collection-builder":{bindings:CollectionBuilderInspector},
+ "record-map":{bindings:MapInspector},
+ "image-annotation":{bindings:AnnotationInspector},
+ "scene-3d":{bindings:SceneInspector},
+ "ai-assistant":{bindings:AIInspector},
+ "external-frame":{bindings:ExternalFrameInspector},
+ "embedded-page":{bindings:EmbeddingInspector},
+ observation:{bindings:ObservationInspector},
+ "action-table":{bindings:ActionTableInspector},
+ notepad:{bindings:NotepadInspector},
+ "collection-analysis":{bindings:CollectionAnalysisInspector},
+ "resource-list":{bindings:ResourceListInspector},
+ "asset-directory":{bindings:AssetDirectoryInspector},
+ "graph-explorer":{bindings:GraphExplorerInspector},
+ "vertex-graph":{bindings:VertexGraphInspector},
+ breadcrumb:{bindings:BreadcrumbInspector,events:BreadcrumbHomeInspector},
+ "avatar-stack":{bindings:AvatarInspector},
+ "static-image":{bindings:ImageInspector},
+ "approval-inbox":{bindings:WorkViewsInspector},
+ "notification-feed":{bindings:WorkViewsInspector},
+ timeline:{bindings:HistoryInspector},
+ "record-comments":{bindings:CollaborationInspector},
+ "record-uploader":{bindings:CollaborationInspector},
+ "media-preview":{bindings:CollaborationInspector},
+ "pdf-viewer":{bindings:CollaborationInspector},
+ "tag-counts":{bindings:TagCountsInspector},
+ "record-comparison":{bindings:RecordComparisonInspector},
+ "record-card":{bindings:RecordCardInspector},
+ "sparkline-kpi":{bindings:SparklineInspector},
+ treemap:{bindings:TreemapInspector},
+ heatmap:{bindings:HeatmapInspector},
+ histogram:{bindings:HistogramInspector},
+ "term-counts":{bindings:TermsInspector},
+ "record-picker":{bindings:RecordPickerInspector},
+ "alert-banner":{bindings:AlertInspector},
+ "date-input":{bindings:DateInspector},
+ "choice-input":{bindings:ChoiceInspector},
+ "boolean-input":{bindings:BooleanInspector},
+ "range-input":{bindings:RangeInspector},
+ "record-leaderboard":{bindings:LeaderboardInspector},
+ "summary-stats":{bindings:SummaryInspector},
+ gauge:{bindings:GaugeInspector},
+ progress:{bindings:ProgressInspector},
+ "record-gantt":{bindings:RecordGanttInspector},
+ "record-calendar":{bindings:RecordCalendarInspector},
+ "record-events":{bindings:RecordEventsInspector},
+ "record-scatter":{bindings:ScatterInspector},
+ "record-chart":{bindings:RecordChartInspector},
+ "record-list":{bindings:RecordListInspector},
+ "collection-title":{bindings:CollectionTitleInspector},
+ metric:{bindings:MetricInspector},
+ "status-tracker":{bindings:StatusTrackerInspector},
+ "record-links":{bindings:RecordLinksInspector},
+ "button-group":{events:ButtonGroupInspector},
+ "record-view":{bindings:RecordViewInspector},
+ detail:{bindings:DetailInspector},
+ filter:{bindings:FilterInspector},
+ "inline-action":{bindings:InlineActionInspector},
+  kanban:{bindings:KanbanInspector},
+  "record-timeline":{bindings:RecordTimelineInspector},
+  chart: {bindings:ChartInspector},
+  pivot: {bindings:PivotInspector},
+  table: {  bindings:TableInspector,events:TableSelectionInspector },
+  button: {  events:ButtonInspector },
+};
+const inspectors=createWidgetDefinitions(Object.fromEntries(widgetContracts.map(contract=>[contract.componentID,{configVersion:contract.configVersion,...specialized[contract.componentID],...("propertyEditor" in contract&&contract.propertyEditor==="schema"?{bindings:SchemaPropertyInspector}:{})}])) as Record<WidgetID,Inspectors&{configVersion:number}>);
 export function widgetInspector(id:string,version:number) {
   const implementation=inspectors.resolve(id,version);
   return implementation?.configVersion===version?{

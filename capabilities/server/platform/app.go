@@ -196,6 +196,12 @@ type AcceptedStateApp interface {
 	ApplyAcceptedState(json.RawMessage) error
 }
 
+// AcceptedHistoryApp may release its persisted immutable history after the
+// original accepted-state image has been saved. Only the owner decodes it.
+type AcceptedHistoryApp interface {
+	UseAcceptedHistory(load func() (json.RawMessage, error))
+}
+
 // DecisionForkApp isolates an owner's decision context and runtime caches while
 // retaining immutable declarations. Its fork must have the same app ID and
 // ledger identity. This is not an acceptance opt-in: every App is staged, and

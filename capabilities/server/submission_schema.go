@@ -21,7 +21,7 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 	}
 	family := uint32(1)
 	key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-	if raw := t.committed.answers[key]; len(raw) > 0 {
+	if raw := t.committed.answer(key); len(raw) > 0 {
 		result, receipt, err := decodeAcceptedBatch(raw)
 		if err == nil {
 			saved, err := batchSubmission(result, receipt)
@@ -31,7 +31,7 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 		}
 	} else if prior := app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()); prior != nil {
 		family = prior.GetSubmission().GetSchema().GetVersion()
-	} else if prior, exists := t.committed.refusals[key]; exists {
+	} else if prior, exists := t.committed.refusal(key); exists {
 		_, saved, err := decodeRefusedResult(platform.Raw(prior))
 		if err == nil {
 			family = saved.GetSchema().GetVersion()
@@ -106,10 +106,10 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 	}
 	if content == "" {
 		key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-		if _, bound := t.committed.schemaVersions[key]; !bound && app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+		if _, bound := t.committed.schemaVersion(key); !bound && app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 			return nil, nil // Retry an original unbound receipt without upgrading its bytes.
 		}
-		if prior, exists := t.committed.refusals[key]; exists && prior.SchemaVersion == nil {
+		if prior, exists := t.committed.refusal(key); exists && prior.SchemaVersion == nil {
 			return nil, nil
 		}
 		if action.SchemaVersion == nil && current.Family == 1 && sub.GetSchema().GetVersion() == 1 {

@@ -96,8 +96,7 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	}
 	accepted := false
 	for _, log := range d.logs {
-		records := log.Records(receipt.GetSubmission().GetTenantId())
-		accepted = len(records) > 0 && proto.Equal(records[len(records)-1], receipt)
+		accepted = proto.Equal(log.Last(receipt.GetSubmission().GetTenantId()), receipt)
 	}
 	if !accepted {
 		return nil, fmt.Errorf("decision has no staged kernel receipt")
@@ -119,7 +118,7 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		return nil, fmt.Errorf("versioned migration row requires the complete record batch")
 	}
 	value, err := json.Marshal(et.rows.get(id).value.Interface())
-	history := copyHistory(et.rows.get(id).history)
+	history := copyHistory(et.rows.get(id).recordHistory())
 	d.records.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -341,7 +340,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}
 	prior := et.rows.get(rec.ID)
 	if prior != nil && reflect.DeepEqual(prior.value.Interface(), value.Interface()) &&
-		reflect.DeepEqual(prior.history, result.Row.History) {
+		reflect.DeepEqual(prior.recordHistory(), result.Row.History) {
 		draft.mu.Unlock()
 		changed, err := l.ApplyAcceptedChange(receipt)
 		if err == nil {
@@ -354,8 +353,8 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	before := len(result.Row.History) - 1
 	if verb == "create" && prior != nil || verb != "create" && prior == nil ||
 		prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
-		prior == nil && before != 0 || prior != nil && (len(prior.history) != before ||
-		before > 0 && !reflect.DeepEqual(prior.history, result.Row.History[:before]) ||
+		prior == nil && before != 0 || prior != nil && (len(prior.recordHistory()) != before ||
+		before > 0 && !reflect.DeepEqual(prior.recordHistory(), result.Row.History[:before]) ||
 		!reflect.DeepEqual(recordOf(prior.value).Created, rec.Created)) {
 		draft.mu.Unlock()
 		return false, fmt.Errorf("accepted record is missing its predecessor")

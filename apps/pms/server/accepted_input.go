@@ -79,7 +79,20 @@ func (h *Hotel) ApplyAcceptedState(raw json.RawMessage) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return platform.RestoreFacts(h.facts, h.tenant, raw)
+	if err := platform.RestoreFacts(h.facts, h.tenant, raw); err != nil {
+		return err
+	}
+	if h.history != nil {
+		platform.CompactFacts(h.facts, h.history)
+	}
+	return nil
+}
+
+func (h *Hotel) UseAcceptedHistory(load func() (json.RawMessage, error)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.history = load
+	platform.CompactFacts(h.facts, load)
 }
 
 func (h *Hotel) HasAcceptedFact(tenant, id string) bool {

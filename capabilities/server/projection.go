@@ -21,16 +21,17 @@ import (
 // Projection copies a tenant's records into PostgreSQL for tools outside the
 // host (ADR-0024): one schema per tenant, one table per entity type with
 // columns from its declaration, and one table of its changes. It is only a
-// copy: rebuilt from the records at start-up, so a changed declaration needs
-// no migration, then kept current after each commit. The journal stays the
-// truth. Record security does not reach outside tools: reading the schema is
+// copy: existing tables and history are retained at startup, with columns
+// reconciled against the current declaration, then updated after commits.
+// Accepted runtime state remains separate. Record security does not reach outside tools: reading the schema is
 // an administrator's grant of its reader role.
 type Projection struct {
-	pool   *pgxpool.Pool
-	tenant *Tenant
-	schema string
-	mu     sync.Mutex
-	dirty  map[string]map[string]bool // type → ids changed since the last flush
+	pool    *pgxpool.Pool
+	tenant  *Tenant
+	schema  string
+	mu      sync.Mutex
+	dirty   map[string]map[string]bool // type → ids changed since the last flush
+	history map[string]int             // type/id → history prefix already written successfully
 }
 
 var unsafe = regexp.MustCompile(`[^a-z0-9_]+`)
@@ -130,10 +131,10 @@ func tableOf(typ string) string { return ident(typ) }
 // q quotes an identifier: fields may be named like SQL words ("from", "order").
 func q(parts ...string) string { return pgx.Identifier(parts).Sanitize() }
 
-// Project creates the tenant's schema and reader role, rebuilds every type's
-// tables from the records, and marks each later change for Flush.
+// Project creates missing reader tables, updates current rows and appends only
+// missing history. A restart preserves the schema and its reader grants.
 func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, error) {
-	p := &Projection{pool: pool, tenant: t, schema: ProjectionSchema(t.ID), dirty: map[string]map[string]bool{}}
+	p := &Projection{pool: pool, tenant: t, schema: ProjectionSchema(t.ID), dirty: map[string]map[string]bool{}, history: map[string]int{}}
 	s := t.records
 	s.mu.Lock()
 	infos := []platform.EntityInfo{}
@@ -147,36 +148,101 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	// A rebuilt schema: tables of types an app no longer declares go with it.
-	if _, err := tx.Exec(ctx, fmt.Sprintf(`drop schema if exists %s cascade; create schema %s`, p.schema, p.schema)); err != nil {
+	if _, err := tx.Exec(ctx, fmt.Sprintf(`create schema if not exists %s`, p.schema)); err != nil {
 		return nil, err
 	}
+	history := map[string]int{}
 	for _, info := range infos {
 		cols := columns(info)
 		defs := make([]string, len(cols))
-		names := make([]string, len(cols))
 		for i, c := range cols {
-			defs[i], names[i] = q(c.name)+" "+c.sqlType, c.name
+			defs[i] = q(c.name) + " " + c.sqlType
 		}
 		table := tableOf(info.Type)
-		if _, err := tx.Exec(ctx, fmt.Sprintf(`create table %s (%s);
-			create table %s (record_id text not null, seq integer not null, change text not null, schema text not null, "by" text not null,
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`create table if not exists %s (%s);
+			create table if not exists %s (record_id text not null, seq integer not null, change text not null, schema text not null, "by" text not null,
 				at timestamptz not null, fields jsonb not null, primary key (record_id, seq))`,
 			q(p.schema, table), strings.Join(defs, ", "), q(p.schema, table+"_changes"))); err != nil {
 			return nil, err
 		}
-		rows, changes := p.rows(info.Type, nil)
-		if _, err := tx.CopyFrom(ctx, pgx.Identifier{p.schema, table}, names, pgx.CopyFromRows(rows)); err != nil {
+		for _, c := range cols {
+			if c.name == "id" {
+				continue
+			}
+			if _, err := tx.Exec(ctx, fmt.Sprintf(`alter table %s add column if not exists %s %s`, q(p.schema, table), q(c.name), c.sqlType)); err != nil {
+				return nil, err
+			}
+		}
+		// Reusing the projection must not retain a column whose declaration is
+		// now restricted or removed. The old full rebuild removed it too.
+		retained := map[string]bool{}
+		for _, c := range cols {
+			retained[c.name] = true
+		}
+		attributes, err := tx.Query(ctx, `select attname from pg_attribute where attrelid=$1::regclass and attnum>0 and not attisdropped`, q(p.schema, table))
+		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.CopyFrom(ctx, pgx.Identifier{p.schema, table + "_changes"}, []string{"record_id", "seq", "change", "schema", "by", "at", "fields"},
-			pgx.CopyFromRows(changes)); err != nil {
+		var removed []string
+		for attributes.Next() {
+			var name string
+			if err = attributes.Scan(&name); err != nil {
+				attributes.Close()
+				return nil, err
+			}
+			if !retained[name] {
+				removed = append(removed, name)
+			}
+		}
+		err = attributes.Err()
+		attributes.Close()
+		if err != nil {
 			return nil, err
 		}
+		for _, name := range removed {
+			if _, err := tx.Exec(ctx, fmt.Sprintf(`alter table %s drop column %s`, q(p.schema, table), q(name))); err != nil {
+				return nil, err
+			}
+		}
+		existing, err := tx.Query(ctx, fmt.Sprintf(`select record_id, max(seq)+1 from %s group by record_id`, q(p.schema, table+"_changes")))
+		if err != nil {
+			return nil, err
+		}
+		for existing.Next() {
+			var id string
+			var end int
+			if err = existing.Scan(&id, &end); err != nil {
+				existing.Close()
+				return nil, err
+			}
+			p.history[info.Type+"/"+id] = end
+		}
+		err = existing.Err()
+		existing.Close()
+		if err != nil {
+			return nil, err
+		}
+		rows, changes, ends := p.rows(info.Type, nil)
+		for ref, end := range ends {
+			history[ref] = end
+		}
+		upsert, change := p.writeSQL(info)
+		batch := &pgx.Batch{}
+		for _, r := range rows {
+			batch.Queue(upsert, r...)
+		}
+		for _, r := range changes {
+			batch.Queue(change, r...)
+		}
+		if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+			return nil, err
+		}
+
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	p.recordHistory(history)
 	p.grant(ctx)
 	s.mu.Lock()
 	s.touched = p.touch
@@ -205,28 +271,68 @@ func (p *Projection) touch(typ, id string) {
 	p.dirty[typ][id] = true
 }
 
-// rows reads a type's records (all, or the ids given) and their changes as table rows.
-func (p *Projection) rows(typ string, ids map[string]bool) (rows [][]any, changes [][]any) {
+// rows reads exactly the changed IDs (or all records on rebuild), and only
+// history after the prefix confirmed by a successful database write.
+func (p *Projection) rows(typ string, ids map[string]bool) (rows [][]any, changes [][]any, ends map[string]int) {
+	p.mu.Lock()
+	written := make(map[string]int, len(ids))
+	if ids == nil {
+		for ref, end := range p.history {
+			prefix := typ + "/"
+			if strings.HasPrefix(ref, prefix) {
+				written[strings.TrimPrefix(ref, prefix)] = end
+			}
+		}
+	}
+	if ids != nil {
+		for id := range ids {
+			written[id] = p.history[typ+"/"+id]
+		}
+	}
+	p.mu.Unlock()
 	s := p.tenant.records
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	et := s.types[typ]
 	cols := columns(et.info)
-	for id, r := range et.rows.all() {
-		if ids != nil && !ids[id] {
-			continue
+	ends = map[string]int{}
+	take := func(id string, r *row) {
+		if r == nil {
+			return
 		}
 		row := make([]any, len(cols))
 		for i, c := range cols {
 			row[i] = c.value(r.value)
 		}
 		rows = append(rows, row)
-		for seq, h := range r.history { // one decision may change a record twice: its position names a change
+		for offset, h := range r.historyAfter(written[id]) { // one decision may change a record twice
+			seq := written[id] + offset
 			fields, _ := json.Marshal(h.Fields)
 			changes = append(changes, []any{id, seq, h.Change, h.Schema, h.By, h.At, fields})
 		}
+		ends[typ+"/"+id] = r.historyLength()
 	}
-	return rows, changes
+	if ids == nil {
+		for id, row := range et.rows.all() {
+			take(id, row)
+		}
+	} else {
+		for id := range ids {
+			take(id, et.rows.get(id))
+		}
+	}
+	return rows, changes, ends
+}
+
+func (p *Projection) recordHistory(ends map[string]int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.history == nil {
+		p.history = map[string]int{}
+	}
+	for ref, end := range ends {
+		p.history[ref] = max(p.history[ref], end)
+	}
 }
 
 // Flush writes the records changed since the last flush; the host calls it
@@ -240,24 +346,17 @@ func (p *Projection) Flush(ctx context.Context) error {
 		return nil
 	}
 	batch := &pgx.Batch{}
+	history := map[string]int{}
 	for typ, ids := range dirty {
 		s := p.tenant.records
 		s.mu.Lock()
 		info := s.types[typ].info
 		s.mu.Unlock()
-		cols := columns(info)
-		names, params, updates := make([]string, len(cols)), make([]string, len(cols)), []string{}
-		for i, c := range cols {
-			names[i], params[i] = q(c.name), fmt.Sprintf("$%d", i+1)
-			if c.name != "id" {
-				updates = append(updates, q(c.name)+" = excluded."+q(c.name))
-			}
+		upsert, change := p.writeSQL(info)
+		rows, changes, ends := p.rows(typ, ids)
+		for ref, end := range ends {
+			history[ref] = end
 		}
-		table := tableOf(typ)
-		upsert := fmt.Sprintf(`insert into %s (%s) values (%s) on conflict (id) do update set %s`,
-			q(p.schema, table), strings.Join(names, ", "), strings.Join(params, ", "), strings.Join(updates, ", "))
-		change := fmt.Sprintf(`insert into %s (record_id, seq, change, schema, "by", at, fields) values ($1, $2, $3, $4, $5, $6, $7) on conflict do nothing`, q(p.schema, table+"_changes"))
-		rows, changes := p.rows(typ, ids)
 		for _, r := range rows {
 			batch.Queue(upsert, r...)
 		}
@@ -278,5 +377,21 @@ func (p *Projection) Flush(ctx context.Context) error {
 		p.mu.Unlock()
 		return err
 	}
+	p.recordHistory(history)
 	return nil
+}
+
+func (p *Projection) writeSQL(info platform.EntityInfo) (string, string) {
+	cols := columns(info)
+	names, params, updates := make([]string, len(cols)), make([]string, len(cols)), []string{}
+	for i, c := range cols {
+		names[i], params[i] = q(c.name), fmt.Sprintf("$%d", i+1)
+		if c.name != "id" {
+			updates = append(updates, q(c.name)+" = excluded."+q(c.name))
+		}
+	}
+	table := tableOf(info.Type)
+	upsert := fmt.Sprintf(`insert into %s (%s) values (%s) on conflict (id) do update set %s`, q(p.schema, table), strings.Join(names, ", "), strings.Join(params, ", "), strings.Join(updates, ", "))
+	change := fmt.Sprintf(`insert into %s (record_id, seq, change, schema, "by", at, fields) values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing`, q(p.schema, table+"_changes"))
+	return upsert, change
 }

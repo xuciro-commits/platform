@@ -168,6 +168,47 @@ func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]pla
 	return []platform.AssetEnvironmentRequirement{req}, nil
 }
 
+func (b *Build) ResolveAssetEnvironment(requirement platform.AssetEnvironmentRequirement) (platform.AssetEnvironmentTarget, error) {
+	if requirement.Ref.App != ID || requirement.Ref.Kind != platform.AssetConnection {
+		return platform.AssetEnvironmentTarget{}, fmt.Errorf("environment binding %s has no Build connection owner", requirement.Ref)
+	}
+	connections, _, refusal := platform.Find[Connection](b.host.Automation(platform.Caller{}, ID), platform.Query{})
+	if refusal != nil {
+		return platform.AssetEnvironmentTarget{}, refusal
+	}
+	var connection Connection
+	for _, candidate := range connections {
+		if candidate.Archived || candidate.Name != requirement.Ref.Name {
+			continue
+		}
+		if connection.ID != "" {
+			return platform.AssetEnvironmentTarget{}, fmt.Errorf("target environment binding %s is ambiguous", requirement.Ref)
+		}
+		connection = candidate
+	}
+	if connection.ID == "" {
+		return platform.AssetEnvironmentTarget{}, fmt.Errorf("release needs a target environment binding for %s", requirement.Ref)
+	}
+	if err := checkEnvironmentConnection(connection, requirement); err != nil {
+		return platform.AssetEnvironmentTarget{}, err
+	}
+	target := platform.AssetEnvironmentTarget{TargetRecord: connection.ID}
+	if requirement.Credential {
+		target.Credential = connection.Secret
+	}
+	return target, nil
+}
+
+func checkEnvironmentConnection(connection Connection, requirement platform.AssetEnvironmentRequirement) error {
+	if connection.Archived || connection.Name != requirement.Ref.Name || connection.State != "ready" || requirement.Profile != "" && connection.Kind != requirement.Profile {
+		return fmt.Errorf("target environment binding %s is not ready or has an incompatible connection kind", requirement.Ref)
+	}
+	if requirement.Credential && connection.Secret == "" {
+		return fmt.Errorf("target environment binding %s needs its own credential", requirement.Ref)
+	}
+	return nil
+}
+
 func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) (func(), error) {
 	saved := b.releaseDraftIDs
 	b.releaseDraftIDs = maps.Clone(saved)
@@ -196,9 +237,13 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 			}
 			conn, ok := platform.Get[Connection](b.host.Automation(platform.Caller{}, ID), target)
 			var d ConnectionDefinition
-			if target == "" || !ok || buildapi.ValueDecodeIntegration(asset.Body, &d) != nil || conn.Name != asset.Ref.Name || conn.Kind != d.Kind || conn.State != "ready" || conn.Archived || d.Credential && conn.Secret == "" {
+			if target == "" || !ok || buildapi.ValueDecodeIntegration(asset.Body, &d) != nil {
 				restore()
 				return nil, fmt.Errorf("connection %s needs a ready target binding with matching kind and credential", asset.Ref)
+			}
+			if err := checkEnvironmentConnection(conn, platform.AssetEnvironmentRequirement{Ref: asset.Ref, Profile: d.Kind, Credential: d.Credential}); err != nil {
+				restore()
+				return nil, err
 			}
 			if !reflect.DeepEqual(buildapi.PortableDriverBinding(conn.Protocol), d.Protocol) {
 				restore()

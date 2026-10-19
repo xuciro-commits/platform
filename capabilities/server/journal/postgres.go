@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,6 +51,7 @@ func SameTime(result, entry time.Time) bool {
 // append names the number it expects, so a second writer that has not replayed
 // the other's entries fails instead of interleaving (one authority per tenant, K5).
 type Postgres struct {
+	Delta    func([]byte) (StateDelta, error)
 	identify Identify
 	mu       sync.Mutex
 	pool     *pgxpool.Pool
@@ -117,6 +121,10 @@ func OpenPostgres(ctx context.Context, url string, identify Identify) (*Postgres
 		pool.Close()
 		return nil, err
 	}
+	if err := migrateVectors(ctx, pool); err != nil {
+		pool.Close()
+		return nil, err
+	}
 	return &Postgres{identify: identify, pool: pool, next: map[string]int64{}, locks: map[string]*sync.Mutex{}}, nil
 }
 
@@ -132,17 +140,76 @@ func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(1347174740, 1)`); err != nil {
 		return err
 	}
-	for _, stmt := range schema {
-		// The newer scope migration supersedes this index definition. Rebuilding
-		// it first would reject rows that now legitimately share a key across
-		// the new scopes, even though the final index accepts those rows.
-		if stmt == legacyScopedIndexSQL {
+	if _, err := tx.Exec(ctx, `create table if not exists journal_migrations (id text primary key, applied timestamptz not null default now())`); err != nil {
+		return err
+	}
+	applied := map[string]bool{}
+	rows, err := tx.Query(ctx, `select id from journal_migrations`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		applied[id] = true
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	migrationID := func(stmt string) string { sum := sha256.Sum256([]byte(stmt)); return hex.EncodeToString(sum[:]) }
+	mark := func(stmt string) error {
+		_, err := tx.Exec(ctx, `insert into journal_migrations(id) values ($1) on conflict do nothing`, migrationID(stmt))
+		return err
+	}
+	var currentIndex string
+	for _, stmt := range append(append(schema, stateSchema...), vectorSchema...) {
+		// The scoped key evolved through several historical definitions. Install
+		// only the current one, after the journal table/columns exist.
+		if strings.Contains(stmt, "journal_result_scoped_key") {
+			if strings.HasPrefix(stmt, "create unique index journal_result_scoped_key") {
+				currentIndex = stmt
+			}
+			continue
+		}
+		if applied[migrationID(stmt)] {
 			continue
 		}
 		if _, err := tx.Exec(ctx, stmt); err != nil {
 			return err
 		}
+		if err := mark(stmt); err != nil {
+			return err
+		}
 	}
+	// Existing databases predate the migration ledger. A correct current index
+	// is adopted from the catalog; it is never rebuilt merely on host restart.
+	var definition string
+	err = tx.QueryRow(ctx, `select coalesce(pg_get_indexdef(to_regclass('journal_result_scoped_key')),'')`).Scan(&definition)
+	if err != nil {
+		return err
+	}
+	definition = strings.ToLower(definition)
+	correct := strings.Contains(definition, "coalesce")
+	for _, scope := range []string{"work-result", "input-result", "effect-result", "host-result", "composite-result", "usage-result", "agent-result"} {
+		correct = correct && strings.Contains(definition, "'"+scope+"'")
+	}
+	if !correct {
+		if _, err := tx.Exec(ctx, `drop index if exists journal_result_scoped_key`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, currentIndex); err != nil {
+			return err
+		}
+	}
+	if err := mark(currentIndex); err != nil {
+		return err
+	}
+
 	return tx.Commit(ctx)
 }
 
@@ -185,8 +252,8 @@ func (j *Postgres) Position(tenant string) int64 {
 	return j.next[tenant] - 1
 }
 
-// SaveSnapshot keeps a tenant's state at a position, compressed, with the code
-// that wrote it; the two newest are kept (ADR-0024).
+// SaveSnapshot keeps a tenant's state at a position, compressed, under its
+// compatibility key; legacy callers use a code digest. The two newest are kept.
 func (j *Postgres) SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -235,7 +302,7 @@ func (j *Postgres) RepairSnapshot(ctx context.Context, tenant string, seq int64,
 	return tx.Commit(ctx)
 }
 
-// Snapshot is the tenant's newest snapshot written by code, if any.
+// Snapshot is the tenant's newest checkpoint matching the compatibility key.
 func (j *Postgres) Snapshot(ctx context.Context, tenant, code string) (int64, []byte, bool, error) {
 	var seq int64
 	var packed []byte
@@ -313,6 +380,17 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	defer lock.Unlock()
 	read := func() ([]byte, error) {
 		var raw []byte
+		var priorHash string
+		lookupErr := j.pool.QueryRow(ctx, `select body,hash from runtime_results where tenant=$1 and app=$2 and scope=$3 and key=$4`, tenant, e.App, identity.Scope, key).Scan(&raw, &priorHash)
+		if lookupErr == nil {
+			if priorHash != hash {
+				return nil, ErrAcceptedConflict
+			}
+			return raw, nil
+		}
+		if !errors.Is(lookupErr, pgx.ErrNoRows) {
+			return nil, lookupErr
+		}
 		err := j.pool.QueryRow(ctx, `select body from journal where tenant=$1 and app=$2
 			and kind='accepted-result' and coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}',
 				body #>> '{receipt,submission,idempotencyKey}')=$3
@@ -343,18 +421,71 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	if !ok {
 		return nil, fmt.Errorf("journal: append to %s before reading its entries", tenant)
 	}
-	tag, err := j.pool.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions)
-		values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing`,
-		tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions)
+	tx, err := j.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1),63)`, tenant); err != nil {
+		return nil, err
+	}
+	var active bool
+	var statePosition int64
+	stateErr := tx.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1 for update`, tenant).Scan(&statePosition)
+	if stateErr == nil {
+		active = true
+		if statePosition != seq-1 {
+			return nil, fmt.Errorf("tenant %s state position differs", tenant)
+		}
+	} else if !errors.Is(stateErr, pgx.ErrNoRows) {
+		return nil, stateErr
+	}
+	tag, err := tx.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions)
+ values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing`, tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions)
 	if err != nil {
 		return nil, err
 	}
 	if tag.RowsAffected() == 0 {
+		_ = tx.Rollback(ctx)
 		if prior, err := read(); err != nil || prior != nil {
 			return prior, err
 		}
 		return nil, fmt.Errorf("journal: concurrent writer changed tenant %s at %d", tenant, seq)
 	}
+	var saved []byte
+	if err = tx.QueryRow(ctx, `select body from journal where tenant=$1 and seq=$2`, tenant, seq).Scan(&saved); err != nil {
+		return nil, err
+	}
+	if active {
+		if j.Delta == nil {
+			return nil, fmt.Errorf("tenant %s has no state delta owner", tenant)
+		}
+		delta, err := j.Delta(saved)
+		if err != nil {
+			return nil, err
+		}
+		if err = j.writeState(ctx, tx, tenant, seq, delta); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(ctx, `insert into runtime_results (tenant,app,scope,key,hash,seq,body) values ($1,$2,$3,$4,$5,$6,$7)`, tenant, e.App, identity.Scope, key, hash, seq, saved); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(ctx, `update runtime_tenants set seq=$2 where tenant=$1`, tenant, seq); err != nil {
+			return nil, err
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		// A lost commit answer is resolved under the original identity. No owner
+		// callback or business decision runs again.
+		if prior, lookupErr := read(); lookupErr == nil && prior != nil {
+			j.mu.Lock()
+			j.next[tenant] = seq + 1
+			j.mu.Unlock()
+			return prior, nil
+		}
+		return nil, err
+	}
+
 	j.mu.Lock()
 	j.next[tenant] = seq + 1
 	j.mu.Unlock()
@@ -394,13 +525,7 @@ func (j *Postgres) Vectors(tenant, model string, hashes []string) map[string][]f
 }
 
 func (j *Postgres) SaveVectors(tenant, model string, vs map[string][]float32) {
-	for h, v := range vs {
-		if _, err := j.pool.Exec(context.Background(), `insert into embeddings (tenant, model, hash, vector) values ($1, $2, $3, $4) on conflict do nothing`,
-			tenant, model, h, EncodeVector(v)); err != nil {
-			log.Printf("save vectors: %v", err)
-			return
-		}
-	}
+	j.saveSearchVectors(tenant, model, vs)
 }
 
 func (j *Postgres) SaveTranscript(x Transcript) {

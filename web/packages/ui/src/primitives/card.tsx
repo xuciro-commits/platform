@@ -8,10 +8,10 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 }
 
 /** A card with a heading: the one way a page groups a part of itself under a title. */
-export function Panel({ title, description, help, actions, className, children, ...props }:
-  Omit<HTMLAttributes<HTMLElement>, "title"> & { title?: ReactNode; description?: ReactNode; help?:ReactNode; actions?: ReactNode }) {
+export function Panel({ title, description, help, actions, className, children, variant="card", ...props }:
+  Omit<HTMLAttributes<HTMLElement>, "title"> & { title?: ReactNode; description?: ReactNode; help?:ReactNode; actions?: ReactNode; variant?: "card" | "plain" }) {
   return (
-    <section data-ui="card" className={cn("rounded-md border border-border bg-surface p-3 text-sm", className)} {...props}>
+    <section data-ui={variant==="plain"?"section":"card"} className={cn(variant==="card"&&"rounded-md border border-border bg-surface p-3 text-sm", className)} {...props}>
       {(title || actions || help) && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           {title && <h2 className="text-sm font-semibold">{title}</h2>}

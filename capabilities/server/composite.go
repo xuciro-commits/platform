@@ -180,14 +180,14 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []CompositeEdit,
 	if err != nil {
 		return CompositeAnswer{}, err
 	}
-	if prior := t.committed.compositeAnswers[saved.Key]; len(prior) > 0 {
+	if prior := t.committed.compositeAnswer(saved.Key); len(prior) > 0 {
 		answer, err := decodeAcceptedComposite(prior)
 		if err != nil || answer.RequestHash != saved.RequestHash {
 			return CompositeAnswer{}, fmt.Errorf("composite key belongs to another request")
 		}
 		return compositeAnswer(answer)
 	}
-	if digest, exists := t.committed.composites[saved.Key]; exists {
+	if digest, exists := t.committed.composite(saved.Key); exists {
 		for i, edit := range edits {
 			r := t.app(build.ID).AcceptedLedger().AcceptedFor(t.ID, key+"#"+strconv.Itoa(i))
 			x := r.GetSubmission()
@@ -309,7 +309,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	if saved.Tenant != t.ID {
 		return saved, fmt.Errorf("composite result belongs to another tenant")
 	}
-	if prior, ok := t.committed.composites[saved.Key]; ok {
+	if prior, ok := t.committed.composite(saved.Key); ok {
 		if prior != saved.Digest {
 			return saved, fmt.Errorf("composite idempotency key changed")
 		}

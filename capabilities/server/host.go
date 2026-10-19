@@ -39,6 +39,9 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
+	startupSnapshot    *snapshotCompatibility
+	runtimePosition    func() int64
+	snapshotPosition   int64 // last captured/restored checkpoint; zero-position diagnostics preserve it
 	observationWindows map[string]observationWindowAttempt
 	confirmationReads  map[string]statusReadAttempt
 	dispatchReads      map[string]statusReadAttempt
@@ -298,6 +301,11 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 	}
 
+	compatibility, err := t.snapshotCompatibility()
+	if err != nil {
+		return nil, fmt.Errorf("tenant %s snapshot composition: %w", id, err)
+	}
+	t.startupSnapshot = &compatibility
 	return t, nil
 }
 
@@ -355,8 +363,8 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	}
 	if retired {
 		key := a.Manifest().ID + "/" + s.GetIdempotencyKey()
-		_, refused := t.committed.refusals[key]
-		if !refused && len(t.committed.answers[key]) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
+		_, refused := t.committed.refusal(key)
+		if !refused && len(t.committed.answer(key)) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 		}
 	}
@@ -375,7 +383,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	} else {
 		s = t.currentSubmissionSchema(a, s)
 	}
-	if prior, ok := t.committed.refusals[s.GetAuthority()+"/"+s.GetIdempotencyKey()]; ok {
+	if prior, ok := t.committed.refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
 		hash, _ := submissionHash(s, binding)
 		if hash != prior.RequestHash || s.GetPrincipalId() != m.ID {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
@@ -391,7 +399,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	defer func() { end(outcomeOf(err)) }()
 	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal, nil)
 	if report != nil && err != nil {
-		if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
+		if prior, ok := t.committed.refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 			hash, _ := submissionHash(s, binding)
 			if prior.RequestHash == hash {
 				report(err, prior.Issues)
@@ -436,7 +444,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
 	}
 	ledger := a.AcceptedLedger()
-	if saved := t.committed.answers[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; len(saved) > 0 {
+	if saved := t.committed.answer(a.Manifest().ID + "/" + s.GetIdempotencyKey()); len(saved) > 0 {
 		result, receipt, err := decodeAcceptedBatch(saved)
 		hash, hashErr := submissionHash(s, binding)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
@@ -448,7 +456,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		if !proto.Equal(prior.GetSubmission(), s) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
-		saved, bound := t.committed.schemaVersions[a.Manifest().ID+"/"+s.GetIdempotencyKey()]
+		saved, bound := t.committed.schemaVersion(a.Manifest().ID + "/" + s.GetIdempotencyKey())
 		if bound != (binding != nil) || binding != nil && saved != *binding {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -458,7 +466,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
 	}
-	if prior, ok := t.committed.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
+	if prior, ok := t.committed.refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 		if prior.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -557,7 +565,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 			t.quarantine(fmt.Errorf("committed refusal differs from the accepted request: %v", err))
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		t.committed.refusals[saved.App+"/"+sub.GetIdempotencyKey()] = saved
+		t.committed.saveRefusal(saved.App+"/"+sub.GetIdempotencyKey(), saved)
 		t.changedOwner(saved.App)
 		answer := saved.Error
 		return nil, &answer

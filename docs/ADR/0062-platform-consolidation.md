@@ -42,7 +42,7 @@ README 与 AGENTS 负责把读者带到上述来源，不再复述一套阶段�
 |---|---|
 | 内核契约与权威边界 | [ADR-0001](0001-kernel-as-contract.md)、[ADR-0006](0006-decisions-across-apps.md)、`contract/` 的规范与向量 |
 | 跨语言边缘与有界证明 | [ADR-0002](0002-no-shared-edge-core-yet.md)、[ADR-0003](0003-authority-migration-adopts-history.md)、[ADR-0012](0012-first-kernel-proof.md)；实现地图见 Platform §3–§5 |
-| 提交、恢复与宿主职责 | [ADR-0010](0010-accepted-results-and-tenant-recovery.md)、[ADR-0037](0037-submission-assets-and-host-boundaries.md)、宿主 `doc.go` |
+| 提交、恢复与宿主职责 | [ADR-0010](0010-accepted-results-and-tenant-recovery.md)、[ADR-0037](0037-submission-assets-and-host-boundaries.md)、[ADR-0063](0063-postgresql-runtime-state.md)、宿主 `doc.go` |
 | 持久工作、流程与外部效果 | [ADR-0004](0004-outbound-effects.md)、[ADR-0007](0007-one-runtime-for-durable-work.md)、[ADR-0013](0013-capability-fabric.md) |
 | 租户、人员与语言 | [ADR-0005](0005-meaning-languages-api-contract.md)、[ADR-0027](0027-tenancy-and-authorization.md)、[ADR-0028](0028-user-domain.md) |
 | 知识、文件与派生来源 | [ADR-0009](0009-derived-content-declares-its-sources.md)、[ADR-0038](0038-build-the-capability-to-build.md) |
@@ -61,7 +61,7 @@ README 与 AGENTS 负责把读者带到上述来源，不再复述一套阶段�
 
 ### 1.3 连续编号
 
-原 123 份 ADR 已按主题合为 62 份，当前文件连续编号 0001–0062。文档、脚本与代码注释统一引用当前主题；被合并的旧文件与旧编号索引不再保留，历史沿 Git 查询。
+原 123 份 ADR 已按主题合为 62 份，技术转型的存储决定新增 ADR-0063，当前文件连续编号 0001–0063。文档、脚本与代码注释统一引用当前主题；被合并的旧文件与旧编号索引不再保留，历史沿 Git 查询。
 
 ## 2. 同一职责只有一个实现
 

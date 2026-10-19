@@ -529,6 +529,8 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	}
 	return nil
 }
+func (b *Build) SnapshotFormat() string { return "platform.ledger.v1" }
+
 func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
 func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(raw) }
 

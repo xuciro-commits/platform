@@ -75,14 +75,14 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 			if err != nil {
 				return nil, err
 			}
-			previousHistory, revision = len(prior.history), recordOf(prior.value).Revision
+			previousHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
 		}
 		if image.Before != before || len(image.History) <= previousHistory {
 			return nil, fmt.Errorf("direct record predecessor differs")
 		}
 		if prior != nil {
 			old, err := canonicalDigest(image.History[:previousHistory])
-			actual, actualErr := canonicalDigest(prior.history)
+			actual, actualErr := canonicalDigest(prior.recordHistory())
 			if err != nil || actualErr != nil || old != actual {
 				return nil, fmt.Errorf("direct record history predecessor differs")
 			}

@@ -492,6 +492,7 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 		fmt.Fprintf(&b, "\nexport type %s = %s;\n", name, tsOf(d, 0))
 	}
 	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts (ADR-0015). */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
+	b.WriteString("\n/** Authoring narrows manifest-owned properties and ports by widget; Section retains the installed wire format. */\nexport type { PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor } from '../widget-authoring';\n")
 	limits, _ := json.Marshal(map[string]int{"maxRegions": platform.MaxImageRegions, "maxLabelBytes": platform.MaxImageRegionLabelBytes, "maxIDBytes": platform.MaxImageRegionIDBytes})
 	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds (ADR-0015). */\nexport const imageRegionLimits = %s as const;\n", limits)
 	return b.String()

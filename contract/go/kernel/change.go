@@ -12,12 +12,25 @@ import (
 )
 
 // ChangeLog implements K4 (contract/spec/K4-change-record.md) for one authority.
+// ChangeArchive reads the immutable prefix through an applied change number.
+// Implementations must stop processing on a read failure, never return absence.
+// Storage and business policy remain outside the kernel.
+type ChangeArchive interface {
+	Records(tenant string, through int) []*pb.ChangeRecord
+	Accepted(tenant, key string, through int) *pb.ChangeRecord
+	Contains(tenant, change string, through int) bool
+}
+
 type ChangeLog struct {
-	schemas *SchemaRegistry
-	logs    map[string][]*pb.ChangeRecord
-	byKey   map[string]map[string]*pb.ChangeRecord
-	revs    map[[3]string]uint32 // (tenant, target type, target id) → revision (C12)
-	next    int
+	schemas  *SchemaRegistry
+	logs     map[string][]*pb.ChangeRecord
+	byKey    map[string]map[string]*pb.ChangeRecord
+	revs     map[[3]string]uint32 // (tenant, target type, target id) → revision (C12)
+	archive  ChangeArchive
+	archived map[string]int
+	last     map[string]time.Time
+	tail     map[string]*pb.ChangeRecord
+	next     int
 	// Facts reports whether a fact is recorded in a tenant (K2); nil knows none (C11).
 	Facts func(tenant, factID string) bool
 }
@@ -27,14 +40,83 @@ func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
 		byKey: map[string]map[string]*pb.ChangeRecord{}, revs: map[[3]string]uint32{}}
 }
 
-func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return slices.Clone(l.logs[tenant]) }
+func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord {
+	var out []*pb.ChangeRecord
+	if l.archive != nil {
+		out = l.archive.Records(tenant, l.archived[tenant])
+	}
+	return append(out, l.logs[tenant]...)
+}
+
+func (l *ChangeLog) accepted(tenant, key string) *pb.ChangeRecord {
+	if r := l.byKey[tenant][key]; r != nil {
+		return r
+	}
+	if l.archive != nil {
+		return l.archive.Accepted(tenant, key, l.archived[tenant])
+	}
+	return nil
+}
+
+// Accepted and Last return original receipts without enumerating history.
+func (l *ChangeLog) Accepted(tenant, key string) *pb.ChangeRecord {
+	r := l.accepted(tenant, key)
+	if r == nil {
+		return nil
+	}
+	return proto.Clone(r).(*pb.ChangeRecord)
+}
+func (l *ChangeLog) Last(tenant string) *pb.ChangeRecord {
+	r := l.tail[tenant]
+	if records := l.logs[tenant]; len(records) > 0 {
+		r = records[len(records)-1]
+	}
+	if r == nil {
+		return nil
+	}
+	return proto.Clone(r).(*pb.ChangeRecord)
+}
+
+// Compact releases resident receipts after the owner has persisted this prefix.
+// Revisions and numbering stay with the original log. Fork never compacts itself.
+func (l *ChangeLog) Compact(archive ChangeArchive) {
+	if l.archived == nil {
+		l.archived = map[string]int{}
+	}
+	if l.last == nil {
+		l.last = map[string]time.Time{}
+	}
+	if l.tail == nil {
+		l.tail = map[string]*pb.ChangeRecord{}
+	}
+	for tenant, records := range l.logs {
+		l.archived[tenant] += len(records)
+		if len(records) > 0 {
+			l.last[tenant] = records[len(records)-1].GetRecordedTime().AsTime()
+			l.tail[tenant] = records[len(records)-1]
+		}
+	}
+	l.archive = archive
+	l.logs = map[string][]*pb.ChangeRecord{}
+	l.byKey = map[string]map[string]*pb.ChangeRecord{}
+}
+
+func (l *ChangeLog) lastTime(tenant string) time.Time {
+	if log := l.logs[tenant]; len(log) > 0 {
+		return log[len(log)-1].GetRecordedTime().AsTime()
+	}
+	return l.last[tenant]
+}
 
 // Fork gives one decision a private change-log view. Accepted records are
 // immutable; the maps and slices that SubmitChecked extends are independent.
 // The host can discard this view when a durable append fails (ADR-0010 19a).
 func (l *ChangeLog) Fork() *ChangeLog {
 	copy := &ChangeLog{schemas: l.schemas, logs: make(map[string][]*pb.ChangeRecord, len(l.logs)),
-		byKey: make(map[string]map[string]*pb.ChangeRecord, len(l.byKey)), revs: make(map[[3]string]uint32, len(l.revs)), next: l.next, Facts: l.Facts}
+		byKey: make(map[string]map[string]*pb.ChangeRecord, len(l.byKey)), revs: make(map[[3]string]uint32, len(l.revs)), next: l.next, Facts: l.Facts, archive: l.archive, archived: map[string]int{}, last: map[string]time.Time{}, tail: map[string]*pb.ChangeRecord{}}
+	for tenant, n := range l.archived {
+		copy.archived[tenant] = n
+	}
 	for tenant, records := range l.logs {
 		copy.logs[tenant] = slices.Clone(records)
 	}
@@ -43,6 +125,12 @@ func (l *ChangeLog) Fork() *ChangeLog {
 		for key, record := range keys {
 			copy.byKey[tenant][key] = record
 		}
+	}
+	for tenant, r := range l.tail {
+		copy.tail[tenant] = r
+	}
+	for tenant, at := range l.last {
+		copy.last[tenant] = at
 	}
 	for target, revision := range l.revs {
 		copy.revs[target] = revision
@@ -62,7 +150,7 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	if s.GetTenantId() == "" || s.GetIdempotencyKey() == "" || s.GetTarget().GetType() == "" || s.GetTarget().GetId() == "" {
 		return false, fmt.Errorf("accepted change has no scoped identity")
 	}
-	if prior := l.byKey[s.GetTenantId()][s.GetIdempotencyKey()]; prior != nil {
+	if prior := l.accepted(s.GetTenantId(), s.GetIdempotencyKey()); prior != nil {
 		if proto.Equal(prior, saved) {
 			return false, nil
 		}
@@ -76,7 +164,7 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 		return false, fmt.Errorf("accepted change %s has revision %d after %d", saved.GetChangeId(), saved.GetRevision(), l.revs[target])
 	}
 	log := l.logs[s.GetTenantId()]
-	if len(log) > 0 && saved.GetRecordedTime().AsTime().Before(log[len(log)-1].GetRecordedTime().AsTime()) {
+	if saved.GetRecordedTime().AsTime().Before(l.lastTime(s.GetTenantId())) {
 		return false, fmt.Errorf("accepted change %s moves recorded time backwards", saved.GetChangeId())
 	}
 	record := proto.Clone(saved).(*pb.ChangeRecord)
@@ -105,14 +193,14 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 	if !l.schemas.Accepts(s.GetSchema()) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA) // C2
 	}
-	if existing := l.byKey[s.GetTenantId()][s.GetIdempotencyKey()]; existing != nil {
+	if existing := l.accepted(s.GetTenantId(), s.GetIdempotencyKey()); existing != nil {
 		if !proto.Equal(existing.GetSubmission(), s) {
 			return nil, errorf(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT) // C5
 		}
 		return existing, nil // C4
 	}
 	log := l.logs[s.GetTenantId()]
-	if c := s.GetCausationId(); c != "" && !slices.ContainsFunc(log, func(r *pb.ChangeRecord) bool { return r.GetChangeId() == c }) {
+	if c := s.GetCausationId(); c != "" && !slices.ContainsFunc(log, func(r *pb.ChangeRecord) bool { return r.GetChangeId() == c }) && (l.archive == nil || !l.archive.Contains(s.GetTenantId(), c, l.archived[s.GetTenantId()])) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // C3
 	}
 	for _, fact := range s.GetEvidenceFactIds() {
@@ -130,8 +218,8 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 		}
 	}
 	recorded := now
-	if n := len(log); n > 0 && log[n-1].GetRecordedTime().AsTime().After(now) {
-		recorded = log[n-1].GetRecordedTime().AsTime() // C6
+	if last := l.lastTime(s.GetTenantId()); last.After(now) {
+		recorded = last // C6
 	}
 	valid := s.GetValidTime()
 	if valid == nil {
@@ -159,7 +247,7 @@ func (l *ChangeLog) Adopt(records []*pb.ChangeRecord) *Error {
 		return nil
 	}
 	tenant := records[0].GetSubmission().GetTenantId()
-	if len(l.logs[tenant]) > 0 {
+	if len(l.logs[tenant]) > 0 || l.tail[tenant] != nil {
 		return conflict
 	}
 	ids, keys := map[string]bool{}, map[string]bool{}

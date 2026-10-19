@@ -34,6 +34,7 @@ type AgentHost interface {
 	Member(string) (platform.Member, bool)
 	OwnerOf(string) (string, bool)
 	Record(string) (any, bool)
+	Entity(string) (platform.EntityInfo, bool)
 	ActiveRelease() string
 	AgentTasks() TaskClosure
 	AgentFlows() AgentFlowCompletion

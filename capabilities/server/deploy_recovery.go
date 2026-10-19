@@ -8,6 +8,7 @@ import (
 )
 
 func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
+	t.runtimePosition = func() int64 { return journal.Position(t.ID) }
 	t.Store = journal
 	t.Record = func(e Entry) {
 		if err := journal.Append(ctx, t.ID, e); err != nil {
@@ -83,11 +84,18 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		if err != nil {
 			return fmt.Errorf("capture repaired tenant %s: %w", id, err)
 		}
-		if err := journal.RepairSnapshot(ctx, id, seq, code, state); err != nil {
+		key, err := fresh.snapshotKey(code)
+		if err != nil {
+			return fmt.Errorf("snapshot format %s: %w", id, err)
+		}
+		if err := journal.RepairSnapshot(ctx, id, seq, key, state); err != nil {
 			return fmt.Errorf("write repaired tenant %s checkpoint: %w", id, err)
 		}
 	}
 	fresh.flowArtifactRecoveryComplete(recoveryStarted)
+	if err := fresh.migrateRuntimeState(ctx, journal); err != nil {
+		return fmt.Errorf("recover tenant %s runtime state: %w", id, err)
+	}
 	fresh.attachJournal(context.Background(), journal)
 	if err := registry.replace(id, old, fresh); err != nil {
 		return err

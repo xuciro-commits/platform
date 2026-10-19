@@ -216,8 +216,10 @@ func (c *Core) Manifest() platform.Manifest {
 
 func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }
 func (c *Core) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
-func (c *Core) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }
-func (c *Core) Restore(raw json.RawMessage) error        { return c.ledger.Restore(raw) }
+func (c *Core) SnapshotFormat() string                   { return "platform.ledger.v1" }
+
+func (c *Core) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
+func (c *Core) Restore(raw json.RawMessage) error  { return c.ledger.Restore(raw) }
 func (c *Core) Read(caller platform.Caller, name string) (any, *kernel.Error) {
 	if period, ok := strings.CutPrefix(name, ReadTrialBalance); ok {
 		return trialBalance(caller, strings.TrimPrefix(period, "/")), nil

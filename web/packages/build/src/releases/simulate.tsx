@@ -11,7 +11,7 @@ import { refKey, resourceKinds, resourceRef, resourceRoute } from "../projects/r
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { AppSelect, useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, PageHeader, PropertyList, Select, StatusTag, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, Panel, PageHeader, PropertyList, Select, StatusTag, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
 import { useEffect, useRef, useState } from "react";
@@ -299,13 +299,13 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     {step.functionMatched !== undefined && <p className={`text-xs${step.functionMatched ? "" : " text-danger"}`}>{step.functionMatched ? t("Function expectation matched") : t("Function expectation did not match")}</p>}
     {step.computeMatched !== undefined && <p className={`text-xs${step.computeMatched ? "" : " text-danger"}`}>{step.computeMatched ? t("Computation expectation matched") : t("Computation expectation did not match")}</p>}
     {resultDefinitions(step)}
-    {step.functions?.map(call => <section key={call.id} className="grid min-w-0 gap-3 border-t border-border pt-3 text-xs">
+    {step.functions?.map(call => <Panel variant="plain" key={call.id} className="grid min-w-0 gap-3 border-t border-border pt-3 text-xs">
       <PropertyList columns={3} items={[[t("Function"), call.function], [t("Version"), call.version], [t("State"), call.state === "ready" ? t("Ready") : call.state === "rejected" ? t("Rejected") : t("Pending")]]} />
       <Disclosure summary={t("Call details")}><PropertyList items={[[t("Source"), call.source], [t("Model"), call.model]]} /></Disclosure>
       {call.output && <Disclosure summary={t("Output")}><pre className="whitespace-pre-wrap break-words">{call.output}</pre></Disclosure>}
       {call.reason && <p className="text-danger">{call.reason}</p>}
       {call.withheld && <p>{t("Some sources cannot be read")}</p>}
-    </section>)}
+    </Panel>)}
     {step.refusal && <p className="text-sm text-danger">{step.refusal}</p>}
     <SimulationExplanation step={step}/>
     {step.flows?.map(flow => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
@@ -324,7 +324,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     {kind==="app" && <PageHeader title={t("Draft trial")} help={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
     {!!planRoots.length && <ContextHelp title={t("Test plan scope")}>{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</ContextHelp>}
  <Card className="p-3">
-      <StructuredEditor expectedRevision={planID ? revision : 0} fieldInput={sourceFieldInput} value={definitionValue()} fields={declarationFields} scope={`build.testplan:${planID || createID}:${host.source.scope}`} disabled={blocked} onChange={next => { load({ ...next, id: planID, revision } as TestPlan, true, true); setDirty(true); }} onTrial={next => trial(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: planID || createID }, next, planID ? revision : 0)}>      <fieldset disabled={blocked} className="grid gap-3">
+      <StructuredEditor initialMode="source" expectedRevision={planID ? revision : 0} fieldInput={sourceFieldInput} value={definitionValue()} fields={declarationFields} scope={`build.testplan:${planID || createID}:${host.source.scope}`} disabled={blocked} onChange={next => { load({ ...next, id: planID, revision } as TestPlan, true, true); setDirty(true); }} onTrial={next => trial(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: planID || createID }, next, planID ? revision : 0)}>      <fieldset disabled={blocked} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">{t("Saved test plan")}
             <Select value={planID} onChange={(event) => {

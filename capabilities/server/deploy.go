@@ -73,7 +73,7 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.TenantsFile, "tenants", "", "JSON file with the host's tenants, their seats and starting settings; the host console appends to it (empty: the built-in development tenant)")
 	flag.StringVar(&d.TemplatesDir, "templates", "", "directory of tenant templates the host console offers (empty: none)")
 	flag.BoolVar(&d.Project, "project", false, "copy records into PostgreSQL tables per tenant for tools outside the host (ADR-0024; needs -database)")
-	flag.Int64Var(&d.SnapshotEvery, "snapshot-every", 10000, "save each tenant's state every this many journal entries and at shutdown, and start from the newest snapshot of this code (ADR-0024; 0: replay the whole journal)")
+	flag.Int64Var(&d.SnapshotEvery, "snapshot-every", 10000, "save each tenant's state every this many journal entries and at shutdown, and start from the newest compatible snapshot (ADR-0024; 0: replay the whole journal)")
 	flag.StringVar(&d.Web, "web", "", "directory of the workspace's build, served at / (ADR-0019; empty: API only)")
 	flag.StringVar(&d.Profile, "profile", "delivery", "delivery: PostgreSQL journal, S3 file bytes, external OpenID provider; lightweight: one -data directory, an internal signing key, no external services")
 	flag.StringVar(&d.Data, "data", "", "directory of a lightweight host's state, journals and file bytes (ADR-0017; required with -profile lightweight)")
@@ -164,7 +164,7 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error)
 }
 
 // restoreTenants brings every tenant to the journal's state before the host
-// serves: the newest snapshot of this code when there is one, then the entries
+// serves: the newest compatible snapshot when there is one, then the entries
 // after it. Both profiles run this same path (ADR-0017 D6): the lightweight
 // profile's journal is a file, not a second set of semantics, so a restart
 // replays and a damaged journal quarantines exactly as it does on PostgreSQL.
@@ -173,7 +173,14 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 		recoveryStarted := time.Now().UTC()
 		var after int64
 		if d.SnapshotEvery > 0 {
-			seq, state, ok, err := journal.Snapshot(ctx, t.ID, code)
+			key, err := t.snapshotKey(code)
+			if err != nil {
+				return fmt.Errorf("snapshot format %s: %w", t.ID, err)
+			}
+			seq, state, ok, err := journal.Snapshot(ctx, t.ID, key)
+			if err == nil && !ok && key != code {
+				seq, state, ok, err = journal.Snapshot(ctx, t.ID, code)
+			}
 			if err != nil {
 				if errors.Is(err, errTenantSnapshot) {
 					t.quarantine(err)
@@ -183,6 +190,11 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 				return fmt.Errorf("snapshot %s: %w", t.ID, err)
 			}
 			if ok {
+				if err := t.checkSnapshotCheckpoint(state, seq); err != nil {
+					t.quarantine(err)
+					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+					continue
+				}
 				if err := t.recoverSnapshot(state, seq); err != nil {
 					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 					continue
@@ -223,6 +235,11 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 		}
 		// An input the journal did not take is never answered; the client's
 		// outbox resends it after the restart has replayed the rest.
+		if err := t.migrateRuntimeState(ctx, journal); err != nil {
+			t.quarantine(fmt.Errorf("runtime state: %w", err))
+			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+			continue
+		}
 		t.attachJournal(ctx, journal)
 	}
 	return nil
@@ -547,7 +564,11 @@ func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
 		return
 	}
 	if err == nil {
-		err = s.journal.SaveSnapshot(ctx, t.ID, seq, s.code, state)
+		var key string
+		key, err = t.snapshotKey(s.code)
+		if err == nil {
+			err = s.journal.SaveSnapshot(ctx, t.ID, seq, key, state)
+		}
 	}
 	if err != nil {
 		log.Printf("snapshot %s: %v", t.ID, err)
@@ -557,9 +578,9 @@ func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
 	log.Printf("saved a snapshot of %s at %d (%d kB) in %v", t.ID, seq, len(state)/1024, time.Since(started).Round(time.Millisecond))
 }
 
-// CodeOf names the code a snapshot is valid for: this binary and the versions
-// of its apps. Other code replays the whole journal, as apps evolve by
-// replaying through new code (ADR-0010), then saves its own snapshot.
+// CodeOf identifies the binary and its app versions. It is diagnostic metadata
+// for versioned checkpoints and the eligibility key for legacy snapshots or
+// owners that have not declared their snapshot restore format.
 func CodeOf(tenants ...*Tenant) string {
 	h := sha256.New()
 	if exe, err := os.Executable(); err == nil {
@@ -576,15 +597,32 @@ func CodeOf(tenants ...*Tenant) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// Work notifications coalesce; the timer still finds delayed or missed work.
+// Both use the same scheduler and outside lane, not a second execution path.
+var workReady = make(chan struct{}, 1)
+
+func wakeWork() {
+	select {
+	case workReady <- struct{}{}:
+	default:
+	}
+}
+
 // RunWork runs the tenants' owned work (ADR-0027) and sends their outbound
-// effects (ADR-0004) every second, for as long as the process lives.
+// effects (ADR-0004) when changed and at least every second.
 func RunWork(tenants ...*Tenant) {
 	runWorkFrom(func() []*Tenant { return tenants })
 }
 
 func runWorkFrom(current func() []*Tenant) {
 	go func() {
-		for range time.Tick(time.Second) {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workReady:
+			case <-ticker.C:
+			}
 			tenants := current()
 			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
 			// Work on the outside — effects (ADR-0004) and agents' model calls

@@ -72,8 +72,10 @@ func (f *Files) Manifest() platform.Manifest {
 
 func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
 func (f *Files) AcceptedLedger() *platform.Ledger         { return f.ledger }
-func (f *Files) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
-func (f *Files) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
+func (f *Files) SnapshotFormat() string                   { return "platform.ledger.v1" }
+
+func (f *Files) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
+func (f *Files) Restore(raw json.RawMessage) error  { return f.ledger.Restore(raw) }
 func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

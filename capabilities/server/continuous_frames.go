@@ -258,7 +258,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		} else {
 			sub = t.currentSubmissionSchema(owner, sub)
 		}
-		_, refused := t.committed.refusals[owner.Manifest().ID+"/"+sub.GetIdempotencyKey()]
+		_, refused := t.committed.refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
 		if schemaRefusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 			record, err := t.submitAcceptedVersion(owner, m, sub, now, false, binding, schemaRefusal, nil)
 			t.mu.Unlock()
@@ -347,7 +347,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		}
 	}
 	record, err := t.submitAcceptedVersion(prepared.Decision(), current, sub, now, false, binding, nil, nil, preparedInput)
-	_, refused := t.committed.refusals[platform.FlowApp+"/"+sub.GetIdempotencyKey()]
+	_, refused := t.committed.refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey())
 	// A durable refusal names no prepared bytes. An uncertain append must
 	// retain them until the original accepted journal resolves its outcome.
 	retained = err == nil || !refused

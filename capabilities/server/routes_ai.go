@@ -36,16 +36,23 @@ func (h *Host) routesAI(rt *routes) {
 					flusher.Flush()
 				}
 			}
+			req.OnStream = func(piece platform.ChatStreamEvent) {
+				if piece.ToolCall != nil {
+					event("tool_delta", piece.ToolCall)
+				}
+			}
 			answer, err, failure := t.Chat(m, req, h.Now(), func(piece string) { event("delta", map[string]string{"content": piece}) })
 			switch {
 			case err != nil && !started:
 				Reply(w, nil, err)
+			case err != nil:
+				event("error", map[string]any{"code": err.Code.String(), "detail": err.Message})
 			case failure != nil && failure.Quota && !started:
 				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 			case failure != nil:
 				event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail, "usage": answer.Usage})
 			default:
-				event("done", map[string]any{"usage": answer.Usage})
+				event("done", map[string]any{"usage": answer.Usage, "toolCalls": answer.ToolCalls})
 			}
 			return
 		}

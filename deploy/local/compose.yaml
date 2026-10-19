@@ -8,7 +8,10 @@ name: platform
 
 services:
   postgres:
-    image: postgres:18-alpine
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.postgres
+    image: platform-postgres:18-vector
     environment:
       POSTGRES_DB: platform
       POSTGRES_USER: platform

@@ -14,7 +14,7 @@ import (
 
 func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
 	activated := map[string]bool{}
-	for key, raw := range h.t.committed.answers {
+	for key, raw := range h.t.committed.allAnswers() {
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}

@@ -126,7 +126,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	for typ, et := range t.records.types {
 		rows := map[string]any{}
 		for id, r := range et.rows.all() {
-			rows[id] = []any{r.value.Interface(), r.history}
+			rows[id] = []any{r.value.Interface(), r.recordHistory()}
 		}
 		records[typ] = rows
 	}
@@ -137,7 +137,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	raw, err := json.Marshal([]any{records, definitions, t.Audit(), t.committed.refusals, t.committed.answers, t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	raw, err := json.Marshal([]any{records, definitions, t.Audit(), t.committed.allRefusals(), t.committed.allAnswers(), t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
 	if err != nil {
 		return "", err
 	}

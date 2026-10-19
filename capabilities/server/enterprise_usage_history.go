@@ -57,7 +57,7 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 			if published := businessField(objects.info, row.value, "published"); published != "" {
 				bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
 			}
-			for _, change := range row.history {
+			for _, change := range row.recordHistory() {
 				for _, field := range change.Fields {
 					if field.Field != "published" {
 						continue

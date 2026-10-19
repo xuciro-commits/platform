@@ -61,8 +61,10 @@ func (k *Knowledge) Manifest() platform.Manifest {
 func (k *Knowledge) AcceptedLedger() *platform.Ledger { return k.ledger }
 
 func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.ledger.Declarations() }
-func (k *Knowledge) Snapshot() (json.RawMessage, error)       { return k.ledger.Snapshot() }
-func (k *Knowledge) Restore(raw json.RawMessage) error        { return k.ledger.Restore(raw) }
+func (k *Knowledge) SnapshotFormat() string                   { return "platform.ledger.v1" }
+
+func (k *Knowledge) Snapshot() (json.RawMessage, error) { return k.ledger.Snapshot() }
+func (k *Knowledge) Restore(raw json.RawMessage) error  { return k.ledger.Restore(raw) }
 func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if name := s.GetSchema().GetName(); (name == TermType+".create" || name == TermType+".edit") && !c.Replaying {
 		var p struct{ RefersTo *string }

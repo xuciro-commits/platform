@@ -26,6 +26,7 @@ func (l *ChangeLog) Restore(tenant string, records []*pb.ChangeRecord) {
 
 // Restore loads a tenant's facts into an empty log, as they were recorded.
 func (l *FactLog) Restore(tenant string, records []*pb.FactRecord) {
+	l.archive, l.archived, l.last = nil, nil, nil
 	l.logs[tenant] = slices.Clone(records)
 	l.byKey[tenant] = map[string]*pb.FactRecord{}
 	for _, r := range records {

@@ -157,6 +157,8 @@ func New(tenant string) *App {
 	return &App{tenant: tenant, ledger: platform.NewLedger(tenant, ID, Actions(), TicketType)}
 }
 
+func (a *App) SnapshotFormat() string { return "platform.ledger.v1" }
+
 func (a *App) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error  { return a.ledger.Restore(raw) }
 

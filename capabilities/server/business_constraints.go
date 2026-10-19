@@ -207,7 +207,7 @@ func constraintLocked(info platform.EntityInfo, before *row) bool {
 	if before.value.FieldByIndex(field.Index).String() != life.Initial {
 		return true
 	}
-	for _, change := range before.history {
+	for _, change := range before.recordHistory() {
 		for _, changed := range change.Fields {
 			if changed.Field != life.Field {
 				continue

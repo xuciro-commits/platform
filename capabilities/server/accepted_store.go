@@ -7,7 +7,20 @@ package platformserver
 // ambiguous-commit lookup and idempotency checks.
 func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 	if t.AcceptResult != nil {
-		return t.AcceptResult(entry, key, hash)
+		before := int64(0)
+		if t.runtimePosition != nil {
+			before = t.runtimePosition()
+			t.committed.releasePending()
+		}
+		raw, err := t.AcceptResult(entry, key, hash)
+		if err == nil && t.runtimePosition != nil && t.runtimePosition() > before {
+			delta, decodeErr := acceptedStorageDelta(raw)
+			if decodeErr != nil {
+				return nil, decodeErr
+			}
+			t.committed.holdPending(delta)
+		}
+		return raw, err
 	}
 	if t.Record != nil {
 		t.Record(entry)

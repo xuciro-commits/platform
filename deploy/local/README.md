@@ -20,6 +20,8 @@ make help    # 中文命令说明
 
 宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants.json）；`deploy/local/.env` 的密钥同样被读取。
 
+PostgreSQL 仍使用原 18 主版本和 `pgdata` 数据卷，镜像由 `Dockerfile.postgres` 加入 pgvector 0.8.7。首次升级检索依赖时运行 `docker compose -f deploy/local/compose.yaml build postgres`，再 `docker compose -f deploy/local/compose.yaml up -d --no-deps postgres`；后续使用原本地更新入口。宿主初始化扩展并转换可重建向量索引，不删除业务日志或重置数据卷。
+
 ## 验收栈与发布（Compose 镜像）
 
 

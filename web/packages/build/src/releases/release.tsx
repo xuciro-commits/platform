@@ -375,18 +375,18 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       {savedReview && <p className="text-sm" role="status">{runningDiagnostic ? t("Current definitions could not be compared with this candidate.") : runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
       {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation installs the candidate's included objects, pages, applications, workflows, AI functions and code functions together.")}</p>}
       {savedReview && activationDiagnostic && <p role="alert" className="text-sm text-warning">{activationDiagnostic}</p>}
-      {savedReview && extensions.length > 0 && <section role="region" aria-label={t("Customer extensions")} className="grid gap-3 border-t border-border pt-3">
+      {savedReview && extensions.length > 0 && <Panel variant="plain" role="region" aria-label={t("Customer extensions")} className="grid gap-3 border-t border-border pt-3">
         <h3 className="text-sm font-medium">{t("Customer extensions")}</h3>
         {extensions.map(extension => <div key={extension.type} className="grid gap-1 text-xs">
           <PropertyList columns={2} items={[[t("Object type"), extension.type], [t("Extension of"), extension.base.ref.name], [t("Source version"), extension.base.sourceVersion || t("Original version not recorded")], [t("Target version"), extension.targetVersion], [t("Retained fields"), extension.fields.join(", ")]]} />
           {extension.issue && <p role="alert" className="text-warning">{extension.issue}</p>}
         </div>)}
-      </section>}
-      {savedReview && upgradePlan && <section role="group" className="grid gap-3 border-t border-border pt-3" aria-label={t("Storage upgrade plan")}>
+      </Panel>}
+      {savedReview && upgradePlan && <Panel variant="plain" role="group" className="grid gap-3 border-t border-border pt-3" aria-label={t("Storage upgrade plan")}>
         <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Storage upgrade plan")}</h3><ContextHelp title={t("Storage upgrade plan")}>{t("Add optional fields without changing existing values or record history. Required fields, type changes and removals are refused.")}</ContextHelp></div>
         <ul className="grid gap-1 text-xs">{upgradePlan.additions.map(addition => <li key={`${addition.type}/${addition.field}`}>{addition.type} · {addition.field} · {t(addition.kind)} · {t("{count} existing records", { count: addition.records })}</li>)}</ul>
         <Checkbox disabled={locked} checked={confirmedUpgrade === upgradePlan.id} onChange={checked => setConfirmedUpgrade(checked ? upgradePlan.id : "")}>{t("Confirm this optional field upgrade plan")}</Checkbox>
-      </section>}
+      </Panel>}
       {builder && savedReview && savedID && activeID && activeID !== savedID && <MigrationWorkbench from={activeID} to={savedID} assets={assets} onChanged={async () => { await inventory.refetch(); await readSaved(savedID); }} onLock={setMigrationLocked} />}
       {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
       {review.diagnostic && (() => { const d = diagnose(review.diagnostic, { application: scope || (kind === "app" ? id : undefined) }); return <div className="grid gap-2">

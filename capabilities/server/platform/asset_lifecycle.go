@@ -28,6 +28,13 @@ type AssetEnvironmentRequirement struct {
 	Credential bool     `json:"credential,omitempty"`
 }
 
+// AssetEnvironmentTarget is the owner's resolved local configuration. Its
+// credential name is preparation-only host context, not a portable asset.
+type AssetEnvironmentTarget struct {
+	TargetRecord string
+	Credential   string
+}
+
 // AssetReleaseContext is transient preparation context. Execution identities
 // are rebound to this target member and frozen in the accepted installation;
 // the candidate never acquires this principal or the target binding records.
@@ -85,6 +92,7 @@ type AssetLifecycleOwner interface {
 	ReleaseAssets() ([]ReleaseAsset, error)
 	ResolvePinned(ref AssetRef, sourceVersion string, contentVersion ...string) (ReleaseAsset, error)
 	AssetEnvironmentRequirements(ReleaseAsset) ([]AssetEnvironmentRequirement, error)
+	ResolveAssetEnvironment(AssetEnvironmentRequirement) (AssetEnvironmentTarget, error)
 	// BeginAssetBootstrap exposes the complete immutable shape set only in a
 	// private owner while its original create actions construct missing drafts.
 	// The returned release restores transient lookups; no definition is installed.

@@ -8,14 +8,15 @@ import { t } from '../i18n';
 import {ContextHelp} from './ContextHelp';
 import {Disclosure} from '../primitives/controls';
 
-export function StructuredEditor({value,onChange,children,scope,fields,fieldInput,validate,onTrial,expectedRevision,readOnly=false,disabled=false,context}: {
+export function StructuredEditor({value,onChange,children,scope,fields,fieldInput,validate,onTrial,expectedRevision,readOnly=false,disabled=false,context,initialMode='visual'}: {
   value: StructuredValue; onChange?: (value: StructuredValue) => void; children?: ReactNode; scope: string; fields?: Api.FieldInfo[];
   fieldInput?: (field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>ReactNode;
   validate?: (value: StructuredValue) => Api.FieldIssue[]; onTrial?: (value: StructuredValue) => Promise<Api.Simulation>;
   readOnly?: boolean; disabled?: boolean; context?: ReactNode;
   expectedRevision?: number;
+  initialMode?: 'visual' | 'source';
 }) {
-  const [mode,setMode] = useState<'visual'|'source'>(children ? 'visual' : 'source');
+  const [mode,setMode] = useState<'visual'|'source'>(children ? initialMode : 'source');
   const [format,setFormat] = useState<SourceFormat>('json');
   const input = useDraftInput('source:'+scope,formatStructuredSource(value,format)), buffers=useInputDrafts();
   const [issues,setIssues]=useState<Api.FieldIssue[]>([]),[message,setMessage]=useState(''),[running,setRunning]=useState(false);

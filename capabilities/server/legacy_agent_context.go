@@ -22,7 +22,7 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 			}
 		}
 	}
-	if prior == nil || image.App != AgentApp || image.Type != RunType || len(prior.history) == 0 || len(image.History) <= len(prior.history) {
+	if prior == nil || image.App != AgentApp || image.Type != RunType || len(prior.recordHistory()) == 0 || len(image.History) <= len(prior.recordHistory()) {
 		return nil
 	}
 	run, ok := prior.value.Interface().(AgentRunRecord)
@@ -54,7 +54,7 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 	if err != nil || currentErr != nil || oldDigest != currentDigest {
 		return nil
 	}
-	history := copyHistory(prior.history)
+	history := copyHistory(prior.recordHistory())
 	for i, field := range history[0].Fields {
 		if field.Field == "seen" {
 			var seen string
@@ -83,7 +83,7 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 // from the already committed row image. The caller still requires the exact
 // predecessor digest; no version is inferred from today's agent registry.
 func legacyAgentBindingImage(prior *row, image acceptedBatchRow) *row {
-	if prior == nil || image.App != AgentApp || image.Type != RunType || len(image.History) < len(prior.history) {
+	if prior == nil || image.App != AgentApp || image.Type != RunType || len(image.History) < len(prior.recordHistory()) {
 		return prior
 	}
 	run, ok := prior.value.Interface().(AgentRunRecord)
@@ -106,7 +106,7 @@ func legacyAgentBindingImage(prior *row, image acceptedBatchRow) *row {
 	if !changed {
 		return prior
 	}
-	history := copyHistory(prior.history)
+	history := copyHistory(prior.recordHistory())
 	for i, entry := range history {
 		fields := map[string]FieldChange{}
 		for _, field := range entry.Fields {

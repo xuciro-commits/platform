@@ -189,10 +189,10 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 			return fmt.Errorf("entry %d: invalid refused result: %v", i+1, decodeErr)
 		}
 		key := e.App + "/" + sub.GetIdempotencyKey()
-		if _, duplicate := t.committed.refusals[key]; duplicate || ra.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+		if _, duplicate := t.committed.refusal(key); duplicate || ra.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 			return fmt.Errorf("entry %d: duplicate refused result key", i+1)
 		}
-		t.committed.refusals[key] = saved
+		t.committed.saveRefusal(key, saved)
 		return nil
 	}
 	if envelope.Kind == "record-batch" {
@@ -208,7 +208,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 			return fmt.Errorf("entry %d: record batch journal identity differs (app=%q/%q tenant=%q/%q principal=%q/%q time=%s/%s)",
 				i+1, saved.App, e.App, saved.Tenant, t.ID, sub.GetPrincipalId(), m.ID, saved.At, e.At)
 		}
-		if _, refused := t.committed.refusals[e.App+"/"+sub.GetIdempotencyKey()]; refused {
+		if _, refused := t.committed.refusal(e.App + "/" + sub.GetIdempotencyKey()); refused {
 			return fmt.Errorf("entry %d: record batch reused a refused key", i+1)
 		}
 		applied, applyErr := t.applyAcceptedBatch(ra.AcceptedLedger(), e.Body)
@@ -228,7 +228,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		saved.Version >= 2 && !journal.SameTime(saved.At, e.At) {
 		return fmt.Errorf("entry %d: accepted result app or input clock differs from journal entry", i+1)
 	}
-	if _, refused := t.committed.refusals[e.App+"/"+receipt.GetSubmission().GetIdempotencyKey()]; refused {
+	if _, refused := t.committed.refusal(e.App + "/" + receipt.GetSubmission().GetIdempotencyKey()); refused {
 		return fmt.Errorf("entry %d: accepted result reused a refused key", i+1)
 	}
 	applied, applyErr := t.applyAcceptedResult(ra.AcceptedLedger(), e.Body)

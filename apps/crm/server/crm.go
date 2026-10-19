@@ -411,6 +411,8 @@ func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declar
 
 // Manifest declares the CRM as an app (ADR-0016).
 // Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
+func (c *CRM) SnapshotFormat() string { return "platform.ledger.v1" }
+
 func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
 
 func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }

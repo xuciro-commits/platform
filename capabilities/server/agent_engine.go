@@ -8,7 +8,9 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/proto"
 
@@ -21,6 +23,8 @@ import (
 // stepBody is an agent entry: what the model chose at one step (ADR-0054).
 type stepBody struct {
 	Run       string           `json:"run"`
+	Calls     []ToolCall       `json:"calls,omitempty"`  // complete new model response; Tool remains the legacy single-call encoding
+	CallID    string           `json:"callId,omitempty"` // continuing an already accepted response
 	Tool      string           `json:"tool,omitempty"`
 	Arguments json.RawMessage  `json:"arguments,omitempty"`
 	Content   string           `json:"content,omitempty"` // text the model gave instead of, or beside, a tool call
@@ -46,7 +50,7 @@ type AgentTurn struct {
 type turn = AgentTurn
 
 // Think gives each running agent its next model turn (ADR-0054). The host
-// calls it every second, apart from other owned work: model calls are slow and
+// wakes it with owned work, with a periodic fallback: model calls are slow and
 // happen outside the tenant's lock; each answer is then journaled and applied.
 func (t *Tenant) Think(now time.Time) { onLane(t.turns(now)) }
 
@@ -96,6 +100,10 @@ func (t *Tenant) take(x turn, now time.Time) {
 				return
 			}
 		}
+		if len(x.Run.Pending) > 0 {
+			t.continueAgentCalls(x.Run, now)
+			return
+		}
 		answer, failure := t.call(x.Provider, x.Model, t.agents.AgentPrincipal(x.Run.Agent), x.Request, now)
 		answer.Usage = agentRunUsage(answer.Usage, x.Run)
 		if t.quarantined() {
@@ -114,12 +122,56 @@ func (t *Tenant) take(x turn, now time.Time) {
 		if failure != nil {
 			body.Failure = failure.Detail
 		} else if len(answer.ToolCalls) > 0 {
-			body.Tool, body.Arguments = answer.ToolCalls[0].Name, answer.ToolCalls[0].Arguments // one step at a time
-			if body.Tool == "knowledge" {
-				body.Observation = t.agents.ObserveAgentKnowledge(x.Run, body.Arguments, now)
+			var err error
+			body.Calls, err = completeToolCalls(answer.ToolCalls, x.Run.ID, x.Run.StepsUsed+1)
+			if err != nil {
+				body.Failure = err.Error()
+			} else if body.Calls[0].Name == "knowledge" {
+				body.Observation = t.agents.ObserveAgentKnowledge(x.Run, body.Calls[0].Arguments, now)
 			}
 		}
 		t.agentStep(body, now)
+	}
+}
+
+// Consecutive knowledge reads can wait on providers together. Their observed
+// values are still accepted in call order, one result at a time. Writes and
+// human checkpoints never join a parallel group.
+func (t *Tenant) continueAgentCalls(run AgentRunRecord, now time.Time) {
+	defer func() {
+		t.mu.Lock()
+		t.agents.IdleAgentTurn(run.ID)
+		t.mu.Unlock()
+		wakeWork()
+	}()
+	calls := run.Pending[:1]
+	if calls[0].Name == "knowledge" {
+		for len(calls) < len(run.Pending) && run.Pending[len(calls)].Name == "knowledge" {
+			calls = run.Pending[:len(calls)+1]
+		}
+	}
+	observations := make([]json.RawMessage, len(calls))
+	if calls[0].Name == "knowledge" {
+		jobs := make(chan int, len(calls))
+		for i := range calls {
+			jobs <- i
+		}
+		close(jobs)
+		var workers sync.WaitGroup
+		for range min(4, len(calls)) {
+			workers.Go(func() {
+				for i := range jobs {
+					observations[i] = t.agents.ObserveAgentKnowledge(run, calls[i].Arguments, now)
+				}
+			})
+		}
+		workers.Wait()
+	}
+	for i, call := range calls {
+		if !t.applyAgentStep(stepBody{Run: run.ID, CallID: call.ID, Tool: call.Name, Arguments: call.Arguments,
+			Observation: observations[i]}, now, false) {
+			break
+		}
 	}
 }
 
@@ -156,9 +208,9 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 			x.Stop = "the agent definition changed; start a new run"
 		case run.OnBehalf != "" && (reader.Tenant != a.tenant || reader.Roles[d.app] == ""):
 			x.Stop = "the person no longer has access to this agent's app"
-		case name == "":
+		case name == "" && len(run.Pending) == 0:
 			x.Stop = "no model is set for agents"
-		case d.spentOut(run):
+		case len(run.Pending) == 0 && d.spentOut(run):
 			// A run at its budget is not given another model call: the reply
 			// that crossed the budget already happened, and one more would
 			// only spend more (ADR-0008, review AI-05).
@@ -167,6 +219,9 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 			sw, _ := h.Record(SwitchType + "/agent:" + run.Agent)
 			x.Stop = "suspended by " + sw.(Switch).By
 		default:
+			if len(run.Pending) > 0 {
+				break // accepted tool calls do not reserve another model call or spend a model turn
+			}
 			model, pv, err := h.AgentModel(name)
 			if err != nil {
 				x.Stop = "the model " + name + " is not enabled"
@@ -217,7 +272,7 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 	// narrowed an old flow agent's scope or a member's grants changed.
 	if typ, id, ok := strings.Cut(run.Ref, "/"); ok {
 		if view, err := a.host.AgentContext(a.readsAs(run), typ, id, now); err == nil {
-			goal += "\nAbout " + run.Ref + ":\n" + clip(string(view.Body), 6000)
+			goal += "\nAbout " + run.Ref + ":\n" + clipObservation(string(view.Body), 6000)
 		}
 	}
 	system := preamble + "\n\n" + d.Instructions
@@ -236,10 +291,17 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 			system += "\n- " + m.Fact
 		}
 	}
-	req := ChatRequest{Model: model, Messages: []Message{{Role: "system", Content: system}, {Role: "user", Content: goal}}}
+	req := ChatRequest{Model: model, PromptCache: true, Messages: []Message{{Role: "system", Content: system}, {Role: "user", Content: goal}}}
 	for i, s := range run.Steps {
+		if len(s.Calls) > 0 {
+			req.Messages = append(req.Messages, Message{Role: "assistant", Content: s.Content, ToolCalls: s.Calls})
+		}
 		if s.Tool == "" {
 			continue // a failed model call or a text-only answer
+		}
+		if s.CallID != "" {
+			req.Messages = append(req.Messages, Message{Role: "tool", ToolCallID: s.CallID, Content: s.Outcome})
+			continue
 		}
 		id := fmt.Sprintf("s%d", i+1)
 		req.Messages = append(req.Messages, Message{Role: "assistant", Content: s.Rationale, ToolCalls: []ToolCall{{ID: id, Name: s.Tool, Arguments: json.RawMessage(cmp.Or(s.Arguments, "{}"))}}},
@@ -261,7 +323,114 @@ func clip(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
 	return s[:n] + "…"
+}
+
+// clipObservation cuts values, never JSON syntax. The envelope tells the model
+// that a bounded observation is incomplete and how to request more information.
+func clipObservation(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	decoder := json.NewDecoder(strings.NewReader(s))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil || decoder.Decode(new(any)) != io.EOF {
+		return clip(s, n)
+	}
+	prefix := `{"truncated":true,"continue":"Use context for a record, or query/read with a narrower scope.","data":`
+	const suffix = `}`
+	budget := n - len(prefix) - len(suffix)
+	if budget < 4 {
+		return `{"truncated":true}`
+	}
+	return prefix + string(boundedJSON(value, budget)) + suffix
+}
+
+func boundedJSON(value any, budget int) json.RawMessage {
+	raw, _ := json.Marshal(value)
+	if len(raw) <= budget {
+		return raw
+	}
+	switch value := value.(type) {
+	case string:
+		low, high := 0, len(value)
+		for low < high {
+			mid := (low + high + 1) / 2
+			candidate, _ := json.Marshal(clip(value, mid))
+			if len(candidate) <= budget {
+				low = mid
+			} else {
+				high = mid - 1
+			}
+		}
+		raw, _ = json.Marshal(clip(value, low))
+		if len(raw) <= budget {
+			return raw
+		}
+	case []any:
+		out := []json.RawMessage{}
+		remaining := budget - 2
+		for _, item := range value {
+			if remaining < 4 {
+				break
+			}
+			part := boundedJSON(item, remaining)
+			out = append(out, part)
+			remaining -= len(part) + 1
+		}
+		raw, _ = json.Marshal(out)
+		return raw
+	case map[string]any:
+		out := map[string]json.RawMessage{}
+		remaining := budget - 2
+		for _, key := range slices.Sorted(func(yield func(string) bool) {
+			for key := range value {
+				if !yield(key) {
+					return
+				}
+			}
+		}) {
+			name, _ := json.Marshal(key)
+			room := remaining - len(name) - 2
+			if room < 4 {
+				continue
+			}
+			out[key] = boundedJSON(value[key], room)
+			remaining = room - len(out[key])
+		}
+		raw, _ = json.Marshal(out)
+		return raw
+	}
+	return json.RawMessage(`null`)
+}
+
+// completeToolCalls preserves the provider IDs and checks complete JSON before
+// any call is executed. Missing IDs get a stable per-turn ID; duplicate IDs
+// cannot safely be paired with their results and are reported as a model error.
+func completeToolCalls(calls []ToolCall, run string, turn int) ([]ToolCall, error) {
+	out := slices.Clone(calls)
+	seen := map[string]bool{}
+	for i := range out {
+		call := &out[i]
+		if call.ID == "" {
+			call.ID = fmt.Sprintf("%s:%d:%d", run, turn, i+1)
+		}
+		if call.Name == "" || seen[call.ID] {
+			return nil, fmt.Errorf("invalid or duplicate tool call %q", call.ID)
+		}
+		seen[call.ID] = true
+		value, err := platform.DecodeValue(call.Arguments, maxAcceptedResultBytes)
+		if _, object := value.(map[string]any); err != nil || !object {
+			return nil, fmt.Errorf("tool call %q requires a complete JSON object", call.ID)
+		}
+		raw, _ := json.Marshal(value)
+		call.Arguments = raw
+	}
+	return out, nil
 }
 
 // reader is the person a run works for, or nil for an app's automation. It
@@ -297,10 +466,14 @@ func (a *Agents) readsAs(run AgentRunRecord) *platform.Member {
 
 // agentStep journals a step, then applies it.
 func (t *Tenant) agentStep(b stepBody, now time.Time) {
+	t.applyAgentStep(b, now, true)
+}
+
+func (t *Tenant) applyAgentStep(b stepBody, now time.Time, releaseTurn bool) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
-		return
+		return false
 	}
 	// The step's journal clock is a PostgreSQL timestamptz. Make the live
 	// decision use its durable precision too; otherwise a full-journal retry
@@ -308,29 +481,35 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	if t.Record != nil {
 		now = now.Truncate(time.Microsecond)
 	}
-	t.agents.IdleAgentTurn(b.Run)
+	if releaseTurn {
+		t.agents.IdleAgentTurn(b.Run)
+	}
 	run, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {
 		// A report is applied only while its evaluation still waits for one;
 		// an evaluation already reported must not be written twice.
 		ev, waited := platform.Get[Evaluation](t.automation(AgentApp, false), b.Evaluation.ID)
 		if !waited || ev.State != "queued" || ev.Revision != b.Evaluation.Revision {
-			return
+			return false
 		}
 		run.Agent = b.Evaluation.Agent
 	} else if !known || run.State != "running" {
 		// The fence at the end of the outside call, and here in the step's own
 		// decision: a model answer that arrives after the run was cancelled or
 		// stopped never runs its tool (ADR-0008, review AI-02).
-		return
+		return false
+	}
+	if b.CallID != "" && (len(run.Pending) == 0 || run.Pending[0].ID != b.CallID) {
+		return false // a completed call's durable result is reused after restart or a late response
 	}
 	if b.Stop == "" && run.OnBehalf != "" {
 		if !t.agents.AllowsAgentRun(run) {
 			b.Stop = "the person no longer has access to this agent's app"
-			b.Tool, b.Arguments, b.Observation = "", nil, nil
+			b.Tool, b.Arguments, b.Observation, b.Calls, b.CallID = "", nil, nil, nil, ""
 		}
 	}
 	t.acceptAgentStep(b, now)
+	return !t.quarantined()
 }
 
 func normalizedStepJSON(raw json.RawMessage) (json.RawMessage, error) {
@@ -385,6 +564,17 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b stepBody, now time.Ti
 
 // take runs the step's tool and returns how the run changes.
 func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now time.Time) func(*pb.ChangeRecord) {
+	continuing := b.CallID != ""
+	if len(b.Calls) > 0 {
+		call := b.Calls[0]
+		b.Tool, b.Arguments, b.CallID = call.Name, call.Arguments, call.ID
+		run.Pending = slices.Clone(b.Calls[1:])
+	} else if continuing {
+		if len(run.Pending) == 0 || run.Pending[0].ID != b.CallID {
+			return func(*pb.ChangeRecord) {} // historical duplicate; no tool is run twice
+		}
+		run.Pending = slices.Clone(run.Pending[1:])
+	}
 	// PostgreSQL JSONB may reorder nested object keys differently from Go's
 	// encoder. Normalize on both live application and replay, not only before
 	// journaling, because these raw bytes become strings in the run history.
@@ -399,8 +589,14 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		}
 	}
 	d := a.def(run.Agent)
-	step := RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output}
-	run.StepsUsed++
+	step := RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output,
+		Calls: b.Calls, CallID: b.CallID, Content: b.Content}
+	if len(b.Calls) > 0 {
+		step.Sources = sourcesOf(run)
+	}
+	if !continuing {
+		run.StepsUsed++
+	}
 	run.TokensUsed += step.Tokens
 	if b.Usage.CostReported { // a cost nobody reported is not 0, it is unknown (ADR-0008)
 		run.Cost += b.Usage.Cost
@@ -461,17 +657,42 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		}
 		step.Outcome, then = a.use(c, d, &run, tool, args, b.Arguments, &step, now)
 	}
-	step.Outcome = clip(step.Outcome, outcomeLimit)
+	if step.CallID == "" { // the retained single-call journal format keeps its original result bytes
+		step.Outcome = legacyAgentOutcome(step.Outcome)
+	} else {
+		step.Outcome = clipObservation(step.Outcome, outcomeLimit)
+	}
 	run.Steps = append(run.Steps, step)
 	return func(r *pb.ChangeRecord) {
 		if then != nil {
 			then(r)
+		}
+		if run.State == "done" || run.State == "stopped" {
+			finishPendingCalls(&run, now)
 		}
 		c.Put(r, run) // before its flow goes on, which may keep a signal on it
 		if run.State == "done" {
 			a.ended(c, r, run, now)
 		}
 	}
+}
+
+func legacyAgentOutcome(s string) string {
+	if len(s) <= outcomeLimit {
+		return s
+	}
+	return s[:outcomeLimit] + "…"
+}
+
+// Every accepted model call retains a result, including calls deliberately
+// skipped because an earlier call finished or a person stopped the run.
+func finishPendingCalls(run *AgentRunRecord, now time.Time) {
+	sources := sourcesOf(*run)
+	for _, call := range run.Pending {
+		run.Steps = append(run.Steps, RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments), CallID: call.ID,
+			Outcome: "not executed: the run " + run.State, Sources: sources})
+	}
+	run.Pending = nil
 }
 
 // use runs one tool; it may return what the decision does besides storing the run.
@@ -503,7 +724,11 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
-		step.Sources = append([]string{str("type") + "/" + str("id")}, view.Sources...)
+		if step.CallID == "" {
+			step.Sources = nil // retained legacy steps recorded only this observation's sources
+		}
+		step.Sources = append(step.Sources, str("type")+"/"+str("id"))
+		step.Sources = append(step.Sources, view.Sources...)
 		return string(view.Body), nil
 	case "search":
 		view := h.AgentSearch(a.readsAs(*run), str("query"), now)
@@ -537,7 +762,11 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
-		step.Sources = append(view.Sources, "read:"+tool.schema)
+		if step.CallID == "" {
+			step.Sources = nil
+		}
+		step.Sources = append(step.Sources, view.Sources...)
+		step.Sources = append(step.Sources, "read:"+tool.schema)
 		return string(view.Body), nil
 	}
 	// An action: the declared tool, the person's own grants when it runs for one, the guard, the budget.
@@ -565,7 +794,11 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		step.Sources = append(step.Sources, tool.target+"/"+target)
 	}
 	var payload map[string]any
-	json.Unmarshal(raw, &payload)
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if step.CallID != "" {
+		decoder.UseNumber()
+	} // retain legacy replay's original number encoding
+	decoder.Decode(&payload)
 	delete(payload, "target")
 	delete(payload, "rationale")
 	body, _ := json.Marshal(payload)
@@ -663,6 +896,7 @@ func (a *Agents) recipients(c platform.Caller, d *agentDef, run AgentRunRecord) 
 // other goes to a person as a task (ADR-0054).
 func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord, why string, now time.Time) {
 	run.State, run.Stopped, run.Draft = "stopped", why, nil
+	finishPendingCalls(run, now)
 	if run.Task != "" {
 		a.host.AgentTasks().Close(c, r, run.Task)
 		run.Task = ""

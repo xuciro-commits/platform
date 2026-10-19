@@ -99,7 +99,7 @@ func canonicalDigest(v any) (string, error) {
 
 func acceptedRowOf(typ, id string, r *row) (acceptedRow, error) {
 	value, err := r.image()
-	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.history), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}, err
+	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.recordHistory()), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}, err
 }
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
@@ -480,7 +480,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	}
 	sub, _ := batchSubmission(result, receipt)
 	key := result.App + "/" + sub.GetIdempotencyKey()
-	if saved := t.committed.answers[key]; len(saved) > 0 {
+	if saved := t.committed.answer(key); len(saved) > 0 {
 		prior, answer, err := decodeAcceptedBatch(saved)
 		if err != nil || prior.RequestHash != result.RequestHash || !proto.Equal(answer, receipt) {
 			return nil, fmt.Errorf("record batch key belongs to another answer")
@@ -514,7 +514,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		if err := protojson.Unmarshal(decision.Receipt, r); err != nil {
 			return nil, err
 		}
-		if _, refused := t.committed.refusals[decision.Event.App+"/"+r.GetSubmission().GetIdempotencyKey()]; refused {
+		if _, refused := t.committed.refusal(decision.Event.App + "/" + r.GetSubmission().GetIdempotencyKey()); refused {
 			return nil, fmt.Errorf("record batch reused a refused child key")
 		}
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
@@ -692,19 +692,19 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			if err != nil {
 				return err
 			}
-			baseHistory, revision = len(prior.history), recordOf(prior.value).Revision
+			baseHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
 		}
 		if result.Version >= 2 {
 			if image.HistoryBase != baseHistory {
 				return fmt.Errorf("record batch history predecessor differs for %s/%s", image.Type, image.ID)
 			}
 			if prior != nil {
-				image.History = append(copyHistory(prior.history), image.History...)
+				image.History = append(copyHistory(prior.recordHistory()), image.History...)
 			}
 		}
 		prefixEqual := true
 		if result.Version == 1 && prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
-			oldDigest, oldErr := canonicalDigest(prior.history)
+			oldDigest, oldErr := canonicalDigest(prior.recordHistory())
 			savedDigest, savedErr := canonicalDigest(image.History[:baseHistory])
 			prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
 		}
