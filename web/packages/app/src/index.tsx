@@ -289,13 +289,20 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   const info = source.entity(type);
   const action = catalog.find((action) => action.schema === (actionSchema??`${type}.${record ? "edit" : "create"}`));
   if (!info || !action) return null;
-  // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0048).
   const inputs = new Set(action.payload.map((field) => field.name));
-  const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
+  // `aside` delegates a field to a specialized editor; it does not make the
+  // original writable declaration unavailable in a general action form.
+  const writable = info.fields.filter(f=>!f.readOnly&&(inputs.has(f.name)||f.aside)&&(!fields||fields.includes(f.name))).map(f=>{
+    const input=action.payload.find(i=>i.name===f.name);
+    return {...f,required:input?.required??false,constraints:input?.constraints??f.constraints,range:input?.range??f.range,group:input?.group??f.group,choices:input?.choices??f.choices,ref:input?.ref??f.ref,stereotype:input?.stereotype??f.stereotype,stereotypes:input?.stereotypes??f.stereotypes};
+  });
+  const writableNames=new Set(writable.map(field=>field.name));
+  const editable=fields?fields.filter(name=>writableNames.has(name)):writable.map(field=>field.name);
+  const editableValues=(values:Record<string,unknown>)=>Object.fromEntries(Object.entries(values).filter(([key])=>writableNames.has(key)));
   const defaults=record??{...Object.fromEntries(action.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial};
-  return <RecordForm sourceFields={info.fields.filter(f=>!f.readOnly&&(inputs.has(f.name)||f.aside)&&(!fields||fields.includes(f.name))).map(f=>{const input=action.payload.find(i=>i.name===f.name);return {...f,required:input?.required??false,constraints:input?.constraints??f.constraints,choices:input?.choices??f.choices,ref:input?.ref??f.ref,stereotype:input?.stereotype??f.stereotype,stereotypes:input?.stereotypes??f.stereotypes};})} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={action.payload.find(input=>input.name===field.name)} app={action.schema.split(".")[0]}/>} onTrial={onTrial} context={context} entity={entityFrom({...info,fields:info.fields.map(f=>{const input=action.payload.find(i=>i.name===f.name);return input?{...f,constraints:input.constraints??f.constraints,range:input.range??f.range,group:input.group??f.group}:f;})}, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={defaults} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
-    onValuesChange={onValuesChange ? v => onValuesChange(Object.fromEntries(Object.entries(v).filter(([k]) => info.fields.some(f=>f.name===k&&!f.readOnly&&(inputs.has(k)||f.aside)&&(!fields||fields.includes(k)))))) : undefined}
-    onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => info.fields.some(f=>f.name===k&&!f.readOnly&&(inputs.has(k)||f.aside)&&(!fields||fields.includes(k))))))} />;
+  return <RecordForm sourceFields={writable} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={action.payload.find(input=>input.name===field.name)} app={action.schema.split(".")[0]}/>} onTrial={onTrial} context={context} entity={entityFrom({...info,fields:writable}, {}, source)} keys={editable} defaultValues={defaults} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
+    onValuesChange={onValuesChange ? values => onValuesChange(editableValues(values)) : undefined}
+    onSubmit={values => onSubmit(editableValues(values))} />;
 }
 
 /** A member's saved view of a list (the work app's `views` read). */

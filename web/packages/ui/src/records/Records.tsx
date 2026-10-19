@@ -125,7 +125,7 @@ export function entityFrom(info: EntityInfo, options: Options = {}, source?: Rec
 function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source?: RecordSource): Record<string, FieldType<any, EntityRecord>> {
   const fields: Record<string, FieldType<any, EntityRecord>> = {};
   for (const f of infos) {
-    const common = { input:{name:f.name,type:f.type==="integer"?"integer":f.type==="decimal"?"number":f.type==="date"||f.type==="datetime"||f.type==="boolean"?f.type:"string",required:f.required,description:f.title,constraints:f.constraints,range:f.range,group:f.group}, label: f.title, help: f.help, required: f.required, readOnly: f.readOnly, when: f.when };
+    const common = { input:{name:f.name,type:f.type==="integer"?"integer":f.type==="decimal"?"number":f.type==="date"||f.type==="datetime"||f.type==="boolean"||f.type==="json"||f.type==="lines"?f.type:["tags","references"].includes(f.type)?"string[]":"string",required:f.required,description:f.title,constraints:f.constraints,range:f.range,group:f.group}, label: f.title, help: f.help, required: f.required, readOnly: f.readOnly, when: f.when };
     fields[f.name] = (() => {
       switch (f.type) {
         case "json": return json(common);
@@ -144,13 +144,16 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         case "reference": return source && f.ref
           ? { ...text(common), type: "reference", display: (value,record) => f.ref === "enterprise.element" ? <EnterpriseReference source={source} value={value} /> : text(common).display(value,record), editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} stereotypes={[...(f.stereotype ? [f.stereotype] : []), ...(f.stereotypes ?? [])]} onChange={onChange} /> }
           : options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
-        case "references": return multiSelect({ ...common, readOnly: true, options: options[f.name] ?? [] });
+        case "references": return source&&f.ref ? {...multiSelect({...common,options:options[f.name]??[]}),editor:({id,value,onChange})=>{
+          const values:string[]=value??[],stereotypes=[...(f.stereotype?[f.stereotype]:[]),...(f.stereotypes??[])];
+          return <div id={id} role="group" aria-label={f.title} className="grid gap-2">{values.map((item,index)=><div key={index} className="flex gap-2"><span className="min-w-0 flex-1"><RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} value={item} ariaLabel={f.title} onChange={next=>onChange(next?values.map((old,at)=>at===index?next:old):values.filter((_,at)=>at!==index))}/></span><Button size="sm" onClick={()=>onChange(values.filter((_,at)=>at!==index))}>{t("Remove")}</Button></div>)}<RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} ariaLabel={f.title} onChange={next=>{if(next&&!values.includes(next))onChange([...values,next]);}}/></div>;
+        }}:multiSelect({ ...common, options: options[f.name] ?? [] });
         // Tags with a list to choose from are that list; tags without one are
         // words a person types (labels, field names).
         case "tags": return options[f.name]?.length ? multiSelect({ ...common, options: options[f.name]! }) : tags(common);
         case "lines": return f.fields?.length
-          ? lines(common, fieldsOf(info, f.fields.filter(field=>!field.aside), Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source))
-          : { ...text(common), readOnly: true, display: (v: unknown) => <span className="text-muted">{Array.isArray(v) ? `${v.length} lines` : "—"}</span> } as FieldType<any>;
+          ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source))
+          : { ...json(common), type:"lines", schema:z.array(z.unknown()) };
         default: return text(common);
       }
     })();
@@ -186,7 +189,7 @@ const lines = (common: { label: string; help?: string; required?: boolean; readO
             <thead><tr>{shown.map(([k, c]) => <th key={k} className="px-1 text-left text-xs font-medium text-muted">{c.label}{c.required ? " *" : ""}</th>)}<th /></tr></thead>
             <tbody>{rows.map((line, i) => (
               <tr key={i}>
-                {shown.map(([k, c]) => <td key={k} className="min-w-28 px-1 py-0.5">{c.editor?.({ value: line[k] as never, onChange: (v) => set(i, k, v) }) ?? c.display(line[k] as never, line)}</td>)}
+                {shown.map(([k, c]) => <td key={k} className="min-w-28 px-1 py-0.5">{!c.readOnly&&c.editor?c.editor({ value: line[k] as never, onChange: (v) => set(i, k, v) }):c.display(line[k] as never, line)}</td>)}
                 <td><Button size="sm" variant="ghost" aria-label={t("Remove line")} onClick={() => onChange(rows.filter((_, j) => j !== i))}>×</Button></td>
               </tr>
             ))}</tbody>

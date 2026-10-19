@@ -56,7 +56,7 @@ export function PayloadFields({ fields, values, onChange, app, preview = false, 
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} app={app} value={String(value ?? "")} onChange={(v) => set(v || undefined)} onUnit={unit=>setUnits(old=>({...old,[f.name]:unit}))} />
           : f.type === "datetime" ? <DateTimeInput title={f.description||f.name} value={String(value??"")} offset="Z" onChange={set}/>
-          : f.type === "json" ? <JsonInput id={id} value={value} onChange={set} />
+          : f.type === "json" ? field.json({label:f.description||f.name,required:f.required}).editor!({id,value,onChange:set,invalid:!!error,describedBy:error?`${id}-error`:undefined})
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
           : <Input id={id} type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? hourly&&f.constraints?.dateTime?"datetime-local":"date" : f.type === "datetime" ? "datetime-local" : "text"} value={value === undefined ? "" : String(value)}
               aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined}
@@ -66,16 +66,6 @@ export function PayloadFields({ fields, values, onChange, app, preview = false, 
       </div>
     );
   })}</>;
-}
-
-/** A structured payload field (type json, e.g. a dataset load's rows): typed as text, submitted
- * as the parsed value once it parses; until then the text stays and the field reads as invalid (UX-07). */
-function JsonInput({ id, value, onChange }: { id: string; value: unknown; onChange: (v: unknown) => void }) {
-  const [text, setText] = useState(() => value === undefined ? "" : JSON.stringify(value, null, 2));
-  return <Textarea parse="json" id={id} rows={6} className="font-mono" value={text} placeholder='[{"id": 1}]' onChange={(e) => {
-    const next = e.target.value; setText(next);
-    onChange(next.trim() ? JSON.parse(next) : undefined);
-  }} />;
 }
 
 /** A list of the items of an app's read, for a payload field whose values are not records here (#129). */
@@ -138,8 +128,8 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  const attemptedVersion=attempt?.entry.schemaVersion??openedDeclaration.schemaVersion;
  const schemaChanged=!!refused&&!!attemptedVersion&&!!current?.schemaVersion&&actionInputSignature(current.schemaVersion)!==actionInputSignature(attemptedVersion);
  const declared=schemaChanged&&current?current:openedDeclaration;
- // Generated actions omit editor-owned fields from their visible payload.
- // Explicit initial model values still belong in the same owner submission.
+ // Generated forms expose writable model fields in both editing modes;
+ // fixed bindings remain part of the same original owner submission.
  const generatedInputs=(next:Record<string,unknown>)=>{
   const inputs={...next,...fixed},model=source.entity(target.type)?.fields??[];
   const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&(field.aside||Object.hasOwn(startingValues,field.name))).map(field=>field.name)]);

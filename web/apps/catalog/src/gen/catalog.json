@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ee0342c41078722e",
+  "revision": "sha256:71168efbe272ee70",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12750,6 +12750,7 @@
       "web/packages/ui/src/components/SegmentedChoice.tsx",
       "web/packages/ui/src/components/StructuredEditor.tsx",
       "web/packages/ui/src/components/TagCounts.tsx",
+      "web/packages/ui/src/fields/StructuredValueInput.tsx",
       "web/packages/ui/src/fields/entity.tsx",
       "web/packages/ui/src/layout/ApplicationHeader.tsx",
       "web/packages/ui/src/layout/CanvasSelectionToolbar.tsx",
@@ -13228,6 +13229,7 @@
       "web/packages/ui/src/components/InspectorControls.tsx",
       "web/packages/ui/src/components/SearchInput.tsx",
       "web/packages/ui/src/components/StructuredEditor.tsx",
+      "web/packages/ui/src/fields/StructuredValueInput.tsx",
       "web/packages/ui/src/fields/entity.tsx",
       "web/packages/ui/src/fields/types.tsx",
       "web/packages/ui/src/layout/ApplicationHeader.tsx",

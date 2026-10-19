@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { DataTable, EntityForm, RecordForm, applyFilters, columnsFor, defineEntity, field, recordSchema } from "../index";
+import type {Api} from "@platform/kernel";
+import { DataTable, EntityForm, RecordForm, applyFilters, columnsFor, defineEntity, entityFrom, field, recordSchema } from "../index";
 
 afterEach(cleanup);
 Element.prototype.getBoundingClientRect = () => ({ width: 800, height: 280, top: 0, left: 0, right: 800, bottom: 280, x: 0, y: 0, toJSON: () => ({}) });
@@ -140,4 +141,56 @@ test("declared bounds and date relationships share record validation",()=>{
  const schema=recordSchema(entity);
  expect(schema.safeParse({arrive:"2028-02-29",depart:"2028-03-01",rooms:1}).success).toBe(true);
  for(const values of [{arrive:"2027-02-29",depart:"2028-03-01",rooms:1},{arrive:"2028-02-29",depart:"2028-02-29",rooms:1},{arrive:"2028-02-29",depart:"2028-03-01",rooms:1.5},{arrive:"2028-02-29",depart:"2028-03-01",rooms:21}])expect(schema.safeParse(values).success).toBe(false);
+});
+
+test("record forms expose writable structured and nested aside fields in both modes while excluding readonly declarations",async()=>{
+ const fields:Api.FieldInfo[]=[
+  {name:"name",title:"Name",type:"text",required:true},
+  {name:"queries",title:"Queries",type:"json",aside:true},
+  {name:"rules",title:"Rules",type:"lines",fields:[{name:"title",title:"Rule title",type:"text",aside:true},{name:"configuration",title:"Rule configuration",type:"json",aside:true}]},
+  {name:"published",title:"Published configuration",type:"json",readOnly:true,aside:true},
+ ];
+ const info:Api.EntityInfo={app:"build",type:"build.example",title:"Example",plural:"Examples",display:"name",standard:[],fields};
+ const initial={name:"Draft",queries:{recent:{limit:0,enabled:false,empty:null},order:["b","a"]},rules:[{title:"Nested rule",configuration:{priority:0}}],published:{private:"not writable"}};
+ const original=structuredClone(initial),submit=vi.fn(()=>false);
+ render(<RecordForm entity={entityFrom(info)} sourceFields={fields.filter(field=>!field.readOnly)} defaultValues={initial} onSubmit={submit}/>);
+ expect(screen.getByRole("combobox",{name:"Queries type"})).toBeTruthy();
+ expect(screen.getByDisplayValue("Nested rule")).toBeTruthy();
+ expect(screen.getByRole("combobox",{name:"Rule configuration type"})).toBeTruthy();
+ expect(screen.queryByRole("combobox",{name:"Published configuration type"})).toBeNull();
+ expect(submit).not.toHaveBeenCalled();
+ fireEvent.change(screen.getByLabelText("Queries.recent.limit"),{target:{value:"2"}});
+ fireEvent.click(screen.getByRole("button",{name:"Source editor"}));
+ const source=screen.getByRole("textbox",{name:"Configuration source"}) as HTMLTextAreaElement;
+ const next={name:"Draft",queries:{recent:{limit:2,enabled:false,empty:null},order:["b","a"]},rules:initial.rules};
+ expect(JSON.parse(source.value)).toEqual(next);
+ const changed={...next,queries:{...next.queries,recent:{...next.queries.recent,limit:4}}};
+ fireEvent.change(source,{target:{value:JSON.stringify(changed)}});
+ await act(async()=>{fireEvent.click(screen.getByRole("button",{name:"Apply source"}));});
+ fireEvent.click(screen.getByRole("button",{name:"Visual"}));
+ expect((screen.getByLabelText("Queries.recent.limit") as HTMLInputElement).value).toBe("4");
+ await act(async()=>{fireEvent.click(screen.getByRole("button",{name:"Save"}));});
+ expect(submit).toHaveBeenCalledExactlyOnceWith(changed);
+ expect(initial).toEqual(original);
+});
+
+test("a structured form distinguishes an omitted field from an explicit null across visual source and original submission",async()=>{
+ const fields:Api.FieldInfo[]=[{name:"queries",title:"Queries",type:"json",aside:true}];
+ const info:Api.EntityInfo={app:"build",type:"build.example",title:"Example",plural:"Examples",display:"id",standard:[],fields};
+ const submit=vi.fn((_values:unknown)=>false);
+ render(<RecordForm entity={entityFrom(info)} sourceFields={fields} defaultValues={{queries:{limit:5}}} onSubmit={submit}/>);
+ fireEvent.change(screen.getByRole("combobox",{name:"Queries type"}),{target:{value:"unset"}});
+ fireEvent.click(screen.getByRole("button",{name:"Source editor"}));
+ expect(JSON.parse((screen.getByRole("textbox",{name:"Configuration source"}) as HTMLTextAreaElement).value)).toEqual({});
+ await act(async()=>{fireEvent.click(screen.getByRole("button",{name:"Save"}));});
+ expect(submit).toHaveBeenCalledTimes(1);
+ expect(JSON.parse(JSON.stringify(submit.mock.calls[0]![0]))).toEqual({});
+ fireEvent.click(screen.getByRole("button",{name:"Visual"}));
+ expect((screen.getByRole("combobox",{name:"Queries type"}) as HTMLSelectElement).value).toBe("unset");
+ fireEvent.change(screen.getByRole("combobox",{name:"Queries type"}),{target:{value:"null"}});
+ fireEvent.click(screen.getByRole("button",{name:"Source editor"}));
+ expect(JSON.parse((screen.getByRole("textbox",{name:"Configuration source"}) as HTMLTextAreaElement).value)).toEqual({queries:null});
+ await act(async()=>{fireEvent.click(screen.getByRole("button",{name:"Save"}));});
+ expect(submit).toHaveBeenCalledTimes(2);
+ expect(submit).toHaveBeenLastCalledWith({queries:null});
 });

@@ -111,6 +111,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
   useEffect(()=>{for(const issue of issues??[])if(issue.path.length===1&&fields.some(f=>f.name===issue.path[0]))setError(issue.path[0]!,{type:"owner",message:issue.message});},[issues,setError]);
   // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
   const current = useWatch({control}) as Record<string, unknown>;
+  const semanticValues=(values:Record<string,unknown>)=>Object.fromEntries(Object.entries(values).map(([key,value])=>[key,visualCleared.current.has(key)&&value===null?undefined:value]));
   const sourceValidate = (values:Record<string,unknown>):Api.FieldIssue[] => {
     const readonly=Object.fromEntries(fields.filter(field=>field.type.readOnly).map(field=>[field.name,(defaultValues as Record<string,unknown>|undefined)?.[field.name]]));
     const found:Api.FieldIssue[] = sourceFields ? structuredIssues(values,sourceFields) : Object.keys(values).filter(key=>!fields.some(field=>field.name===key&&(!field.type.readOnly||JSON.stringify(values[key])===JSON.stringify(readonly[key])))).map(key=>({path:[key],code:"unknown",message:t("This field is not declared.")}));
@@ -119,26 +120,10 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
     return found;
   };
   const valuesChanged = useRef(onValuesChange); valuesChanged.current = onValuesChange;
-  const valueSignature = JSON.stringify(current);
+  const valueSignature = JSON.stringify(semanticValues(current));
   useEffect(() => { valuesChanged.current?.(JSON.parse(valueSignature)); }, [valueSignature]);
-  return (
-    <form onSubmit={handleSubmit(async (_values, event) => {
-      if (lock.current||inputs?.invalid||submitDisabled) return; lock.current = true; setFailure("");inputs?.reject();inputs?.pending(1); onBusy?.(true);
-      try {
-        const submitted = Object.fromEntries(Object.entries(getValues()).map(([key,value])=>[key,visualCleared.current.has(key)&&value===null?undefined:value]));
-        if (sourceValidate(submitted).length) return;
-        const confirmed = await onSubmit(submitted, event);
-        if (confirmed === false) setFailure(t("The request was not confirmed. Your input is retained."));
-        else if (confirmed === true) { reset(submitted); visualCleared.current.clear(); inputs?.clear(); markSaved(); }
-        // A void callback owns its own outcome; it is not proof of acceptance.
-      }
-      catch (error) { setFailure(error instanceof Error ? error.message : t("The request was not confirmed. Your input is retained.")); }
-      finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }
-    })} className="grid gap-3" noValidate>
-      <InputProblems/>{failure && <p role="alert" className="text-sm text-danger">{failure}</p>}
-      <StructuredEditor scope="form" value={Object.fromEntries(Object.entries(current).filter(([name])=>declarations.some(field=>field.name===name)))} fields={declarations} fieldInput={fieldInput??((field,value,onChange)=>fields.find(item=>item.name===field.name)?.type.editor?.({value,onChange}))} validate={sourceValidate} onChange={next=>{visualCleared.current.clear();for(const key of new Set([...declarations.map(field=>field.name),...Object.keys(next)]))setValue(key,next[key],{shouldDirty:true});void trigger();}} onTrial={onTrial} context={context} disabled={isSubmitting||locked}>
-      <fieldset disabled={isSubmitting || locked} className="grid gap-3">
-      {fields.map(({ name, type }) => {
+  const advanced=new Set(sourceFields?.filter(field=>field.aside).map(field=>field.name));
+  const renderField=({name,type}:{name:string;type:FieldType})=>{
         if (!applies(type, current)) return null;
         if(fields.some(f=>f.type.input?.range?.end===name))return null;
         const range=type.input?.range,endField=range&&fields.find(f=>f.name===range.end),endError=endField?(errors as Record<string,{message?:string}>)[endField.name]?.message:undefined;
@@ -148,7 +133,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
         const errorId = error ? `${id}-error` : undefined;
         const ariaDescribedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
         return (
-          <div key={name} className="grid gap-1">
+          <div key={name} data-field-name={name} className="grid min-w-0 gap-1">
             <div className="flex items-baseline justify-between gap-2">
               <label htmlFor={id} className="text-xs font-medium text-muted">
                 {type.label}{type.required ? " *" : ""}
@@ -165,7 +150,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
                     {type.display(field.value, (defaultValues ?? {}) as never)}
                   </div>
                 ) : (
-                  range&&endField?<DateRangeInput id={id} start={String(field.value??"")} end={String(current[endField.name]??"")} startLabel={type.label} endLabel={endField.type.label} inclusive={range.inclusive} invalid={!!error||!!endError} describedBy={ariaDescribedBy} onChange={(start,end)=>{setValue(name,start,{shouldTouch:true,shouldDirty:true});setValue(endField.name,end,{shouldTouch:!!end,shouldDirty:true});void trigger(end?[name,endField.name]:[name]);}}/>:type.editor?.({ id, value: field.value ?? undefined, onChange: value=>{if(value===undefined)visualCleared.current.add(name);else visualCleared.current.delete(name);field.onChange(value ?? null);const dependent=fields.filter(f=>errors[f.name]&&(f.type.input?.constraints?.before===name||f.type.input?.constraints?.after===name||issues?.some(issue=>issue.path[0]===f.name&&issue.relatedPaths?.some(path=>path[0]===name)))).map(f=>f.name);if(dependent.length)void trigger(dependent);}, invalid: !!error, describedBy: ariaDescribedBy }) ??
+                  range&&endField?<DateRangeInput id={id} start={String(field.value??"")} end={String(current[endField.name]??"")} startLabel={type.label} endLabel={endField.type.label} inclusive={range.inclusive} invalid={!!error||!!endError} describedBy={ariaDescribedBy} onChange={(start,end)=>{setValue(name,start,{shouldTouch:true,shouldDirty:true});setValue(endField.name,end,{shouldTouch:!!end,shouldDirty:true});void trigger(end?[name,endField.name]:[name]);}}/>:type.editor?.({ id, value: ["json","lines"].includes(type.type) ? (visualCleared.current.has(name)&&field.value===null?undefined:field.value) : field.value ?? undefined, onChange: value=>{if(value===undefined)visualCleared.current.add(name);else visualCleared.current.delete(name);field.onChange(value ?? null);const dependent=fields.filter(f=>errors[f.name]&&(f.type.input?.constraints?.before===name||f.type.input?.constraints?.after===name||issues?.some(issue=>issue.path[0]===f.name&&issue.relatedPaths?.some(path=>path[0]===name)))).map(f=>f.name);if(dependent.length)void trigger(dependent);}, invalid: !!error, describedBy: ariaDescribedBy }) ??
                   type.display(field.value, (defaultValues ?? {}) as never)
                 )}
               </span>
@@ -175,7 +160,29 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
             {error && <p id={errorId} className="text-xs text-[var(--tone-danger)]">{error}</p>}
           </div>
         );
-      })}
+  };
+  return (
+    <form onSubmit={handleSubmit(async (_values, event) => {
+      if (lock.current||inputs?.invalid||submitDisabled) return; lock.current = true; setFailure("");inputs?.reject();inputs?.pending(1); onBusy?.(true);
+      try {
+        const submitted = semanticValues(getValues());
+        if (sourceValidate(submitted).length) return;
+        const confirmed = await onSubmit(submitted, event);
+        if (confirmed === false) setFailure(t("The request was not confirmed. Your input is retained."));
+        else if (confirmed === true) { reset(submitted); visualCleared.current.clear(); inputs?.clear(); markSaved(); }
+        // A void callback owns its own outcome; it is not proof of acceptance.
+      }
+      catch (error) { setFailure(error instanceof Error ? error.message : t("The request was not confirmed. Your input is retained.")); }
+      finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }
+    })} className="grid gap-3" noValidate>
+      <InputProblems/>{failure && <p role="alert" className="text-sm text-danger">{failure}</p>}
+      <StructuredEditor scope="form" value={Object.fromEntries(Object.entries(semanticValues(current)).filter(([name])=>declarations.some(field=>field.name===name)))} fields={declarations} fieldInput={fieldInput??((field,value,onChange)=>fields.find(item=>item.name===field.name)?.type.editor?.({value,onChange}))} validate={sourceValidate} onChange={next=>{visualCleared.current.clear();for(const key of new Set([...declarations.map(field=>field.name),...Object.keys(next)]))setValue(key,next[key],{shouldDirty:true});void trigger();}} onTrial={onTrial} context={context} disabled={isSubmitting||locked}>
+      <fieldset disabled={isSubmitting || locked} className="grid gap-3">
+      {fields.filter(field=>!advanced.has(field.name)).map(renderField)}
+      {!!advanced.size&&<details className="min-w-0 rounded-md border border-border p-3" open={fields.some(field=>advanced.has(field.name)&&(field.type.required||current[field.name]!==undefined))||undefined}>
+        <summary className="cursor-pointer text-sm font-medium">{t("Advanced configuration")}</summary>
+        <div className="mt-3 grid min-w-0 gap-3">{fields.filter(field=>advanced.has(field.name)).map(renderField)}</div>
+      </details>}
       </fieldset>
       </StructuredEditor>
       <div className="mt-1 flex justify-end gap-2">

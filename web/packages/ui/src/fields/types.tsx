@@ -13,6 +13,7 @@ import { Markdown, MarkdownEditor } from "../components/Markdown";
 import { WorkspaceContext } from "../shell/Workspace";
 import type { Route } from "../shell/route";
 import { t } from "../i18n";
+import {StructuredValueInput} from './StructuredValueInput';
 
 export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean; describedBy?: string };
 export type Operator<V> = { id: string; label: string; needsArg: boolean; test: (value: V | undefined, arg: V | undefined) => boolean };
@@ -75,13 +76,14 @@ export const text = (o: Common & { placeholder?: string; maxLength?: number }): 
   editor: input("text", (s) => s, String, { placeholder: o.placeholder }), compare: byString, operators: textOps, text: (v) => v ?? "",
 });
 
-/** Structured values remain read-only here; their owner supplies any schema-aware editor. */
+/** JSON is editable as a value tree; only the original declaration makes it read-only. */
 export const json = (o: Common): FieldType<unknown> => {
   const format = (value: unknown) => value === undefined ? "" : JSON.stringify(value) ?? "";
   return {
-    type: "json", ...o, readOnly: true, width: o.width ?? 320,
+    type: "json", ...o, width: o.width ?? 320,
     display: (value) => value === undefined ? muted : <code className="line-clamp-3 whitespace-pre-wrap break-all text-xs" title={format(value)}>{format(value)}</code>,
     schema: z.json(), text: format, compare: (a, b) => format(a).localeCompare(format(b)), operators: [],
+    editor: props=><StructuredValueInput {...props} label={o.label}/>,
   };
 };
 
