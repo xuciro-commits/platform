@@ -34,6 +34,29 @@ var (
 	}
 )
 
+func TestTenantSnapshotDeclaresEveryOwnerFormat(t *testing.T) {
+	tenant, err := NewTenant("snapshot-formats", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _, err := tenant.Snapshot(func() int64 { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state struct {
+		Checkpoint *struct {
+			Host   string            `json:"host"`
+			Owners map[string]string `json:"owners"`
+		} `json:"checkpoint"`
+	}
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.Checkpoint == nil || state.Checkpoint.Host == "" || state.Checkpoint.Owners["memstay"] != "platform.ledger.v1" {
+		t.Fatal("hotel composition still requires an exact binary instead of declared snapshot formats")
+	}
+}
+
 type world struct {
 	t       *testing.T
 	tenant  *platformserver.Tenant

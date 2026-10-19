@@ -6,6 +6,8 @@
 
 组件作者声明（ADR-0048）：`pnpm --dir web --filter @platform/kernel test` 检查按 widget 区分的作者类型与保留的扁平 Section，Build 原 Node 检查覆盖清单派生的字段/端口/属性与注册表，UI 的 StructuredEditor 检查入口偏好。普通属性只维护运行声明和对应显示行为，作者类型、允许字段、普通 Inspector 和属性校验从同一清单生成；复杂业务绑定仍需要原专用编辑。任务耗时仅在实际计时后报告，不以自动测试时长冒充构建者操作时间。
 
+酒店快照组合检查：在 `solutions/hospitality` 执行 `go test -run TestTenantSnapshotDeclaresEveryOwnerFormat .`，确认包含 `memstay` 的实际组合导出明确格式。没有格式声明的第三方仍须按原二进制资格读取，不能通过放宽旧快照校验解决启动慢。
+
 原生模块旧检查：2026-10-19 对照改动前 `0f776d3f` 的独立源码副本确认，PMS 的七项角色/排程/通知检查与 MES 的 `TestDowntimeTellsSupervisors` 已在该版本失败。原断言未削弱；本次事实和连接器接受结果、故障重试及恢复按对应检查单独验证，不把组合检查报告为全通过。
 
 ## 检查选择与停止
