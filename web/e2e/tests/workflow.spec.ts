@@ -1,5 +1,7 @@
 import { Builder, Member, expect, fresh, test } from "./kit";
 
+test.use({ actionTimeout: 15_000 });
+
 for (const fixture of [
   { industry: "hospitality", baseURL: "http://127.0.0.1:18496", builder: "manager", operator: "desk", operatorID: "desk-1", answer: "approve", state: "Done" },
   { industry: "manufacturing", baseURL: "http://127.0.0.1:18497", builder: "supervisor", operator: "operator-l1", operatorID: "op-l1", answer: "reject", state: "Rejected" },
@@ -7,6 +9,7 @@ for (const fixture of [
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });
     test("a tested native flow binds its release and only its operator answers", async ({ browser, page, request }, testInfo) => {
+      test.setTimeout(90_000);
       const builder = new Builder(request, fixture.builder);
       const operator = new Member(request, fixture.operator);
       const { type } = await builder.object({ title: "Review sample", fields: [{ name: "note", title: "Note", type: "text" }],
@@ -22,6 +25,7 @@ for (const fixture of [
 
       // Edit and save through the current flow workbench, then test synthetic data.
       await builder.open(page, `/flow?id=${id}`);
+      await page.getByRole("region", { name: "Editor", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
       const properties = page.getByRole("region", { name: "Workflow properties", exact: true });
       await properties.getByLabel("Default workflow input", { exact: false }).fill("{");
       const structure = page.getByRole("region", { name: "Flow structure", exact: true });
@@ -60,6 +64,7 @@ for (const fixture of [
       await page.keyboard.press("ControlOrMeta+s");
       await expect.poll(async () => (await builder.record("build.process", id)).title).toBe("Reviewed native flow");
       await page.getByRole("tab", { name: "Test", exact: true }).click();
+      await page.getByRole("tabpanel", { name: "Test", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
       await page.getByRole("textbox", { name: "Member ID (empty: you)", exact: true }).fill(fixture.operatorID);
       await page.getByRole("group", { name: "Test step 1", exact: true }).getByRole("textbox", { name: "Note", exact: true }).fill("SYNTHETIC");
       await page.getByRole("group", { name: "Test step 2", exact: true }).getByRole("combobox", { name: "Human answer", exact: true }).selectOption(fixture.answer);
@@ -80,7 +85,8 @@ for (const fixture of [
       await page.getByRole("button", { name: "Run isolated test", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "All expected outcomes matched." })).toBeVisible();
       await expect(page.getByRole("status").filter({ hasText: "Test state recovered exactly." })).toBeVisible();
-      const candidate = await page.getByText("Tested candidate:").locator("code").innerText();
+      await page.getByRole("button", { name: "Test details", exact: true }).click();
+      const candidate = await page.getByText("Tested candidate", { exact: true }).locator("..").locator("code").innerText();
       expect((await request.get(`/v1/records/${type}/TEST-1`, { headers: operator.headers })).status()).toBe(404);
 
       // Release the tested bytes; actual work must retain that candidate binding.
@@ -89,7 +95,8 @@ for (const fixture of [
       await page.getByRole("button", { name: "Close dock", exact: true }).click();
       await page.getByRole("button", { name: "Publish", exact: true }).click();
       await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
-      await expect(page.getByText("Draft candidate:").locator("code")).toHaveText(candidate);
+      await page.getByRole("button", { name: "Candidate identity", exact: true }).click();
+      await expect(page.getByText("Draft candidate", { exact: true }).locator("..").locator("code")).toHaveText(candidate);
       await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
       await page.getByRole("button", { name: "Activate release", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();

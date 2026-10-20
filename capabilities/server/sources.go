@@ -1,7 +1,10 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +17,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	construction "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -22,7 +25,7 @@ import (
 // file comes from an endpoint: the host fetches the answer on the I/O lane,
 // outside every lock and decision, then submits each mapped row as the
 // publisher - the target's own generated create or edit, keyed by the source,
-// the row and its content - and finally the pull's summary on the source. Each
+// a frozen execution and row position - and finally the pull's summary on the source. Each
 // of those is an ordinary journaled input; a replay never fetches.
 
 // PullSources pulls every due source of the tenant once; it runs on the
@@ -32,9 +35,9 @@ func (t *Tenant) PullSources(now time.Time) {
 		return
 	}
 	t.mu.Lock()
-	sources, _, _ := platform.Find[build.Source](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	sources, _, _ := platform.Find[construction.Source](t.automation(construction.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	t.mu.Unlock()
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
+	owner := t.app(construction.ID).(host.IntegrationDefinitions)
 	for _, s := range sources {
 		s, err := owner.ExecutionSource(s)
 		if err != nil {
@@ -50,52 +53,222 @@ func (t *Tenant) PullSources(now time.Time) {
 	t.EvaluateObservations(now)
 }
 
-func (t *Tenant) pullSource(s build.Source, now time.Time) {
-	pull := build.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
+// integrationPreparation is immutable input and resolved output, held by the
+// existing file owner rather than copied into every accepted result.
+type integrationPreparation struct {
+	Type       string                         `json:"type"`
+	ID         string                         `json:"id"`
+	Rows       []construction.SourceRow       `json:"rows,omitempty"`
+	Data       []map[string]any               `json:"data"`
+	Object     string                         `json:"object,omitempty"`
+	Dataset    string                         `json:"dataset,omitempty"`
+	Enterprise *construction.EnterpriseTarget `json:"enterprise,omitempty"`
+	Producer   string                         `json:"producer"`
+	Marking    string                         `json:"marking,omitempty"`
+}
+
+func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*construction.IntegrationExecution, error) {
+	raw, err := json.Marshal(plan)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxFlowFrameBytes {
+		return nil, fmt.Errorf("the integration preparation exceeds its retained input budget")
+	}
+	digest := fmt.Sprintf("%x", sha256.Sum256(raw))
+	if err := t.files().Put(context.Background(), t.ID+"/artifacts/integration/"+digest+".json", raw, "application/json"); err != nil {
+		return nil, err
+	}
+	identity := sha256.Sum256(platform.Raw([]any{t.ID, plan.Type, plan.ID, revision, now.UTC()}))
+	return &construction.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Pending: true, Snapshot: digest}, nil
+}
+
+// integrationPending reads the already accepted execution, without journaling
+// another artificial resume operation. A paused/replaced source cannot start
+// more work, and the definition/actor of an accepted input stays fixed.
+func (t *Tenant) integrationPending(typ, id string, execution *construction.IntegrationExecution) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	c := t.automation(construction.ID, false)
+	var current *construction.IntegrationExecution
+	switch typ {
+	case construction.SourceType:
+		source, ok := platform.Get[construction.Source](c, id)
+		if !ok || source.Archived || source.State != "published" || source.Last == nil {
+			return false
+		}
+		current = source.Last.Execution
+	case construction.PipelineType:
+		pipeline, ok := platform.Get[construction.Pipeline](c, id)
+		if !ok || pipeline.Archived || pipeline.State != "published" || pipeline.Last == nil {
+			return false
+		}
+		current = pipeline.Last.Execution
+	}
+	return current != nil && current.Pending && current.ID == execution.ID && current.Snapshot == execution.Snapshot && current.Member == execution.Member
+}
+
+func (t *Tenant) integrationPreparation(execution *construction.IntegrationExecution) (integrationPreparation, error) {
+	var plan integrationPreparation
+	digest, err := hex.DecodeString(execution.Snapshot)
+	if err != nil || len(digest) != sha256.Size {
+		return plan, fmt.Errorf("the integration snapshot has an invalid digest")
+	}
+	reader, size, err := t.files().Get(context.Background(), t.ID+"/artifacts/integration/"+execution.Snapshot+".json")
+	if err != nil {
+		return plan, err
+	}
+	defer reader.Close()
+	if size <= 0 || size > maxFlowFrameBytes {
+		return plan, fmt.Errorf("the integration snapshot exceeds its retained input budget")
+	}
+	raw, err := io.ReadAll(io.LimitReader(reader, maxFlowFrameBytes+1))
+	if err != nil {
+		return plan, err
+	}
+	if int64(len(raw)) != size || fmt.Sprintf("%x", sha256.Sum256(raw)) != execution.Snapshot {
+		return plan, fmt.Errorf("the integration snapshot differs from its accepted digest")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	err = decoder.Decode(&plan)
+	return plan, err
+}
+
+func (t *Tenant) sourceResult(member platform.Member, s construction.Source, pull construction.SourcePull, phase string, revision *uint32, now time.Time) *kernel.Error {
+	payload := platform.Raw(map[string]any{"pull": pull})
+	key := "pulled:" + s.ID + ":" + now.UTC().Format(time.RFC3339Nano)
+	if pull.Execution != nil {
+		key = "source:" + pull.Execution.ID + ":" + phase
+	}
+	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key, ExpectedRevision: revision,
+		Target: &pb.EntityRef{Type: construction.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: construction.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
+	return err
+}
+
+func (t *Tenant) pullSource(s construction.Source, now time.Time) {
+	pull := construction.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
 	member, ok := t.Member(s.Puller)
-	if !ok {
+	var plan integrationPreparation
+	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
+		pull = *s.Last
+		member, ok = t.Member(pull.Execution.Member)
+		var err error
+		plan, err = t.integrationPreparation(pull.Execution)
+		if err != nil {
+			log.Printf("source retained input unavailable: %v", err)
+			return
+		}
+	} else if !ok {
 		pull.Error = "The publishing member is no longer available"
 	} else if raw, err := t.readSource(s); err != nil {
 		pull.Error = err.Error()
-	} else if s.Dataset != "" {
+	} else {
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
-		if len(raw) > 0 || s.Cursor == "" {
-			if err := t.loadDataset(member, s.Dataset, "source:"+s.Name, t.connectionMarking(s.Connection), raw, now); err != nil {
-				pull.Error = err.Message
-			} else {
-				pull.Applied = len(raw)
+		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: t.connectionMarking(s.Connection)}
+		plan.Type, plan.ID = construction.SourceType, s.ID
+		if s.Dataset != "" {
+			if len(raw) > 0 || s.Cursor == "" {
+				plan.Data = raw
+				if plan.Data == nil {
+					plan.Data = []map[string]any{}
+				}
+			}
+		} else if construction.Guarded(plan.Marking) {
+			pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
+		} else if rows, err := s.MapRows(raw); err != nil {
+			pull.Error = err.Error()
+		} else {
+			plan.Rows = rows
+			pull.Merged = t.prepareRows(member, s.Object, s.Name, plan.Rows, now)
+		}
+		if pull.Error == "" {
+			execution, err := t.prepareIntegration(member, s.Revision, now, plan)
+			if err != nil {
+				log.Printf("source input retention failed: %v", err)
+				return
+			}
+			pull.Execution = execution
+			if err := t.sourceResult(member, s, pull, "prepared", &s.Revision, now); err != nil {
+				return
 			}
 		}
-	} else if rows, err := s.MapRows(raw); err != nil {
-		pull.Error = err.Error()
-	} else if build.Guarded(t.connectionMarking(s.Connection)) {
-		pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
-	} else {
-		pull.Cursor = s.Advance(raw)
-		pull.Rows, pull.Applied = len(rows), 0
-		t.applyRows(member, s.Object, s.Name, rows, now, &pull)
 	}
-	payload, _ := json.Marshal(map[string]any{"pull": pull})
 	if member.ID == "" {
-		member = t.automation(build.ID, false).Member
+		member = t.automation(construction.ID, false).Member
 	}
-	t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "pulled:" + s.ID + ":" + now.UTC().Format(time.RFC3339Nano),
-		Target: &pb.EntityRef{Type: build.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: build.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
+	if pull.Execution != nil {
+		if !t.integrationPending(construction.SourceType, s.ID, pull.Execution) {
+			return
+		}
+		if !ok {
+			pull.Error = "The publishing member is no longer available"
+		} else if plan.Dataset != "" {
+			if plan.Data != nil {
+				key := "source:" + pull.Execution.ID + ":dataset"
+				if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, pull.At); err != nil {
+					if !t.integrationRefused(construction.ID, key) {
+						return
+					}
+					pull.Error = err.Message
+				} else {
+					pull.Applied = len(plan.Data)
+				}
+			}
+		} else if !t.applyRows(member, plan, pull.Execution, pull.At, &pull) {
+			return
+		}
+		execution := *pull.Execution
+		execution.Pending = false
+		pull.Execution = &execution
+	}
+	_ = t.sourceResult(member, s, pull, "finished", nil, now)
 }
 
-// applyRows decides each mapped row as the member: the object's own create,
-// or edit on conflict, keyed by content; failures are counted on the summary.
-func (t *Tenant) applyRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time, pull *build.SourcePull) {
-	t.records.mu.Lock()
-	et := t.records.types[object]
-	t.records.mu.Unlock()
+// prepareRows fixes matching and create/edit selection before accepting the input.
+func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []construction.SourceRow, now time.Time) int {
+	merged := 0
 	if resolver := t.resolver(member, object, producer, now); resolver != nil {
 		for i := range rows {
 			resolver.Resolve(&rows[i])
 		}
-		pull.Merged = resolver.Merged
+		merged = resolver.Merged
 	}
-	for _, row := range rows {
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	et := t.records.types[object]
+	seen := map[string]bool{}
+	for i := range rows {
+		row := &rows[i]
+		row.Key = fmt.Sprintf("row:%d", i)
+		row.Verb = ".create"
+		if seen[row.ID] || et != nil && et.rows.get(row.ID) != nil {
+			row.Verb = ".edit"
+		}
+		if row.Error == "" {
+			seen[row.ID] = true
+		}
+	}
+	return merged
+}
+
+// integrationRefused distinguishes a saved business refusal from an append
+// failure. Only saved answers can finish a row; an uncommitted row stays pending.
+func (t *Tenant) integrationRefused(authority, key string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, ok := t.committed.refusal(authority + "/" + key)
+	return ok
+}
+
+func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *construction.IntegrationExecution, now time.Time, pull *construction.SourcePull) bool {
+	t.records.mu.Lock()
+	et := t.records.types[plan.Object]
+	t.records.mu.Unlock()
+	for _, row := range plan.Rows {
+		if t.quarantined() || !t.integrationPending(plan.Type, plan.ID, execution) {
+			return false
+		}
 		if row.Error != "" {
 			pull.Fail(row.ID, row.Error)
 			continue
@@ -104,21 +277,19 @@ func (t *Tenant) applyRows(member platform.Member, object, producer string, rows
 			pull.Fail(row.ID, "the target object is no longer installed")
 			continue
 		}
-		try := func(verb, key string) *kernel.Error {
-			_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.info.App, IdempotencyKey: key,
-				Target: &pb.EntityRef{Type: object, Id: row.ID}, Schema: &pb.SchemaRef{Name: object + verb, Version: 1}, Payload: row.Payload}, now)
-			return err
-		}
-		err := try(".create", row.Key)
-		if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT {
-			err = try(".edit", row.Key+":edit")
-		}
+		key := "integration:" + execution.ID + ":" + row.Key
+		_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.info.App, IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: plan.Object, Id: row.ID}, Schema: &pb.SchemaRef{Name: plan.Object + row.Verb, Version: 1}, Payload: row.Payload}, now)
 		if err != nil {
+			if !t.integrationRefused(et.info.App, key) {
+				return false
+			}
 			pull.Fail(row.ID, err.Code.String()+": "+err.Message)
-			continue
+		} else {
+			pull.Applied++
 		}
-		pull.Applied++
 	}
+	return true
 }
 
 // connectionMarking is what a connection classifies everything read through it as (ADR-0025).
@@ -126,8 +297,8 @@ func (t *Tenant) connectionMarking(connection string) string {
 	if connection == "" {
 		return ""
 	}
-	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
-	fixed, err := t.app(build.ID).(host.IntegrationDefinitions).ExecutionConnection(conn)
+	conn, _ := platform.Get[construction.Connection](t.automation(construction.ID, false), connection)
+	fixed, err := t.app(construction.ID).(host.IntegrationDefinitions).ExecutionConnection(conn)
 	if err != nil {
 		return "restricted"
 	}
@@ -136,10 +307,10 @@ func (t *Tenant) connectionMarking(connection string) string {
 
 // resolver is the object's published matching rule (ADR-0024) over its
 // records as they are now, or nil when rows land as they come.
-func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
-	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
-	var fixed []build.Match
+func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *construction.Resolver {
+	rules, _, _ := platform.Find[construction.Match](t.automation(construction.ID, false), platform.Query{Limit: 500})
+	owner := t.app(construction.ID).(host.IntegrationDefinitions)
+	var fixed []construction.Match
 	for _, rule := range rules {
 		execution, err := owner.ExecutionMatching(rule)
 		if err != nil {
@@ -149,7 +320,7 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 		fixed = append(fixed, execution)
 	}
 	rules = fixed
-	i := slices.IndexFunc(rules, func(m build.Match) bool { return m.Object == object && m.State == "published" })
+	i := slices.IndexFunc(rules, func(m construction.Match) bool { return m.Object == object && m.State == "published" })
 	if i < 0 {
 		return nil
 	}
@@ -170,30 +341,34 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 			break
 		}
 	}
-	return build.NewResolver(rules[i], producer, records)
+	return construction.NewResolver(rules[i], producer, records)
 }
 
 // loadDataset appends rows as the dataset's next version, one journaled input.
 func (t *Tenant) loadDataset(member platform.Member, dataset, producer, marking string, rows []map[string]any, now time.Time) *kernel.Error {
+	return t.loadDatasetKey(member, dataset, producer, marking, rows, "load:"+dataset+":"+producer+":"+now.UTC().Format(time.RFC3339Nano), now)
+}
+
+func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marking string, rows []map[string]any, key string, now time.Time) *kernel.Error {
 	if rows == nil {
 		rows = []map[string]any{}
 	}
 	payload, _ := json.Marshal(map[string]any{"rows": rows, "producer": producer, "marking": marking})
-	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "load:" + dataset + ":" + producer + ":" + now.UTC().Format(time.RFC3339Nano),
-		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
+	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key,
+		Target: &pb.EntityRef{Type: construction.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: construction.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
 	return err
 }
 
 // readSource reads the source's rows by its profile (ADR-0023): json and csv
 // fetch one body, odata walks an entity set's pages, table queries a database.
-func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
-	var conn *build.Connection
+func (t *Tenant) readSource(s construction.Source) ([]map[string]any, error) {
+	var conn *construction.Connection
 	if s.Connection != "" {
 		t.mu.Lock()
-		c, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
+		c, ok := platform.Get[construction.Connection](t.automation(construction.ID, false), s.Connection)
 		if ok {
 			var err error
-			c, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionConnection(c)
+			c, err = t.app(construction.ID).(host.IntegrationDefinitions).ExecutionConnection(c)
 			if err != nil {
 				ok = false
 			}
@@ -212,7 +387,7 @@ func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 	return t.readSourceWithConnection(s, conn)
 }
 
-func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection, retained ...bool) ([]map[string]any, error) {
+func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construction.Connection, retained ...bool) ([]map[string]any, error) {
 	if conn != nil && conn.Protocol != nil {
 		readOnly := len(retained) > 0 && retained[0]
 		if err := t.configureProtocol(context.Background(), *conn, readOnly); err != nil {
@@ -238,7 +413,7 @@ func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection
 }
 
 // authorization is the Authorization header a connection's secret gives, or none.
-func (t *Tenant) authorization(c build.Connection) string {
+func (t *Tenant) authorization(c construction.Connection) string {
 	if c.Secret == "" {
 		return ""
 	}
@@ -268,15 +443,15 @@ func (t *Tenant) fetchSource(url, header string, allowPrivate, csv bool) ([]byte
 		return nil, fmt.Errorf("the endpoint did not answer: %v", err)
 	}
 	defer resp.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, build.SourceBody+1))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, construction.SourceBody+1))
 	if readErr != nil {
 		return nil, fmt.Errorf("the response body could not be read")
 	}
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("the endpoint answered %d", resp.StatusCode)
 	}
-	if len(body) > build.SourceBody {
-		return nil, fmt.Errorf("the answer exceeds %d bytes", build.SourceBody)
+	if len(body) > construction.SourceBody {
+		return nil, fmt.Errorf("the answer exceeds %d bytes", construction.SourceBody)
 	}
 	return body, nil
 }

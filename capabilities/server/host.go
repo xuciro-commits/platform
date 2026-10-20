@@ -51,8 +51,8 @@ type Tenant struct {
 	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity      host.IdentityDirectory
 	ID            string
-	// Record, when set, makes each accepted input durable before it is answered;
-	// a failure must stop the server (ADR-0010).
+	// Record is the legacy local recording callback. Durable deployments use
+	// AcceptResult so storage failures can be returned before applying state.
 	Record func(Entry)
 	// AcceptResult persists a supported top-level decision or owned-work
 	// attempt before any authoritative changes or intents are visible.
@@ -545,7 +545,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// Once committed, even an unexpected application panic is tenant-local:
 	// never answer from a possibly half-applied memory image or take down the
-	// other tenants. A repaired journal requires a fresh process to resume.
+	// other tenants. A repaired journal requires a fresh tenant generation.
 	defer func() {
 		if failure := recover(); failure != nil {
 			t.quarantine(fmt.Errorf("apply committed result: %v", failure))

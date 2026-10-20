@@ -193,7 +193,11 @@ func (c *committed) decisionDefinition(key string) *DecisionDefinition {
 	return v
 }
 func (c *committed) allAnswers() map[string]json.RawMessage {
-	return storedValues(c, "answer", c.answers)
+	answers := storedValues(c, "answer", c.answers)
+	if len(answers) == 0 {
+		return nil
+	}
+	return answers
 }
 func (c *committed) allInputs() map[string]json.RawMessage { return storedValues(c, "input", c.inputs) }
 func (c *committed) allRefusals() map[string]refusedResult {

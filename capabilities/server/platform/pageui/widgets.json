@@ -1654,7 +1654,8 @@
                 "type": "string",
                 "enum": [
                   "grid",
-                  "list"
+                  "list",
+                  "tiles"
                 ]
               }
             },
@@ -5280,16 +5281,90 @@
               },
               "layers": {
                 "type": "array",
+                "maxItems": 32,
                 "items": {
                   "type": "object",
-                  "additionalProperties": true
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 512
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "opacity": {
+                      "type": "number"
+                    },
+                    "wireframe": {
+                      "type": "boolean"
+                    },
+                    "color": {
+                      "type": "string"
+                    }
+                  }
                 }
               },
               "mappings": {
                 "type": "array",
+                "maxItems": 64,
                 "items": {
                   "type": "object",
-                  "additionalProperties": true
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "node": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "field": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "axis": {
+                      "type": "string"
+                    },
+                    "inputMin": {
+                      "type": "number"
+                    },
+                    "inputMax": {
+                      "type": "number"
+                    },
+                    "outputMin": {
+                      "type": "number"
+                    },
+                    "outputMax": {
+                      "type": "number"
+                    },
+                    "threshold": {
+                      "type": "number"
+                    },
+                    "colorLow": {
+                      "type": "string"
+                    },
+                    "colorHigh": {
+                      "type": "string"
+                    },
+                    "smooth": {
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  }
                 }
               },
               "sampleTimeField": {
@@ -6293,11 +6368,6 @@
     },
     "recordList": {
       "requiredUIProfile": "platform.page.v2.42",
-      "layouts": [
-        "grid",
-        "list",
-        "tiles"
-      ],
       "maxFields": 4
     },
     "recordChart": {

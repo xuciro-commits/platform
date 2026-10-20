@@ -2,9 +2,7 @@ package buildapi
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/csv"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -21,8 +19,8 @@ import (
 // how fields map onto one of the tenant's objects. The host pulls it when due
 // or asked, outside any decision - like a CSV import: every row becomes the
 // object's own generated create or edit as the publisher, under a key made of
-// the source, the row and its content, so a page pulled twice decides nothing
-// twice; then the pull's summary is decided on the source (SchemaSourcePulled).
+// a durably prepared execution and row position; retries reuse that execution.
+// The pull's summary is decided on the source (SchemaSourcePulled).
 const (
 	SourceType              = "build.source"
 	SchemaSourcePulled      = "build.source.pulled"
@@ -81,16 +79,28 @@ type SourceField struct {
 	Convert string `json:"convert,omitempty"` // "", string, number, boolean, date
 }
 
+// IntegrationExecution fixes one invocation independently of its input content.
+// Snapshot is the digest of its immutable preparation in the original file store.
+// Completed invocations keep the reference for historical reading.
+type IntegrationExecution struct {
+	ID       string         `json:"id"`
+	Member   string         `json:"member"`
+	Pending  bool           `json:"pending,omitempty"`
+	Snapshot string         `json:"snapshot"`
+	Inputs   map[string]int `json:"inputs,omitempty"`
+}
+
 // SourcePull is what one pull did: counted, with the first failures kept.
 type SourcePull struct {
-	DefinitionVersion string          `json:"definitionVersion,omitempty"`
-	At                time.Time       `json:"at"`
-	Rows              int             `json:"rows"`
-	Applied           int             `json:"applied"`
-	Failed            int             `json:"failed"`
-	Merged            int             `json:"merged,omitempty"` // rows that became an edit of a matched record (ADR-0024)
-	Error             string          `json:"error,omitempty"`
-	Failures          []SourceFailure `json:"failures,omitempty"`
+	Execution         *IntegrationExecution `json:"execution,omitempty"`
+	DefinitionVersion string                `json:"definitionVersion,omitempty"`
+	At                time.Time             `json:"at"`
+	Rows              int                   `json:"rows"`
+	Applied           int                   `json:"applied"`
+	Failed            int                   `json:"failed"`
+	Merged            int                   `json:"merged,omitempty"` // rows that became an edit of a matched record (ADR-0024)
+	Error             string                `json:"error,omitempty"`
+	Failures          []SourceFailure       `json:"failures,omitempty"`
 	// Cursor is the last incremental value the pull reached; kept on the source.
 	Cursor string `json:"cursor,omitempty"`
 }
@@ -106,6 +116,12 @@ func (s Source) Due(now time.Time) bool {
 	if s.State != "published" || s.Stream {
 		return false
 	}
+	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
+		return true
+	}
+	if s.Last != nil && s.Last.DefinitionVersion != s.ExecutionVersion() {
+		return true
+	}
 	if s.Requested {
 		return true
 	}
@@ -116,12 +132,12 @@ func (s Source) Due(now time.Time) bool {
 	return s.Last == nil || !now.Before(s.Last.At.Add(every))
 }
 
-// SourceRow is one mapped row: the record's id, its payload and the key that
-// makes the same content decide once.
+// SourceRow is one mapped row. Preparation fixes its operation and execution key.
 type SourceRow struct {
 	ID      string
 	Payload json.RawMessage
 	Key     string
+	Verb    string
 	Error   string
 }
 
@@ -157,8 +173,6 @@ func (s Source) MapRows(rows []map[string]any) ([]SourceRow, error) {
 			r.Error = "row has no id"
 		}
 		r.Payload, _ = json.Marshal(payload)
-		sum := sha256.Sum256(r.Payload)
-		r.Key = fmt.Sprintf("source:%s:%s:%s", s.Name, r.ID, hex.EncodeToString(sum[:8]))
 		out = append(out, r)
 	}
 	return out, nil

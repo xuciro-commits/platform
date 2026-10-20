@@ -478,7 +478,7 @@ func (t *Tenant) applyAgentStep(b stepBody, now time.Time, releaseTurn bool) boo
 	// The step's journal clock is a PostgreSQL timestamptz. Make the live
 	// decision use its durable precision too; otherwise a full-journal retry
 	// recreates a different run history from the same saved model step.
-	if t.Record != nil {
+	if t.recordsAcceptedResults() {
 		now = now.Truncate(time.Microsecond)
 	}
 	if releaseTurn {

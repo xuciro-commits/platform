@@ -39,6 +39,7 @@ type File struct {
 	entries     map[string][]Entry           // tenant → entries in order
 	next        map[string]int64             // tenant → the sequence the next append takes
 	results     map[string]map[string]string // tenant → "app|scope|key" → request hash
+	writeFault  error                        // an incomplete/unsynced shared append requires reopening
 	vectors     map[string]map[string][]float32
 	transcripts []Transcript
 }
@@ -232,8 +233,11 @@ func (j *File) Append(_ context.Context, tenant string, e Entry) error {
 // tenant's lock is held by the caller.
 func (j *File) appendLocked(tenant string, e Entry) error {
 	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.writeFault != nil {
+		return j.writeFault
+	}
 	seq, read := j.next[tenant]
-	j.mu.Unlock()
 	if !read {
 		return fmt.Errorf("journal: append to %s before reading its entries", tenant)
 	}
@@ -242,11 +246,16 @@ func (j *File) appendLocked(tenant string, e Entry) error {
 	if err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
-	if _, err := j.file.Write(append(raw, '\n')); err != nil {
+	if n, err := j.file.Write(append(raw, '\n')); err != nil {
+		if n > 0 {
+			j.writeFault = fmt.Errorf("%w: partial journal append: %v", ErrCommitUnknown, err)
+			return j.writeFault
+		}
 		return fmt.Errorf("journal: %w", err)
 	}
 	if err := j.file.Sync(); err != nil {
-		return fmt.Errorf("journal: %w", err)
+		j.writeFault = fmt.Errorf("%w: sync journal append: %v", ErrCommitUnknown, err)
+		return j.writeFault
 	}
 	// What a later read returns is what the line holds: the bytes the encoder
 	// wrote, read back the way a restart reads them, so live and replayed state
@@ -254,10 +263,9 @@ func (j *File) appendLocked(tenant string, e Entry) error {
 	// same reason).
 	var stored fileLine
 	if err := json.Unmarshal(raw, &stored); err != nil {
-		return fmt.Errorf("journal: %w", err)
+		return fmt.Errorf("%w: decode committed entry: %v", ErrCommitUnknown, err)
 	}
 	stored.Entry.At = stored.Entry.At.UTC()
-	j.mu.Lock()
 	j.entries[tenant] = append(j.entries[tenant], stored.Entry)
 	j.next[tenant] = seq + 1
 	if stored.Entry.Kind == "accepted-result" {
@@ -265,7 +273,6 @@ func (j *File) appendLocked(tenant string, e Entry) error {
 			j.index(tenant, identity.App, identity.Scope, identity.Key, identity.Hash)
 		}
 	}
-	j.mu.Unlock()
 	return nil
 }
 
@@ -297,6 +304,8 @@ func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, ha
 	if err := j.appendLocked(tenant, e); err != nil {
 		return nil, err
 	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	return j.findAccepted(tenant, identity.App, identity.Scope, key), nil
 }
 

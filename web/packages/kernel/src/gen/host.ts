@@ -2085,6 +2085,14 @@ export type IntegrationEffect = {
   error?: string;
 };
 
+export type IntegrationExecution = {
+  id: string;
+  member: string;
+  pending?: boolean;
+  snapshot: string;
+  inputs?: Record<string, number>;
+};
+
 export type Interface = {
   name: string;
   title: string;
@@ -3425,6 +3433,7 @@ export type PipelinePreviewRequest = {
 };
 
 export type PipelineRun = {
+  execution?: IntegrationExecution;
   definitionVersion?: string;
   at: string;
   inputVersion: number;
@@ -4402,6 +4411,7 @@ export type SourceField = {
 };
 
 export type SourcePull = {
+  execution?: IntegrationExecution;
   definitionVersion?: string;
   at: string;
   rows: number;
@@ -5133,24 +5143,309 @@ export const pageUIManifest = {
     "maxPadding": 64
   },
   "runtime": {
-    "telemetry": {
-      "sharedUIProfile": "platform.page.v2.103"
+    "aggregate": {
+      "source": "count",
+      "maxVariables": 8,
+      "maxExpandedReads": 32
     },
-    "scope": "page",
-    "valueTypes": [
-      "string",
-      "boolean",
-      "record",
-      "filter",
-      "object-set",
-      "decimal",
-      "string-set",
-      "record-set",
-      "number",
-      "statistics"
-    ],
-    "maxVariables": 64,
+    "alertBanner": {
+      "requiredUIProfile": "platform.page.v2.60",
+      "maxMessageBytes": 4096,
+      "tones": [
+        "info",
+        "warning",
+        "danger"
+      ]
+    },
+    "application": {
+      "scope": "application",
+      "valueTypes": [
+        "string",
+        "boolean",
+        "object-set",
+        "record",
+        "filter",
+        "decimal",
+        "record-set"
+      ],
+      "modes": [
+        "state",
+        "constant",
+        "derived",
+        "resource",
+        "property",
+        "aggregate"
+      ],
+      "bindingMode": "shared",
+      "maxFilterFields": 16
+    },
+    "booleanInput": {
+      "requiredUIProfile": "platform.page.v2.54",
+      "variants": [
+        "switch",
+        "checkbox"
+      ]
+    },
+    "buttonGroup": {
+      "requiredUIProfile": "platform.page.v2.37",
+      "maxButtons": 16,
+      "maxTitleBytes": 256,
+      "variants": [
+        "default",
+        "primary",
+        "ghost",
+        "danger"
+      ],
+      "icons": [
+        "arrow",
+        "edit",
+        "plus",
+        "trash"
+      ]
+    },
+    "chartPresentation": {
+      "requiredUIProfile": "platform.page.v2.44",
+      "variants": [
+        "pie",
+        "donut"
+      ]
+    },
+    "choiceInput": {
+      "requiredUIProfile": "platform.page.v2.55",
+      "variants": [
+        "select",
+        "radio",
+        "segments",
+        "multiple",
+        "steps",
+        "tabs"
+      ],
+      "maxOptions": 64,
+      "maxOptionBytes": 256,
+      "multipleRequiredUIProfile": "platform.page.v2.56",
+      "maxSelected": 64,
+      "clearRequiredUIProfile": "platform.page.v2.65",
+      "indexedRequiredUIProfile": "platform.page.v2.75"
+    },
+    "collaboration": {
+      "requiredUIProfile": "platform.page.v2.76",
+      "maxCommentsWindow": 50,
+      "maxFilesWindow": 100,
+      "maxPreviewBytes": 26214400,
+      "maxCommentBytes": 16384,
+      "maxImagePixels": 16777216,
+      "maxPDFPixels": 16777216,
+      "maxPDFPages": 1000
+    },
+    "collectionAnalysis": {
+      "requiredUIProfile": "platform.page.v2.80",
+      "maxGroups": 64,
+      "maxRecords": 80
+    },
+    "composite": {
+      "maxRecords": 200,
+      "maxCells": 1600,
+      "maxBytes": 262144,
+      "requiredUIProfile": "platform.page.v2.111"
+    },
+    "computeResource": {
+      "requiredUIProfile": "platform.page.v2.100",
+      "maxResources": 4
+    },
+    "contextViews": {
+      "requiredUIProfile": "platform.page.v2.78",
+      "maxAvatarWindow": 6,
+      "maxDetailFields": 2,
+      "maxLabelBytes": 1024,
+      "maxURLBytes": 4096,
+      "maxCaptionBytes": 4096,
+      "maxImageHeight": 4096,
+      "defaultImageHeight": 160,
+      "sharedUIProfile": "platform.page.v2.98"
+    },
+    "dateInput": {
+      "requiredUIProfile": "platform.page.v2.57",
+      "dateTimeRequiredUIProfile": "platform.page.v2.59"
+    },
+    "decimal": {
+      "maxBytes": 128
+    },
+    "detailPresentation": {
+      "requiredUIProfile": "platform.page.v2.35",
+      "maxColumns": 4,
+      "barcodeRequiredUIProfile": "platform.page.v2.107"
+    },
+    "device": {
+      "requiredUIProfile": "platform.page.v2.107",
+      "kinds": [
+        "handheld"
+      ]
+    },
+    "embedding": {
+      "maxDepth": 3,
+      "maxInstances": 16,
+      "maxQueries": 8,
+      "maxRecords": 512,
+      "maxSections": 256
+    },
+    "exploration": {
+      "requiredUIProfile": "platform.page.v2.79",
+      "maxResourceWindow": 12,
+      "maxDirectoryItems": 4,
+      "maxObjects": 8,
+      "maxRelations": 12,
+      "maxPath": 8,
+      "maxWindow": 20,
+      "maxNeighborhoodRecords": 7,
+      "sharedVertexUIProfile": "platform.page.v2.102"
+    },
+    "gauge": {
+      "requiredUIProfile": "platform.page.v2.49"
+    },
+    "heatmap": {
+      "requiredUIProfile": "platform.page.v2.70",
+      "maxAxis": 64,
+      "maxCells": 4096
+    },
+    "histogram": {
+      "requiredUIProfile": "platform.page.v2.68",
+      "maxBins": 64
+    },
+    "input": {
+      "searchRequiredUIProfile": "platform.page.v2.66",
+      "scanRequiredUIProfile": "platform.page.v2.107"
+    },
+    "interface": {
+      "maxPorts": 16,
+      "maxVersion": 65535,
+      "valueTypes": [
+        "string",
+        "boolean",
+        "record",
+        "decimal",
+        "object-set"
+      ]
+    },
+    "kanban": {
+      "dynamicUIProfile": "platform.page.v2.99"
+    },
+    "leaderboard": {
+      "requiredUIProfile": "platform.page.v2.51",
+      "maxRanks": 32
+    },
+    "loop": {
+      "scope": "loop-item",
+      "source": "item",
+      "maxContainers": 8,
+      "maxItems": 100,
+      "maxTotalItems": 256,
+      "recordWidgets": [
+        "detail",
+        "actions",
+        "timeline",
+        "tasks",
+        "inline-action",
+        "record-view",
+        "record-links",
+        "status-tracker",
+        "record-card",
+        "record-comments",
+        "record-uploader",
+        "media-preview",
+        "pdf-viewer"
+      ],
+      "presentationWidgets": [
+        "text",
+        "button",
+        "input",
+        "button-group",
+        "progress",
+        "gauge"
+      ],
+      "maxDepth": 2
+    },
     "maxStringBytes": 4096,
+    "maxVariables": 64,
+    "metricPresentation": {
+      "requiredUIProfile": "platform.page.v2.40",
+      "maxUnitBytes": 64,
+      "formatters": [
+        "number",
+        "short"
+      ],
+      "variants": [
+        "card",
+        "simple",
+        "tag"
+      ],
+      "tones": [
+        "neutral",
+        "warning",
+        "danger",
+        "success"
+      ]
+    },
+    "modelBinding": {
+      "requiredUIProfile": "platform.page.v2.110",
+      "maxFields": 64,
+      "maxPath": 16,
+      "maxRecords": 10000,
+      "maxWindow": 200,
+      "maxBytes": 8388608,
+      "fieldSlots": [
+        "group",
+        "columnGroup",
+        "timeStart",
+        "timeEnd",
+        "timeLabel",
+        "timeGroup",
+        "cardLabel",
+        "summaryField",
+        "measure",
+        "recordGantt.startField",
+        "recordGantt.endField",
+        "recordGantt.titleField",
+        "recordGantt.statusField",
+        "recordCalendar.dateField",
+        "recordCalendar.labelField",
+        "recordEvents.timeField",
+        "recordEvents.titleField",
+        "recordEvents.severityField",
+        "recordPicker.labelField",
+        "recordCard.labelField",
+        "recordComparison.labelField",
+        "recordChart.xField",
+        "recordChart.yField",
+        "scatter.xField",
+        "scatter.yField",
+        "scatter.labelField",
+        "scatter.colorField",
+        "histogram.field",
+        "leaderboard.valueField",
+        "leaderboard.labelField",
+        "statusTracker.field",
+        "breadcrumb.labelField",
+        "avatar.labelField",
+        "sparkline.field"
+      ]
+    },
+    "notice": {
+      "requiredUIProfile": "platform.page.v2.61",
+      "maxTitleBytes": 1024,
+      "maxMessageBytes": 4096,
+      "tones": [
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    "observation": {
+      "requiredUIProfile": "platform.page.v2.82",
+      "maxSignals": 100,
+      "maxRecords": 100,
+      "maxWindowRows": 100000
+    },
     "operators": [
       {
         "id": "equal",
@@ -5230,6 +5525,171 @@ export const pageUIManifest = {
         "maxArgs": 1
       }
     ],
+    "overlay": {
+      "scope": "overlay",
+      "valueTypes": [
+        "string",
+        "boolean",
+        "record",
+        "object-set",
+        "filter",
+        "decimal",
+        "string-set",
+        "record-set",
+        "number",
+        "statistics"
+      ],
+      "modes": [
+        "state",
+        "constant",
+        "derived",
+        "resource",
+        "property",
+        "aggregate"
+      ]
+    },
+    "progress": {
+      "requiredUIProfile": "platform.page.v2.48"
+    },
+    "query": {
+      "source": "plan",
+      "maxPlans": 8,
+      "maxConditions": 16,
+      "maxSort": 4,
+      "maxLimit": 100,
+      "maxTotalLimit": 512,
+      "maxOffset": 100000,
+      "operators": [
+        "=",
+        "!=",
+        "\u003c",
+        "\u003c=",
+        "\u003e",
+        "\u003e=",
+        "like",
+        "in",
+        "not in"
+      ],
+      "set": {
+        "operations": [
+          "union",
+          "intersect",
+          "subtract"
+        ],
+        "maxNodes": 31,
+        "maxDepth": 4,
+        "maxBytes": 65536,
+        "maxConditions": 32,
+        "maxSearchBytes": 4096
+      },
+      "inventoryUIProfile": "platform.page.v2.97",
+      "maxDeclaredPlans": 16,
+      "maxDeclaredTotalLimit": 1600,
+      "interfaceUIProfile": "platform.page.v2.109"
+    },
+    "rangeInput": {
+      "requiredUIProfile": "platform.page.v2.52",
+      "maxTicks": 10000
+    },
+    "recordCalendar": {
+      "requiredUIProfile": "platform.page.v2.46",
+      "maxRecords": 100
+    },
+    "recordCard": {
+      "requiredUIProfile": "platform.page.v2.73",
+      "maxFields": 4,
+      "tones": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    "recordChart": {
+      "requiredUIProfile": "platform.page.v2.43",
+      "marks": [
+        "bar",
+        "line"
+      ],
+      "maxPoints": 40
+    },
+    "recordComparison": {
+      "requiredUIProfile": "platform.page.v2.74",
+      "minRecords": 2,
+      "maxRecords": 4,
+      "maxFields": 64,
+      "minFields": 1
+    },
+    "recordEvents": {
+      "requiredUIProfile": "platform.page.v2.45",
+      "maxEvents": 30,
+      "maxTones": 32,
+      "tones": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    "recordGantt": {
+      "requiredUIProfile": "platform.page.v2.47",
+      "maxTones": 32,
+      "tones": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ],
+      "maxRows": 20
+    },
+    "recordLinks": {
+      "requiredUIProfile": "platform.page.v2.38",
+      "maxGroups": 16,
+      "maxTitleBytes": 256
+    },
+    "recordList": {
+      "layouts": [
+        "grid",
+        "list",
+        "tiles"
+      ],
+      "maxFields": 4,
+      "requiredUIProfile": "platform.page.v2.42"
+    },
+    "recordMap": {
+      "sharedUIProfile": "platform.page.v2.101"
+    },
+    "recordPicker": {
+      "requiredUIProfile": "platform.page.v2.58",
+      "maxCandidates": 20,
+      "valueRequiredUIProfile": "platform.page.v2.64"
+    },
+    "recordScatter": {
+      "requiredUIProfile": "platform.page.v2.69",
+      "maxPoints": 100
+    },
+    "recordSelection": {
+      "maxRecords": 64,
+      "sharedUIProfile": "platform.page.v2.96"
+    },
+    "recordView": {
+      "requiredUIProfile": "platform.page.v2.36",
+      "tabs": [
+        "overview",
+        "properties",
+        "links",
+        "history"
+      ]
+    },
+    "recordWork": {
+      "requiredUIProfile": "platform.page.v2.81",
+      "maxActionRows": 50,
+      "maxTiles": 8,
+      "maxParameters": 16
+    },
     "resources": [
       {
         "kind": "record",
@@ -5323,136 +5783,24 @@ export const pageUIManifest = {
         "widget": "collection-builder"
       }
     ],
-    "loop": {
-      "scope": "loop-item",
-      "source": "item",
-      "maxContainers": 8,
-      "maxItems": 100,
-      "maxTotalItems": 256,
-      "recordWidgets": [
-        "detail",
-        "actions",
-        "timeline",
-        "tasks",
-        "inline-action",
-        "record-view",
-        "record-links",
-        "status-tracker",
-        "record-card",
-        "record-comments",
-        "record-uploader",
-        "media-preview",
-        "pdf-viewer"
-      ],
-      "presentationWidgets": [
-        "text",
-        "button",
-        "input",
-        "button-group",
-        "progress",
-        "gauge"
-      ],
-      "maxDepth": 2
+    "scope": "page",
+    "separator": {
+      "requiredUIProfile": "platform.page.v2.62",
+      "maxLabelBytes": 1024
     },
-    "interface": {
-      "maxPorts": 16,
-      "maxVersion": 65535,
-      "valueTypes": [
-        "string",
-        "boolean",
-        "record",
-        "decimal",
-        "object-set"
-      ]
+    "spacer": {
+      "requiredUIProfile": "platform.page.v2.63"
     },
-    "overlay": {
-      "scope": "overlay",
-      "valueTypes": [
-        "string",
-        "boolean",
-        "record",
-        "object-set",
-        "filter",
-        "decimal",
-        "string-set",
-        "record-set",
-        "number",
-        "statistics"
-      ],
-      "modes": [
-        "state",
-        "constant",
-        "derived",
-        "resource",
-        "property",
-        "aggregate"
-      ]
+    "sparkline": {
+      "requiredUIProfile": "platform.page.v2.72",
+      "maxPoints": 30
     },
-    "application": {
-      "scope": "application",
-      "valueTypes": [
-        "string",
-        "boolean",
-        "object-set",
-        "record",
-        "filter",
-        "decimal",
-        "record-set"
-      ],
-      "modes": [
-        "state",
-        "constant",
-        "derived",
-        "resource",
-        "property",
-        "aggregate"
-      ],
-      "bindingMode": "shared",
-      "maxFilterFields": 16
+    "statusTracker": {
+      "requiredUIProfile": "platform.page.v2.39",
+      "maxStages": 32
     },
-    "query": {
-      "source": "plan",
-      "maxPlans": 8,
-      "maxConditions": 16,
-      "maxSort": 4,
-      "maxLimit": 100,
-      "maxTotalLimit": 512,
-      "maxOffset": 100000,
-      "operators": [
-        "=",
-        "!=",
-        "\u003c",
-        "\u003c=",
-        "\u003e",
-        "\u003e=",
-        "like",
-        "in",
-        "not in"
-      ],
-      "set": {
-        "operations": [
-          "union",
-          "intersect",
-          "subtract"
-        ],
-        "maxNodes": 31,
-        "maxDepth": 4,
-        "maxBytes": 65536,
-        "maxConditions": 32,
-        "maxSearchBytes": 4096
-      },
-      "inventoryUIProfile": "platform.page.v2.97",
-      "maxDeclaredPlans": 16,
-      "maxDeclaredTotalLimit": 1600,
-      "interfaceUIProfile": "platform.page.v2.109"
-    },
-    "decimal": {
-      "maxBytes": 128
-    },
-    "aggregate": {
-      "source": "count",
-      "maxVariables": 8,
-      "maxExpandedReads": 32
+    "summary": {
+      "requiredUIProfile": "platform.page.v2.50"
     },
     "tableEditing": {
       "maxRows": 64,
@@ -5468,10 +5816,6 @@ export const pageUIManifest = {
         "datetime",
         "reference"
       ]
-    },
-    "recordSelection": {
-      "maxRecords": 64,
-      "sharedUIProfile": "platform.page.v2.96"
     },
     "tablePresentation": {
       "requiredUIProfile": "platform.page.v2.34",
@@ -5517,64 +5861,12 @@ export const pageUIManifest = {
         }
       ]
     },
-    "detailPresentation": {
-      "requiredUIProfile": "platform.page.v2.35",
-      "maxColumns": 4,
-      "barcodeRequiredUIProfile": "platform.page.v2.107"
+    "telemetry": {
+      "sharedUIProfile": "platform.page.v2.103"
     },
-    "recordView": {
-      "requiredUIProfile": "platform.page.v2.36",
-      "tabs": [
-        "overview",
-        "properties",
-        "links",
-        "history"
-      ]
-    },
-    "buttonGroup": {
-      "requiredUIProfile": "platform.page.v2.37",
-      "maxButtons": 16,
-      "maxTitleBytes": 256,
-      "variants": [
-        "default",
-        "primary",
-        "ghost",
-        "danger"
-      ],
-      "icons": [
-        "arrow",
-        "edit",
-        "plus",
-        "trash"
-      ]
-    },
-    "recordLinks": {
-      "requiredUIProfile": "platform.page.v2.38",
-      "maxGroups": 16,
-      "maxTitleBytes": 256
-    },
-    "statusTracker": {
-      "requiredUIProfile": "platform.page.v2.39",
-      "maxStages": 32
-    },
-    "metricPresentation": {
-      "requiredUIProfile": "platform.page.v2.40",
-      "maxUnitBytes": 64,
-      "formatters": [
-        "number",
-        "short"
-      ],
-      "variants": [
-        "card",
-        "simple",
-        "tag"
-      ],
-      "tones": [
-        "neutral",
-        "warning",
-        "danger",
-        "success"
-      ]
+    "terms": {
+      "requiredUIProfile": "platform.page.v2.67",
+      "maxGroups": 64
     },
     "titles": {
       "requiredUIProfile": "platform.page.v2.41",
@@ -5585,309 +5877,27 @@ export const pageUIManifest = {
         "h3"
       ]
     },
-    "recordList": {
-      "requiredUIProfile": "platform.page.v2.42",
-      "layouts": [
-        "grid",
-        "list",
-        "tiles"
-      ],
-      "maxFields": 4
-    },
-    "recordChart": {
-      "requiredUIProfile": "platform.page.v2.43",
-      "marks": [
-        "bar",
-        "line"
-      ],
-      "maxPoints": 40
-    },
-    "chartPresentation": {
-      "requiredUIProfile": "platform.page.v2.44",
-      "variants": [
-        "pie",
-        "donut"
-      ]
-    },
-    "recordEvents": {
-      "requiredUIProfile": "platform.page.v2.45",
-      "maxEvents": 30,
-      "maxTones": 32,
-      "tones": [
-        "neutral",
-        "info",
-        "success",
-        "warning",
-        "danger"
-      ]
-    },
-    "recordCalendar": {
-      "requiredUIProfile": "platform.page.v2.46",
-      "maxRecords": 100
-    },
-    "recordGantt": {
-      "requiredUIProfile": "platform.page.v2.47",
-      "maxTones": 32,
-      "tones": [
-        "neutral",
-        "info",
-        "success",
-        "warning",
-        "danger"
-      ],
-      "maxRows": 20
-    },
-    "progress": {
-      "requiredUIProfile": "platform.page.v2.48"
-    },
-    "gauge": {
-      "requiredUIProfile": "platform.page.v2.49"
-    },
-    "summary": {
-      "requiredUIProfile": "platform.page.v2.50"
-    },
-    "leaderboard": {
-      "requiredUIProfile": "platform.page.v2.51",
-      "maxRanks": 32
-    },
-    "rangeInput": {
-      "requiredUIProfile": "platform.page.v2.52",
-      "maxTicks": 10000
-    },
-    "booleanInput": {
-      "requiredUIProfile": "platform.page.v2.54",
-      "variants": [
-        "switch",
-        "checkbox"
-      ]
-    },
-    "choiceInput": {
-      "requiredUIProfile": "platform.page.v2.55",
-      "variants": [
-        "select",
-        "radio",
-        "segments",
-        "multiple",
-        "steps",
-        "tabs"
-      ],
-      "maxOptions": 64,
-      "maxOptionBytes": 256,
-      "multipleRequiredUIProfile": "platform.page.v2.56",
-      "maxSelected": 64,
-      "clearRequiredUIProfile": "platform.page.v2.65",
-      "indexedRequiredUIProfile": "platform.page.v2.75"
-    },
-    "dateInput": {
-      "requiredUIProfile": "platform.page.v2.57",
-      "dateTimeRequiredUIProfile": "platform.page.v2.59"
-    },
-    "recordPicker": {
-      "requiredUIProfile": "platform.page.v2.58",
-      "maxCandidates": 20,
-      "valueRequiredUIProfile": "platform.page.v2.64"
-    },
-    "alertBanner": {
-      "requiredUIProfile": "platform.page.v2.60",
-      "maxMessageBytes": 4096,
-      "tones": [
-        "info",
-        "warning",
-        "danger"
-      ]
-    },
-    "notice": {
-      "requiredUIProfile": "platform.page.v2.61",
-      "maxTitleBytes": 1024,
-      "maxMessageBytes": 4096,
-      "tones": [
-        "info",
-        "success",
-        "warning",
-        "danger"
-      ]
-    },
-    "separator": {
-      "requiredUIProfile": "platform.page.v2.62",
-      "maxLabelBytes": 1024
-    },
-    "spacer": {
-      "requiredUIProfile": "platform.page.v2.63"
-    },
-    "input": {
-      "searchRequiredUIProfile": "platform.page.v2.66",
-      "scanRequiredUIProfile": "platform.page.v2.107"
-    },
-    "terms": {
-      "requiredUIProfile": "platform.page.v2.67",
-      "maxGroups": 64
-    },
-    "histogram": {
-      "requiredUIProfile": "platform.page.v2.68",
-      "maxBins": 64
-    },
-    "recordScatter": {
-      "requiredUIProfile": "platform.page.v2.69",
-      "maxPoints": 100
-    },
-    "heatmap": {
-      "requiredUIProfile": "platform.page.v2.70",
-      "maxAxis": 64,
-      "maxCells": 4096
-    },
     "treemap": {
       "requiredUIProfile": "platform.page.v2.71"
     },
-    "sparkline": {
-      "requiredUIProfile": "platform.page.v2.72",
-      "maxPoints": 30
-    },
-    "recordCard": {
-      "requiredUIProfile": "platform.page.v2.73",
-      "maxFields": 4,
-      "tones": [
-        "neutral",
-        "info",
-        "success",
-        "warning",
-        "danger"
-      ]
-    },
-    "recordComparison": {
-      "requiredUIProfile": "platform.page.v2.74",
-      "minRecords": 2,
-      "maxRecords": 4,
-      "maxFields": 64,
-      "minFields": 1
-    },
-    "collaboration": {
-      "requiredUIProfile": "platform.page.v2.76",
-      "maxCommentsWindow": 50,
-      "maxFilesWindow": 100,
-      "maxPreviewBytes": 26214400,
-      "maxCommentBytes": 16384,
-      "maxImagePixels": 16777216,
-      "maxPDFPixels": 16777216,
-      "maxPDFPages": 1000
-    },
+    "valueTypes": [
+      "string",
+      "boolean",
+      "record",
+      "filter",
+      "object-set",
+      "decimal",
+      "string-set",
+      "record-set",
+      "number",
+      "statistics"
+    ],
     "workViews": {
       "requiredUIProfile": "platform.page.v2.77",
       "maxApprovalsWindow": 25,
       "maxNotificationsWindow": 40,
       "maxHistoryWindow": 100,
       "defaultHistoryWindow": 18
-    },
-    "contextViews": {
-      "requiredUIProfile": "platform.page.v2.78",
-      "maxAvatarWindow": 6,
-      "maxDetailFields": 2,
-      "maxLabelBytes": 1024,
-      "maxURLBytes": 4096,
-      "maxCaptionBytes": 4096,
-      "maxImageHeight": 4096,
-      "defaultImageHeight": 160,
-      "sharedUIProfile": "platform.page.v2.98"
-    },
-    "exploration": {
-      "requiredUIProfile": "platform.page.v2.79",
-      "maxResourceWindow": 12,
-      "maxDirectoryItems": 4,
-      "maxObjects": 8,
-      "maxRelations": 12,
-      "maxPath": 8,
-      "maxWindow": 20,
-      "maxNeighborhoodRecords": 7,
-      "sharedVertexUIProfile": "platform.page.v2.102"
-    },
-    "collectionAnalysis": {
-      "requiredUIProfile": "platform.page.v2.80",
-      "maxGroups": 64,
-      "maxRecords": 80
-    },
-    "recordWork": {
-      "requiredUIProfile": "platform.page.v2.81",
-      "maxActionRows": 50,
-      "maxTiles": 8,
-      "maxParameters": 16
-    },
-    "observation": {
-      "requiredUIProfile": "platform.page.v2.82",
-      "maxSignals": 100,
-      "maxRecords": 100,
-      "maxWindowRows": 100000
-    },
-    "embedding": {
-      "maxDepth": 3,
-      "maxInstances": 16,
-      "maxQueries": 8,
-      "maxRecords": 512,
-      "maxSections": 256
-    },
-    "kanban": {
-      "dynamicUIProfile": "platform.page.v2.99"
-    },
-    "computeResource": {
-      "requiredUIProfile": "platform.page.v2.100",
-      "maxResources": 4
-    },
-    "recordMap": {
-      "sharedUIProfile": "platform.page.v2.101"
-    },
-    "device": {
-      "requiredUIProfile": "platform.page.v2.107",
-      "kinds": [
-        "handheld"
-      ]
-    },
-    "modelBinding": {
-      "requiredUIProfile": "platform.page.v2.110",
-      "maxFields": 64,
-      "maxPath": 16,
-      "maxRecords": 10000,
-      "maxWindow": 200,
-      "maxBytes": 8388608,
-      "fieldSlots": [
-        "group",
-        "columnGroup",
-        "timeStart",
-        "timeEnd",
-        "timeLabel",
-        "timeGroup",
-        "cardLabel",
-        "summaryField",
-        "measure",
-        "recordGantt.startField",
-        "recordGantt.endField",
-        "recordGantt.titleField",
-        "recordGantt.statusField",
-        "recordCalendar.dateField",
-        "recordCalendar.labelField",
-        "recordEvents.timeField",
-        "recordEvents.titleField",
-        "recordEvents.severityField",
-        "recordPicker.labelField",
-        "recordCard.labelField",
-        "recordComparison.labelField",
-        "recordChart.xField",
-        "recordChart.yField",
-        "scatter.xField",
-        "scatter.yField",
-        "scatter.labelField",
-        "scatter.colorField",
-        "histogram.field",
-        "leaderboard.valueField",
-        "leaderboard.labelField",
-        "statusTracker.field",
-        "breadcrumb.labelField",
-        "avatar.labelField",
-        "sparkline.field"
-      ]
-    },
-    "composite": {
-      "maxRecords": 200,
-      "maxCells": 1600,
-      "maxBytes": 262144,
-      "requiredUIProfile": "platform.page.v2.111"
     }
   },
   "supportedProfiles": [
@@ -8004,7 +8014,8 @@ export const pageUIManifest = {
                 "type": "string",
                 "enum": [
                   "grid",
-                  "list"
+                  "list",
+                  "tiles"
                 ]
               }
             },
@@ -12189,16 +12200,90 @@ export const pageUIManifest = {
               },
               "layers": {
                 "type": "array",
+                "maxItems": 32,
                 "items": {
                   "type": "object",
-                  "additionalProperties": true
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 512
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "opacity": {
+                      "type": "number"
+                    },
+                    "wireframe": {
+                      "type": "boolean"
+                    },
+                    "color": {
+                      "type": "string"
+                    }
+                  }
                 }
               },
               "mappings": {
                 "type": "array",
+                "maxItems": 64,
                 "items": {
                   "type": "object",
-                  "additionalProperties": true
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "node": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "field": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "axis": {
+                      "type": "string"
+                    },
+                    "inputMin": {
+                      "type": "number"
+                    },
+                    "inputMax": {
+                      "type": "number"
+                    },
+                    "outputMin": {
+                      "type": "number"
+                    },
+                    "outputMax": {
+                      "type": "number"
+                    },
+                    "threshold": {
+                      "type": "number"
+                    },
+                    "colorLow": {
+                      "type": "string"
+                    },
+                    "colorHigh": {
+                      "type": "string"
+                    },
+                    "smooth": {
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  }
                 }
               },
               "sampleTimeField": {

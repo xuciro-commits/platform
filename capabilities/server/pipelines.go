@@ -8,7 +8,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	"platformkernel/kernel"
+	construction "platformserver/internal/host/buildapi"
 	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
@@ -16,7 +17,7 @@ import (
 // Pipeline runs (ADR-0024). A run reads the input dataset's latest version,
 // executes the declared steps in memory, quarantines rows that fail the
 // expectations, and writes the rest: as the output dataset's next version, or
-// as the output object's own create/edit per row keyed by content. Every write
+// as the output object's own create/edit per row keyed by execution. Every write
 // and the run summary are ordinary journaled inputs; replay never recomputes.
 
 // RunPipelines runs every due pipeline of the tenant once, on the outside loop.
@@ -25,11 +26,12 @@ func (t *Tenant) RunPipelines(now time.Time) {
 		return
 	}
 	t.mu.Lock()
-	c := t.automation(build.ID, false)
-	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	c := t.automation(construction.ID, false)
+	pipelines, _, _ := platform.Find[construction.Pipeline](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	versions := map[string]int{}
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
-	var fixed []build.Pipeline
+	changed := map[string]bool{}
+	owner := t.app(construction.ID).(host.IntegrationDefinitions)
+	var fixed []construction.Pipeline
 	for _, p := range pipelines {
 		p, err := owner.ExecutionPipeline(p)
 		if err != nil {
@@ -37,111 +39,191 @@ func (t *Tenant) RunPipelines(now time.Time) {
 			continue
 		}
 		fixed = append(fixed, p)
-		if ds, ok := platform.Get[build.Dataset](c, p.Input); ok {
+		if ds, ok := platform.Get[construction.Dataset](c, p.Input); ok {
 			versions[p.ID] = ds.Version
+		}
+		if p.Last != nil && p.Last.Execution != nil {
+			for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
+				if ds, ok := platform.Get[construction.Dataset](c, id); ok && ds.Version != p.Last.Execution.Inputs[id] {
+					changed[p.ID] = true
+				}
+			}
 		}
 	}
 	t.mu.Unlock()
 	for _, p := range fixed {
-		if p.Due(now, versions[p.ID]) {
+		if p.Due(now, versions[p.ID]) || p.State == "published" && changed[p.ID] {
 			t.runPipeline(p, now)
 		}
 	}
 }
 
-func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
-	run := build.PipelineRun{At: now, DefinitionVersion: p.ExecutionVersion()}
+func (t *Tenant) pipelineResult(member platform.Member, p construction.Pipeline, run construction.PipelineRun, phase string, revision *uint32, now time.Time) *kernel.Error {
+	payload := platform.Raw(map[string]any{"run": run})
+	key := "ran:" + p.ID + ":" + now.UTC().Format(time.RFC3339Nano)
+	if run.Execution != nil {
+		key = "pipeline:" + run.Execution.ID + ":" + phase
+	}
+	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key, ExpectedRevision: revision,
+		Target: &pb.EntityRef{Type: construction.PipelineType, Id: p.ID}, Schema: &pb.SchemaRef{Name: construction.SchemaPipelineRan, Version: 1}, Payload: payload}, now)
+	return err
+}
+
+func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
+	run := construction.PipelineRun{At: now, DefinitionVersion: p.ExecutionVersion()}
 	member, ok := t.Member(p.Runner)
-	if !ok {
+	var plan integrationPreparation
+	if p.Last != nil && p.Last.Execution != nil && p.Last.Execution.Pending {
+		run = *p.Last
+		member, ok = t.Member(run.Execution.Member)
+		var err error
+		plan, err = t.integrationPreparation(run.Execution)
+		if err != nil {
+			log.Printf("pipeline retained input unavailable: %v", err)
+			return
+		}
+	} else if !ok {
 		run.Error = "The publishing member is no longer available"
 	} else {
-		// Read everything under the lock, compute outside it, write through Submit.
+		// Every input, including lookup/join datasets, is frozen under one read.
 		t.mu.Lock()
-		c := t.automation(build.ID, false)
-		rows, version, err := build.DatasetRows(c, p.Input, 0)
-		others := map[string][]map[string]any{}
-		for _, s := range p.Steps {
-			if s.Dataset != "" {
-				others[s.Dataset], _, _ = build.DatasetRows(c, s.Dataset, 0)
-			}
-		}
+		c := t.automation(construction.ID, false)
+		inputs := map[string]int{}
+		data := map[string][]map[string]any{}
+		var inputErr error
 		for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
-			if ds, ok := platform.Get[build.Dataset](c, id); ok {
-				fixed, definitionErr := t.app(build.ID).(host.IntegrationDefinitions).ExecutionDataset(ds)
-				if definitionErr != nil {
-					err = definitionErr
+			if _, seen := inputs[id]; seen {
+				continue
+			}
+			rows, version, err := construction.DatasetRows(c, id, 0)
+			if err != nil {
+				inputErr = err
+				break
+			}
+			inputs[id], data[id] = version, rows
+			if ds, ok := platform.Get[construction.Dataset](c, id); ok {
+				fixed, err := t.app(construction.ID).(host.IntegrationDefinitions).ExecutionDataset(ds)
+				if err != nil {
+					inputErr = err
 					break
 				}
-				run.Marking = build.HigherMarking(run.Marking, fixed.Marking)
+				run.Marking = construction.HigherMarking(run.Marking, fixed.Marking)
 			}
 		}
 		t.mu.Unlock()
-		run.Input = version
-		if err != nil {
-			run.Error = err.Error()
-		} else if version == 0 {
+		run.Input = inputs[p.Input]
+		if inputErr != nil {
+			run.Error = inputErr.Error()
+		} else if run.Input == 0 {
 			run.Error = "The input dataset has no rows yet"
 		} else {
-			kept, quarantined, execErr := p.Execute(rows, func(id string) ([]map[string]any, error) { return others[id], nil })
-			if execErr != nil {
-				run.Error = execErr.Error()
+			kept, quarantined, err := p.Execute(data[p.Input], func(id string) ([]map[string]any, error) { return data[id], nil })
+			if err != nil {
+				run.Error = err.Error()
 			} else {
 				run.Rows, run.Quarantined = len(kept)+len(quarantined), len(quarantined)
 				if len(quarantined) > pipelineQuarantineKept {
 					quarantined = quarantined[:pipelineQuarantineKept]
 				}
 				run.Quarantine = quarantined
-				if p.OutputEnterprise != nil {
-					if build.Guarded(run.Marking) {
-						run.Error = "The enterprise model is tenant-readable; confidential or restricted rows cannot land there"
+				plan = integrationPreparation{Object: p.OutputObject, Dataset: p.OutputDataset, Enterprise: p.OutputEnterprise, Producer: "pipeline:" + p.Name, Marking: run.Marking, Data: kept}
+				plan.Type, plan.ID = construction.PipelineType, p.ID
+				if plan.Data == nil {
+					plan.Data = []map[string]any{}
+				}
+				if p.OutputEnterprise != nil && construction.Guarded(run.Marking) {
+					run.Error = "The enterprise model is tenant-readable; confidential or restricted rows cannot land there"
+				} else if p.OutputObject != "" {
+					if open := t.unguarded(p.OutputObject, run.Marking); len(open) > 0 {
+						run.Error = "The input is " + run.Marking + " now; name who reads " + p.OutputObject + "'s fields " + strings.Join(open, ", ") + " first, or lower the marking"
 					} else {
-						elements, rels, skipped := p.OutputEnterprise.Slice(kept)
-						payload, _ := json.Marshal(map[string]any{"source": p.OutputEnterprise.Source, "elements": elements, "relationships": rels})
-						_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: enterprise.ID, IdempotencyKey: "sync:" + p.ID + ":" + now.UTC().Format(time.RFC3339Nano),
-							Target: &pb.EntityRef{Type: enterprise.ModelType, Id: "model"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaSliceSync, Version: 1}, Payload: payload}, now)
-						switch {
-						case err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED:
-							run.Error = "The pipeline runs as its publisher, who needs the Enterprise admin role to land elements in the model"
-						case err != nil:
-							run.Error = err.Code.String() + ": " + err.Message
-						default:
-							run.Written, run.Failed = len(elements), skipped
-						}
+						plan.Rows = p.ObjectRows(kept)
+						run.Merged = t.prepareRows(member, p.OutputObject, p.Name, plan.Rows, now)
+						plan.Data = nil
 					}
-				} else if p.OutputDataset != "" {
-					if err := t.loadDataset(member, p.OutputDataset, "pipeline:"+p.Name, run.Marking, kept, now); err != nil {
-						run.Error = err.Message
-					} else {
-						run.Written = len(kept)
-						t.mu.Lock()
-						if ds, ok := platform.Get[build.Dataset](t.automation(build.ID, false), p.OutputDataset); ok {
-							run.Output = ds.Version
-						}
-						t.mu.Unlock()
+				}
+				if run.Error == "" {
+					execution, err := t.prepareIntegration(member, p.Revision, now, plan)
+					if err != nil {
+						log.Printf("pipeline input retention failed: %v", err)
+						return
 					}
-				} else if open := t.unguarded(p.OutputObject, run.Marking); len(open) > 0 {
-					run.Error = "The input is " + run.Marking + " now; name who reads " + p.OutputObject + "'s fields " + strings.Join(open, ", ") + " first, or lower the marking"
-				} else {
-					pull := build.SourcePull{}
-					t.applyRows(member, p.OutputObject, p.Name, p.ObjectRows(kept), now, &pull)
-					run.Written, run.Failed, run.Failures, run.Merged = pull.Applied, pull.Failed, pull.Failures, pull.Merged
+					execution.Inputs = inputs
+					run.Execution = execution
+					if err := t.pipelineResult(member, p, run, "prepared", &p.Revision, now); err != nil {
+						return
+					}
 				}
 			}
 		}
 	}
-	payload, _ := json.Marshal(map[string]any{"run": run})
 	if member.ID == "" {
-		member = t.automation(build.ID, false).Member
+		member = t.automation(construction.ID, false).Member
 	}
-	t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "ran:" + p.ID + ":" + now.UTC().Format(time.RFC3339Nano),
-		Target: &pb.EntityRef{Type: build.PipelineType, Id: p.ID}, Schema: &pb.SchemaRef{Name: build.SchemaPipelineRan, Version: 1}, Payload: payload}, now)
+	if run.Execution != nil {
+		if !t.integrationPending(construction.PipelineType, p.ID, run.Execution) {
+			return
+		}
+		if !ok {
+			run.Error = "The publishing member is no longer available"
+		} else if plan.Enterprise != nil {
+			elements, rels, skipped := plan.Enterprise.Slice(plan.Data)
+			key := "pipeline:" + run.Execution.ID + ":enterprise"
+			_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: enterprise.ID, IdempotencyKey: key,
+				Target: &pb.EntityRef{Type: enterprise.ModelType, Id: "model"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaSliceSync, Version: 1}, Payload: platform.Raw(map[string]any{"source": plan.Enterprise.Source, "elements": elements, "relationships": rels})}, run.At)
+			if err != nil {
+				if !t.integrationRefused(enterprise.ID, key) {
+					return
+				}
+				if err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+					run.Error = "The pipeline runs as its publisher, who needs the Enterprise admin role to land elements in the model"
+				} else {
+					run.Error = err.Code.String() + ": " + err.Message
+				}
+			} else {
+				run.Written, run.Failed = len(elements), skipped
+			}
+		} else if plan.Dataset != "" {
+			key := "pipeline:" + run.Execution.ID + ":dataset"
+			if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, run.At); err != nil {
+				if !t.integrationRefused(construction.ID, key) {
+					return
+				}
+				run.Error = err.Message
+			} else {
+				run.Written = len(plan.Data)
+				t.mu.Lock()
+				// The load's immutable version keeps its original operation key,
+				// including after retention archives its data or later loads occur.
+				versions, _, err := platform.Find[construction.DatasetVersion](t.automation(construction.ID, false), platform.Query{
+					Domain: platform.Raw([][]any{{"dataset", "=", plan.Dataset}, {"requestKey", "=", key}}), Archived: true, Limit: 1,
+				})
+				t.mu.Unlock()
+				if err != nil || len(versions) != 1 {
+					log.Printf("pipeline output version unavailable: %v", err)
+					return
+				}
+				run.Output = versions[0].Version
+			}
+		} else {
+			pull := construction.SourcePull{}
+			if !t.applyRows(member, plan, run.Execution, run.At, &pull) {
+				return
+			}
+			run.Written, run.Failed, run.Failures = pull.Applied, pull.Failed, pull.Failures
+		}
+		execution := *run.Execution
+		execution.Pending = false
+		run.Execution = &execution
+	}
+	_ = t.pipelineResult(member, p, run, "finished", nil, now)
 }
 
 const pipelineQuarantineKept = 50
 
 // unguarded are the object's fields every role reads, when marking forbids pouring into them (ADR-0025).
 func (t *Tenant) unguarded(object, marking string) []string {
-	if !build.Guarded(marking) {
+	if !construction.Guarded(marking) {
 		return nil
 	}
 	t.records.mu.Lock()
@@ -150,5 +232,5 @@ func (t *Tenant) unguarded(object, marking string) []string {
 	if et == nil {
 		return nil
 	}
-	return build.UnguardedFields(et.info, nil)
+	return construction.UnguardedFields(et.info, nil)
 }

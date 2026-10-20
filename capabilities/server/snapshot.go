@@ -16,7 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	construction "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -108,9 +108,12 @@ func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 		manifest := app.Manifest()
 		format, declared := app.(platform.SnapshotFormatOwner)
 		if !declared || strings.TrimSpace(format.SnapshotFormat()) == "" {
-			return snapshotCompatibility{}, nil
+			// Keep the startup composition for in-process tenant recovery even
+			// when this owner requires exact-build checkpoint eligibility.
+			compatibility.Host = ""
+		} else {
+			compatibility.Owners[manifest.ID] = format.SnapshotFormat()
 		}
-		compatibility.Owners[manifest.ID] = format.SnapshotFormat()
 		item := compositionApp{ID: manifest.ID, Version: manifest.Version, Provides: manifest.Provides, Consumes: manifest.Consumes}
 		own := map[reflect.Type]string{}
 		for _, entity := range manifest.Entities {
@@ -397,7 +400,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 // records of the types they install (ADR-0048).
 func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordState) error {
 	needsDefinitions := len(held) > 0
-	for typ, kind := range map[string]platform.AssetKind{build.PropertyTypeType: platform.AssetPropertyType, build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute, build.TableType: platform.AssetCompute} {
+	for typ, kind := range map[string]platform.AssetKind{construction.PropertyTypeType: platform.AssetPropertyType, construction.LinkTypeType: platform.AssetLinkType, construction.QueryType: platform.AssetQuery, construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.ProcessType: platform.AssetFlow, construction.FunctionType: platform.AssetFunction, construction.CodeType: platform.AssetCompute, construction.TableType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
 			var meta struct {
 				Published string `json:"published"`
@@ -414,7 +417,7 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 			}
 			name := saved.Name
 			if kind == platform.AssetObject || kind == platform.AssetFlow {
-				name = build.TypeOf(name)
+				name = construction.TypeOf(name)
 			}
 			if kind == platform.AssetFlow {
 				var state struct {
@@ -423,11 +426,11 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 				}
 				json.Unmarshal([]byte(meta.Published), &state)
 				owner, ok := t.procs.(host.FlowDefinitionPresence)
-				needsDefinitions = needsDefinitions || !ok || !owner.HasDefinition(build.ID, state.Name, state.Version)
+				needsDefinitions = needsDefinitions || !ok || !owner.HasDefinition(construction.ID, state.Name, state.Version)
 				continue
 			}
 
-			ref := platform.AssetRef{App: build.ID, Kind: kind, Name: name}
+			ref := platform.AssetRef{App: construction.ID, Kind: kind, Name: name}
 			needsDefinitions = needsDefinitions || !slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Source == "tenant" })
 		}
 	}

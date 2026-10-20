@@ -131,7 +131,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 		hash = input.InputHash
 	}
 	call := platform.OperationCall{ID: id, Definition: definition, InputHash: hash, Version: version, Module: op.Binding.Module, Sources: slices.Clone(q.Sources), Dependencies: closure.ID, Release: release}
-	if !c.Replaying && (t.Record == nil || c.Staging()) {
+	if !c.Replaying && (!t.recordsAcceptedResults() || c.Staging()) {
 		call.OwnerVersion = app.Manifest().Version
 	}
 	for _, intent := range pending {

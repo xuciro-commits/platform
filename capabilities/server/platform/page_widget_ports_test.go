@@ -63,6 +63,14 @@ func TestFrozenDocumentlessSectionsPreserveRetainedFields(t *testing.T) {
 
 func TestWidgetAuthorFieldsUseOriginalComponentDeclarations(t *testing.T) {
 	var manifest struct {
+		Runtime struct {
+			Scope        string   `json:"scope"`
+			MaxVariables int      `json:"maxVariables"`
+			ValueTypes   []string `json:"valueTypes"`
+			RecordList   struct {
+				Layouts []string `json:"layouts"`
+			} `json:"recordList"`
+		} `json:"runtime"`
 		Widgets []struct {
 			ID     string   `json:"componentID"`
 			Fields []string `json:"authoringFields"`
@@ -70,6 +78,10 @@ func TestWidgetAuthorFieldsUseOriginalComponentDeclarations(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(PageUIManifest()), &manifest); err != nil {
 		t.Fatal(err)
+	}
+	layouts := pageWidget("record-list").PropsSchema.Properties["recordList"].Properties["layout"].Enum
+	if !slices.Equal(manifest.Runtime.RecordList.Layouts, layouts) || !slices.Contains(layouts, "tiles") || manifest.Runtime.Scope != "page" || manifest.Runtime.MaxVariables != 64 || len(manifest.Runtime.ValueTypes) == 0 {
+		t.Fatal("derived record layouts changed other runtime declarations")
 	}
 	fields := map[string][]string{}
 	for _, widget := range manifest.Widgets {

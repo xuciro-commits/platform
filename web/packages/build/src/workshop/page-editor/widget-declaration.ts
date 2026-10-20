@@ -1,6 +1,6 @@
 import {pageUIManifest, type Api} from '@platform/kernel';
 import {t} from '@platform/ui';
-import {schemaIssue} from '../../automate/workflow-schema';
+import {schemaIssue} from '../../shared/value-schema';
 
 type Configuration = Record<string, unknown>;
 const propertyNames = new Set(pageUIManifest.widgets.flatMap(widget=>Object.keys(widget.propsSchema.properties)));

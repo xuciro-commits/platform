@@ -2444,5 +2444,11 @@
   "published element": "已共享的节点",
   "Current enterprise use": "当前企业节点用途",
   "Enterprise element type": "企业节点类型",
-  "Enterprise element types": "企业节点类型列表"
+  "Enterprise element types": "企业节点类型列表",
+  "Request key": "请求标识",
+  "Integration execution has no retained input": "集成执行缺少已保存的输入",
+  "The pending integration execution must finish first": "请先完成正在处理的集成执行",
+  "Integration execution was not prepared": "集成执行尚未保存输入",
+  "Integration execution changed before its result was accepted": "集成执行在接受结果前发生了变化",
+  "The previous pull was stopped by resetting its cursor": "重置游标已停止上一次拉取"
 }

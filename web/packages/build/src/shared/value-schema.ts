@@ -1,7 +1,7 @@
 import {t} from "@platform/ui";
-import type {ValueSchema} from "./workflow-model";
+import type {Api} from "@platform/kernel";
 
-export function schemaIssue(schema: ValueSchema & {minimum?:number;maximum?:number}, value: unknown): string | undefined {
+export function schemaIssue(schema: Api.ValueSchema & {minimum?:number;maximum?:number}, value: unknown): string | undefined {
   if (value === null && schema.nullable) return undefined;
   if (schema.type === "variant") {
     if (!value || typeof value !== "object" || Array.isArray(value)) return t("Expected a tagged object.");

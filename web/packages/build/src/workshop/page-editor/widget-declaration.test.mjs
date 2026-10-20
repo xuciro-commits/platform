@@ -16,6 +16,15 @@ const {widgetDeclarationIssues}=await import('./widget-declaration.ts');
 const section=(widget,values={})=>({widget,configVersion:1,...values});
 const issues=(...sections)=>widgetDeclarationIssues({sections});
 
+test('the original scene layers and mappings share the closed manifest schema',()=>{
+ const page=JSON.parse(readFileSync(new URL('../../../../../../capabilities/server/apps/build/testdata/default-telemetry.json',import.meta.url)));
+ const scene=page.sections.find(section=>section.widget==='scene-3d');
+ assert.ok(scene.scene.layers.length>0&&scene.scene.mappings.length>0);
+ assert.deepEqual(issues(scene),[]);
+ const invalid=structuredClone(scene);invalid.scene.layers[0].unregistered=true;
+ assert.match(issues(invalid)[0].message,/Unknown field: unregistered/);
+});
+
 test('manifest property and port fields are scoped by widget without altering original business declarations',()=>{
  const retained=section('notice',{id:'instructions',notice:{tone:'info',message:'Read <b>literally</b>',title:''},model:{type:'build.note'}});
  const before=structuredClone(retained);
@@ -23,6 +32,8 @@ test('manifest property and port fields are scoped by widget without altering or
  assert.deepEqual(retained,before);
  assert.match(issues(section('heading',{notice:{tone:'info',message:'wrong widget'}}))[0].message,/Unknown field: notice/);
  assert.deepEqual(issues(section('table',{collectionVariable:'original_query',selectionVariable:'selected_record'})),[]);
+ assert.deepEqual(issues(section('record-list',{recordList:{layout:'tiles'},collectionVariable:'original_query'})),[]);
+ assert.match(issues(section('record-list',{recordList:{layout:'invented'},collectionVariable:'original_query'}))[0].message,/declared option/);
  assert.deepEqual(issues(section('button',{collectionVariable:'original_query'}))[0].path,['sections','0','collectionVariable']);
  assert.deepEqual(issues(section('heading',{avatar:{contextVariable:'record'}}))[0].path,['sections','0','avatar','contextVariable']);
  assert.match(issues(section('table',{collectionVariable:42}))[0].message,/Expected text/);

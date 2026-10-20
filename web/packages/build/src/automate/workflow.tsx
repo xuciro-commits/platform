@@ -7,21 +7,24 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
-import {DraftInputs,useDraftSession} from "../session/DraftSession";
-import {workflowInputs,workflowRunMatches} from "./workflow-session";
+import {DraftInputs} from "../session/DraftSession";
+import { removeWorkflowSteps, renameWorkflowStep, replaceReferences } from "./workflow-edit";
+import {workflowRunMatches} from "./workflow-session";
+import { useProcessDraft } from "./process-draft";
 // Logic Studio edits the one build.process definition. Its native Flow owner
 // compiles, executes and accepts outcomes; React Flow remains presentation.
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
 import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, PageHeader, Panel, ProblemList, StructureRow, Workbench,
-  flowBlockHeight, flowNodeIcon, flowNodeWidth, flowPlacement, flowPortFits, useFlowArrangement, loops, notationOf, t, useUnsavedChanges,
+  flowBlockHeight, flowNodeIcon, flowNodeWidth, flowPlacement, flowPortFits, useFlowArrangement, loops, notationOf, t,
   type FlowAddContext, type FlowBoundary, type FlowCatalog, type FlowEdge, type FlowNode, type FlowNodeKind, type FlowNodeStatus, type FlowPort, type WorkbenchProblem } from "@platform/ui";
 import { MoreHorizontal, Play, Plus, Search, Settings2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {useQueries} from "@tanstack/react-query";
-import { DataField, JSONEditor, schemaIssue } from "./workflow-binding";
+import { DataField, JSONEditor } from "./workflow-binding";
+import { schemaIssue } from "../shared/value-schema";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
-import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
+import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
   type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
@@ -123,22 +126,16 @@ export function Flows() {
 }
 
 export function FlowEditor({ id }: { id: string }) {
-  const { decide, role, client } = useHost(), { open, close } = useApplicationWorkspace();
+  const { decide, role, client } = useHost(), { open } = useApplicationWorkspace();
   const model = useAuthoringModel();
-  const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
   const catalogQuery = useAuthoringCapabilities<Capability>();
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
   const authoringHost = useHost(), trial = useActionTrial();
   const declarationFields = authoringHost.source.entity("build.process")?.fields ?? [];
-  const session=useDraftSession<WorkflowDraft>(empty());
-  const [createID]=useState(()=>crypto.randomUUID());
-  const {draft,dirty}=session;
-  const loaded=useRef(""),baseRevision=useRef(0),lock=useRef(false),acknowledged=useRef<WorkflowDraft|undefined>(undefined);
   const [chosen, setChosenValue] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState<boolean>();
   const setChosen = useCallback((name: string) => { setChosenValue(name); setInspectorOpen(true); }, []);
   const [importingFlow,setImportingFlow]=useState(false);
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [dock, setDockValue] = useState<"problems" | "run" | "history" | "test" | "release">("problems");
   const [dockOpen, setDockOpen] = useState<boolean>();
   const setDock = (next: typeof dock) => { setDockValue(next); setDockOpen(true); };
@@ -148,14 +145,13 @@ export function FlowEditor({ id }: { id: string }) {
   const runInputs=useInputBuffers();
   const [runInput, setRunInput] = useState<unknown>({}), [runKey, setRunKey] = useState("");
   const [validation, setValidation] = useState<{ valid: boolean; issues: { node?: string; message: string }[] }>();
-  const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
-    const saved=query.data?.record??empty();session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`; setError(""); setValidation(undefined); setChosen("");
-  }, busy);
-  useEffect(()=>{const saved=query.data?.record;if(saved&&saved.revision>=baseRevision.current&&!dirty&&!busy&&loaded.current!==`${saved.id}:${saved.revision}`){session.load(saved);baseRevision.current=saved.revision;loaded.current=`${saved.id}:${saved.revision}`;}},[query.data,dirty,busy,session.load]);
+  const process = useProcessDraft({ id, view: "flow", empty, failure: t("The workflow request could not be completed."),
+    onDiscard: () => { setValidation(undefined); setChosen(""); }, onPublished: () => catalogQuery.refetch() });
+  const { session, draft, dirty, createID, query, busy, error, setError, save, publish, perform, confirmDiscard, discardChanges, revision, synchronized } = process;
   useEffect(() => { setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock]);
-  const change = useCallback((edit: Edit) => {if(lock.current)return;session.edit(edit);setError("");setValidation(undefined);},[session.edit]);
+  const change = (edit: Edit) => { if (busy) return; process.edit(edit); setValidation(undefined); };
   const installed=useMemo(()=>{try{return query.data?.record?.published?JSON.parse(query.data.record.published) as WorkflowDraft:undefined;}catch{return undefined;}},[query.data?.record?.published]);
-  const matchingRun=query.data?.record?.revision===baseRevision.current&&workflowRunMatches(draft,installed,run,dirty);
+  const matchingRun=query.data?.record?.revision===revision&&workflowRunMatches(draft,installed,run,dirty);
   useEffect(()=>{setRunInput(installed?.input??{});setRunKey("");},[installed]);
   useEffect(()=>{if(chosen&&!draft.steps.some(step=>step.name===chosen))setChosen("");},[chosen,draft.steps]);
   const retainedQueries=useMemo(()=>[...new Set(draft.steps.filter(s=>s.kind==="query"&&s.queryVersion).map(s=>`/v1/capabilities/${encodeURIComponent(s.app??"")}/query/${encodeURIComponent(s.query??"")}?version=${s.queryVersion}`))],[draft.steps]);
@@ -182,7 +178,6 @@ export function FlowEditor({ id }: { id: string }) {
   });
   const node = draft.steps.find((step) => step.name === chosen);
   const saved = query.data?.record;
-  const synchronized=!draft.id||saved?.revision===baseRevision.current;
   const runIssue = installed?.inputSchema ? schemaIssue(installed.inputSchema, runInput) : undefined;
   const inputProblems = session.inputProblems;
   const brokenForm = Object.values(inputProblems).filter(Boolean);
@@ -252,8 +247,7 @@ export function FlowEditor({ id }: { id: string }) {
   }, step)) }));
   const deleteNodes = (removed: FlowNode[]) => {
     const ids = new Set(removed.map((item) => item.id));
-    change((current) => ({ ...current, steps: current.steps.filter((step) => !ids.has(step.name)).map((step) => [...ids].reduce((result, id) => replaceReferences(result, id, ""), step)),
-      layout: Object.fromEntries(Object.entries(current.layout ?? {}).filter(([name]) => !ids.has(name))) }));
+    change((current) => removeWorkflowSteps(current, [...ids]));
     for (const key of Object.keys(session.inputs.values)) if ([...ids].some(id => key.startsWith(`step:${id}/`)||key.includes(`/step:${id}/`))) session.inputs.set(key);
     if (ids.has(chosen)) setChosen("");
   };
@@ -268,38 +262,13 @@ export function FlowEditor({ id }: { id: string }) {
     change((current) => ({ ...current, steps: [...current.steps, ...steps], layout: { ...current.layout, ...Object.fromEntries(selected.flatMap((item) => renamed.has(item.id) ? [[renamed.get(item.id)!, { x: item.position.x + 40, y: item.position.y + 60 }]] : [])) } }));
     if (steps[0]) setChosen(steps[0].name);
   };
-  const save = async () => {
-    if (brokenForm.length) return;
-    const submitted=structuredClone(draft),target=submitted.id||createID,revision=submitted.id?baseRevision.current:0;
-    if(!await decide(`build.process.${submitted.id?"edit":"create"}`,{type:"build.process",id:target},workflowInputs(submitted),{expectedRevision:submitted.id?revision:undefined,quiet:true,onRefused:setError}))return;
-    baseRevision.current=revision+1;loaded.current=`${target}:${revision+1}`;
-    if(!submitted.id){
-      session.saved(submitted,{...submitted,id:target,revision:1});markSaved();
-      open({view:"flow",params:{id:target}});close({view:"flow",params:{id}});return target;
-    }
-    const fresh=await query.refetch();
-    const confirmed=fresh.isSuccess&&fresh.data?.record?.revision===revision+1?fresh.data.record:undefined;
-    acknowledged.current=confirmed??{...submitted,revision:revision+1};
-    session.saved(submitted,acknowledged.current);markSaved();return target;
-  };
   const check = async () => {
     const response = await client.call<{ valid: boolean; issues: { node?: string; message: string }[] }>("POST", "/v1/build/process/check", draft);
     if (!response.ok) { setError(apiErrorMessage(response.body) ?? t("Workflow validation failed.")); return; }
     setValidation(response.body);
   };
-  const publish = async () => {
-    if(!synchronized)return;
-    if(dirty&&!await save())return;
-    if(await decide("build.process.publish",{type:"build.process",id:draft.id},{},{expectedRevision:baseRevision.current,quiet:true,onRefused:setError})){
-      baseRevision.current++;loaded.current=`${draft.id}:${baseRevision.current}`;
-      const fresh=await query.refetch();
-      if(fresh.isSuccess&&fresh.data?.record?.revision===baseRevision.current){session.saved(dirty?acknowledged.current!:draft,fresh.data.record);markSaved();}
-      await catalogQuery.refetch();
-    }
-  };
-  const perform=async(action:()=>Promise<unknown>)=>{if(lock.current)return;lock.current=true;setBusy(true);setError("");try{await action();}catch{setError(t("The workflow request could not be completed."));}finally{lock.current=false;setBusy(false);}};
   const review = async () => {
-    const target = dirty || !draft.id ? await save() : draft.id;
+    const target = await process.reviewTarget();
     if (!target) return;
     if (target !== draft.id) open({ view: "release-review", params: { kind: "flow", id: target } });
     else setDock("release");
@@ -313,8 +282,7 @@ export function FlowEditor({ id }: { id: string }) {
   const rename = (name: string) => {
     if (!node || !/^[a-z][a-z0-9]*$/.test(name) || draft.steps.some((step) => step.name === name && step !== node)) return;
     const old = node.name;
-    change((current) => ({ ...current, steps: current.steps.map((step) => ({ ...replaceReferences(step, old, name), name: step.name === old ? name : step.name })),
-      layout: Object.fromEntries(Object.entries(current.layout ?? {}).map(([id, point]) => [id === old ? name : id, point])) }));
+    change((current) => renameWorkflowStep(current, old, name));
     for (const [key, value] of Object.entries(session.inputs.values)) if (key.startsWith(`step:${old}/`)||key.includes(`/step:${old}/`)) { session.inputs.set(key); if (key !== `step:${old}/identifier:${t("Step name")}:${old}`) session.inputs.set(key.replace(`step:${old}/`,`step:${name}/`), {...value,reveal:()=>setChosen(name)}); }
     setChosen(name);
   };
@@ -357,7 +325,7 @@ export function FlowEditor({ id }: { id: string }) {
         <Button size="sm" variant={dock === "run" ? "primary" : "ghost"} disabled={busy || !synchronized || !installed?.manual || dirty} onClick={() => setDock("run")}><Play />{t("Run")}</Button>
         <ActionMenu label={t("More flow commands")} icon={<MoreHorizontal />} commands={[
           { id: "import", label: t("Import Workshop flow…"), disabled: busy || !!draft.id, run: () => setImportingFlow(true) },
-          ...(draft.id ? [{ id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.isSuccess && fresh.data?.record) { markSaved(); session.load(fresh.data.record); baseRevision.current = fresh.data.record.revision; loaded.current = `${fresh.data.record.id}:${fresh.data.record.revision}`; setError(""); setValidation(undefined); } })) }] : []),
+          ...(draft.id ? [{ id: "reload", label: t("Reload saved flow"), disabled: busy, run: () => confirmDiscard(() => void perform(process.reload)) }] : []),
         ]} />
         <ResourceControls type="build.process" record={draft} dirty={dirty} busy={busy} invalid={brokenForm.length > 0 || !synchronized} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "flow", params: { id } }} />
       </>}
@@ -385,7 +353,7 @@ export function FlowEditor({ id }: { id: string }) {
       ] }}>
       {importingFlow && <FlowImportDialog name={draft.name || "importedflow"} capabilities={capabilities} onClose={() => setImportingFlow(false)} onApply={(next) => { change(next); setChosen(""); setImportingFlow(false); }} />}
       {run && !matchingRun && <Panel role="status" className="m-2 text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}
-      <StructuredEditor initialMode="source" expectedRevision={draft.id ? baseRevision.current : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.process:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { session.edit(() => ({ ...empty(), ...replaceDeclaration(draft, next, declarationFields) })); setValidation(undefined); }} onTrial={next => trial(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: draft.id || createID }, next, draft.id ? baseRevision.current : 0)}><fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
+      <StructuredEditor initialMode="source" expectedRevision={draft.id ? revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.process:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { session.edit(() => ({ ...empty(), ...replaceDeclaration(draft, next, declarationFields) })); setValidation(undefined); }} onTrial={next => trial(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: draft.id || createID }, next, draft.id ? revision : 0)}><fieldset disabled={busy} className="flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0"><FlowCanvas label={t("Flow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
         onSelect={(name) => setChosen(name)} onOpen={(name) => setChosen(name)} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
         onPositionsChange={(positions) => change((current) => ({ ...current, layout: { ...current.layout, ...positions } }))} onLayout={(positions) => change({ layout: positions })}
         lanes={(draft.lanes ?? []).map((lane) => ({ id: lane.name, title: lane.title || lane.name }))}

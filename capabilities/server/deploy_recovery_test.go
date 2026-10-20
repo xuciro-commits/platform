@@ -3,6 +3,7 @@ package platformserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,8 +12,131 @@ import (
 	"testing"
 	"time"
 
+	"platformserver/journal"
 	"platformserver/platform"
 )
+
+type failingAcceptedJournal struct {
+	Journals
+	tenant  string
+	failure error
+	commit  bool
+}
+
+func (j *failingAcceptedJournal) AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
+	if tenant != j.tenant || j.failure == nil {
+		return j.Journals.AppendAccepted(ctx, tenant, e, key, hash)
+	}
+	if j.commit {
+		if _, err := j.Journals.AppendAccepted(ctx, tenant, e, key, hash); err != nil {
+			return nil, err
+		}
+	}
+	return nil, j.failure
+}
+
+func TestAttachedJournalCommitFailureIsTenantLocal(t *testing.T) {
+	for _, backend := range journalsUnderTest(t) {
+		for _, committed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/committed=%t", backend.name, committed), func(t *testing.T) {
+				ctx := context.Background()
+				id := fmt.Sprintf("commit-failure-%d", time.Now().UnixNano())
+				neighborID := id + "-neighbor"
+				t.Cleanup(func() { backend.cleanup(t, id); backend.cleanup(t, neighborID) })
+				store := backend.open(t, id)
+				defer store.Close()
+				compose := func(id string) *Tenant {
+					return composeTenant(t, id, []Seat{seatOf("clerk", "stock:clerk")}, newStock(id))
+				}
+				bad, good := compose(id), compose(neighborID)
+				for _, tenant := range []*Tenant{bad, good} {
+					if _, err := store.Entries(ctx, tenant.ID, 0); err != nil {
+						t.Fatal(err)
+					}
+				}
+				failure := errors.New("append rejected before commit")
+				if committed {
+					failure = fmt.Errorf("%w: lost commit reply", journal.ErrCommitUnknown)
+				}
+				injected := &failingAcceptedJournal{Journals: store, tenant: id, failure: failure, commit: committed}
+				bad.attachJournal(ctx, injected)
+				good.attachJournal(ctx, injected)
+				member := memberOf(t, bad, "clerk")
+				sub := submission(bad, member, "stock", "stock.bin.create", "stock.bin", "B1", map[string]any{"code": "one"})
+				at := time.Date(2026, 10, 19, 18, 0, 0, 0, time.UTC)
+				if receipt, err := bad.Submit(member, sub, at); receipt != nil || err == nil {
+					t.Fatalf("failed append answered success: %v %v", receipt, err)
+				}
+				if bad.quarantined() != committed || bad.records.types["stock.bin"].rows.len() != 0 ||
+					len(bad.app("stock").AcceptedLedger().RecordsFor(id)) != 0 || len(bad.outbound) != 0 {
+					t.Fatal("append failure exposed state/effects or used the wrong recovery state")
+				}
+				decide(t, good, "clerk", "stock", "stock.bin.create", "stock.bin", "B1", map[string]any{"code": "neighbor"}, at)
+				if good.quarantined() || good.records.types["stock.bin"].rows.len() != 1 {
+					t.Fatal("another tenant stopped after the append failure")
+				}
+				injected.failure = nil
+				if committed {
+					if receipt, err := bad.Submit(member, sub, at); receipt != nil || err == nil {
+						t.Fatal("unresolved commit accepted another decision")
+					}
+					registry := newTenantRegistry([]*Tenant{bad, good})
+					code := CodeOf(bad, good)
+					registry.add(compose(id + "-added"))
+					deployment := Deployment{SnapshotEvery: 1, Rebuild: func(name string) (*Tenant, error) { return compose(name), nil }}
+					if err := deployment.retryTenant(ctx, store, registry, code, id); err != nil {
+						t.Fatalf("recovery after another tenant was added: %v", err)
+					}
+					bad = registry.current(id)
+				}
+				receipt, err := bad.Submit(member, sub, at.Add(time.Minute))
+				if err != nil || receipt == nil || store.Position(id) != 1 || bad.records.types["stock.bin"].rows.len() != 1 {
+					t.Fatalf("original identity did not recover exactly one result: %v %v", receipt, err)
+				}
+				if duplicate, err := bad.Submit(member, sub, at.Add(2*time.Minute)); err != nil || duplicate.GetChangeId() != receipt.GetChangeId() || store.Position(id) != 1 {
+					t.Fatalf("retry made another result: %v %v", duplicate, err)
+				}
+			})
+		}
+	}
+}
+
+func TestTenantRecoveryChecksOnlyItsStartupComposition(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenFileJournal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	compose := func(format, version string) *Tenant {
+		return composeTenant(t, "composition-recovery", []Seat{seatOf("clerk", "stock:clerk")},
+			&formattedStock{stock: newStock("composition-recovery"), format: format, version: version})
+	}
+	old := compose("stock.v1", "1")
+	if _, err := store.Entries(ctx, old.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	old.attachJournal(ctx, store)
+	at := time.Date(2026, 10, 19, 19, 0, 0, 0, time.UTC)
+	decide(t, old, "clerk", "stock", "stock.bin.create", "stock.bin", "B1", map[string]any{"code": "one"}, at)
+	old.quarantine(errors.New("rebuild required"))
+	neighbor := isolatedStock(t, "unrelated")
+	code := CodeOf(old)
+	registry := newTenantRegistry([]*Tenant{neighbor, old})
+	for _, change := range []struct{ format, version string }{{"stock.v2", "1"}, {"stock.v1", "2"}} {
+		deployment := Deployment{Rebuild: func(string) (*Tenant, error) { return compose(change.format, change.version), nil }}
+		if err := deployment.retryTenant(ctx, store, registry, code, old.ID); err == nil || registry.current(old.ID) != old {
+			t.Fatal("different target composition or restore format was accepted")
+		}
+	}
+	deployment := Deployment{Rebuild: func(string) (*Tenant, error) { return compose("stock.v1", "1"), nil }}
+	if err := deployment.retryTenant(ctx, store, registry, code, old.ID); err != nil {
+		t.Fatalf("unrelated tenant or registry order blocked recovery: %v", err)
+	}
+	if registry.current(old.ID) == old || registry.current(neighbor.ID) != neighbor {
+		t.Fatal("recovery replaced the wrong tenant generation")
+	}
+}
 
 func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	url := os.Getenv("PLATFORM_TEST_DATABASE")

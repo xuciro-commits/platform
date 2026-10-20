@@ -121,6 +121,9 @@ var pageWidgets = func() pageUIContract {
 	}
 	seen := map[string]bool{}
 	for _, widget := range manifest.Widgets {
+		if widget.ComponentID == "record-list" {
+			manifest.Runtime.RecordList.Layouts = slices.Clone(widget.PropsSchema.Properties["recordList"].Properties["layout"].Enum)
+		}
 		if widget.ComponentID == "" || seen[widget.ComponentID] || widget.ConfigVersion < 1 || !slices.Contains(manifest.SupportedProfiles, widget.RequiredUIProfile) {
 			panic("invalid page widget contract identity")
 		}
@@ -192,6 +195,15 @@ func PageUIManifest() string {
 		widgets[i]["authoringFields"], _ = json.Marshal(widget.authoringFields())
 	}
 	manifest["widgets"], _ = json.Marshal(widgets)
+	// Keep the existing runtime discovery field as a projection of the one
+	// authoring enum, rather than a separately maintained list of layouts.
+	var runtime map[string]json.RawMessage
+	_ = json.Unmarshal(manifest["runtime"], &runtime)
+	var recordList map[string]json.RawMessage
+	_ = json.Unmarshal(runtime["recordList"], &recordList)
+	recordList["layouts"], _ = json.Marshal(pageWidgets.Runtime.RecordList.Layouts)
+	runtime["recordList"], _ = json.Marshal(recordList)
+	manifest["runtime"], _ = json.Marshal(runtime)
 	raw, _ := json.MarshalIndent(manifest, "", "  ")
 	return string(raw)
 }

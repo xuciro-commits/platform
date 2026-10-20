@@ -1,4 +1,4 @@
-import {schemaIssue} from "../../automate/workflow-schema";
+import {schemaIssue} from "../../shared/value-schema";
 import {parameterSchema} from "../../automate/workflow-model";
 import type {Capability,WorkflowDraft,WorkflowStep} from "../../automate/workflow-model";
 import type {Api} from "@platform/kernel";

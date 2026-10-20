@@ -64,6 +64,7 @@ type DatasetVersion struct {
 	At      time.Time       `json:"at"`
 	Rows    int             `json:"rows"`
 	Data    json.RawMessage `json:"data" type:"json"`
+	Request string          `json:"requestKey,omitempty" field:"readonly" title:"Request key"`
 }
 
 func ValueTypeOf(v any) string {

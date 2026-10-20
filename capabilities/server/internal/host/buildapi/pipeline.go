@@ -1,8 +1,6 @@
 package buildapi
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -100,19 +98,20 @@ type Expectation struct {
 
 // PipelineRun is what one run did.
 type PipelineRun struct {
-	DefinitionVersion string           `json:"definitionVersion,omitempty"`
-	At                time.Time        `json:"at"`
-	Input             int              `json:"inputVersion"`
-	Rows              int              `json:"rows"`              // rows after the steps
-	Written           int              `json:"written"`           // rows written to the output
-	Marking           string           `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0025)
-	Merged            int              `json:"merged,omitempty"`  // rows merged into matched records (ADR-0024)
-	Quarantined       int              `json:"quarantined"`
-	Failed            int              `json:"failed"` // rows the output refused
-	Error             string           `json:"error,omitempty"`
-	Quarantine        []QuarantinedRow `json:"quarantine,omitempty"`
-	Failures          []SourceFailure  `json:"failures,omitempty"`
-	Output            int              `json:"outputVersion,omitempty"`
+	Execution         *IntegrationExecution `json:"execution,omitempty"`
+	DefinitionVersion string                `json:"definitionVersion,omitempty"`
+	At                time.Time             `json:"at"`
+	Input             int                   `json:"inputVersion"`
+	Rows              int                   `json:"rows"`              // rows after the steps
+	Written           int                   `json:"written"`           // rows written to the output
+	Marking           string                `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0025)
+	Merged            int                   `json:"merged,omitempty"`  // rows merged into matched records (ADR-0024)
+	Quarantined       int                   `json:"quarantined"`
+	Failed            int                   `json:"failed"` // rows the output refused
+	Error             string                `json:"error,omitempty"`
+	Quarantine        []QuarantinedRow      `json:"quarantine,omitempty"`
+	Failures          []SourceFailure       `json:"failures,omitempty"`
+	Output            int                   `json:"outputVersion,omitempty"`
 }
 
 type QuarantinedRow struct {
@@ -125,6 +124,12 @@ type QuarantinedRow struct {
 func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 	if p.State != "published" {
 		return false
+	}
+	if p.Last != nil && p.Last.Execution != nil && p.Last.Execution.Pending {
+		return true
+	}
+	if p.Last != nil && p.Last.DefinitionVersion != p.ExecutionVersion() {
+		return true
 	}
 	if p.Requested {
 		return true
@@ -466,8 +471,8 @@ func (p Pipeline) Expect(rows []map[string]any) ([]map[string]any, []Quarantined
 }
 
 // ObjectRows turns final rows into the output object's rows: every column is
-// a payload field (the key column names the record), keyed by content like a
-// source pull, so a rerun over the same data decides nothing twice.
+// a payload field (the key column names the record). The host freezes operation
+// identities with the execution before any output is written.
 func (p Pipeline) ObjectRows(rows []map[string]any) []SourceRow {
 	out := make([]SourceRow, 0, len(rows))
 	for _, r := range rows {
@@ -479,8 +484,6 @@ func (p Pipeline) ObjectRows(rows []map[string]any) []SourceRow {
 			}
 		}
 		row.Payload, _ = json.Marshal(payload)
-		sum := sha256.Sum256(row.Payload)
-		row.Key = fmt.Sprintf("pipeline:%s:%s:%s", p.Name, row.ID, hex.EncodeToString(sum[:8]))
 		if row.ID == "" {
 			row.Error = "row has no id"
 		}

@@ -63,6 +63,10 @@ var ErrAcceptedConflict = errors.New("accepted result idempotency key reused for
 var ErrTenantJournal = errors.New("tenant journal is damaged")
 var ErrTenantSnapshot = errors.New("tenant snapshot is damaged")
 
+// ErrCommitUnknown means the append may have committed but its stored result
+// could not be read. The caller must recover before making another decision.
+var ErrCommitUnknown = errors.New("journal commit outcome is unknown")
+
 // The current index and lookup share the same scope expression. Historical
 // schema statements remain unchanged; the final migration replaces the older
 // index so existing journals gain the new result scopes without rewriting rows.
@@ -491,7 +495,10 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 			j.mu.Unlock()
 			return prior, nil
 		}
-		return nil, err
+		if errors.Is(err, pgx.ErrTxCommitRollback) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%w: %v", ErrCommitUnknown, err)
 	}
 
 	j.mu.Lock()
@@ -502,10 +509,13 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	// would leave live history different from a restart's recovered history.
 	// Always apply the exact representation the committed journal returns.
 	committed, err := read()
-	if err == nil && len(committed) == 0 {
-		return nil, fmt.Errorf("journal: accepted result missing after append")
+	if err != nil {
+		return nil, fmt.Errorf("%w: read committed result: %v", ErrCommitUnknown, err)
 	}
-	return committed, err
+	if len(committed) == 0 {
+		return nil, fmt.Errorf("%w: accepted result missing after append", ErrCommitUnknown)
+	}
+	return committed, nil
 }
 
 func (j *Postgres) Close() { j.pool.Close() }

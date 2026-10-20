@@ -4,10 +4,28 @@ import (
 	"encoding/json"
 
 	"testing"
+	"time"
+
+	construction "platformserver/internal/host/buildapi"
+	"platformserver/platform"
 )
 
+func TestSourceResetEndsPendingInputWithoutMutatingItsHistory(t *testing.T) {
+	prior := construction.SourcePull{Cursor: "2", Execution: &construction.IntegrationExecution{ID: "original", Member: "builder", Pending: true}}
+	source := construction.Source{Cursor: "1", Last: &prior}
+	if err := resetCursor(platform.Caller{}, &source, nil, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if source.Cursor != "" || !source.Requested || source.Last.Execution.Pending || source.Last.Error == "" {
+		t.Fatalf("reset did not end the old input and request a fresh pull: %+v", source)
+	}
+	if !prior.Execution.Pending || prior.Error != "" || source.Last == &prior || source.Last.Execution == prior.Execution {
+		t.Fatal("reset mutated the previous accepted input")
+	}
+}
+
 func TestSourceProfilesDecodeAndGuard(t *testing.T) {
-	s := Source{Profile: "csv", Key: "sku", Since: "changed", Mapping: []SourceField{{From: "sku", To: "code"}, {From: "qty", To: "quantity", Convert: "number"}}}
+	s := construction.Source{Profile: "csv", Key: "sku", Since: "changed", Mapping: []construction.SourceField{{From: "sku", To: "code"}, {From: "qty", To: "quantity", Convert: "number"}}}
 	rows, err := s.Decode([]byte("sku,qty,changed\nA,1,2026-01-01\nB,2.5,2026-01-03\n"))
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("rows=%d err=%v", len(rows), err)
@@ -19,7 +37,7 @@ func TestSourceProfilesDecodeAndGuard(t *testing.T) {
 	if s.Advance(rows) != "2026-01-03" {
 		t.Fatal("cursor")
 	}
-	sequence := Source{Since: "seq", Cursor: "9"}
+	sequence := construction.Source{Since: "seq", Cursor: "9"}
 	if got := sequence.Advance([]map[string]any{{"seq": float64(10)}, {"seq": float64(2)}}); got != "10" {
 		t.Fatalf("numeric sequence cursor = %s, want 10", got)
 	}
@@ -27,7 +45,7 @@ func TestSourceProfilesDecodeAndGuard(t *testing.T) {
 	if got := sequence.Advance([]map[string]any{{"seq": json.Number("9007199254740993")}}); got != "9007199254740993" {
 		t.Fatalf("full-width sequence cursor = %s", got)
 	}
-	timestamps := Source{Since: "at", Cursor: "2026-10-10T00:00:00Z"}
+	timestamps := construction.Source{Since: "at", Cursor: "2026-10-10T00:00:00Z"}
 	if got := timestamps.Advance([]map[string]any{{"at": "2026-10-10T00:00:00.1Z"}}); got != "2026-10-10T00:00:00.1Z" {
 		t.Fatal("fractional event position did not advance chronologically")
 	}
@@ -39,7 +57,7 @@ func TestSourceProfilesDecodeAndGuard(t *testing.T) {
 	if !tableName("mes.confirmations") || tableName("a.b.c") || tableName("x;") {
 		t.Fatal("tableName")
 	}
-	c := Connection{Address: "https://sap.example/odata/"}
+	c := construction.Connection{Address: "https://sap.example/odata/"}
 	if c.Resolve("Products") != "https://sap.example/odata/Products" || c.Resolve("https://o.example/x") != "https://o.example/x" {
 		t.Fatal("resolve")
 	}

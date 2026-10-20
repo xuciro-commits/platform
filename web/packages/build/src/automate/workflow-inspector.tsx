@@ -70,9 +70,9 @@ export function WorkflowSettings({ draft, onChange, objects }: { draft: Workflow
   </div>;
 }
 
-export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, onRename, onMakeEntry, flows, output }: {
+export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, onRename, onMakeEntry, flows, output, linear = false }: {
   step: WorkflowStep; steps: WorkflowStep[]; lanes: Api.ProcessLane[]; capabilities: Capability[]; onChange: (patch: Partial<WorkflowStep>) => void; onRename: (name: string) => void;
-  onMakeEntry: () => void; flows: { id: string; title: string; version: number }[]; output?: unknown;
+  onMakeEntry: () => void; linear?: boolean; flows: { id: string; title: string; version: number }[]; output?: unknown;
 }) {
   const [tab, setTab] = useState<"settings" | "input" | "output">("input");
   const capability = sourceCapability(step, capabilities);
@@ -89,7 +89,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
       {step.kind === "switch" ? <IdentifierInput label={t("Case value")} value={key} invalid={(name) => !name || name !== key && name in (step.cases ?? {})} onCommit={(name) => { const next = { ...step.cases }; delete next[key]; next[name] = target; onChange({ cases: next }); }} /> : <span className="text-xs font-medium">{key}</span>}
       <Select aria-label={t("After {case}", { case: key })} value={target} onChange={(event) => onChange({ cases: { ...step.cases, [key]: event.target.value } })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>
     </div>)}
-    {!["end", "join", "break", "continue", "fail", "branch"].includes(step.kind) && field(step.kind === "switch" ? "Default path" : "Next path", <Select value={step.next ?? ""} onChange={(event) => onChange({ next: event.target.value || undefined })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
+    {!linear && !["end", "join", "break", "continue", "fail", "branch"].includes(step.kind) && field(step.kind === "switch" ? "Default path" : "Next path", <Select value={step.next ?? ""} onChange={(event) => onChange({ next: event.target.value || undefined })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
     {field("Error path", <Select value={step.error ?? ""} onChange={(event) => onChange({ error: event.target.value || undefined })}><option value="">{t("Stop with an error")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
   </div>;
   return <div role="region" aria-label={t("Workflow properties")} className="flex min-h-0 flex-1 flex-col">
@@ -101,7 +101,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
           <option value="">{t("No lane")}</option>{lanes.map((lane) => <option key={lane.name} value={lane.name}>{lane.title || lane.name}</option>)}</Select>)}
         <div className="flex items-center gap-1"><Tag label={t(capability?.group ?? step.kind)} /><Tag label={capability?.source ?? "platform"} /></div>
         {capability && <><p className="text-[11px] leading-5 text-muted">{t(capability.description)}</p><code className="break-all text-[10px] text-muted">{capability.ref.app}/{capability.ref.kind}/{capability.ref.name}@{capability.version}</code></>}
-        {steps[0]?.name !== step.name && <Button onClick={onMakeEntry}><ArrowDownToLine className="mr-1 size-3" />{t("Make entry")}</Button>}
+        {!linear && steps[0]?.name !== step.name && <Button onClick={onMakeEntry}><ArrowDownToLine className="mr-1 size-3" />{t("Make entry")}</Button>}
         {field("Timeout (seconds)", <Input type="number" min={0} max={2592000} value={step.timeoutSeconds ?? 0} onChange={(event) => onChange({ timeoutSeconds: Number(event.target.value) })} />)}
         <Disclosure summary={<span className="text-xs font-medium">{t("Control paths")}</span>}><div className="mt-2">{paths}</div></Disclosure>
       </div> },

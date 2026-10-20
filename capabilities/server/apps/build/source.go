@@ -1,10 +1,12 @@
 package build
 
 import (
+	"encoding/hex"
 	"encoding/json"
 
 	"net/url"
-	buildapi "platformserver/internal/host/buildapi"
+	construction "platformserver/internal/host/buildapi"
+	"reflect"
 	"regexp"
 	"slices"
 
@@ -17,9 +19,9 @@ import (
 )
 
 func (b *Build) sourceEntity() platform.Entity {
-	return platform.Entity{Type: SourceType, Title: "Data source", Plural: "Data sources", Model: Source{}, Display: "title", Description: "An external JSON endpoint whose rows become records of one object, pulled on a period or on request.",
+	return platform.Entity{Type: construction.SourceType, Title: "Data source", Plural: "Data sources", Model: construction.Source{}, Display: "title", Description: "An external JSON endpoint whose rows become records of one object, pulled on a period or on request.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
-			s := record.(*Source)
+			s := record.(*construction.Source)
 			if s.State == "published" {
 				fixed, err := b.ExecutionSource(*s)
 				if err != nil {
@@ -32,23 +34,23 @@ func (b *Build) sourceEntity() platform.Entity {
 			}
 			return nil
 		},
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant, construction.Integrator: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Check the source and let the builder's job pull it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishSource},
-				{Name: "pull", Title: "Pull now", Description: "Ask for one pull at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: requestPull},
-				{Name: "reset", Title: "Reset cursor", Description: "Forget the incremental cursor and pull everything at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: resetCursor},
-				{Name: "pause", Title: "Pause", Description: "Stop pulling; the mapping stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+				{Name: "publish", Title: "Publish", Description: "Check the source and let the builder's job pull it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishSource},
+				{Name: "pull", Title: "Pull now", Description: "Ask for one pull at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: requestPull},
+				{Name: "reset", Title: "Reset cursor", Description: "Forget the incremental cursor and pull everything at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: resetCursor},
+				{Name: "pause", Title: "Pause", Description: "Stop pulling; the mapping stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
 func sourceActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaSourcePulled, Target: SourceType, Capability: "integrations", Title: "Keep pull result", Description: "Retain what one pull of a data source decided.", Roles: []string{Builder, Integrator},
+	return []platform.Action{{Schema: construction.SchemaSourcePulled, Target: construction.SourceType, Capability: "integrations", Title: "Keep pull result", Description: "Retain what one pull of a data source decided.", Roles: []string{construction.Builder, construction.Integrator},
 		Payload: []platform.Field{{Name: "pull", Type: "json", Required: true, Description: "The pull's counts and first failures"}}}}
 }
 
 func requestPull(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	s, ok := record.(*Source)
+	s, ok := record.(*construction.Source)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -60,19 +62,26 @@ func requestPull(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) 
 }
 
 func resetCursor(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	s, ok := record.(*Source)
+	s, ok := record.(*construction.Source)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if s.Stream {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source cursor belongs to its Flow instance")
 	}
+	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
+		last, execution := *s.Last, *s.Last.Execution
+		execution.Pending = false
+		last.Execution = &execution
+		last.Error = "The previous pull was stopped by resetting its cursor"
+		s.Last = &last
+	}
 	s.Cursor, s.Requested = "", true
 	return nil
 }
 
 func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	s, ok := record.(*Source)
+	s, ok := record.(*construction.Source)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -85,7 +94,7 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		*s = fixed.(Source)
+		*s = fixed.(construction.Source)
 	}
 	if s.Stream {
 		s.Cursor, s.Last = "", nil
@@ -93,7 +102,7 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 	return nil
 }
 
-func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
+func (b *Build) checkSource(c platform.Caller, s construction.Source) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -119,18 +128,18 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 		if s.Object != "" {
 			return refuse("A source feeds either a dataset or an object")
 		}
-		if _, ok := platform.Get[Dataset](c, s.Dataset); !ok {
+		if _, ok := platform.Get[construction.Dataset](c, s.Dataset); !ok {
 			return refuse("The target dataset does not exist")
 		}
 		return checkEvery(s.Every)
 	}
 	if s.Connection != "" {
-		if conn, ok := platform.Get[Connection](c, s.Connection); ok {
+		if conn, ok := platform.Get[construction.Connection](c, s.Connection); ok {
 			fixed, err := b.ExecutionConnection(conn)
 			if err != nil {
 				return refuse(err.Error())
 			}
-			if buildapi.Guarded(fixed.Marking) {
+			if construction.Guarded(fixed.Marking) {
 				return refuse("A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules")
 			}
 		}
@@ -156,7 +165,7 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 	return checkEvery(s.Every)
 }
 
-func (b *Build) checkSourceConnection(c platform.Caller, s Source) *kernel.Error {
+func (b *Build) checkSourceConnection(c platform.Caller, s construction.Source) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -173,7 +182,7 @@ func (b *Build) checkSourceConnection(c platform.Caller, s Source) *kernel.Error
 		}
 		return nil
 	}
-	conn, ok := platform.Get[Connection](c, s.Connection)
+	conn, ok := platform.Get[construction.Connection](c, s.Connection)
 	if ok {
 		fixed, err := b.ExecutionConnection(conn)
 		if err != nil {
@@ -210,25 +219,60 @@ func checkEvery(every string) *kernel.Error {
 func (b *Build) submitSourcePulled(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
-			Pull SourcePull `json:"pull"`
+			Pull construction.SourcePull `json:"pull"`
 		}
-		src, ok := platform.Get[Source](c, s.GetTarget().GetId())
+		src, ok := platform.Get[construction.Source](c, s.GetTarget().GetId())
 		if !ok || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Pull.At.IsZero() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Pull result has no source")
 		}
-		equivalent, versionErr := retainedExecutionEquivalent(src, payload.Pull.DefinitionVersion)
-		if versionErr != nil || !equivalent {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
+		if src.Last != nil && src.Last.Execution != nil && src.Last.Execution.Pending {
+			if err := checkIntegrationExecution(src.Last.Execution, payload.Pull.Execution, c.ID); err != nil {
+				return nil, err
+			}
+			if payload.Pull.DefinitionVersion != src.Last.DefinitionVersion || !payload.Pull.At.Equal(src.Last.At) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration execution changed before its result was accepted")
+			}
+		} else {
+			equivalent, versionErr := retainedExecutionEquivalent(src, payload.Pull.DefinitionVersion)
+			if versionErr != nil || !equivalent {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
+			}
+			if err := checkIntegrationExecution(nil, payload.Pull.Execution, c.ID); err != nil {
+				return nil, err
+			}
 		}
 		return func(r *pb.ChangeRecord) {
 			pull := payload.Pull
-			src.Last, src.Requested = &pull, false
-			if pull.Cursor != "" && pull.Error == "" && pull.Failed == 0 {
+			src.Last, src.Requested = &pull, pull.Execution != nil && pull.Execution.Pending
+			if (pull.Execution == nil || !pull.Execution.Pending) && pull.Cursor != "" && pull.Error == "" && pull.Failed == 0 {
 				src.Cursor = pull.Cursor
 			}
 			c.Put(r, src)
 		}, nil
 	})
+}
+
+func checkIntegrationExecution(prior, next *construction.IntegrationExecution, member string) *kernel.Error {
+	if next == nil {
+		if prior != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The pending integration execution must finish first")
+		}
+		return nil // historical/direct-development result without a preparation
+	}
+	digest, err := hex.DecodeString(next.Snapshot)
+	if next.ID == "" || len(next.ID) > 64 || err != nil || len(digest) != 32 || next.Member != member {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Integration execution has no retained input")
+	}
+	if prior != nil {
+		fixed := *next
+		fixed.Pending = prior.Pending
+		if !reflect.DeepEqual(*prior, fixed) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The pending integration execution must finish first")
+		}
+	} else if !next.Pending {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration execution was not prepared")
+	}
+	return nil
 }
 
 var identifierRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

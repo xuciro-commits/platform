@@ -4,24 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 	"time"
 )
 
 func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
 	t.runtimePosition = func() int64 { return journal.Position(t.ID) }
 	t.Store = journal
-	t.Record = func(e Entry) {
-		if err := journal.Append(ctx, t.ID, e); err != nil {
-			log.Fatalf("journal append: %v", err)
-		}
-	}
 	id := t.ID
 	t.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
-		raw, err := journal.AppendAccepted(ctx, id, e, key, hash)
-		if err != nil && err != errAcceptedConflict {
-			log.Fatalf("accepted result append: %v", err)
-		}
-		return raw, err
+		return journal.AppendAccepted(ctx, id, e, key, hash)
 	}
 }
 
@@ -50,14 +42,13 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if fresh == nil || fresh.ID != id || fresh.quarantined() {
 		return fmt.Errorf("tenant %s recovery factory returned a different or damaged tenant", id)
 	}
-	candidate := registry.list()
-	for i, t := range candidate {
-		if t.ID == id {
-			candidate[i] = fresh
-		}
+	before, err := old.snapshotCompatibility()
+	if err != nil {
+		return fmt.Errorf("tenant %s original composition: %w", id, err)
 	}
-	if CodeOf(candidate...) != code {
-		return fmt.Errorf("tenant %s recovery factory has different app versions", id)
+	after, err := fresh.snapshotCompatibility()
+	if err != nil || !reflect.DeepEqual(before, after) {
+		return fmt.Errorf("tenant %s recovery factory has different app composition or restore formats: %v", id, err)
 	}
 	fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
 	entries, err := journal.Entries(ctx, id, 0)

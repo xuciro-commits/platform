@@ -96,14 +96,6 @@ export function withPath(step: WorkflowStep, port: string, target: string): Work
   }
   return step;
 }
-export function replaceReferences(step: WorkflowStep, old: string, next: string): WorkflowStep {
-  const rewrite = (binding: Binding | undefined): Binding | undefined => binding?.source === "step" && binding.step === old ? next ? { ...binding, step: next } : undefined : binding;
-  const predicate = (value: Predicate | undefined): Predicate | undefined => value ? { ...value, left: rewrite(value.left), right: rewrite(value.right), terms: value.terms?.map((term) => predicate(term)!) } : undefined;
-  return { ...step, next: step.next === old ? next || undefined : step.next, error: step.error === old ? next || undefined : step.error, body: step.body === old ? next || undefined : step.body,
-    branches: step.branches?.map((name) => name === old ? next : name).filter(Boolean), cases: Object.fromEntries(Object.entries(step.cases ?? {}).map(([key, name]) => [key, name === old ? next : name])),
-    inputs: Object.fromEntries(Object.entries(step.inputs ?? {}).flatMap(([name, value]) => { const binding = rewrite(value); return binding ? [[name, binding]] : []; })),
-    value: rewrite(step.value), target: rewrite(step.target), collection: rewrite(step.collection), condition: predicate(step.condition) };
-}
 export function nextStepName(steps: WorkflowStep[], base: string): string {
   const simple = base.replace(/[^a-z0-9]/g, "").replace(/^[^a-z]+/, "") || "step";
   let name = simple, index = 2; while (steps.some((step) => step.name === name)) name = `${simple}${index++}`; return name;

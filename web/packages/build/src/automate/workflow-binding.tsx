@@ -1,5 +1,4 @@
-import {schemaIssue} from "./workflow-schema";
-export {schemaIssue} from "./workflow-schema";
+import {schemaIssue} from "../shared/value-schema";
 import { ContextHelp, InputDraftProvider, Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";

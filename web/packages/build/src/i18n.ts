@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "This automation uses settings that need the flow map. Open it there to keep every step and result.": "此自动化包含需要在流程图中编辑的设置。请打开流程图，保留全部步骤和结果。",
   "Keep the selected source and target releases.": "保留所选的来源和目标发布版本。",
   "Enterprise element types": "企业元素类型",
   "Choose the enterprise families this reference accepts. No selection accepts every readable enterprise element.": "选择此引用接受的企业元素类型；不选则允许所有可读取的企业元素。",
