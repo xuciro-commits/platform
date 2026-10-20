@@ -105,7 +105,11 @@ func (b *Build) submitDatasetLoad(c platform.Caller, s *pb.Submission, now time.
 			}
 			ds.Marking = construction.HigherMarking(ds.Marking, payload.Marking)
 			c.Put(r, ds)
-			c.Put(r, construction.DatasetVersion{Record: platform.Record{ID: construction.VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, At: now, Rows: len(payload.Rows), Data: data, Request: s.GetIdempotencyKey()})
+			version := construction.DatasetVersion{Record: platform.Record{ID: construction.VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, At: now, Rows: len(payload.Rows), Data: data}
+			if !c.Replaying {
+				version.Request = s.GetIdempotencyKey()
+			}
+			c.Put(r, version)
 			keep := fixed.Keep
 			if keep <= 0 {
 				keep = construction.DatasetKeepDefault

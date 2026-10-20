@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"platformserver/internal/construction"
 	"platformserver/platform"
@@ -254,5 +257,65 @@ func TestIntegrationPipelineRecoversItsOriginalOutputVersion(t *testing.T) {
 	rows, version, err = construction.DatasetRows(restored.automation(construction.ID, false), "out", 0)
 	if err != nil || version != 3 || rows[0]["note"] != "new input" || rows[0]["tag"] != float64(1) {
 		t.Fatalf("the next input version did not run independently: %+v %d %v", rows, version, err)
+	}
+}
+
+// Legacy submission replay reproduces its original record image. New accepted
+// results retain the request key used to resume an integration after a restart.
+func TestIntegrationDatasetLegacyReplayKeepsOriginalImage(t *testing.T) {
+	compose := func() *Tenant { return builderTenant(t, "dataset-legacy-request") }
+	live := compose()
+	member := memberOf(t, live, "builder")
+	at := time.Date(2026, 10, 20, 8, 0, 0, 0, time.UTC)
+	var entries []Entry
+	for _, step := range []struct {
+		schema  string
+		payload any
+	}{
+		{construction.DatasetType + ".create", map[string]any{"name": "historical", "title": "Historical rows"}},
+		{construction.SchemaDatasetLoad, map[string]any{"rows": []map[string]any{{"note": "original"}}, "producer": "legacy"}},
+	} {
+		request := submission(live, member, construction.ID, step.schema, construction.DatasetType, "DATASET", step.payload)
+		raw, err := protojson.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, Entry{App: construction.ID, Kind: "submission", Principal: platform.Raw(member), Body: raw, At: at})
+	}
+	if err := live.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	original, ok := live.Held(construction.DatasetVersionType + "/DATASET@1")
+	if !ok {
+		t.Fatal("legacy dataset version was not restored")
+	}
+	originalImage := platform.Raw(original)
+	if original.(construction.DatasetVersion).Request != "" || bytes.Contains(originalImage, []byte(`"requestKey"`)) {
+		t.Fatalf("legacy replay added request metadata to the original image: %s", originalImage)
+	}
+	live.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
+	request := submission(live, member, construction.ID, construction.SchemaDatasetLoad, construction.DatasetType, "DATASET", map[string]any{"rows": []map[string]any{{"note": "new"}}, "producer": "current"})
+	if _, refusal := live.Submit(member, request, at.Add(time.Minute)); refusal != nil {
+		t.Fatal(refusal)
+	}
+	current, ok := live.Held(construction.DatasetVersionType + "/DATASET@2")
+	if !ok || current.(construction.DatasetVersion).Request != request.GetIdempotencyKey() {
+		t.Fatal("new accepted version did not retain its request identity")
+	}
+	CheckReplay(t, live, entries, compose)
+	restored := compose()
+	if err := restored.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	old, ok := restored.Held(construction.DatasetVersionType + "/DATASET@1")
+	if !ok || !bytes.Equal(platform.Raw(old), originalImage) {
+		t.Fatal("mixed replay changed the original legacy image")
+	}
+	kept, ok := restored.Held(construction.DatasetVersionType + "/DATASET@2")
+	if !ok || kept.(construction.DatasetVersion).Request != request.GetIdempotencyKey() {
+		t.Fatal("pure result application lost the saved request identity")
 	}
 }
