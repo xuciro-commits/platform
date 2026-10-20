@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"slices"
 
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
 // CompleteBlueprintAssets uses exactly the ordinary object publisher's
 // generated actions/pages. Explicit owner-produced pages retain precedence.
 func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
-	var objects []Object
+	var objects []construction.Object
 	for _, asset := range input {
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject {
-			var object Object
-			if err := json.Unmarshal(asset.Body, &object); err != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetObject {
+			var object construction.Object
+			if err := json.Unmarshal(asset.Body, &object); err != nil || construction.TypeOf(object.Name) != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid blueprint object %s", asset.Ref)
 			}
 			object.ID = object.Name
@@ -43,7 +43,7 @@ func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platfo
 
 // RootDrafts resolves portable logical roots to the same saved drafts the
 // existing joint review and simulation already use.
-func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
+func (b *Build) RootDrafts(roots []platform.AssetRef) ([]construction.JointDraftRef, error) {
 	objects, _, _, err := b.releaseInventory()
 	if err != nil {
 		return nil, err
@@ -52,17 +52,17 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out []JointDraftRef
-	seen := map[JointDraftRef]bool{}
+	var out []construction.JointDraftRef
+	seen := map[construction.JointDraftRef]bool{}
 	for _, root := range roots {
 		id := ""
-		if root.App != ID {
+		if root.App != construction.ID {
 			return nil, fmt.Errorf("test root %s has no Build draft", root)
 		}
 		switch root.Kind {
 		case platform.AssetObject:
 			for _, o := range objects {
-				if !o.Archived && buildapi.TypeOf(o.Name) == root.Name {
+				if !o.Archived && construction.TypeOf(o.Name) == root.Name {
 					if id != "" {
 						return nil, fmt.Errorf("test root %s is ambiguous", root)
 					}
@@ -71,7 +71,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 			}
 		case platform.AssetFlow:
 			for _, p := range processes {
-				if !p.Archived && buildapi.TypeOf(p.Name) == root.Name {
+				if !p.Archived && construction.TypeOf(p.Name) == root.Name {
 					if id != "" {
 						return nil, fmt.Errorf("test root %s is ambiguous", root)
 					}
@@ -84,7 +84,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 		if id == "" {
 			return nil, fmt.Errorf("test root %s has no saved draft", root)
 		}
-		selected := []JointDraftRef{{Kind: root.Kind, ID: id}}
+		selected := []construction.JointDraftRef{{Kind: root.Kind, ID: id}}
 		dependencies, err := b.ReferencedDrafts(root.Kind, id)
 		if err != nil {
 			return nil, err
@@ -103,19 +103,19 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 	return out, nil
 }
 
-func portableConnectionDraft(asset platform.ReleaseAsset) (Connection, error) {
-	var definition ConnectionDefinition
-	if err := buildapi.ValueDecodeIntegration(asset.Body, &definition); err != nil {
-		return Connection{}, err
+func portableConnectionDraft(asset platform.ReleaseAsset) (construction.Connection, error) {
+	var definition construction.ConnectionDefinition
+	if err := construction.ValueDecodeIntegration(asset.Body, &definition); err != nil {
+		return construction.Connection{}, err
 	}
 	// Site addresses, credentials and concrete protocol settings are filled in
 	// this environment before check/publication, never copied from a package.
-	return Connection{Name: definition.Name, Title: definition.Title, Kind: definition.Kind, Marking: definition.Marking, State: "draft"}, nil
+	return construction.Connection{Name: definition.Name, Title: definition.Title, Kind: definition.Kind, Marking: definition.Marking, State: "draft"}, nil
 }
 
 func (b *Build) draftIntegrationTargets(assets []platform.ReleaseAsset) {
 	for _, asset := range assets {
-		if asset.Ref.App != ID || !buildapi.ValueIntegrationKind(asset.Ref.Kind) {
+		if asset.Ref.App != construction.ID || !construction.ValueIntegrationKind(asset.Ref.Kind) {
 			continue
 		}
 		id := asset.Ref.Name

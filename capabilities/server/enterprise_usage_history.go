@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -51,9 +51,9 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 	for _, et := range store.types {
 		fields(et.info.Type, et.info.Fields, nil)
 	}
-	if objects := store.types[build.ObjectType]; objects != nil {
+	if objects := store.types[construction.ObjectType]; objects != nil {
 		for _, row := range objects.rows.all() {
-			typ := build.TypeOf(businessField(objects.info, row.value, "name"))
+			typ := construction.TypeOf(businessField(objects.info, row.value, "name"))
 			if published := businessField(objects.info, row.value, "published"); published != "" {
 				bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
 			}
@@ -96,8 +96,8 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 		typ := body.typ
 		if declaration.Type != "" {
 			typ = declaration.Type
-		} else if declaration.Name != "" && strings.HasPrefix(typ, build.ID+".") {
-			typ = build.TypeOf(declaration.Name)
+		} else if declaration.Name != "" && strings.HasPrefix(typ, construction.ID+".") {
+			typ = construction.TypeOf(declaration.Name)
 		}
 		if declaration.Entity != nil {
 			declaration = *declaration.Entity

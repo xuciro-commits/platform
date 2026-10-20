@@ -13,8 +13,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -54,7 +54,7 @@ type observationReadPlan struct {
 	info       ObservationInfo
 	entity     platform.EntityInfo
 	record     json.RawMessage
-	connection build.Connection
+	connection construction.Connection
 	header     string
 	device     string
 	stamp      string
@@ -72,12 +72,12 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 	if err != nil {
 		return nil, observationUnavailable(err)
 	}
-	connections, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
+	connections, _, refusal := platform.Find[construction.Connection](t.automation(construction.ID, false), platform.Query{Limit: 500})
 	if refusal != nil {
 		return nil, refusal
 	}
 	live := map[string]bool{}
-	if owner, ok := t.app(build.ID).(host.IntegrationDefinitions); ok {
+	if owner, ok := t.app(construction.ID).(host.IntegrationDefinitions); ok {
 		for _, connection := range connections {
 			if connection.State == "ready" && !connection.Archived {
 				if fixed, err := owner.ExecutionConnection(connection); err == nil && fixed.Protocol != nil {
@@ -89,7 +89,7 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 	out := []ObservationInfo{}
 	for _, definition := range definitions {
 		if definition.Observation != nil {
-			out = append(out, ObservationInfo{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation, SupportsLatest: definition.Observation.Connection.App == build.ID && live[definition.Observation.Connection.Name]})
+			out = append(out, ObservationInfo{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation, SupportsLatest: definition.Observation.Connection.App == construction.ID && live[definition.Observation.Connection.Name]})
 		}
 	}
 	return out, nil
@@ -165,7 +165,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if json.Unmarshal(plan.record, &values) != nil || json.Unmarshal(values[definition.DeviceField], &plan.device) != nil || strings.TrimSpace(plan.device) == "" || len(plan.device) > 256 {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The original record needs a readable observation device identifier")
 	}
-	connections, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
+	connections, _, refusal := platform.Find[construction.Connection](t.automation(construction.ID, false), platform.Query{Limit: 500})
 	if refusal != nil {
 		return plan, refusal
 	}
@@ -193,8 +193,8 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	}
 	// Connection markings retain the existing integration restriction; source
 	// roles never downgrade confidential input for an ordinary business user.
-	if build.Guarded(plan.connection.Marking) {
-		marking := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: build.ConnectionType, Record: plan.connection.ID}, at, false)
+	if construction.Guarded(plan.connection.Marking) {
+		marking := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: construction.ConnectionType, Record: plan.connection.ID}, at, false)
 		if refusal := authorizationRefusal(marking); refusal != nil {
 			return plan, refusal
 		}

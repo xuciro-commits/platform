@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -39,18 +41,18 @@ func TestPageDraftRulesUseSavedModelsWithoutPublishingThem(t *testing.T) {
 			tn := builderTenant(t, fmt.Sprint("page-draft-rules-", installed))
 			member := memberOf(t, tn, "builder")
 			const object = "build.draftrules"
-			fields := []build.Field{{Name: "note", Title: "Note", Type: "text"}}
-			decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "OBJECT", map[string]any{"name": "draftrules", "title": "Draft rules", "fields": fields}, at)
+			fields := []construction.Field{{Name: "note", Title: "Note", Type: "text"}}
+			decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "OBJECT", map[string]any{"name": "draftrules", "title": "Draft rules", "fields": fields}, at)
 			page := modelTestPage(object, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: object}}, ID: "records", Widget: "table", ConfigVersion: 1}})
 			if installed {
-				decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{}, at)
-				decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
-				decide(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at)
+				decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "OBJECT", map[string]any{}, at)
+				decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
+				decide(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at)
 			}
-			beforeObject, _ := platform.Get[build.Object](tn.automation(build.ID, false), "OBJECT")
-			beforePage, _ := platform.Get[build.Page](tn.automation(build.ID, false), "PAGE")
-			fields = append(fields, build.Field{Name: "followup", Title: "Follow up", Type: "boolean"})
-			decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "OBJECT", map[string]any{"fields": fields}, at)
+			beforeObject, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), "OBJECT")
+			beforePage, _ := platform.Get[build.Page](tn.automation(construction.ID, false), "PAGE")
+			fields = append(fields, construction.Field{Name: "followup", Title: "Follow up", Type: "boolean"})
+			decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "OBJECT", map[string]any{"fields": fields}, at)
 			ref := platform.ModelObject(object)
 			path := platform.Expr{Op: "path", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", "selected")}, Path: []string{"followup"}}
 			page.Document.Variables = map[string]platform.PageVariable{
@@ -59,24 +61,24 @@ func TestPageDraftRulesUseSavedModelsWithoutPublishingThem(t *testing.T) {
 				"visible":  {Scope: "page", Type: "boolean", Mode: "derived", Rule: &path},
 			}
 			if installed {
-				decide(t, tn, "builder", build.ID, "build.page.edit", build.PageType, "PAGE", map[string]any{"document": page.Document}, at)
+				decide(t, tn, "builder", construction.ID, "build.page.edit", construction.PageType, "PAGE", map[string]any{"document": page.Document}, at)
 			} else {
-				decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
+				decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
 			}
-			decide(t, tn, "builder", build.ID, "build.page.edit", build.PageType, "PAGE", map[string]any{"title": "Saved draft rules"}, at)
-			saved, _ := platform.Get[build.Page](tn.automation(build.ID, false), "PAGE")
+			decide(t, tn, "builder", construction.ID, "build.page.edit", construction.PageType, "PAGE", map[string]any{"title": "Saved draft rules"}, at)
+			saved, _ := platform.Get[build.Page](tn.automation(construction.ID, false), "PAGE")
 			resourceType := saved.Document.Variables["selected"].RuleType
 			propertyType := saved.Document.Variables["followup"].RuleType
 			if resourceType == nil || resourceType.Fields["followup"].Kind != "boolean" || propertyType == nil || propertyType.Kind != "boolean" || saved.Document.Variables["visible"].Rule == nil {
 				t.Fatalf("saved rules did not retain their draft field types: %+v", saved.Document.Variables)
 			}
-			if got := refuse(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at); got == "ok" {
+			if got := refuse(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at); got == "ok" {
 				t.Fatal("direct publication used an unselected object draft")
 			}
 			if alone, err := tn.PreviewRelease(member, platform.AssetPage, "PAGE"); err == nil && alone.Diagnostic == "" {
 				t.Fatal("page-only candidate used an unselected object draft")
 			}
-			selection := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetPage, ID: "PAGE"}}
+			selection := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetPage, ID: "PAGE"}}
 			joint, err := tn.PreviewReleaseDrafts(member, selection)
 			if err != nil || joint.Diagnostic != "" || joint.CandidateID == "" {
 				t.Fatalf("joint model and page rules: %+v %v", joint, err)
@@ -85,8 +87,8 @@ func TestPageDraftRulesUseSavedModelsWithoutPublishingThem(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			afterObject, _ := platform.Get[build.Object](tn.automation(build.ID, false), "OBJECT")
-			afterPage, _ := platform.Get[build.Page](tn.automation(build.ID, false), "PAGE")
+			afterObject, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), "OBJECT")
+			afterPage, _ := platform.Get[build.Page](tn.automation(construction.ID, false), "PAGE")
 			if afterObject.Published != beforeObject.Published || afterPage.Published != beforePage.Published {
 				t.Fatal("saving drafts or reviewing the candidate rewrote an original publication")
 			}
@@ -106,7 +108,7 @@ func TestPageModelSelectorAndStartShareOneRuleAndRecover(t *testing.T) {
 	tn := compose()
 	var entries []Entry
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	op := publishObject(t, tn, "builder", "OP", map[string]any{"name": "operation", "title": "Operation", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "cut", Title: "Requires cutting", Type: "boolean"}, {Name: "drill", Title: "Requires drilling", Type: "boolean"}}}, at)
+	op := publishObject(t, tn, "builder", "OP", map[string]any{"name": "operation", "title": "Operation", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "cut", Title: "Requires cutting", Type: "boolean"}, {Name: "drill", Title: "Requires drilling", Type: "boolean"}}}, at)
 	path := func(name string) platform.Expr {
 		return platform.Expr{Op: "path", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", "input.operation")}, Path: []string{name}}
 	}
@@ -114,16 +116,16 @@ func TestPageModelSelectorAndStartShareOneRuleAndRecover(t *testing.T) {
 		return platform.Expr{Op: "or", Kind: "boolean", Args: []platform.Expr{{Op: "not", Kind: "boolean", Args: []platform.Expr{path(name)}}, platform.ExprReference("boolean", name)}}
 	}
 	rule := platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{implication("cut"), implication("drill")}}
-	action := build.Action{Name: "start", Title: "Start", From: []string{"ready"}, To: "running", Inputs: []build.Input{{Name: "operation", Title: "Operation", Type: "reference", Ref: op, Required: true}, {Name: "note", Title: "Optional note", Type: "text"}}, Conditions: []build.Condition{{Expr: &rule, Message: "Equipment lacks required capabilities"}}}
-	eq := publishObject(t, tn, "builder", "EQ", map[string]any{"name": "equipment", "title": "Equipment", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "cut", Title: "Cutting", Type: "boolean"}, {Name: "drill", Title: "Drilling", Type: "boolean"}}, "states": []build.State{{Name: "ready", Title: "Ready", Tone: "info"}, {Name: "running", Title: "Running", Tone: "success"}}, "actions": []build.Action{action}}, at)
-	decide(t, tn, "user", build.ID, op+".create", op, "operation", map[string]any{"name": "Cut", "cut": true, "drill": false}, at)
+	action := construction.Action{Name: "start", Title: "Start", From: []string{"ready"}, To: "running", Inputs: []construction.Input{{Name: "operation", Title: "Operation", Type: "reference", Ref: op, Required: true}, {Name: "note", Title: "Optional note", Type: "text"}}, Conditions: []construction.Condition{{Expr: &rule, Message: "Equipment lacks required capabilities"}}}
+	eq := publishObject(t, tn, "builder", "EQ", map[string]any{"name": "equipment", "title": "Equipment", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "cut", Title: "Cutting", Type: "boolean"}, {Name: "drill", Title: "Drilling", Type: "boolean"}}, "states": []construction.State{{Name: "ready", Title: "Ready", Tone: "info"}, {Name: "running", Title: "Running", Tone: "success"}}, "actions": []construction.Action{action}}, at)
+	decide(t, tn, "user", construction.ID, op+".create", op, "operation", map[string]any{"name": "Cut", "cut": true, "drill": false}, at)
 	for _, row := range []struct {
 		id         string
 		cut, drill bool
 	}{{"cut", true, false}, {"drill", false, true}, {"zero", false, false}} {
-		decide(t, tn, "user", build.ID, eq+".create", eq, row.id, map[string]any{"name": row.id, "cut": row.cut, "drill": row.drill}, at)
+		decide(t, tn, "user", construction.ID, eq+".create", eq, row.id, map[string]any{"name": row.id, "cut": row.cut, "drill": row.drill}, at)
 	}
-	p := modelTestPage(op, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: op}}, ID: "operations", Widget: "table", ConfigVersion: 1}, {PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: eq, Options: &platform.OptionsRef{Rule: &platform.ModelRule{Action: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: eq + ".start"}, Inputs: map[string]string{"operation": "operation"}}}}}, ID: "equipment", Widget: "record-picker", ConfigVersion: 1}})
+	p := modelTestPage(op, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: op}}, ID: "operations", Widget: "table", ConfigVersion: 1}, {PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: eq, Options: &platform.OptionsRef{Rule: &platform.ModelRule{Action: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: eq + ".start"}, Inputs: map[string]string{"operation": "operation"}}}}}, ID: "equipment", Widget: "record-picker", ConfigVersion: 1}})
 	p.Document.Variables["operation"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "operations"}}
 	request := PageModelRead{Draft: &p, Section: "equipment", Records: map[string]PageModelRecord{"operation": {Object: op, ID: "operation"}}, Limit: 20, Sort: []string{"id"}}
 	read := func() PageModelResult {
@@ -139,25 +141,25 @@ func TestPageModelSelectorAndStartShareOneRuleAndRecover(t *testing.T) {
 	if out.Total != 1 || out.Records[0]["id"] != "cut" || out.Partial {
 		t.Fatalf("subset candidates or initialized false changed: %+v", out)
 	}
-	if got := refuse(t, tn, "user", build.ID, eq+".start", eq, "drill", map[string]any{"operation": "operation"}, at); !strings.Contains(got, action.Conditions[0].Message) {
+	if got := refuse(t, tn, "user", construction.ID, eq+".start", eq, "drill", map[string]any{"operation": "operation"}, at); !strings.Contains(got, action.Conditions[0].Message) {
 		t.Fatalf("start did not use selector's rule: %s", got)
 	}
 	// Only the original action definition changes. The selector is unchanged.
 	changed := platform.ExprReference("boolean", "drill")
 	action.Conditions[0].Expr = &changed
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "EQ", map[string]any{"actions": []build.Action{action}}, at)
-	decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "EQ", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "EQ", map[string]any{"actions": []construction.Action{action}}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "EQ", map[string]any{}, at)
 	out = read()
 	if out.Total != 1 || out.Records[0]["id"] != "drill" {
 		t.Fatalf("rule edit did not change candidates: %+v", out)
 	}
-	if got := refuse(t, tn, "user", build.ID, eq+".start", eq, "cut", map[string]any{"operation": "operation"}, at); !strings.Contains(got, action.Conditions[0].Message) {
+	if got := refuse(t, tn, "user", construction.ID, eq+".start", eq, "cut", map[string]any{"operation": "operation"}, at); !strings.Contains(got, action.Conditions[0].Message) {
 		t.Fatalf("rule edit did not change start: %s", got)
 	}
-	decide(t, tn, "user", build.ID, eq+".start", eq, "drill", map[string]any{"operation": "operation"}, at)
+	decide(t, tn, "user", construction.ID, eq+".start", eq, "drill", map[string]any{"operation": "operation"}, at)
 	// A new model page is canonical in the accepted result and release closure.
-	decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": p.Name, "title": p.Title, "object": op, "sections": modelAuthoringSections(p.Sections), "document": p.Document}, at)
-	decide(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": p.Name, "title": p.Title, "object": op, "sections": modelAuthoringSections(p.Sections), "document": p.Document}, at)
+	decide(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at)
 	preview, err := tn.PreviewRelease(memberOf(t, tn, "builder"), platform.AssetPage, "PAGE")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("model closure: %+v %v", preview, err)
@@ -168,15 +170,15 @@ func TestPageModelSelectorAndStartShareOneRuleAndRecover(t *testing.T) {
 func TestPageModelDeclaredInverseFilteredAndNamedCollections(t *testing.T) {
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	tn := builderTenant(t, "model-sets")
-	parent := publishObject(t, tn, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
-	child := publishObject(t, tn, "builder", "CHILD", map[string]any{"name": "child", "title": "Child", "fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: parent, Inverse: "children"}, {Name: "number", Title: "Number", Type: "integer"}}}, at)
+	parent := publishObject(t, tn, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
+	child := publishObject(t, tn, "builder", "CHILD", map[string]any{"name": "child", "title": "Child", "fields": []construction.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: parent, Inverse: "children"}, {Name: "number", Title: "Number", Type: "integer"}}}, at)
 	positive := platform.Expr{Op: ">", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("integer", "number"), platform.ExprLiteralValue("integer", "0")}}
 	sets := []platform.RecordSet{{Name: "children", From: "children", Direction: "inverse", Object: child, Order: []platform.RecordSetSort{{Expr: platform.ExprReference("integer", "number")}}, Limit: 100}, {Name: "positive", From: "children", Direction: "inverse", Object: child, Where: []platform.Expr{positive}, Order: []platform.RecordSetSort{{Expr: platform.ExprReference("integer", "number")}}, Limit: 100}}
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "PARENT", map[string]any{"sets": sets}, at)
-	decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "PARENT", map[string]any{}, at)
-	decide(t, tn, "user", build.ID, parent+".create", parent, "parent", map[string]any{"name": "Parent"}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "PARENT", map[string]any{"sets": sets}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "PARENT", map[string]any{}, at)
+	decide(t, tn, "user", construction.ID, parent+".create", parent, "parent", map[string]any{"name": "Parent"}, at)
 	for i := -1; i < 4; i++ {
-		decide(t, tn, "user", build.ID, child+".create", child, fmt.Sprint("child", i), map[string]any{"parent": "parent", "number": i}, at)
+		decide(t, tn, "user", construction.ID, child+".create", child, fmt.Sprint("child", i), map[string]any{"parent": "parent", "number": i}, at)
 	}
 	p := modelTestPage(parent, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: parent}}, ID: "parent", Widget: "table", ConfigVersion: 1}, {PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: child, Set: &platform.ModelRecordSet{RecordVariable: "parent", Name: "children"}, Visibility: "mark"}}, ID: "children", Widget: "table", ConfigVersion: 1}})
 	p.Document.Variables["parent"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "parent"}}
@@ -200,9 +202,9 @@ func TestPageModelDeclaredInverseFilteredAndNamedCollections(t *testing.T) {
 	if out.Total != 3 || len(out.Records) != 2 {
 		t.Fatalf("filtered set: %+v", out)
 	}
-	decide(t, tn, "builder", build.ID, "build.query.create", build.QueryType, "QUERY", map[string]any{"name": "children", "title": "Named children", "description": "Children of the selected parent", "object": child, "by": "parent", "sort": []string{"number"}, "limit": 2}, at)
-	decide(t, tn, "builder", build.ID, "build.query.publish", build.QueryType, "QUERY", map[string]any{}, at)
-	binding, ok := (hostView{t: tn}).ModelQueryBinding(platform.AssetRef{App: build.ID, Kind: platform.AssetQuery, Name: "children"})
+	decide(t, tn, "builder", construction.ID, "build.query.create", construction.QueryType, "QUERY", map[string]any{"name": "children", "title": "Named children", "description": "Children of the selected parent", "object": child, "by": "parent", "sort": []string{"number"}, "limit": 2}, at)
+	decide(t, tn, "builder", construction.ID, "build.query.publish", construction.QueryType, "QUERY", map[string]any{}, at)
+	binding, ok := (hostView{t: tn}).ModelQueryBinding(platform.AssetRef{App: construction.ID, Kind: platform.AssetQuery, Name: "children"})
 	if !ok {
 		t.Fatal("named query unavailable")
 	}
@@ -231,14 +233,14 @@ func TestPageModelDeclaredInverseFilteredAndNamedCollections(t *testing.T) {
 func TestPageModelMigrationPathsReadOnlyAndPublicationRefusals(t *testing.T) {
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	tn := builderTenant(t, "model-paths")
-	country := publishObject(t, tn, "builder", "COUNTRY", map[string]any{"name": "country", "title": "Country", "fields": []build.Field{{Name: "name", Title: "Country name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}}, at)
-	supplier := publishObject(t, tn, "builder", "SUPPLIER", map[string]any{"name": "supplier", "title": "Supplier", "fields": []build.Field{{Name: "country", Title: "Country", Type: "reference", Ref: country}}}, at)
-	order := publishObject(t, tn, "builder", "ORDER", map[string]any{"name": "order", "title": "Order", "fields": []build.Field{{Name: "supplier", Title: "Supplier", Type: "reference", Ref: supplier}, {Name: "note", Title: "Note", Type: "text", Write: []string{build.Builder}}}}, at)
+	country := publishObject(t, tn, "builder", "COUNTRY", map[string]any{"name": "country", "title": "Country", "fields": []construction.Field{{Name: "name", Title: "Country name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}}, at)
+	supplier := publishObject(t, tn, "builder", "SUPPLIER", map[string]any{"name": "supplier", "title": "Supplier", "fields": []construction.Field{{Name: "country", Title: "Country", Type: "reference", Ref: country}}}, at)
+	order := publishObject(t, tn, "builder", "ORDER", map[string]any{"name": "order", "title": "Order", "fields": []construction.Field{{Name: "supplier", Title: "Supplier", Type: "reference", Ref: supplier}, {Name: "note", Title: "Note", Type: "text", Write: []string{construction.Builder}}}}, at)
 	for _, r := range []struct {
 		typ, id string
 		payload any
 	}{{country, "country", map[string]any{"name": "Canada", "secret": "hidden"}}, {supplier, "supplier", map[string]any{"country": "country"}}, {order, "order", map[string]any{"supplier": "supplier", "note": "Original"}}} {
-		decide(t, tn, "builder", build.ID, r.typ+".create", r.typ, r.id, r.payload, at)
+		decide(t, tn, "builder", construction.ID, r.typ+".create", r.typ, r.id, r.payload, at)
 	}
 	legacy := modelTestPage(order, []platform.Section{{ID: "orders", Widget: "table", ConfigVersion: 1, Fields: []string{"note", "supplier.country.name"}}})
 	legacy.Document.UIProfile = "platform.page.v2.109"
@@ -262,10 +264,10 @@ func TestPageModelMigrationPathsReadOnlyAndPublicationRefusals(t *testing.T) {
 		t.Fatalf("multi-hop model read: %+v %v", out, err)
 	}
 	// The user consumes the installed page, with original per-field decisions.
-	decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", map[string]any{"name": "orders", "title": "Orders", "object": order, "sections": modelAuthoringSections(migrated.Sections), "document": migrated.Document}, at)
-	decide(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": "orders", "title": "Orders", "object": order, "sections": modelAuthoringSections(migrated.Sections), "document": migrated.Document}, at)
+	decide(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at)
 	request.Draft = nil
-	request.Page = platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: "orders"}
+	request.Page = platform.AssetRef{App: construction.ID, Kind: platform.AssetPage, Name: "orders"}
 	tn.mu.Lock()
 	out, err = tn.readPageModel(memberOf(t, tn, "user"), request, at)
 	tn.mu.Unlock()
@@ -278,7 +280,7 @@ func TestPageModelMigrationPathsReadOnlyAndPublicationRefusals(t *testing.T) {
 		model := *p.Sections[0].Model
 		p.Sections[0].Model = &model
 		model.Fields = []platform.FieldRef{{Path: path}}
-		if err := (hostView{t: tn}).CheckPageModel(platform.NewCaller(runtime{tn}, memberOf(t, tn, "user"), build.ID, false, false), p); err == nil {
+		if err := (hostView{t: tn}).CheckPageModel(platform.NewCaller(runtime{tn}, memberOf(t, tn, "user"), construction.ID, false, false), p); err == nil {
 			t.Fatalf("publish accepted unavailable path %v", path)
 		}
 	}

@@ -24,14 +24,14 @@ Connection/Source/Dataset/Pipeline 的定义已由 ADR-0037、ADR-0046 纳入原
 
 | profile | 需要 | 读什么 | 增量 |
 |---|---|---|---|
-| `json` | http | `url`（可相对 Connection 地址）+ `path` | 无（整表，内容键去重） |
+| `json` | http | `url`（可相对 Connection 地址）+ `path` | 无（整表；一次拉取固定一次执行） |
 | `csv` | http | 同上，首行为列名 | 无 |
 | `odata` | odata | `entity`（实体集名）+ 可选 `filter` | `since`：时间戳/序列属性，`$filter=since gt <cursor>&$orderby=since`，跟随 `@odata.nextLink` / `d.__next` 分页，v2 `d.results` 与 v4 `value` 都认 |
 | `table` | postgres | `entity`（`schema.table`）+ 可选 `filter`（WHERE 片段，参数化不可用于片段，故只允许标识符与常量的简单比较） | `since`：列名，`WHERE since > $1 ORDER BY since LIMIT 5000` |
 
 `cursor` 是只读字段，每次成功拉取后随 `build.source.pulled` 一起写回（最大 `since` 值）；`pull` 之外另有 `reset` 把 cursor 清空重拉。无 Connection 的 json source 继续按 ADR-0023 工作（向后兼容：`connection` 为空、`profile` 为空视为 json）。
 
-行的处理不变：映射 → 目标对象自己的 create/edit → 内容键幂等 → `pulled` 摘要。Dataset 输出及复杂映射已由 ADR-0024 实现，原直写路径仍适用于小而稳定的接口。
+行处理按 ADR-0064 改为：拉取与映射 → 持久接受固定输入/执行身份 → 目标对象自己的 create/edit → 原执行的 `pulled` 摘要。同次执行重试复用原答复；新的快照拉取拥有新身份，A→B→A 不会漏掉最后一次变化。Dataset 输出及复杂映射归 ADR-0024，原直写路径仍适用于小而稳定的接口。
 
 ### 3. 构建器
 
@@ -48,6 +48,6 @@ RFC/IDoc、CDC、OAuth 刷新流程（密钥名可以指向一个会轮换的文
 
 ## HTTP JSON 原接入与保留行为
 
-没有 Connection 的 JSON 来源仍可直接声明 URL、行路径、id 字段、映射和可选请求头。单次读取至多 16 MB、5,000 行，经原受控网络访问规则；http/私网必须显式允许。拉取在锁外进行，映射行以发布者身份提交目标自身 create/edit，内容键去重；同一内容不重新决定，改变内容形成正常编辑。`pulled` 保存计数与最多 20 条失败。恢复不再读取外部网络。
+没有 Connection 的 JSON 来源仍可直接声明 URL、行路径、id 字段、映射和可选请求头。单次读取至多 16 MB、5,000 行，经原受控网络访问规则；http/私网必须显式允许。拉取在锁外进行，映射及匹配结果由原 FileStore 固定，接受执行后才以原发布者的当前权限提交目标自身 create/edit。操作键来自执行和行身份，内容摘要不再当作事件身份。`pulled` 保存计数及最多 20 条失败；追加失败保留原输入以便重启继续，全部成功才推进游标。重置游标结束旧 pending 拉取并请求新的完整拉取，旧接受结果不改写。恢复不读取外部网络，具体执行与版本安排见 ADR-0024 §3。
 
 原 ADR-0023 的 CSV/数据库/预览/血缘待建列表已取消：四类 Source 已在本文实现，数据集与管道归 ADR-0024，来源回读归 ADR-0051。Source 直写对象和 Dataset 输出同时是有效路径，不能因引入 Dataset 强制迁移所有小接口。已退出的 erpadapter 不再作为待迁移任务；外部 ERP 使用原 Connection、协议与效果机制。

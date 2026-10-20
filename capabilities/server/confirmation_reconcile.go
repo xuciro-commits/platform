@@ -9,8 +9,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -23,11 +23,11 @@ type statusReadAttempt struct {
 // Reconciliation uses the original bounded source readers on their outside
 // lane, then revalidates the captured progress and the applicant's access.
 func (t *Tenant) ReconcileConfirmations(at time.Time) {
-	if t.quarantined() || t.app(build.ID) == nil {
+	if t.quarantined() || t.app(construction.ID) == nil {
 		return
 	}
 	t.mu.Lock()
-	runs, err := platform.PendingConfirmations(t.automation(build.ID, false))
+	runs, err := platform.PendingConfirmations(t.automation(construction.ID, false))
 	if err != nil {
 		t.mu.Unlock()
 		return
@@ -74,13 +74,13 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		for i := range saved.Parties {
 			slot := saved.ID + ":" + saved.Parties[i].Name
 			t.mu.Lock()
-			run, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), saved.ID)
+			run, exists := platform.Get[platform.ConfirmationRun](t.automation(construction.ID, false), saved.ID)
 			valid := exists && i < len(run.Parties) && i < len(run.Definition.Parties) && run.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, run.State)
 			if valid {
 				valid = (hostView{t: t}).CheckConfirmationRead(run, i, at) == nil
 			}
-			var source build.Source
-			var connection build.Connection
+			var source construction.Source
+			var connection construction.Connection
 			if valid {
 				party, policy := run.Parties[i], run.Definition.Parties[i].Reconcile
 				attempt := t.confirmationReads[slot]
@@ -106,7 +106,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			diff := platform.ConfirmationDifference{At: at}
 			var rows []map[string]any
 			var problem error
-			if build.Guarded(connection.Marking) {
+			if construction.Guarded(connection.Marking) {
 				problem = fmt.Errorf("Reconciliation requires an unclassified source projection")
 			} else {
 				rows, problem = t.readSourceWithConnection(source, &connection)
@@ -125,12 +125,12 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			}
 			matches := 0
 			for _, row := range rows {
-				key, exists := build.ValueLookupPath(row, policy.KeyField)
+				key, exists := construction.ValueLookupPath(row, policy.KeyField)
 				if !exists || fmt.Sprint(key) != subject {
 					continue
 				}
 				matches++
-				value, exists := build.ValueLookupPath(row, policy.ResultField)
+				value, exists := construction.ValueLookupPath(row, policy.ResultField)
 				if !exists {
 					continue
 				}
@@ -161,7 +161,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			}
 			t.mu.Lock()
 			t.confirmationReads[slot] = statusReadAttempt{Due: at.Add(time.Duration(policy.EverySeconds) * time.Second)}
-			current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
+			current, exists := platform.Get[platform.ConfirmationRun](t.automation(construction.ID, false), run.ID)
 			valid = exists && current.Revision == run.Revision && i < len(current.Parties) && current.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, current.State)
 			if valid {
 				valid = (current.Parties[i].State == "pending" || current.Parties[i].State == "unknown") && (hostView{t: t}).CheckConfirmationRead(current, i, at) == nil
@@ -183,9 +183,9 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				}
 			}
 			payload := map[string]any{"party": p.Name, "revision": run.Revision, "outcome": outcome, "reason": "Source reconciliation", "difference": diff, "answer": diff.Observed}
-			caller := t.automation(build.ID, false).Member
-			submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}
-			_, refusal := t.submitAccepted(t.app(build.ID), caller, submission, at, true)
+			caller := t.automation(construction.ID, false).Member
+			submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: construction.ID, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}
+			_, refusal := t.submitAccepted(t.app(construction.ID), caller, submission, at, true)
 			t.mu.Unlock()
 			if refusal != nil {
 				continue // A stale read or revoked access is not an accepted difference.

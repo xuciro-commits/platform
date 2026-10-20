@@ -112,6 +112,10 @@ type ModelBinding struct {
 
 ## 5. As built
 
+ADR-0064 对原场景属性清单补齐图层和映射的真实字段，移除 ValueSchema 不支持的 additionalProperties 占位；已存在的非空图层/映射不再被误拒绝。前后端使用同一份原遥测页面数据检查合法结构，额外未知属性仍拒绝，不放宽通用对象规则；专有场景语义继续归原 PageSceneConfig 与渲染器检查。Record list 的 grid/list/tiles 枚举只在原组件属性 Schema 声明，运行发现的 layouts 由其派生，专用 Inspector 也读取派生值；保留公开发现字段，删除第二份枚举，原八条记录和固定排序条件继续检查。
+
+公共值 Schema 校验归 `build/src/shared/value-schema.ts`，页面声明、模块导入与 Flow 编辑直接引用唯一实现；页面不再依赖 Flow 目录，旧校验文件与转导出已删除。
+
 组件清单现在从同一声明产生 `authoringFields`、允许字段、端口、配置版本及普通属性 Schema。Web 的作者类型按 `widget` 区分配置，运行期及历史仍读取原扁平 Section；不引入另一套 DSL。普通标题、说明、分隔与间距属性复用 Schema Inspector，专用业务绑定保留原编辑器。注册表只声明专用交互，不再逐项抄写普通属性和版本；原空文档校验的长分支由声明中冻结的历史允许字段代替，旧输入的接受/拒绝范围保留。保存模型绑定时前后端都保留较新的声明 profile，只在原绑定确需更高版本时提升，不把 `v2.111` 降成绑定最低要求 `v2.110`。
 
 页面能力与 profile 要求集中在原清单投影；新普通属性不要求修改全局微版本或另补字段名单。复杂业务约束仍由原编译器检查，历史 profile 与组件配置版本不改写。作者类型和普通属性由声明推导不代表全部复杂 Inspector 已生成，也不把 Go/React 实现反向转换为配置。JSON/YAML 与原画布共用草稿、撤销和正式发布路径。类型、端口、历史允许字段和 Schema Inspector 的检查与浏览器用法归 [Testing](../Testing.md)。

@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,11 +13,11 @@ import (
 	"platformserver/platform"
 )
 
-func alertReleaseAsset(a Alert, version int) (platform.ReleaseAsset, error) {
+func alertReleaseAsset(a construction.Alert, version int) (platform.ReleaseAsset, error) {
 	if version < 1 || version > 64 {
 		return platform.ReleaseAsset{}, fmt.Errorf("an alert may retain at most 64 published versions")
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAlert, Name: a.Name}, ContractVersion: 1, SourceVersion: definitionVersion + ".alert-" + strconv.Itoa(version), Body: platform.Raw(a.Definition())})
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetAlert, Name: a.Name}, ContractVersion: 1, SourceVersion: construction.ValueDefinitionVersion + ".alert-" + strconv.Itoa(version), Body: platform.Raw(a.Definition())})
 }
 
 func sameRuleAsset(left, right platform.ReleaseAsset) bool {
@@ -23,21 +25,23 @@ func sameRuleAsset(left, right platform.ReleaseAsset) bool {
 	return json.Unmarshal(platform.Raw(left), &a) == nil && json.Unmarshal(platform.Raw(right), &b) == nil && reflect.DeepEqual(a, b)
 }
 
-func alertFromAsset(asset platform.ReleaseAsset) (Alert, int, error) {
+func alertFromAsset(asset platform.ReleaseAsset) (construction.Alert, int, error) {
 	var d platform.AlertRule
-	text, found := strings.CutPrefix(asset.SourceVersion, definitionVersion+".alert-")
+	text, found := strings.CutPrefix(asset.SourceVersion, construction.ValueDefinitionVersion+".alert-")
 	version, err := strconv.Atoi(text)
-	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetAlert || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
-		return Alert{}, 0, fmt.Errorf("invalid alert asset %s", asset.Ref)
+	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetAlert || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+		return construction.Alert{}, 0, fmt.Errorf("invalid alert asset %s", asset.Ref)
 	}
-	return Alert{Name: d.Name, Title: d.Title, Object: d.Object.Name, Field: d.Field, Operator: d.Operator, Value: d.Value, Message: d.Message, Role: d.Role, Every: d.Every, Active: d.Active}, version, nil
+	return construction.Alert{Name: d.Name, Title: d.Title, Object: d.Object.Name, Field: d.Field, Operator: d.Operator, Value: d.Value, Message: d.Message, Role: d.Role, Every: d.Every, Active: d.Active}, version, nil
 }
 
 // Only records written before alert publication existed use their original
 // bytes. The first edit freezes that version before changing the draft.
-func legacyAlert(a Alert) bool { return a.State == "" && a.Version == 0 && a.Published == "" }
+func legacyAlert(a construction.Alert) bool {
+	return a.State == "" && a.Version == 0 && a.Published == ""
+}
 
-func freezeLegacyAlert(a *Alert) error {
+func freezeLegacyAlert(a *construction.Alert) error {
 	if !legacyAlert(*a) {
 		return nil
 	}
@@ -48,7 +52,7 @@ func freezeLegacyAlert(a *Alert) error {
 	return retainAlertAsset(a, asset)
 }
 
-func retainAlertAsset(a *Alert, asset platform.ReleaseAsset) error {
+func retainAlertAsset(a *construction.Alert, asset platform.ReleaseAsset) error {
 	_, version, err := alertFromAsset(asset)
 	if err != nil {
 		return err
@@ -63,8 +67,8 @@ func retainAlertAsset(a *Alert, asset platform.ReleaseAsset) error {
 	return nil
 }
 
-func alertImage(image []byte) (Alert, platform.ReleaseAsset, error) {
-	var a Alert
+func alertImage(image []byte) (construction.Alert, platform.ReleaseAsset, error) {
+	var a construction.Alert
 	var asset platform.ReleaseAsset
 	if json.Unmarshal(image, &a) != nil || a.ID == "" || a.State != "published" || json.Unmarshal([]byte(a.Published), &asset) != nil {
 		return a, asset, fmt.Errorf("accepted alert has no immutable publication")
@@ -77,7 +81,7 @@ func alertImage(image []byte) (Alert, platform.ReleaseAsset, error) {
 }
 
 func (b *Build) alertAssets() ([]platform.ReleaseAsset, error) {
-	rows, err := readDefinitionInventory[Alert](b.host.Automation(platform.Caller{}, ID))
+	rows, err := readDefinitionInventory[construction.Alert](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -101,12 +105,12 @@ func (b *Build) alertAssets() ([]platform.ReleaseAsset, error) {
 	return assets, nil
 }
 
-func (b *Build) AlertRules(object string) ([]Alert, error) {
-	rows, err := readDefinitionInventory[Alert](b.host.Automation(platform.Caller{}, ID))
+func (b *Build) AlertRules(object string) ([]construction.Alert, error) {
+	rows, err := readDefinitionInventory[construction.Alert](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return nil, err
 	}
-	var rules []Alert
+	var rules []construction.Alert
 	for _, record := range rows {
 		if record.Archived {
 			continue
@@ -134,7 +138,7 @@ func (b *Build) AlertRules(object string) ([]Alert, error) {
 }
 
 func (b *Build) alertPinned(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
-	rows, err := readDefinitionInventory[Alert](b.host.Automation(platform.Caller{}, ID))
+	rows, err := readDefinitionInventory[construction.Alert](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
@@ -158,7 +162,7 @@ func (b *Build) alertDraftAssets(id string) (before, after []platform.ReleaseAss
 	if err != nil {
 		return
 	}
-	a, ok := platform.Get[Alert](b.host.Automation(platform.Caller{}, ID), id)
+	a, ok := platform.Get[construction.Alert](b.host.Automation(platform.Caller{}, construction.ID), id)
 	if !ok || a.Archived {
 		err = fmt.Errorf("alert draft %s was not found", id)
 		return
@@ -177,7 +181,7 @@ func (b *Build) alertDraftAssets(id string) (before, after []platform.ReleaseAss
 	if err = b.checkAlert(a); err != nil {
 		return
 	}
-	next = platform.AssetRef{App: ID, Kind: platform.AssetAlert, Name: a.Name}
+	next = platform.AssetRef{App: construction.ID, Kind: platform.AssetAlert, Name: a.Name}
 	asset, problem := alertReleaseAsset(a, a.Version+1)
 	if problem != nil {
 		err = problem
@@ -188,21 +192,21 @@ func (b *Build) alertDraftAssets(id string) (before, after []platform.ReleaseAss
 	return
 }
 
-func (b *Build) prepareAlertPublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
-	rows, err := readDefinitionInventory[Alert](b.host.Automation(platform.Caller{}, ID))
+func (b *Build) prepareAlertPublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
+	rows, err := readDefinitionInventory[construction.Alert](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return nil, err
 	}
-	var out []ReleasePublication
+	var out []construction.ReleasePublication
 	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetAlert {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetAlert {
 			continue
 		}
 		frozen, version, err := alertFromAsset(asset)
 		if err != nil {
 			return nil, err
 		}
-		i := slices.IndexFunc(rows, func(a Alert) bool { return !a.Archived && a.Name == frozen.Name })
+		i := slices.IndexFunc(rows, func(a construction.Alert) bool { return !a.Archived && a.Name == frozen.Name })
 		if i < 0 {
 			return nil, fmt.Errorf("alert %s has no target draft", asset.Ref)
 		}
@@ -221,7 +225,7 @@ func (b *Build) prepareAlertPublications(assets []platform.ReleaseAsset) ([]Rele
 		if err := retainAlertAsset(&record, asset); err != nil {
 			return nil, err
 		}
-		out = append(out, ReleasePublication{Schema: SchemaAlertPublish, Image: platform.Raw(record)})
+		out = append(out, construction.ReleasePublication{Schema: SchemaAlertPublish, Image: platform.Raw(record)})
 	}
 	return out, nil
 }

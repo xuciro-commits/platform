@@ -10,7 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -18,23 +18,23 @@ import (
 // in a private staged decision that is then discarded (ADR-0047 21d): no
 // journal entry, no record, notice, effect or delivery leaves it.
 type Simulation struct {
-	Issues          []platform.FieldIssue    `json:"issues,omitempty"`
-	RefusalCode     string                   `json:"refusalCode,omitempty"`
-	Unsupported     bool                     `json:"unsupported,omitempty"`
-	TraceTruncated  bool                     `json:"traceTruncated,omitempty"`
-	Input           *SimulationStep          `json:"input,omitempty"`
-	Trace           []platform.DecisionTrace `json:"trace,omitempty"`
-	Read            json.RawMessage          `json:"read,omitempty"`
-	RolledBack      bool                     `json:"rolledBack,omitempty"`
-	Accepted        bool                     `json:"accepted"`
-	Refusal         string                   `json:"refusal,omitempty"`
-	Changes         []SimulatedChange        `json:"changes"`
-	Matched         *bool                    `json:"matched,omitempty"`
-	Flows           []SimulatedFlow          `json:"flows,omitempty"`
-	Tasks           []platform.WorkTask      `json:"tasks,omitempty"`
-	Functions       []build.FunctionRun      `json:"functions,omitempty"`
-	ComputeMatched  *bool                    `json:"computeMatched,omitempty"`
-	FunctionMatched *bool                    `json:"functionMatched,omitempty"`
+	Issues          []platform.FieldIssue      `json:"issues,omitempty"`
+	RefusalCode     string                     `json:"refusalCode,omitempty"`
+	Unsupported     bool                       `json:"unsupported,omitempty"`
+	TraceTruncated  bool                       `json:"traceTruncated,omitempty"`
+	Input           *SimulationStep            `json:"input,omitempty"`
+	Trace           []platform.DecisionTrace   `json:"trace,omitempty"`
+	Read            json.RawMessage            `json:"read,omitempty"`
+	RolledBack      bool                       `json:"rolledBack,omitempty"`
+	Accepted        bool                       `json:"accepted"`
+	Refusal         string                     `json:"refusal,omitempty"`
+	Changes         []SimulatedChange          `json:"changes"`
+	Matched         *bool                      `json:"matched,omitempty"`
+	Flows           []SimulatedFlow            `json:"flows,omitempty"`
+	Tasks           []platform.WorkTask        `json:"tasks,omitempty"`
+	Functions       []construction.FunctionRun `json:"functions,omitempty"`
+	ComputeMatched  *bool                      `json:"computeMatched,omitempty"`
+	FunctionMatched *bool                      `json:"functionMatched,omitempty"`
 }
 
 // SimulatedFlow exposes native progress/trace, never its raw source Data.
@@ -80,8 +80,8 @@ func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, n
 	}
 	m := member
 	if as != "" && as != member.ID {
-		caller := platform.NewCaller(runtime{t}, member, build.ID, false, false)
-		if refusal := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true)); refusal != nil {
+		caller := platform.NewCaller(runtime{t}, member, construction.ID, false, false)
+		if refusal := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{construction.Builder}, true)); refusal != nil {
 			return Simulation{}, refusal
 		}
 		other, ok := t.member(as)

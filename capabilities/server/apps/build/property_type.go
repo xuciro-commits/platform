@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-const SchemaPropertyType = PropertyTypeType + ".publish"
+const SchemaPropertyType = construction.PropertyTypeType + ".publish"
 
 // PropertyType owns one bounded declaration and its retained publications. Draft
 // edits never replace what callers use until the publication result commits.
@@ -32,12 +34,12 @@ func (f PropertyType) Definition() platform.PropertyType {
 }
 
 func (b *Build) propertyTypeEntity() platform.Entity {
-	return platform.Entity{Type: PropertyTypeType, Title: "Property type", Plural: "Property types", Model: PropertyType{}, Display: "title",
+	return platform.Entity{Type: construction.PropertyTypeType, Title: "Property type", Plural: "Property types", Model: PropertyType{}, Display: "title",
 		Description: "Reusable scalar meaning; object fields keep their own identity and access.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "propertytypes"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "propertytypes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this shared scalar property as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "propertytypes", Payload: []platform.Field{}, Do: b.publishPropertyType}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this shared scalar property as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "propertytypes", Payload: []platform.Field{}, Do: b.publishPropertyType}}}}
 }
 
 func (b *Build) checkPropertyType(f *PropertyType) error {
@@ -81,7 +83,7 @@ func propertyTypeImage(image []byte) (PropertyType, error) {
 }
 
 func (b *Build) propertyTypeInventory() ([]PropertyType, error) {
-	return readDefinitionInventory[PropertyType](b.host.Automation(platform.Caller{}, ID))
+	return readDefinitionInventory[PropertyType](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
 func (b *Build) installPropertyType(c platform.Caller, f PropertyType) error {

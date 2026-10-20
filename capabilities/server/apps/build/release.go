@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"slices"
 	"strconv"
@@ -61,7 +61,7 @@ func (b *Build) FlowReleaseAsset(name string, version int) (platform.ReleaseAsse
 			return platform.ReleaseAsset{}, err
 		}
 		for _, raw := range record.Versions {
-			p, ok := wasPublished[Process](raw)
+			p, ok := wasPublished[construction.Process](raw)
 			if ok && p.Name == name && p.Version == version {
 				return processReleaseAsset(p, b.Manifest().Version)
 			}
@@ -70,12 +70,12 @@ func (b *Build) FlowReleaseAsset(name string, version int) (platform.ReleaseAsse
 	return platform.ReleaseAsset{}, fmt.Errorf("process %s version %d is not retained", name, version)
 }
 
-func (b *Build) releaseInventory() ([]Object, []Page, []Application, error) {
+func (b *Build) releaseInventory() ([]construction.Object, []Page, []Application, error) {
 	if b.host == nil {
 		return nil, nil, nil, fmt.Errorf("builder has no host")
 	}
-	c := b.host.Automation(platform.Caller{}, ID)
-	objects, err := readDefinitionInventory[Object](c)
+	c := b.host.Automation(platform.Caller{}, construction.ID)
+	objects, err := readDefinitionInventory[construction.Object](c)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("read builder objects: %w", err)
 	}
@@ -157,24 +157,24 @@ func (b *Build) PublishedPage(name string) (bool, error) {
 	return false, nil
 }
 
-func (b *Build) validateObjectInstallation(record Object) error {
+func (b *Build) validateObjectInstallation(record construction.Object) error {
 	if processes := b.host.BuildProcesses(); processes != nil {
-		current, exists := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), record.ID)
-		if previous, ok := wasPublished[Object](current.Published); exists && ok {
-			oldBody, err := definitionBody(previous, buildapi.TypeOf(previous.Name))
+		current, exists := platform.Get[construction.Object](b.host.Automation(platform.Caller{}, construction.ID), record.ID)
+		if previous, ok := wasPublished[construction.Object](current.Published); exists && ok {
+			oldBody, err := definitionBody(previous, construction.TypeOf(previous.Name))
 			if err != nil {
 				return err
 			}
-			newBody, err := definitionBody(record, buildapi.TypeOf(record.Name))
+			newBody, err := definitionBody(record, construction.TypeOf(record.Name))
 			if err != nil {
 				return err
 			}
 			if string(oldBody) != string(newBody) {
-				running, err := processes.HasUnboundRunningDependency(buildapi.TypeOf(previous.Name))
+				running, err := processes.HasUnboundRunningDependency(construction.TypeOf(previous.Name))
 				if err != nil {
 					return err
 				}
-				if running && !buildapi.CompatibleObjectExpansion(previous, record) {
+				if running && !construction.CompatibleObjectExpansion(previous, record) {
 					return fmt.Errorf("finish the running processes before changing their object definition")
 				}
 			}
@@ -185,8 +185,8 @@ func (b *Build) validateObjectInstallation(record Object) error {
 	if err != nil {
 		return err
 	}
-	current, _ := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), record.ID)
-	previous, _ := wasPublished[Object](current.Published)
+	current, _ := platform.Get[construction.Object](b.host.Automation(platform.Caller{}, construction.ID), record.ID)
+	previous, _ := wasPublished[construction.Object](current.Published)
 	if !b.jointMode {
 		for _, process := range processes {
 			if process.Published == "" {
@@ -197,7 +197,7 @@ func (b *Build) validateObjectInstallation(record Object) error {
 			if err != nil {
 				return err
 			}
-			if installed.Object != entity.Type && installed.Object != buildapi.TypeOf(previous.Name) {
+			if installed.Object != entity.Type && installed.Object != construction.TypeOf(previous.Name) {
 				continue
 			}
 			if problem := b.checkFlowOn(installed, entity); problem != nil {
@@ -217,7 +217,7 @@ func (b *Build) validateObjectInstallation(record Object) error {
 
 // An explicitly published page owns its name after it replaces an object's
 // generated page. Updating the object must not silently overwrite that page.
-func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string, error) {
+func (b *Build) objectInstallationPages(record construction.Object) ([]platform.Page, string, error) {
 	explicit, err := b.PublishedPage(record.Name)
 	if err != nil {
 		return nil, "", err
@@ -233,7 +233,7 @@ func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string,
 // and approvals), excluding only record identity/stamps and editor state.
 // An action depends on that complete object, so changing a rule changes its
 // closed release even when the action's display metadata stays the same.
-func releaseAssets(objects []Object, pages []Page, apps []Application, processes []Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
+func releaseAssets(objects []construction.Object, pages []Page, apps []Application, processes []construction.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	index := map[platform.AssetRef]int{}
 	add := func(asset platform.ReleaseAsset, replacesGeneratedPage bool) error {
@@ -252,14 +252,14 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		var saved Object
+		var saved construction.Object
 		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
 			return nil, fmt.Errorf("invalid published object %s: %w", record.ID, err)
 		}
 		if saved.ID != record.ID {
 			return nil, fmt.Errorf("published object %s belongs to another record", record.ID)
 		}
-		ref := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(saved.Name)}
+		ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: construction.TypeOf(saved.Name)}
 		body, err := definitionBody(saved, ref.Name)
 		if err != nil {
 			return nil, err
@@ -282,7 +282,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 				return nil, fmt.Errorf("encode action %s: %w", action.Schema, err)
 			}
 			asset, err := platform.WithDependencies(platform.ReleaseAsset{
-				Ref:             platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Schema},
+				Ref:             platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: action.Schema},
 				ContractVersion: 1, SourceVersion: sourceVersion, Body: actionBody,
 			})
 			if err != nil {
@@ -292,7 +292,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 				return nil, err
 			}
 		}
-		pageAsset, err := platform.PageReleaseAsset(ID, sourceVersion, page(saved))
+		pageAsset, err := platform.PageReleaseAsset(construction.ID, sourceVersion, page(saved))
 		if err != nil {
 			return nil, err
 		}
@@ -311,7 +311,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 		if saved.ID != record.ID {
 			return nil, fmt.Errorf("published page %s belongs to another record", record.ID)
 		}
-		asset, err := platform.PageReleaseAsset(ID, sourceVersion, descriptor(saved))
+		asset, err := platform.PageReleaseAsset(construction.ID, sourceVersion, descriptor(saved))
 		if err != nil {
 			return nil, err
 		}
@@ -330,7 +330,7 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 		if saved.ID != record.ID {
 			return nil, fmt.Errorf("published application %s belongs to another record", record.ID)
 		}
-		asset, err := platform.ApplicationReleaseAsset(ID, sourceVersion, applicationDescriptor(saved))
+		asset, err := platform.ApplicationReleaseAsset(construction.ID, sourceVersion, applicationDescriptor(saved))
 		if err != nil {
 			return nil, err
 		}
@@ -359,9 +359,9 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 	return assets, nil
 }
 
-func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseAsset, error) {
+func processReleaseAsset(saved construction.Process, sourceVersion string) (platform.ReleaseAsset, error) {
 	fl := platform.Flow{Name: saved.Name, Subject: saved.Object}
-	ref := platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: buildapi.TypeOf(fl.Name)}
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetFlow, Name: construction.TypeOf(fl.Name)}
 	var subject platform.AssetRef
 	if fl.Subject != "" {
 		owner, _, _ := strings.Cut(fl.Subject, ".")
@@ -387,10 +387,10 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		if step.Function != nil {
 			owner := step.Function.App
 			if owner == "" {
-				owner = ID
+				owner = construction.ID
 			}
 			ref := platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: step.Function.Name}
-			if owner != ID || step.Function.Version == 0 {
+			if owner != construction.ID || step.Function.Version == 0 {
 				dependencies = append(dependencies, ref)
 				continue
 			}
@@ -402,10 +402,10 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		if step.Operation != nil {
 			owner := step.Operation.App
 			if owner == "" {
-				owner = ID
+				owner = construction.ID
 			}
 			ref := platform.AssetRef{App: owner, Kind: platform.AssetCompute, Name: step.Operation.Name}
-			if owner == ID && step.Operation.Version > 0 {
+			if owner == construction.ID && step.Operation.Version > 0 {
 				operations = append(operations, platform.AssetBinding{Ref: ref, SourceVersion: sourceVersion + ".compute-" + strconv.Itoa(step.Operation.Version)})
 			} else {
 				dependencies = append(dependencies, ref)
@@ -413,7 +413,7 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		}
 		if step.Query != "" {
 			ref := platform.AssetRef{App: step.App, Kind: platform.AssetQuery, Name: step.Query}
-			if step.App == ID && step.QueryVersion > 0 {
+			if step.App == construction.ID && step.QueryVersion > 0 {
 				queries = append(queries, platform.AssetBinding{Ref: ref, SourceVersion: sourceVersion + ".query-" + strconv.Itoa(step.QueryVersion)})
 			} else {
 				dependencies = append(dependencies, ref)
@@ -421,10 +421,10 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		}
 		if step.Flow != "" {
 			name := step.Flow
-			if !strings.HasPrefix(name, ID+".") {
-				name = buildapi.TypeOf(name)
+			if !strings.HasPrefix(name, construction.ID+".") {
+				name = construction.TypeOf(name)
 			}
-			dependencies = append(dependencies, platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: name})
+			dependencies = append(dependencies, platform.AssetRef{App: construction.ID, Kind: platform.AssetFlow, Name: name})
 		}
 	}
 	slices.SortFunc(operations, func(a, b platform.AssetBinding) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
@@ -461,10 +461,10 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 // that its compiled bindings are exactly the ones in the release envelope.
 // A sandbox assigns its own native version ordinal; that counter is not the
 // semantic content identity or a dependency version.
-func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
+func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (construction.Process, error) {
 	var envelope platform.FlowReleaseDescriptor
-	var p Process
-	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
+	var p construction.Process
+	if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
 		return p, fmt.Errorf("unsupported process release asset %s", asset.Ref)
 	}
 	if err := json.Unmarshal(asset.Body, &envelope); err != nil {
@@ -487,7 +487,7 @@ func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	return p, nil
 }
 
-func definitionBody(value Object, typ string) (json.RawMessage, error) {
+func definitionBody(value construction.Object, typ string) (json.RawMessage, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return nil, err

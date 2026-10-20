@@ -17,7 +17,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -514,21 +514,21 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*pl
 
 // streamSource captures only controlled source/connection definitions. Their
 // mutable pull summaries and record clocks are not the stream's configuration.
-func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *platform.StreamIntake, now time.Time) (build.Source, build.Connection, string, *kernel.Error) {
-	refuse := func(message string) (build.Source, build.Connection, string, *kernel.Error) {
-		return build.Source{}, build.Connection{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
+func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *platform.StreamIntake, now time.Time) (construction.Source, construction.Connection, string, *kernel.Error) {
+	refuse := func(message string) (construction.Source, construction.Connection, string, *kernel.Error) {
+		return construction.Source{}, construction.Connection{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
 	}
 	if intake == nil {
 		return refuse("The Flow has no controlled source intake")
 	}
-	view, err := t.RecordOf(m, build.SourceType, intake.SourceRecord, now)
+	view, err := t.RecordOf(m, construction.SourceType, intake.SourceRecord, now)
 	if err != nil {
 		return refuse("The Flow source is not readable")
 	}
-	source, ok := view.Record.(build.Source)
+	source, ok := view.Record.(construction.Source)
 	if ok {
 		var err error
-		source, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionSource(source)
+		source, err = t.app(construction.ID).(host.IntegrationDefinitions).ExecutionSource(source)
 		if err != nil {
 			ok = false
 		}
@@ -536,14 +536,14 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	if !ok || !source.Stream || source.State != "published" || source.Name != name || source.Since == "" || source.Profile != "table" {
 		return refuse("The Flow source must be a published incremental stream source")
 	}
-	view, err = t.RecordOf(m, build.ConnectionType, source.Connection, now)
+	view, err = t.RecordOf(m, construction.ConnectionType, source.Connection, now)
 	if err != nil {
 		return refuse("The Flow connection is not readable")
 	}
-	connection, ok := view.Record.(build.Connection)
+	connection, ok := view.Record.(construction.Connection)
 	if ok {
 		var err error
-		connection, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionConnection(connection)
+		connection, err = t.app(construction.ID).(host.IntegrationDefinitions).ExecutionConnection(connection)
 		if err != nil {
 			ok = false
 		}
@@ -621,7 +621,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 			}
 			return platform.FlowBatchOutcome{}, nil
 		}
-		batch := platform.FlowBatch{Bootstrap: true, Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Cursor, Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+		batch := platform.FlowBatch{Bootstrap: true, Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Cursor, Sources: []string{construction.SourceType + "/" + source.ID, construction.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 		if before.Batch != nil {
 			batch.Predecessor = before.Batch.Cursor
 		}
@@ -640,7 +640,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		}
 		position.Cursor = next
 	}
-	batch := platform.FlowBatch{Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+	batch := platform.FlowBatch{Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: source.Advance(rows), Sources: []string{construction.SourceType + "/" + source.ID, construction.ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 	if before.Batch != nil {
 		batch.Predecessor = before.Batch.Cursor
 	}
@@ -688,7 +688,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 // Source retries retain the original instance, definition and source cursor.
 // Backoff and database I/O run outside the writer lock; each attempt refreshes
 // the original member and proves the same retained automation is still allowed.
-func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, name string, intake *platform.StreamIntake, source build.Source, connection build.Connection, hash string, latestBootstrap bool, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
+func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, name string, intake *platform.StreamIntake, source construction.Source, connection construction.Connection, hash string, latestBootstrap bool, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
 	retry := intake.Retry
 	if err := retry.Check(); err != nil {
 		return nil, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -749,7 +749,7 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBa
 	if refusal != nil {
 		return refusal
 	}
-	refs := []string{build.SourceType + "/" + source.ID, build.ConnectionType + "/" + connection.ID}
+	refs := []string{construction.SourceType + "/" + source.ID, construction.ConnectionType + "/" + connection.ID}
 	if checkpoint.Record != source.ID || checkpoint.Config != hash || !slices.Equal(checkpoint.Sources, refs) || x.Batch != nil && x.Batch.Source != nil && (x.Batch.Source.Record != source.ID || x.Batch.Source.Config != hash) || intake.Offset == "latest" && (!checkpoint.Initialized || checkpoint.Offset != "latest") || checkpoint.Initialized && checkpoint.Offset != intake.Offset {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow source configuration or protected references changed")
 	}
@@ -849,10 +849,10 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 			}
 			if plan, err := f.PlanBatch(instance, t.automation(platform.FlowApp, false)); err == nil {
 				if _, intake, _ := plan.Intake(); intake != nil {
-					source, exists := platform.Get[build.Source](t.automation(build.ID, false), intake.SourceRecord)
+					source, exists := platform.Get[construction.Source](t.automation(construction.ID, false), intake.SourceRecord)
 					if exists {
 						var err error
-						source, err = t.app(build.ID).(host.IntegrationDefinitions).ExecutionSource(source)
+						source, err = t.app(construction.ID).(host.IntegrationDefinitions).ExecutionSource(source)
 						if err != nil {
 							exists = false
 						}

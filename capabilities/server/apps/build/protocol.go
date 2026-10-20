@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 	"slices"
@@ -12,7 +14,7 @@ import (
 
 func protocolReadName(typ, name string) string { return "protocol:" + typ + ":" + name }
 
-func objectProvisions(object Object, entity platform.Entity) []platform.Provision {
+func objectProvisions(object construction.Object, entity platform.Entity) []platform.Provision {
 	catalog := platform.NewCatalog(platform.EntityActions(entity)...)
 	var out []platform.Provision
 	for _, declaration := range object.Protocols {
@@ -52,7 +54,7 @@ func objectProvisions(object Object, entity platform.Entity) []platform.Provisio
 	return out
 }
 
-func (b *Build) checkObjectProtocols(object Object) error {
+func (b *Build) checkObjectProtocols(object construction.Object) error {
 	if len(object.Protocols) > 16 {
 		return fmt.Errorf("An object supports at most 16 protocol bindings")
 	}

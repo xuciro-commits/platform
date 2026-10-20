@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -38,17 +40,17 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 
 	// Four drafts, none published: the application holds both a page over the
 	// draft object and a new native flow. Preview/save must not publish the flow.
-	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{
 		"name": "jointvisit", "title": "Joint visit", "plural": "Joint visits",
-		"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-	decide(t, tn, "builder", build.ID, build.PageType+".create", build.PageType, "PAGE", map[string]any{
+		"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.PageType+".create", construction.PageType, "PAGE", map[string]any{
 		"name": "jointvisits", "title": "Joint visits", "object": "build.jointvisit",
 		"sections": []build.Section{{Widget: "table", Fields: []string{"note"}}}}, at)
-	decide(t, tn, "builder", build.ID, build.ProcessType+".create", build.ProcessType, "FLOW", map[string]any{
-		"name": "jointarrival", "title": "Joint arrival", "manual": true, "steps": []build.ProcessStep{{Name: "done", Kind: "end"}}}, at)
-	decide(t, tn, "builder", build.ID, build.AppType+".create", build.AppType, "APP", map[string]any{
+	decide(t, tn, "builder", construction.ID, construction.ProcessType+".create", construction.ProcessType, "FLOW", map[string]any{
+		"name": "jointarrival", "title": "Joint arrival", "manual": true, "steps": []construction.ProcessStep{{Name: "done", Kind: "end"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.AppType+".create", construction.AppType, "APP", map[string]any{
 		"name": "jointdesk", "title": "Joint desk", "pages": []string{"jointvisits"},
-		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetFlow, Name: "build.jointarrival"}}}, at)
+		"resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetFlow, Name: "build.jointarrival"}}}, at)
 
 	// The page alone still cannot be delivered: its object was never published,
 	// so the review must say what is missing rather than save a candidate that
@@ -65,13 +67,13 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	if err != nil || len(closure.Drafts) != 3 {
 		t.Fatalf("application closure: %+v %v", closure, err)
 	}
-	for _, ref := range []build.JointDraftRef{{Kind: platform.AssetPage, ID: "PAGE"}, {Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "FLOW"}} {
+	for _, ref := range []construction.JointDraftRef{{Kind: platform.AssetPage, ID: "PAGE"}, {Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "FLOW"}} {
 		if !slices.Contains(closure.Drafts, ref) {
 			t.Fatalf("application closure omitted %v: %+v", ref, closure.Drafts)
 		}
 	}
 
-	selection := []build.JointDraftRef{
+	selection := []construction.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "O"},
 		{Kind: platform.AssetPage, ID: "PAGE"},
 		{Kind: platform.AssetFlow, ID: "FLOW"},
@@ -81,7 +83,7 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
 		t.Fatalf("joint preview: %+v %v", preview, err)
 	}
-	if len(preview.Drafts) != 4 || preview.Drafts[0] != (build.JointDraftRef{Kind: platform.AssetObject, ID: "O"}) {
+	if len(preview.Drafts) != 4 || preview.Drafts[0] != (construction.JointDraftRef{Kind: platform.AssetObject, ID: "O"}) {
 		t.Fatalf("joint review concealed its draft provenance: %+v", preview.Drafts)
 	}
 	kinds := map[platform.AssetKind]int{}
@@ -101,7 +103,7 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	if _, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "stale", at); err == nil {
 		t.Fatal("a stale joint selection was saved under the previewed candidate ID")
 	}
-	missingFlow, err := tn.PreviewReleaseDrafts(member, []build.JointDraftRef{
+	missingFlow, err := tn.PreviewReleaseDrafts(member, []construction.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetPage, ID: "PAGE"}, {Kind: platform.AssetApp, ID: "APP"},
 	})
 	if err == nil && !strings.Contains(missingFlow.Diagnostic, "build.jointarrival") {
@@ -110,7 +112,7 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	if tn.procs.HasPublishedFlow("build.jointarrival") {
 		t.Fatal("candidate validation published the new flow in the live runtime")
 	}
-	saved, err := tn.SaveReleaseCandidates(member, []build.JointDraftRef{
+	saved, err := tn.SaveReleaseCandidates(member, []construction.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "O"},
 		{Kind: platform.AssetPage, ID: "PAGE"},
 		{Kind: platform.AssetFlow, ID: "FLOW"},
@@ -130,7 +132,7 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	}
 	// The delivered drafts are what the operator now reads: the object is in
 	// their definitions and the page is served under its application.
-	reader := platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User, flow.ID: "member"}}
+	reader := platform.Member{ID: "operator", Roles: map[string]string{construction.ID: construction.User, flow.ID: "member"}}
 	sawObject, sawPage, sawApplication := false, false, false
 	for _, definition := range tn.Definitions(reader) {
 		switch {
@@ -161,10 +163,10 @@ func TestJointDraftFirstScheduledFlowRetainsPublisher(t *testing.T) {
 	var entries []Entry
 	tn.Record = func(e Entry) { entries = append(entries, e) }
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	decide(t, tn, "author", build.ID, build.ProcessType+".create", build.ProcessType, "FLOW", map[string]any{
-		"name": "scheduled", "title": "Scheduled", "every": "1h", "steps": []build.ProcessStep{{Name: "done", Kind: "end"}}}, at)
+	decide(t, tn, "author", construction.ID, construction.ProcessType+".create", construction.ProcessType, "FLOW", map[string]any{
+		"name": "scheduled", "title": "Scheduled", "every": "1h", "steps": []construction.ProcessStep{{Name: "done", Kind: "end"}}}, at)
 	member := memberOf(t, tn, "publisher")
-	selection := []build.JointDraftRef{{Kind: platform.AssetFlow, ID: "FLOW"}}
+	selection := []construction.JointDraftRef{{Kind: platform.AssetFlow, ID: "FLOW"}}
 	preview, err := tn.PreviewReleaseDrafts(member, selection)
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
 		t.Fatalf("first scheduled preview: %+v %v", preview, err)
@@ -179,8 +181,8 @@ func TestJointDraftFirstScheduledFlowRetainsPublisher(t *testing.T) {
 	if _, err := tn.ActivateRelease(member, saved, "activate", at); err != nil {
 		t.Fatal(err)
 	}
-	p, ok := platform.Get[build.Process](tn.automation(build.ID, false), "FLOW")
-	var accepted build.Process
+	p, ok := platform.Get[construction.Process](tn.automation(construction.ID, false), "FLOW")
+	var accepted construction.Process
 	if !ok || json.Unmarshal([]byte(p.Published), &accepted) != nil || accepted.Version != 1 || accepted.Scheduler != member.ID {
 		t.Fatalf("candidate lost its publisher: %+v", accepted)
 	}
@@ -198,15 +200,15 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	source := compose(tenant)
 	var entries []Entry
 	source.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	decide(t, source, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{"name": "case", "title": "Case", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-	decide(t, source, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
-	decide(t, source, "builder", build.ID, build.AgentType+".create", build.AgentType, "AG", map[string]any{"name": "assist", "title": "Assist", "description": "Prepare case updates", "instructions": "Prepare a note update", "tools": []string{"build.case.edit"}, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Expect: "Ready"}}}, at)
-	decide(t, source, "builder", build.ID, build.SchemaAgentPublish, build.AgentType, "AG", map[string]any{}, at)
-	decide(t, source, "builder", build.ID, build.ProcessType+".create", build.ProcessType, "FLOW", map[string]any{"name": "closecase", "title": "Close case", "manual": true, "steps": []build.ProcessStep{{Name: "done", Kind: "end"}}}, at)
-	resources := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.case"}, {App: build.ID, Kind: platform.AssetAction, Name: "build.case.edit"}, {App: build.ID, Kind: platform.AssetAgent, Name: "assist"}, {App: build.ID, Kind: platform.AssetFlow, Name: "build.closecase"}}
-	decide(t, source, "builder", build.ID, build.AppType+".create", build.AppType, "APP", map[string]any{"name": "cases", "title": "Cases", "resources": resources, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.case": 1}, ExpectedRuns: 1, Retention: map[string]string{"runs": "24h"}}}, at)
+	decide(t, source, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{"name": "case", "title": "Case", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, source, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "O", map[string]any{}, at)
+	decide(t, source, "builder", construction.ID, build.AgentType+".create", build.AgentType, "AG", map[string]any{"name": "assist", "title": "Assist", "description": "Prepare case updates", "instructions": "Prepare a note update", "tools": []string{"build.case.edit"}, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Expect: "Ready"}}}, at)
+	decide(t, source, "builder", construction.ID, build.SchemaAgentPublish, build.AgentType, "AG", map[string]any{}, at)
+	decide(t, source, "builder", construction.ID, construction.ProcessType+".create", construction.ProcessType, "FLOW", map[string]any{"name": "closecase", "title": "Close case", "manual": true, "steps": []construction.ProcessStep{{Name: "done", Kind: "end"}}}, at)
+	resources := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.case"}, {App: construction.ID, Kind: platform.AssetAction, Name: "build.case.edit"}, {App: construction.ID, Kind: platform.AssetAgent, Name: "assist"}, {App: construction.ID, Kind: platform.AssetFlow, Name: "build.closecase"}}
+	decide(t, source, "builder", construction.ID, construction.AppType+".create", construction.AppType, "APP", map[string]any{"name": "cases", "title": "Cases", "resources": resources, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.case": 1}, ExpectedRuns: 1, Retention: map[string]string{"runs": "24h"}}}, at)
 	member := memberOf(t, source, "builder")
-	selection := []build.JointDraftRef{{Kind: platform.AssetFlow, ID: "FLOW"}, {Kind: platform.AssetApp, ID: "APP"}}
+	selection := []construction.JointDraftRef{{Kind: platform.AssetFlow, ID: "FLOW"}, {Kind: platform.AssetApp, ID: "APP"}}
 	preview, err := source.PreviewReleaseDrafts(member, selection)
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("agent/application preview: %+v %v", preview, err)
@@ -231,7 +233,7 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	if _, err := source.ActivateRelease(member, saved, "activate-app", at); err != nil {
 		t.Fatal(err)
 	}
-	root := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "cases"}
+	root := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "cases"}
 	runtime, refusal := source.ApplicationRuntimeOf(member, root, at)
 	if refusal != nil || len(runtime.Artifact.AI) != 1 || runtime.Artifact.AI[0].Ref.Kind != platform.AssetAgent || len(runtime.Artifact.Flows) != 1 || len(runtime.Artifact.Roles) == 0 {
 		t.Fatalf("complete application projection: %+v %v", runtime, refusal)
@@ -254,7 +256,7 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 		t.Fatalf("target changed immutable artifact: %+v %v", installed, refusal)
 	}
 	CheckReplay(t, source, entries, func() *Tenant { return compose(tenant) })
-	decide(t, source, "builder", build.ID, build.SchemaProcessRun, build.ProcessType, "FLOW", map[string]any{"key": "run-one"}, at)
+	decide(t, source, "builder", construction.ID, construction.SchemaProcessRun, construction.ProcessType, "FLOW", map[string]any{"key": "run-one"}, at)
 	source.Work(at)
 	runs, refusal := source.ApplicationRuns(member, root, 0, 50, at, ApplicationRunFilter{Kind: "flow", Since: at, Until: at})
 	if refusal != nil || runs.Total != 1 || runs.Runs[0].ResourceName != "build.closecase" || len(runs.Runs[0].Applications) == 0 || runs.Runs[0].Applications[0].Ref != root {
@@ -266,15 +268,15 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	}
 	// Recorded application membership survives removal and must not be assigned
 	// to an unrelated application which begins sharing the flow later.
-	decide(t, source, "builder", build.ID, build.AppType+".edit", build.AppType, "APP", map[string]any{"resources": resources[:len(resources)-1]}, at.Add(time.Second))
-	decide(t, source, "builder", build.ID, build.SchemaHandOver, build.AppType, "APP", map[string]any{}, at.Add(time.Second))
-	decide(t, source, "builder", build.ID, build.AppType+".create", build.AppType, "OTHER", map[string]any{"name": "later", "title": "Later application", "resources": resources[len(resources)-1:]}, at.Add(time.Second))
-	decide(t, source, "builder", build.ID, build.SchemaHandOver, build.AppType, "OTHER", map[string]any{}, at.Add(time.Second))
+	decide(t, source, "builder", construction.ID, construction.AppType+".edit", construction.AppType, "APP", map[string]any{"resources": resources[:len(resources)-1]}, at.Add(time.Second))
+	decide(t, source, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, "APP", map[string]any{}, at.Add(time.Second))
+	decide(t, source, "builder", construction.ID, construction.AppType+".create", construction.AppType, "OTHER", map[string]any{"name": "later", "title": "Later application", "resources": resources[len(resources)-1:]}, at.Add(time.Second))
+	decide(t, source, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, "OTHER", map[string]any{}, at.Add(time.Second))
 	runs, refusal = source.ApplicationRuns(member, root, 0, 50, at.Add(time.Second), ApplicationRunFilter{Kind: "flow"})
 	if refusal != nil || runs.Total != 1 || runs.Runs[0].Association != "application" || len(runs.Runs[0].Shared) != 0 {
 		t.Fatalf("historical application membership changed: %+v %v", runs, refusal)
 	}
-	other, refusal := source.ApplicationRuns(member, platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "later"}, 0, 50, at.Add(time.Second), ApplicationRunFilter{Kind: "flow"})
+	other, refusal := source.ApplicationRuns(member, platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "later"}, 0, 50, at.Add(time.Second), ApplicationRunFilter{Kind: "flow"})
 	if refusal != nil || other.Total != 0 {
 		t.Fatalf("later membership claimed an existing run: %+v %v", other, refusal)
 	}

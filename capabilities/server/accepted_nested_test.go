@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"context"
 	"encoding/json"
@@ -199,14 +201,14 @@ func (n *nestedIssuer) Submit(c platform.Caller, sub *pb.Submission, at time.Tim
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Nested record is not visible in the decision")
 		}
 		if n.publish {
-			object := &pb.Submission{TenantId: sub.GetTenantId(), PrincipalId: c.ID, Authority: build.ID,
-				IdempotencyKey: sub.GetIdempotencyKey() + ":object", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
-				Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
+			object := &pb.Submission{TenantId: sub.GetTenantId(), PrincipalId: c.ID, Authority: construction.ID,
+				IdempotencyKey: sub.GetIdempotencyKey() + ":object", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+				Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
 				Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}
 			if _, err := n.host.Submit(c, object, at); err != nil {
 				return nil, err
 			}
-			object.IdempotencyKey, object.Schema.Name, object.Payload = sub.GetIdempotencyKey()+":publish", build.SchemaPublish, []byte(`{}`)
+			object.IdempotencyKey, object.Schema.Name, object.Payload = sub.GetIdempotencyKey()+":publish", construction.SchemaPublish, []byte(`{}`)
 			if _, err := n.host.Submit(c, object, at); err != nil {
 				return nil, err
 			}
@@ -230,8 +232,8 @@ func nestedTenantID(t *testing.T, id string, extra ...platform.App) *Tenant {
 	seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
 		Roles: map[string]string{"stock": "clerk", "nested": "clerk"}}}
 	for _, app := range extra {
-		if app.Manifest().ID == build.ID {
-			seat.Member.Roles[build.ID] = build.Builder
+		if app.Manifest().ID == construction.ID {
+			seat.Member.Roles[construction.ID] = construction.Builder
 		}
 	}
 	apps := append([]platform.App{NewConsole(id, seat), newStock(id), newNestedIssuer(id)}, extra...)
@@ -254,7 +256,7 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if _, exists := live.owner["action:build.visit.create"]; exists ||
-			live.records.types["build.visit"] != nil || len(live.app(build.ID).(platform.App).AcceptedLedger().RecordsFor(live.ID)) != 0 {
+			live.records.types["build.visit"] != nil || len(live.app(construction.ID).(platform.App).AcceptedLedger().RecordsFor(live.ID)) != 0 {
 			t.Fatal("nested publication installed before the parent's commit")
 		}
 		if fail {

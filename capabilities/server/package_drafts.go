@@ -7,8 +7,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -31,7 +31,7 @@ type PackageDraftResult struct {
 }
 
 func (h *Host) routesPackageDrafts(rt *routes) {
-	rt.authorized(Route{Pattern: "POST /v1/packages/{id}/drafts", Summary: "Create original Build drafts from an installed package; publication and permissions stay separate", Body: PackageDraftRequest{}, Answer: PackageDraftResult{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/packages/{id}/drafts", Summary: "Create original Build drafts from an installed package; publication and permissions stay separate", Body: PackageDraftRequest{}, Answer: PackageDraftResult{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request PackageDraftRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -80,7 +80,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if err := t.admits(m); err != nil {
 		return answer, err
 	}
-	if !holdsIndependentBuildRole(m, build.Builder) {
+	if !holdsIndependentBuildRole(m, construction.Builder) {
 		return answer, fmt.Errorf("builder role required")
 	}
 	if id == "" || version == "" || key == "" || len(key) > 128 || at.IsZero() {
@@ -92,7 +92,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		return answer, fmt.Errorf("tenant is quarantined")
 	}
 	console, ok := t.app(PlatformApp).(host.BlueprintCatalog)
-	if !ok || t.app(build.ID) == nil {
+	if !ok || t.app(construction.ID) == nil {
 		return answer, fmt.Errorf("this tenant has no package and Build owners")
 	}
 	roots, assets, err := console.InstalledBlueprint(id, version)
@@ -100,7 +100,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		return answer, err
 	}
 	blueprint := PackageBlueprint{Roots: roots, Assets: assets}
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 	if !ok {
 		return answer, fmt.Errorf("this tenant has no Build draft owner")
 	}
@@ -128,7 +128,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	answer = PackageDraftResult{Package: id, Version: version, Key: key, Drafts: make([]PackageDraft, 0, len(drafts))}
 	for _, draft := range drafts {
 		et := t.records.types[draft.Type]
-		if et == nil || et.info.App != build.ID {
+		if et == nil || et.info.App != construction.ID {
 			return PackageDraftResult{}, fmt.Errorf("draft %s has no Build owner", draft.Ref)
 		}
 		payload, err := assetDraftPayload(et.info, draft.Image)
@@ -150,7 +150,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		return PackageDraftResult{}, fmt.Errorf("an application package needs one root application draft")
 	}
 	commandKey := "package-drafts:" + m.ID + ":" + key
-	saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: build.ID, Member: m.ID, Key: "composite:" + commandKey, At: at.UTC(), Edits: edits}
+	saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: construction.ID, Member: m.ID, Key: "composite:" + commandKey, At: at.UTC(), Edits: edits}
 	saved.RequestHash, err = compositeRequestHash(t.ID, m.ID, saved.Key, edits)
 	if err != nil {
 		return PackageDraftResult{}, err
@@ -175,7 +175,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		return PackageDraftResult{}, err
 	}
 	principal, _ := json.Marshal(m)
-	committed, err := t.acceptResult(Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
+	committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
 	if err != nil {
 		return PackageDraftResult{}, err
 	}

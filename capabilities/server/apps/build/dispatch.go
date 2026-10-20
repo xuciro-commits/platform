@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"crypto/sha256"
 	"encoding/hex"
@@ -20,9 +22,9 @@ import (
 func (b *Build) dispatchEntity() platform.Entity {
 	return platform.Entity{Type: platform.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
 		Description: "Declared commands, durable delivery attempts, status reads and authorized human intervention. Control loops and safety interlocks remain local to the equipment.",
-		Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}, Participants: func(value any) []string {
+		Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant, construction.Integrator: platform.ScopeTenant}, Participants: func(value any) []string {
 			run := value.(platform.DispatchRun)
-			return append([]string{run.Member}, b.host.(host.ConfirmationHost).Holding(ID, run.Definition.ReviewerRole)...)
+			return append([]string{run.Member}, b.host.(host.ConfirmationHost).Holding(construction.ID, run.Definition.ReviewerRole)...)
 		}}, Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"reason", "input", "request", "source", "connection", "observation", "device", "attempts", "readback", "definition", "assets", "compensationCommand", "compensationRequest"}}}}
 }
 
@@ -38,7 +40,7 @@ func dispatchActions() []platform.Action {
 	}
 }
 
-func dispatchCommand(object Object, name string) (platform.DispatchCommand, bool) {
+func dispatchCommand(object construction.Object, name string) (platform.DispatchCommand, bool) {
 	i := slices.IndexFunc(object.DispatchCommands, func(command platform.DispatchCommand) bool { return command.Name == name })
 	if i < 0 {
 		return platform.DispatchCommand{}, false
@@ -46,7 +48,7 @@ func dispatchCommand(object Object, name string) (platform.DispatchCommand, bool
 	return object.DispatchCommands[i], true
 }
 
-func (b *Build) checkDispatch(spec *platform.Dispatch, object Object, action Action) error {
+func (b *Build) checkDispatch(spec *platform.Dispatch, object construction.Object, action construction.Action) error {
 	if spec == nil {
 		return nil
 	}
@@ -60,10 +62,10 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object Object, action Act
 	if action.Transaction.Confirmation != nil {
 		return fmt.Errorf("A transaction declares either a confirmation or a device dispatch")
 	}
-	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(access Access) bool { return access.Role == spec.ReviewerRole }) {
+	if spec.ReviewerRole != construction.Builder && !slices.ContainsFunc(object.Access, func(access construction.Access) bool { return access.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The dispatch reviewer role is not declared")
 	}
-	info, _ := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+	info, _ := platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
 	lookup := ruleLookup(object, b.conditionLookup)
 	if spec.Key != "$subject" {
 		field, found := info.Field(strings.TrimPrefix(spec.Key, "record."))
@@ -139,7 +141,7 @@ type dispatchBindings struct {
 	Record              *platform.AssetRef           `json:"record,omitempty"`
 }
 
-func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBindings, error) {
+func (b *Build) bindDispatch(spec platform.Dispatch, object construction.Object) (dispatchBindings, error) {
 	out := dispatchBindings{Commands: map[string]platform.AssetRef{}}
 	command, found := dispatchCommand(object, spec.Command)
 	if !found {
@@ -150,12 +152,12 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		if err != nil {
 			return platform.AssetRef{}, err
 		}
-		var fixed Writeback
+		var fixed construction.Writeback
 		if selected {
-			fixed = prospective.(Writeback)
+			fixed = prospective.(construction.Writeback)
 		} else {
-			record, known := b.host.Record(WritebackType + "/" + id)
-			w, valid := record.(Writeback)
+			record, known := b.host.Record(construction.WritebackType + "/" + id)
+			w, valid := record.(construction.Writeback)
 			if !known || !valid {
 				return platform.AssetRef{}, fmt.Errorf("Dispatch writeback is unavailable")
 			}
@@ -171,7 +173,7 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		if err != nil || path.IsAbs() || path.Host != "" || path.User != nil || strings.HasPrefix(fixed.Path, "//") {
 			return platform.AssetRef{}, fmt.Errorf("Dispatch command paths must be relative to the external connection")
 		}
-		return platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: fixed.Name}, nil
+		return platform.AssetRef{App: construction.ID, Kind: platform.AssetWriteback, Name: fixed.Name}, nil
 	}
 	var err error
 	for _, declared := range object.DispatchCommands {
@@ -196,8 +198,8 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		}
 		out.CompensateWriteback = &ref
 	}
-	record, known := b.host.Record(ConnectionType + "/" + spec.Target)
-	connection, valid := record.(Connection)
+	record, known := b.host.Record(construction.ConnectionType + "/" + spec.Target)
+	connection, valid := record.(construction.Connection)
 	if !known || !valid {
 		return out, fmt.Errorf("Dispatch target connection is unavailable")
 	}
@@ -208,19 +210,19 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 	if connection.State != "ready" || !slices.Contains([]string{"http", "odata"}, connection.Kind) {
 		return out, fmt.Errorf("Dispatch target must be a ready external connection")
 	}
-	out.Target = platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: connection.Name}
+	out.Target = platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: connection.Name}
 	if spec.Readback.Source != "" {
 		prospective, selected, err := b.prospectiveIntegration(platform.AssetSource, spec.Readback.Source)
 		if err != nil {
 			return out, err
 		}
-		var source Source
+		var source construction.Source
 		if selected {
-			source = prospective.(Source)
+			source = prospective.(construction.Source)
 		} else {
-			record, known := b.host.Record(SourceType + "/" + spec.Readback.Source)
+			record, known := b.host.Record(construction.SourceType + "/" + spec.Readback.Source)
 			var valid bool
-			source, valid = record.(Source)
+			source, valid = record.(construction.Source)
 			if !known || !valid {
 				return out, fmt.Errorf("Dispatch status source is unavailable")
 			}
@@ -236,7 +238,7 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		if err != nil || path.IsAbs() || path.Host != "" || path.User != nil || strings.HasPrefix(source.URL, "//") {
 			return out, fmt.Errorf("Dispatch status paths must be relative to the source connection")
 		}
-		out.Source = &platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: source.Name}
+		out.Source = &platform.AssetRef{App: construction.ID, Kind: platform.AssetSource, Name: source.Name}
 	}
 	if spec.Readback.Observation != "" {
 		prospective, selected, err := b.prospectiveIntegration(platform.AssetObservation, spec.Readback.Observation)
@@ -245,10 +247,10 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		}
 		var definition platform.ObservationDefinition
 		if selected {
-			definition, err = b.observationDefinition(prospective.(Observation))
+			definition, err = b.observationDefinition(prospective.(construction.Observation))
 		} else {
-			record, known := b.host.Record(ObservationType + "/" + spec.Readback.Observation)
-			observation, valid := record.(Observation)
+			record, known := b.host.Record(construction.ObservationType + "/" + spec.Readback.Observation)
+			observation, valid := record.(construction.Observation)
 			if !known || !valid {
 				return out, fmt.Errorf("Dispatch observation is unavailable")
 			}
@@ -260,7 +262,7 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBin
 		if definition.Object.Name != "build."+object.Name {
 			return out, fmt.Errorf("Dispatch observation must read its business subject")
 		}
-		out.Observation = &platform.AssetRef{App: ID, Kind: platform.AssetObservation, Name: definition.Name}
+		out.Observation = &platform.AssetRef{App: construction.ID, Kind: platform.AssetObservation, Name: definition.Name}
 	}
 	if spec.Readback.Record != "" {
 		owner, _, _ := strings.Cut(spec.Readback.Record, ".")
@@ -273,10 +275,10 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 	bindings := map[string]dispatchBindings{}
 	effects := map[string]map[string]platform.AssetRef{}
 	for i, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object Object
+		var object construction.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return nil, err
 		}
@@ -352,7 +354,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 // Portable objects retain logical integration names. Installation and retained
 // execution resolve those names through the same target inventory as sources
 // and writebacks, without changing the candidate's frozen bytes.
-func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, string) (string, error)) error {
+func mapDispatchIntegrations(object *construction.Object, resolve func(platform.AssetKind, string) (string, error)) error {
 	var failure error
 	mapTxn := func(txn *platform.BusinessTxn) {
 		if txn == nil {
@@ -399,7 +401,7 @@ func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, st
 	return failure
 }
 
-func objectHasIntegrations(object Object) bool {
+func objectHasIntegrations(object construction.Object) bool {
 	found := len(object.DispatchCommands) > 0
 	visit := func(txn *platform.BusinessTxn) {
 		if txn != nil {
@@ -425,16 +427,16 @@ func (b *Build) txnEffectBindings(txn *platform.BusinessTxn) (map[string]platfor
 			failure = err
 			return
 		}
-		refs[step.Name] = platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: name}
+		refs[step.Name] = platform.AssetRef{App: construction.ID, Kind: platform.AssetWriteback, Name: name}
 	})
 	return refs, failure
 }
 
-func (b *Build) dispatchSchemaObject(object Object) (Object, error) {
+func (b *Build) dispatchSchemaObject(object construction.Object) (construction.Object, error) {
 	if !objectHasIntegrations(object) {
 		return object, nil
 	}
-	var portable Object
+	var portable construction.Object
 	if err := json.Unmarshal(platform.Raw(object), &portable); err != nil {
 		return object, err
 	}
@@ -460,9 +462,9 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 	}
-	var object Object
+	var object construction.Object
 	for _, asset := range assets {
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == txn.Subject {
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == txn.Subject {
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Dispatch subject publication is invalid")
 			}
@@ -505,16 +507,16 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	}
 	payload["key"] = key
 	run := platform.DispatchRun{Record: platform.Record{ID: id}, Subject: txn.Subject + "/" + receipt.GetSubmission().GetTarget().GetId(), Action: receipt.GetSubmission().GetSchema().GetName(), Member: c.ID, Command: command, Definition: spec, Target: spec.Target, Key: key, State: "pending", StartedAt: at, StateAt: at, Deadline: at.Add(time.Duration(spec.DeadlineSeconds) * time.Second), ReadDue: at, Release: release, Assets: assets, Input: platform.Raw(payload), Readback: []platform.DispatchReading{}, Attempts: []platform.DispatchAttempt{}, Reviewers: []string{}}
-	run.Reviewers = append(run.Reviewers, b.host.(host.ConfirmationHost).Holding(ID, spec.ReviewerRole)...)
-	connection := func(id string) (Connection, error) {
-		conn, found := platform.Get[Connection](c, id)
+	run.Reviewers = append(run.Reviewers, b.host.(host.ConfirmationHost).Holding(construction.ID, spec.ReviewerRole)...)
+	connection := func(id string) (construction.Connection, error) {
+		conn, found := platform.Get[construction.Connection](c, id)
 		if !found {
-			return Connection{}, fmt.Errorf("Dispatch connection is unavailable")
+			return construction.Connection{}, fmt.Errorf("Dispatch connection is unavailable")
 		}
 		return b.ExecutionConnection(conn)
 	}
 	prepare := func(command platform.DispatchCommand) (json.RawMessage, error) {
-		w, found := platform.Get[Writeback](c, command.Writeback)
+		w, found := platform.Get[construction.Writeback](c, command.Writeback)
 		if !found {
 			return nil, fmt.Errorf("Dispatch writeback is unavailable")
 		}
@@ -562,7 +564,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		}
 	}
 	if spec.Readback.Source != "" {
-		source, found := platform.Get[Source](c, spec.Readback.Source)
+		source, found := platform.Get[construction.Source](c, spec.Readback.Source)
 		if !found {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch status source is unavailable")
 		}
@@ -578,7 +580,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		run.Source, run.Connection = platform.Raw(source), platform.Raw(conn)
 	}
 	if spec.Readback.Observation != "" {
-		observation, found := platform.Get[Observation](c, spec.Readback.Observation)
+		observation, found := platform.Get[construction.Observation](c, spec.Readback.Observation)
 		if !found {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch observation is unavailable")
 		}
@@ -607,7 +609,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 
 func (b *Build) queueDispatch(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *kernel.Error {
 	run.Attempt++
-	run.Intent = fmt.Sprintf("%s:%s:dispatch:%s:%d:%s%s", c.Tenant, ID, run.ID, run.Attempt, WritebackEndpoint, run.Target)
+	run.Intent = fmt.Sprintf("%s:%s:dispatch:%s:%d:%s%s", c.Tenant, construction.ID, run.ID, run.Attempt, construction.WritebackEndpoint, run.Target)
 	run.Attempts = append(run.Attempts, platform.DispatchAttempt{Number: run.Attempt, Intent: run.Intent, Target: run.Target, State: "pending", At: at, Compensation: run.Compensating})
 	if len(run.Attempts) > 20 {
 		run.Attempts = run.Attempts[len(run.Attempts)-20:]
@@ -644,7 +646,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Dispatch transport is unavailable")
 		}
 		if manual {
-			if c.Agent || !c.Holds(ID, run.Definition.ReviewerRole) || strings.TrimSpace(in.Reason) == "" {
+			if c.Agent || !c.Holds(construction.ID, run.Definition.ReviewerRole) || strings.TrimSpace(in.Reason) == "" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dispatch needs its current reviewer and evidence")
 			}
 			typ, id, _ := strings.Cut(run.Subject, "/")
@@ -853,5 +855,5 @@ func (b *Build) runDispatches(c platform.Caller, at time.Time) *kernel.Error {
 }
 
 func dispatchSubmission(c platform.Caller, id, schema, key string, payload any, at time.Time) *pb.Submission {
-	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "dispatch:" + id + ":" + key, Target: &pb.EntityRef{Type: platform.DispatchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: construction.ID, IdempotencyKey: "dispatch:" + id + ":" + key, Target: &pb.EntityRef{Type: platform.DispatchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
 }

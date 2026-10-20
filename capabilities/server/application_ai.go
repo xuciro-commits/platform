@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -61,7 +61,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 					item.Placement = "autonomous"
 				}
 			}
-			if t.agents != nil && (m.Holds(build.ID, build.Builder) || m.Holds(build.ID, build.Publisher)) {
+			if t.agents != nil && (m.Holds(construction.ID, construction.Builder) || m.Holds(construction.ID, construction.Publisher)) {
 				digest, _ := canonicalDigest(asset)
 				reports, _, problem := platform.Find[Evaluation](t.automation(AgentApp, false), platform.Query{Domain: platform.Raw([]any{[]any{"agent", "=", asset.Ref.App + "." + asset.Ref.Name}, []any{"definitionDigest", "=", digest}})})
 				if problem != nil {
@@ -100,7 +100,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 			if object.Ref.Kind != platform.AssetObject || object.Ref.App != asset.Ref.App {
 				continue
 			}
-			var declaration build.Object
+			var declaration construction.Object
 			if json.Unmarshal(object.Body, &declaration) != nil {
 				continue
 			}
@@ -120,10 +120,10 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 				}
 			}
 		}
-		if m.Holds(build.ID, build.Builder) || m.Holds(build.ID, build.Publisher) {
+		if m.Holds(construction.ID, construction.Builder) || m.Holds(construction.ID, construction.Publisher) {
 			offset := 0
 			for {
-				rows, total, problem := platform.Find[build.Evaluation](t.automation(build.ID, false), platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
+				rows, total, problem := platform.Find[construction.Evaluation](t.automation(construction.ID, false), platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
 				if problem != nil {
 					return nil, problem
 				}

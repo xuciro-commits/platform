@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"cmp"
 	"encoding/json"
@@ -16,16 +18,16 @@ import (
 )
 
 func (b *Build) processEntity() platform.Entity {
-	return platform.Entity{Type: ProcessType, Title: "Process", Plural: "Processes", Model: Process{}, Display: "title", Description: "Typed capability blocks compiled to the platform's native flow.",
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "processes"},
+	return platform.Entity{Type: construction.ProcessType, Title: "Process", Plural: "Processes", Model: construction.Process{}, Display: "title", Description: "Typed capability blocks compiled to the platform's native flow.",
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "processes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: b.publishProcess},
-				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: b.runProcess}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "processes", Payload: []platform.Field{}, Do: b.publishProcess},
+				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "processes", Payload: []platform.Field{{Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: b.runProcess}}}}
 }
 
 func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	p, ok := record.(*Process)
+	p, ok := record.(*construction.Process)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -38,7 +40,7 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 			return err
 		}
 		if p.Continuous != nil && p.Continuous.Intake != nil {
-			source, ok := platform.Get[Source](c, p.Continuous.Intake.SourceRecord)
+			source, ok := platform.Get[construction.Source](c, p.Continuous.Intake.SourceRecord)
 			if !ok || !source.Stream || source.State != "published" || source.Name != p.Continuous.Source {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The intake names a readable published continuous source")
 			}
@@ -70,11 +72,11 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 }
 
 func (b *Build) runProcess(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
-	p, ok := record.(*Process)
+	p, ok := record.(*construction.Process)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	installed, ok := wasPublished[Process](p.Published)
+	installed, ok := wasPublished[construction.Process](p.Published)
 	if !ok || !installed.Manual {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Publish a manual workflow before running it")
 	}
@@ -106,16 +108,16 @@ func (b *Build) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	if !ok {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This tenant runs no manual processes")
 	}
-	return start.StartManual(c, ID, installed.Name, installed.Version, request.Key, input, now)
+	return start.StartManual(c, construction.ID, installed.Name, installed.Version, request.Key, input, now)
 }
 
-func (b *Build) checkFlow(p Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
+func (b *Build) checkFlow(p construction.Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
 	plans, err := b.processInventory()
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
 	}
 	for _, other := range plans {
-		installed, _ := wasPublished[Process](other.Published)
+		installed, _ := wasPublished[construction.Process](other.Published)
 		if other.ID != p.ID && (other.Name == p.Name || installed.Name == p.Name) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process name {name} is already used", p.Name)
 		}
@@ -125,8 +127,8 @@ func (b *Build) checkFlow(p Process, entity platform.Entity, objects ...platform
 
 // CheckProcess exposes the exact publication compiler to edit/test feedback.
 // It returns node-qualified errors instead of trusting frontend edge rules.
-func (b *Build) CheckProcess(c platform.Caller, p Process) *kernel.Error {
-	objects, err := readDefinitionInventory[Object](c)
+func (b *Build) CheckProcess(c platform.Caller, p construction.Process) *kernel.Error {
+	objects, err := readDefinitionInventory[construction.Object](c)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object inventory cannot be checked")
 	}
@@ -145,7 +147,7 @@ func (b *Build) CheckProcess(c platform.Caller, p Process) *kernel.Error {
 	return b.checkFlow(p, source, models...)
 }
 
-func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
+func (b *Build) checkFlowOn(p construction.Process, entity platform.Entity, objects ...platform.Entity) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -158,7 +160,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 	if !named(p.Name) {
 		return refuse("The process name {name} must be lower-case letters and digits", p.Name)
 	}
-	if old, ok := wasPublished[Process](p.Published); ok && (old.Name != p.Name || old.Object != p.Object) {
+	if old, ok := wasPublished[construction.Process](p.Published); ok && (old.Name != p.Name || old.Object != p.Object) {
 		return refuse("A published process keeps its name and object")
 	}
 	if p.Kind != "" && p.Kind != "flow" && p.Kind != "automation" {
@@ -223,7 +225,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 	if len(p.Steps) < 1 || len(p.Steps) > 128 {
 		return refuse("A process needs 1–128 typed steps")
 	}
-	nodes := map[string]ProcessStep{}
+	nodes := map[string]construction.ProcessStep{}
 	for _, step := range p.Steps {
 		if !named(step.Name) || nodes[step.Name].Name != "" {
 			return refuse("The process step {step} needs a unique lower-case name", step.Name)
@@ -287,7 +289,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 					scope = info.Scope
 				}
 			}
-			readable := step.Ask == Builder || p.Object == "" || len(scope.Levels) == 0 && step.Ask == User || scope.Levels[step.Ask] == platform.ScopeTenant
+			readable := step.Ask == construction.Builder || p.Object == "" || len(scope.Levels) == 0 && step.Ask == construction.User || scope.Levels[step.Ask] == platform.ScopeTenant
 			if !readable {
 				return problem("recipient role must read all records of its source")
 			}
@@ -314,7 +316,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 				for _, candidate := range platform.EntityActions(model) {
 					if candidate.Schema == schema {
 						action = candidate
-						owner = ID
+						owner = construction.ID
 						ok = true
 						break
 					}
@@ -343,15 +345,15 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 			if step.Function == nil {
 				return problem("choose a retained AI function")
 			}
-			f, _, ok := b.host.Function(cmp.Or(step.Function.App, ID), step.Function.Name, step.Function.Version)
-			if !ok || cmp.Or(step.Function.App, ID) == ID && step.Function.Version < 1 || cmp.Or(step.Function.App, ID) != ID && step.Function.Version != 0 || f.Object != p.Object && step.Target == nil {
+			f, _, ok := b.host.Function(cmp.Or(step.Function.App, construction.ID), step.Function.Name, step.Function.Version)
+			if !ok || cmp.Or(step.Function.App, construction.ID) == construction.ID && step.Function.Version < 1 || cmp.Or(step.Function.App, construction.ID) != construction.ID && step.Function.Version != 0 || f.Object != p.Object && step.Target == nil {
 				return problem("AI function source/version is not installed")
 			}
 		case "compute":
 			if step.Operation == nil || step.Operation.Name == "" || step.Operation.Version < 0 {
 				return problem("choose a retained computation")
 			}
-			op, _, ok := b.host.Operation(cmp.Or(step.Operation.App, ID), step.Operation.Name, step.Operation.Version)
+			op, _, ok := b.host.Operation(cmp.Or(step.Operation.App, construction.ID), step.Operation.Name, step.Operation.Version)
 			if !ok {
 				return problem("computation owner/version is not installed")
 			}
@@ -386,7 +388,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 			if step.Query == "" || step.App == "" {
 				return problem("choose an owner query")
 			}
-			if step.App == ID {
+			if step.App == construction.ID {
 				q, ordinal, ok := b.QueryDefinition(step.Query, step.QueryVersion)
 				if !ok || step.QueryVersion < 1 || step.QueryVersion > 64 || ordinal != step.QueryVersion {
 					return problem("choose an exact retained tenant query version")
@@ -492,7 +494,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 	}
 	return nil
 }
-func processPaths(s ProcessStep) []string {
+func processPaths(s construction.ProcessStep) []string {
 	paths := []string{s.Next, s.Error, s.Body}
 	paths = append(paths, s.Branches...)
 	paths = append(paths, slices.Collect(maps.Values(s.Cases))...)
@@ -501,19 +503,19 @@ func processPaths(s ProcessStep) []string {
 
 // processImage checks the already saved version family, independently of
 // draft rules. Old versions are flat images, not copies of their own history.
-func processImage(image []byte) (Process, error) {
-	var record Process
+func processImage(image []byte) (construction.Process, error) {
+	var record construction.Process
 	if err := json.Unmarshal(image, &record); err != nil {
-		return Process{}, err
+		return construction.Process{}, err
 	}
 	if record.State != "published" || record.Version < 1 || record.Version > 64 || len(record.Versions) != record.Version || record.Published != record.Versions[record.Version-1] {
-		return Process{}, fmt.Errorf("accepted process has an invalid version family")
+		return construction.Process{}, fmt.Errorf("accepted process has an invalid version family")
 	}
-	var latest Process
+	var latest construction.Process
 	for index, raw := range record.Versions {
-		version, ok := wasPublished[Process](raw)
+		version, ok := wasPublished[construction.Process](raw)
 		if !ok || version.ID != record.ID || version.Version != index+1 || version.Published != "" || len(version.Versions) != 0 || index > 0 && (version.Name != latest.Name || version.Object != latest.Object) {
-			return Process{}, fmt.Errorf("accepted process has a malformed version %d", index+1)
+			return construction.Process{}, fmt.Errorf("accepted process has a malformed version %d", index+1)
 		}
 		latest = version
 	}
@@ -521,8 +523,8 @@ func processImage(image []byte) (Process, error) {
 }
 
 // flowOf compiles every declarative block into the existing native owner.
-func (b *Build) flowOf(p Process) platform.Flow {
-	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual}, Continuous: p.Continuous}
+func (b *Build) flowOf(p construction.Process) platform.Flow {
+	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{construction.Builder}, Start: platform.Start{Manual: p.Manual}, Continuous: p.Continuous}
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)
 		fl.Start.OnBehalf = p.Scheduler
@@ -535,7 +537,7 @@ func (b *Build) flowOf(p Process) platform.Flow {
 			if b.host == nil || processID == "" || processVersion < 1 {
 				return false
 			}
-			current, ok := platform.Get[Process](b.host.Automation(c, ID), processID)
+			current, ok := platform.Get[construction.Process](b.host.Automation(c, construction.ID), processID)
 			return ok && current.State == "published" && current.Version == processVersion && current.Name == processName
 		}
 	} else if !p.Manual {
@@ -567,7 +569,7 @@ func (b *Build) flowOf(p Process) platform.Flow {
 			if !ok {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
 			}
-			raw, err := b.host.Caller(c, member, ID).ReadRecord(p.Object, r.Key, r.Now)
+			raw, err := b.host.Caller(c, member, construction.ID).ReadRecord(p.Object, r.Key, r.Now)
 			if err == nil {
 				var fields map[string]json.RawMessage
 				info, known := b.lookupEntity(p.Object)
@@ -591,7 +593,7 @@ func (b *Build) flowOf(p Process) platform.Flow {
 				if !known {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
 				}
-				value, sources, err := b.host.Caller(c, member, ID).ReadRecordPath(p.Object, r.Key, binding.Path, r.Now)
+				value, sources, err := b.host.Caller(c, member, construction.ID).ReadRecordPath(p.Object, r.Key, binding.Path, r.Now)
 				r.Sources = append(r.Sources, sources...)
 				return value, err
 			}
@@ -812,15 +814,15 @@ func (b *Build) flowOf(p Process) platform.Flow {
 				if err != nil {
 					return platform.OperationRequest{}, err
 				}
-				return platform.OperationRequest{App: cmp.Or(s.Operation.App, ID), Name: s.Operation.Name, Version: s.Operation.Version, Inputs: raw}, nil
+				return platform.OperationRequest{App: cmp.Or(s.Operation.App, construction.ID), Name: s.Operation.Name, Version: s.Operation.Version, Inputs: raw}, nil
 			}}
 		case "ai":
-			step.Invoke = &platform.Invocation{Act: platform.Act{Action: SchemaFunctionCall, Target: func(_ platform.Caller, r *platform.Run) string {
+			step.Invoke = &platform.Invocation{Act: platform.Act{Action: construction.SchemaFunctionCall, Target: func(_ platform.Caller, r *platform.Run) string {
 				return fmt.Sprintf("%s:%s:%d", r.ID, s.Name, r.Sequence)
 			}, Payload: func(c platform.Caller, r *platform.Run) any {
 				return platform.FunctionRequest{App: s.Function.App, Name: s.Function.Name, Version: s.Function.Version, Source: target(c, r), OnBehalf: r.OnBehalf, Release: &r.Release}
 			}}, Result: func(c platform.Caller, r *platform.Run, id string) (json.RawMessage, bool, *kernel.Error) {
-				call, ok := platform.Get[FunctionRun](c, id)
+				call, ok := platform.Get[construction.FunctionRun](c, id)
 				if !ok || call.State == "pending" {
 					return nil, false, nil
 				}
@@ -856,7 +858,7 @@ func (b *Build) installProcesses() error {
 			return err
 		}
 		for _, raw := range p.Versions {
-			was, ok := wasPublished[Process](raw)
+			was, ok := wasPublished[construction.Process](raw)
 			if !ok {
 				return fmt.Errorf("process %s: unreadable version", p.Name)
 			}
@@ -868,8 +870,8 @@ func (b *Build) installProcesses() error {
 	return nil
 }
 
-func (b *Build) processInventory() ([]Process, error) {
-	return readDefinitionInventory[Process](b.host.Automation(platform.Caller{}, ID))
+func (b *Build) processInventory() ([]construction.Process, error) {
+	return readDefinitionInventory[construction.Process](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
 func predicateSubject(p platform.Predicate) bool {
@@ -889,7 +891,7 @@ func predicateSubject(p platform.Predicate) bool {
 // whose false path ends the run; then effects - actions, AI and compute steps -
 // one after another, each leading to the next, the last to nothing. Anything
 // richer is a flow and is edited on the map.
-func checkAutomation(p Process) *kernel.Error {
+func checkAutomation(p construction.Process) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -905,7 +907,7 @@ func checkAutomation(p Process) *kernel.Error {
 			ends[s.Name] = true
 		}
 	}
-	chain := slices.DeleteFunc(slices.Clone(p.Steps), func(s ProcessStep) bool { return s.Kind == "end" })
+	chain := slices.DeleteFunc(slices.Clone(p.Steps), func(s construction.ProcessStep) bool { return s.Kind == "end" })
 	for i, s := range chain {
 		last := i == len(chain)-1
 		next := ""

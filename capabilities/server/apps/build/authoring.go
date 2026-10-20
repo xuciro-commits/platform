@@ -1,11 +1,13 @@
 package build
 
+import "platformserver/internal/construction"
+
 import "platformserver/platform"
 
 // SavedObjectActions describes editable declarations, not executable grants or
 // installed versions. The same object owner produces candidate action inputs.
 func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error) {
-	objects, err := readDefinitionInventory[Object](c)
+	objects, err := readDefinitionInventory[construction.Object](c)
 	if err != nil {
 		return nil, err
 	}

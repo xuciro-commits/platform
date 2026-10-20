@@ -15,7 +15,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -266,12 +266,12 @@ func toCSV(v any) string {
 // restricted says whether typ holds restricted data (ADR-0025): a dataset or
 // version marked so, or an object a restricted pipeline writes.
 func (t *Tenant) restricted(typ string) bool {
-	c := t.automation(build.ID, false)
+	c := t.automation(construction.ID, false)
 	switch typ {
-	case build.DatasetType, build.DatasetVersionType:
-		sets, _, _ := platform.Find[build.Dataset](c, platform.Query{Limit: 500})
-		return slices.ContainsFunc(sets, func(d build.Dataset) bool { return d.Marking == "restricted" })
+	case construction.DatasetType, construction.DatasetVersionType:
+		sets, _, _ := platform.Find[construction.Dataset](c, platform.Query{Limit: 500})
+		return slices.ContainsFunc(sets, func(d construction.Dataset) bool { return d.Marking == "restricted" })
 	}
-	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Limit: 500})
-	return slices.ContainsFunc(pipelines, func(p build.Pipeline) bool { return p.OutputObject == typ && p.Marking == "restricted" })
+	pipelines, _, _ := platform.Find[construction.Pipeline](c, platform.Query{Limit: 500})
+	return slices.ContainsFunc(pipelines, func(p construction.Pipeline) bool { return p.OutputObject == typ && p.Marking == "restricted" })
 }

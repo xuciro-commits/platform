@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bufio"
 	"encoding/json"
@@ -70,7 +72,7 @@ func TestEnterpriseLegacyViewRecovery(t *testing.T) {
 }
 
 func TestApprovalRequestsJoinSharedLiveReads(t *testing.T) {
-	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{PlatformApp: Admin, work.ID: "member", build.ID: build.Builder}}}
+	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{PlatformApp: Admin, work.ID: "member", construction.ID: construction.Builder}}}
 	tn, err := NewTenant("live-requests", NewConsole("live-requests", seat), work.New("live-requests"), build.New("live-requests"))
 	if err != nil {
 		t.Fatal(err)
@@ -487,7 +489,7 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 	if len(model("admin").Views) != 1 || len(model("admin").Elements) != 3 {
 		t.Fatal("deleting a drawing changed the model")
 	}
-	decide(t, tn, "admin", build.ID, "build.object.create", build.ObjectType, "OBJ", map[string]any{"name": "privateobject", "title": "Private object"}, at)
+	decide(t, tn, "admin", construction.ID, "build.object.create", construction.ObjectType, "OBJ", map[string]any{"name": "privateobject", "title": "Private object"}, at)
 	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second",
 		map[string]any{"name": "Pinned", "viewpoint": "organization", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a", "label": "Cached private text", "at": []int{10, 20}}}}, at)
 	if len(model("viewer").Views[0].Pins) != 0 {

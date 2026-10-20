@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -8,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -39,14 +40,14 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 						}
 					}
 					attach()
-					fields := []build.Field{{Name: "value", Title: "Value", Type: "text", SourceType: "user-input"}}
-					actions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done", Conditions: []build.Condition{{Field: "value", Operator: "=", Value: "Updated", Message: "The retained write must be readable"}}}}
-					publishObject(t, tn, "builder", "S", map[string]any{"name": "sample", "title": "Sample", "fields": fields, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "actions": actions}, txnAt)
-					steps := []build.ProcessStep{{Name: "ask", Title: "Confirm", Kind: "ask", Ask: build.User, Answers: []string{"yes"}, Next: "edit"}, {Name: "edit", Kind: "action", Act: "edit", Inputs: map[string]platform.Binding{"value": {Source: "literal", Value: platform.Raw("Updated")}}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}}
-					decide(t, tn, "builder", build.ID, "build.process.create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.sample", "when": "open", "steps": steps}, txnAt)
-					decide(t, tn, "builder", build.ID, build.SchemaProcess, build.ProcessType, "P", map[string]any{}, txnAt)
+					fields := []construction.Field{{Name: "value", Title: "Value", Type: "text", SourceType: "user-input"}}
+					actions := []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done", Conditions: []construction.Condition{{Field: "value", Operator: "=", Value: "Updated", Message: "The retained write must be readable"}}}}
+					publishObject(t, tn, "builder", "S", map[string]any{"name": "sample", "title": "Sample", "fields": fields, "states": []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "actions": actions}, txnAt)
+					steps := []construction.ProcessStep{{Name: "ask", Title: "Confirm", Kind: "ask", Ask: construction.User, Answers: []string{"yes"}, Next: "edit"}, {Name: "edit", Kind: "action", Act: "edit", Inputs: map[string]platform.Binding{"value": {Source: "literal", Value: platform.Raw("Updated")}}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}}
+					decide(t, tn, "builder", construction.ID, "build.process.create", construction.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.sample", "when": "open", "steps": steps}, txnAt)
+					decide(t, tn, "builder", construction.ID, construction.SchemaProcess, construction.ProcessType, "P", map[string]any{}, txnAt)
 
-					save := func(key string, drafts []build.JointDraftRef) string {
+					save := func(key string, drafts []construction.JointDraftRef) string {
 						t.Helper()
 						member := memberOf(t, tn, "builder")
 						preview, err := tn.PreviewReleaseDrafts(member, drafts)
@@ -59,23 +60,23 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 						}
 						return candidate
 					}
-					from := save("source", []build.JointDraftRef{{Kind: platform.AssetObject, ID: "S"}, {Kind: platform.AssetFlow, ID: "P"}})
+					from := save("source", []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "S"}, {Kind: platform.AssetFlow, ID: "P"}})
 					if _, err := tn.ActivateRelease(memberOf(t, tn, "builder"), from, "source-activate", txnAt); err != nil {
 						t.Fatal(err)
 					}
 					for _, rowID := range []string{"A", "B", "C"} {
-						decide(t, tn, "user", build.ID, "build.sample.create", "build.sample", rowID, map[string]any{"value": "Name " + rowID}, txnAt)
+						decide(t, tn, "user", construction.ID, "build.sample.create", "build.sample", rowID, map[string]any{"value": "Name " + rowID}, txnAt)
 					}
 					tn.Work(txnAt.Add(2 * time.Second))
-					decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "T", map[string]any{"name": "detail", "title": "Detail", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text", Required: true}}}, txnAt)
+					decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "T", map[string]any{"name": "detail", "title": "Detail", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text", Required: true}}}, txnAt)
 					fields[0].ReadOnly = true
-					fields = append(fields, build.Field{Name: "mark", Title: "Mark", Type: "text"})
+					fields = append(fields, construction.Field{Name: "mark", Title: "Mark", Type: "text"})
 					actions[0].Conditions[0].Field = "mark"
 					steps[1].Inputs = map[string]platform.Binding{"mark": {Source: "literal", Value: platform.Raw("Updated")}}
-					decide(t, tn, "builder", build.ID, "build.process.edit", build.ProcessType, "P", map[string]any{"steps": steps}, txnAt)
+					decide(t, tn, "builder", construction.ID, "build.process.edit", construction.ProcessType, "P", map[string]any{"steps": steps}, txnAt)
 
-					decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "S", map[string]any{"fields": fields, "actions": actions}, txnAt)
-					to := save("target", []build.JointDraftRef{{Kind: platform.AssetObject, ID: "S"}, {Kind: platform.AssetObject, ID: "T"}, {Kind: platform.AssetFlow, ID: "P"}})
+					decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "S", map[string]any{"fields": fields, "actions": actions}, txnAt)
+					to := save("target", []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "S"}, {Kind: platform.AssetObject, ID: "T"}, {Kind: platform.AssetFlow, ID: "P"}})
 					identity, value := platform.ExprReference("reference", "id"), platform.ExprReference("text", "value")
 					plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.sample"}, Steps: []platform.MigrateStep{{Kind: "extract", Types: []string{"build.sample"}, Target: "build.detail", Identity: &identity, Batch: 2, Fields: []platform.MigrateField{{From: "value", To: "name", Expr: &value}}}}}
 					if mode == "conflict" || mode == "quarantine" {
@@ -89,7 +90,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					start := submission(tn, memberOf(t, tn, "builder"), build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At})
+					start := submission(tn, memberOf(t, tn, "builder"), construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At})
 					before := snapshot(tn)
 					fail = true
 					if _, err := tn.Submit(memberOf(t, tn, "builder"), start, txnAt); err == nil || snapshot(tn) != before || tn.records.types["build.detail"] != nil {
@@ -102,7 +103,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					if target := tn.records.types["build.detail"]; target == nil || target.rows.len() != 0 {
 						t.Fatal("start did not accept the sealed new object declaration")
 					}
-					advance := submission(tn, memberOf(t, tn, "builder"), build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
+					advance := submission(tn, memberOf(t, tn, "builder"), construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
 					before = snapshot(tn)
 					fail = true
 					if _, err := tn.Submit(memberOf(t, tn, "builder"), advance, txnAt); err == nil || snapshot(tn) != before {
@@ -115,7 +116,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					}
 					if mode == "conflict" || mode == "quarantine" {
 						if mode == "quarantine" {
-							decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+							decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 						}
 						run := migrationRun(t, tn, "M")
 						expected := 0
@@ -144,7 +145,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					if run := migrationRun(t, tn, "M"); run.Processed != 2 || run.Migrated != 2 || len(run.Extractions) != 2 || run.State != "running" {
 						t.Fatalf("batch: %+v", run)
 					}
-					if got := refuse(t, tn, "user", build.ID, "build.detail.edit", "build.detail", "A", map[string]any{"name": "forbidden"}, txnAt); got == "ok" {
+					if got := refuse(t, tn, "user", construction.ID, "build.detail.edit", "build.detail", "A", map[string]any{"name": "forbidden"}, txnAt); got == "ok" {
 						t.Fatal("target writes were not frozen")
 					}
 					position := journal.Position(id)
@@ -165,7 +166,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					}
 					if cancel {
 						for i := 0; i < 3; i++ {
-							decide(t, tn, "builder", build.ID, "build.migration.cancel", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+							decide(t, tn, "builder", construction.ID, "build.migration.cancel", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 						}
 						if migrationRun(t, tn, "M").State != "cancelled" {
 							t.Fatal("cancellation did not finish its bounded compensation")
@@ -175,9 +176,9 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 								t.Fatal("cancellation left an extracted record active")
 							}
 						}
-						decide(t, tn, "user", build.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "Source reopened"}, txnAt)
+						decide(t, tn, "user", construction.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "Source reopened"}, txnAt)
 					} else {
-						decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+						decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 						if _, err := tn.ActivateRelease(memberOf(t, tn, "builder"), to, "target-activate", txnAt); err != nil {
 							t.Fatal(err)
 						}

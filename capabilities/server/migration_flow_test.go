@@ -1,11 +1,12 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -34,25 +35,25 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	at := txnAt
 	fields := []map[string]any{{"name": "guest", "title": "Guest", "type": "text", "sourceType": "user-input"}}
-	actions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
+	actions := []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
 	if approval {
-		actions[0].Approval = &build.ActionApproval{Pending: "pending", Rejected: "rejected", Levels: []build.ApproverLevel{{Title: "Builder", Role: build.Builder}}}
+		actions[0].Approval = &construction.ActionApproval{Pending: "pending", Rejected: "rejected", Levels: []construction.ApproverLevel{{Title: "Builder", Role: construction.Builder}}}
 	}
-	states := []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}
+	states := []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}
 	if approval {
-		states = append(states, build.State{Name: "pending", Title: "Pending"})
+		states = append(states, construction.State{Name: "pending", Title: "Pending"})
 	}
-	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "O", map[string]any{"name": "visit", "title": "Visit", "fields": fields, "states": states, "actions": actions}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
-	steps := []build.ProcessStep{
-		{Name: "check", Title: "Check", Kind: "ask", Ask: build.User, Answers: []string{"yes"}, Next: "rename"},
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "O", map[string]any{"name": "visit", "title": "Visit", "fields": fields, "states": states, "actions": actions}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "O", map[string]any{}, at)
+	steps := []construction.ProcessStep{
+		{Name: "check", Title: "Check", Kind: "ask", Ask: construction.User, Answers: []string{"yes"}, Next: "rename"},
 		{Name: "rename", Kind: "action", Act: "edit", Inputs: map[string]platform.Binding{"guest": {Source: "literal", Value: platform.Raw("Flow updated")}}, Next: "close"},
 		{Name: "close", Kind: "action", Act: "close"},
 	}
-	decide(t, tn, "builder", build.ID, "build.process.create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.visit", "when": "open", "steps": steps}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaProcess, build.ProcessType, "P", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.process.create", construction.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.visit", "when": "open", "steps": steps}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaProcess, construction.ProcessType, "P", map[string]any{}, at)
 	builder := memberOf(t, tn, "builder")
-	drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "P"}}
+	drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "P"}}
 	save := func(key string) string {
 		t.Helper()
 		preview, err := tn.PreviewReleaseDrafts(builder, drafts)
@@ -69,7 +70,7 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	if _, err := tn.ActivateRelease(builder, from, "source-activate", at); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "user", build.ID, "build.visit.create", "build.visit", "A", map[string]any{"guest": "Ada"}, at)
+	decide(t, tn, "user", construction.ID, "build.visit.create", "build.visit", "A", map[string]any{"guest": "Ada"}, at)
 	at = at.Add(2 * time.Second)
 	tn.Work(at)
 	started, found := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:A")
@@ -89,8 +90,8 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 		steps[2].Act = "reject"
 	}
 	steps[1].Inputs = map[string]platform.Binding{"name": {Source: "literal", Value: platform.Raw("Flow updated")}}
-	decide(t, tn, "builder", build.ID, "build.process.edit", build.ProcessType, "P", map[string]any{"steps": steps}, at)
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "O", map[string]any{"fields": fields, "actions": actions}, at)
+	decide(t, tn, "builder", construction.ID, "build.process.edit", construction.ProcessType, "P", map[string]any{"steps": steps}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "O", map[string]any{"fields": fields, "actions": actions}, at)
 	to := save("target")
 	literal := platform.ExprLiteralValue("boolean", true)
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.visit"}, Steps: []platform.MigrateStep{
@@ -104,9 +105,9 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
 	for range plan.Steps {
-		decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, at)
+		decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, at)
 	}
 	if _, err := tn.ActivateRelease(builder, to, "target-activate", at); err != nil {
 		t.Fatal(err)
@@ -137,7 +138,7 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	tn = waitingRestored
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	builder = memberOf(t, tn, "builder")
-	decide(t, tn, "user", build.ID, "build.visit.edit", "build.visit", "A", map[string]any{"name": "Updated"}, at)
+	decide(t, tn, "user", construction.ID, "build.visit.edit", "build.visit", "A", map[string]any{"name": "Updated"}, at)
 	decide(t, tn, "user", work.ID, "work.task.complete", work.TaskType, tasks[0].ID, map[string]any{"answer": "yes"}, at)
 	at = at.Add(2 * time.Second)
 	tn.Work(at)
@@ -159,7 +160,7 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	if ended.State != "done" || ended.Release != started.Release || ended.Dependencies != started.Dependencies {
 		t.Fatalf("old instance drifted: %+v", ended)
 	}
-	decide(t, tn, "user", build.ID, "build.visit.create", "build.visit", "B", map[string]any{"name": "Bob", "enabled": true}, at)
+	decide(t, tn, "user", construction.ID, "build.visit.create", "build.visit", "B", map[string]any{"name": "Bob", "enabled": true}, at)
 	at = at.Add(2 * time.Second)
 	tn.Work(at)
 	newTasks, _, _ := platform.Find[platform.WorkTask](tn.automation(work.ID, false), platform.Query{})

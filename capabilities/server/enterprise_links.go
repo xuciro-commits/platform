@@ -12,8 +12,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
@@ -50,38 +50,38 @@ func (t *Tenant) tenantLinkModel() (enterprise.Model, *kernel.Error) {
 
 // The caller keeps its original runtime, so a staged import reads the same
 // authorized connection record as its other original owner decisions.
-func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (build.Connection, *kernel.Error) {
-	c = platform.RouteCaller(c, build.ID)
+func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (construction.Connection, *kernel.Error) {
+	c = platform.RouteCaller(c, construction.ID)
 	c.Automation = false
-	permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: build.ConnectionType, Record: id, Fields: []string{"kind", "address", "secret", "allowPrivate", "state", "published", "protocol", "marking"}}, now)
+	permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: construction.ConnectionType, Record: id, Fields: []string{"kind", "address", "secret", "allowPrivate", "state", "published", "protocol", "marking"}}, now)
 	if err := authorizationRefusal(permission); err != nil {
-		return build.Connection{}, err
+		return construction.Connection{}, err
 	}
 	if len(permission.Withheld) > 0 {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The connection settings are not readable")
+		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The connection settings are not readable")
 	}
-	raw, refusal := c.ReadRecord(build.ConnectionType, id, now)
+	raw, refusal := c.ReadRecord(construction.ConnectionType, id, now)
 	if refusal != nil {
-		return build.Connection{}, refusal
+		return construction.Connection{}, refusal
 	}
-	var connection build.Connection
+	var connection construction.Connection
 	if json.Unmarshal(raw, &connection) != nil {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connection settings are not readable")
+		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connection settings are not readable")
 	}
-	owner, ok := t.app(build.ID).(host.IntegrationDefinitions)
+	owner, ok := t.app(construction.ID).(host.IntegrationDefinitions)
 	if !ok {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The connection owner is unavailable")
+		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The connection owner is unavailable")
 	}
 	fixed, err := owner.ExecutionConnection(connection)
 	if err != nil || fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" || fixed.Protocol != nil {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
+		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
 	}
 	address, err := url.Parse(fixed.Address)
 	if err != nil || address.Host == "" || address.User != nil || address.RawQuery != "" || address.Fragment != "" || address.Scheme != "https" && !(address.Scheme == "http" && fixed.AllowPrivate) {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an HTTP service root")
+		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an HTTP service root")
 	}
 	if fixed.Secret == "" || t.authorization(fixed) == "" {
-		return build.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an available connection credential")
+		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an available connection credential")
 	}
 	return fixed, nil
 }
@@ -164,8 +164,8 @@ func (t *Tenant) PreviewEnterpriseLink(ctx context.Context, m platform.Member, i
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The enterprise source did not answer")
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, build.SourceBody+1))
-	if err != nil || response.StatusCode != http.StatusOK || len(body) > build.SourceBody || json.Unmarshal(body, &answer.Slice) != nil {
+	body, err := io.ReadAll(io.LimitReader(response.Body, construction.SourceBody+1))
+	if err != nil || response.StatusCode != http.StatusOK || len(body) > construction.SourceBody || json.Unmarshal(body, &answer.Slice) != nil {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The enterprise source did not return a bounded published slice")
 	}
 	answer.Content = answer.Slice.Fingerprint()

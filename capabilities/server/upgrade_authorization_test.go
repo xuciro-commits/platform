@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"context"
 	"encoding/json"
@@ -27,8 +29,8 @@ func upgradeSeats() []Seat {
 		return Seat{Subjects: []string{"user:" + id + "@example.test"}, Member: platform.Member{ID: id, Roles: roles}}
 	}
 	return []Seat{
-		seat("dana", map[string]string{build.ID: build.Builder, PlatformApp: Admin, work.ID: work.Admin}),
-		seat("pat", map[string]string{build.ID: build.Publisher}),
+		seat("dana", map[string]string{construction.ID: construction.Builder, PlatformApp: Admin, work.ID: work.Admin}),
+		seat("pat", map[string]string{construction.ID: construction.Publisher}),
 		seat("aud", map[string]string{PlatformApp: Auditor}),
 		seat("mo", nil),
 		seat("approver", map[string]string{"manager": "manager"}),
@@ -52,7 +54,7 @@ func upgradeTenant(t *testing.T, id string) (*Tenant, func(string) platform.Memb
 	submit := func(who, schema, typ, target string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		authority := build.ID
+		authority := construction.ID
 		if typ == work.ApprovalType || typ == work.PolicyType {
 			authority = work.ID
 		} else if typ == PackageType || typ == ProjectType {
@@ -74,7 +76,7 @@ func TestPublisherActivatesWithoutEditing(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 
 	// The builder role edits definitions; the publisher does not.
-	if role := member("pat").Roles[build.ID]; role != build.Publisher {
+	if role := member("pat").Roles[construction.ID]; role != construction.Publisher {
 		t.Fatalf("publisher seat: %s", role)
 	}
 	if _, err := tn.SaveReleaseCandidates(member("pat"), nil, "cand", "k1", now); err == nil ||
@@ -106,7 +108,7 @@ func TestAuditorReadsWithoutDeciding(t *testing.T) {
 	if _, err := tn.Read(member("aud"), "packages"); err != nil {
 		t.Fatalf("auditor may not read packages: %v", err)
 	}
-	if got := submit("aud", SchemaGrant, MemberType, "mo", map[string]any{"app": build.ID, "role": build.Builder}); got == "ok" {
+	if got := submit("aud", SchemaGrant, MemberType, "mo", map[string]any{"app": construction.ID, "role": construction.Builder}); got == "ok" {
 		t.Fatal("the auditor granted a role")
 	}
 	if got := submit("aud", SchemaAdd, MemberType, "eve", map[string]any{"subject": "user:eve@example.test"}); got == "ok" {
@@ -160,16 +162,16 @@ func TestProjectDelegationIsTargetScoped(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	object := map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
+	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("builder draft: %s", got)
 	}
 	second := map[string]any{"name": "invoice", "title": "Invoice",
 		"fields": []map[string]any{{"name": "amount", "title": "Amount", "type": "text"}}}
-	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "invoice", second); got != "ok" {
+	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "invoice", second); got != "ok" {
 		t.Fatalf("builder draft 2: %s", got)
 	}
 	// Without a project the member has no edit right at all.
-	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit"}); got == "ok" {
+	if got := submit("mo", "build.object.edit", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit"}); got == "ok" {
 		t.Fatal("a member with no role edited an object")
 	}
 	project := map[string]any{"name": "opening", "title": "Hotel opening",
@@ -180,27 +182,27 @@ func TestProjectDelegationIsTargetScoped(t *testing.T) {
 	}
 	// The project hands mo the builder role (By project:<id>): the Studio loads for them.
 	mo := member("mo")
-	if mo.Roles[build.ID] != build.Builder || !slices.ContainsFunc(mo.Grants, func(g platform.Grant) bool { return g.By == "project:opening" }) {
+	if mo.Roles[construction.ID] != construction.Builder || !slices.ContainsFunc(mo.Grants, func(g platform.Grant) bool { return g.By == "project:opening" }) {
 		t.Fatalf("project did not grant builder: %+v", mo.Grants)
 	}
 	// Its writes are bounded to the assets the project names, on the submission path.
-	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit (mo)", "fields": object["fields"]}); got != "ok" {
+	if got := submit("mo", "build.object.edit", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit (mo)", "fields": object["fields"]}); got != "ok" {
 		t.Fatalf("delegated edit: %s", got)
 	}
-	if got := submit("mo", "build.object.edit", build.ObjectType, "invoice", map[string]any{"name": "invoice", "title": "Invoice", "fields": second["fields"]}); got == "ok" {
+	if got := submit("mo", "build.object.edit", construction.ObjectType, "invoice", map[string]any{"name": "invoice", "title": "Invoice", "fields": second["fields"]}); got == "ok" {
 		t.Fatal("delegation leaked to an asset the project does not name")
 	}
-	if got := submit("mo", build.SchemaPublish, build.ObjectType, "visit", map[string]any{}); got == "ok" {
+	if got := submit("mo", construction.SchemaPublish, construction.ObjectType, "visit", map[string]any{}); got == "ok" {
 		t.Fatal("delegation covered publishing")
 	}
 	// Archiving the project takes the role and the edit right away together.
 	if got := submit("dana", SchemaProjectArchive, ProjectType, "opening", map[string]any{}); got != "ok" {
 		t.Fatalf("project archive: %s", got)
 	}
-	if member("mo").Roles[build.ID] != "" {
+	if member("mo").Roles[construction.ID] != "" {
 		t.Fatal("an archived project still grants")
 	}
-	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": object["fields"]}); got == "ok" {
+	if got := submit("mo", "build.object.edit", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": object["fields"]}); got == "ok" {
 		t.Fatal("an archived project still delegates")
 	}
 	_ = now
@@ -218,14 +220,14 @@ func TestMultiApprovalPolicyNeedsDistinctApprovers(t *testing.T) {
 		t.Fatalf("an all-approvers level stays all: %d", got)
 	}
 	tn, member, submit := upgradeTenant(t, "t-appr")
-	if got := submit("dana", work.SchemaPolicySave, work.PolicyType, "publish-two-eyes", map[string]any{"app": build.ID, "schema": build.SchemaPublish, "approvals": 2, "title": "two eyes"}); got != "ok" {
+	if got := submit("dana", work.SchemaPolicySave, work.PolicyType, "publish-two-eyes", map[string]any{"app": construction.ID, "schema": construction.SchemaPublish, "approvals": 2, "title": "two eyes"}); got != "ok" {
 		t.Fatalf("policy save: %s", got)
 	}
 	caller := tn.caller(member("dana"), tn.app(work.ID), false)
-	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, build.ID, build.SchemaPublish); count != 2 {
+	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, construction.ID, construction.SchemaPublish); count != 2 {
 		t.Fatalf("policy count: %d", count)
 	}
-	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, build.ID, "nothing"); count != 0 {
+	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, construction.ID, "nothing"); count != 0 {
 		t.Fatalf("policy leaked to another action: %d", count)
 	}
 }
@@ -302,12 +304,12 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	object := map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
+	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
 	// Activation is a target-side install: the target must hold the owner
 	// drafts the candidate's assets resolve to, exactly as a local save needs.
-	if got := toSubmit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
+	if got := toSubmit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("target draft: %s", got)
 	}
 	preview, err := from.PreviewRelease(member("dana"), platform.AssetObject, "visit")
@@ -315,7 +317,7 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 		t.Fatalf("preview: %+v %v", preview, err)
 	}
 	candidateID := preview.CandidateID
-	drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "visit"}}
+	drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "visit"}}
 	if _, err := from.SaveReleaseCandidates(member("dana"), drafts, candidateID, "save", now); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -343,7 +345,7 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 	// A candidate for an app the target does not host is refused.
 	other, _, otherSubmit := upgradeTenant(t, "t-other")
 	_ = other
-	if got := otherSubmit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
+	if got := otherSubmit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("draft on the third tenant: %s", got)
 	}
 	thin := NewConsole("t-thin", upgradeSeats()...)
@@ -515,19 +517,19 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 func TestCompositeEditsAllOrNothing(t *testing.T) {
 	tn, member, submit := upgradeTenant(t, "t-comp")
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
-	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit",
+	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
 	edits := []CompositeEdit{
-		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)},
-		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "missing"}, Payload: json.RawMessage(`{"name":"missing","title":"Missing"}`)},
+		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)},
+		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "missing"}, Payload: json.RawMessage(`{"name":"missing","title":"Missing"}`)},
 	}
 	if _, err := tn.Composite(member("dana"), "composite-1", edits, now); err == nil {
 		t.Fatal("a composite with a bad edit applied")
 	}
 	// Nothing half-applied: the first edit's title is unchanged.
-	visit, ok := platform.Get[build.Object](tn.caller(member("dana"), tn.app(build.ID), false), "visit")
+	visit, ok := platform.Get[construction.Object](tn.caller(member("dana"), tn.app(construction.ID), false), "visit")
 	if !ok || visit.Title != "Visit" {
 		t.Fatalf("the refused composite changed the first edit: %+v", visit)
 	}
@@ -536,7 +538,7 @@ func TestCompositeEditsAllOrNothing(t *testing.T) {
 	if err != nil || answer.Applied != 1 {
 		t.Fatalf("composite: %+v %v", answer, err)
 	}
-	visit, _ = platform.Get[build.Object](tn.caller(member("dana"), tn.app(build.ID), false), "visit")
+	visit, _ = platform.Get[construction.Object](tn.caller(member("dana"), tn.app(construction.ID), false), "visit")
 	if visit.Title != "Visit today" {
 		t.Fatalf("the composite did not apply: %+v", visit)
 	}

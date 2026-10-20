@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"regexp"
 	"slices"
 
@@ -25,19 +25,18 @@ import (
 // Its complete rule plan is the original compute release asset. Candidate
 // activation or development publication installs it; drafts never change it.
 const (
-	TableType          = buildapi.TableType
-	SchemaTablePublish = TableType + ".publish"
+	SchemaTablePublish = construction.TableType + ".publish"
 	tableRows          = 500
 	tableCols          = 16
 )
 
 func (b *Build) tableEntity() platform.Entity {
-	return platform.Entity{Type: TableType, Title: "Decision table", Plural: "Decision tables", Model: Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
+	return platform.Entity{Type: construction.TableType, Title: "Decision table", Plural: "Decision tables", Model: construction.Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {
 				return nil
 			}
-			tb := record.(*Table)
+			tb := record.(*construction.Table)
 			if err := tb.NormalizeRules(); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
@@ -46,14 +45,14 @@ func (b *Build) tableEntity() platform.Entity {
 			}
 			return nil
 		},
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "compute"},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "compute"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Check the table and install it as an operation at once.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "compute", Payload: []platform.Field{}, Do: b.publishTable}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Check the table and install it as an operation at once.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "compute", Payload: []platform.Field{}, Do: b.publishTable}}}}
 }
 
 func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	tb, ok := record.(*Table)
+	tb, ok := record.(*construction.Table)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -88,7 +87,7 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 	return nil
 }
 
-func (b *Build) installTable(c platform.Caller, tb Table) error {
+func (b *Build) installTable(c platform.Caller, tb construction.Table) error {
 	if err := b.host.InstallOperation(c, tb.Definition(), tb.Version); err != nil {
 		return err
 	}
@@ -98,7 +97,7 @@ func (b *Build) installTable(c platform.Caller, tb Table) error {
 
 // installTables puts every published table back after a restart or snapshot.
 func (b *Build) installTables() error {
-	list, err := readDefinitionInventory[Table](b.host.Automation(platform.Caller{}, ID))
+	list, err := readDefinitionInventory[construction.Table](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return err
 	}
@@ -106,7 +105,7 @@ func (b *Build) installTables() error {
 		if record.Published == "" || record.Archived {
 			continue
 		}
-		tb, ok := wasPublished[Table](record.Published)
+		tb, ok := wasPublished[construction.Table](record.Published)
 		if !ok || tb.Name != record.Name {
 			return fmt.Errorf("decision table %s has a malformed publication", record.Name)
 		}
@@ -120,7 +119,7 @@ func (b *Build) installTables() error {
 
 var columnName = regexp.MustCompile(`^[a-z][a-z0-9]{0,31}$`)
 
-func (b *Build) checkTable(tb Table) error {
+func (b *Build) checkTable(tb construction.Table) error {
 	if err := b.checkName(tb.Name, tb.ID); err != nil {
 		return err
 	}
@@ -128,12 +127,12 @@ func (b *Build) checkTable(tb Table) error {
 }
 
 // checkTableShape checks everything but the name's uniqueness.
-func (b *Build) checkTableShape(tb Table) error {
+func (b *Build) checkTableShape(tb construction.Table) error {
 	if strings.TrimSpace(tb.Title) == "" || len(tb.Inputs) == 0 || len(tb.Outputs) == 0 || len(tb.Inputs)+len(tb.Outputs) > tableCols || len(tb.Rows) == 0 || len(tb.Rows) > tableRows {
 		return fmt.Errorf("a table needs a title, 1 to %d columns and 1 to %d rows", tableCols, tableRows)
 	}
 	seen := map[string]bool{}
-	for _, col := range append(append([]TableColumn{}, tb.Inputs...), tb.Outputs...) {
+	for _, col := range append(append([]construction.TableColumn{}, tb.Inputs...), tb.Outputs...) {
 		if !columnName.MatchString(col.Name) || seen[col.Name] || col.Type != "text" && col.Type != "number" && col.Type != "boolean" {
 			return fmt.Errorf("column %q needs a unique lower-case name and a type of text, number or boolean", col.Name)
 		}
@@ -159,12 +158,12 @@ func (b *Build) checkTableShape(tb Table) error {
 			return fmt.Errorf("row %d does not fill every column", i+1)
 		}
 		for j, cell := range row.When {
-			if _, err := buildapi.ValueParseCondition(cell, tb.Inputs[j].Type); err != nil {
+			if _, err := construction.ValueParseCondition(cell, tb.Inputs[j].Type); err != nil {
 				return fmt.Errorf("row %d, %s: %w", i+1, tb.Inputs[j].Name, err)
 			}
 		}
 		for j, cell := range row.Then {
-			if _, err := buildapi.ValueCastCell(cell, tb.Outputs[j].Type); err != nil {
+			if _, err := construction.ValueCastCell(cell, tb.Outputs[j].Type); err != nil {
 				return fmt.Errorf("row %d, %s: %w", i+1, tb.Outputs[j].Name, err)
 			}
 		}
@@ -174,7 +173,7 @@ func (b *Build) checkTableShape(tb Table) error {
 			return fmt.Errorf("the default result fills every result column")
 		}
 		for j, cell := range tb.Default {
-			if _, err := buildapi.ValueCastCell(cell, tb.Outputs[j].Type); err != nil {
+			if _, err := construction.ValueCastCell(cell, tb.Outputs[j].Type); err != nil {
 				return fmt.Errorf("default, %s: %w", tb.Outputs[j].Name, err)
 			}
 		}
@@ -199,12 +198,12 @@ func (b *Build) Compute(_ context.Context, name string, input json.RawMessage) (
 	return json.Marshal(result)
 }
 
-func tableImage(image []byte) (Table, error) {
-	var record Table
+func tableImage(image []byte) (construction.Table, error) {
+	var record construction.Table
 	if err := json.Unmarshal(image, &record); err != nil {
 		return record, err
 	}
-	frozen, ok := wasPublished[Table](record.Published)
+	frozen, ok := wasPublished[construction.Table](record.Published)
 	if !ok || record.State != "published" || frozen.ID != record.ID || frozen.Name != record.Name || frozen.Version < 1 || frozen.Version > record.Version || record.Version > 64 {
 		return frozen, fmt.Errorf("accepted table has no matching immutable publication")
 	}

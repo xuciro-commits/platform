@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"os"
@@ -38,7 +40,7 @@ func TestCompleteDefaultMapRetainsSharedSelectionAndBusinessSchedule(t *testing.
 			}
 		}
 	}
-	if _, err := platform.PageReleaseAsset(ID, "1.page-1", page); err != nil {
+	if _, err := platform.PageReleaseAsset(construction.ID, "1.page-1", page); err != nil {
 		t.Fatal(err)
 	}
 	page.Document.UIProfile = "platform.page.v2.100"

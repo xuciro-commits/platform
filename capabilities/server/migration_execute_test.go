@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -8,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -29,14 +30,14 @@ func migrationFixture(t *testing.T, name string, values []string, durable ...Jou
 	}
 	builder := memberOf(t, tn, "builder")
 	fields := []map[string]any{{"name": "name", "title": "Name", "type": "text", "sourceType": "user-input"}}
-	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "asset", map[string]any{"name": "asset", "title": "Asset", "fields": fields}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "asset", map[string]any{"name": "asset", "title": "Asset", "fields": fields}, txnAt)
 	save := func(key string) string {
 		t.Helper()
 		preview, err := tn.PreviewRelease(builder, platform.AssetObject, "asset")
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("preview: %+v %v", preview, err)
 		}
-		id, err := tn.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
+		id, err := tn.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,10 +49,10 @@ func migrationFixture(t *testing.T, name string, values []string, durable ...Jou
 	}
 	for index, value := range values {
 		id := string(rune('A' + index))
-		decide(t, tn, "user", build.ID, "build.asset.create", "build.asset", id, map[string]any{"name": value}, txnAt)
+		decide(t, tn, "user", construction.ID, "build.asset.create", "build.asset", id, map[string]any{"name": value}, txnAt)
 	}
 	fields = append(fields, map[string]any{"name": "enabled", "title": "Enabled", "type": "boolean", "required": true})
-	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
 	to := save("target")
 	literal := platform.ExprLiteralValue("boolean", true)
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.asset"}, Steps: []platform.MigrateStep{{Kind: "default", Types: []string{"build.asset"}, Batch: 2, Fields: []platform.MigrateField{{To: "enabled", Expr: &literal}}}}}
@@ -76,8 +77,8 @@ func TestMigrationReopensItsDurableJournal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			decide(t, live, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
-			request := submission(live, builder, build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
+			decide(t, live, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+			request := submission(live, builder, construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
 			first, refusal := live.Submit(builder, request, txnAt)
 			if refusal != nil {
 				t.Fatal(refusal)
@@ -101,7 +102,7 @@ func TestMigrationReopensItsDurableJournal(t *testing.T) {
 			if refusal != nil || first.GetChangeId() != again.GetChangeId() || journal.Position(id) != position {
 				t.Fatal("reopen repeated an accepted batch")
 			}
-			decide(t, recovered, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
+			decide(t, recovered, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
 			if _, err := recovered.ActivateRelease(memberOf(t, recovered, "builder"), plan.To, "target", txnAt.Add(time.Hour)); err != nil {
 				t.Fatal(err)
 			}
@@ -136,18 +137,18 @@ func TestMigrationIncompleteScopeCannotActivateRequiredTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
-	decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 	if _, err := tn.ActivateRelease(builder, plan.To, "incomplete-target", txnAt); err == nil || tn.releases.active != plan.From {
 		t.Fatal("a completed cursor bypassed its required target values")
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.cancel", platform.MigrationRunType, "M", map[string]any{}, txnAt)
-	decide(t, tn, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Source remains usable"}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.cancel", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Source remains usable"}, txnAt)
 }
 
 func migrationRun(t *testing.T, tn *Tenant, id string) platform.MigrationRun {
 	t.Helper()
-	c := tn.caller(memberOf(t, tn, "builder"), tn.app(build.ID), false)
+	c := tn.caller(memberOf(t, tn, "builder"), tn.app(construction.ID), false)
 	run, ok := platform.Get[platform.MigrationRun](c, id)
 	if !ok {
 		t.Fatal("migration progress was not saved")
@@ -166,10 +167,10 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, refusal := tn.Submit(builder, submission(tn, builder, build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}), txnAt); refusal != nil {
+	if _, refusal := tn.Submit(builder, submission(tn, builder, construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}), txnAt); refusal != nil {
 		t.Fatalf("start: %v fault: %+v", refusal, tn.fault.Load())
 	}
-	request := submission(tn, builder, build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
+	request := submission(tn, builder, construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
 	first, refusal := tn.Submit(builder, request, txnAt)
 	if refusal != nil {
 		t.Fatal(refusal)
@@ -196,10 +197,10 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 			t.Fatalf("target fact/source read image missing: %s %s %v", id, image, err)
 		}
 	}
-	if got := refuse(t, tn, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Lost future fact"}, txnAt); got == "ok" {
+	if got := refuse(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Lost future fact"}, txnAt); got == "ok" {
 		t.Fatal("old-definition write was accepted during migration")
 	}
-	if got := refuse(t, tn, "builder", build.ID, build.ObjectType+".publish", build.ObjectType, "asset", map[string]any{}, txnAt); got == "ok" {
+	if got := refuse(t, tn, "builder", construction.ID, construction.ObjectType+".publish", construction.ObjectType, "asset", map[string]any{}, txnAt); got == "ok" {
 		t.Fatal("direct publication bypassed the pending migration")
 	}
 	if _, err := tn.ActivateRelease(builder, plan.To, "too-early", txnAt); err == nil {
@@ -230,7 +231,7 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 	if run := migrationRun(t, restored, "M"); run.Cursor != "build.asset/B" || run.Migrated != 2 {
 		t.Fatalf("restored progress changed: %+v", run)
 	}
-	decide(t, restored, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
+	decide(t, restored, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
 	if run := migrationRun(t, restored, "M"); run.Migrated != 3 || run.State != "complete" {
 		t.Fatalf("resume did not finish exactly the remaining row: %+v", run)
 	}
@@ -240,7 +241,7 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 	if restored.releases.active != plan.To {
 		t.Fatal("migration did not use the original release activation")
 	}
-	decide(t, restored, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "After migration"}, txnAt.Add(2*time.Hour))
+	decide(t, restored, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "After migration"}, txnAt.Add(2*time.Hour))
 	image, _ := restored.records.types["build.asset"].rows.get("A").image()
 	var values map[string]json.RawMessage
 	if json.Unmarshal(image, &values) != nil || string(values["enabled"]) != "true" {
@@ -251,13 +252,13 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 func TestMigrationDecoderSelectsTheReleaseEvenWithUnchangedFields(t *testing.T) {
 	tn, plan, _ := migrationFixture(t, "migration-same-shape", []string{"Source value"})
 	fields := []map[string]any{{"name": "name", "title": "Name", "type": "text", "sourceType": "user-input"}}
-	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "asset", map[string]any{"title": "Asset next", "fields": fields}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "asset", map[string]any{"title": "Asset next", "fields": fields}, txnAt)
 	builder := memberOf(t, tn, "builder")
 	preview, err := tn.PreviewRelease(builder, platform.AssetObject, "asset")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("preview: %+v %v", preview, err)
 	}
-	plan.To, err = tn.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, "same-shape-target", txnAt)
+	plan.To, err = tn.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, "same-shape-target", txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,8 +268,8 @@ func TestMigrationDecoderSelectsTheReleaseEvenWithUnchangedFields(t *testing.T) 
 	if err != nil || review.Types[0].SourceShape != review.Types[0].TargetShape {
 		t.Fatalf("same field shapes: %+v %v", review, err)
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt.Add(time.Hour))
-	decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(2*time.Hour))
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt.Add(time.Hour))
+	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(2*time.Hour))
 	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.get("A").value, "name"); got != "Source value" {
 		t.Fatal("source reader saw unactivated target facts")
 	}
@@ -289,7 +290,7 @@ func TestMigrationDecoderSelectsTheReleaseEvenWithUnchangedFields(t *testing.T) 
 	if got := businessField(recovered.records.types["build.asset"].info, recovered.records.types["build.asset"].rows.get("A").value, "name"); got != "Migrated value" {
 		t.Fatal("snapshot restored the wrong release's facts")
 	}
-	decide(t, recovered, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "New write"}, txnAt.Add(4*time.Hour))
+	decide(t, recovered, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "New write"}, txnAt.Add(4*time.Hour))
 }
 
 func TestMigrationFailedBatchDoesNotAcceptEarlierRows(t *testing.T) {
@@ -310,8 +311,8 @@ func TestMigrationFailedBatchDoesNotAcceptEarlierRows(t *testing.T) {
 				t.Fatalf("failure review: %+v %v", review, err)
 			}
 			before, _ := tn.records.types["build.asset"].rows.get("A").image()
-			decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
-			decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+			decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+			decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 			run := migrationRun(t, tn, "M")
 			if run.State != "blocked" || len(run.Failures) != 1 || run.Failures[0].Record != "B" {
 				t.Fatalf("failure/progress not recorded: %+v", run)
@@ -333,7 +334,7 @@ func TestMigrationFailedBatchDoesNotAcceptEarlierRows(t *testing.T) {
 			if _, err := recovered.ActivateRelease(memberOf(t, recovered, "builder"), plan.To, "blocked-activation", txnAt); err == nil {
 				t.Fatal("unresolved conversion failure activated its target")
 			}
-			decide(t, recovered, "builder", build.ID, "build.migration.cancel", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
+			decide(t, recovered, "builder", construction.ID, "build.migration.cancel", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
 			if run := migrationRun(t, recovered, "M"); run.State != "cancelled" {
 				t.Fatalf("failed migration could not release its source: %+v", run)
 			}
@@ -346,7 +347,7 @@ func TestMigrationFailedBatchDoesNotAcceptEarlierRows(t *testing.T) {
 			if strategy == "quarantine" && (len(row.history) != 3 || row.history[2].Schema != "build.migration.cancel") {
 				t.Fatal("cancellation erased history instead of recording compensation")
 			}
-			decide(t, recovered, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Writable again"}, txnAt.Add(2*time.Hour))
+			decide(t, recovered, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Writable again"}, txnAt.Add(2*time.Hour))
 		})
 	}
 }

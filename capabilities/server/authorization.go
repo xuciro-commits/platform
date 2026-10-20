@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -195,7 +195,7 @@ func (d *Console) projectGrantsLocked(member string) []platform.Grant {
 		}
 		for _, e := range p.Members {
 			if e.Member == member && e.Role == ProjectEditorRole {
-				out = append(out, platform.Grant{App: build.ID, Role: build.Builder, By: "project:" + id, Reason: p.Title})
+				out = append(out, platform.Grant{App: construction.ID, Role: construction.Builder, By: "project:" + id, Reason: p.Title})
 				break
 			}
 		}
@@ -210,13 +210,13 @@ func (d *Console) projectGrantsLocked(member string) []platform.Grant {
 // project delegation.
 func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Error {
 	owner := t.owner["action:"+s.GetSchema().GetName()]
-	if owner == nil || owner.Manifest().ID != build.ID {
+	if owner == nil || owner.Manifest().ID != construction.ID {
 		return nil
 	}
 	viaProject := false
 	var independent []string
 	for _, g := range m.Grants {
-		if g.App == build.ID {
+		if g.App == construction.ID {
 			if strings.HasPrefix(g.By, "project:") {
 				viaProject = true
 			} else {
@@ -224,7 +224,7 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 			}
 		}
 	}
-	if !viaProject || slices.Contains(independent, build.Builder) || owner.Manifest().Actions.PermitsAny(independent, s.GetSchema().GetName()) { // preserve only actions held independently
+	if !viaProject || slices.Contains(independent, construction.Builder) || owner.Manifest().Actions.PermitsAny(independent, s.GetSchema().GetName()) { // preserve only actions held independently
 		return nil
 	}
 	d, _ := t.app(PlatformApp).(ProjectAccess)
@@ -272,7 +272,7 @@ func (t *Tenant) draftName(s *pb.Submission) string {
 // publish or release schema keeps the app-wide role requirement.
 func delegatedAsset(s *pb.Submission) (ProjectAsset, bool) {
 	typ, schema := s.GetTarget().GetType(), s.GetSchema().GetName()
-	if !strings.HasPrefix(typ, build.ID+".") || !strings.HasPrefix(schema, typ+".") {
+	if !strings.HasPrefix(typ, construction.ID+".") || !strings.HasPrefix(schema, typ+".") {
 		return ProjectAsset{}, false
 	}
 	verb := strings.TrimPrefix(schema, typ+".")
@@ -289,7 +289,7 @@ func delegatedAsset(s *pb.Submission) (ProjectAsset, bool) {
 		App string `json:"app"`
 	}
 	_ = json.Unmarshal(s.GetPayload(), &payload)
-	return ProjectAsset{App: payload.App, Kind: strings.TrimPrefix(typ, build.ID+"."), Name: id}, true
+	return ProjectAsset{App: payload.App, Kind: strings.TrimPrefix(typ, construction.ID+"."), Name: id}, true
 }
 
 // Auditor read surface: the administrator reads an auditor may use.
@@ -311,7 +311,7 @@ func auditorMayRead(name string) bool {
 func holdsIndependentBuildRole(m platform.Member, roles ...string) bool {
 	held := false
 	for _, g := range m.Grants {
-		if g.App != build.ID {
+		if g.App != construction.ID {
 			continue
 		}
 		held = true
@@ -319,5 +319,5 @@ func holdsIndependentBuildRole(m platform.Member, roles ...string) bool {
 			return true
 		}
 	}
-	return !held && slices.Contains(roles, m.Roles[build.ID])
+	return !held && slices.Contains(roles, m.Roles[construction.ID])
 }

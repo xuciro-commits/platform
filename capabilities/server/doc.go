@@ -25,7 +25,7 @@
 // W3 consumer boundaries (ADR-0037): internal/host names the role each
 // compiled owner receives; Host is only the composition aggregate. Console
 // and Agents own their state and receive ConsoleHost/AgentHost, never Tenant.
-// Construction and enterprise value contracts live in internal/host/buildapi
+// Construction and enterprise value contracts live in internal/construction
 // and enterpriseapi; runtime code imports no compiled apps. Public DTOs retain
 // the original host API schema names and journal encodings.
 //

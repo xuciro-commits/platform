@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"crypto/sha256"
 	"encoding/json"
@@ -48,30 +50,30 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 			t.Fatalf("%s: %v fault=%+v", schema, err, tn.fault.Load())
 		}
 	}
-	must("dana", build.ID, build.ObjectType+".create", build.ObjectType, "O1", map[string]any{"name": "intake", "title": "Intake", "access": []build.Access{{Role: build.User, Read: "all", Create: true, Edit: true}, {Role: "analyst", Read: "all"}}, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
-	must("dana", build.ID, build.SchemaPublish, build.ObjectType, "O1", struct{}{})
-	definition := platform.RecordAdviceFunction("build.intake", []string{"note"}, []string{build.Builder, build.User, "analyst"})
+	must("dana", construction.ID, construction.ObjectType+".create", construction.ObjectType, "O1", map[string]any{"name": "intake", "title": "Intake", "access": []construction.Access{{Role: construction.User, Read: "all", Create: true, Edit: true}, {Role: "analyst", Read: "all"}}, "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}})
+	must("dana", construction.ID, construction.SchemaPublish, construction.ObjectType, "O1", struct{}{})
+	definition := platform.RecordAdviceFunction("build.intake", []string{"note"}, []string{construction.Builder, construction.User, "analyst"})
 	definition.Name = "advice"
-	must("dana", build.ID, build.FunctionType+".create", build.FunctionType, "F1", definition)
-	owner := tn.app(build.ID).(*build.Build)
+	must("dana", construction.ID, construction.FunctionType+".create", construction.FunctionType, "F1", definition)
+	owner := tn.app(construction.ID).(*build.Build)
 	if _, _, ok := owner.FunctionDefinition("advice", 0); ok {
 		t.Fatal("draft function installed")
 	}
 	fail = true
-	if err := submit("dana", build.ID, build.SchemaFunction, build.FunctionType, "F1", struct{}{}); err == nil {
+	if err := submit("dana", construction.ID, build.SchemaFunction, construction.FunctionType, "F1", struct{}{}); err == nil {
 		t.Fatal("failed publication append accepted")
 	}
 	if _, _, ok := owner.FunctionDefinition("advice", 0); ok {
 		t.Fatal("failed append installed the function")
 	}
 	fail = false
-	must("dana", build.ID, build.SchemaFunction, build.FunctionType, "F1", struct{}{})
+	must("dana", construction.ID, build.SchemaFunction, construction.FunctionType, "F1", struct{}{})
 	installed, version, ok := owner.FunctionDefinition("advice", 0)
 	if !ok || version != 1 || installed.Instructions != definition.Instructions {
 		t.Fatal("first publication missing")
 	}
 	dana, _ := tn.Member("dana")
-	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFunction, Name: "advice"}
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetFunction, Name: "advice"}
 	if !slices.ContainsFunc(tn.Definitions(dana), func(d platform.Definition) bool {
 		return d.Ref == ref && d.Source == "tenant" && d.Version == "1.function-1"
 	}) {
@@ -92,7 +94,7 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	// Establish a saved release to test exact runtime binding. This is not a
 	// proof of the future function candidate evaluation/activation journey.
 	tn.releases.candidates, tn.releases.active = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
-	if closure, release, err := tn.functionClosure(build.ID, definition, 1, nil); err != nil || closure.ID != c1.ID || release != c1.ID {
+	if closure, release, err := tn.functionClosure(construction.ID, definition, 1, nil); err != nil || closure.ID != c1.ID || release != c1.ID {
 		t.Fatalf("published function did not bind its saved release: %s %s %v", closure.ID, release, err)
 	}
 	// Original releases did not seal Provides or machine-resolved bindings.
@@ -118,7 +120,7 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	tn.releases.candidates, tn.releases.active = map[string]json.RawMessage{legacyID: legacyBytes}, legacyID
-	if closure, release, err := tn.functionClosure(build.ID, definition, 1, nil); err != nil || closure.ID != legacyID || release != legacyID {
+	if closure, release, err := tn.functionClosure(construction.ID, definition, 1, nil); err != nil || closure.ID != legacyID || release != legacyID {
 		t.Fatalf("historical function binding changed identity: %s %s %v", closure.ID, release, err)
 	}
 	tn.releases.active = ""
@@ -126,31 +128,31 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	must("dana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": "http://localhost:1"})
 	must("dana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]string{"access": "users"})
 	must("dana", PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "local/probe"})
-	must("eli", build.ID, "build.intake.create", "build.intake", "S1", map[string]string{"note": "Original note"})
+	must("eli", construction.ID, "build.intake.create", "build.intake", "S1", map[string]string{"note": "Original note"})
 	call := map[string]any{"name": "advice", "source": "S1"}
-	if err := submit("eli", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "impersonation", map[string]any{"name": "advice", "source": "S1", "onBehalf": "dana"}); err == nil || len(tn.outbound) != 0 {
+	if err := submit("eli", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, "impersonation", map[string]any{"name": "advice", "source": "S1", "onBehalf": "dana"}); err == nil || len(tn.outbound) != 0 {
 		t.Fatal("person borrowed another member's grants")
 	}
 	fail = true
-	if err := submit("eli", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "R1", call); err == nil || len(tn.outbound) != 0 {
+	if err := submit("eli", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, "R1", call); err == nil || len(tn.outbound) != 0 {
 		t.Fatal("failed append leaked model input")
 	}
 	fail = false
-	must("eli", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "R1", call)
+	must("eli", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, "R1", call)
 	var ask modelAsk
 	json.Unmarshal([]byte(tn.outbound[0].Body), &ask)
-	if ask.Function == nil || ask.Function.Call.Source != "build.intake/S1" || ask.Record != build.FunctionCallType+"/R1" || ask.Function.Call.Version != 1 || ask.Function.Member != "eli" {
+	if ask.Function == nil || ask.Function.Call.Source != "build.intake/S1" || ask.Record != construction.FunctionCallType+"/R1" || ask.Function.Call.Version != 1 || ask.Function.Member != "eli" {
 		t.Fatalf("call confused source and reply: %+v", ask)
 	}
-	if err := submit("eli", build.ID, build.SchemaFunctionAnswer, build.FunctionCallType, "R1", platform.Answer{Call: "R1", Outcome: "accepted", Text: `{"summary":"Forged","category":"routine","review":false}`}); err == nil {
+	if err := submit("eli", construction.ID, construction.SchemaFunctionAnswer, construction.FunctionCallType, "R1", platform.Answer{Call: "R1", Outcome: "accepted", Text: `{"summary":"Forged","category":"routine","review":false}`}); err == nil {
 		t.Fatal("a person forged the automatic answer")
 	}
-	must("eli", build.ID, "build.intake.edit", "build.intake", "S1", map[string]string{"note": "New source note"})
-	must("dana", build.ID, build.FunctionType+".edit", build.FunctionType, "F1", map[string]string{"instructions": "New instructions"})
+	must("eli", construction.ID, "build.intake.edit", "build.intake", "S1", map[string]string{"note": "New source note"})
+	must("dana", construction.ID, construction.FunctionType+".edit", construction.FunctionType, "F1", map[string]string{"instructions": "New instructions"})
 	if f, v, _ := owner.FunctionDefinition("advice", 0); v != 1 || f.Instructions != definition.Instructions {
 		t.Fatal("draft edit changed installed calls")
 	}
-	must("dana", build.ID, build.SchemaFunction, build.FunctionType, "F1", struct{}{})
+	must("dana", construction.ID, build.SchemaFunction, construction.FunctionType, "F1", struct{}{})
 	if f, v, _ := owner.FunctionDefinition("advice", 0); v != 2 || f.Instructions != "New instructions" {
 		t.Fatal("second publication not installed")
 	}
@@ -158,7 +160,7 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 		t.Fatal("old publication lost")
 	}
 	tn.releases.candidates, tn.releases.active = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
-	if err := submit("eli", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "wrong-release", call); err == nil {
+	if err := submit("eli", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, "wrong-release", call); err == nil {
 		t.Fatal("latest function silently escaped its activated version")
 	}
 	// The manually established release has no journal entry; remove it before
@@ -174,7 +176,7 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	if err := restored.Restore(raw); err != nil {
 		t.Fatal(err)
 	}
-	if f, v, ok := restored.app(build.ID).(*build.Build).FunctionDefinition("advice", 1); !ok || v != 1 || f.Instructions != definition.Instructions {
+	if f, v, ok := restored.app(construction.ID).(*build.Build).FunctionDefinition("advice", 1); !ok || v != 1 || f.Instructions != definition.Instructions {
 		t.Fatal("restore lost retained version")
 	}
 	var wire string
@@ -194,8 +196,8 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	fail = true
 	tn.settleWithUsage(effect.ID, out, usage, at.Add(time.Second))
 	eli, _ := tn.Member("eli")
-	view, refusal := tn.RecordOf(eli, build.FunctionCallType, "R1", at)
-	if refusal != nil || view.Record.(build.FunctionRun).Metered || len(tn.ai.Usage()) != 0 {
+	view, refusal := tn.RecordOf(eli, construction.FunctionCallType, "R1", at)
+	if refusal != nil || view.Record.(construction.FunctionRun).Metered || len(tn.ai.Usage()) != 0 {
 		t.Fatal("failed effect append exposed uncommitted function metrics")
 	}
 	fail = false
@@ -203,18 +205,18 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	if tn.quarantined() {
 		t.Fatal(tn.fault.Load())
 	}
-	view, refusal = tn.RecordOf(eli, build.FunctionCallType, "R1", at)
+	view, refusal = tn.RecordOf(eli, construction.FunctionCallType, "R1", at)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	run := view.Record.(build.FunctionRun)
+	run := view.Record.(construction.FunctionRun)
 	if run.State != "ready" || run.Output == "" || run.Version != 1 || run.Model != "local/probe" ||
 		!run.Metered || !run.TokensReported || run.InputTokens != 4 || run.OutputTokens != 8 ||
 		!run.CostReported || run.CostUSD != 0.0125 || run.LatencyMillis < 0 {
 		t.Fatalf("answer not retained: %+v", run)
 	}
 	bo, _ := tn.Member("bo")
-	if _, err := tn.RecordOf(bo, build.FunctionCallType, "R1", at); err == nil {
+	if _, err := tn.RecordOf(bo, construction.FunctionCallType, "R1", at); err == nil {
 		t.Fatal("another person saw the call")
 	}
 	source, refusal := tn.RecordOf(eli, "build.intake", "S1", at)
@@ -224,31 +226,31 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	}
 	// Owning a call does not grant access to its sources after a field grant
 	// changes. The shared derived-content projection must withhold the answer.
-	must("dana", build.ID, build.ObjectType+".edit", build.ObjectType, "O1", map[string]any{"fields": []build.Field{{Name: "note", Title: "Note", Type: "text", Read: []string{build.Builder}}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
-	must("dana", build.ID, build.SchemaPublish, build.ObjectType, "O1", struct{}{})
-	view, refusal = tn.RecordOf(eli, build.FunctionCallType, "R1", at)
-	if refusal != nil || view.Record.(build.FunctionRun).Output != "" || !view.Record.(build.FunctionRun).Withheld {
+	must("dana", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "O1", map[string]any{"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text", Read: []string{construction.Builder}}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}})
+	must("dana", construction.ID, construction.SchemaPublish, construction.ObjectType, "O1", struct{}{})
+	view, refusal = tn.RecordOf(eli, construction.FunctionCallType, "R1", at)
+	if refusal != nil || view.Record.(construction.FunctionRun).Output != "" || !view.Record.(construction.FunctionRun).Withheld {
 		t.Fatal("source field revocation left the derived answer readable")
 	}
-	must("dana", build.ID, build.ObjectType+".edit", build.ObjectType, "O1", map[string]any{"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
-	must("dana", build.ID, build.SchemaPublish, build.ObjectType, "O1", struct{}{})
+	must("dana", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "O1", map[string]any{"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}})
+	must("dana", construction.ID, construction.SchemaPublish, construction.ObjectType, "O1", struct{}{})
 	// Removing a function input must not silently break its installed binding.
-	must("dana", build.ID, build.ObjectType+".edit", build.ObjectType, "O1", map[string]any{"fields": []build.Field{{Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
-	if err := submit("dana", build.ID, build.SchemaPublish, build.ObjectType, "O1", struct{}{}); err == nil {
+	must("dana", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "O1", map[string]any{"fields": []construction.Field{{Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}})
+	if err := submit("dana", construction.ID, construction.SchemaPublish, construction.ObjectType, "O1", struct{}{}); err == nil {
 		t.Fatal("source republish removed function input")
 	}
 	// A changed function role cannot borrow a field it still cannot read.
-	must("dana", build.ID, build.FunctionType+".edit", build.FunctionType, "F1", map[string]any{"fields": []string{"secret"}})
-	must("dana", build.ID, build.SchemaFunction, build.FunctionType, "F1", struct{}{})
-	if err := submit("eli", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "private", call); err == nil {
+	must("dana", construction.ID, construction.FunctionType+".edit", construction.FunctionType, "F1", map[string]any{"fields": []string{"secret"}})
+	must("dana", construction.ID, build.SchemaFunction, construction.FunctionType, "F1", struct{}{})
+	if err := submit("eli", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, "private", call); err == nil {
 		t.Fatal("private field escaped through function call")
 	}
 	// Explicit old version remains callable, with current source permissions.
 	old := map[string]any{"name": "advice", "source": "S1", "version": 1}
-	must("dana", PlatformApp, SchemaGrant, MemberType, "bo", map[string]string{"app": build.ID, "role": "analyst"})
-	must("bo", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "custom-role", old)
-	must("eli", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "R2", old)
-	must("dana", PlatformApp, SchemaRevoke, MemberType, "eli", map[string]string{"app": build.ID})
+	must("dana", PlatformApp, SchemaGrant, MemberType, "bo", map[string]string{"app": construction.ID, "role": "analyst"})
+	must("bo", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, "custom-role", old)
+	must("eli", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, "R2", old)
+	must("dana", PlatformApp, SchemaRevoke, MemberType, "eli", map[string]string{"app": construction.ID})
 	tn.AIClient = func(*http.Request) (*http.Response, error) {
 		t.Fatal("revoked input reached provider")
 		return nil, nil

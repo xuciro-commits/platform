@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -18,7 +18,7 @@ func pendingComputeEffects(t *Tenant) []platform.Effect {
 	}
 	return out
 }
-func settleComputeFixture(t *Tenant, actor platform.Member, fixture build.ComputeFixture, now time.Time) (bool, error) {
+func settleComputeFixture(t *Tenant, actor platform.Member, fixture construction.ComputeFixture, now time.Time) (bool, error) {
 	var matched []platform.Effect
 	for _, effect := range pendingComputeEffects(t) {
 		var binding operationBinding

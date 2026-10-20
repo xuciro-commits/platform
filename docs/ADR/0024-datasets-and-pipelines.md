@@ -2,7 +2,7 @@
 
 <a id="adr-0024"></a>
 
-状态：有界首版已实施（2026-10-06）；Pipeline 画布由 ADR-0033 实现，集成定义候选与跨环境交付由 ADR-0037、ADR-0046 接续，规则表达归 ADR-0040。独立 Pipeline 草稿试跑已实现（§5）；Dataset 版本数据不随定义制品自动迁移 · 承接 ADR-0023、ADR-0040、ADR-0062
+状态：有界首版已实施（2026-10-06）；Pipeline 画布由 ADR-0033 实现，集成定义候选与跨环境交付由 ADR-0037、ADR-0046 接续，规则表达归 ADR-0040。Source/Pipeline 执行身份和固定输入按 ADR-0064 实施（§3），替代原内容键。独立 Pipeline 草稿试跑已实现（§5）；Dataset 版本数据不随定义制品自动迁移 · 承接 ADR-0023、ADR-0040、ADR-0062
 
 ## 决定
 
@@ -39,11 +39,17 @@ Dataset 版本就是记录，走同一账本与恢复，未引入独立存储层
 
 ### 3. 运行面：外循环，一切经由账本
 
-`Tenant.RunPipelines(now)` 在 deploy 循环中紧随 `PullSources/CheckConnections`：对每个 `published` 管道，`Due` 为真（请求 / 输入版本大于上次运行的输入版本 / 周期到期）时读输入版本与引用的其他数据集，在内存中 `Execute`，然后：
+`Tenant.RunPipelines(now)` 在 deploy 循环中紧随 `PullSources/CheckConnections`：对每个 `published` 管道，未完成执行优先继续；请求、主输入或 lookup/join 数据集版本变化、发布定义变化或周期到期时开始新执行。所有输入版本在同一读取范围内固定，转换和匹配后的写入计划通过原 FileStore 保存为带内容摘要的不可变制品；Source 的快照拉取也采用同一准备过程。
+
+开始写入前，原 `pulled/ran` 接受动作先保存执行身份、发布者、定义版本、输入引用及 pending 状态。随后：
 
 - 输出数据集：`build.dataset.load`（producer `pipeline:<name>`）；
-- 输出对象：复用 Source 的行应用逻辑（`applyRows`：对象自己的 create，冲突则 edit，内容键幂等，键前缀 `pipeline:<name>:`）；
-- 最后 `build.pipeline.ran` 记下计数、隔离与拒绝——与 Source 的 `pulled`、Connection 的 `checked` 同一个"外循环结果是账本输入"的模式。回放不重算。
+- 输出对象：复用 Source 的行应用逻辑，准备时固定匹配、create/edit 和行身份；操作键由执行与行位置确定，不按载荷内容构造；
+- 最后原 `build.pipeline.ran` / `build.source.pulled` 保存计数、隔离和拒绝，结束该执行。Source 只有全部成功才推进游标。回放只应用保存结果，不重新拉取或转换。
+
+同一执行重试复用原行答复，新输入 A→B→A 拥有三次执行身份。部分行追加失败时保留 pending，重启读取原制品，沿原发布者的当前权限完成，不能改用新响应、最新数据集或新定义重新计算。已接受执行固定其原定义；后续发布不阻止原执行结束，新定义随后独立运行。暂停停止新的执行推进。保存的业务拒绝可以结束该行但不当成成功；确定未提交的存储失败不结束行。恢复前不追加人为的 resume/revision 操作。
+
+数据集版本保留原 `requestKey`，归档数据后仍可根据原装载键找到产生的版本；Pipeline 不把后来其他装载产生的版本当成本次输出。制品位于租户自己的 integration artifact 范围，沿原文件存储持久化；当前保留历史引用，不增加独立清理队列。既有连续 Flow 来源仍归原实例，这里不新增事件流协议。
 
 输入还没有版本时，运行记录 "The input dataset has no rows yet"，不写空版本。
 
@@ -85,7 +91,7 @@ Datasets 提供定义、手动装载、结构变化与版本预览；Pipelines �
 
 ## 主数据匹配
 
-`build.match` 由对象、keys 和字段 prefer 构成：exact、folded、digits 中任一键命中即同一记录；同一对象只允许一条已发布规则。Source 和 Pipeline 的原 `applyRows` 统一应用匹配，改用命中 id 并追加幂等身份；同批同键合并。字段优先生产者已有非空值时，其他生产者不覆盖；结果记录 merged 计数。没有第二张黄金记录表。
+`build.match` 由对象、keys 和字段 prefer 构成：exact、folded、digits 中任一键命中即同一记录；同一对象只允许一条已发布规则。Source 和 Pipeline 在接受执行前统一应用匹配，固定命中 ID、行操作和输入；同批同键合并。字段优先生产者已有非空值时，其他生产者不覆盖；结果记录 merged 计数。没有第二张黄金记录表。
 
 发布只影响后续落入的行，不重算历史，不引入模糊匹配、打分或人工合并队列。现有 `matches_test.go` 验证跨来源归一化、优先字段与新增行；`writebacks_test.go` 与接受结果恢复测试保留原效果/应答证据。独立 Pipeline 草稿试跑使用下节的原执行与读取路径，不再作为待实现条目。
 

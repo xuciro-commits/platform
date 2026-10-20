@@ -1,12 +1,13 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -20,13 +21,13 @@ func TestMigrationRenameAliasFollowsNewWritesAndPreservesHistory(t *testing.T) {
 		{"name": "name", "title": "Old name", "type": "text", "readOnly": true, "aliasOf": "title", "sourceType": "user-input"},
 		{"name": "title", "title": "New name", "type": "text", "sourceType": "user-input"},
 	}
-	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
 	builder := memberOf(t, tn, "builder")
 	preview, err := tn.PreviewRelease(builder, platform.AssetObject, "asset")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("preview: %+v %v", preview, err)
 	}
-	plan.To, err = tn.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, "rename-target", txnAt)
+	plan.To, err = tn.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, "rename-target", txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,17 +38,17 @@ func TestMigrationRenameAliasFollowsNewWritesAndPreservesHistory(t *testing.T) {
 	}
 	originalRelease := bytes.Clone(tn.releases.raw(plan.From))
 	originalHistory := copyHistory(tn.records.types["build.asset"].rows.get("A").history)
-	decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
 	for i := 0; i < 2; i++ {
-		decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
+		decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
 	}
 	if _, err := tn.ActivateRelease(builder, plan.To, "rename-activate", txnAt.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if got := refuse(t, tn, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Forbidden"}, txnAt.Add(2*time.Hour)); got == "ok" {
+	if got := refuse(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Forbidden"}, txnAt.Add(2*time.Hour)); got == "ok" {
 		t.Fatal("the old read alias remained writable")
 	}
-	decide(t, tn, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"title": "Changed"}, txnAt.Add(2*time.Hour))
+	decide(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"title": "Changed"}, txnAt.Add(2*time.Hour))
 	for _, name := range []string{"name", "title"} {
 		if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.get("A").value, name); got != "Changed" {
 			t.Fatalf("alias %s lost the current value: %s", name, got)
@@ -67,9 +68,9 @@ func TestMigrationRenameAliasFollowsNewWritesAndPreservesHistory(t *testing.T) {
 	}
 
 	// A retained public name cannot expose its now restricted target field.
-	fields[1]["read"] = []string{build.Builder}
-	decide(t, recovered, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "asset", map[string]any{"fields": fields}, txnAt.Add(3*time.Hour))
-	decide(t, recovered, "builder", build.ID, build.ObjectType+".publish", build.ObjectType, "asset", map[string]any{}, txnAt.Add(3*time.Hour))
+	fields[1]["read"] = []string{construction.Builder}
+	decide(t, recovered, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "asset", map[string]any{"fields": fields}, txnAt.Add(3*time.Hour))
+	decide(t, recovered, "builder", construction.ID, construction.ObjectType+".publish", construction.ObjectType, "asset", map[string]any{}, txnAt.Add(3*time.Hour))
 	view, refusal := recovered.RecordOf(memberOf(t, recovered, "user"), "build.asset", "A", txnAt.Add(3*time.Hour))
 	var exposed map[string]json.RawMessage
 	if refusal != nil || json.Unmarshal(platform.Raw(view.Record), &exposed) != nil || len(exposed["name"]) != 0 || len(exposed["title"]) != 0 {
@@ -87,13 +88,13 @@ func TestMigrationRetiredFieldStaysReadableWithoutNewWrites(t *testing.T) {
 		return e.Body, nil
 	}
 	fields := []map[string]any{{"name": "name", "title": "Retired name", "type": "text", "readOnly": true, "sourceType": "user-input"}}
-	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
 	builder := memberOf(t, tn, "builder")
 	preview, err := tn.PreviewRelease(builder, platform.AssetObject, "asset")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("preview: %+v %v", preview, err)
 	}
-	plan.To, err = tn.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, "retire-target", txnAt)
+	plan.To, err = tn.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, "retire-target", txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +104,8 @@ func TestMigrationRetiredFieldStaysReadableWithoutNewWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := tn.records.types["build.asset"].rows.get("A").image()
-	decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
-	decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 	if _, err := tn.ActivateRelease(builder, plan.To, "retire-activate", txnAt); err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +113,10 @@ func TestMigrationRetiredFieldStaysReadableWithoutNewWrites(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatal("retirement rewrote a retained record")
 	}
-	if got := refuse(t, tn, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Replace history"}, txnAt); got == "ok" {
+	if got := refuse(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Replace history"}, txnAt); got == "ok" {
 		t.Fatal("retired field was writable")
 	}
-	decide(t, tn, "user", build.ID, "build.asset.create", "build.asset", "B", map[string]any{}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.create", "build.asset", "B", map[string]any{}, txnAt)
 	recovered := builderTenant(t, tn.ID)
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)

@@ -3,8 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -12,7 +12,7 @@ import (
 )
 
 type releaseInstallation struct {
-	build.ReleasePublication
+	construction.ReleasePublication
 	Before string             `json:"before"`
 	Ref    *platform.AssetRef `json:"ref,omitempty"`
 	Record string             `json:"record,omitempty"`
@@ -37,7 +37,7 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 }
 
 func (t *Tenant) installationPlan(registry *platform.AssetRegistry, installation releaseInstallation) (platform.AssetInstallation, error) {
-	app := build.ID
+	app := construction.ID
 	if installation.Ref != nil {
 		app = installation.Ref.App
 	}

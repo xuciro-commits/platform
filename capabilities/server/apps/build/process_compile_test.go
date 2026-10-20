@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"reflect"
@@ -13,11 +15,11 @@ import (
 
 type processStartRuntime struct {
 	platform.Runtime
-	current Process
+	current construction.Process
 }
 
 func (r *processStartRuntime) Get(_ platform.Caller, typ reflect.Type, id string) (any, bool) {
-	if typ == reflect.TypeFor[Process]() && id == r.current.ID {
+	if typ == reflect.TypeFor[construction.Process]() && id == r.current.ID {
 		return r.current, true
 	}
 	return nil, false
@@ -31,18 +33,18 @@ type processStartHost struct {
 func (h processStartHost) Automation(platform.Caller, string) platform.Caller { return h.caller }
 
 func TestCompilerRejectsBranchOnlyAndEscapedIterationBindings(t *testing.T) {
-	branchOnly := Process{Steps: []ProcessStep{{Name: "branch", Kind: "branch", Cases: map[string]string{"true": "yes", "false": "no"}}, {Name: "yes", Kind: "transform", Next: "merge"}, {Name: "no", Kind: "transform", Next: "merge"}, {Name: "merge", Kind: "end", Value: &platform.Binding{Source: "step", Step: "yes"}}}}
+	branchOnly := construction.Process{Steps: []construction.ProcessStep{{Name: "branch", Kind: "branch", Cases: map[string]string{"true": "yes", "false": "no"}}, {Name: "yes", Kind: "transform", Next: "merge"}, {Name: "no", Kind: "transform", Next: "merge"}, {Name: "merge", Kind: "end", Value: &platform.Binding{Source: "step", Step: "yes"}}}}
 	if err := checkProcessScopes(branchOnly); err == nil || !strings.Contains(err.Error(), "not guaranteed") {
 		t.Fatalf("optional branch output became a required downstream value: %v", err)
 	}
-	escaped := Process{Steps: []ProcessStep{{Name: "loop", Kind: "foreach", Body: "body", Next: "outside"}, {Name: "body", Kind: "transform", Next: "finish"}, {Name: "finish", Kind: "end"}, {Name: "outside", Kind: "end", Value: &platform.Binding{Source: "step", Step: "body"}}}}
+	escaped := construction.Process{Steps: []construction.ProcessStep{{Name: "loop", Kind: "foreach", Body: "body", Next: "outside"}, {Name: "body", Kind: "transform", Next: "finish"}, {Name: "finish", Kind: "end"}, {Name: "outside", Kind: "end", Value: &platform.Binding{Source: "step", Step: "body"}}}}
 	if err := checkProcessScopes(escaped); err == nil {
 		t.Fatal("iteration-local output escaped without the loop's ordered result")
 	}
 }
 
 func TestProcessStepDecodesStrictly(t *testing.T) {
-	var process Process
+	var process construction.Process
 	if err := json.Unmarshal([]byte(`{"name":"review","steps":[{"name":"ask","kind":"ask","ask":"user","answers":["yes"],"cases":{"yes":"done"},"inputs":{"threshold":{"source":"literal","value":10}}},{"name":"done","kind":"action","act":"close"}]}`), &process); err != nil {
 		t.Fatal(err)
 	}
@@ -55,29 +57,31 @@ func TestProcessStepDecodesStrictly(t *testing.T) {
 }
 
 func TestAutomationShape(t *testing.T) {
-	act := func(name, next string) ProcessStep {
-		return ProcessStep{Name: name, Kind: "action", Act: "close", Next: next}
+	act := func(name, next string) construction.ProcessStep {
+		return construction.ProcessStep{Name: name, Kind: "action", Act: "close", Next: next}
 	}
-	base := Process{Name: "notify", Kind: "automation", Object: "build.item", When: "open"}
+	base := construction.Process{Name: "notify", Kind: "automation", Object: "build.item", When: "open"}
 	ok := base
-	ok.Steps = []ProcessStep{act("first", "second"), act("second", "")}
+	ok.Steps = []construction.ProcessStep{act("first", "second"), act("second", "")}
 	if err := checkAutomation(ok); err != nil {
 		t.Fatalf("a linear automation is accepted: %v", err)
 	}
 	withCondition := base
-	withCondition.Steps = []ProcessStep{{Name: "when", Kind: "branch", Cases: map[string]string{"true": "first", "false": "stop"}}, act("first", ""), {Name: "stop", Kind: "end"}}
+	withCondition.Steps = []construction.ProcessStep{{Name: "when", Kind: "branch", Cases: map[string]string{"true": "first", "false": "stop"}}, act("first", ""), {Name: "stop", Kind: "end"}}
 	if err := checkAutomation(withCondition); err != nil {
 		t.Fatalf("a condition first, ending when false, is accepted: %v", err)
 	}
-	for name, bad := range map[string]func(p *Process){
-		"manual":    func(p *Process) { p.Manual = true; p.Steps = ok.Steps },
-		"no effect": func(p *Process) { p.Steps = nil },
-		"loop": func(p *Process) {
-			p.Steps = []ProcessStep{{Name: "each", Kind: "foreach", Body: "first"}, act("first", "")}
+	for name, bad := range map[string]func(p *construction.Process){
+		"manual":    func(p *construction.Process) { p.Manual = true; p.Steps = ok.Steps },
+		"no effect": func(p *construction.Process) { p.Steps = nil },
+		"loop": func(p *construction.Process) {
+			p.Steps = []construction.ProcessStep{{Name: "each", Kind: "foreach", Body: "first"}, act("first", "")}
 		},
-		"broken chain": func(p *Process) { p.Steps = []ProcessStep{act("first", ""), act("second", "")} },
-		"late branch": func(p *Process) {
-			p.Steps = []ProcessStep{act("first", "when"), {Name: "when", Kind: "branch", Cases: map[string]string{"true": "second"}}, act("second", "")}
+		"broken chain": func(p *construction.Process) {
+			p.Steps = []construction.ProcessStep{act("first", ""), act("second", "")}
+		},
+		"late branch": func(p *construction.Process) {
+			p.Steps = []construction.ProcessStep{act("first", "when"), {Name: "when", Kind: "branch", Cases: map[string]string{"true": "second"}}, act("second", "")}
 		},
 	} {
 		p := base
@@ -89,17 +93,17 @@ func TestAutomationShape(t *testing.T) {
 }
 
 func TestContinuousProcessUsesPublishedSourceStartInsteadOfManualEntry(t *testing.T) {
-	p := Process{
+	p := construction.Process{
 		Record: platform.Record{ID: "continuous"}, Name: "telemetry", Title: "Telemetry", State: "published", Version: 1, Scheduler: "builder",
 		Continuous: &platform.Continuous{
 			Source: "planttelemetry", Batch: 512, State: 16 << 20, FrameBytes: 64 << 20, DeadLetter: true,
 			Window: &platform.StreamWindow{Node: "windowstate", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 10000, LateEvents: "sideOutput"},
 			Intake: &platform.StreamIntake{SourceRecord: "source-1", Key: "eventId", Partition: []string{"plantId", "deviceId"}, EventTime: "eventTime", Value: "reading", Offset: "latest"},
 		},
-		Steps: []ProcessStep{{Name: "finish", Kind: "end"}},
+		Steps: []construction.ProcessStep{{Name: "finish", Kind: "end"}},
 	}
 	runtime := &processStartRuntime{current: p}
-	caller := platform.NewCaller(runtime, platform.Member{ID: "builder"}, ID, false, true)
+	caller := platform.NewCaller(runtime, platform.Member{ID: "builder"}, construction.ID, false, true)
 	b := &Build{host: processStartHost{caller: caller}}
 	if err := b.checkFlowOn(p, platform.Entity{}); err != nil {
 		t.Fatalf("an automatically started continuous process is valid: %v", err)

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 	"sync/atomic"
@@ -48,7 +50,7 @@ func composeTenant(t *testing.T, id string, seats []Seat, apps ...platform.App) 
 // builder ("builder") and one business user ("user"), plus any further apps.
 func builderTenant(t *testing.T, id string, apps ...platform.App) *Tenant {
 	t.Helper()
-	return composeTenant(t, id, []Seat{seatOf("builder", build.ID+":"+build.Builder), seatOf("user", build.ID+":"+build.User)}, append([]platform.App{build.New(id)}, apps...)...)
+	return composeTenant(t, id, []Seat{seatOf("builder", construction.ID+":"+construction.Builder), seatOf("user", construction.ID+":"+construction.User)}, append([]platform.App{build.New(id)}, apps...)...)
 }
 
 // memberOf is the tenant's member with this ID, failing the test if the
@@ -96,9 +98,9 @@ func refuse(t *testing.T, tn *Tenant, who, app, schema, typ, id string, payload 
 // and resolves to its record type ("build.<name>").
 func publishObject(t *testing.T, tn *Tenant, who, id string, object map[string]any, at time.Time) string {
 	t.Helper()
-	decide(t, tn, who, build.ID, "build.object.create", build.ObjectType, id, object, at)
-	decide(t, tn, who, build.ID, "build.object.publish", build.ObjectType, id, map[string]any{}, at)
-	return build.ID + "." + object["name"].(string)
+	decide(t, tn, who, construction.ID, "build.object.create", construction.ObjectType, id, object, at)
+	decide(t, tn, who, construction.ID, "build.object.publish", construction.ObjectType, id, map[string]any{}, at)
+	return construction.ID + "." + object["name"].(string)
 }
 
 func testConsoleOf(t *Tenant) *Console { c, _ := t.app(PlatformApp).(*Console); return c }

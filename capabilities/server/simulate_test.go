@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"strings"
 	"testing"
 	"time"
@@ -24,9 +24,9 @@ import (
 func TestSimulateIsDiscarded(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	seat := func(id, role string) Seat {
-		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{build.ID: role}}}
+		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{construction.ID: role}}}
 	}
-	tn, err := NewTenant("sim", NewConsole("sim", seat("dana", build.Builder), seat("eli", build.User)), build.New("sim"))
+	tn, err := NewTenant("sim", NewConsole("sim", seat("dana", construction.Builder), seat("eli", construction.User)), build.New("sim"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestSimulateIsDiscarded(t *testing.T) {
 	sub := func(who, schema, typ, id string, payload any) *pb.Submission {
 		keys++
 		raw, _ := json.Marshal(payload)
-		return &pb.Submission{TenantId: "sim", PrincipalId: who, Authority: build.ID, IdempotencyKey: fmt.Sprint("k", keys),
+		return &pb.Submission{TenantId: "sim", PrincipalId: who, Authority: construction.ID, IdempotencyKey: fmt.Sprint("k", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
 	}
 	must := func(who string, s *pb.Submission) {
@@ -46,13 +46,13 @@ func TestSimulateIsDiscarded(t *testing.T) {
 			t.Fatalf("%s: %s %s", s.GetSchema().GetName(), err.Code, err.Message)
 		}
 	}
-	must("dana", sub("dana", build.ObjectType+".create", build.ObjectType, "O1", map[string]any{"name": "visit", "title": "Visit",
+	must("dana", sub("dana", construction.ObjectType+".create", construction.ObjectType, "O1", map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}},
 		"states": []map[string]any{{"name": "open", "title": "Open"}, {"name": "done", "title": "Done"}},
 		"actions": []map[string]any{{"name": "close", "title": "Close", "from": []string{"open"}, "to": "done",
 			"conditions": []map[string]any{{"field": "guest", "operator": "=", "value": "Ada", "message": "Only Ada can close this visit"}}}}}))
-	must("dana", sub("dana", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}))
-	visit := buildapi.TypeOf("visit")
+	must("dana", sub("dana", construction.SchemaPublish, construction.ObjectType, "O1", map[string]any{}))
+	visit := construction.TypeOf("visit")
 	must("eli", sub("eli", visit+".create", visit, "V1", map[string]any{"guest": "Ada"}))
 	must("eli", sub("eli", visit+".create", visit, "V2", map[string]any{"guest": "Bob"}))
 	before, entries := snapshot(tn), len(journal)
@@ -209,7 +209,7 @@ func TestSimulationUnsupportedEffectDoesNotFallBackToExecution(t *testing.T) {
 func TestSimulationResultsUseBuilderReadPermissions(t *testing.T) {
 	tn := stockTenant(t, build.New("t-1"))
 	console := tn.app(PlatformApp).(*Console)
-	console.members["op"].Roles[build.ID] = build.Builder
+	console.members["op"].Roles[construction.ID] = construction.Builder
 	builder, _ := tn.Member("op") // reads only line L1, without the lead-only secret
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	before := snapshot(tn)

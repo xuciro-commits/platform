@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"platformserver/platform"
@@ -9,8 +11,8 @@ import (
 	"time"
 )
 
-func actionRulesObject() Object {
-	return Object{Name: "asset", States: []State{{Name: "active", Title: "Active"}, {Name: "offline", Title: "Offline"}}, Fields: []Field{{Name: "priority", Type: "choice", Choices: "Low,High"}, {Name: "operator", Type: "reference", Ref: "build.operator"}}, Actions: []Action{{Name: "update", Title: "Update", From: []string{"active", "offline"}, ToInput: "status", Inputs: []Input{{Name: "status", Title: "Status", Type: "choice", Choices: "active,offline", Required: true}, {Name: "priority", Title: "Priority", Type: "choice", Choices: "Low,High"}}, Sets: []Set{{Field: "priority", From: "priority"}}, Conditions: []Condition{{When: &Condition{Field: "input.status", Operator: "=", Value: "offline"}, Field: "input.priority", Operator: "=", Value: "High", Message: "Offline requires High"}}}}}
+func actionRulesObject() construction.Object {
+	return construction.Object{Name: "asset", States: []construction.State{{Name: "active", Title: "Active"}, {Name: "offline", Title: "Offline"}}, Fields: []construction.Field{{Name: "priority", Type: "choice", Choices: "Low,High"}, {Name: "operator", Type: "reference", Ref: "build.operator"}}, Actions: []construction.Action{{Name: "update", Title: "Update", From: []string{"active", "offline"}, ToInput: "status", Inputs: []construction.Input{{Name: "status", Title: "Status", Type: "choice", Choices: "active,offline", Required: true}, {Name: "priority", Title: "Priority", Type: "choice", Choices: "Low,High"}}, Sets: []construction.Set{{Field: "priority", From: "priority"}}, Conditions: []construction.Condition{{When: &construction.Condition{Field: "input.status", Operator: "=", Value: "offline"}, Field: "input.priority", Operator: "=", Value: "High", Message: "Offline requires High"}}}}}
 }
 
 func TestCanonicalActionLifecycleRetainsTransactionDestinations(t *testing.T) {
@@ -33,8 +35,8 @@ func TestCanonicalActionLifecycleRetainsTransactionDestinations(t *testing.T) {
 			if canonical.Actions[0].To != "" || canonical.Actions[0].ToInput != "" {
 				t.Fatal("canonical action retained a second state rule")
 			}
-			for _, object := range []Object{o, canonical} {
-				info, err := platform.Describe(ID, b.entity(object), func(reflect.Type) string { return "" })
+			for _, object := range []construction.Object{o, canonical} {
+				info, err := platform.Describe(construction.ID, b.entity(object), func(reflect.Type) string { return "" })
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -102,7 +104,7 @@ func TestActionRulesChooseOriginalStatesAndGuardConditionsBeforeMutation(t *test
 			t.Fatalf("%s: state=%s allowed=%t", tc.payload, r.State, allowed)
 		}
 	}
-	for _, edit := range []func(*Object){func(o *Object) { o.Actions[0].To = "offline" }, func(o *Object) { o.Actions[0].ToInput = "priority" }, func(o *Object) { o.Actions[0].Inputs[0].Required = false }, func(o *Object) { o.Actions[0].Conditions[0].When.When = &Condition{} }, func(o *Object) { o.Actions[0].Conditions[0].When.Field = "input.missing" }, func(o *Object) { o.Actions[0].Approval = &ActionApproval{} }} {
+	for _, edit := range []func(*construction.Object){func(o *construction.Object) { o.Actions[0].To = "offline" }, func(o *construction.Object) { o.Actions[0].ToInput = "priority" }, func(o *construction.Object) { o.Actions[0].Inputs[0].Required = false }, func(o *construction.Object) { o.Actions[0].Conditions[0].When.When = &construction.Condition{} }, func(o *construction.Object) { o.Actions[0].Conditions[0].When.Field = "input.missing" }, func(o *construction.Object) { o.Actions[0].Approval = &construction.ActionApproval{} }} {
 		o := actionRulesObject()
 		edit(&o)
 		if checkProcess(o, nil) == nil {
@@ -114,8 +116,8 @@ func TestOriginalReferenceInputsAndUTF16MinimumHaveBoundedDeclarations(t *testin
 	min := 4
 	o := actionRulesObject()
 	o.Actions[0].ToInput = ""
-	o.Actions[0].Inputs = []Input{{Name: "operator", Title: "Operator", Type: "reference", Ref: "build.operator", Required: true}, {Name: "title", Title: "Title", Type: "text", MinLength: &min}}
-	o.Actions[0].Sets = []Set{{Field: "operator", From: "operator"}}
+	o.Actions[0].Inputs = []construction.Input{{Name: "operator", Title: "Operator", Type: "reference", Ref: "build.operator", Required: true}, {Name: "title", Title: "Title", Type: "text", MinLength: &min}}
+	o.Actions[0].Sets = []construction.Set{{Field: "operator", From: "operator"}}
 	o.Actions[0].Conditions = nil
 	lookup := func(name string) (platform.EntityInfo, bool) {
 		return platform.EntityInfo{App: "build", Type: name}, name == "build.operator"
@@ -123,7 +125,7 @@ func TestOriginalReferenceInputsAndUTF16MinimumHaveBoundedDeclarations(t *testin
 	if err := checkProcess(o, lookup); err != nil {
 		t.Fatal(err)
 	}
-	descriptor := lifecycle(o, []string{User}, nil, lookup)
+	descriptor := lifecycle(o, []string{construction.User}, nil, lookup)
 	if descriptor.Transitions[0].Payload[0].Ref != "build.operator" || descriptor.Transitions[0].Payload[1].Constraints == nil || *descriptor.Transitions[0].Payload[1].Constraints.MinLength != min {
 		t.Fatal("reference became an ordinary text parameter")
 	}
@@ -136,9 +138,9 @@ func TestOriginalReferenceInputsAndUTF16MinimumHaveBoundedDeclarations(t *testin
 			t.Fatalf("title %q: %v", input.title, issues)
 		}
 	}
-	for _, edit := range []func(*Object){func(o *Object) { o.Actions[0].Inputs[0].Ref = "build.other" }, func(o *Object) { o.Actions[0].Inputs[0].Type = "text" }, func(o *Object) { o.Actions[0].Inputs[1].Type = "boolean" }, func(o *Object) { bad := 4097; o.Actions[0].Inputs[1].MinLength = &bad }} {
+	for _, edit := range []func(*construction.Object){func(o *construction.Object) { o.Actions[0].Inputs[0].Ref = "build.other" }, func(o *construction.Object) { o.Actions[0].Inputs[0].Type = "text" }, func(o *construction.Object) { o.Actions[0].Inputs[1].Type = "boolean" }, func(o *construction.Object) { bad := 4097; o.Actions[0].Inputs[1].MinLength = &bad }} {
 		raw, _ := json.Marshal(o)
-		var copy Object
+		var copy construction.Object
 		json.Unmarshal(raw, &copy)
 		edit(&copy)
 		if checkProcess(copy, lookup) == nil {

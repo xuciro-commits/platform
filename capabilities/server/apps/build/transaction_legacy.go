@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -9,8 +11,8 @@ import (
 	"platformserver/platform"
 )
 
-func (b *Build) CanonicalObject(object Object) (Object, error) {
-	var canonical Object
+func (b *Build) CanonicalObject(object construction.Object) (construction.Object, error) {
+	var canonical construction.Object
 	if err := json.Unmarshal(platform.Raw(object), &canonical); err != nil {
 		return object, err
 	}
@@ -20,7 +22,7 @@ func (b *Build) CanonicalObject(object Object) (Object, error) {
 	return canonical, nil
 }
 
-func legacyTxnExpr(object Object, action Action, from, kind string, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
+func legacyTxnExpr(object construction.Object, action construction.Action, from, kind string, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
 	if strings.HasPrefix(from, "record.") {
 		return legacyOperand(object, action, strings.TrimPrefix(from, "record."), lookup)
 	}
@@ -51,7 +53,7 @@ func legacyTxnExpr(object Object, action Action, from, kind string, lookup func(
 	return platform.Expr{}, fmt.Errorf("Legacy transaction source %q is unavailable", from)
 }
 
-func compileLegacyTransaction(object Object, action Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.BusinessTxn, error) {
+func compileLegacyTransaction(object construction.Object, action construction.Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.BusinessTxn, error) {
 	if action.Transaction != nil {
 		return action.Transaction, nil
 	}
@@ -174,7 +176,7 @@ func compileLegacyTransaction(object Object, action Action, lookup func(string) 
 
 // New saves replace the old parallel action fields. Historical publication
 // images are compiled in memory and retain their original immutable bytes.
-func (b *Build) migrateObjectTransactions(object *Object) error {
+func (b *Build) migrateObjectTransactions(object *construction.Object) error {
 	original := *object
 	original.Actions = slices.Clone(object.Actions)
 	lookup := ruleLookup(original, b.conditionLookup)
@@ -252,7 +254,7 @@ func (b *Build) migrateObjectTransactions(object *Object) error {
 	return nil
 }
 
-func compileLegacyNumbering(object Object) (*platform.BusinessTxn, error) {
+func compileLegacyNumbering(object construction.Object) (*platform.BusinessTxn, error) {
 	number := object.Numbering
 	if number == nil {
 		return nil, nil

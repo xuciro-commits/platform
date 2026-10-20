@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -21,26 +23,26 @@ func TestApplicationTrial(t *testing.T) {
 	}
 	tn := compose()
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
-	access := []build.Access{{Role: "operator", Read: "all", Create: true, Edit: true}, {Role: "limited", Read: "all", Create: true, Edit: true}, {Role: "observer", Read: "none"}}
-	publishObject(t, tn, "builder", "LOG", map[string]any{"name": "triallog", "title": "Old log", "fields": []build.Field{{Name: "label", Title: "Label", Type: "text", Required: true}}, "access": []build.Access{{Role: "operator", Read: "all", Create: true}, {Role: "limited", Read: "all"}, {Role: "observer", Read: "all"}}}, at)
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "LOG", map[string]any{"title": "Current draft log"}, at)
+	access := []construction.Access{{Role: "operator", Read: "all", Create: true, Edit: true}, {Role: "limited", Read: "all", Create: true, Edit: true}, {Role: "observer", Read: "none"}}
+	publishObject(t, tn, "builder", "LOG", map[string]any{"name": "triallog", "title": "Old log", "fields": []construction.Field{{Name: "label", Title: "Label", Type: "text", Required: true}}, "access": []construction.Access{{Role: "operator", Read: "all", Create: true}, {Role: "limited", Read: "all"}, {Role: "observer", Read: "all"}}}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "LOG", map[string]any{"title": "Current draft log"}, at)
 	positive := booleanRule(">", platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 0))
 	txn := &platform.BusinessTxn{Subject: "build.trialjob", Guard: positive, Message: "Quantity must be positive", Steps: []platform.TxnStep{
 		{Name: "complete", Kind: "update", Target: platform.TxnRef{Type: "build.trialjob", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "done", From: "=true"}}},
 		{Name: "log", Kind: "create", Target: platform.TxnRef{Type: "build.triallog"}, Changes: []platform.TxnSet{{Field: "label", From: "=completed"}}},
 	}}
-	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "JOB", map[string]any{"name": "trialjob", "title": "Job", "fields": []build.Field{{Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "done", Title: "Done", Type: "boolean"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}, "states": []build.State{{Name: "draft", Title: "Draft"}}, "access": access, "constraints": []platform.Constraint{{Name: "positive", Kind: "expression", Fields: []string{"qty"}, Expr: positive, Message: "Quantity must be positive"}}, "actions": []build.Action{{Name: "complete", Title: "Complete job", From: []string{"draft"}, Roles: []string{"operator", "limited"}, Transaction: txn}}}, at)
-	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "UNRELATED", map[string]any{"name": "unrelated", "title": "Unrelated", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "JOB", map[string]any{"name": "trialjob", "title": "Job", "fields": []construction.Field{{Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "done", Title: "Done", Type: "boolean"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}, "states": []construction.State{{Name: "draft", Title: "Draft"}}, "access": access, "constraints": []platform.Constraint{{Name: "positive", Kind: "expression", Fields: []string{"qty"}, Expr: positive, Message: "Quantity must be positive"}}, "actions": []construction.Action{{Name: "complete", Title: "Complete job", From: []string{"draft"}, Roles: []string{"operator", "limited"}, Transaction: txn}}}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "UNRELATED", map[string]any{"name": "unrelated", "title": "Unrelated", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
 	samples := []platform.SampleRecords{{Type: "build.trialjob", Records: []json.RawMessage{platform.Raw(map[string]any{"id": "JOB-1", "qty": 2, "done": false, "state": "draft", "secret": "SYNTHETIC-SECRET"})}}}
-	decide(t, tn, "builder", build.ID, "build.sample-set.create", build.SampleSetType, "SAMPLE", map[string]any{"name": "jobs", "title": "Job scenario", "samples": samples}, at)
-	decide(t, tn, "builder", build.ID, "build.dataset.create", build.DatasetType, "DATASET", map[string]any{"name": "trialinput", "title": "Synthetic input"}, at)
-	decide(t, tn, "builder", build.ID, "build.app.create", build.AppType, "APP", map[string]any{"name": "trialapp", "title": "Trial application", "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.trialjob"}, {App: build.ID, Kind: platform.AssetSampleSet, Name: "jobs"}, {App: build.ID, Kind: platform.AssetDataset, Name: "trialinput"}}}, at)
+	decide(t, tn, "builder", construction.ID, "build.sample-set.create", build.SampleSetType, "SAMPLE", map[string]any{"name": "jobs", "title": "Job scenario", "samples": samples}, at)
+	decide(t, tn, "builder", construction.ID, "build.dataset.create", construction.DatasetType, "DATASET", map[string]any{"name": "trialinput", "title": "Synthetic input"}, at)
+	decide(t, tn, "builder", construction.ID, "build.app.create", construction.AppType, "APP", map[string]any{"name": "trialapp", "title": "Trial application", "resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.trialjob"}, {App: construction.ID, Kind: platform.AssetSampleSet, Name: "jobs"}, {App: construction.ID, Kind: platform.AssetDataset, Name: "trialinput"}}}, at)
 	builder := memberOf(t, tn, "builder")
-	drafts, err := tn.app(build.ID).(host.ConstructionDrafts).ApplicationDrafts("APP")
+	drafts, err := tn.app(construction.ID).(host.ConstructionDrafts).ApplicationDrafts("APP")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(drafts, build.JointDraftRef{Kind: platform.AssetObject, ID: "LOG"}) || slices.Contains(drafts, build.JointDraftRef{Kind: platform.AssetObject, ID: "UNRELATED"}) {
+	if !slices.Contains(drafts, construction.JointDraftRef{Kind: platform.AssetObject, ID: "LOG"}) || slices.Contains(drafts, construction.JointDraftRef{Kind: platform.AssetObject, ID: "UNRELATED"}) {
 		t.Fatalf("application boundary: %+v", drafts)
 	}
 	request := CandidateSimulationRequest{ApplicationID: "APP", Sample: "jobs", Actors: []string{"operator", "limited", "observer"}, At: at, Steps: []SimulationStep{{Type: "build.trialjob", ID: "JOB-1", Read: true, Payload: platform.Raw(map[string]any{}), Expect: "accepted"}, {Type: "build.trialjob", ID: "JOB-1", Action: "build.trialjob.complete", Payload: platform.Raw(map[string]any{}), Expect: "accepted"}, {Type: "build.trialjob", ID: "JOB-1", Read: true, Payload: platform.Raw(map[string]any{}), Expect: "accepted"}}}
@@ -112,7 +114,7 @@ func TestApplicationTrial(t *testing.T) {
 		t.Fatal("sample outside application closure admitted")
 	}
 	bad = request
-	bad.Steps = []SimulationStep{{Type: build.DatasetType, ID: "OTHER", Action: "build.dataset.create", Payload: platform.Raw(map[string]any{"name": "other", "title": "Other"})}}
+	bad.Steps = []SimulationStep{{Type: construction.DatasetType, ID: "OTHER", Action: "build.dataset.create", Payload: platform.Raw(map[string]any{"name": "other", "title": "Other"})}}
 	if _, problem := tn.SimulateCandidate(builder, bad); problem == nil {
 		t.Fatal("undeclared construction action admitted")
 	}
@@ -124,7 +126,7 @@ func TestApplicationTrial(t *testing.T) {
 		values["payload"] = string(step.Payload)
 		testSteps = append(testSteps, values)
 	}
-	decide(t, tn, "builder", build.ID, "build.testplan.create", build.TestPlanType, "PLAN", map[string]any{"title": "Complete job regression", "application": "APP", "sample": "jobs", "actors": request.Actors, "at": at, "steps": testSteps}, at)
+	decide(t, tn, "builder", construction.ID, "build.testplan.create", construction.TestPlanType, "PLAN", map[string]any{"title": "Complete job regression", "application": "APP", "sample": "jobs", "actors": request.Actors, "at": at, "steps": testSteps}, at)
 	review, err := tn.PreviewReleaseDrafts(builder, drafts)
 	if err != nil || review.Diagnostic != "" {
 		t.Fatalf("release: %v %s", err, review.Diagnostic)
@@ -143,8 +145,8 @@ func TestApplicationTrial(t *testing.T) {
 	// Editing both draft rule and sample does not affect a retained candidate.
 	changed := samples
 	samples[0].Records = []json.RawMessage{platform.Raw(map[string]any{"id": "JOB-1", "qty": 0, "state": "draft"})}
-	decide(t, tn, "builder", build.ID, "build.sample-set.edit", build.SampleSetType, "SAMPLE", map[string]any{"samples": changed}, at)
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "JOB", map[string]any{"actions": []build.Action{}}, at)
+	decide(t, tn, "builder", construction.ID, "build.sample-set.edit", build.SampleSetType, "SAMPLE", map[string]any{"samples": changed}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "JOB", map[string]any{"actions": []construction.Action{}}, at)
 	second, problem := tn.SimulateCandidate(builder, frozen)
 	if problem != nil || !reflect.DeepEqual(first, second) {
 		t.Fatalf("retained version changed: %+v", problem)
@@ -154,7 +156,7 @@ func TestApplicationTrial(t *testing.T) {
 	if _, err := tn.ActivateRelease(builder, saved, "activate-trial", at); err != nil {
 		t.Fatal(err)
 	}
-	assets, err := tn.app(build.ID).(*build.Build).ReleaseAssets()
+	assets, err := tn.app(construction.ID).(*build.Build).ReleaseAssets()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,10 +176,10 @@ func TestApplicationTrial(t *testing.T) {
 		t.Fatalf("recovered trial differs: %+v", problem)
 	}
 	// Production and the private run share one transaction executor and refusal.
-	decide(t, tn, "operator", build.ID, "build.trialjob.create", "build.trialjob", "JOB-1", map[string]any{"qty": 2}, at)
-	decide(t, tn, "operator", build.ID, "build.trialjob.complete", "build.trialjob", "JOB-1", map[string]any{}, at)
-	decide(t, tn, "limited", build.ID, "build.trialjob.create", "build.trialjob", "LIMITED", map[string]any{"qty": 2}, at)
-	if got := refuse(t, tn, "limited", build.ID, "build.trialjob.complete", "build.trialjob", "LIMITED", map[string]any{}, at); !strings.HasSuffix(got, first.Actors[1].Steps[1].Refusal) {
+	decide(t, tn, "operator", construction.ID, "build.trialjob.create", "build.trialjob", "JOB-1", map[string]any{"qty": 2}, at)
+	decide(t, tn, "operator", construction.ID, "build.trialjob.complete", "build.trialjob", "JOB-1", map[string]any{}, at)
+	decide(t, tn, "limited", construction.ID, "build.trialjob.create", "build.trialjob", "LIMITED", map[string]any{"qty": 2}, at)
+	if got := refuse(t, tn, "limited", construction.ID, "build.trialjob.complete", "build.trialjob", "LIMITED", map[string]any{}, at); !strings.HasSuffix(got, first.Actors[1].Steps[1].Refusal) {
 		t.Fatal("production accepted a trial refusal")
 	}
 }

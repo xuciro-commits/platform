@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,9 +17,9 @@ import (
 	"platformserver/platform"
 )
 
-const SchemaCodeCompile = CodeType + ".compile"
-const SchemaCodePublish = CodeType + ".publish"
-const SchemaCodeCompiled = CodeType + ".compiled"
+const SchemaCodeCompile = construction.CodeType + ".compile"
+const SchemaCodePublish = construction.CodeType + ".publish"
+const SchemaCodeCompiled = construction.CodeType + ".compiled"
 
 // Code is the single owner of source, build evidence and compute publications.
 // Compiling changes no installed capability. Candidate activation owns release.
@@ -76,7 +78,7 @@ func (c Code) buildHash() string {
 	return hex.EncodeToString(hash[:])
 }
 func (b *Build) codeEntity() platform.Entity {
-	return platform.Entity{Type: CodeType, Title: "Code function", Plural: "Code functions", Model: Code{}, Display: "title", Description: "A typed Go/TinyGo algorithm built in isolation and activated with its application.", Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "compute"}, Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "compiling", Title: "Compiling", Tone: "warning"}, {Name: "compiled", Title: "Compiled", Tone: "success"}, {Name: "failed", Title: "Build failed", Tone: "danger"}, {Name: "published", Title: "Published", Tone: "success"}}, Transitions: []platform.Transition{{Name: "compile", Title: "Compile", Description: "Build the current source with an isolated pinned Go/TinyGo toolchain.", From: []string{"draft", "compiled", "failed", "published"}, To: []string{"compiling"}, Roles: []string{Builder}, Capability: "compute", Payload: []platform.Field{}, Do: b.compileCode}}}}
+	return platform.Entity{Type: construction.CodeType, Title: "Code function", Plural: "Code functions", Model: Code{}, Display: "title", Description: "A typed Go/TinyGo algorithm built in isolation and activated with its application.", Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "compute"}, Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "compiling", Title: "Compiling", Tone: "warning"}, {Name: "compiled", Title: "Compiled", Tone: "success"}, {Name: "failed", Title: "Build failed", Tone: "danger"}, {Name: "published", Title: "Published", Tone: "success"}}, Transitions: []platform.Transition{{Name: "compile", Title: "Compile", Description: "Build the current source with an isolated pinned Go/TinyGo toolchain.", From: []string{"draft", "compiled", "failed", "published"}, To: []string{"compiling"}, Roles: []string{construction.Builder}, Capability: "compute", Payload: []platform.Field{}, Do: b.compileCode}}}}
 }
 func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	code, ok := record.(*Code)
@@ -103,7 +105,7 @@ func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.
 			return nil, err
 		}
 		return func(r *pb.ChangeRecord) {
-			call, err := c.RequestCompilation(r, r.GetChangeId(), CodeType+"/"+code.ID, platform.CodeBuildRequest{ABI: code.ABI, Language: code.Language, Source: code.Source, Input: code.Input, Output: code.Output})
+			call, err := c.RequestCompilation(r, r.GetChangeId(), construction.CodeType+"/"+code.ID, platform.CodeBuildRequest{ABI: code.ABI, Language: code.Language, Source: code.Source, Input: code.Input, Output: code.Output})
 			if err != nil {
 				return
 			}
@@ -113,7 +115,7 @@ func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.
 	})
 }
 func codeActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaCodeCompiled, Target: CodeType, Capability: "compute", Title: "Keep code build result", Description: "Retain the accepted compiler output on its source asset.", Automation: true, Payload: []platform.Field{{Name: "call", Type: "string", Required: true, Description: "The accepted compilation call"}, {Name: "result", Type: "json", Required: true, Description: "Validated compiler result"}, {Name: "request", Type: "json", Required: true, Description: "The accepted source and SDK schema snapshot"}}}}
+	return []platform.Action{{Schema: SchemaCodeCompiled, Target: construction.CodeType, Capability: "compute", Title: "Keep code build result", Description: "Retain the accepted compiler output on its source asset.", Automation: true, Payload: []platform.Field{{Name: "call", Type: "string", Required: true, Description: "The accepted compilation call"}, {Name: "result", Type: "json", Required: true, Description: "Validated compiler result"}, {Name: "request", Type: "json", Required: true, Description: "The accepted source and SDK schema snapshot"}}}}
 }
 func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -143,10 +145,10 @@ func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 	})
 }
 func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
-	if strings.HasPrefix(effect.Endpoint, WritebackEndpoint) {
+	if strings.HasPrefix(effect.Endpoint, construction.WritebackEndpoint) {
 		return b.answered(c, effect, out, now)
 	}
-	if effect.Endpoint != "operation" || !strings.HasPrefix(effect.Target, CodeType+"/") {
+	if effect.Endpoint != "operation" || !strings.HasPrefix(effect.Target, construction.CodeType+"/") {
 		return nil
 	}
 	var result platform.CodeBuildResult
@@ -168,11 +170,11 @@ func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.O
 		Result  platform.CodeBuildResult  `json:"result"`
 		Request platform.CodeBuildRequest `json:"request"`
 	}{effect.ID, result, *binding.Build})
-	_, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "compiled:" + effect.ID, Target: &pb.EntityRef{Type: CodeType, Id: strings.TrimPrefix(effect.Target, CodeType+"/")}, Schema: &pb.SchemaRef{Name: SchemaCodeCompiled, Version: 1}, Payload: payload}, now)
+	_, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: construction.ID, IdempotencyKey: "compiled:" + effect.ID, Target: &pb.EntityRef{Type: construction.CodeType, Id: strings.TrimPrefix(effect.Target, construction.CodeType+"/")}, Schema: &pb.SchemaRef{Name: SchemaCodeCompiled, Version: 1}, Payload: payload}, now)
 	return err
 }
 func (b *Build) codeInventory() ([]Code, error) {
-	return readDefinitionInventory[Code](b.host.Automation(platform.Caller{}, ID))
+	return readDefinitionInventory[Code](b.host.Automation(platform.Caller{}, construction.ID))
 }
 func (b *Build) checkCode(code Code) error {
 	if code.Module == "" || code.SourceHash != code.sourceHash() || code.BuildHash != code.buildHash() || code.Language != "go" && code.Language != "tinygo" || code.Toolchain == "" {
@@ -219,7 +221,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 	}
 	for _, tb := range b.tables {
 		for _, raw := range tb.Versions {
-			prior, ok := wasPublished[Table](raw)
+			prior, ok := wasPublished[construction.Table](raw)
 			if ok && prior.Name == name && prior.Version == version {
 				return prior.Definition(), version, true
 			}
@@ -266,7 +268,7 @@ func codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
 }
 func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	out := []platform.ReleaseAsset{}
@@ -298,13 +300,13 @@ func (b *Build) OperationReleaseAsset(name, version string) (platform.ReleaseAss
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
 }
 func (b *Build) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	var op platform.Operation
 	text, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".compute-")
 	ordinal, err := strconv.Atoi(text)
-	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid compute candidate asset")
 	}
 	if op.Binding.Kind == "native" {
@@ -334,10 +336,10 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 	}
 	code := list[i]
 	if old, ok := wasPublished[Code](code.Published); ok {
-		prior = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: old.Name}
+		prior = platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: old.Name}
 		hadPrior = true
 	}
-	next = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}
+	next = platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: code.Name}
 	if err = b.checkCode(code); err != nil {
 		return
 	}
@@ -359,14 +361,14 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 
 // PrepareCodeReleasePublications freezes the candidate's descriptor beside its
 // mutable source draft. No new publish endpoint or standalone installation.
-func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
+func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
 	list, err := b.codeInventory()
 	if err != nil {
 		return nil, err
 	}
-	out := []ReleasePublication{}
+	out := []construction.ReleasePublication{}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetCompute {
 			continue
 		}
 		var operation platform.Operation
@@ -403,7 +405,7 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 			if ordinal < record.Version {
 				record.State = "draft"
 			}
-			out = append(out, ReleasePublication{Schema: SchemaCodePublish, Image: platform.Raw(record)})
+			out = append(out, construction.ReleasePublication{Schema: SchemaCodePublish, Image: platform.Raw(record)})
 			continue
 		}
 		built := Code{ABI: record.BuiltABI, Language: record.BuiltLanguage, Source: record.BuiltSource, Input: record.BuiltInput, Output: record.BuiltOutput}
@@ -419,7 +421,7 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		record.Version, record.State, record.Published = ordinal, "published", frozen.Published
 		record.Versions = append(record.Versions, record.Published)
 		raw, _ := json.Marshal(record)
-		out = append(out, ReleasePublication{Schema: SchemaCodePublish, Image: raw})
+		out = append(out, construction.ReleasePublication{Schema: SchemaCodePublish, Image: raw})
 	}
 	return out, nil
 }

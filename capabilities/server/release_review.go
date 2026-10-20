@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -87,8 +87,8 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 	if err := t.admits(m); err != nil {
 		return ReleasePage{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{construction.Builder, construction.Publisher}, true)); err != nil {
 		return ReleasePage{}, err
 	}
 	if offset < 0 || limit < 1 || limit > 100 {
@@ -98,7 +98,7 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 	defer t.mu.Unlock()
 	ids := t.releases.ids()
 	if len(application) > 0 && application[0] != "" {
-		ref := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: application[0]}
+		ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: application[0]}
 		filtered := make([]string, 0, len(ids))
 		for _, id := range ids {
 			candidate, err := t.releases.candidate(id)
@@ -157,8 +157,8 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	if err := t.admits(m); err != nil {
 		return SavedReleaseReview{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{construction.Builder, construction.Publisher}, true)); err != nil {
 		return SavedReleaseReview{}, err
 	}
 	t.mu.Lock()

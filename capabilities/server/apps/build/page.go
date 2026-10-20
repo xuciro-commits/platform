@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -88,7 +90,7 @@ type Section struct {
 }
 
 func (b *Build) pageEntity() platform.Entity {
-	return platform.Entity{Type: PageType, Title: "Page", Plural: "Pages", Model: Page{}, Display: "title",
+	return platform.Entity{Type: construction.PageType, Title: "Page", Plural: "Pages", Model: Page{}, Display: "title",
 		Description: "A list and detail page this organisation composed over an object it may read: the fields it shows and the actions it offers.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {
@@ -99,12 +101,12 @@ func (b *Build) pageEntity() platform.Entity {
 			}
 			return nil
 		},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "pages"},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "pages"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being composed; nobody can open it yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "Open to the members who may read its object."}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"},
-				Roles: []string{Builder}, Capability: "pages", Payload: []platform.Field{},
+				Roles: []string{construction.Builder}, Capability: "pages", Payload: []platform.Field{},
 				Description: "Put the page in the workspace as it stands. Published again, it takes its new fields and actions.",
 				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
 					page, ok := record.(*Page)
@@ -154,7 +156,7 @@ func (b *Build) pageDraftEntity() platform.Entity {
 		if c.Replaying || page.Document == nil {
 			return nil
 		}
-		objects, err := readDefinitionInventory[Object](c)
+		objects, err := readDefinitionInventory[construction.Object](c)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
@@ -163,7 +165,7 @@ func (b *Build) pageDraftEntity() platform.Entity {
 			if object.Archived {
 				continue
 			}
-			info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+			info, err := platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
@@ -235,8 +237,8 @@ func descriptor(p Page) platform.Page {
 			section.InlineEdit = &platform.PageInlineEdit{Action: platform.AssetRef{App: strings.SplitN(s.InlineEdit.Action, ".", 2)[0], Kind: platform.AssetAction, Name: s.InlineEdit.Action}, Fields: slices.Clone(s.InlineEdit.Fields)}
 		}
 		if s.Function != nil {
-			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: s.Function.Name},
-				SourceVersion: definitionVersion + ".function-" + fmt.Sprint(s.Function.Version)}
+			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetFunction, Name: s.Function.Name},
+				SourceVersion: construction.ValueDefinitionVersion + ".function-" + fmt.Sprint(s.Function.Version)}
 		}
 		if s.Object != "" {
 			owner, _, _ := strings.Cut(s.Object, ".")

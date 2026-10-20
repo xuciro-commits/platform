@@ -5,17 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"slices"
 
 	"platformserver/platform"
 )
-
-// JointDraftAssets is one candidate image built from several saved drafts at
-// once: what is installed today, and what the tenant would run if this exact
-// selection were saved and activated.
-type JointDraftAssets = buildapi.JointDraftAssets
 
 // recordKind reports whether a draft is substituted in the shared definition
 // inventories (objects, pages, applications, flows) rather than in its own
@@ -42,18 +37,18 @@ func (b *Build) lookupEntity(typ string) (platform.EntityInfo, bool) {
 
 // jointObjectEntities declares what each selected draft object would be
 // installed as, using the same descriptor the publisher installs.
-func (b *Build) jointObjectEntities(objects []Object, drafts []JointDraftRef) map[string]platform.EntityInfo {
+func (b *Build) jointObjectEntities(objects []construction.Object, drafts []construction.JointDraftRef) map[string]platform.EntityInfo {
 	joint := map[string]platform.EntityInfo{}
 	for _, draft := range drafts {
 		if draft.Kind != platform.AssetObject {
 			continue
 		}
-		i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == draft.ID && !o.Archived })
+		i := slices.IndexFunc(objects, func(o construction.Object) bool { return o.ID == draft.ID && !o.Archived })
 		if i < 0 {
 			continue
 		}
 		record := objects[i]
-		info, err := platform.Describe(ID, Entity(record), func(reflect.Type) string { return "" })
+		info, err := platform.Describe(construction.ID, Entity(record), func(reflect.Type) string { return "" })
 		if err != nil {
 			continue // the draft's own check reports why it cannot be published
 		}
@@ -66,14 +61,14 @@ func (b *Build) jointObjectEntities(objects []Object, drafts []JointDraftRef) ma
 // candidate image. Simple kinds keep their owner's existing single-draft
 // checks; record kinds are substituted through one shared inventory so a page
 // or flow may reference an object that is itself only a draft here.
-func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.Member) (JointDraftAssets, error) {
-	var result JointDraftAssets
+func (b *Build) DraftReleaseAssetsMulti(drafts []construction.JointDraftRef, member platform.Member) (construction.JointDraftAssets, error) {
+	var result construction.JointDraftAssets
 	if len(drafts) == 0 {
 		return result, fmt.Errorf("select at least one saved draft")
 	}
 	seen := map[platform.AssetRef]bool{}
 	for _, draft := range drafts {
-		ref := platform.AssetRef{App: ID, Kind: draft.Kind, Name: draft.ID}
+		ref := platform.AssetRef{App: construction.ID, Kind: draft.Kind, Name: draft.ID}
 		if draft.ID == "" || seen[ref] {
 			return result, fmt.Errorf("a draft must be named once")
 		}
@@ -120,7 +115,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 		}
 		return 0
 	}
-	slices.SortStableFunc(declarations, func(a, b JointDraftRef) int {
+	slices.SortStableFunc(declarations, func(a, b construction.JointDraftRef) int {
 		return cmp.Compare(priority(a.Kind), priority(b.Kind))
 	})
 	for _, draft := range declarations {
@@ -226,10 +221,10 @@ func findReleaseAsset(assets []platform.ReleaseAsset, ref platform.AssetRef) (pl
 // draftInventories are the builder's four record families as one candidate
 // sees them: installed records with the selected drafts substituted in.
 type draftInventories struct {
-	objects   []Object
+	objects   []construction.Object
 	pages     []Page
 	apps      []Application
-	processes []Process
+	processes []construction.Process
 }
 
 // applyRecordDraft substitutes one saved record draft into the shared
@@ -240,20 +235,20 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 	joint := b.jointMode
 	switch kind {
 	case platform.AssetFlow:
-		i := slices.IndexFunc(inv.processes, func(p Process) bool { return p.ID == id })
+		i := slices.IndexFunc(inv.processes, func(p construction.Process) bool { return p.ID == id })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft process %q not found", id)
 		}
 		record := inv.processes[i]
-		if was, ok := wasPublished[Process](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(was.Name)}
+		if was, ok := wasPublished[construction.Process](record.Published); ok {
+			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(was.Name)}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
+		next = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(record.Name)}
 		source := b.installed[record.Object]
 		models := []platform.Entity{}
 		for _, object := range inv.objects {
-			if _, selected := b.jointEntities[buildapi.TypeOf(object.Name)]; !selected || object.Archived {
+			if _, selected := b.jointEntities[construction.TypeOf(object.Name)]; !selected || object.Archived {
 				continue
 			}
 			model := Entity(object)
@@ -286,16 +281,16 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			}
 		}
 	case platform.AssetObject:
-		i := slices.IndexFunc(inv.objects, func(o Object) bool { return o.ID == id && !o.Archived })
+		i := slices.IndexFunc(inv.objects, func(o construction.Object) bool { return o.ID == id && !o.Archived })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft object %q not found", id)
 		}
 		record := inv.objects[i]
-		if was, ok := wasPublished[Object](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(was.Name)}
+		if was, ok := wasPublished[construction.Object](record.Published); ok {
+			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(was.Name)}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: buildapi.TypeOf(record.Name)}
+		next = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(record.Name)}
 		if err = b.captureExtensionSource(&record); err != nil {
 			return prior, next, hadPrior, err
 		}
@@ -315,10 +310,10 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		}
 		record := inv.pages[i]
 		if was, ok := wasPublished[Page](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: was.Name}
+			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: was.Name}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: record.Name}
+		next = platform.AssetRef{App: construction.ID, Kind: kind, Name: record.Name}
 		if err = b.checkPage(record); err == nil && !joint {
 			err = b.host.ValidateInstallPage(descriptor(record))
 		}
@@ -333,10 +328,10 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		}
 		record := inv.apps[i]
 		if was, ok := wasPublished[Application](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: was.Name}
+			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: was.Name}
 			hadPrior = true
 		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: record.Name}
+		next = platform.AssetRef{App: construction.ID, Kind: kind, Name: record.Name}
 		if err = b.checkApplication(record); err == nil && !joint {
 			err = b.host.ValidateInstallApplication(applicationDescriptor(record))
 		}
@@ -352,7 +347,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 // singleDraftAssets is the owner's original one-draft comparison, unchanged for
 // simple kinds and routed through the shared record substitution otherwise.
 func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	if buildapi.ValueIntegrationKind(kind) {
+	if construction.ValueIntegrationKind(kind) {
 		return b.integrationDraftAssets(kind, id)
 	}
 	if kind == platform.AssetEvaluation || kind == platform.AssetTestPlan {
@@ -374,7 +369,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		return b.queryDraftAssets(id)
 	}
 	if kind == platform.AssetCompute {
-		if _, ok := platform.Get[Table](b.host.Automation(platform.Caller{}, ID), id); ok {
+		if _, ok := platform.Get[construction.Table](b.host.Automation(platform.Caller{}, construction.ID), id); ok {
 			return b.tableDraftAssets(id)
 		}
 		return b.CodeDraftAssets(id)
@@ -391,7 +386,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if !recordKind(kind) {
 		return nil, nil, prior, next, false, fmt.Errorf("draft kind %q cannot be previewed", kind)
 	}
-	assets, err := b.DraftReleaseAssetsMulti([]JointDraftRef{{Kind: kind, ID: id}}, platform.Member{})
+	assets, err := b.DraftReleaseAssetsMulti([]construction.JointDraftRef{{Kind: kind, ID: id}}, platform.Member{})
 	if err != nil {
 		return nil, nil, prior, next, false, err
 	}
@@ -413,7 +408,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 // draft is reported by that owner's own check, and the builder selects it by
 // hand. A dependency that is already published needs no entry: the candidate
 // closes over its installed version.
-func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDraftRef, error) {
+func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]construction.JointDraftRef, error) {
 	if id == "" {
 		return nil, fmt.Errorf("a saved draft is required")
 	}
@@ -428,39 +423,39 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 	if err != nil {
 		return nil, err
 	}
-	find := func(want platform.AssetKind, name string) (JointDraftRef, bool) {
+	find := func(want platform.AssetKind, name string) (construction.JointDraftRef, bool) {
 		switch want {
 		case platform.AssetObject:
 			for _, o := range objects {
-				if o.Published == "" && (o.Name == name || buildapi.TypeOf(o.Name) == name) {
-					return JointDraftRef{Kind: want, ID: o.ID}, true
+				if o.Published == "" && (o.Name == name || construction.TypeOf(o.Name) == name) {
+					return construction.JointDraftRef{Kind: want, ID: o.ID}, true
 				}
 			}
 		case platform.AssetPage:
 			for _, p := range pages {
-				if p.Published == "" && (p.Name == name || buildapi.TypeOf(p.Name) == name) {
-					return JointDraftRef{Kind: want, ID: p.ID}, true
+				if p.Published == "" && (p.Name == name || construction.TypeOf(p.Name) == name) {
+					return construction.JointDraftRef{Kind: want, ID: p.ID}, true
 				}
 			}
 		case platform.AssetFlow:
 			for _, p := range processes {
-				if p.Published == "" && (p.Name == name || buildapi.TypeOf(p.Name) == name) {
-					return JointDraftRef{Kind: want, ID: p.ID}, true
+				if p.Published == "" && (p.Name == name || construction.TypeOf(p.Name) == name) {
+					return construction.JointDraftRef{Kind: want, ID: p.ID}, true
 				}
 			}
 		}
-		return JointDraftRef{}, false
+		return construction.JointDraftRef{}, false
 	}
-	var result []JointDraftRef
-	seen := map[JointDraftRef]bool{{Kind: kind, ID: id}: true}
-	queue := []JointDraftRef{{Kind: kind, ID: id}}
+	var result []construction.JointDraftRef
+	seen := map[construction.JointDraftRef]bool{{Kind: kind, ID: id}: true}
+	queue := []construction.JointDraftRef{{Kind: kind, ID: id}}
 	for len(queue) > 0 && len(result) < 64 {
 		next := queue[0]
 		queue = queue[1:]
 		dependencies := map[platform.AssetKind][]string{}
 		switch next.Kind {
 		case platform.AssetObject:
-			i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == next.ID })
+			i := slices.IndexFunc(objects, func(o construction.Object) bool { return o.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved object draft %s", next.ID)
 			}
@@ -489,7 +484,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 				dependencies[resource.Kind] = append(dependencies[resource.Kind], resource.Name)
 			}
 		case platform.AssetFlow:
-			i := slices.IndexFunc(processes, func(p Process) bool { return p.ID == next.ID })
+			i := slices.IndexFunc(processes, func(p construction.Process) bool { return p.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved workflow draft %s", next.ID)
 			}

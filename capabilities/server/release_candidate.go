@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -48,7 +48,7 @@ func (t *Tenant) releaseAssetsLocked(builderAssets []platform.ReleaseAsset, repl
 			code[definition.Ref] = true
 		}
 	}
-	out := slices.DeleteFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref.App == build.ID && !code[asset.Ref] })
+	out := slices.DeleteFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref.App == construction.ID && !code[asset.Ref] })
 	return append(out, builderAssets...), nil
 }
 
@@ -242,7 +242,7 @@ type ReleasePreview struct {
 	// Drafts is the exact saved-draft selection this review was built from, in
 	// the order it was selected (ADR-0011): the provenance of a joint
 	// candidate. One draft keeping its installed dependency is not repeated.
-	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
+	Drafts []construction.JointDraftRef `json:"drafts,omitempty"`
 	// CandidateActions are owner-compiled draft inputs for builder test forms,
 	// not the installed member catalog or permission to execute.
 	CandidateActions []platform.Action `json:"candidateActions"`
@@ -254,15 +254,15 @@ type ReleasePreviewRequest struct {
 	ID                string             `json:"id,omitempty"`
 	// Drafts selects several saved drafts as one joint candidate (ADR-0011).
 	// A request carries either one kind/id or a non-empty drafts list.
-	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
+	Drafts []construction.JointDraftRef `json:"drafts,omitempty"`
 }
 
 type ReleaseSaveRequest struct {
-	Kind        platform.AssetKind    `json:"kind,omitempty"`
-	ID          string                `json:"id,omitempty"`
-	Drafts      []build.JointDraftRef `json:"drafts,omitempty"`
-	CandidateID string                `json:"candidateId"`
-	Key         string                `json:"key"`
+	Kind        platform.AssetKind           `json:"kind,omitempty"`
+	ID          string                       `json:"id,omitempty"`
+	Drafts      []construction.JointDraftRef `json:"drafts,omitempty"`
+	CandidateID string                       `json:"candidateId"`
+	Key         string                       `json:"key"`
 }
 
 // ReleaseDraftsRequest names one saved draft to list dependencies for.
@@ -274,7 +274,7 @@ type ReleaseDraftsRequest struct {
 // ReleaseDraftClosure is the saved record drafts that must be delivered with
 // the chosen draft, in dependency order breadth-first from it.
 type ReleaseDraftClosure struct {
-	Drafts []build.JointDraftRef `json:"drafts"`
+	Drafts []construction.JointDraftRef `json:"drafts"`
 }
 
 // ReferencedDrafts answers which saved record drafts a chosen draft needs, so
@@ -283,21 +283,21 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if err := t.admits(m); err != nil {
 		return ReleaseDraftClosure{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{build.Builder}, true)); err != nil {
+	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{construction.Builder}, true)); err != nil {
 		return ReleaseDraftClosure{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 	if !ok {
 		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
-	var drafts []build.JointDraftRef
+	var drafts []construction.JointDraftRef
 	var err error
 	if kind == platform.AssetApp {
 		drafts, err = owner.ApplicationDrafts(id)
-		drafts = slices.DeleteFunc(drafts, func(draft build.JointDraftRef) bool { return draft.Kind == kind && draft.ID == id })
+		drafts = slices.DeleteFunc(drafts, func(draft construction.JointDraftRef) bool { return draft.Kind == kind && draft.ID == id })
 	} else {
 		drafts, err = owner.ReferencedDrafts(kind, id)
 	}
@@ -305,7 +305,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 		return ReleaseDraftClosure{}, err
 	}
 	if drafts == nil {
-		drafts = []build.JointDraftRef{}
+		drafts = []construction.JointDraftRef{}
 	}
 	return ReleaseDraftClosure{Drafts: drafts}, nil
 }
@@ -330,18 +330,18 @@ type ReleaseActive struct {
 // records and before computing any digest or error path. It never changes the
 // installed definitions, persistent records, or active operator work.
 func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id string) (ReleasePreview, error) {
-	return t.PreviewReleaseDrafts(m, []build.JointDraftRef{{Kind: kind, ID: id}})
+	return t.PreviewReleaseDrafts(m, []construction.JointDraftRef{{Kind: kind, ID: id}})
 }
 
 // PreviewReleaseDrafts compares one or several saved drafts with the installed
 // development definitions, and proves the resulting joint candidate installs
 // before it can be saved (ADR-0011/D2).
-func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef) (ReleasePreview, error) {
+func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []construction.JointDraftRef) (ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
 		return ReleasePreview{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{build.Builder}, true)); err != nil {
+	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{construction.Builder}, true)); err != nil {
 		return ReleasePreview{}, err
 	}
 	t.mu.Lock()
@@ -352,17 +352,17 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 		return reply, err
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object build.Object
+		var object construction.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return ReleasePreview{}, fmt.Errorf("candidate object %s: %w", asset.Ref, err)
 		}
 		// A function/flow candidate retains its source object, but may not
 		// retain its create/edit action assets. Ask the original owner for
 		// those test inputs using that exact object image, not the live model.
-		owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+		owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 		if !ok {
 			return reply, fmt.Errorf("construction owner is unavailable")
 		}
@@ -383,8 +383,8 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 // The candidate returned here is exactly what the builder saw in the
 // comparison. A later save must recompute it under the tenant lock and reject
 // a stale candidate ID rather than trusting bytes supplied by the browser.
-func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
+	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 	if !ok {
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
@@ -566,11 +566,11 @@ func (t *Tenant) PreviewApplicationDrafts(m platform.Member, id string) (Release
 	if err := t.admits(m); err != nil {
 		return ReleasePreview{}, err
 	}
-	if !m.Holds(build.ID, build.Builder) {
+	if !m.Holds(construction.ID, construction.Builder) {
 		return ReleasePreview{}, fmt.Errorf("Only a builder can inspect application drafts")
 	}
 	t.mu.Lock()
-	owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 	if !ok {
 		t.mu.Unlock()
 		return ReleasePreview{}, fmt.Errorf("Construction owner is unavailable")

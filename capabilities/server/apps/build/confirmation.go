@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -21,9 +23,9 @@ const confirmationTick = confirmationType + ".tick"
 func (b *Build) confirmationEntity() platform.Entity {
 	return platform.Entity{Type: confirmationType, Title: "Business confirmation", Plural: "Business confirmations", Model: platform.ConfirmationRun{}, Display: "subject",
 		Description: "Independent party receipts, unknown outcomes, source reconciliation and declared compensation.",
-		Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}, Participants: func(value any) []string {
+		Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant, construction.Integrator: platform.ScopeTenant}, Participants: func(value any) []string {
 			r := value.(platform.ConfirmationRun)
-			return append([]string{r.Member}, b.host.(host.ConfirmationHost).Holding(ID, r.Definition.ReviewerRole)...)
+			return append([]string{r.Member}, b.host.(host.ConfirmationHost).Holding(construction.ID, r.Definition.ReviewerRole)...)
 		}},
 		Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"input", "parties", "definition", "assets"}}},
 	}
@@ -36,7 +38,7 @@ func confirmationActions() []platform.Action {
 	}
 }
 
-func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) error {
+func (b *Build) checkConfirmation(spec *platform.Confirmation, object construction.Object) error {
 	if spec == nil {
 		return nil
 	}
@@ -52,7 +54,7 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 			if action.Transaction == nil || action.Transaction.Confirmation != spec {
 				continue
 			}
-			declared = slices.ContainsFunc(action.Inputs, func(input Input) bool {
+			declared = slices.ContainsFunc(action.Inputs, func(input construction.Input) bool {
 				return input.Name == party.Reconcile.KeyInput && input.Required && (input.Type == "text" || input.Type == "reference")
 			})
 		}
@@ -61,7 +63,7 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 		}
 	}
 	subject := "build." + object.Name
-	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(a Access) bool { return a.Role == spec.ReviewerRole }) {
+	if spec.ReviewerRole != construction.Builder && !slices.ContainsFunc(object.Access, func(a construction.Access) bool { return a.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The confirmation reviewer role is not declared")
 	}
 	for _, name := range []string{spec.OnComplete, spec.OnPartialAction} {
@@ -73,7 +75,7 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 			schema = subject + "." + name
 		}
 		name := strings.TrimPrefix(schema, subject+".")
-		i := slices.IndexFunc(object.Actions, func(a Action) bool { return a.Name == name })
+		i := slices.IndexFunc(object.Actions, func(a construction.Action) bool { return a.Name == name })
 		if i < 0 || object.Actions[i].Approval != nil || object.Actions[i].Transaction != nil && object.Actions[i].Transaction.Confirmation != nil {
 			return fmt.Errorf("Confirmation completion needs a subject action without another approval or confirmation")
 		}
@@ -119,20 +121,20 @@ func (b *Build) bindConfirmation(spec *platform.Confirmation, subject string) (c
 			if item.id == "" {
 				continue
 			}
-			record, ok := b.host.Record(WritebackType + "/" + item.id)
-			w, valid := record.(Writeback)
+			record, ok := b.host.Record(construction.WritebackType + "/" + item.id)
+			w, valid := record.(construction.Writeback)
 			if !ok || !valid {
 				return out, fmt.Errorf("Confirmation writeback is unavailable")
 			}
-			*item.ref = &platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: w.Name}
+			*item.ref = &platform.AssetRef{App: construction.ID, Kind: platform.AssetWriteback, Name: w.Name}
 		}
 		if party.Reconcile != nil {
-			record, ok := b.host.Record(SourceType + "/" + party.Reconcile.Source)
-			s, valid := record.(Source)
+			record, ok := b.host.Record(construction.SourceType + "/" + party.Reconcile.Source)
+			s, valid := record.(construction.Source)
 			if !ok || !valid {
 				return out, fmt.Errorf("Reconciliation source is unavailable")
 			}
-			binding.Source = &platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: s.Name}
+			binding.Source = &platform.AssetRef{App: construction.ID, Kind: platform.AssetSource, Name: s.Name}
 		}
 		if party.Protocol != "" {
 			p, err := b.host.(host.ConfirmationHost).FreezeConfirmationProtocol(party)
@@ -166,10 +168,10 @@ func (b *Build) bindConfirmation(spec *platform.Confirmation, subject string) (c
 func (b *Build) bindConfirmationAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
 	bindings := map[string]confirmationBindings{}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object Object
+		var object construction.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return nil, err
 		}
@@ -249,11 +251,11 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 	}
 	id := "confirmation:" + r.GetChangeId()
 	run := platform.ConfirmationRun{Record: platform.Record{ID: id}, Subject: txn.Subject + "/" + r.GetSubmission().GetTarget().GetId(), Action: r.GetSubmission().GetSchema().GetName(), Member: c.ID, State: "pending", Deadline: at.Add(time.Duration(spec.DeadlineSeconds) * time.Second), Definition: spec, Release: release, Assets: assets, Input: slices.Clone(r.GetSubmission().GetPayload()), Parties: []platform.ConfirmationProgress{}, Reviewers: []string{}}
-	for _, member := range b.host.(host.ConfirmationHost).Holding(ID, spec.ReviewerRole) {
+	for _, member := range b.host.(host.ConfirmationHost).Holding(construction.ID, spec.ReviewerRole) {
 		run.Reviewers = append(run.Reviewers, member)
 	}
 	for _, party := range spec.Parties {
-		p := platform.ConfirmationProgress{Name: party.Name, Title: party.Title, State: "pending", Key: id + ":" + party.Name, Intent: c.Tenant + ":" + ID + ":" + id + ":" + party.Name}
+		p := platform.ConfirmationProgress{Name: party.Name, Title: party.Title, State: "pending", Key: id + ":" + party.Name, Intent: c.Tenant + ":" + construction.ID + ":" + id + ":" + party.Name}
 		if party.Protocol != "" {
 			p.Protocol, err = transport.FreezeConfirmationProtocol(party)
 			if err != nil {
@@ -264,7 +266,7 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			if writeback == "" {
 				return nil, 0, nil
 			}
-			w, known := platform.Get[Writeback](c, writeback)
+			w, known := platform.Get[construction.Writeback](c, writeback)
 			if !known {
 				return nil, 0, fmt.Errorf("Confirmation writeback is unavailable")
 			}
@@ -275,7 +277,7 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			if w.State != "published" || w.Object != txn.Subject {
 				return nil, 0, fmt.Errorf("Confirmation writeback must be published")
 			}
-			conn, known := platform.Get[Connection](c, w.Connection)
+			conn, known := platform.Get[construction.Connection](c, w.Connection)
 			if !known {
 				return nil, 0, fmt.Errorf("Confirmation connection is unavailable")
 			}
@@ -303,7 +305,7 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
 		if party.Reconcile != nil {
-			s, known := platform.Get[Source](c, party.Reconcile.Source)
+			s, known := platform.Get[construction.Source](c, party.Reconcile.Source)
 			if !known {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reconciliation source is unavailable")
 			}
@@ -314,7 +316,7 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			if s.Header != "" || s.Connection == "" {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reconciliation needs a controlled connection and named credentials")
 			}
-			conn, known := platform.Get[Connection](c, s.Connection)
+			conn, known := platform.Get[construction.Connection](c, s.Connection)
 			if !known {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Reconciliation connection is unavailable")
 			}
@@ -361,7 +363,7 @@ func (b *Build) updateConfirmation(c platform.Caller, s *pb.Submission, at time.
 		}
 		manual := s.GetSchema().GetName() == confirmationReview
 		if manual {
-			if c.Agent || !c.Holds(ID, run.Definition.ReviewerRole) || strings.TrimSpace(in.Reason) == "" {
+			if c.Agent || !c.Holds(construction.ID, run.Definition.ReviewerRole) || strings.TrimSpace(in.Reason) == "" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation needs its current reviewer and evidence")
 			}
 			typ, id, _ := strings.Cut(run.Subject, "/")
@@ -510,11 +512,11 @@ func confirmationIntent(tenant, key string, request json.RawMessage, protocol *p
 	if protocol != nil {
 		endpoint = "protocol:" + protocol.Provider
 	} else {
-		var req WritebackRequest
+		var req construction.WritebackRequest
 		_ = json.Unmarshal(request, &req)
-		endpoint = WritebackEndpoint + req.Connection
+		endpoint = construction.WritebackEndpoint + req.Connection
 	}
-	return tenant + ":" + ID + ":confirmation:" + key + ":" + endpoint
+	return tenant + ":" + construction.ID + ":confirmation:" + key + ":" + endpoint
 }
 
 func (b *Build) confirmationState(c platform.Caller, r *pb.ChangeRecord, run *platform.ConfirmationRun, at time.Time) {
@@ -604,5 +606,5 @@ func (b *Build) Run(c platform.Caller, job string, at time.Time) *kernel.Error {
 }
 
 func confirmationSubmission(c platform.Caller, id, schema, key string, payload any, at time.Time) *pb.Submission {
-	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "confirmation:" + id + ":" + key, Target: &pb.EntityRef{Type: confirmationType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: construction.ID, IdempotencyKey: "confirmation:" + id + ":" + key, Target: &pb.EntityRef{Type: confirmationType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
 }

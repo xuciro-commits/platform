@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -16,11 +16,11 @@ import (
 func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
 	s := e.Record.GetSubmission()
 	typ := s.GetTarget().GetType()
-	if e.App != build.ID || !strings.HasPrefix(typ, build.ID+".") || typ == build.AlertType {
+	if e.App != construction.ID || !strings.HasPrefix(typ, construction.ID+".") || typ == construction.AlertType {
 		return
 	}
-	c := t.automation(build.ID, false)
-	owner, ok := t.app(build.ID).(host.AlertDefinitions)
+	c := t.automation(construction.ID, false)
+	owner, ok := t.app(construction.ID).(host.AlertDefinitions)
 	if !ok {
 		return
 	}
@@ -53,7 +53,7 @@ func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
 		}
 		role := rule.Role
 		if role == "" {
-			role = build.Builder
+			role = construction.Builder
 		}
 		title := rule.Title
 		if display, ok := record[info.Display].(string); ok && display != "" && info.Display != "id" {

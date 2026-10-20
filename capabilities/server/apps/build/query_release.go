@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -10,7 +12,7 @@ import (
 )
 
 func queryReleaseAsset(f Query, sourceVersion string) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, sourceVersion+".query-"+strconv.Itoa(f.Version), f.Definition())
+	return definitionReleaseAsset(platform.AssetRef{App: construction.ID, Kind: platform.AssetQuery, Name: f.Name}, sourceVersion+".query-"+strconv.Itoa(f.Version), f.Definition())
 }
 
 // QueryReleaseAsset resolves only a retained version from this owner.
@@ -53,7 +55,7 @@ func (b *Build) queryDraftAssets(id string) (before, after []platform.ReleaseAss
 
 // Freeze the immutable candidate beside the mutable editor row. Existing
 // ordinals must match retained bytes; only the next ordinal can publish.
-func (b *Build) prepareQueryReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
+func (b *Build) prepareQueryReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, b.queryInventory, platform.AssetQuery, "query", SchemaQuery, "query", b.QueryReleaseAsset, func(record Query, asset platform.ReleaseAsset, version int) (Query, error) {
 		var q platform.NamedQuery
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Object != record.Object || q.Interface != record.Interface {

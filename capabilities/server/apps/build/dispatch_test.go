@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"reflect"
@@ -10,12 +12,12 @@ import (
 	"platformserver/platform"
 )
 
-func dispatchDefinition() Object {
+func dispatchDefinition() construction.Object {
 	destination := platform.ExprReference("text", "destination")
-	return Object{Name: "movement", Title: "Movement", Fields: []Field{{Name: "status", Title: "Status", Type: "text"}, {Name: "destination", Title: "Destination", Type: "text"}}, States: []State{{Name: "ready", Title: "Ready"}},
+	return construction.Object{Name: "movement", Title: "Movement", Fields: []construction.Field{{Name: "status", Title: "Status", Type: "text"}, {Name: "destination", Title: "Destination", Type: "text"}}, States: []construction.State{{Name: "ready", Title: "Ready"}},
 		DispatchCommands: []platform.DispatchCommand{{Name: "move", Title: "Move to target", EndpointKind: "controller", Writeback: "local-command"}},
-		Actions: []Action{{Name: "send", Title: "Send", From: []string{"ready"}, Transaction: &platform.BusinessTxn{Subject: "build.movement", Steps: []platform.TxnStep{{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: "build.movement", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "status", From: "=sent"}}}},
-			Dispatch: &platform.Dispatch{Command: "move", Target: "local-target", Key: "$subject", DeadlineSeconds: 60, ReviewerRole: Builder, OnStuck: "manual", OnFail: "manual", Payload: []platform.TxnSet{{Field: "destination", Expr: &destination}}, Readback: platform.DispatchRead{Name: "movement-status", Source: "local-status", KeyField: "key", ResultField: "status", EverySeconds: 1, States: map[string]string{"moving": "running", "done": "completed", "no-status": "unknown", "error": "failed"}}},
+		Actions: []construction.Action{{Name: "send", Title: "Send", From: []string{"ready"}, Transaction: &platform.BusinessTxn{Subject: "build.movement", Steps: []platform.TxnStep{{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: "build.movement", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "status", From: "=sent"}}}},
+			Dispatch: &platform.Dispatch{Command: "move", Target: "local-target", Key: "$subject", DeadlineSeconds: 60, ReviewerRole: construction.Builder, OnStuck: "manual", OnFail: "manual", Payload: []platform.TxnSet{{Field: "destination", Expr: &destination}}, Readback: platform.DispatchRead{Name: "movement-status", Source: "local-status", KeyField: "key", ResultField: "status", EverySeconds: 1, States: map[string]string{"moving": "running", "done": "completed", "no-status": "unknown", "error": "failed"}}},
 		}}}}
 }
 
@@ -27,7 +29,7 @@ func TestDispatchPublicationRejectsUnsafeRetryAndInvalidDefinitions(t *testing.T
 	}
 	for _, name := range []string{"unsafe stuck retry", "unsafe failure retry", "undeclared command", "duplicate command", "missing status read", "ambiguous status read", "missing stuck policy", "unknown status mapping", "input business key", "undeclared compensation", "reserved key parameter"} {
 		t.Run(name, func(t *testing.T) {
-			var object Object
+			var object construction.Object
 			if err := json.Unmarshal(platform.Raw(base), &object); err != nil {
 				t.Fatal(err)
 			}
@@ -77,9 +79,9 @@ func TestDispatchPublicationRejectsUnsafeRetryAndInvalidDefinitions(t *testing.T
 func TestDispatchReleaseBindsStableTransportAssetsOnStartingAction(t *testing.T) {
 	b, rows := lifecycleBuild()
 	b.host = confirmationBindingHost{lifecycleHost: b.host.(lifecycleHost), records: map[string]any{
-		WritebackType + "/local-command": Writeback{Record: platform.Record{ID: "local-command"}, Name: "move-request", Object: "build.movement", On: "dispatch", State: "published"},
-		SourceType + "/local-status":     Source{Record: platform.Record{ID: "local-status"}, Name: "movement-status", Connection: "local-target", State: "published"},
-		ConnectionType + "/local-target": Connection{Record: platform.Record{ID: "local-target"}, Name: "device-gateway", Kind: "http", State: "ready"},
+		construction.WritebackType + "/local-command": construction.Writeback{Record: platform.Record{ID: "local-command"}, Name: "move-request", Object: "build.movement", On: "dispatch", State: "published"},
+		construction.SourceType + "/local-status":     construction.Source{Record: platform.Record{ID: "local-status"}, Name: "movement-status", Connection: "local-target", State: "published"},
+		construction.ConnectionType + "/local-target": construction.Connection{Record: platform.Record{ID: "local-target"}, Name: "device-gateway", Kind: "http", State: "ready"},
 	}}
 	for _, record := range b.host.(confirmationBindingHost).records {
 		rows.rows[reflect.TypeOf(record)] = append(rows.rows[reflect.TypeOf(record)], record)
@@ -87,7 +89,7 @@ func TestDispatchReleaseBindsStableTransportAssetsOnStartingAction(t *testing.T)
 	object := dispatchDefinition()
 	object.ID = "movement"
 	object.Published = published(object)
-	assets, err := releaseAssets([]Object{object}, nil, nil, nil, "1")
+	assets, err := releaseAssets([]construction.Object{object}, nil, nil, nil, "1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +106,7 @@ func TestDispatchReleaseBindsStableTransportAssetsOnStartingAction(t *testing.T)
 		if asset.Ref.Kind != platform.AssetAction || asset.Ref.Name != "build.movement.send" {
 			continue
 		}
-		for _, ref := range []platform.AssetRef{{App: ID, Kind: platform.AssetWriteback, Name: "move-request"}, {App: ID, Kind: platform.AssetConnection, Name: "device-gateway"}, {App: ID, Kind: platform.AssetSource, Name: "movement-status"}} {
+		for _, ref := range []platform.AssetRef{{App: construction.ID, Kind: platform.AssetWriteback, Name: "move-request"}, {App: construction.ID, Kind: platform.AssetConnection, Name: "device-gateway"}, {App: construction.ID, Kind: platform.AssetSource, Name: "movement-status"}} {
 			if !slices.Contains(asset.Requires, ref) {
 				t.Fatalf("Dispatch omitted its original dependency %s", ref)
 			}

@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -11,29 +13,29 @@ import (
 	"platformserver/platform"
 )
 
-func tableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, error) {
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
+func tableReleaseAsset(table construction.Table, manifest string) (platform.ReleaseAsset, error) {
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
 }
 
 // A table's operation carries the complete rule plan. Reconstruct the editor
 // columns from its ordered schema and its rows from that same plan.
-func tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
+func tableFromAsset(asset platform.ReleaseAsset) (construction.Table, error) {
 	var op platform.Operation
-	text, found := strings.CutPrefix(asset.SourceVersion, definitionVersion+".compute-")
+	text, found := strings.CutPrefix(asset.SourceVersion, construction.ValueDefinitionVersion+".compute-")
 	version, err := strconv.Atoi(text)
-	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Binding.Kind != "native" || op.Rules == nil || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
-		return Table{}, fmt.Errorf("invalid decision table asset %s", asset.Ref)
+	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Binding.Kind != "native" || op.Rules == nil || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+		return construction.Table{}, fmt.Errorf("invalid decision table asset %s", asset.Ref)
 	}
-	tb := Table{Name: op.Name, Title: op.Title, Description: op.Description, Reads: &op.Rules.Reads, State: "published", Version: version}
-	columns := func(schema platform.ValueSchema) ([]TableColumn, error) {
-		var columns []TableColumn
+	tb := construction.Table{Name: op.Name, Title: op.Title, Description: op.Description, Reads: &op.Rules.Reads, State: "published", Version: version}
+	columns := func(schema platform.ValueSchema) ([]construction.TableColumn, error) {
+		var columns []construction.TableColumn
 		for _, name := range schema.Required {
 			field := schema.Properties[name]
 			kind := map[string]string{"string": "text", "number": "number", "boolean": "boolean"}[field.Type]
 			if kind == "" {
 				return nil, fmt.Errorf("table column %s has an unsupported schema", name)
 			}
-			columns = append(columns, TableColumn{Name: name, Title: field.Description, Type: kind})
+			columns = append(columns, construction.TableColumn{Name: name, Title: field.Description, Type: kind})
 		}
 		if len(columns) == 0 || len(columns) != len(schema.Properties) {
 			return nil, fmt.Errorf("table columns need ordered, required schema fields")
@@ -41,10 +43,10 @@ func tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 		return columns, nil
 	}
 	if tb.Inputs, err = columns(op.Input); err != nil {
-		return Table{}, err
+		return construction.Table{}, err
 	}
 	if tb.Outputs, err = columns(op.Output); err != nil {
-		return Table{}, err
+		return construction.Table{}, err
 	}
 	results := func(raw json.RawMessage) ([]string, error) {
 		var values map[string]any
@@ -67,23 +69,23 @@ func tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 		expressions := []platform.Expr{row.Condition}
 		if len(tb.Inputs) > 1 {
 			if row.Condition.Op != "and" || len(row.Condition.Args) != len(tb.Inputs) {
-				return Table{}, fmt.Errorf("table row does not match its columns")
+				return construction.Table{}, fmt.Errorf("table row does not match its columns")
 			}
 			expressions = row.Condition.Args
 		}
 		then, err := results(row.Result)
 		if err != nil {
-			return Table{}, err
+			return construction.Table{}, err
 		}
-		tb.Rows = append(tb.Rows, TableRow{Expressions: expressions, Then: then})
+		tb.Rows = append(tb.Rows, construction.TableRow{Expressions: expressions, Then: then})
 	}
 	if len(op.Rules.Default) > 0 {
 		if tb.Default, err = results(op.Rules.Default); err != nil {
-			return Table{}, err
+			return construction.Table{}, err
 		}
 	}
 	if !bytes.Equal(platform.Raw(tb.Definition()), platform.Raw(op)) {
-		return Table{}, fmt.Errorf("table operation cannot be represented by its original editor")
+		return construction.Table{}, fmt.Errorf("table operation cannot be represented by its original editor")
 	}
 	return tb, nil
 }
@@ -93,13 +95,13 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 	if err != nil {
 		return
 	}
-	tb, ok := platform.Get[Table](b.host.Automation(platform.Caller{}, ID), id)
+	tb, ok := platform.Get[construction.Table](b.host.Automation(platform.Caller{}, construction.ID), id)
 	if !ok || tb.Archived {
 		err = fmt.Errorf("decision table draft %s was not found", id)
 		return
 	}
-	if old, ok := wasPublished[Table](tb.Published); ok {
-		prior, hadPrior = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: old.Name}, true
+	if old, ok := wasPublished[construction.Table](tb.Published); ok {
+		prior, hadPrior = platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: old.Name}, true
 	}
 	if err = tb.NormalizeRules(); err == nil {
 		err = b.checkTable(tb)
@@ -112,7 +114,7 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 		return
 	}
 	tb.Version++
-	next = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: tb.Name}
+	next = platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: tb.Name}
 	asset, problem := tableReleaseAsset(tb, b.Manifest().Version)
 	if problem != nil {
 		err = problem
@@ -123,14 +125,14 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 	return
 }
 
-func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
-	rows, err := readDefinitionInventory[Table](b.host.Automation(platform.Caller{}, ID))
+func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
+	rows, err := readDefinitionInventory[construction.Table](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return nil, err
 	}
-	var out []ReleasePublication
+	var out []construction.ReleasePublication
 	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetCompute {
 			continue
 		}
 		var operation platform.Operation
@@ -141,7 +143,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]Rele
 		if err != nil {
 			return nil, err
 		}
-		i := slices.IndexFunc(rows, func(tb Table) bool { return !tb.Archived && tb.Name == frozen.Name })
+		i := slices.IndexFunc(rows, func(tb construction.Table) bool { return !tb.Archived && tb.Name == frozen.Name })
 		if i < 0 {
 			return nil, fmt.Errorf("table %s has no target draft", asset.Ref)
 		}
@@ -157,7 +159,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]Rele
 		frozen.Record = record.Record
 		raw := published(frozen)
 		for _, retained := range record.Versions {
-			if prior, ok := wasPublished[Table](retained); ok && prior.Version == frozen.Version {
+			if prior, ok := wasPublished[construction.Table](retained); ok && prior.Version == frozen.Version {
 				raw = retained
 				break
 			}
@@ -166,7 +168,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]Rele
 			record.Versions = append(slices.Clone(record.Versions), raw)
 		}
 		record.Version, record.State, record.Published = max(record.Version, frozen.Version), "published", raw
-		out = append(out, ReleasePublication{Schema: SchemaTablePublish, Image: platform.Raw(record)})
+		out = append(out, construction.ReleasePublication{Schema: SchemaTablePublish, Image: platform.Raw(record)})
 	}
 	return out, nil
 }

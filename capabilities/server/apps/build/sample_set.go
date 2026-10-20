@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -34,8 +36,8 @@ func (m SampleSetRecord) descriptor() platform.SampleSet {
 
 func (b *Build) sampleSetEntity() platform.Entity {
 	return platform.Entity{Type: SampleSetType, Title: "Sample set", Plural: "Sample sets", Model: SampleSetRecord{}, Display: "title",
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "objects"},
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {
 				return nil
@@ -47,7 +49,7 @@ func (b *Build) sampleSetEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain these synthetic records as an immutable application sample asset", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain these synthetic records as an immutable application sample asset", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "objects", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 				m := record.(*SampleSetRecord)
 				next, err := b.retainSampleSet(*m)
 				if err != nil {
@@ -59,7 +61,7 @@ func (b *Build) sampleSetEntity() platform.Entity {
 }
 
 func (b *Build) sampleSetInventory() ([]SampleSetRecord, error) {
-	return readDefinitionInventory[SampleSetRecord](b.host.Automation(platform.Caller{}, ID))
+	return readDefinitionInventory[SampleSetRecord](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
 func (b *Build) checkSampleSet(m SampleSetRecord) error {
@@ -88,14 +90,14 @@ func (b *Build) checkSampleSet(m SampleSetRecord) error {
 }
 
 func sampleSetAsset(m SampleSetRecord, version int) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}, definitionVersion+".samples-"+strconv.Itoa(version), m.descriptor())
+	return definitionReleaseAsset(platform.AssetRef{App: construction.ID, Kind: platform.AssetSampleSet, Name: m.Name}, construction.ValueDefinitionVersion+".samples-"+strconv.Itoa(version), m.descriptor())
 }
 
 func decodeSampleAsset(asset platform.ReleaseAsset) (platform.SampleSet, int, error) {
 	var d platform.SampleSet
-	ordinal, ok := strings.CutPrefix(asset.SourceVersion, definitionVersion+".samples-")
+	ordinal, ok := strings.CutPrefix(asset.SourceVersion, construction.ValueDefinitionVersion+".samples-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return d, 0, fmt.Errorf("Invalid sample asset")
 	}
 	return d, version, nil
@@ -152,7 +154,7 @@ func (b *Build) sampleSetDraftAssets(id string) (before, after []platform.Releas
 		err = fmt.Errorf("The sample set version family is full")
 		return
 	}
-	next = platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}
+	next = platform.AssetRef{App: construction.ID, Kind: platform.AssetSampleSet, Name: m.Name}
 	prior, hadPrior = next, m.Published != ""
 	a, e := sampleSetAsset(m, m.DefinitionVersion+1)
 	if e != nil {
@@ -171,7 +173,7 @@ func (b *Build) prepareSampleSetInstallations(assets []platform.ReleaseAsset) ([
 	}
 	out := []platform.AssetInstallation{}
 	for _, a := range assets {
-		if a.Ref.Kind != platform.AssetSampleSet || a.Ref.App != ID {
+		if a.Ref.Kind != platform.AssetSampleSet || a.Ref.App != construction.ID {
 			continue
 		}
 		d, version, err := decodeSampleAsset(a)

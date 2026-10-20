@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 
@@ -13,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-func (b *Build) checkJournal(o Object) error {
+func (b *Build) checkJournal(o construction.Object) error {
 	if o.Numbering != nil {
 		if err := o.Numbering.Check(o); err != nil {
 			return err
@@ -65,7 +67,7 @@ func (b *Build) checkJournal(o Object) error {
 
 // numberingOf gives a new record the next number: the count of records so far
 // (this year, when yearly) plus one, which is gapless because nothing is deleted.
-func numberingOf(o Object, model any) func(c platform.Caller, record any, now time.Time) *kernel.Error {
+func numberingOf(o construction.Object, model any) func(c platform.Caller, record any, now time.Time) *kernel.Error {
 	if o.Numbering == nil {
 		return nil
 	}

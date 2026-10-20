@@ -16,7 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -35,17 +35,17 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
+	if !m.Holds(construction.ID, construction.Builder) && !m.Holds(construction.ID, construction.Integrator) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	out := []IntegrationEffect{}
 	for _, effect := range t.Effects(now) {
-		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		books := (strings.HasPrefix(effect.Event, "journal/") || effect.Event == build.ID+"/journal") && effect.Endpoint == build.BooksEndpoint
-		confirmation := effect.Event == build.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		dispatch := effect.Event == build.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		transaction := effect.Event == build.ID+"/transaction" && strings.HasPrefix(effect.Endpoint, build.WritebackEndpoint)
-		if effect.App != build.ID || !writeback && !books && !confirmation && !dispatch && !transaction {
+		writeback := strings.HasPrefix(effect.Event, "writeback/") && strings.HasPrefix(effect.Endpoint, construction.WritebackEndpoint)
+		books := (strings.HasPrefix(effect.Event, "journal/") || effect.Event == construction.ID+"/journal") && effect.Endpoint == construction.BooksEndpoint
+		confirmation := effect.Event == construction.ID+"/confirmation" && strings.HasPrefix(effect.Endpoint, construction.WritebackEndpoint)
+		dispatch := effect.Event == construction.ID+"/dispatch" && strings.HasPrefix(effect.Endpoint, construction.WritebackEndpoint)
+		transaction := effect.Event == construction.ID+"/transaction" && strings.HasPrefix(effect.Endpoint, construction.WritebackEndpoint)
+		if effect.App != construction.ID || !writeback && !books && !confirmation && !dispatch && !transaction {
 			continue
 		}
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
@@ -70,18 +70,18 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 // writebackEffects plans the effects of one accepted decision. It runs inside
 // the input and inside replay, so it only reads records as they stand.
 func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
-	if t.app(build.ID) == nil {
+	if t.app(construction.ID) == nil {
 		return nil
 	}
 	s := e.Record.GetSubmission()
 	schema := s.GetSchema().GetName()
-	if e.App != build.ID {
+	if e.App != construction.ID {
 		return nil
 	}
-	c := t.automation(build.ID, false)
-	writebacks, _, _ := platform.Find[build.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	c := t.automation(construction.ID, false)
+	writebacks, _, _ := platform.Find[construction.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	var planned []platform.Effect
-	owner := t.app(build.ID).(host.IntegrationDefinitions)
+	owner := t.app(construction.ID).(host.IntegrationDefinitions)
 	for _, w := range writebacks {
 		w, err := owner.ExecutionWriteback(w)
 		if err != nil {
@@ -90,7 +90,7 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 		if w.On == "confirmation" || w.On == "dispatch" || w.On == "transaction" || w.Schema() != schema {
 			continue
 		}
-		conn, ok := platform.Get[build.Connection](c, w.Connection)
+		conn, ok := platform.Get[construction.Connection](c, w.Connection)
 		if !ok {
 			continue
 		}
@@ -104,8 +104,8 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 		}
 		body, _ := json.Marshal(req)
 		at := e.Record.GetRecordedTime().AsTime()
-		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, build.ID, e.Record.GetChangeId(), w.ID),
-			Endpoint: build.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at,
+		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, construction.ID, e.Record.GetChangeId(), w.ID),
+			Endpoint: construction.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: construction.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at,
 			State: "pending", Due: at, Body: string(body)})
 	}
 	return planned
@@ -117,7 +117,7 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 func (t *Tenant) connectionEndpoints() []*Endpoint {
 	var out []*Endpoint
 	for _, x := range t.outbound {
-		if !strings.HasPrefix(x.Endpoint, build.WritebackEndpoint) || settled(x.State) {
+		if !strings.HasPrefix(x.Endpoint, construction.WritebackEndpoint) || settled(x.State) {
 			continue
 		}
 		if !slices.ContainsFunc(out, func(ep *Endpoint) bool { return ep.ID == x.Endpoint }) {
@@ -132,7 +132,7 @@ func (t *Tenant) connectionEndpoints() []*Endpoint {
 func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 	sum := sha256.Sum256([]byte(x.Body))
 	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
-	var req build.WritebackRequest
+	var req construction.WritebackRequest
 	if json.Unmarshal([]byte(x.Body), &req) != nil {
 		out.Result, out.Detail = "rejected", "the request is unreadable"
 		return out
@@ -153,7 +153,7 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 			out.Result, out.Detail = "rejected", "Protocol command has no original dispatch identity"
 			return out
 		}
-		connection := build.Connection{Record: platform.Record{ID: req.Connection}, Kind: "http", Address: req.Gateway, Secret: req.Secret, AllowPrivate: req.AllowPrivate, Protocol: req.Protocol}
+		connection := construction.Connection{Record: platform.Record{ID: req.Connection}, Kind: "http", Address: req.Gateway, Secret: req.Secret, AllowPrivate: req.AllowPrivate, Protocol: req.Protocol}
 		if err := t.configureProtocol(context.Background(), connection, true); err != nil {
 			out.Result, out.Detail = "unknown", err.Error()
 			return out

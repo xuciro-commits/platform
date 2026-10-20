@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"reflect"
 	"testing"
@@ -9,7 +11,7 @@ import (
 
 func TestDraftComparisonUsesOriginalPortableOwners(t *testing.T) {
 	b := New("draft-comparison")
-	dataset := Dataset{Name: "samples", Title: "Samples", Keep: 3}
+	dataset := construction.Dataset{Name: "samples", Title: "Samples", Keep: 3}
 	asset, err := b.integrationAsset(platform.AssetDataset, dataset, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +25,7 @@ func TestDraftComparisonUsesOriginalPortableOwners(t *testing.T) {
 	if err != nil || string(before["title"]) != `"Samples"` || string(after["title"]) != `"Updated samples"` {
 		t.Fatalf("portable dataset title difference: %v", err)
 	}
-	alert := Alert{Name: "late", Title: "Late", Object: "build.visit", Field: "note", Operator: "=", Value: "late", Message: "Review visit", Role: "user", Active: true}
+	alert := construction.Alert{Name: "late", Title: "Late", Object: "build.visit", Field: "note", Operator: "=", Value: "late", Message: "Review visit", Role: "user", Active: true}
 	asset, err = alertReleaseAsset(alert, 1)
 	if err != nil {
 		t.Fatal(err)

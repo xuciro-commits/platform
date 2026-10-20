@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -42,7 +44,7 @@ func (f LinkType) Definition() platform.LinkType {
 	}
 	roles := f.Roles
 	if storage == "edge" && len(roles) == 0 {
-		roles = []string{Builder, User}
+		roles = []string{construction.Builder, construction.User}
 	}
 	policy := f.DeletePolicy
 	if policy == "" {
@@ -52,16 +54,16 @@ func (f LinkType) Definition() platform.LinkType {
 	if cardinality == "" {
 		cardinality = "one-to-many"
 	}
-	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: storage, Cardinality: cardinality, DeletePolicy: policy, Roles: roles}
+	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: storage, Cardinality: cardinality, DeletePolicy: policy, Roles: roles}
 }
 
 func (b *Build) linkTypeEntity() platform.Entity {
-	return platform.Entity{Type: LinkTypeType, Title: "Link type", Plural: "Link types", Model: LinkType{}, Display: "title",
+	return platform.Entity{Type: construction.LinkTypeType, Title: "Link type", Plural: "Link types", Model: LinkType{}, Display: "title",
 		Description: "A versioned relationship over an original reference; drafts do not change installed traversal.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "linktypes"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "linktypes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this reference-backed relationship as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "linktypes", Payload: []platform.Field{}, Do: b.publishLinkType}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this reference-backed relationship as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "linktypes", Payload: []platform.Field{}, Do: b.publishLinkType}}}}
 }
 
 func (b *Build) checkLinkType(f *LinkType) error {
@@ -74,10 +76,10 @@ func (b *Build) checkLinkType(f *LinkType) error {
 	_, childInstalled := b.installed[f.Child]
 	_, parentSelected := b.jointEntities[f.Parent]
 	_, childSelected := b.jointEntities[f.Child]
-	if !parentFound || parent.App != ID || !parentInstalled && !parentSelected {
+	if !parentFound || parent.App != construction.ID || !parentInstalled && !parentSelected {
 		return fmt.Errorf("Link parent needs this builder's published or jointly selected object")
 	}
-	if !childFound || info.App != ID || !childInstalled && !childSelected {
+	if !childFound || info.App != construction.ID || !childInstalled && !childSelected {
 		return fmt.Errorf("Link child needs this builder's published or jointly selected object")
 	}
 	if f.Storage != "edge" {
@@ -131,7 +133,7 @@ func linkTypeImage(image []byte) (LinkType, error) {
 }
 
 func (b *Build) linkTypeInventory() ([]LinkType, error) {
-	return readDefinitionInventory[LinkType](b.host.Automation(platform.Caller{}, ID))
+	return readDefinitionInventory[LinkType](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
 func (b *Build) installLinkType(c platform.Caller, f LinkType) error {
@@ -159,7 +161,7 @@ func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at
 		if !ok || record.Archived || !retained || installed.Definition().Storage != "edge" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Publish an owned relationship before migrating")
 		}
-		binding := platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: installed.Name}, SourceVersion: b.Manifest().Version + ".link-" + strconv.Itoa(installed.Version)}
+		binding := platform.AssetBinding{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetLinkType, Name: installed.Name}, SourceVersion: b.Manifest().Version + ".link-" + strconv.Itoa(installed.Version)}
 		return func(receipt *pb.ChangeRecord) {
 			if c.MigrateOwnedRelations(receipt, binding, at) != nil {
 				return

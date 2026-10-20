@@ -11,7 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -177,14 +177,14 @@ func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time
 	if refusal := t.admits(member); refusal != nil {
 		return nil, refusal
 	}
-	caller := platform.NewCaller(runtime{t}, member, build.ID, false, false)
+	caller := platform.NewCaller(runtime{t}, member, construction.ID, false, false)
 	run, found := platform.Get[platform.DispatchRun](caller, id)
-	if !found || member.Agent || !member.Holds(build.ID, run.Definition.ReviewerRole) || !(hostView{t: t}).Readable(member, run.Subject, at) {
+	if !found || member.Agent || !member.Holds(construction.ID, run.Definition.ReviewerRole) || !(hostView{t: t}).Readable(member, run.Subject, at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the current dispatch reviewer may choose an external target")
 	}
 	out := []DispatchTarget{}
 	for offset := 0; ; {
-		connections, total, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","ready"]]`), Sort: []string{"title", "id"}, Limit: 500, Offset: offset})
+		connections, total, refusal := platform.Find[construction.Connection](t.automation(construction.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","ready"]]`), Sort: []string{"title", "id"}, Limit: 500, Offset: offset})
 		if refusal != nil {
 			return nil, refusal
 		}

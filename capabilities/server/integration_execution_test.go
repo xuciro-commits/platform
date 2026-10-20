@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	construction "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 

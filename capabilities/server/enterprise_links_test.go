@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -40,8 +42,8 @@ func tenantLinkPreviewSetup(t *testing.T) (*Tenant, *enterprise.Enterprise, *htt
 	model := enterprise.New("group", platform.OrgSeed{Units: []platform.Unit{{ID: "group", Name: "Group", From: "2026-01-01"}}})
 	tn := composeTenant(t, "group", []Seat{seatOf("owner", "enterprise:admin", "build:integrator"), seatOf("modeladmin", "enterprise:admin"), seatOf("integrator", "build:integrator")}, build.New("group"), model)
 	tn.Secrets = func(name string) ([]byte, bool) { return []byte("Bearer source-token"), name == "source-access" }
-	decide(t, tn, "owner", build.ID, build.ConnectionType+".create", build.ConnectionType, "source", map[string]any{"name": "subsidiarysource", "title": "Subsidiary source", "kind": "http", "address": remote.URL, "secret": "source-access", "allowPrivate": true}, txnAt)
-	decide(t, tn, "owner", build.ID, build.ConnectionType+".check", build.ConnectionType, "source", map[string]any{}, txnAt)
+	decide(t, tn, "owner", construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "source", map[string]any{"name": "subsidiarysource", "title": "Subsidiary source", "kind": "http", "address": remote.URL, "secret": "source-access", "allowPrivate": true}, txnAt)
+	decide(t, tn, "owner", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "source", map[string]any{}, txnAt)
 	tn.CheckConnections(txnAt)
 	decide(t, tn, "owner", enterprise.ID, enterprise.SchemaTenantLinkSave, enterprise.TenantLinkType, "subsidiary", map[string]any{"organization": "group", "tenant": "source", "root": "remote", "connection": "source"}, txnAt)
 	return tn, model, remote, calls
@@ -113,7 +115,7 @@ func TestEnterpriseLinkPreviewRejectsChangedConnectionAndModel(t *testing.T) {
 				tn.Secrets = func(string) ([]byte, bool) { return nil, false }
 			}
 			if change == "draft" {
-				decide(t, tn, "owner", build.ID, build.ConnectionType+".retire", build.ConnectionType, "source", map[string]any{}, txnAt)
+				decide(t, tn, "owner", construction.ID, construction.ConnectionType+".retire", construction.ConnectionType, "source", map[string]any{}, txnAt)
 			}
 			if change == "tenant" || change == "root" {
 				tenant, root := "source", "remote"
@@ -128,7 +130,7 @@ func TestEnterpriseLinkPreviewRejectsChangedConnectionAndModel(t *testing.T) {
 				// A decision can enter while the source is being fetched. If preview
 				// held the tenant lock, this original owner decision would deadlock.
 				if change == "connection" {
-					decide(t, tn, "owner", build.ID, build.ConnectionType+".edit", build.ConnectionType, "source", map[string]any{"title": "Changed after preview"}, txnAt)
+					decide(t, tn, "owner", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, "source", map[string]any{"title": "Changed after preview"}, txnAt)
 				}
 				if change == "model" {
 					decide(t, tn, "owner", enterprise.ID, enterprise.SchemaElementEdit, enterprise.ElementType, "group", map[string]any{"name": "Changed group"}, txnAt)
@@ -158,7 +160,7 @@ func TestEnterpriseLinkImportRejectsConnectionChangedAfterPreview(t *testing.T) 
 		t.Fatal(err)
 	}
 	before := model.Model().Fingerprint()
-	decide(t, tn, "owner", build.ID, build.ConnectionType+".edit", build.ConnectionType, "source", map[string]any{"title": "Revised connection"}, txnAt)
+	decide(t, tn, "owner", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, "source", map[string]any{"title": "Revised connection"}, txnAt)
 	answer := refuse(t, tn, "owner", enterprise.ID, enterprise.SchemaSliceImport, enterprise.ModelType, "stale-connection", map[string]any{"link": preview.Link, "base": preview.Base, "content": preview.Content, "connectionRevision": preview.ConnectionRevision, "slice": preview.Slice}, txnAt)
 	if !strings.Contains(answer, "source connection changed") || model.Model().Fingerprint() != before || calls.Load() != 1 {
 		t.Fatalf("confirmation accepted a changed connection or refetched the source: %s", answer)

@@ -11,19 +11,19 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
-const SchemaProposalReview = FunctionCallType + ".review"
+const SchemaProposalReview = construction.FunctionCallType + ".review"
 
 type proposalConsumption struct {
-	run        FunctionRun
+	run        construction.FunctionRun
 	binding    platform.ProposalAdoption
 	amendments json.RawMessage
 }
 
-func checkActionAdoption(a Action) error {
+func checkActionAdoption(a construction.Action) error {
 	if a.Adoption == nil {
 		return nil
 	}
@@ -33,15 +33,15 @@ func checkActionAdoption(a Action) error {
 	if err := a.Adoption.Check(); err != nil {
 		return err
 	}
-	if a.Adoption.Function.App != "" && a.Adoption.Function.App != ID {
+	if a.Adoption.Function.App != "" && a.Adoption.Function.App != construction.ID {
 		return fmt.Errorf("Proposal adoption cannot cross record authorities")
 	}
-	input := slices.IndexFunc(a.Inputs, func(in Input) bool { return in.Name == a.Adoption.Input })
-	if input < 0 || a.Inputs[input].Type != "reference" || a.Inputs[input].Ref != FunctionCallType || !a.Inputs[input].Required {
+	input := slices.IndexFunc(a.Inputs, func(in construction.Input) bool { return in.Name == a.Adoption.Input })
+	if input < 0 || a.Inputs[input].Type != "reference" || a.Inputs[input].Ref != construction.FunctionCallType || !a.Inputs[input].Required {
 		return fmt.Errorf("Adoption needs a required reference input to the retained function call")
 	}
 	for _, mapping := range a.Adoption.Mapping {
-		if !slices.ContainsFunc(a.Inputs, func(in Input) bool { return in.Name == mapping.Input }) {
+		if !slices.ContainsFunc(a.Inputs, func(in construction.Input) bool { return in.Name == mapping.Input }) {
 			return fmt.Errorf("Proposal mapping names an undeclared action input")
 		}
 	}
@@ -82,13 +82,13 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 	if json.Unmarshal(values[binding.Input], &id) != nil || id == "" {
 		return fail("Choose a retained proposal for this action")
 	}
-	visible, problem := c.ReadRecord(FunctionCallType, id, now)
-	var readable FunctionRun
+	visible, problem := c.ReadRecord(construction.FunctionCallType, id, now)
+	var readable construction.FunctionRun
 	if problem != nil || json.Unmarshal(visible, &readable) != nil || readable.Withheld || readable.Output == "" {
 		return fail("The proposal and its current sources must be readable")
 	}
-	run, ok := platform.Get[FunctionRun](c, id)
-	if !ok || run.State != "ready" || run.Contract.Proposal == nil || run.Decision != "pending" || run.Source != txn.Subject+"/"+r.GetSubmission().GetTarget().GetId() || run.Function != binding.Function.Name || cmp.Or(run.App, ID) != cmp.Or(binding.Function.App, ID) || binding.Function.Version != 0 && run.Version != binding.Function.Version {
+	run, ok := platform.Get[construction.FunctionRun](c, id)
+	if !ok || run.State != "ready" || run.Contract.Proposal == nil || run.Decision != "pending" || run.Source != txn.Subject+"/"+r.GetSubmission().GetTarget().GetId() || run.Function != binding.Function.Name || cmp.Or(run.App, construction.ID) != cmp.Or(binding.Function.App, construction.ID) || binding.Function.Version != 0 && run.Version != binding.Function.Version {
 		return fail("The proposal is not pending for this action and source")
 	}
 	if run.ExpiresAt.IsZero() || !now.Before(run.ExpiresAt) {
@@ -109,7 +109,7 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 		return fail("The retained proposal output is invalid")
 	}
 	policy := run.Contract.Proposal
-	if proposalNeedsHandover(run) && !c.Holds(ID, policy.HandoffRole) {
+	if proposalNeedsHandover(run) && !c.Holds(construction.ID, policy.HandoffRole) {
 		checkpoint := action.Approval != nil && slices.ContainsFunc(action.Approval.Levels, func(level platform.ApprovalLevel) bool { return level.AppRole == policy.HandoffRole })
 		if !checkpoint {
 			return fail("This proposal needs its designated reviewer or approval checkpoint")
@@ -126,7 +126,7 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 	}
 	return &proposalConsumption{run: run, binding: binding, amendments: platform.Raw(amendments)}, nil
 }
-func proposalNeedsHandover(run FunctionRun) bool {
+func proposalNeedsHandover(run construction.FunctionRun) bool {
 	p := run.Contract.Proposal
 	if p == nil || p.HandoffRole == "" {
 		return false
@@ -172,7 +172,7 @@ func proposalEntity(e platform.Entity, changed map[string]any, p *proposalConsum
 		}
 		rv := reflect.ValueOf(record).Elem()
 		sources := append(slices.Clone(p.run.Sources), extra...)
-		sources = append(sources, FunctionCallType+"/"+p.run.ID+"#output")
+		sources = append(sources, construction.FunctionCallType+"/"+p.run.ID+"#output")
 		slices.Sort(sources)
 		sources = slices.Compact(sources)
 		for field := range changed {
@@ -188,10 +188,10 @@ func proposalEntity(e platform.Entity, changed map[string]any, p *proposalConsum
 
 func (b *Build) submitProposalReview(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		raw, err := c.ReadRecord(FunctionCallType, s.GetTarget().GetId(), now)
-		var visible FunctionRun
-		run, ok := platform.Get[FunctionRun](c, s.GetTarget().GetId())
-		if err != nil || json.Unmarshal(raw, &visible) != nil || visible.Withheld || !ok || run.Contract.Proposal == nil || run.State != "ready" || run.Decision != "pending" || c.ID != run.Member && !c.Holds(ID, run.Contract.Proposal.HandoffRole) && !c.Holds(ID, Builder) {
+		raw, err := c.ReadRecord(construction.FunctionCallType, s.GetTarget().GetId(), now)
+		var visible construction.FunctionRun
+		run, ok := platform.Get[construction.FunctionRun](c, s.GetTarget().GetId())
+		if err != nil || json.Unmarshal(raw, &visible) != nil || visible.Withheld || !ok || run.Contract.Proposal == nil || run.State != "ready" || run.Decision != "pending" || c.ID != run.Member && !c.Holds(construction.ID, run.Contract.Proposal.HandoffRole) && !c.Holds(construction.ID, construction.Builder) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The pending proposal is not available for review")
 		}
 		var input struct {
@@ -202,7 +202,7 @@ func (b *Build) submitProposalReview(c platform.Caller, s *pb.Submission, now ti
 		}
 		return func(r *pb.ChangeRecord) {
 			if input.Decision == "rejected" {
-				fact := platform.BusinessRefusalFact{Level: "rejected", Code: "AI_PROPOSAL_REJECTED", Message: "The reviewer rejected the AI proposal", Translations: map[string]string{"zh-CN": "审核人驳回了 AI 提议"}, Subject: FunctionCallType + "/" + run.ID, Action: s.GetSchema().GetName(), Member: c.ID, At: now.UTC(), Original: raw, Inputs: map[string]json.RawMessage{"decision": platform.Raw(input.Decision)}, Record: FunctionCallType + "/" + run.ID}
+				fact := platform.BusinessRefusalFact{Level: "rejected", Code: "AI_PROPOSAL_REJECTED", Message: "The reviewer rejected the AI proposal", Translations: map[string]string{"zh-CN": "审核人驳回了 AI 提议"}, Subject: construction.FunctionCallType + "/" + run.ID, Action: s.GetSchema().GetName(), Member: c.ID, At: now.UTC(), Original: raw, Inputs: map[string]json.RawMessage{"decision": platform.Raw(input.Decision)}, Record: construction.FunctionCallType + "/" + run.ID}
 				if err := c.CaptureBusinessRefusal(r, fact); err != nil {
 					c.FailDecision(err)
 					return
@@ -221,7 +221,7 @@ func (b *Build) submitProposalReview(c platform.Caller, s *pb.Submission, now ti
 	})
 }
 
-func checkAdoptionSources(o Object, a Action, lookup func(string) (platform.EntityInfo, bool)) error {
+func checkAdoptionSources(o construction.Object, a construction.Action, lookup func(string) (platform.EntityInfo, bool)) error {
 	if a.Adoption == nil || a.Transaction == nil {
 		return nil
 	}
@@ -260,7 +260,7 @@ func checkAdoptionSources(o Object, a Action, lookup func(string) (platform.Enti
 			}
 			taintedSteps[step.Name] = true
 			source := ""
-			if step.Target.Type == buildapi.TypeOf(o.Name) {
+			if step.Target.Type == construction.TypeOf(o.Name) {
 				for _, field := range o.Fields {
 					if field.Name == change.Field {
 						source = field.SourceType

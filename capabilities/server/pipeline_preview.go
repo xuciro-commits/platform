@@ -7,8 +7,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -17,35 +17,35 @@ const pipelinePreviewRows = 1000
 
 // PipelinePreviewRequest carries the editor's draft, including unsaved steps.
 type PipelinePreviewRequest struct {
-	Pipeline build.Pipeline `json:"pipeline"`
+	Pipeline construction.Pipeline `json:"pipeline"`
 }
 
 // PipelinePreview is a sample of transformations, never an output write result.
 type PipelinePreview struct {
-	InputVersion int                    `json:"inputVersion"`
-	InputRows    int                    `json:"inputRows"`
-	SampledRows  int                    `json:"sampledRows"`
-	Truncated    bool                   `json:"truncated"`
-	Rows         []map[string]any       `json:"rows"`
-	Quarantine   []build.QuarantinedRow `json:"quarantine"`
-	Marking      string                 `json:"marking,omitempty"`
+	InputVersion int                           `json:"inputVersion"`
+	InputRows    int                           `json:"inputRows"`
+	SampledRows  int                           `json:"sampledRows"`
+	Truncated    bool                          `json:"truncated"`
+	Rows         []map[string]any              `json:"rows"`
+	Quarantine   []construction.QuarantinedRow `json:"quarantine"`
+	Marking      string                        `json:"marking,omitempty"`
 }
 
 // PreviewPipeline captures authorized dataset versions under the original
 // record owner, then invokes the same pure transformation used by real runs.
 // No staged business decision is needed: neither branch submits an output.
 func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreviewRequest, at time.Time) (PipelinePreview, *kernel.Error) {
-	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []build.QuarantinedRow{}}
+	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []construction.QuarantinedRow{}}
 	if problem := t.admits(member); problem != nil {
 		return out, problem
 	}
 	t.mu.Lock()
-	if t.quarantined() || t.app(build.ID) == nil {
+	if t.quarantined() || t.app(construction.ID) == nil {
 		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Pipeline trial is unavailable")
 	}
-	caller := t.caller(member, t.app(build.ID), false)
-	if problem := authorizationRefusal(t.authorizeCapability(caller, build.ID, "build.pipeline.preview", []string{build.Builder, build.Integrator}, true, authorizationDetails{At: at})); problem != nil {
+	caller := t.caller(member, t.app(construction.ID), false)
+	if problem := authorizationRefusal(t.authorizeCapability(caller, construction.ID, "build.pipeline.preview", []string{construction.Builder, construction.Integrator}, true, authorizationDetails{At: at})); problem != nil {
 		t.mu.Unlock()
 		return out, problem
 	}
@@ -57,7 +57,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Pipeline trial accepts at most 64 steps, 64 expectations and 1 MiB of definition")
 	}
-	p = build.Pipeline{}
+	p = construction.Pipeline{}
 	_ = json.Unmarshal(raw, &p) // detach slices and formula pointers from direct Go callers too
 	if err := p.NormalizeFormulaRules(); err != nil {
 		t.mu.Unlock()
@@ -69,30 +69,30 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		if _, exists := inputs[id]; exists {
 			continue
 		}
-		data, problem := caller.ReadRecord(build.DatasetType, id, at)
+		data, problem := caller.ReadRecord(construction.DatasetType, id, at)
 		if problem != nil {
 			t.mu.Unlock()
 			return out, problem
 		}
-		var dataset build.Dataset
+		var dataset construction.Dataset
 		if json.Unmarshal(data, &dataset) != nil || dataset.Version < 1 {
 			t.mu.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset has no rows yet")
 		}
-		versionID := build.VersionID(id, dataset.Version)
-		data, problem = caller.ReadRecord(build.DatasetVersionType, versionID, at)
+		versionID := construction.VersionID(id, dataset.Version)
+		data, problem = caller.ReadRecord(construction.DatasetVersionType, versionID, at)
 		if problem != nil {
 			t.mu.Unlock()
 			return out, problem
 		}
-		var version build.DatasetVersion
+		var version construction.DatasetVersion
 		var rows []map[string]any
 		if json.Unmarshal(data, &version) != nil || version.Archived || json.Unmarshal(version.Data, &rows) != nil {
 			t.mu.Unlock()
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset version is unavailable")
 		}
-		sources = append(sources, build.DatasetType+"/"+id, build.DatasetVersionType+"/"+versionID+"#data")
-		out.Marking = build.HigherMarking(out.Marking, dataset.Marking)
+		sources = append(sources, construction.DatasetType+"/"+id, construction.DatasetVersionType+"/"+versionID+"#data")
+		out.Marking = construction.HigherMarking(out.Marking, dataset.Marking)
 		if id == p.Input {
 			out.InputRows, out.InputVersion = len(rows), dataset.Version
 		}
@@ -101,7 +101,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		}
 		inputs[id] = rows
 	}
-	problem := t.app(build.ID).(host.ConstructionDrafts).CheckPipeline(caller, p)
+	problem := t.app(construction.ID).(host.ConstructionDrafts).CheckPipeline(caller, p)
 	t.mu.Unlock()
 	if problem != nil {
 		return out, problem
@@ -129,7 +129,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 	// Returning sample data is still a derived read: revocation during the
 	// outside-lock computation must not leave a copy of the old permissions.
 	t.mu.Lock()
-	problem = authorizationRefusal(t.authorizeCapability(caller, build.ID, "build.pipeline.preview", []string{build.Builder, build.Integrator}, true, authorizationDetails{At: at, Sources: sources}))
+	problem = authorizationRefusal(t.authorizeCapability(caller, construction.ID, "build.pipeline.preview", []string{construction.Builder, construction.Integrator}, true, authorizationDetails{At: at, Sources: sources}))
 	t.mu.Unlock()
 	if problem != nil {
 		return PipelinePreview{}, problem

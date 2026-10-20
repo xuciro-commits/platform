@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"time"
 
@@ -14,14 +14,14 @@ import (
 
 // formulaExpr mechanically lowers the old grammar. Integer destinations use
 // an explicit round node; saved Expr values never inherit legacy zero fallback.
-func formulaExpr(fields []Field, f Field) (platform.Expr, error) {
+func formulaExpr(fields []construction.Field, f construction.Field) (platform.Expr, error) {
 	if f.FormulaExpr != nil {
 		if f.Formula != "" {
 			return platform.Expr{}, fmt.Errorf("field %s has two formulas", f.Name)
 		}
 		return *f.FormulaExpr, nil
 	}
-	node, err := buildapi.ValueParseFormula(f.Formula)
+	node, err := construction.ValueParseFormula(f.Formula)
 	if err != nil {
 		return platform.Expr{}, err
 	}
@@ -43,7 +43,7 @@ func formulaExpr(fields []Field, f Field) (platform.Expr, error) {
 	}
 	return e, nil
 }
-func checkFormulas(fields []Field) error {
+func checkFormulas(fields []construction.Field) error {
 	for _, f := range fields {
 		if f.Formula != "" {
 			if f.Type != "integer" && f.Type != "decimal" {
@@ -56,7 +56,7 @@ func checkFormulas(fields []Field) error {
 	}
 	return nil
 }
-func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *kernel.Error {
+func computeRulesOf(o construction.Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *kernel.Error {
 	list, orderErr := formulaOrder(o.Fields)
 	if len(list) == 0 {
 		return nil
@@ -71,7 +71,7 @@ func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) f
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			s := ruleSpec(o, Action{}, o.Reads)
+			s := ruleSpec(o, construction.Action{}, o.Reads)
 			schema, err := platform.RuleSchema(e, s, lookup)
 			if f.Formula != "" {
 				refs := map[string]platform.ExprType{}
@@ -148,7 +148,7 @@ func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) f
 // validateOf is the entity hook of an extension object (ADR-0020 A3): one
 // extension record per base record, so the base type's pages can merge the
 // extension's fields as if they were its own.
-func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
+func validateOf(o construction.Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
 	if o.Extends == "" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, b
 			if !exists {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
 			}
-			shape := platform.EntityInfo{Type: buildapi.TypeOf(o.Name), Extends: o.Extends, ExtensionSource: o.ExtensionSource}
+			shape := platform.EntityInfo{Type: construction.TypeOf(o.Name), Extends: o.Extends, ExtensionSource: o.ExtensionSource}
 			for _, field := range o.Fields {
 				shape.Fields = append(shape.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type, Ref: field.Ref, Required: field.Required, ReadOnly: field.ReadOnly, AliasOf: field.AliasOf})
 			}
@@ -187,15 +187,15 @@ func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, b
 	}
 }
 
-func formulaOrder(fields []Field) ([]Field, error) {
-	byName := map[string]Field{}
+func formulaOrder(fields []construction.Field) ([]construction.Field, error) {
+	byName := map[string]construction.Field{}
 	for _, f := range fields {
 		if f.Formula != "" || f.FormulaExpr != nil {
 			byName[f.Name] = f
 		}
 	}
 	visited, visiting := map[string]bool{}, map[string]bool{}
-	out := []Field{}
+	out := []construction.Field{}
 	var walk func(string) error
 	walk = func(name string) error {
 		if visited[name] {

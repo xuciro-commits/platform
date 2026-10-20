@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"net"
 	"strings"
@@ -142,17 +144,17 @@ func TestContinuousSourcePreparationRetriesWithoutCursorLoss(t *testing.T) {
 				}
 				switch scenario.mutation {
 				case "revoke":
-					decide(t, tn, "admin", PlatformApp, "platform.member.revoke", "platform.member", "member", map[string]any{"app": build.ID}, at)
+					decide(t, tn, "admin", PlatformApp, "platform.member.revoke", "platform.member", "member", map[string]any{"app": construction.ID}, at)
 				case "source":
-					x, _ := platform.Get[build.Source](tn.automation(build.ID, false), "stream")
+					x, _ := platform.Get[construction.Source](tn.automation(construction.ID, false), "stream")
 					x.Entity = "different_source"
-					if err := tn.automation(build.ID, true).PutAt(at, "test.change-source", x); err != nil {
+					if err := tn.automation(construction.ID, true).PutAt(at, "test.change-source", x); err != nil {
 						t.Error(err)
 					}
 				case "connection":
-					x, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "db")
+					x, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "db")
 					x.Address += "&connect_timeout=2"
-					if err := tn.automation(build.ID, true).PutAt(at, "test.change-connection", x); err != nil {
+					if err := tn.automation(construction.ID, true).PutAt(at, "test.change-connection", x); err != nil {
 						t.Error(err)
 					}
 				case "stop":
@@ -162,10 +164,10 @@ func TestContinuousSourcePreparationRetriesWithoutCursorLoss(t *testing.T) {
 			source := &retryIntakeSource{frameSource: newFrameSource(tenant, 2<<20), latest: scenario.latest}
 			tn = composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin", "build:builder"), seatOf("admin", "platform:admin")}, build.New(tenant), work.New(tenant), flow.New(tenant), source)
 			for _, record := range []any{
-				build.Connection{Record: platform.Record{ID: "db"}, Name: "db", Kind: "postgres", Address: address, State: "ready"},
-				build.Source{Record: platform.Record{ID: "stream"}, Name: "frames.source", Connection: "db", Profile: "table", Entity: "telemetry", Since: "seq", Stream: true, State: "published"},
+				construction.Connection{Record: platform.Record{ID: "db"}, Name: "db", Kind: "postgres", Address: address, State: "ready"},
+				construction.Source{Record: platform.Record{ID: "stream"}, Name: "frames.source", Connection: "db", Profile: "table", Entity: "telemetry", Since: "seq", Stream: true, State: "published"},
 			} {
-				if err := tn.automation(build.ID, true).PutAt(at, "test.source", record); err != nil {
+				if err := tn.automation(construction.ID, true).PutAt(at, "test.source", record); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -197,7 +199,7 @@ func TestContinuousSourcePreparationRetriesWithoutCursorLoss(t *testing.T) {
 			if connections.Load() != scenario.calls || queries.Load() != scenario.queries {
 				t.Fatalf("fixed retry/latest bounds differ: connections=%d latest=%d", connections.Load(), queries.Load())
 			}
-			if stream, _ := platform.Get[build.Source](tn.automation(build.ID, false), "stream"); stream.Cursor != "" {
+			if stream, _ := platform.Get[construction.Source](tn.automation(construction.ID, false), "stream"); stream.Cursor != "" {
 				t.Fatal("preparation created a second source cursor")
 			}
 		})

@@ -8,26 +8,21 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
-const ObservationType = buildapi.ObservationType
-const SchemaObservation = buildapi.SchemaObservation
-
-type Observation = buildapi.Observation
-
 func (b *Build) observationEntity() platform.Entity {
-	return platform.Entity{Type: ObservationType, Title: "Observation source", Plural: "Observation sources", Model: Observation{}, Display: "title",
+	return platform.Entity{Type: construction.ObservationType, Title: "Observation source", Plural: "Observation sources", Model: construction.Observation{}, Display: "title",
 		Description: "Read external time-series summaries and apply declared business decisions without retaining raw points.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant, construction.Integrator: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations"},
 		Validate: func(c platform.Caller, value any) *kernel.Error {
 			if c.Replaying {
 				return nil
 			}
-			record := value.(*Observation)
+			record := value.(*construction.Observation)
 			if record.State == "retired" && record.Published != "" {
 				if _, err := b.ExecutionObservation(*record); err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
@@ -41,8 +36,8 @@ func (b *Build) observationEntity() platform.Entity {
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}, {Name: "retired", Title: "Retired", Tone: "neutral"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Retain the logical source, authorized reads and declared decision as one immutable version.", From: []string{"draft", "published", "retired"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: func(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *kernel.Error {
-					record := value.(*Observation)
+				{Name: "publish", Title: "Publish", Description: "Retain the logical source, authorized reads and declared decision as one immutable version.", From: []string{"draft", "published", "retired"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: func(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *kernel.Error {
+					record := value.(*construction.Observation)
 					if c.Replaying {
 						return nil
 					}
@@ -55,15 +50,15 @@ func (b *Build) observationEntity() platform.Entity {
 					if err != nil {
 						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 					}
-					*record = fixed.(Observation)
+					*record = fixed.(construction.Observation)
 					return nil
 				}},
-				{Name: "retire", Title: "Retire", Description: "Stop new reads and evaluations while retaining every published definition.", From: []string{"published"}, To: []string{"retired"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}},
+				{Name: "retire", Title: "Retire", Description: "Stop new reads and evaluations while retaining every published definition.", From: []string{"published"}, To: []string{"retired"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}},
 			}},
 	}
 }
 
-func (b *Build) observationDefinition(record Observation) (platform.ObservationDefinition, error) {
+func (b *Build) observationDefinition(record construction.Observation) (platform.ObservationDefinition, error) {
 	connection, err := b.integrationName(platform.AssetConnection, record.Connection)
 	if err != nil {
 		return platform.ObservationDefinition{}, err
@@ -73,23 +68,23 @@ func (b *Build) observationDefinition(record Observation) (platform.ObservationD
 		return platform.ObservationDefinition{}, fmt.Errorf("The observation object is unavailable")
 	}
 	return platform.ObservationDefinition{Name: record.Name, Title: record.Title, Description: record.Description,
-		Connection: platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: connection}, Object: platform.AssetRef{App: object.App, Kind: platform.AssetObject, Name: record.Object},
+		Connection: platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: connection}, Object: platform.AssetRef{App: object.App, Kind: platform.AssetObject, Name: record.Object},
 		DeviceField: record.DeviceField, Signal: record.Signal, Unit: record.Unit, Path: record.Path, WindowSeconds: record.WindowSeconds,
 		ExpectedRetentionSeconds: record.ExpectedRetentionSeconds, ExpectedGranularitySeconds: record.ExpectedGranularitySeconds,
 		Roles: slices.Clone(record.Roles), Scheduled: record.Scheduled, RequireComplete: record.RequireComplete, Decision: record.Decision}, nil
 }
 
-func (b *Build) checkObservation(c platform.Caller, record Observation) error {
+func (b *Build) checkObservation(c platform.Caller, record construction.Observation) error {
 	return b.checkObservationDefinition(c, record, true)
 }
 
-func (b *Build) checkObservationDefinition(c platform.Caller, record Observation, ready bool) error {
+func (b *Build) checkObservationDefinition(c platform.Caller, record construction.Observation, ready bool) error {
 	if err := b.checkName(record.Name, record.ID); err != nil {
 		return err
 	}
 	if record.Published != "" {
 		var prior platform.ReleaseAsset
-		if buildapi.ValueDecodeIntegration([]byte(record.Published), &prior) != nil || prior.Ref.Name != record.Name {
+		if construction.ValueDecodeIntegration([]byte(record.Published), &prior) != nil || prior.Ref.Name != record.Name {
 			return fmt.Errorf("A published observation source keeps its name")
 		}
 	}
@@ -105,7 +100,7 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record Observation
 		return err
 	}
 	for _, row := range rows {
-		other := row.(Observation)
+		other := row.(construction.Observation)
 		if other.Name == record.Name && other.ID != record.ID {
 			return fmt.Errorf("The observation source name is already used")
 		}
@@ -127,7 +122,7 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record Observation
 			return err
 		}
 	}
-	connection, ok := platform.Get[Connection](b.host.Automation(platform.Caller{}, ID), record.Connection)
+	connection, ok := platform.Get[construction.Connection](b.host.Automation(platform.Caller{}, construction.ID), record.Connection)
 	if !ok || connection.Archived || ready && connection.State != "ready" || connection.Kind != "http" {
 		return fmt.Errorf("The observation connection must be a ready HTTP connection")
 	}
@@ -138,17 +133,17 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record Observation
 // Read that original object draft rather than requiring an earlier live install.
 func (b *Build) observationAction(definition platform.ObservationDefinition) (string, platform.Action, bool) {
 	if _, joint := b.jointEntities[definition.Object.Name]; joint {
-		objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+		objects, err := readDefinitionInventory[construction.Object](b.host.Automation(platform.Caller{}, construction.ID))
 		if err != nil {
 			return "", platform.Action{}, false
 		}
 		for _, object := range objects {
-			if object.Archived || buildapi.TypeOf(object.Name) != definition.Object.Name {
+			if object.Archived || construction.TypeOf(object.Name) != definition.Object.Name {
 				continue
 			}
 			for _, action := range objectActions(object, Entity(object)) {
 				if action.Schema == definition.Decision.Action.Name {
-					return ID, action, true
+					return construction.ID, action, true
 				}
 			}
 		}
@@ -158,16 +153,16 @@ func (b *Build) observationAction(definition platform.ObservationDefinition) (st
 
 // ExecutionObservation returns accepted declaration bytes, never a mutable
 // editor row and never observations fetched from the external store.
-func (b *Build) ExecutionObservation(record Observation) (platform.ObservationDefinition, error) {
+func (b *Build) ExecutionObservation(record construction.Observation) (platform.ObservationDefinition, error) {
 	var asset platform.ReleaseAsset
-	if record.Published == "" || buildapi.ValueDecodeIntegration([]byte(record.Published), &asset) != nil || asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetObservation, Name: record.Name}) {
+	if record.Published == "" || construction.ValueDecodeIntegration([]byte(record.Published), &asset) != nil || asset.Ref != (platform.AssetRef{App: construction.ID, Kind: platform.AssetObservation, Name: record.Name}) {
 		return platform.ObservationDefinition{}, fmt.Errorf("The observation source is not published")
 	}
 	if err := validateIntegrationFamily(record, asset); err != nil {
 		return platform.ObservationDefinition{}, err
 	}
 	var definition platform.ObservationDefinition
-	if err := buildapi.ValueDecodeIntegration(asset.Body, &definition); err != nil {
+	if err := construction.ValueDecodeIntegration(asset.Body, &definition); err != nil {
 		return definition, err
 	}
 	return definition, nil

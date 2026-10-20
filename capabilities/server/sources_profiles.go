@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -26,7 +26,7 @@ const odataPages = 20 // pages walked per pull; the row cap bounds the rest
 // readOData walks an entity set: $filter past the cursor, ordered by the
 // incremental property, following nextLink in v4 (@odata.nextLink, value) and
 // v2 (d.__next, d.results) shapes.
-func (t *Tenant) readOData(s build.Source, c build.Connection) ([]map[string]any, error) {
+func (t *Tenant) readOData(s construction.Source, c construction.Connection) ([]map[string]any, error) {
 	q := url.Values{}
 	q.Set("$format", "json")
 	filter := s.Filter
@@ -106,7 +106,7 @@ func odataLiteral(v string) string {
 }
 
 // readTable selects a database table past the cursor, read-only, bounded.
-func (t *Tenant) latestTableCursor(s build.Source, c build.Connection) (string, error) {
+func (t *Tenant) latestTableCursor(s construction.Source, c construction.Connection) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := t.openPostgres(ctx, c)
@@ -138,7 +138,7 @@ func (t *Tenant) latestTableCursor(s build.Source, c build.Connection) (string, 
 	return s.Advance([]map[string]any{{s.Since: plain(values[0])}}), nil
 }
 
-func (t *Tenant) readTable(s build.Source, c build.Connection, columns ...string) ([]map[string]any, error) {
+func (t *Tenant) readTable(s construction.Source, c construction.Connection, columns ...string) ([]map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := t.openPostgres(ctx, c)
@@ -192,7 +192,7 @@ func (t *Tenant) readTable(s build.Source, c build.Connection, columns ...string
 		}
 		if len(columns) > 0 {
 			projectedBytes += len(platform.Raw(row))
-			if projectedBytes > build.SourceBody {
+			if projectedBytes > construction.SourceBody {
 				return nil, fmt.Errorf("the projected table rows exceed the source byte budget")
 			}
 		}
@@ -235,7 +235,7 @@ func plain(v any) any {
 	return v
 }
 
-func (t *Tenant) openPostgres(ctx context.Context, c build.Connection) (*pgx.Conn, error) {
+func (t *Tenant) openPostgres(ctx context.Context, c construction.Connection) (*pgx.Conn, error) {
 	cfg, err := pgx.ParseConfig(c.Address)
 	if err != nil {
 		return nil, fmt.Errorf("the address is not a postgres URL")
@@ -261,10 +261,10 @@ func (t *Tenant) CheckConnections(now time.Time) {
 		return
 	}
 	t.mu.Lock()
-	conns, _, _ := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
+	conns, _, _ := platform.Find[construction.Connection](t.automation(construction.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
 	t.mu.Unlock()
 	for _, c := range conns {
-		check := build.ConnectionCheck{At: now}
+		check := construction.ConnectionCheck{At: now}
 		if c.Protocol != nil {
 			check = t.checkProtocolConnection(context.Background(), c, now)
 		} else {
@@ -276,16 +276,16 @@ func (t *Tenant) CheckConnections(now time.Time) {
 		}
 		check.Samples = nil
 		payload, _ := json.Marshal(map[string]any{"revision": c.Revision, "check": check})
-		caller := t.automation(build.ID, false)
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),
-			Target: &pb.EntityRef{Type: build.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: build.SchemaConnectionChecked, Version: 1}, Payload: payload}
+		caller := t.automation(construction.ID, false)
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: construction.ID, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),
+			Target: &pb.EntityRef{Type: construction.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: construction.SchemaConnectionChecked, Version: 1}, Payload: payload}
 		func() {
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			if t.quarantined() {
 				return
 			}
-			app := t.app(build.ID)
+			app := t.app(construction.ID)
 			if _, err := t.submitAccepted(app, caller.Member, sub, now, true); err != nil {
 				log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
 			}
@@ -293,7 +293,7 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	}
 }
 
-func (t *Tenant) checkConnection(c build.Connection) (string, error) {
+func (t *Tenant) checkConnection(c construction.Connection) (string, error) {
 	if c.Secret != "" {
 		if value, ok := t.secret(c.Secret); !ok || len(strings.TrimSpace(string(value))) == 0 {
 			return "", fmt.Errorf("the named connection secret is unavailable")

@@ -8,23 +8,23 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
-func ruleLookup(o Object, lookup func(string) (platform.EntityInfo, bool)) func(string) (platform.EntityInfo, bool) {
+func ruleLookup(o construction.Object, lookup func(string) (platform.EntityInfo, bool)) func(string) (platform.EntityInfo, bool) {
 	return func(typ string) (platform.EntityInfo, bool) {
-		if typ != buildapi.TypeOf(o.Name) {
+		if typ != construction.TypeOf(o.Name) {
 			if lookup == nil {
 				return platform.EntityInfo{}, false
 			}
 			return lookup(typ)
 		}
-		info := platform.EntityInfo{Type: typ, App: ID, Sets: o.Sets}
+		info := platform.EntityInfo{Type: typ, App: construction.ID, Sets: o.Sets}
 		for _, f := range o.Fields {
 			read := f.Read
 			if len(read) > 0 {
-				read = append([]string{Builder}, read...)
+				read = append([]string{construction.Builder}, read...)
 			}
 			info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Read: read})
 		}
@@ -34,8 +34,8 @@ func ruleLookup(o Object, lookup func(string) (platform.EntityInfo, bool)) func(
 		return info, true
 	}
 }
-func ruleSpec(o Object, a Action, read *platform.RuleReadSpec) platform.RuleReadSpec {
-	s := platform.RuleReadSpec{Object: buildapi.TypeOf(o.Name), Inputs: map[string]platform.ExprType{}}
+func ruleSpec(o construction.Object, a construction.Action, read *platform.RuleReadSpec) platform.RuleReadSpec {
+	s := platform.RuleReadSpec{Object: construction.TypeOf(o.Name), Inputs: map[string]platform.ExprType{}}
 	if a.Transaction != nil {
 		s.Inputs["$subject"] = platform.ExprType{Kind: "reference", Object: s.Object}
 	}
@@ -47,7 +47,7 @@ func ruleSpec(o Object, a Action, read *platform.RuleReadSpec) platform.RuleRead
 	}
 	return s
 }
-func legacyOperand(o Object, a Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
+func legacyOperand(o construction.Object, a construction.Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
 	f, err := conditionField(o, a, name, lookup)
 	if err != nil {
 		return platform.Expr{}, err
@@ -59,7 +59,7 @@ func legacyOperand(o Object, a Action, name string, lookup func(string) (platfor
 	parts := strings.Split(name, ".")
 	return platform.Expr{Op: "path", Kind: kind, Args: []platform.Expr{platform.ExprReference("reference", parts[0])}, Path: parts[1:]}, nil
 }
-func conditionExpr(o Object, a Action, cond Condition, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
+func conditionExpr(o construction.Object, a construction.Action, cond construction.Condition, lookup func(string) (platform.EntityInfo, bool)) (platform.Expr, error) {
 	if cond.Expr != nil {
 		if cond.Field != "" || cond.Operator != "" || cond.Value != "" || cond.ValueField != "" || cond.When != nil {
 			return platform.Expr{}, fmt.Errorf("use one expression condition")
@@ -100,7 +100,7 @@ func conditionExpr(o Object, a Action, cond Condition, lookup func(string) (plat
 	}
 	return e, nil
 }
-func assignmentExpr(kind string, set Set, spec platform.RuleReadSpec) (platform.Expr, error) {
+func assignmentExpr(kind string, set construction.Set, spec platform.RuleReadSpec) (platform.Expr, error) {
 	kind = platform.RuleFieldKind(kind)
 	targetKind := kind
 	if set.Expr != nil {
@@ -145,12 +145,12 @@ func evalRule(e platform.Expr, spec platform.RuleReadSpec, c platform.Caller, re
 	return platform.EvaluateRule(e, spec, c, record, inputs, now, lookup)
 }
 
-func actionCriteria(o Object, a Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
+func actionCriteria(o construction.Object, a construction.Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
 	reads, conditions := a.Reads, a.Conditions
 	if txn := a.Transaction; txn != nil {
 		reads, conditions = txn.Reads, nil
 		if txn.Guard != nil {
-			conditions = []Condition{{Expr: txn.Guard, Message: txn.Message}}
+			conditions = []construction.Condition{{Expr: txn.Guard, Message: txn.Message}}
 		}
 	}
 	plan := &platform.RuleCriteria{Reads: ruleSpec(o, a, reads)}
@@ -205,12 +205,12 @@ func ruleAssignment(e platform.Expr, s platform.RuleReadSpec, c platform.Caller,
 	return v, nil
 }
 
-func (b *Build) normalizeObjectRules(o *Object) error {
+func (b *Build) normalizeObjectRules(o *construction.Object) error {
 	lookup := ruleLookup(*o, b.conditionLookup)
 	for i := range o.Fields {
 		f := &o.Fields[i]
 		if f.Formula != "" {
-			node, parseErr := buildapi.ValueParseFormula(f.Formula)
+			node, parseErr := construction.ValueParseFormula(f.Formula)
 			if parseErr != nil {
 				return parseErr
 			}
@@ -251,7 +251,7 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 			if err != nil {
 				return err
 			}
-			*cond = Condition{Expr: &e, Message: cond.Message}
+			*cond = construction.Condition{Expr: &e, Message: cond.Message}
 		}
 		for j := range a.Sets {
 			set := &a.Sets[j]
@@ -275,7 +275,7 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 						return fmt.Errorf("action %s assignment input %s does not fit %s", a.Name, set.From, f.Type)
 					}
 					if f.Type == "choice" {
-						for _, option := range buildapi.ValueChoices(a.Inputs[ix].Choices) {
+						for _, option := range construction.ValueChoices(a.Inputs[ix].Choices) {
 							found := false
 							for _, allowed := range f.Choices {
 								if option == allowed {
@@ -293,7 +293,7 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 			if err != nil {
 				return err
 			}
-			*set = Set{Field: set.Field, Expr: &e}
+			*set = construction.Set{Field: set.Field, Expr: &e}
 		}
 		if a.Transaction != nil {
 			if err := b.normalizeTransaction(*o, a, lookup); err != nil {
@@ -310,9 +310,9 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 		}
 	}
 	if o.CreateTransaction != nil {
-		action := Action{Name: "creation", Transaction: o.CreateTransaction}
+		action := construction.Action{Name: "creation", Transaction: o.CreateTransaction}
 		for _, field := range o.Fields {
-			action.Inputs = append(action.Inputs, Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
+			action.Inputs = append(action.Inputs, construction.Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
 		}
 		if err := b.normalizeTransaction(*o, &action, lookup); err != nil {
 			return err
@@ -320,7 +320,7 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 	}
 	return b.checkObjectRules(*o)
 }
-func (b *Build) checkObjectRules(o Object) error {
+func (b *Build) checkObjectRules(o construction.Object) error {
 	if err := b.checkObjectProtocols(o); err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func (b *Build) checkObjectRules(o Object) error {
 			if platform.RuleFieldKind(f.Type) != platform.RuleFieldKind(f.FormulaExpr.Kind) {
 				return fmt.Errorf("field %s formula result type differs", f.Name)
 			}
-			if err := check(*f.FormulaExpr, ruleSpec(o, Action{}, o.Reads), "field "+f.Name); err != nil {
+			if err := check(*f.FormulaExpr, ruleSpec(o, construction.Action{}, o.Reads), "field "+f.Name); err != nil {
 				return err
 			}
 		}

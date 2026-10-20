@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -7,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -42,41 +43,41 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 					original, updated := "12", "25"
 					if kind == "rebind" {
 						for _, target := range []string{"oldtarget", "newtarget"} {
-							publishObject(t, tn, "builder", target, map[string]any{"name": target, "title": target, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
+							publishObject(t, tn, "builder", target, map[string]any{"name": target, "title": target, "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
 							for _, value := range []string{"a", "b"} {
-								decide(t, tn, "user", build.ID, "build."+target+".create", "build."+target, value, map[string]any{"name": value}, at)
+								decide(t, tn, "user", construction.ID, "build."+target+".create", "build."+target, value, map[string]any{"name": value}, at)
 							}
 						}
 						field["type"], field["ref"] = "reference", "build.oldtarget"
 						original, updated = "a", "b"
 					}
-					fields := []any{field, build.Field{Name: "mark", Title: "Mark", Type: "text"}}
+					fields := []any{field, construction.Field{Name: "mark", Title: "Mark", Type: "text"}}
 					if kind == "merge" {
-						fields = append(fields, build.Field{Name: "other", Title: "Other", Type: "text"})
+						fields = append(fields, construction.Field{Name: "other", Title: "Other", Type: "text"})
 					}
-					states := []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}
-					actions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
+					states := []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}
+					actions := []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
 					if kind == "retire-action" {
-						states = append(states, build.State{Name: "pending", Title: "Pending"})
-						actions = append(actions, build.Action{Name: "hold", Title: "Hold", From: []string{"open"}, To: "done", Approval: &build.ActionApproval{Pending: "pending", Rejected: "open", Levels: []build.ApproverLevel{{Title: "Builder", Role: build.Builder}}}})
+						states = append(states, construction.State{Name: "pending", Title: "Pending"})
+						actions = append(actions, construction.Action{Name: "hold", Title: "Hold", From: []string{"open"}, To: "done", Approval: &construction.ActionApproval{Pending: "pending", Rejected: "open", Levels: []construction.ApproverLevel{{Title: "Builder", Role: construction.Builder}}}})
 					}
 					inputs := map[string]platform.Binding{"value": {Source: "literal", Value: platform.Raw(updated)}}
 					if kind == "retire" {
 						inputs = map[string]platform.Binding{"mark": {Source: "literal", Value: platform.Raw(updated)}}
-						actions[0].Conditions = []build.Condition{{Field: "value", Operator: "=", Value: original, Message: "The original retained field must still be readable"}}
+						actions[0].Conditions = []construction.Condition{{Field: "value", Operator: "=", Value: original, Message: "The original retained field must still be readable"}}
 					}
 					publishObject(t, tn, "builder", "O", map[string]any{"name": "sample", "title": "Sample", "fields": fields, "states": states, "actions": actions}, at)
-					steps := []build.ProcessStep{
-						{Name: "ask", Title: "Confirm", Kind: "ask", Ask: build.User, Answers: []string{"yes"}, Next: "write"},
+					steps := []construction.ProcessStep{
+						{Name: "ask", Title: "Confirm", Kind: "ask", Ask: construction.User, Answers: []string{"yes"}, Next: "write"},
 						{Name: "write", Kind: "action", Act: "edit", Inputs: inputs, Next: "close"},
 						{Name: "close", Kind: "action", Act: "close"},
 					}
-					decide(t, tn, "builder", build.ID, "build.process.create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.sample", "when": "open", "steps": steps}, at)
-					decide(t, tn, "builder", build.ID, build.SchemaProcess, build.ProcessType, "P", map[string]any{}, at)
+					decide(t, tn, "builder", construction.ID, "build.process.create", construction.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.sample", "when": "open", "steps": steps}, at)
+					decide(t, tn, "builder", construction.ID, construction.SchemaProcess, construction.ProcessType, "P", map[string]any{}, at)
 					save := func(key string) string {
 						t.Helper()
 						builder := memberOf(t, tn, "builder")
-						drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "P"}}
+						drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "P"}}
 						preview, err := tn.PreviewReleaseDrafts(builder, drafts)
 						if err != nil || preview.Diagnostic != "" {
 							t.Fatalf("preview: %+v %v", preview, err)
@@ -97,7 +98,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						if kind == "merge" {
 							values["other"] = "8"
 						}
-						decide(t, tn, "user", build.ID, "build.sample.create", "build.sample", rowID, values, at)
+						decide(t, tn, "user", construction.ID, "build.sample.create", "build.sample", rowID, values, at)
 					}
 					at = at.Add(2 * time.Second)
 					tn.Work(at)
@@ -108,7 +109,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 							t.Fatalf("source flow did not wait: %+v", instance)
 						}
 						if kind == "retire-action" {
-							decide(t, tn, "user", build.ID, "build.sample.hold", "build.sample", rowID, map[string]any{}, at)
+							decide(t, tn, "user", construction.ID, "build.sample.hold", "build.sample", rowID, map[string]any{}, at)
 						}
 						history[rowID] = copyHistory(tn.records.types["build.sample"].rows.get(rowID).history)
 					}
@@ -116,27 +117,27 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 					want := map[string]string{"value": updated}
 					switch kind {
 					case "default":
-						fields = append(fields, build.Field{Name: "enabled", Title: "Enabled", Type: "boolean", Required: true})
+						fields = append(fields, construction.Field{Name: "enabled", Title: "Enabled", Type: "boolean", Required: true})
 						expr := platform.ExprLiteralValue("boolean", true)
 						step.Fields = []platform.MigrateField{{To: "enabled", Expr: &expr}}
 						want["enabled"] = "true"
 					case "rename":
 						field["readOnly"], field["aliasOf"] = true, "renamed"
-						fields = append(fields, build.Field{Name: "renamed", Title: "Renamed", Type: "text"})
+						fields = append(fields, construction.Field{Name: "renamed", Title: "Renamed", Type: "text"})
 						step.Fields = []platform.MigrateField{{From: "value", To: "renamed"}}
 						steps[1].Inputs = map[string]platform.Binding{"renamed": {Source: "literal", Value: platform.Raw("new")}}
 						want["renamed"] = updated
 					case "split":
 						field["readOnly"] = true
-						fields = append(fields, build.Field{Name: "left", Title: "Left", Type: "text"}, build.Field{Name: "right", Title: "Right", Type: "text"})
+						fields = append(fields, construction.Field{Name: "left", Title: "Left", Type: "text"}, construction.Field{Name: "right", Title: "Right", Type: "text"})
 						expr := platform.ExprReference("text", "value")
 						step.Fields = []platform.MigrateField{{From: "value", To: "left", Expr: &expr}, {From: "value", To: "right", Expr: &expr}}
 						steps[1].Inputs = map[string]platform.Binding{"left": {Source: "literal", Value: platform.Raw("new")}}
 						want = map[string]string{"value": original, "left": updated, "right": updated}
 					case "merge":
 						field["readOnly"] = true
-						fields[2] = build.Field{Name: "other", Title: "Other", Type: "text", ReadOnly: true}
-						fields = append(fields, build.Field{Name: "joined", Title: "Joined", Type: "text"})
+						fields[2] = construction.Field{Name: "other", Title: "Other", Type: "text", ReadOnly: true}
+						fields = append(fields, construction.Field{Name: "joined", Title: "Joined", Type: "text"})
 						expr := platform.Expr{Kind: "text", Op: "concat", Args: []platform.Expr{platform.ExprReference("text", "value"), platform.ExprReference("text", "other")}}
 						step.Fields = []platform.MigrateField{{From: "value", To: "joined", Expr: &expr}, {From: "other", To: "joined", Expr: &expr}}
 						steps[1].Inputs = map[string]platform.Binding{"joined": {Source: "literal", Value: platform.Raw("new")}}
@@ -154,16 +155,16 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						step.Fields = []platform.MigrateField{{From: "value", To: "value"}}
 						want = map[string]string{"value": original, "mark": updated}
 					}
-					decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "O", map[string]any{"fields": fields, "actions": actions}, at)
-					decide(t, tn, "builder", build.ID, "build.process.edit", build.ProcessType, "P", map[string]any{"steps": steps}, at)
+					decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "O", map[string]any{"fields": fields, "actions": actions}, at)
+					decide(t, tn, "builder", construction.ID, "build.process.edit", construction.ProcessType, "P", map[string]any{"steps": steps}, at)
 					to := save("target")
 					plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.sample"}, Steps: []platform.MigrateStep{step}}
 					review, err := tn.ReviewMigrationPlan(memberOf(t, tn, "builder"), plan, at)
 					if err != nil {
 						t.Fatal(err)
 					}
-					decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
-					request := submission(tn, memberOf(t, tn, "builder"), build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
+					decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
+					request := submission(tn, memberOf(t, tn, "builder"), construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
 					first, refusal := tn.Submit(memberOf(t, tn, "builder"), request, at)
 					if refusal != nil {
 						t.Fatal(refusal)
@@ -187,25 +188,25 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 					if refusal != nil || first.GetChangeId() != again.GetChangeId() || journal.Position(id) != position {
 						t.Fatal("recovery repeated an accepted batch")
 					}
-					decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, at)
+					decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, at)
 					if _, err := tn.ActivateRelease(memberOf(t, tn, "builder"), to, "target-activate", at); err != nil {
 						t.Fatal(err)
 					}
 					if kind == "split" {
 						// The oldest waiting flows now cross a second completed plan.
-						fields[2] = build.Field{Name: "left", Title: "Left", Type: "text", ReadOnly: true, AliasOf: "summary"}
-						fields = append(fields, build.Field{Name: "summary", Title: "Summary", Type: "text"})
+						fields[2] = construction.Field{Name: "left", Title: "Left", Type: "text", ReadOnly: true, AliasOf: "summary"}
+						fields = append(fields, construction.Field{Name: "summary", Title: "Summary", Type: "text"})
 						steps[1].Inputs = map[string]platform.Binding{"summary": {Source: "literal", Value: platform.Raw("new")}}
-						decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "O", map[string]any{"fields": fields}, at)
-						decide(t, tn, "builder", build.ID, "build.process.edit", build.ProcessType, "P", map[string]any{"steps": steps}, at)
+						decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "O", map[string]any{"fields": fields}, at)
+						decide(t, tn, "builder", construction.ID, "build.process.edit", construction.ProcessType, "P", map[string]any{"steps": steps}, at)
 						next := save("second-target")
 						plan := platform.MigrationPlan{From: to, To: next, Scope: platform.MigrationScope{Type: "build.sample"}, Steps: []platform.MigrateStep{{Kind: "rename", Types: []string{"build.sample"}, Batch: 2, Fields: []platform.MigrateField{{From: "left", To: "summary"}}}}}
 						review, err := tn.ReviewMigrationPlan(memberOf(t, tn, "builder"), plan, at)
 						if err != nil {
 							t.Fatal(err)
 						}
-						decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M2", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
-						decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M2", map[string]any{}, at)
+						decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M2", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
+						decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M2", map[string]any{}, at)
 						saved, _, err := tn.Snapshot(func() int64 { return 0 })
 						if err != nil {
 							t.Fatal(err)
@@ -215,14 +216,14 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 							t.Fatal(err)
 						}
 						attach()
-						decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M2", map[string]any{}, at)
+						decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M2", map[string]any{}, at)
 						if _, err := tn.ActivateRelease(memberOf(t, tn, "builder"), next, "second-target-activate", at); err != nil {
 							t.Fatal(err)
 						}
 						want["summary"] = updated
 					}
 					if kind == "retire" || kind == "split" || kind == "merge" {
-						if got := refuse(t, tn, "user", build.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "forbidden"}, at); got == "ok" {
+						if got := refuse(t, tn, "user", construction.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "forbidden"}, at); got == "ok" {
 							t.Fatal("the current version wrote a retired field")
 						}
 					}

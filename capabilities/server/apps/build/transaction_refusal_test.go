@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"reflect"
@@ -9,17 +11,17 @@ import (
 	"platformserver/platform"
 )
 
-func refusalPublication(t *testing.T) (*Build, Object) {
+func refusalPublication(t *testing.T) (*Build, construction.Object) {
 	t.Helper()
 	b, _ := lifecycleBuild()
-	reason := Object{Name: "disposition", Title: "Disposition", Plural: "Dispositions", Fields: []Field{{Name: "request", Title: "Request", Type: "reference", Ref: "build.request"}, {Name: "reason", Title: "Reason", Type: "text"}}}
+	reason := construction.Object{Name: "disposition", Title: "Disposition", Plural: "Dispositions", Fields: []construction.Field{{Name: "request", Title: "Request", Type: "reference", Ref: "build.request"}, {Name: "reason", Title: "Reason", Type: "text"}}}
 	b.installed = map[string]platform.Entity{"build.disposition": Entity(reason)}
 	b.jointEntities = map[string]platform.EntityInfo{}
 	for name, entity := range b.installed {
-		info, _ := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
+		info, _ := platform.Describe(construction.ID, entity, func(reflect.Type) string { return "" })
 		b.jointEntities[name] = info
 	}
-	object := Object{Name: "request", Title: "Request", Plural: "Requests", Fields: []Field{{Name: "done", Title: "Done", Type: "boolean"}}, States: []State{{Name: "draft", Title: "Draft"}}, Actions: []Action{
+	object := construction.Object{Name: "request", Title: "Request", Plural: "Requests", Fields: []construction.Field{{Name: "done", Title: "Done", Type: "boolean"}}, States: []construction.State{{Name: "draft", Title: "Draft"}}, Actions: []construction.Action{
 		{Name: "apply", Title: "Apply", From: []string{"draft"}, Transaction: &platform.BusinessTxn{Subject: "build.request", Steps: []platform.TxnStep{{Name: "done", Kind: "update", Target: platform.TxnRef{Type: "build.request", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "done", From: "=true"}}}}}},
 		{Name: "rework", Title: "Rework", From: []string{"draft"}, Transaction: &platform.BusinessTxn{Subject: "build.request", Steps: []platform.TxnStep{{Name: "done", Kind: "update", Target: platform.TxnRef{Type: "build.request", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "done", From: "=false"}}}}}},
 	}}
@@ -83,7 +85,7 @@ func TestBusinessRefusalPublication(t *testing.T) {
 				back.Route.Action = "apply"
 				object.Actions[1].Transaction.Refusals = []platform.Refusal{back}
 			case "route approval":
-				object.Actions[1].Approval = &ActionApproval{}
+				object.Actions[1].Approval = &construction.ActionApproval{}
 			case "missing translation":
 				declaration.Translations = nil
 			case "nonboolean":

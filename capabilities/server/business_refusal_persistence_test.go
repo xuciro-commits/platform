@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"context"
 	"encoding/json"
@@ -141,7 +143,7 @@ func TestBusinessRefusalPrivateSavepointDoesNotLeakFacts(t *testing.T) {
 	d := tn.newStagedDecision()
 	d.at = txnAt
 	fact := platform.BusinessRefusalFact{Level: "block", Code: "resource", Message: "Unavailable", Subject: "build.request/operator", Action: "build.request.apply", Member: "operator", At: txnAt, Original: json.RawMessage(`{"id":"operator"}`)}
-	parent := platform.NewCaller(d, memberOf(t, tn, "operator"), build.ID, false, false)
+	parent := platform.NewCaller(d, memberOf(t, tn, "operator"), construction.ID, false, false)
 	_, err := platform.Attempt(parent, func() (*pb.ChangeRecord, *kernel.Error) { return nil, parent.RefuseBusiness(fact) })
 	if err == nil || len(d.businessRefusals) != 0 || len(d.inputIssues) != 0 {
 		t.Fatal("handled refusal polluted parent")

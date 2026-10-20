@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -13,9 +15,9 @@ import (
 
 func TestObservationSourceUsesOriginalReleaseAndEnvironmentOwner(t *testing.T) {
 	b, rows := lifecycleBuild()
-	connection := Connection{Record: platform.Record{ID: "source-connection-id"}, Name: "timeseries", Title: "External observations", Kind: "http", State: "ready", Address: "https://source.example", Secret: "SOURCE_SECRET"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{connection}
-	source := Observation{Record: platform.Record{ID: "temperature-source"}, Name: "temperature", Title: "Temperature", Connection: connection.ID, Object: "build.receipt", DeviceField: "item", Signal: "temperature", Unit: "C", Path: "/observations", WindowSeconds: 60, ExpectedRetentionSeconds: 3600, ExpectedGranularitySeconds: 1, Roles: []string{Builder}}
+	connection := construction.Connection{Record: platform.Record{ID: "source-connection-id"}, Name: "timeseries", Title: "External observations", Kind: "http", State: "ready", Address: "https://source.example", Secret: "SOURCE_SECRET"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{connection}
+	source := construction.Observation{Record: platform.Record{ID: "temperature-source"}, Name: "temperature", Title: "Temperature", Connection: connection.ID, Object: "build.receipt", DeviceField: "item", Signal: "temperature", Unit: "C", Path: "/observations", WindowSeconds: 60, ExpectedRetentionSeconds: 3600, ExpectedGranularitySeconds: 1, Roles: []string{construction.Builder}}
 	asset, err := b.integrationAsset(platform.AssetObservation, source, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -25,18 +27,18 @@ func TestObservationSourceUsesOriginalReleaseAndEnvironmentOwner(t *testing.T) {
 			t.Fatalf("portable observation leaked %s", private)
 		}
 	}
-	if !slices.Contains(asset.Requires, platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: connection.Name}) || len(asset.Provides) != 1 || asset.Provides[0].Side != platform.CapabilityPure {
+	if !slices.Contains(asset.Requires, platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: connection.Name}) || len(asset.Provides) != 1 || asset.Provides[0].Side != platform.CapabilityPure {
 		t.Fatal("observation omitted its original dependency or pure read", asset)
 	}
 	accepted, err := retainIntegration(source, asset)
 	if err != nil {
 		t.Fatal(err)
 	}
-	live := accepted.(Observation)
+	live := accepted.(construction.Observation)
 	live.State, live.Publisher = "published", "target-builder"
 	original := live.Published
 	live.Signal, live.Path = "unsaved-signal", "/unsaved"
-	rows.rows[reflect.TypeFor[Observation]()] = []any{live}
+	rows.rows[reflect.TypeFor[construction.Observation]()] = []any{live}
 	definition, err := b.ExecutionObservation(live)
 	if err != nil || definition.Signal != "temperature" || definition.Path != "/observations" {
 		t.Fatal("mutable editor replaced immutable observation", definition, err)
@@ -48,10 +50,10 @@ func TestObservationSourceUsesOriginalReleaseAndEnvironmentOwner(t *testing.T) {
 	target, targetRows := lifecycleBuild()
 	targetConnection := connection
 	targetConnection.ID, targetConnection.Address, targetConnection.Secret = "target-connection-id", "https://target.example", "TARGET_SECRET"
-	targetRows.rows[reflect.TypeFor[Connection]()] = []any{targetConnection}
+	targetRows.rows[reflect.TypeFor[construction.Connection]()] = []any{targetConnection}
 	seed := source
 	seed.ID, seed.Connection, seed.Signal = "target-observation", targetConnection.ID, "unsaved-target-signal"
-	targetRows.rows[reflect.TypeFor[Observation]()] = []any{seed}
+	targetRows.rows[reflect.TypeFor[construction.Observation]()] = []any{seed}
 	connectionAsset, err := b.integrationAsset(platform.AssetConnection, connection, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +71,7 @@ func TestObservationSourceUsesOriginalReleaseAndEnvironmentOwner(t *testing.T) {
 		if plan.Ref != asset.Ref {
 			continue
 		}
-		var installed Observation
+		var installed construction.Observation
 		if json.Unmarshal(plan.Image, &installed) != nil || installed.ID != seed.ID || installed.Connection != targetConnection.ID || installed.Signal != source.Signal {
 			t.Fatal("target draft or endpoint replaced candidate declaration", installed)
 		}
@@ -86,9 +88,9 @@ func TestObservationSourceUsesOriginalReleaseAndEnvironmentOwner(t *testing.T) {
 
 func TestObservationSourceRejectsWritableOrMissingActionInputs(t *testing.T) {
 	b, rows := lifecycleBuild()
-	connection := Connection{Record: platform.Record{ID: "connection"}, Name: "timeseries", Title: "Time series", Kind: "http", State: "ready"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{connection}
-	source := Observation{Name: "temperature", Title: "Temperature", Connection: connection.ID, Object: "build.receipt", DeviceField: "item", Signal: "temperature", Unit: "C", Path: "/observations", WindowSeconds: 60, ExpectedRetentionSeconds: 3600, ExpectedGranularitySeconds: 1, Roles: []string{Builder}, Decision: &platform.ObservationDecision{When: platform.ExprLiteralValue("boolean", true), Action: platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: "build.receipt.warn"}, Inputs: map[string]platform.Expr{"points": platform.ExprLiteralValue("text", "raw")}}}
+	connection := construction.Connection{Record: platform.Record{ID: "connection"}, Name: "timeseries", Title: "Time series", Kind: "http", State: "ready"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{connection}
+	source := construction.Observation{Name: "temperature", Title: "Temperature", Connection: connection.ID, Object: "build.receipt", DeviceField: "item", Signal: "temperature", Unit: "C", Path: "/observations", WindowSeconds: 60, ExpectedRetentionSeconds: 3600, ExpectedGranularitySeconds: 1, Roles: []string{construction.Builder}, Decision: &platform.ObservationDecision{When: platform.ExprLiteralValue("boolean", true), Action: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: "build.receipt.warn"}, Inputs: map[string]platform.Expr{"points": platform.ExprLiteralValue("text", "raw")}}}
 	if _, err := b.integrationAsset(platform.AssetObservation, source, 1); err == nil {
 		t.Fatal("undeclared action input accepted")
 	}

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -22,15 +22,15 @@ import (
 // legacyJournalEffects retains the original intent identity for historical
 // raw-input recovery. Current transactions save their own frozen journal intent.
 func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
-	if e.App != build.ID || t.app(platform.BooksApp) == nil {
+	if e.App != construction.ID || t.app(platform.BooksApp) == nil {
 		return nil
 	}
 	s := e.Record.GetSubmission()
 	typ, verb := s.GetTarget().GetType(), strings.TrimPrefix(s.GetSchema().GetName(), s.GetTarget().GetType()+".")
-	c := t.automation(build.ID, false)
-	objects, _, _ := platform.Find[build.Object](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Limit: 500})
+	c := t.automation(construction.ID, false)
+	objects, _, _ := platform.Find[construction.Object](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Limit: 500})
 	for _, o := range objects {
-		if build.TypeOf(o.Name) != typ {
+		if construction.TypeOf(o.Name) != typ {
 			continue
 		}
 		for _, a := range o.Actions {
@@ -54,8 +54,8 @@ func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
 			if err != nil {
 				entry["error"] = err.Error()
 			}
-			return []platform.Effect{{ID: fmt.Sprintf("%s:%s:%s:books", t.ID, build.ID, e.Record.GetChangeId()), Endpoint: build.BooksEndpoint, Event: "journal/" + o.Name + "." + a.Name,
-				App: build.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at, State: "pending", Due: at, Body: t.bookBody(entry, typ, s.GetTarget().GetId(), a.Reverses)}}
+			return []platform.Effect{{ID: fmt.Sprintf("%s:%s:%s:books", t.ID, construction.ID, e.Record.GetChangeId()), Endpoint: construction.BooksEndpoint, Event: "journal/" + o.Name + "." + a.Name,
+				App: construction.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at, State: "pending", Due: at, Body: t.bookBody(entry, typ, s.GetTarget().GetId(), a.Reverses)}}
 		}
 	}
 	return nil
@@ -109,7 +109,7 @@ func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 }
 
 // booksEndpoint is the single ordered lane entries go through.
-func booksEndpoint() *Endpoint { return &Endpoint{ID: build.BooksEndpoint, Kind: "books"} }
+func booksEndpoint() *Endpoint { return &Endpoint{ID: construction.BooksEndpoint, Kind: "books"} }
 
 // submitBooks uses the same accepted-result boundary as other host-owned decisions.
 func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time) *kernel.Error {
@@ -155,7 +155,7 @@ func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *
 
 func (t *Tenant) bookBody(entry map[string]any, typ, id, reverses string) string {
 	if reverses == "" {
-		return build.EntryBody(entry)
+		return construction.EntryBody(entry)
 	}
 	change := ""
 	t.records.mu.Lock()
@@ -178,7 +178,7 @@ func (t *Tenant) bookBody(entry map[string]any, typ, id, reverses string) string
 	original := ""
 	t.opsMu.Lock()
 	for _, intent := range t.outbound {
-		if intent.Endpoint != build.BooksEndpoint || intent.Target != typ+"/"+id || intent.Key != change && !strings.HasPrefix(intent.Key, change+":") {
+		if intent.Endpoint != construction.BooksEndpoint || intent.Target != typ+"/"+id || intent.Key != change && !strings.HasPrefix(intent.Key, change+":") {
 			continue
 		}
 		var journal platform.Journal

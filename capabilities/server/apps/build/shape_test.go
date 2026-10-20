@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"strings"
 	"testing"
@@ -9,11 +11,11 @@ import (
 // are refused while the object is still a draft (ADR-0020 A2, A3).
 func TestCheckShape(t *testing.T) {
 	b := &Build{}
-	o := Object{Name: "vendor", Title: "Vendor", Fields: []Field{{Name: "code", Type: "text", Search: true}}, Implements: []string{"core.coded"}}
+	o := construction.Object{Name: "vendor", Title: "Vendor", Fields: []construction.Field{{Name: "code", Type: "text", Search: true}}, Implements: []string{"core.coded"}}
 	if err := b.checkShape(o); err == nil || !strings.Contains(err.Error(), "core.coded") {
 		t.Fatalf("undeclared interface accepted: %v", err)
 	}
-	o = Object{Name: "employee", Title: "Employee", Extends: "build.employee"}
+	o = construction.Object{Name: "employee", Title: "Employee", Extends: "build.employee"}
 	if err := b.checkShape(o); err == nil || !strings.Contains(err.Error(), "cannot extend") {
 		t.Fatalf("self extension accepted: %v", err)
 	}

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"slices"
@@ -26,12 +28,12 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	at := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	for _, name := range []string{"alpha", "beta", "private"} {
-		fields := []build.Field{{Name: "code", Title: "Code", Type: "text", Search: true}, {Name: "name", Title: "Name", Type: "text", Search: true}, {Name: "secret", Title: "Secret", Type: "text", Search: true, Read: []string{build.Builder}}}
+		fields := []construction.Field{{Name: "code", Title: "Code", Type: "text", Search: true}, {Name: "name", Title: "Name", Type: "text", Search: true}, {Name: "secret", Title: "Secret", Type: "text", Search: true, Read: []string{construction.Builder}}}
 		if name == "private" {
-			fields[0].Read = []string{build.Builder}
+			fields[0].Read = []string{construction.Builder}
 		}
 		publishObject(t, tn, "builder", name, map[string]any{"name": name, "title": name, "fields": fields, "implements": []string{"core.coded"}}, at)
-		decide(t, tn, "builder", build.ID, "build."+name+".create", "build."+name, "SAME", map[string]any{"code": "DUP", "name": name, "secret": "private-data"}, at)
+		decide(t, tn, "builder", construction.ID, "build."+name+".create", "build."+name, "SAME", map[string]any{"code": "DUP", "name": name, "secret": "private-data"}, at)
 	}
 	reader := memberOf(t, tn, "reader")
 	window := platform.Query{Domain: json.RawMessage(`[["code","=","DUP"]]`), Sort: []string{"name"}, Limit: 1}
@@ -65,8 +67,8 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 		t.Fatal("an interface read mutated the original object schema")
 	}
 
-	decide(t, tn, "builder", build.ID, "build.query.create", build.QueryType, "QUERY", map[string]any{"name": "coded", "title": "Coded records", "description": "Interface read", "interface": "core.coded", "domain": [][]any{{"code", "=", "DUP"}}, "sort": []string{"name"}, "limit": 20}, at)
-	if refusal := refuse(t, tn, "reader", build.ID, "build.query.publish", build.QueryType, "QUERY", map[string]any{}, at); refusal == "ok" {
+	decide(t, tn, "builder", construction.ID, "build.query.create", construction.QueryType, "QUERY", map[string]any{"name": "coded", "title": "Coded records", "description": "Interface read", "interface": "core.coded", "domain": [][]any{{"code", "=", "DUP"}}, "sort": []string{"name"}, "limit": 20}, at)
+	if refusal := refuse(t, tn, "reader", construction.ID, "build.query.publish", construction.QueryType, "QUERY", map[string]any{}, at); refusal == "ok" {
 		t.Fatal("reader published a query")
 	}
 	builder := memberOf(t, tn, "builder")
@@ -77,14 +79,14 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 	if _, err := tn.SaveReleaseCandidate(builder, platform.AssetQuery, "QUERY", preview.CandidateID, "save-interface-query", at); err != nil {
 		t.Fatal(err)
 	}
-	publishObject(t, tn, "builder", "later", map[string]any{"name": "later", "title": "Later", "fields": []build.Field{{Name: "code", Title: "Code", Type: "text", Search: true}, {Name: "name", Title: "Name", Type: "text", Search: true}}, "implements": []string{"core.coded"}}, at)
-	decide(t, tn, "builder", build.ID, "build.later.create", "build.later", "SAME", map[string]any{"code": "DUP", "name": "later"}, at)
+	publishObject(t, tn, "builder", "later", map[string]any{"name": "later", "title": "Later", "fields": []construction.Field{{Name: "code", Title: "Code", Type: "text", Search: true}, {Name: "name", Title: "Name", Type: "text", Search: true}}, "implements": []string{"core.coded"}}, at)
+	decide(t, tn, "builder", construction.ID, "build.later.create", "build.later", "SAME", map[string]any{"code": "DUP", "name": "later"}, at)
 	if _, err := tn.ActivateRelease(builder, preview.CandidateID, "activate-interface-query", at); err != nil {
 		t.Fatal(err)
 	}
 	readVersion := func(version string, want int) {
 		t.Helper()
-		page, err := tn.RunQueryWindow(reader, build.ID, "coded", "", version, platform.Query{}, at)
+		page, err := tn.RunQueryWindow(reader, construction.ID, "coded", "", version, platform.Query{}, at)
 		if err != nil || page.Total != want {
 			t.Fatalf("query %s: %+v %v", version, page, err)
 		}
@@ -103,19 +105,19 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 			}
 		}
 	}
-	decide(t, tn, "builder", build.ID, "build.query.publish", build.QueryType, "QUERY", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.query.publish", construction.QueryType, "QUERY", map[string]any{}, at)
 	readVersion("1.query-1", 2)
 	readVersion("1.query-2", 3)
 	t.Run("published page keeps its interface source and member projection", func(t *testing.T) {
-		decide(t, tn, "builder", build.ID, "build.query.create", build.QueryType, "PICKERQUERY", map[string]any{"name": "pickerquery", "title": "Picker query", "description": "Select a concrete coded record", "interface": "core.coded", "sort": []string{"id"}, "limit": 20}, at)
-		decide(t, tn, "builder", build.ID, "build.query.publish", build.QueryType, "PICKERQUERY", map[string]any{}, at)
-		binding := platform.AssetBinding{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetQuery, Name: "pickerquery"}, SourceVersion: "1.query-1"}
+		decide(t, tn, "builder", construction.ID, "build.query.create", construction.QueryType, "PICKERQUERY", map[string]any{"name": "pickerquery", "title": "Picker query", "description": "Select a concrete coded record", "interface": "core.coded", "sort": []string{"id"}, "limit": 20}, at)
+		decide(t, tn, "builder", construction.ID, "build.query.publish", construction.QueryType, "PICKERQUERY", map[string]any{}, at)
+		binding := platform.AssetBinding{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetQuery, Name: "pickerquery"}, SourceVersion: "1.query-1"}
 		doc := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"picker", "card"}}, "picker": {Kind: "widget", Section: "picker"}, "card": {Kind: "widget", Section: "card"}}, Queries: map[string]platform.PageQuery{"coded": {Interface: "core.coded", Query: &binding, Sort: []string{"id"}, Limit: 20}}, Variables: map[string]platform.PageVariable{
 			"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "coded"}},
 			"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "picker"}},
 		}}
 		sections := []build.Section{{PageWidgetConfig: platform.PageWidgetConfig{RecordPicker: &platform.PageRecordPicker{LabelField: "name"}}, ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window"}, {PageWidgetConfig: platform.PageWidgetConfig{RecordCard: &platform.PageRecordCard{LabelField: "name", Tone: "neutral"}}, ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", Fields: []string{"code", "name"}}}
-		decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "INTERFACEPAGE", map[string]any{"name": "interfacepage", "title": "Interface page", "object": "build.alpha", "document": doc, "sections": sections}, at)
+		decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "INTERFACEPAGE", map[string]any{"name": "interfacepage", "title": "Interface page", "object": "build.alpha", "document": doc, "sections": sections}, at)
 		preview, err := tn.PreviewRelease(builder, platform.AssetPage, "INTERFACEPAGE")
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("interface page preview: %+v %v", preview, err)
@@ -151,10 +153,10 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 	CheckReplay(t, tn, entries, compose)
 	t.Run("joint unpublished implementation", func(t *testing.T) {
 		fresh := compose()
-		decide(t, fresh, "builder", build.ID, "build.object.create", build.ObjectType, "NEW", map[string]any{"name": "newcoded", "title": "New coded object", "implements": []string{"core.coded"}, "fields": []build.Field{{Name: "code", Title: "Code", Type: "text"}, {Name: "name", Title: "Name", Type: "text"}}}, at)
-		decide(t, fresh, "builder", build.ID, "build.query.create", build.QueryType, "NEWQUERY", map[string]any{"name": "newquery", "title": "New query", "description": "Joint interface read", "interface": "core.coded", "domain": [][]any{{"code", "=", "NEW"}}, "limit": 20}, at)
+		decide(t, fresh, "builder", construction.ID, "build.object.create", construction.ObjectType, "NEW", map[string]any{"name": "newcoded", "title": "New coded object", "implements": []string{"core.coded"}, "fields": []construction.Field{{Name: "code", Title: "Code", Type: "text"}, {Name: "name", Title: "Name", Type: "text"}}}, at)
+		decide(t, fresh, "builder", construction.ID, "build.query.create", construction.QueryType, "NEWQUERY", map[string]any{"name": "newquery", "title": "New query", "description": "Joint interface read", "interface": "core.coded", "domain": [][]any{{"code", "=", "NEW"}}, "limit": 20}, at)
 		builder := memberOf(t, fresh, "builder")
-		drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "NEW"}, {Kind: platform.AssetQuery, ID: "NEWQUERY"}}
+		drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "NEW"}, {Kind: platform.AssetQuery, ID: "NEWQUERY"}}
 		preview, err := fresh.PreviewReleaseDrafts(builder, drafts)
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("joint interface preview: %+v %v", preview, err)
@@ -165,8 +167,8 @@ func TestInterfaceQueriesKeepIdentityPermissionsAndFrozenImplementers(t *testing
 		if _, err := fresh.ActivateRelease(builder, preview.CandidateID, "joint-query-active", at); err != nil {
 			t.Fatal(err)
 		}
-		decide(t, fresh, "reader", build.ID, "build.newcoded.create", "build.newcoded", "NEW", map[string]any{"code": "NEW", "name": "Joint row"}, at)
-		page, refusal := fresh.RunQuery(memberOf(t, fresh, "reader"), build.ID, "newquery", "", at)
+		decide(t, fresh, "reader", construction.ID, "build.newcoded.create", "build.newcoded", "NEW", map[string]any{"code": "NEW", "name": "Joint row"}, at)
+		page, refusal := fresh.RunQuery(memberOf(t, fresh, "reader"), construction.ID, "newquery", "", at)
 		if refusal != nil || page.Total != 1 || page.Records[0].(InterfaceRecord).Type != "build.newcoded" {
 			t.Fatalf("joint interface target: %+v %v", page, refusal)
 		}

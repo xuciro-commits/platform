@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"slices"
 
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -23,7 +23,7 @@ func (b *releaseExecution) Manifest() platform.Manifest {
 }
 
 func (b *Build) retainedCodeObject(asset platform.ReleaseAsset) (bool, error) {
-	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+	if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
 		return false, nil
 	}
 	manifest := b.Manifest()
@@ -53,14 +53,14 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	bound.jointEntities = map[string]platform.EntityInfo{}
 	bound.jointMode = true
 	for _, asset := range assets {
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetAgent {
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetAgent {
 			agent, err := decodeAgentAsset(asset)
 			if err != nil {
 				return nil, err
 			}
 			bound.agents[agent.Name] = agent
 		}
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
 		code, err := b.retainedCodeObject(asset)
@@ -70,11 +70,11 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 		if code {
 			continue
 		}
-		var object Object
-		if asset.SourceVersion != definitionVersion || json.Unmarshal(asset.Body, &object) != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
+		var object construction.Object
+		if asset.SourceVersion != construction.ValueDefinitionVersion || json.Unmarshal(asset.Body, &object) != nil || construction.TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
 		}
-		info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+		info, err := platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
 		if problem := checkObjectSchemas(object); problem != nil {
 			return nil, problem
 		}
@@ -85,7 +85,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	}
 	var actions []platform.Action
 	for _, asset := range assets {
-		if asset.Ref.App != ID {
+		if asset.Ref.App != construction.ID {
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetObject {
@@ -96,7 +96,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			if code {
 				continue
 			}
-			var object Object
+			var object construction.Object
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return nil, err
 			}

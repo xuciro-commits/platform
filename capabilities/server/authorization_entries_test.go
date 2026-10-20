@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"net/http"
@@ -119,7 +121,7 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 	})
 	t.Run("publish composition and host controls", func(t *testing.T) {
 		tn := composeTenant(t, "control-authz", []Seat{seatOf("builder", "platform:admin", "build:builder")}, build.New("control-authz"))
-		freeze(tn, build.ID)
+		freeze(tn, construction.ID)
 		h := NewHost(Tokens(map[string]string{"builder-token": "builder"}), tn)
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPost, "/v1/releases/candidates", strings.NewReader(`{}`))

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"slices"
@@ -19,18 +21,18 @@ func TestDraftActionCapabilitiesDescribeSavedInputsWithoutInstallingThem(t *test
 	tn := composeTenant(t, tenant, []Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user"), seatOf("publisher", "build:publisher")}, build.New(tenant))
 	builder := memberOf(t, tn, "builder")
 	const object = "build.authoring"
-	peerObject := publishObject(t, tn, "builder", "PEER", map[string]any{"name": "authoringpeer", "title": "Authoring peer", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: object + ".review"}
-	action := build.Action{Name: "review", Title: "Review", From: []string{"ready"}, To: "done", Inputs: []build.Input{
+	peerObject := publishObject(t, tn, "builder", "PEER", map[string]any{"name": "authoringpeer", "title": "Authoring peer", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: object + ".review"}
+	action := construction.Action{Name: "review", Title: "Review", From: []string{"ready"}, To: "done", Inputs: []construction.Input{
 		{Name: "peer", Title: "Peer", Type: "reference", Ref: peerObject, Required: true},
 		{Name: "note", Title: "Note", Type: "text"},
 	}}
-	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "OBJECT", map[string]any{
-		"name": "authoring", "title": "Authoring", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}},
-		"states": []build.State{{Name: "ready", Title: "Ready"}, {Name: "done", Title: "Done"}}, "actions": []build.Action{action},
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "OBJECT", map[string]any{
+		"name": "authoring", "title": "Authoring", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}},
+		"states": []construction.State{{Name: "ready", Title: "Ready"}, {Name: "done", Title: "Done"}}, "actions": []construction.Action{action},
 	}, at)
-	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "ARCHIVED", map[string]any{"name": "archived", "title": "Archived", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-	decide(t, tn, "builder", build.ID, "build.object.archive", build.ObjectType, "ARCHIVED", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "ARCHIVED", map[string]any{"name": "archived", "title": "Archived", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.archive", construction.ObjectType, "ARCHIVED", map[string]any{}, at)
 	for _, who := range []string{"user", "publisher"} {
 		if capabilities, err := tn.DraftActionCapabilities(memberOf(t, tn, who)); err == nil || len(capabilities) != 0 {
 			t.Fatalf("%s read builder draft action declarations: %+v %v", who, capabilities, err)
@@ -64,19 +66,19 @@ func TestDraftActionCapabilitiesDescribeSavedInputsWithoutInstallingThem(t *test
 			t.Fatal("draft-only object or action entered installed definitions")
 		}
 	}
-	if got := refuse(t, tn, "builder", build.ID, ref.Name, object, "R", map[string]any{"peer": "R"}, at); got == "ok" {
+	if got := refuse(t, tn, "builder", construction.ID, ref.Name, object, "R", map[string]any{"peer": "R"}, at); got == "ok" {
 		t.Fatal("reading draft metadata made the unpublished action executable")
 	}
-	decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{}, at)
-	before, _ := platform.Get[build.Object](tn.automation(build.ID, false), "OBJECT")
+	decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "OBJECT", map[string]any{}, at)
+	before, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), "OBJECT")
 	definitions := tn.Definitions(builder)
 	published := slices.IndexFunc(definitions, func(definition platform.Definition) bool { return definition.Ref == ref })
 	if published < 0 {
 		t.Fatal("publication did not install the original action")
 	}
 	original := platform.Raw(definitions[published])
-	action.Inputs = append(action.Inputs, build.Input{Name: "reason", Title: "Reason", Type: "text", Required: true})
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "OBJECT", map[string]any{"actions": []build.Action{action}}, at)
+	action.Inputs = append(action.Inputs, construction.Input{Name: "reason", Title: "Reason", Type: "text", Required: true})
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "OBJECT", map[string]any{"actions": []construction.Action{action}}, at)
 	capabilities, err = tn.DraftActionCapabilities(builder)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +89,7 @@ func TestDraftActionCapabilitiesDescribeSavedInputsWithoutInstallingThem(t *test
 	}
 	definitions = tn.Definitions(builder)
 	published = slices.IndexFunc(definitions, func(definition platform.Definition) bool { return definition.Ref == ref })
-	after, _ := platform.Get[build.Object](tn.automation(build.ID, false), "OBJECT")
+	after, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), "OBJECT")
 	if after.Published != before.Published || published < 0 || !bytes.Equal(original, platform.Raw(definitions[published])) {
 		t.Fatal("draft input edit or discovery rewrote the original publication")
 	}
@@ -96,12 +98,12 @@ func TestDraftActionCapabilitiesDescribeSavedInputsWithoutInstallingThem(t *test
 			t.Fatal("draft input change entered current executable capabilities")
 		}
 	}
-	decide(t, tn, "builder", build.ID, peerObject+".create", peerObject, "R", map[string]any{"note": "Peer"}, at)
-	decide(t, tn, "builder", build.ID, object+".create", object, "R", map[string]any{"note": "Original runtime"}, at)
-	decide(t, tn, "builder", build.ID, ref.Name, object, "R", map[string]any{"peer": "R"}, at)
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "OBJECT", map[string]any{"actions": []build.Action{}}, at)
-	process := build.Process{Name: "removedaction", Title: "Removed action", Manual: true, Steps: []build.ProcessStep{{Name: "review", Kind: "action", Act: ref.Name, Target: &platform.Binding{Source: "literal", Value: platform.Raw("R")}, Inputs: map[string]platform.Binding{"peer": {Source: "literal", Value: platform.Raw("R")}}}}}
-	if problem := tn.app(build.ID).(*build.Build).CheckProcess(platform.NewCaller(runtime{tn}, builder, build.ID, false, false), process); problem == nil {
+	decide(t, tn, "builder", construction.ID, peerObject+".create", peerObject, "R", map[string]any{"note": "Peer"}, at)
+	decide(t, tn, "builder", construction.ID, object+".create", object, "R", map[string]any{"note": "Original runtime"}, at)
+	decide(t, tn, "builder", construction.ID, ref.Name, object, "R", map[string]any{"peer": "R"}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "OBJECT", map[string]any{"actions": []construction.Action{}}, at)
+	process := construction.Process{Name: "removedaction", Title: "Removed action", Manual: true, Steps: []construction.ProcessStep{{Name: "review", Kind: "action", Act: ref.Name, Target: &platform.Binding{Source: "literal", Value: platform.Raw("R")}, Inputs: map[string]platform.Binding{"peer": {Source: "literal", Value: platform.Raw("R")}}}}}
+	if problem := tn.app(construction.ID).(*build.Build).CheckProcess(platform.NewCaller(runtime{tn}, builder, construction.ID, false, false), process); problem == nil {
 		t.Fatal("a removed draft action fell back to its original published declaration")
 	}
 }
@@ -114,23 +116,23 @@ func TestManualAndScheduledProcessesUseSelectedDraftActions(t *testing.T) {
 			tn := builderTenant(t, tenant, work.New(tenant), flow.New(tenant))
 			member := memberOf(t, tn, "builder")
 			const object = "build.drafttarget"
-			decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "OBJECT", map[string]any{"name": "drafttarget", "title": "Draft target", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-			process := build.Process{Record: platform.Record{ID: "FLOW"}, Name: "explicitdraft", Title: "Explicit draft", Manual: manual, Steps: []build.ProcessStep{{Name: "create", Kind: "action", Act: object + ".create", Target: &platform.Binding{Source: "literal", Value: platform.Raw("R")}, Inputs: map[string]platform.Binding{"note": {Source: "literal", Value: platform.Raw("Synthetic")}}}}}
+			decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "OBJECT", map[string]any{"name": "drafttarget", "title": "Draft target", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+			process := construction.Process{Record: platform.Record{ID: "FLOW"}, Name: "explicitdraft", Title: "Explicit draft", Manual: manual, Steps: []construction.ProcessStep{{Name: "create", Kind: "action", Act: object + ".create", Target: &platform.Binding{Source: "literal", Value: platform.Raw("R")}, Inputs: map[string]platform.Binding{"note": {Source: "literal", Value: platform.Raw("Synthetic")}}}}}
 			if !manual {
 				process.Kind, process.Every = "automation", "1h"
 			}
-			caller := platform.NewCaller(runtime{tn}, member, build.ID, false, false)
-			if problem := tn.app(build.ID).(*build.Build).CheckProcess(caller, process); problem != nil {
+			caller := platform.NewCaller(runtime{tn}, member, construction.ID, false, false)
+			if problem := tn.app(construction.ID).(*build.Build).CheckProcess(caller, process); problem != nil {
 				t.Fatalf("draft action with an explicit target could not be checked: %+v", problem)
 			}
-			decide(t, tn, "builder", build.ID, "build.process.create", build.ProcessType, "FLOW", map[string]any{"name": process.Name, "title": process.Title, "manual": process.Manual, "kind": process.Kind, "every": process.Every, "steps": process.Steps}, at)
-			if got := refuse(t, tn, "builder", build.ID, "build.process.publish", build.ProcessType, "FLOW", map[string]any{}, at); got == "ok" {
+			decide(t, tn, "builder", construction.ID, "build.process.create", construction.ProcessType, "FLOW", map[string]any{"name": process.Name, "title": process.Title, "manual": process.Manual, "kind": process.Kind, "every": process.Every, "steps": process.Steps}, at)
+			if got := refuse(t, tn, "builder", construction.ID, "build.process.publish", construction.ProcessType, "FLOW", map[string]any{}, at); got == "ok" {
 				t.Fatal("direct publication resolved an unselected object draft")
 			}
 			if alone, err := tn.PreviewRelease(member, platform.AssetFlow, "FLOW"); err == nil && alone.Diagnostic == "" {
 				t.Fatal("flow-only candidate resolved an unselected object draft")
 			}
-			selection := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetFlow, ID: "FLOW"}}
+			selection := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetFlow, ID: "FLOW"}}
 			joint, err := tn.PreviewReleaseDrafts(member, selection)
 			if err != nil || joint.Diagnostic != "" || joint.CandidateID == "" {
 				t.Fatalf("explicit object and workflow selection: %+v %v", joint, err)
@@ -145,17 +147,17 @@ func TestCheckProcessUsesDraftObjectWithoutPublishingIt(t *testing.T) {
 	tn := builderTenant(t, tenant, work.New(tenant), flow.New(tenant))
 	member := memberOf(t, tn, "builder")
 	const object = "build.draftsource"
-	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "OBJECT", map[string]any{
-		"name": "draftsource", "title": "Draft source", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}},
-		"states":  []build.State{{Name: "ready", Title: "Ready"}, {Name: "done", Title: "Done"}},
-		"actions": []build.Action{{Name: "review", Title: "Review", From: []string{"ready"}, To: "done", Inputs: []build.Input{{Name: "note", Title: "Note", Type: "text", Required: true}}}},
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "OBJECT", map[string]any{
+		"name": "draftsource", "title": "Draft source", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}},
+		"states":  []construction.State{{Name: "ready", Title: "Ready"}, {Name: "done", Title: "Done"}},
+		"actions": []construction.Action{{Name: "review", Title: "Review", From: []string{"ready"}, To: "done", Inputs: []construction.Input{{Name: "note", Title: "Note", Type: "text", Required: true}}}},
 	}, at)
-	process := build.Process{Record: platform.Record{ID: "FLOW"}, Name: "reviewdraft", Title: "Review draft", Object: object, When: "ready", Steps: []build.ProcessStep{
+	process := construction.Process{Record: platform.Record{ID: "FLOW"}, Name: "reviewdraft", Title: "Review draft", Object: object, When: "ready", Steps: []construction.ProcessStep{
 		{Name: "review", Kind: "action", Act: "review", Target: &platform.Binding{Source: "subject", Path: []string{"id"}}, Inputs: map[string]platform.Binding{"note": {Source: "literal", Value: platform.Raw("Reviewed")}}, Next: "done"},
 		{Name: "done", Kind: "end"},
 	}}
-	owner := tn.app(build.ID).(*build.Build)
-	caller := platform.NewCaller(runtime{tn}, member, build.ID, false, false)
+	owner := tn.app(construction.ID).(*build.Build)
+	caller := platform.NewCaller(runtime{tn}, member, construction.ID, false, false)
 	if problem := owner.CheckProcess(caller, process); problem != nil {
 		t.Fatalf("saved object action could not be checked before publication: %+v", problem)
 	}
@@ -165,14 +167,14 @@ func TestCheckProcessUsesDraftObjectWithoutPublishingIt(t *testing.T) {
 	if problem := owner.CheckProcess(caller, invalid); problem == nil || !strings.Contains(problem.Message, "required action input note") {
 		t.Fatalf("draft check skipped the original action's required input: %+v", problem)
 	}
-	decide(t, tn, "builder", build.ID, "build.process.create", build.ProcessType, "FLOW", map[string]any{"name": process.Name, "title": process.Title, "object": process.Object, "when": process.When, "steps": process.Steps}, at)
-	if got := refuse(t, tn, "builder", build.ID, "build.process.publish", build.ProcessType, "FLOW", map[string]any{}, at); got == "ok" {
+	decide(t, tn, "builder", construction.ID, "build.process.create", construction.ProcessType, "FLOW", map[string]any{"name": process.Name, "title": process.Title, "object": process.Object, "when": process.When, "steps": process.Steps}, at)
+	if got := refuse(t, tn, "builder", construction.ID, "build.process.publish", construction.ProcessType, "FLOW", map[string]any{}, at); got == "ok" {
 		t.Fatal("editor feedback published a process over an unpublished object")
 	}
 	if alone, err := tn.PreviewRelease(member, platform.AssetFlow, "FLOW"); err == nil && alone.Diagnostic == "" {
 		t.Fatal("flow-only candidate silently included an unselected object")
 	}
-	selection := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetFlow, ID: "FLOW"}}
+	selection := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetFlow, ID: "FLOW"}}
 	joint, err := tn.PreviewReleaseDrafts(member, selection)
 	if err != nil || joint.Diagnostic != "" || joint.CandidateID == "" {
 		t.Fatalf("explicit object and workflow selection could not form a candidate: %+v %v", joint, err)
@@ -190,7 +192,7 @@ func TestCheckProcessUsesDraftObjectWithoutPublishingIt(t *testing.T) {
 	if !tn.procs.HasPublishedFlow("build." + process.Name) {
 		t.Fatal("activation did not install the explicitly selected workflow")
 	}
-	decide(t, tn, "builder", build.ID, object+".create", object, "R", map[string]any{"note": "Original"}, at)
+	decide(t, tn, "builder", construction.ID, object+".create", object, "R", map[string]any{"note": "Original"}, at)
 	tn.Work(at.Add(2 * time.Second))
 	row, problem := tn.RecordOf(member, object, "R", at.Add(2*time.Second))
 	if problem != nil || !bytes.Contains(platform.Raw(row), []byte(`"state":"done"`)) {

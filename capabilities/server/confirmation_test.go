@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -51,9 +53,9 @@ func TestBusinessConfirmationKeepsIndependentReceiptsAndReconciles(t *testing.T)
 	spec := businessConfirmationSpec("hold", "hold")
 	spec.DeadlineSeconds = 3600
 	prepareBusinessConfirmation(t, tn, at, spec)
-	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
 	before, _ := tn.RecordOf(memberOf(t, tn, "operator"), "build.receipt", "R1", at)
-	sub := submission(tn, memberOf(t, tn, "operator"), build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{})
+	sub := submission(tn, memberOf(t, tn, "operator"), construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{})
 	fail = true
 	if _, err := tn.Submit(memberOf(t, tn, "operator"), sub, at); err == nil {
 		t.Fatal("unpersisted coordination accepted")
@@ -66,43 +68,43 @@ func TestBusinessConfirmationKeepsIndependentReceiptsAndReconciles(t *testing.T)
 	if _, err := tn.Submit(memberOf(t, tn, "operator"), sub, at); err != nil {
 		t.Fatalf("start: %s %s; fault=%+v", err.Code, err.Message, tn.fault.Load())
 	}
-	runs, _, _ := platform.Find[platform.ConfirmationRun](tn.automation(build.ID, false), platform.Query{})
+	runs, _, _ := platform.Find[platform.ConfirmationRun](tn.automation(construction.ID, false), platform.Query{})
 	if len(runs) != 1 || len(runs[0].Parties) != 2 {
 		t.Fatalf("progress: %+v", runs)
 	}
 	for _, effect := range tn.Effects(at) {
-		if effect.Event != build.ID+"/confirmation" {
+		if effect.Event != construction.ID+"/confirmation" {
 			continue
 		}
 		out := tn.sendWriteback(effect)
 		tn.settleWithUsage(effect.ID, out, nil, at)
 	}
-	run, _ := platform.Get[platform.ConfirmationRun](tn.automation(build.ID, false), runs[0].ID)
+	run, _ := platform.Get[platform.ConfirmationRun](tn.automation(construction.ID, false), runs[0].ID)
 	if run.Parties[0].State != "confirmed" || run.Parties[1].State != "unknown" || posts != 2 {
 		t.Fatalf("independent receipts: %+v (%d sends)", run, posts)
 	}
 	if !strings.Contains(string(platform.Raw(run)), "unknown") {
 		t.Fatal("unknown outcome lost")
 	}
-	if got := refuse(t, tn, "operator", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "accepted", "reason": "claim"}, at); got == "ok" {
+	if got := refuse(t, tn, "operator", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "accepted", "reason": "claim"}, at); got == "ok" {
 		t.Fatal("operator impersonated reviewer")
 	}
 	tn.ReconcileConfirmations(at.Add(time.Second))
-	run, _ = platform.Get[platform.ConfirmationRun](tn.automation(build.ID, false), run.ID)
+	run, _ = platform.Get[platform.ConfirmationRun](tn.automation(construction.ID, false), run.ID)
 	if len(run.Parties[1].Differences) != 1 || run.Parties[1].Differences[0].Matched {
 		t.Fatalf("difference missing: state=%s fault=%+v", run.Parties[1].State, tn.fault.Load())
 	}
 	sourceState = "confirmed"
 	tn.ReconcileConfirmations(at.Add(3 * time.Second))
-	run, _ = platform.Get[platform.ConfirmationRun](tn.automation(build.ID, false), run.ID)
+	run, _ = platform.Get[platform.ConfirmationRun](tn.automation(construction.ID, false), run.ID)
 	if run.State != "confirmed" || len(run.Parties[1].Differences) != 2 {
 		t.Fatalf("source convergence: %+v", run)
 	}
-	runJob(t, tn, build.ID, "confirmations", at.Add(4*time.Second))
+	runJob(t, tn, construction.ID, "confirmations", at.Add(4*time.Second))
 	if tn.quarantined() {
 		t.Fatal(tn.fault.Load())
 	}
-	run, _ = platform.Get[platform.ConfirmationRun](tn.automation(build.ID, false), run.ID)
+	run, _ = platform.Get[platform.ConfirmationRun](tn.automation(construction.ID, false), run.ID)
 	final, _ := tn.RecordOf(memberOf(t, tn, "operator"), "build.receipt", "R1", at)
 	if run.Completion == "" || !strings.Contains(string(platform.Raw(final.Record)), `"status":"complete"`) {
 		t.Fatalf("original completion action: %+v %s", run, platform.Raw(final.Record))
@@ -130,12 +132,12 @@ func confirmationTenant(t *testing.T, id string, extra ...platform.App) *Tenant 
 
 func prepareBusinessConfirmation(t *testing.T, tn *Tenant, at time.Time, spec *platform.Confirmation) {
 	t.Helper()
-	start := build.Action{Name: "start", Title: "Start receipt", From: []string{"open"}, Roles: []string{build.User, build.Builder}, Inputs: []build.Input{{Name: "item", Title: "Item", Type: "text"}}, Transaction: &platform.BusinessTxn{Subject: "build.receipt", Steps: []platform.TxnStep{{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: "build.receipt", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "status", From: "=waiting"}}}}}}
-	actions := []build.Action{start, {Name: "complete", Title: "Complete receipt", From: []string{"open"}, Sets: []build.Set{{Field: "status", From: "=complete"}}}, {Name: "partial", Title: "Partial receipt", From: []string{"open"}, Sets: []build.Set{{Field: "status", From: "=partial"}}}}
-	publishObject(t, tn, "builder", "O", map[string]any{"name": "receipt", "title": "Receipt", "fields": []build.Field{{Name: "status", Title: "Status", Type: "text"}}, "states": []build.State{{Name: "open", Title: "Open"}}, "access": []build.Access{{Role: build.User, Read: "all", Create: true, Edit: true}, {Role: "reviewer", Read: "all", Edit: true}}, "actions": actions}, at)
+	start := construction.Action{Name: "start", Title: "Start receipt", From: []string{"open"}, Roles: []string{construction.User, construction.Builder}, Inputs: []construction.Input{{Name: "item", Title: "Item", Type: "text"}}, Transaction: &platform.BusinessTxn{Subject: "build.receipt", Steps: []platform.TxnStep{{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: "build.receipt", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "status", From: "=waiting"}}}}}}
+	actions := []construction.Action{start, {Name: "complete", Title: "Complete receipt", From: []string{"open"}, Sets: []construction.Set{{Field: "status", From: "=complete"}}}, {Name: "partial", Title: "Partial receipt", From: []string{"open"}, Sets: []construction.Set{{Field: "status", From: "=partial"}}}}
+	publishObject(t, tn, "builder", "O", map[string]any{"name": "receipt", "title": "Receipt", "fields": []construction.Field{{Name: "status", Title: "Status", Type: "text"}}, "states": []construction.State{{Name: "open", Title: "Open"}}, "access": []construction.Access{{Role: construction.User, Read: "all", Create: true, Edit: true}, {Role: "reviewer", Read: "all", Edit: true}}, "actions": actions}, at)
 	for _, id := range []string{"erp", "wms"} {
-		decide(t, tn, "builder", build.ID, "build.connection.create", build.ConnectionType, id, map[string]any{"name": id, "title": id, "kind": "http", "address": "https://" + id + ".example/"}, at)
-		decide(t, tn, "builder", build.ID, "build.connection.check", build.ConnectionType, id, map[string]any{}, at)
+		decide(t, tn, "builder", construction.ID, "build.connection.create", construction.ConnectionType, id, map[string]any{"name": id, "title": id, "kind": "http", "address": "https://" + id + ".example/"}, at)
+		decide(t, tn, "builder", construction.ID, "build.connection.check", construction.ConnectionType, id, map[string]any{}, at)
 	}
 	tn.CheckConnections(at)
 	for _, id := range []string{"erp", "wms"} {
@@ -144,15 +146,15 @@ func prepareBusinessConfirmation(t *testing.T, tn *Tenant, at time.Time, spec *p
 			if reverse {
 				name, path = id+"-reverse", id+"/reverse"
 			}
-			decide(t, tn, "builder", build.ID, "build.writeback.create", build.WritebackType, name, map[string]any{"name": strings.ReplaceAll(name, "-", ""), "title": name, "connection": id, "object": "build.receipt", "on": "confirmation", "path": path}, at)
-			decide(t, tn, "builder", build.ID, "build.writeback.publish", build.WritebackType, name, map[string]any{}, at)
+			decide(t, tn, "builder", construction.ID, "build.writeback.create", construction.WritebackType, name, map[string]any{"name": strings.ReplaceAll(name, "-", ""), "title": name, "connection": id, "object": "build.receipt", "on": "confirmation", "path": path}, at)
+			decide(t, tn, "builder", construction.ID, "build.writeback.publish", construction.WritebackType, name, map[string]any{}, at)
 		}
 	}
-	decide(t, tn, "builder", build.ID, "build.source.create", build.SourceType, "SOURCE", map[string]any{"name": "receiptsource", "title": "External receipt status", "connection": "wms", "profile": "json", "url": "rows", "object": "build.receipt", "key": "id", "mapping": []build.SourceField{{From: "state", To: "status"}}}, at)
-	decide(t, tn, "builder", build.ID, "build.source.publish", build.SourceType, "SOURCE", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.source.create", construction.SourceType, "SOURCE", map[string]any{"name": "receiptsource", "title": "External receipt status", "connection": "wms", "profile": "json", "url": "rows", "object": "build.receipt", "key": "id", "mapping": []construction.SourceField{{From: "state", To: "status"}}}, at)
+	decide(t, tn, "builder", construction.ID, "build.source.publish", construction.SourceType, "SOURCE", map[string]any{}, at)
 	actions[0].Transaction.Confirmation = spec
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "O", map[string]any{"actions": actions}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "O", map[string]any{"actions": actions}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "O", map[string]any{}, at)
 }
 
 func confirmationResponse(code int, body string) (*http.Response, error) {
@@ -161,7 +163,7 @@ func confirmationResponse(code int, body string) (*http.Response, error) {
 
 func currentConfirmation(t *testing.T, tn *Tenant) platform.ConfirmationRun {
 	t.Helper()
-	runs, _, err := platform.Find[platform.ConfirmationRun](tn.automation(build.ID, false), platform.Query{})
+	runs, _, err := platform.Find[platform.ConfirmationRun](tn.automation(construction.ID, false), platform.Query{})
 	if err != nil || len(runs) != 1 {
 		t.Fatalf("confirmation count=%d: %v", len(runs), err)
 	}
@@ -199,8 +201,8 @@ func TestBusinessConfirmationDeadlineCompensatesEveryPartyAndAllowsEvidence(t *t
 		return confirmationResponse(200, `{"state":"confirmed"}`)
 	}
 	prepareBusinessConfirmation(t, tn, at, businessConfirmationSpec("hold", "compensate"))
-	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-	start := submission(tn, memberOf(t, tn, "operator"), build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{})
+	decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	start := submission(tn, memberOf(t, tn, "operator"), construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{})
 	first, err := tn.Submit(memberOf(t, tn, "operator"), start, at)
 	if err != nil {
 		t.Fatal(err)
@@ -210,7 +212,7 @@ func TestBusinessConfirmationDeadlineCompensatesEveryPartyAndAllowsEvidence(t *t
 		t.Fatal("same initiation lost its original answer")
 	}
 	tn.Dispatch(at)
-	runJob(t, tn, build.ID, "confirmations", at.Add(2*time.Second))
+	runJob(t, tn, construction.ID, "confirmations", at.Add(2*time.Second))
 	run := currentConfirmation(t, tn)
 	if run.State != "compensating" || slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.Compensation == "" }) {
 		t.Fatalf("deadline omitted a party: %+v", run)
@@ -220,15 +222,15 @@ func TestBusinessConfirmationDeadlineCompensatesEveryPartyAndAllowsEvidence(t *t
 	if run.Parties[0].CompensationState != "rejected" || run.Parties[1].CompensationState != "unknown" {
 		t.Fatalf("reverse outcomes: %+v", run)
 	}
-	if got := refuse(t, tn, "operator", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "compensation": true, "outcome": "accepted", "reason": "checked"}, at); got == "ok" {
+	if got := refuse(t, tn, "operator", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "compensation": true, "outcome": "accepted", "reason": "checked"}, at); got == "ok" {
 		t.Fatal("operator impersonated a reviewer")
 	}
-	if got := refuse(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "compensation": true, "outcome": "retry", "reason": "guess"}, at); got == "ok" {
+	if got := refuse(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "compensation": true, "outcome": "retry", "reason": "guess"}, at); got == "ok" {
 		t.Fatal("unknown compensation was resent")
 	}
-	decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "compensation": true, "outcome": "accepted", "reason": "The receiver confirmed cancellation"}, at.Add(4*time.Second))
+	decide(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "compensation": true, "outcome": "accepted", "reason": "The receiver confirmed cancellation"}, at.Add(4*time.Second))
 	refuseReverse = false
-	decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "erp", "compensation": true, "outcome": "retry", "reason": "The receiver is ready to cancel"}, at.Add(4*time.Second))
+	decide(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "erp", "compensation": true, "outcome": "retry", "reason": "The receiver is ready to cancel"}, at.Add(4*time.Second))
 	tn.Dispatch(at.Add(5 * time.Second))
 	run = currentConfirmation(t, tn)
 	if run.State != "compensated" || len(reverseKeys["erp.example"]) != 2 || reverseKeys["erp.example"][0] != reverseKeys["erp.example"][1] || len(reverseKeys["wms.example"]) != 1 {
@@ -254,10 +256,10 @@ func TestBusinessConfirmationPartialPoliciesAndLateAnswers(t *testing.T) {
 				return confirmationResponse(200, `{}`)
 			}
 			prepareBusinessConfirmation(t, tn, at, businessConfirmationSpec(policy, "hold"))
-			decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-			decide(t, tn, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
+			decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+			decide(t, tn, "operator", construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
 			tn.Dispatch(at)
-			runJob(t, tn, build.ID, "confirmations", at.Add(time.Second))
+			runJob(t, tn, construction.ID, "confirmations", at.Add(time.Second))
 			run := currentConfirmation(t, tn)
 			record, _ := tn.RecordOf(memberOf(t, tn, "operator"), "build.receipt", "R1", at)
 			want := "waiting"
@@ -281,12 +283,12 @@ func TestBusinessConfirmationRevalidationRejectsStaleSourceEvidence(t *testing.T
 		return confirmationResponse(200, `[{"id":"R1","state":"confirmed"}]`)
 	}
 	prepareBusinessConfirmation(t, tn, at, businessConfirmationSpec("hold", "hold"))
-	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-	decide(t, tn, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
 	tn.Dispatch(at)
 	tn.Outbound = func(req *http.Request, _ bool) (*http.Response, error) {
 		run := currentConfirmation(t, tn)
-		decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "refused", "reason": "Checked external refusal during source read"}, at)
+		decide(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "refused", "reason": "Checked external refusal during source read"}, at)
 		return confirmationResponse(200, `[{"id":"R1","state":"confirmed"}]`)
 	}
 	tn.ReconcileConfirmations(at.Add(time.Second))
@@ -334,8 +336,8 @@ func TestBusinessConfirmationReconciliationWritesOnlyChanges(t *testing.T) {
 	spec.DeadlineSeconds = 3600
 	spec.Parties[1].Reconcile.EverySeconds = 2
 	prepareBusinessConfirmation(t, tn, at, spec)
-	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-	decide(t, tn, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
 	tn.Dispatch(at)
 	written := len(entries)
 	tn.ReconcileConfirmations(at.Add(time.Second))
@@ -385,14 +387,14 @@ func TestBusinessConfirmationReconciliationWritesOnlyChanges(t *testing.T) {
 	sourceState, sourceError = "confirmed", nil
 	duringRead = func() {
 		duringRead = nil
-		decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "refused", "reason": "Checked external refusal during source read"}, at.Add(13*time.Second))
+		decide(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "refused", "reason": "Checked external refusal during source read"}, at.Add(13*time.Second))
 	}
 	tn.ReconcileConfirmations(at.Add(13 * time.Second))
 	run = currentConfirmation(t, tn)
 	if run.Parties[1].State != "rejected" || len(run.Parties[1].Differences) != 3 || len(entries) != written+1 {
 		t.Fatalf("a stale source read replaced manual review: %+v", run.Parties[1])
 	}
-	decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "retry", "reason": "Receiver is ready for another checked attempt"}, at.Add(14*time.Second))
+	decide(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": "wms", "outcome": "retry", "reason": "Receiver is ready for another checked attempt"}, at.Add(14*time.Second))
 	tn.ReconcileConfirmations(at.Add(15 * time.Second))
 	run = currentConfirmation(t, tn)
 	if run.State != "confirmed" || len(run.Parties[1].Differences) != 4 || !run.Parties[1].Differences[3].Matched || reads != 8 || posts != 2 {
@@ -405,14 +407,14 @@ func TestBusinessConfirmationRetainsDefinitionAcrossUpgrade(t *testing.T) {
 	tn := confirmationTenant(t, "confirmation-version")
 	tn.Outbound = func(req *http.Request, _ bool) (*http.Response, error) { return confirmationResponse(200, `{}`) }
 	prepareBusinessConfirmation(t, tn, at, businessConfirmationSpec("hold", "hold"))
-	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-	decide(t, tn, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
-	object, _ := platform.Get[build.Object](tn.automation(build.ID, false), "O")
-	object.Actions[1].Sets = []build.Set{{Field: "status", From: "=newcomplete"}}
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "O", map[string]any{"actions": object.Actions}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
+	object, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), "O")
+	object.Actions[1].Sets = []construction.Set{{Field: "status", From: "=newcomplete"}}
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "O", map[string]any{"actions": object.Actions}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "O", map[string]any{}, at)
 	tn.Dispatch(at.Add(time.Second))
-	runJob(t, tn, build.ID, "confirmations", at.Add(time.Second))
+	runJob(t, tn, construction.ID, "confirmations", at.Add(time.Second))
 	record, _ := tn.RecordOf(memberOf(t, tn, "operator"), "build.receipt", "R1", at)
 	run := currentConfirmation(t, tn)
 	if run.Completion == "" || !strings.Contains(string(platform.Raw(record.Record)), `"status":"complete"`) {
@@ -441,8 +443,8 @@ func TestBusinessConfirmationDurableUnknownRecovery(t *testing.T) {
 				return nil, io.ErrUnexpectedEOF
 			}
 			prepareBusinessConfirmation(t, live, at, businessConfirmationSpec("hold", "hold"))
-			decide(t, live, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-			decide(t, live, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
+			decide(t, live, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+			decide(t, live, "operator", construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
 			// A durable outcome exists, but the process disappears before application.
 			live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 				_, err := journal.AppendAccepted(ctx, id, e, key, hash)
@@ -505,8 +507,8 @@ func TestBusinessConfirmationProtocolUsesOriginalApplicantAndMapping(t *testing.
 	spec := businessConfirmationSpec("hold", "hold")
 	spec.Parties[0] = platform.ConfirmationParty{Name: "erp", Title: "Internal inventory", Protocol: testProtocol().ID(), Action: "hold"}
 	prepareBusinessConfirmation(t, tn, at, spec)
-	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-	decide(t, tn, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{"item": "pen"}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{"item": "pen"}, at)
 	run := currentConfirmation(t, tn)
 	held, known := platform.Get[Hold](tn.automation("stock", false), "R1")
 	if !known || held.Item != "pen" || run.Parties[0].State != "confirmed" || run.Parties[0].Protocol == nil || run.Parties[0].Protocol.Provider != "stock" || len(run.Parties[0].Answer) == 0 {
@@ -529,23 +531,23 @@ func TestBusinessConfirmationEscalationAndExplicitLateCompletion(t *testing.T) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	prepareBusinessConfirmation(t, tn, at, businessConfirmationSpec("hold", "escalate"))
-	decide(t, tn, "operator", build.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
-	decide(t, tn, "operator", build.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	decide(t, tn, "operator", construction.ID, "build.receipt.start", "build.receipt", "R1", map[string]any{}, at)
 	tn.Dispatch(at)
-	runJob(t, tn, build.ID, "confirmations", at.Add(3*time.Second))
+	runJob(t, tn, construction.ID, "confirmations", at.Add(3*time.Second))
 	run := currentConfirmation(t, tn)
 	if run.State != "expired" || !run.Escalated {
 		t.Fatalf("deadline did not escalate: %+v", run)
 	}
 	for _, party := range []string{"erp", "wms"} {
-		decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": party, "outcome": "accepted", "reason": "Checked late receipt"}, at.Add(4*time.Second))
+		decide(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"party": party, "outcome": "accepted", "reason": "Checked late receipt"}, at.Add(4*time.Second))
 	}
 	run = currentConfirmation(t, tn)
 	if run.State != "expired" || run.Completion != "" {
 		t.Fatalf("late answers silently bypassed the deadline: %+v", run)
 	}
-	decide(t, tn, "reviewer", build.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"outcome": "complete", "reason": "All late receipts checked; resume original action"}, at.Add(5*time.Second))
-	runJob(t, tn, build.ID, "confirmations", at.Add(6*time.Second))
+	decide(t, tn, "reviewer", construction.ID, "build.confirmation.review", platform.ConfirmationType, run.ID, map[string]any{"outcome": "complete", "reason": "All late receipts checked; resume original action"}, at.Add(5*time.Second))
+	runJob(t, tn, construction.ID, "confirmations", at.Add(6*time.Second))
 	if currentConfirmation(t, tn).Completion == "" {
 		t.Fatal("reviewed late completion did not resume")
 	}

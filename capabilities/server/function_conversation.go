@@ -3,7 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -22,7 +22,7 @@ func (t *Tenant) functionConversation(store *recordStore, member platform.Member
 	if strings.TrimSpace(request.Question) == "" || len(request.Question) > 4096 || !utf8.ValidString(request.Question) || len(request.History) > 8 {
 		return nil, nil, fmt.Errorf("conversation needs a bounded question and history")
 	}
-	if request.Reply != build.SchemaFunctionAnswer {
+	if request.Reply != construction.SchemaFunctionAnswer {
 		return nil, nil, fmt.Errorf("conversation history needs the original function call owner")
 	}
 	type turn struct {
@@ -32,7 +32,7 @@ func (t *Tenant) functionConversation(store *recordStore, member platform.Member
 	history := []turn{}
 	refs := []string{}
 	seen := map[string]bool{}
-	et := store.types[build.FunctionCallType]
+	et := store.types[construction.FunctionCallType]
 	for _, id := range request.History {
 		if id == "" || len(id) > 1024 || seen[id] || et == nil {
 			return nil, nil, fmt.Errorf("conversation history is unavailable")
@@ -47,12 +47,12 @@ func (t *Tenant) functionConversation(store *recordStore, member platform.Member
 		if row == nil {
 			return nil, nil, fmt.Errorf("conversation history is unavailable")
 		}
-		run, ok := row.value.Interface().(build.FunctionRun)
+		run, ok := row.value.Interface().(construction.FunctionRun)
 		if !ok || run.Archived || run.State != "ready" || run.Member != member.ID || run.App != owner || run.Function != f.Name || run.Version != version || run.Definition != definition || run.Source != source || f.ValidateOutput([]byte(run.Output)) != nil {
 			return nil, nil, fmt.Errorf("conversation history belongs to another context")
 		}
 		history = append(history, turn{Question: run.Question, Answer: json.RawMessage(run.Output)})
-		refs = append(refs, build.FunctionCallType+"/"+id+"#question", build.FunctionCallType+"/"+id+"#output")
+		refs = append(refs, construction.FunctionCallType+"/"+id+"#question", construction.FunctionCallType+"/"+id+"#output")
 	}
 	return struct {
 		Record   map[string]any `json:"record"`

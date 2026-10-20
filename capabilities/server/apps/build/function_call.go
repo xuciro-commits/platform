@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"cmp"
 	"encoding/json"
@@ -12,17 +14,17 @@ import (
 )
 
 func (b *Build) functionCallEntity() platform.Entity {
-	return platform.Entity{Type: FunctionCallType, Title: "AI function call", Plural: "AI function calls", Model: FunctionRun{}, Display: "function",
+	return platform.Entity{Type: construction.FunctionCallType, Title: "AI function call", Plural: "AI function calls", Model: construction.FunctionRun{}, Display: "function",
 		Description: "A retained typed suggestion or refusal; it never changes its source record.",
-		Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "member", Levels: map[string]string{Builder: platform.ScopeTenant}, Participants: func(record any) []string {
-			run := record.(FunctionRun)
+		Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "member", Levels: map[string]string{construction.Builder: platform.ScopeTenant}, Participants: func(record any) []string {
+			run := record.(construction.FunctionRun)
 			return append([]string{run.Member}, run.Reviewers...)
 		}},
 		Derived: []platform.Derivation{{From: "sources", Fields: []string{"output", "reason", "question", "sourceValues", "amendments"}}}, Withheld: "withheld"}
 }
 
 func functionCallActions(roles []string) []platform.Action {
-	return append([]platform.Action{{Schema: SchemaFunctionCall, Target: FunctionCallType, New: true, Capability: "functions", Title: "Call AI function",
+	return append([]platform.Action{{Schema: construction.SchemaFunctionCall, Target: construction.FunctionCallType, New: true, Capability: "functions", Title: "Call AI function",
 		Description: "Request a published function over a readable source; retain the suggestion for human review.",
 		Roles:       append(slices.Clone(roles), platform.AnyMember), Automation: true,
 		Payload: []platform.Field{{Name: "question", Type: "string", Description: "Bounded member question for a conversation function"}, {Name: "history", Type: "json", Description: "Up to eight prior completed calls in this conversation"}, {Name: "app", Type: "string", Description: "Registered function owner"}, {Name: "name", Type: "string", Required: true, Description: "Published function name"},
@@ -30,8 +32,8 @@ func functionCallActions(roles []string) []platform.Action {
 			{Name: "version", Type: "integer", Description: "Published version; zero selects the installed version"},
 			{Name: "release", Type: "string", Description: "Retained release for a native automation; empty keeps a development run"},
 			{Name: "onBehalf", Type: "string", Description: "Retained member for a native automation"}}},
-		{Schema: SchemaFunctionAnswer, Target: FunctionCallType, Capability: "functions", Title: "Record AI function answer",
-			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.FunctionAnswerFields()}}, platform.Action{Schema: SchemaProposalReview, Target: FunctionCallType, Capability: "functions", Title: "Review AI proposal", Description: "Reject or expire a retained proposal without changing its business source.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "decision", Type: "string", Required: true, Choices: []string{"rejected", "expired"}, Description: "Proposal decision"}}})
+		{Schema: construction.SchemaFunctionAnswer, Target: construction.FunctionCallType, Capability: "functions", Title: "Record AI function answer",
+			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.FunctionAnswerFields()}}, platform.Action{Schema: SchemaProposalReview, Target: construction.FunctionCallType, Capability: "functions", Title: "Review AI proposal", Description: "Reject or expire a retained proposal without changing its business source.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "decision", Type: "string", Required: true, Choices: []string{"rejected", "expired"}, Description: "Proposal decision"}}})
 }
 
 func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -40,8 +42,8 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "AI functions require an accepted decision")
 		}
 		id := s.GetTarget().GetId()
-		run, exists := platform.Get[FunctionRun](c, id)
-		if s.GetSchema().GetName() == SchemaFunctionCall {
+		run, exists := platform.Get[construction.FunctionRun](c, id)
+		if s.GetSchema().GetName() == construction.SchemaFunctionCall {
 			if exists {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
@@ -49,7 +51,7 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 			if json.Unmarshal(s.GetPayload(), &request) != nil {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
-			request.Reply = SchemaFunctionAnswer
+			request.Reply = construction.SchemaFunctionAnswer
 			return func(r *pb.ChangeRecord) {
 				call, err := c.RequestFunction(r, request)
 				if err != nil {
@@ -59,11 +61,11 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 				if c.Automation {
 					member = request.OnBehalf
 				}
-				definition, _, ok := b.host.Function(cmp.Or(request.App, ID), request.Name, call.Version)
+				definition, _, ok := b.host.Function(cmp.Or(request.App, construction.ID), request.Name, call.Version)
 				if !ok {
 					return
 				}
-				c.Put(r, FunctionRun{Question: request.Question, History: slices.Clone(request.History), App: cmp.Or(request.App, ID), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
+				c.Put(r, construction.FunctionRun{Question: request.Question, History: slices.Clone(request.History), App: cmp.Or(request.App, construction.ID), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
 					SourceValues: call.SourceValues, SourceRevision: call.SourceRevision, Applications: call.Applications, Source: call.Source, State: "pending", Definition: call.Definition, Dependencies: call.Dependencies,
 					Model: call.Model, InputHash: call.InputHash, Release: call.Release, Sources: call.Sources})
 			}, nil
@@ -91,10 +93,10 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 				if proposalNeedsHandover(run) {
 					recipient := platform.Recipient{AppRole: run.Contract.Proposal.HandoffRole}
 					key := "proposal:" + run.ID
-					if err := c.Assign(r, platform.Assignment{Title: "Review AI proposal", Ref: FunctionCallType + "/" + run.ID, To: []platform.Recipient{recipient}, Due: run.ExpiresAt, Key: key}); err != nil {
+					if err := c.Assign(r, platform.Assignment{Title: "Review AI proposal", Ref: construction.FunctionCallType + "/" + run.ID, To: []platform.Recipient{recipient}, Due: run.ExpiresAt, Key: key}); err != nil {
 						return
 					}
-					if task, ok := platform.Get[platform.WorkTask](b.host.Automation(c, platform.WorkApp), ID+":"+key); ok {
+					if task, ok := platform.Get[platform.WorkTask](b.host.Automation(c, platform.WorkApp), construction.ID+":"+key); ok {
 						run.Reviewers = slices.Clone(task.Candidates)
 					}
 				}

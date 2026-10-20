@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"strings"
@@ -9,9 +11,9 @@ import (
 )
 
 func TestPublishedBuilderReleaseUsesCompleteOwnerDefinitions(t *testing.T) {
-	object := Object{
-		Name: "visit", Title: "Visit", Fields: []Field{{Name: "guest", Title: "Guest", Type: "text", Required: true, Search: true}},
-		Access: []Access{{Role: User, Read: "own"}},
+	object := construction.Object{
+		Name: "visit", Title: "Visit", Fields: []construction.Field{{Name: "guest", Title: "Guest", Type: "text", Required: true, Search: true}},
+		Access: []construction.Access{{Role: construction.User, Read: "own"}},
 	}
 	object.ID = "O1"
 	object.Published = published(object)
@@ -23,10 +25,10 @@ func TestPublishedBuilderReleaseUsesCompleteOwnerDefinitions(t *testing.T) {
 	app.ID = "A1"
 	app.Published = published(app)
 
-	root := platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: "desk"}
-	release := func(o Object) platform.ReleaseCandidate {
+	root := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "desk"}
+	release := func(o construction.Object) platform.ReleaseCandidate {
 		t.Helper()
-		assets, err := releaseAssets([]Object{o}, []Page{page}, []Application{app}, nil, "1")
+		assets, err := releaseAssets([]construction.Object{o}, []Page{page}, []Application{app}, nil, "1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,34 +60,34 @@ func TestPublishedBuilderReleaseUsesCompleteOwnerDefinitions(t *testing.T) {
 }
 
 func TestPublishedBuilderReleaseRejectsUnclosedReferences(t *testing.T) {
-	object := Object{Name: "visit", Title: "Visit", Fields: []Field{
+	object := construction.Object{Name: "visit", Title: "Visit", Fields: []construction.Field{
 		{Name: "account", Title: "Account", Type: "reference", Ref: "crm.account"},
 	}}
 	object.ID = "O1"
 	object.Published = published(object)
-	assets, err := releaseAssets([]Object{object}, nil, nil, nil, "1")
+	assets, err := releaseAssets([]construction.Object{object}, nil, nil, nil, "1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = platform.Candidate([]platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: "build.visit"}}, assets)
+	_, err = platform.Candidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.visit"}}, assets)
 	if err == nil || !strings.Contains(err.Error(), "missing asset crm/object/crm.account") {
 		t.Fatalf("expected a closed object reference, got %v", err)
 	}
 }
 
 func TestPublishedBuilderPageReplacesTheGeneratedPage(t *testing.T) {
-	object := Object{Name: "visit", Title: "Visit", Fields: []Field{{Name: "guest", Title: "Guest", Type: "text"}}}
+	object := construction.Object{Name: "visit", Title: "Visit", Fields: []construction.Field{{Name: "guest", Title: "Guest", Type: "text"}}}
 	object.ID = "O1"
 	object.Published = published(object)
 	page := Page{Name: "visit", Title: "Reception visits", Object: "build.visit",
 		List: []string{"guest"}, Detail: []string{"guest"}}
 	page.ID = "P1"
 	page.Published = published(page)
-	assets, err := releaseAssets([]Object{object}, []Page{page}, nil, nil, "1")
+	assets, err := releaseAssets([]construction.Object{object}, []Page{page}, nil, nil, "1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate, err := platform.Candidate([]platform.AssetRef{{App: ID, Kind: platform.AssetPage, Name: "visit"}}, assets)
+	candidate, err := platform.Candidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "visit"}}, assets)
 	if err != nil {
 		t.Fatal(err)
 	}

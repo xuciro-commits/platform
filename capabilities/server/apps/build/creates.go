@@ -2,7 +2,7 @@ package build
 
 import (
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"strings"
 	"time"
@@ -15,14 +15,14 @@ import (
 // checkCreates refuses a related record an action could not make: an object of
 // another app (whose records change only through its own actions), one this
 // tenant has not installed, or a Via that is not its reference to this object.
-func (b *Build) checkCreates(o Object) error {
+func (b *Build) checkCreates(o construction.Object) error {
 	for _, a := range o.Actions {
 		for _, cr := range a.Creates {
 			where := fmt.Sprintf("the action %q creates %q", a.Name, cr.Object)
-			if !strings.HasPrefix(cr.Object, ID+".") {
+			if !strings.HasPrefix(cr.Object, construction.ID+".") {
 				return fmt.Errorf("%s, which is another app's object; change it through that app's actions", where)
 			}
-			if cr.Object == buildapi.TypeOf(o.Name) {
+			if cr.Object == construction.TypeOf(o.Name) {
 				return fmt.Errorf("%s, which is this object itself", where)
 			}
 			if b.host == nil {
@@ -33,8 +33,8 @@ func (b *Build) checkCreates(o Object) error {
 				return fmt.Errorf("%s, which this tenant has not published", where)
 			}
 			via, ok := info.Field(cr.Via)
-			if !ok || via.Type != "reference" || via.Ref != buildapi.TypeOf(o.Name) {
-				return fmt.Errorf("%s through %q, which is not its reference to %s", where, cr.Via, buildapi.TypeOf(o.Name))
+			if !ok || via.Type != "reference" || via.Ref != construction.TypeOf(o.Name) {
+				return fmt.Errorf("%s through %q, which is not its reference to %s", where, cr.Via, construction.TypeOf(o.Name))
 			}
 			for _, set := range cr.Sets {
 				if set.Field == cr.Via {
@@ -61,15 +61,15 @@ func (b *Build) checkCreates(o Object) error {
 // holds both writes or neither. No second submission re-enters the ledger.
 // Only this builder's own objects are made: another app's records change
 // through its actions, protocols or flows.
-func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error) {
-	if b.host == nil || !strings.HasPrefix(cr.Object, ID+".") {
+func (b *Build) create(c platform.Caller, cr construction.Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error) {
+	if b.host == nil || !strings.HasPrefix(cr.Object, construction.ID+".") {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} is not an object of this builder", cr.Object)
 	}
 	related, known := b.installed[cr.Object]
 	if !known {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} is not published", cr.Object)
 	}
-	info, err := platform.Describe(ID, related, func(reflect.Type) string { return "" })
+	info, err := platform.Describe(construction.ID, related, func(reflect.Type) string { return "" })
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -81,7 +81,7 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 	if creators == nil {
 		creators = related.Standard.Roles
 	}
-	if !related.Standard.Create || !c.Holds(c.App, Builder) && !c.May(c.App, "create", creators).Allow {
+	if !related.Standard.Create || !c.Holds(c.App, construction.Builder) && !c.May(c.App, "create", creators).Allow {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not create {object}", c.ID, cr.Object)
 	}
 	v := reflect.New(reflect.TypeOf(related.Model)).Elem()
@@ -124,6 +124,6 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 
 // relatedID is the n-th related record's ID for one taking of an action: the
 // same in the decision and in its After, and new at each revision.
-func relatedID(rec platform.Record, a Action, n int) string {
+func relatedID(rec platform.Record, a construction.Action, n int) string {
 	return fmt.Sprintf("%s-%s-%d-%d", rec.ID, a.Name, rec.Revision, n+1)
 }

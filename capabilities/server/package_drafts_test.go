@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"errors"
@@ -18,16 +20,16 @@ import (
 func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 	at := time.Date(2026, 10, 15, 15, 0, 0, 0, time.UTC)
 	source := builderTenant(t, "blueprint-source")
-	decide(t, source, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "object", map[string]any{"name": "item", "title": "Item", "fields": []map[string]any{{"name": "title", "title": "Title", "type": "text"}}}, at)
-	decide(t, source, "builder", build.ID, build.TestPlanType+".create", build.TestPlanType, "scenario", map[string]any{"name": "createitem", "title": "Create item", "roots": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.item"}}, "at": at, "steps": []platform.TestStep{{Type: "build.item", ID: "sample", Action: "build.item.create", Payload: `{"title":"Example"}`, Expect: "accepted"}}}, at)
-	decide(t, source, "builder", build.ID, build.AppType+".create", build.AppType, "application", map[string]any{"name": "inventory", "title": "Inventory", "pages": []string{"item"}, "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetTestPlan, Name: "createitem"}}}, at)
+	decide(t, source, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "object", map[string]any{"name": "item", "title": "Item", "fields": []map[string]any{{"name": "title", "title": "Title", "type": "text"}}}, at)
+	decide(t, source, "builder", construction.ID, construction.TestPlanType+".create", construction.TestPlanType, "scenario", map[string]any{"name": "createitem", "title": "Create item", "roots": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.item"}}, "at": at, "steps": []platform.TestStep{{Type: "build.item", ID: "sample", Action: "build.item.create", Payload: `{"title":"Example"}`, Expect: "accepted"}}}, at)
+	decide(t, source, "builder", construction.ID, construction.AppType+".create", construction.AppType, "application", map[string]any{"name": "inventory", "title": "Inventory", "pages": []string{"item"}, "resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetTestPlan, Name: "createitem"}}}, at)
 	source.mu.Lock()
-	preview, candidate, err := source.previewReleaseLocked([]build.JointDraftRef{{Kind: platform.AssetObject, ID: "object"}, {Kind: platform.AssetApp, ID: "application"}, {Kind: platform.AssetTestPlan, ID: "scenario"}}, memberOf(t, source, "builder"))
+	preview, candidate, err := source.previewReleaseLocked([]construction.JointDraftRef{{Kind: platform.AssetObject, ID: "object"}, {Kind: platform.AssetApp, ID: "application"}, {Kind: platform.AssetTestPlan, ID: "scenario"}}, memberOf(t, source, "builder"))
 	source.mu.Unlock()
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("owner candidate: %+v %v", preview, err)
 	}
-	descriptor := PackageDescriptor{ID: "example.inventory", Version: "1.0.0", Namespace: "example.inventory", Blueprint: &PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "inventory"}}, Assets: candidate.Assets}}
+	descriptor := PackageDescriptor{ID: "example.inventory", Version: "1.0.0", Namespace: "example.inventory", Blueprint: &PackageBlueprint{Roots: []platform.AssetRef{{App: construction.ID, Kind: platform.AssetApp, Name: "inventory"}}, Assets: candidate.Assets}}
 	directory := t.TempDir()
 	raw, _ := json.Marshal(descriptor)
 	original := append([]byte(nil), raw...)
@@ -40,7 +42,7 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	compose := func() *Tenant {
-		tn := composeTenant(t, "blueprint-target", []Seat{seatOf("admin", PlatformApp+":"+Admin), seatOf("builder", build.ID+":"+build.Builder), seatOf("user", build.ID+":"+build.User)}, build.New("blueprint-target"))
+		tn := composeTenant(t, "blueprint-target", []Seat{seatOf("admin", PlatformApp+":"+Admin), seatOf("builder", construction.ID+":"+construction.Builder), seatOf("user", construction.ID+":"+construction.User)}, build.New("blueprint-target"))
 		testConsoleOf(tn).BindPackageIndex(index)
 		return tn
 	}
@@ -76,12 +78,12 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 	if _, err = target.CreatePackageDrafts(builder, descriptor.ID, descriptor.Version, "create", at); err == nil {
 		t.Fatal("failed append created an application")
 	}
-	if _, ok := platform.Get[build.Application](target.automation(build.ID, false), "inventory"); ok {
+	if _, ok := platform.Get[build.Application](target.automation(construction.ID, false), "inventory"); ok {
 		t.Fatal("append failure leaked an application draft")
 	}
 	fail = false
 	limited := builder
-	limited.Scopes = []string{build.AppType + ".create"}
+	limited.Scopes = []string{construction.AppType + ".create"}
 	if _, err = target.CreatePackageDrafts(limited, descriptor.ID, descriptor.Version, "limited", at); err == nil {
 		t.Fatal("one allowed create bypassed another draft's scope")
 	}
@@ -92,18 +94,18 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 	if answer.ApplicationID != "inventory" || len(answer.Drafts) != 3 || len(entries) != 2 {
 		t.Fatalf("created drafts: %+v entries=%d", answer, len(entries))
 	}
-	app, ok := platform.Get[build.Application](target.automation(build.ID, false), answer.ApplicationID)
+	app, ok := platform.Get[build.Application](target.automation(construction.ID, false), answer.ApplicationID)
 	if !ok || app.Title != "Inventory" || app.Published != "" || app.State != "draft" {
 		t.Fatalf("created application is not the sealed draft: %+v", app)
 	}
-	object, ok := platform.Get[build.Object](target.automation(build.ID, false), "item")
+	object, ok := platform.Get[construction.Object](target.automation(construction.ID, false), "item")
 	if !ok || object.Published != "" || object.State != "draft" {
 		t.Fatalf("created object is not a draft: %+v", object)
 	}
 	if _, ok := target.entity("build.item"); ok || target.ActiveRelease() != "" {
 		t.Fatal("package creation published definitions")
 	}
-	plan, ok := platform.Get[build.TestPlan](target.automation(build.ID, false), "createitem")
+	plan, ok := platform.Get[construction.TestPlan](target.automation(construction.ID, false), "createitem")
 	if !ok || len(plan.Roots) != 1 || plan.Object != "" || plan.Application != "" || plan.Published != "" {
 		t.Fatalf("portable scenario draft: %+v", plan)
 	}
@@ -113,7 +115,7 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 	if _, refusal := target.Read(memberOf(t, target, "user"), "packages"); refusal == nil {
 		t.Fatal("business user discovered builder packages")
 	}
-	if roles := memberOf(t, target, "builder").Roles; len(roles) != 1 || roles[build.ID] != build.Builder {
+	if roles := memberOf(t, target, "builder").Roles; len(roles) != 1 || roles[construction.ID] != construction.Builder {
 		t.Fatalf("package granted roles: %v", roles)
 	}
 	retried, err := target.CreatePackageDrafts(builder, descriptor.ID, descriptor.Version, "create", at.Add(time.Hour))
@@ -134,7 +136,7 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 	if held := testConsoleOf(target).packagesOf()[descriptor.ID]; held.State != "active" || len(held.Retained) != 0 {
 		t.Fatalf("blueprint was not reinstalled as the same version: %+v", held)
 	}
-	if current, ok := platform.Get[build.Application](target.automation(build.ID, false), answer.ApplicationID); !ok || !reflect.DeepEqual(current, app) {
+	if current, ok := platform.Get[build.Application](target.automation(construction.ID, false), answer.ApplicationID); !ok || !reflect.DeepEqual(current, app) {
 		t.Fatalf("uninstall and reinstall changed the application draft: %+v", current)
 	}
 	recovered := compose()
@@ -156,11 +158,11 @@ func TestPackageBlueprintCreatesOnlyDraftsAndRecovers(t *testing.T) {
 
 func TestPackageBlueprintExtendsInstalledCodeWithoutNativeDrafts(t *testing.T) {
 	base := platform.AssetRef{App: core.ID, Kind: platform.AssetApp, Name: core.ID}
-	page, err := platform.PageReleaseAsset(build.ID, "1", platform.Page{Name: "materialdesk", Title: "Materials", Object: platform.AssetRef{App: core.ID, Kind: platform.AssetObject, Name: core.MaterialType}, Sections: []platform.Section{{ID: "table", Widget: "table", Fields: []string{"name"}}}})
+	page, err := platform.PageReleaseAsset(construction.ID, "1", platform.Page{Name: "materialdesk", Title: "Materials", Object: platform.AssetRef{App: core.ID, Kind: platform.AssetObject, Name: core.MaterialType}, Sections: []platform.Section{{ID: "table", Widget: "table", Fields: []string{"name"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	application, err := platform.ApplicationReleaseAsset(build.ID, "1", platform.Application{Name: "materialworkspace", Title: "Material workspace", Pages: []string{"materialdesk"}, Extends: &base, Entry: core.ID,
+	application, err := platform.ApplicationReleaseAsset(construction.ID, "1", platform.Application{Name: "materialworkspace", Title: "Material workspace", Pages: []string{"materialdesk"}, Extends: &base, Entry: core.ID,
 		Replacements: []platform.ApplicationPageReplacement{{View: "materials", Page: "materialdesk"}}})
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +188,7 @@ func TestPackageBlueprintExtendsInstalledCodeWithoutNativeDrafts(t *testing.T) {
 		t.Fatalf("native dependency prevented ordinary Build drafts: %+v %v", answer, err)
 	}
 	for _, draft := range answer.Drafts {
-		if draft.Ref.App != build.ID || draft.Type != build.AppType && draft.Type != build.PageType {
+		if draft.Ref.App != construction.ID || draft.Type != construction.AppType && draft.Type != construction.PageType {
 			t.Fatalf("native prerequisite became a draft: %+v", draft)
 		}
 	}
@@ -194,7 +196,7 @@ func TestPackageBlueprintExtendsInstalledCodeWithoutNativeDrafts(t *testing.T) {
 	if err != nil || string(original) != string(current) || tn.ActiveRelease() != "" {
 		t.Fatal("draft creation changed the native owner or activated the application")
 	}
-	preview, err := tn.PreviewReleaseDrafts(memberOf(t, tn, "builder"), []build.JointDraftRef{{Kind: platform.AssetPage, ID: "materialdesk"}, {Kind: platform.AssetApp, ID: "materialworkspace"}})
+	preview, err := tn.PreviewReleaseDrafts(memberOf(t, tn, "builder"), []construction.JointDraftRef{{Kind: platform.AssetPage, ID: "materialdesk"}, {Kind: platform.AssetApp, ID: "materialworkspace"}})
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("native extension drafts do not form an ordinary candidate: %+v %v", preview, err)
 	}

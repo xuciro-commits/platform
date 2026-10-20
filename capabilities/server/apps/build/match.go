@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"slices"
@@ -19,10 +21,10 @@ import (
 const MatchType = "build.match"
 
 func (b *Build) matchEntity() platform.Entity {
-	return platform.Entity{Type: MatchType, Title: "Matching rule", Plural: "Matching rules", Model: Match{}, Display: "title",
+	return platform.Entity{Type: MatchType, Title: "Matching rule", Plural: "Matching rules", Model: construction.Match{}, Display: "title",
 		Description: "When rows from different systems are one party, material or site, and whose value wins per field.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
-			m := record.(*Match)
+			m := record.(*construction.Match)
 			if m.State == "published" {
 				fixed, err := b.ExecutionMatching(*m)
 				if err != nil {
@@ -32,16 +34,16 @@ func (b *Build) matchEntity() platform.Entity {
 			}
 			return nil
 		},
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant, construction.Integrator: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Check the rule and apply it to every row landing in the object from now on.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishMatch},
-				{Name: "pause", Title: "Pause", Description: "Stop matching; records stay as they are.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+				{Name: "publish", Title: "Publish", Description: "Check the rule and apply it to every row landing in the object from now on.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishMatch},
+				{Name: "pause", Title: "Pause", Description: "Stop matching; records stay as they are.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
 func (b *Build) publishMatch(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	m, ok := record.(*Match)
+	m, ok := record.(*construction.Match)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -54,12 +56,12 @@ func (b *Build) publishMatch(c platform.Caller, record any, _ json.RawMessage, _
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		*m = fixed.(Match)
+		*m = fixed.(construction.Match)
 	}
 	return nil
 }
 
-func (b *Build) checkMatch(c platform.Caller, m Match) *kernel.Error {
+func (b *Build) checkMatch(c platform.Caller, m construction.Match) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -94,7 +96,7 @@ func (b *Build) checkMatch(c platform.Caller, m Match) *kernel.Error {
 			return refuse("{field} is not a writable field of {object}", p.Field, m.Object)
 		}
 	}
-	others, _, _ := platform.Find[Match](c, platform.Query{Limit: 500})
+	others, _, _ := platform.Find[construction.Match](c, platform.Query{Limit: 500})
 	for _, other := range others {
 		if other.ID == m.ID || other.State != "published" {
 			continue

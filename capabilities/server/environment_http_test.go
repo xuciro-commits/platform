@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/base64"
@@ -24,8 +26,8 @@ import (
 // release workbench and the host console are written against.
 func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	seats := append(upgradeSeats(),
-		Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{build.ID: build.User}}},
-		Seat{Subjects: []string{"user:pub-only@example.test"}, Member: platform.Member{ID: "pub-only", Roles: map[string]string{build.ID: build.Publisher}}})
+		Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{construction.ID: construction.User}}},
+		Seat{Subjects: []string{"user:pub-only@example.test"}, Member: platform.Member{ID: "pub-only", Roles: map[string]string{construction.ID: construction.Publisher}}})
 	compose := func(id string) *Tenant {
 		tn, err := NewTenant(id, NewConsole(id, seats...), work.New(id), build.New(id))
 		if err != nil {
@@ -79,7 +81,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 		t.Helper()
 		keys++
 		raw, _ := json.Marshal(payload)
-		authority := build.ID
+		authority := construction.ID
 		var binding *platform.SchemaVersion
 		family := uint32(1)
 		for _, action := range host.tenantByID(tenant).Catalog(memberOf(t, host.tenantByID(tenant), token)) {
@@ -111,7 +113,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 		for _, step := range []struct {
 			typ, target string
 			payload     any
-		}{{build.ObjectType, "O1", visitV1}, {build.PageType, "P1", deskV1}, {build.AppType, "A1", appV1}} {
+		}{{construction.ObjectType, "O1", visitV1}, {construction.PageType, "P1", deskV1}, {construction.AppType, "A1", appV1}} {
 			if got := submit(tenant, "dana", step.typ, step.target, step.typ+".create", step.payload); got != "ok" {
 				t.Fatalf("%s %s: %s", tenant, step.typ, got)
 			}
@@ -197,7 +199,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 	// in /v1/me, the application with its page and titles in /v1/definitions,
 	// and the page itself, before any record exists.
 	code, me := call(http.MethodGet, "prod", "ops", "/v1/me", nil)
-	if code != http.StatusOK || !strings.Contains(fmt.Sprint(me["apps"]), build.ID) {
+	if code != http.StatusOK || !strings.Contains(fmt.Sprint(me["apps"]), construction.ID) {
 		t.Fatalf("prod operator does not see the build app: %d %v", code, me)
 	}
 	request, _ := http.NewRequest(http.MethodGet, srv.URL+"/v1/definitions", nil)
@@ -261,7 +263,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 
 	// 5. v2 with an optional field: reviewed plan on each environment.
 	visitV2 := map[string]any{"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}, {"name": "priority", "title": "Priority", "type": "integer"}}}
-	if got := submit("dev", "dana", build.ObjectType, "O1", build.ObjectType+".edit", visitV2); got != "ok" {
+	if got := submit("dev", "dana", construction.ObjectType, "O1", construction.ObjectType+".edit", visitV2); got != "ok" {
 		t.Fatalf("dev v2 draft: %s", got)
 	}
 	v2 := freeze("dev")
@@ -277,7 +279,7 @@ func TestApplicationLifecycleOverHTTP(t *testing.T) {
 		t.Fatalf("dev upgrade: %d %v", code, out)
 	}
 	// The materialised drafts are named after their assets.
-	if got := submit("prod", "dana", build.ObjectType, "visit", build.ObjectType+".edit", visitV2); got != "ok" {
+	if got := submit("prod", "dana", construction.ObjectType, "visit", construction.ObjectType+".edit", visitV2); got != "ok" {
 		t.Fatalf("prod v2 draft: %s", got)
 	}
 	if code, _ := call(http.MethodPost, "", "host", "/v1/host/tenants/prod/promotions", map[string]any{"from": "dev", "candidate": v2, "key": "promote-v2", "activate": true, "targetGrant": prodGrant}); code != http.StatusConflict {

@@ -3,8 +3,8 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	buildapi "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -23,8 +23,8 @@ func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action
 		}
 		return actions, nil
 	}
-	var object Object
-	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject || json.Unmarshal(asset.Body, &object) != nil || buildapi.TypeOf(object.Name) != asset.Ref.Name {
+	var object construction.Object
+	if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject || json.Unmarshal(asset.Body, &object) != nil || construction.TypeOf(object.Name) != asset.Ref.Name {
 		return nil, fmt.Errorf("invalid construction object descriptor")
 	}
 	return objectActions(object, Entity(object)), nil

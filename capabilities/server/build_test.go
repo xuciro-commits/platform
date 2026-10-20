@@ -3,7 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"slices"
 	"strings"
 	"testing"
@@ -23,9 +23,9 @@ func TestTenantDefinedObject(t *testing.T) {
 	var journal []Entry
 	compose := func() *Tenant {
 		seat := func(id, role string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{build.ID: role}}}
+			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{construction.ID: role}}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("dana", build.Builder), seat("eli", build.User)), build.New("t-1"))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("dana", construction.Builder), seat("eli", construction.User)), build.New("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -45,7 +45,7 @@ func TestTenantDefinedObject(t *testing.T) {
 	do := func(who, schema, typ, id string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		if _, err := tn.Submit(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: build.ID, IdempotencyKey: fmt.Sprint("b", keys),
+		if _, err := tn.Submit(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: construction.ID, IdempotencyKey: fmt.Sprint("b", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
 			if err.Message != "" {
 				return err.Error() + ": " + err.Message
@@ -61,31 +61,31 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"name": "kind", "title": "Kind", "type": "choice", "choices": "tour, tasting"},
 	}
 	// A definition the host could not install is refused while it is a draft, with the reason.
-	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-1",
+	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "O-1",
 		map[string]any{"name": "Visit", "title": "Visit", "fields": fields}); got != "ERROR_CODE_INVALID_ARGUMENT: the name \"Visit\" is not lower-case letters and digits" {
 		t.Fatalf("a name that is not a name: %s", got)
 	}
-	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-1", map[string]any{"name": "visit", "title": "Visit",
+	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "O-1", map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "colour"}}}); got != "ERROR_CODE_INVALID_ARGUMENT: the field \"guest\" has no type \"colour\"" {
 		t.Fatalf("a field type the platform has not: %s", got)
 	}
 	// The draft, then published.
-	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-1",
+	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "O-1",
 		map[string]any{"name": "visit", "title": "Visit", "plural": "Visits", "description": "A guest's visit.", "fields": fields}); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
-	if _, err := tn.Records(member("eli"), buildapi.TypeOf("visit"), platform.Query{}, now); err == nil {
+	if _, err := tn.Records(member("eli"), construction.TypeOf("visit"), platform.Query{}, now); err == nil {
 		t.Error("a draft was already installed")
 	}
-	if got := do("eli", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got == "ok" {
+	if got := do("eli", construction.SchemaPublish, construction.ObjectType, "O-1", map[string]any{}); got == "ok" {
 		t.Error("someone without the builder role published an object")
 	}
-	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaPublish, construction.ObjectType, "O-1", map[string]any{}); got != "ok" {
 		t.Fatalf("publish: %s", got)
 	}
 
 	// It is now an ordinary type: declared, in the member's entities and catalog.
-	visit := buildapi.TypeOf("visit")
+	visit := construction.TypeOf("visit")
 	if !slices.ContainsFunc(tn.Entities(member("eli")), func(info platform.EntityInfo) bool { return info.Type == visit }) {
 		t.Fatalf("the published object is not among eli's entities: %+v", tn.Entities(member("eli")))
 	}
@@ -121,10 +121,10 @@ func TestTenantDefinedObject(t *testing.T) {
 
 	// Published again with another field: the records keep what they had.
 	grown := append(slices.Clone(fields), map[string]any{"name": "note", "title": "Note", "type": "longtext"})
-	if got := do("dana", build.ObjectType+".edit", build.ObjectType, "O-1", map[string]any{"fields": grown}); got != "ok" {
+	if got := do("dana", construction.ObjectType+".edit", construction.ObjectType, "O-1", map[string]any{"fields": grown}); got != "ok" {
 		t.Fatalf("edit: %s", got)
 	}
-	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaPublish, construction.ObjectType, "O-1", map[string]any{}); got != "ok" {
 		t.Fatalf("publish again: %s", got)
 	}
 	if got := do("eli", visit+".edit", visit, "V-1", map[string]any{"note": "Asked about the tasting."}); got != "ok" {
@@ -144,13 +144,13 @@ func TestTenantDefinedObject(t *testing.T) {
 	// has, checked against what is installed, with the reason when it is wrong.
 	bad := func(payload map[string]any, want string) {
 		t.Helper()
-		if got := do("dana", build.PageType+".create", build.PageType, "P-1", payload); got != want {
+		if got := do("dana", construction.PageType+".create", construction.PageType, "P-1", payload); got != want {
 			t.Errorf("page refused as %q, want %q", got, want)
 		}
 	}
 	bad(map[string]any{"name": "visits", "title": "Visits", "object": "stock.item", "list": []string{"guest"}, "detail": []string{"guest"}},
 		"ERROR_CODE_INVALID_ARGUMENT: this tenant has no object \"stock.item\"")
-	if got := do("dana", build.PageType+".create", build.PageType, "P-1",
+	if got := do("dana", construction.PageType+".create", construction.PageType, "P-1",
 		map[string]any{"name": "visits", "title": "Visits", "description": "Every visit.", "object": visit,
 			"list": []string{"guest", "kind"}, "detail": []string{"guest", "visited", "spend", "kind", "note"}, "actions": []string{visit + ".edit"}}); got != "ok" {
 		t.Fatalf("page draft: %s", got)
@@ -160,7 +160,7 @@ func TestTenantDefinedObject(t *testing.T) {
 	}) {
 		t.Error("a page was offered before it was published")
 	}
-	if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaRelease, construction.PageType, "P-1", map[string]any{}); got != "ok" {
 		t.Fatalf("publish the page: %s", got)
 	}
 	composedPage := func(who, name string) *platform.Page {
@@ -177,10 +177,10 @@ func TestTenantDefinedObject(t *testing.T) {
 	}
 	// Composed again with a field that is not there: refused, and the page people
 	// open is still the one that worked.
-	if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"list": []string{"guest", "nothing"}}); got != "ok" {
+	if got := do("dana", construction.PageType+".edit", construction.PageType, "P-1", map[string]any{"list": []string{"guest", "nothing"}}); got != "ok" {
 		t.Fatalf("edit the page: %s", got)
 	}
-	if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); !strings.Contains(got, "has no field \"nothing\"") {
+	if got := do("dana", construction.SchemaRelease, construction.PageType, "P-1", map[string]any{}); !strings.Contains(got, "has no field \"nothing\"") {
 		t.Errorf("a page over a field that is not there: %s", got)
 	}
 	if again := composedPage("eli", "visits"); again == nil || len(again.ListFields) != 2 {
@@ -202,10 +202,10 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"widget": "timeline", "width": "half"},
 		{"widget": "tasks", "width": "half"},
 	}
-	if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"sections": sections}); got != "ok" {
+	if got := do("dana", construction.PageType+".edit", construction.PageType, "P-1", map[string]any{"sections": sections}); got != "ok" {
 		t.Fatalf("lay out the page: %s", got)
 	}
-	if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaRelease, construction.PageType, "P-1", map[string]any{}); got != "ok" {
 		t.Fatalf("publish the composed page: %s", got)
 	}
 	laid := composedPage("eli", "visits")
@@ -228,10 +228,10 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"a filter over words people type", map[string]any{"widget": "filter", "fields": []string{"guest"}}, "guest is a text field"},
 		{"a form that leaves out what a visit needs", map[string]any{"widget": "form", "fields": []string{"kind"}}, "needs guest"},
 	} {
-		if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"sections": []map[string]any{x.section}}); got != "ok" {
+		if got := do("dana", construction.PageType+".edit", construction.PageType, "P-1", map[string]any{"sections": []map[string]any{x.section}}); got != "ok" {
 			t.Fatalf("%s: edit: %s", x.why, got)
 		}
-		if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); !strings.Contains(got, x.want) {
+		if got := do("dana", construction.SchemaRelease, construction.PageType, "P-1", map[string]any{}); !strings.Contains(got, x.want) {
 			t.Errorf("%s: %s, want %q", x.why, got, x.want)
 		}
 	}
@@ -239,21 +239,21 @@ func TestTenantDefinedObject(t *testing.T) {
 		t.Errorf("a refused layout changed the page people open: %+v", still)
 	}
 	// Shared membership must not expose an unrelated private object.
-	if got := do("dana", build.ObjectType+".create", build.ObjectType, "PRIVATE", map[string]any{"name": "privateasset", "title": "Private asset", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}, "access": []build.Access{{Role: build.User, Read: "none"}}}); got != "ok" {
+	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "PRIVATE", map[string]any{"name": "privateasset", "title": "Private asset", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}, "access": []construction.Access{{Role: construction.User, Read: "none"}}}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := do("dana", build.SchemaPublish, build.ObjectType, "PRIVATE", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaPublish, construction.ObjectType, "PRIVATE", map[string]any{}); got != "ok" {
 		t.Fatal(got)
 	}
-	shared := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: visit}
-	private := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.privateasset"}
+	shared := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: visit}
+	private := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.privateasset"}
 	// An application handed to the people it was built for (ADR-0046): a name,
 	// an icon and the pages it holds, offered to whoever may open one of them.
-	if got := do("dana", build.AppType+".create", build.AppType, "A-1",
+	if got := do("dana", construction.AppType+".create", construction.AppType, "A-1",
 		map[string]any{"name": "frontdesk", "title": "Front desk", "icon": "clipboard", "pages": []string{"visits"}, "resources": []platform.AssetRef{shared, private}}); got != "ok" {
 		t.Fatalf("an application: %s", got)
 	}
-	if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaHandOver, construction.AppType, "A-1", map[string]any{}); got != "ok" {
 		t.Fatalf("hand it over: %s", got)
 	}
 	handed := func(who string) *platform.Application {
@@ -273,10 +273,10 @@ func TestTenantDefinedObject(t *testing.T) {
 	if app := handed("dana"); len(app.Resources) != 2 {
 		t.Fatalf("builder membership lost: %+v", app)
 	}
-	if got := do("dana", build.AppType+".create", build.AppType, "A-2", map[string]any{"name": "otherdesk", "title": "Other desk", "pages": []string{"visits"}, "resources": []platform.AssetRef{shared}}); got != "ok" {
+	if got := do("dana", construction.AppType+".create", construction.AppType, "A-2", map[string]any{"name": "otherdesk", "title": "Other desk", "pages": []string{"visits"}, "resources": []platform.AssetRef{shared}}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := do("dana", build.SchemaHandOver, build.AppType, "A-2", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaHandOver, construction.AppType, "A-2", map[string]any{}); got != "ok" {
 		t.Fatalf("shared resource ownership changed: %s", got)
 	}
 	// It grants nothing: someone who may not open its pages is not handed it.
@@ -285,10 +285,10 @@ func TestTenantDefinedObject(t *testing.T) {
 	}
 	// Its navigation has headings (17b): a page under one, as the builder chose.
 	daily := []map[string]any{{"title": "Daily", "pages": []string{"visits"}}}
-	if got := do("dana", build.AppType+".edit", build.AppType, "A-1", map[string]any{"groups": daily}); got != "ok" {
+	if got := do("dana", construction.AppType+".edit", construction.AppType, "A-1", map[string]any{"groups": daily}); got != "ok" {
 		t.Fatalf("groups: %s", got)
 	}
-	if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaHandOver, construction.AppType, "A-1", map[string]any{}); got != "ok" {
 		t.Fatalf("hand it over with groups: %s", got)
 	}
 	if app := handed("eli"); app == nil || len(app.Groups) != 1 || app.Groups[0].Title != "Daily" || !slices.Equal(app.Groups[0].Pages, []string{"visits"}) {
@@ -304,15 +304,15 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"a heading over nothing", map[string]any{"groups": []map[string]any{{"title": "Empty", "pages": []string{}}}}, "holds no page"},
 		{"a page that is not there", map[string]any{"groups": []map[string]any{}, "pages": []string{"nothing"}}, "no page nothing"},
 		{"no page or resource", map[string]any{"pages": []string{}}, "needs pages or declared resources"},
-		{"missing resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetCompute, Name: "missing"}}}, "no published resource"},
+		{"missing resource", map[string]any{"resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetCompute, Name: "missing"}}}, "no published resource"},
 		{"duplicate resource", map[string]any{"resources": []platform.AssetRef{shared, shared}}, "declared twice"},
-		{"page duplicated as a resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "visits"}}}, "non-navigation"},
+		{"page duplicated as a resource", map[string]any{"resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "visits"}}}, "non-navigation"},
 		{"malformed icon name", map[string]any{"icon": "../rocket"}, "not an icon name"},
 	} {
-		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", merge(map[string]any{"pages": []string{"visits"}, "groups": daily, "resources": []platform.AssetRef{}}, x.fields)); got != "ok" {
+		if got := do("dana", construction.AppType+".edit", construction.AppType, "A-1", merge(map[string]any{"pages": []string{"visits"}, "groups": daily, "resources": []platform.AssetRef{}}, x.fields)); got != "ok" {
 			t.Fatalf("%s: edit: %s", x.why, got)
 		}
-		if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); !strings.Contains(got, x.want) {
+		if got := do("dana", construction.SchemaHandOver, construction.AppType, "A-1", map[string]any{}); !strings.Contains(got, x.want) {
 			t.Errorf("%s: %s, want %q", x.why, got, x.want)
 		}
 	}
@@ -322,15 +322,15 @@ func TestTenantDefinedObject(t *testing.T) {
 	// The kit owns the growing vocabulary; optional icons and new shaped names
 	// may publish, while malformed names are refused at publication above.
 	for _, icon := range []string{"rocket", ""} {
-		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", map[string]any{"icon": icon, "pages": []string{"visits"}, "groups": daily, "resources": []platform.AssetRef{}}); got != "ok" {
+		if got := do("dana", construction.AppType+".edit", construction.AppType, "A-1", map[string]any{"icon": icon, "pages": []string{"visits"}, "groups": daily, "resources": []platform.AssetRef{}}); got != "ok" {
 			t.Fatalf("icon %q draft: %s", icon, got)
 		}
-		if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); got != "ok" {
+		if got := do("dana", construction.SchemaHandOver, construction.AppType, "A-1", map[string]any{}); got != "ok" {
 			t.Fatalf("icon %q publication: %s", icon, got)
 		}
 	}
 	if !slices.ContainsFunc(journal, func(e Entry) bool {
-		return e.Kind == "accepted-result" && e.App == build.ID
+		return e.Kind == "accepted-result" && e.App == construction.ID
 	}) {
 		t.Fatal("tenant-defined records did not use the accepted-result boundary")
 	}

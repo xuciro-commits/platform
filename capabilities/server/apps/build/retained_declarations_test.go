@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"reflect"
@@ -28,12 +30,12 @@ func TestPortableDefinitionsKeepPinnedHistoryAndInstallationBytes(t *testing.T) 
 	} {
 		t.Run(tc.prefix, func(t *testing.T) {
 			b, rows := lifecycleBuild()
-			asset, err := definitionReleaseAsset(platform.AssetRef{App: ID, Kind: tc.kind, Name: "example"}, definitionVersion+"."+tc.prefix+"-1", tc.descriptor)
+			asset, err := definitionReleaseAsset(platform.AssetRef{App: construction.ID, Kind: tc.kind, Name: "example"}, construction.ValueDefinitionVersion+"."+tc.prefix+"-1", tc.descriptor)
 			if err != nil {
 				t.Fatal(err)
 			}
 			second := asset
-			second.SourceVersion = definitionVersion + "." + tc.prefix + "-2"
+			second.SourceVersion = construction.ValueDefinitionVersion + "." + tc.prefix + "-2"
 			firstRaw, secondRaw := string(platform.Raw(asset)), string(platform.Raw(second))
 			damaged := asset
 			damaged.Body = json.RawMessage(`{}`)
@@ -83,9 +85,9 @@ func TestRetainedDeclarationAssetsPreserveDescriptorsAndRejectInvalidVersions(t 
 	b, _ := lifecycleBuild()
 	source := b.Manifest().Version
 	query := Query{Name: "lookup", Title: "Lookup", Object: "build.receipt"}
-	function := Function{Name: "advice", Title: "Advice", Description: "Review a receipt", Object: "build.receipt", Fields: []string{"item"}, Instructions: "Use the item", Output: []platform.Field{{Name: "summary", Type: "string", Required: true, Description: "Summary"}}, MaxInputBytes: 1024, MaxOutputBytes: 256, MaxTokens: 64, Roles: []string{User}}
+	function := construction.Function{Name: "advice", Title: "Advice", Description: "Review a receipt", Object: "build.receipt", Fields: []string{"item"}, Instructions: "Use the item", Output: []platform.Field{{Name: "summary", Type: "string", Required: true, Description: "Summary"}}, MaxInputBytes: 1024, MaxOutputBytes: 256, MaxTokens: 64, Roles: []string{construction.User}}
 	property := PropertyType{Name: "label", Title: "Label", Description: "Receipt label", Type: "text"}
-	link := LinkType{Name: "related", Title: "Related", Description: "Related receipts", Parent: "build.receipt", Child: "build.receipt", Forward: "children", Reverse: "parent", Storage: "edge", Cardinality: "one-to-many", DeletePolicy: "owner", Roles: []string{Builder}}
+	link := LinkType{Name: "related", Title: "Related", Description: "Related receipts", Parent: "build.receipt", Child: "build.receipt", Forward: "children", Reverse: "parent", Storage: "edge", Cardinality: "one-to-many", DeletePolicy: "owner", Roles: []string{construction.Builder}}
 	for _, tc := range []struct {
 		prefix     string
 		name       string
@@ -127,11 +129,11 @@ func TestRetainedDeclarationAssetsPreserveDescriptorsAndRejectInvalidVersions(t 
 					if err != nil {
 						t.Fatal(err)
 					}
-					want, err := platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: tc.kind, Name: tc.name}, ContractVersion: tc.contract, SourceVersion: source + "." + tc.prefix + "-" + strconv.Itoa(version), Body: body})
+					want, err := platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: tc.kind, Name: tc.name}, ContractVersion: tc.contract, SourceVersion: source + "." + tc.prefix + "-" + strconv.Itoa(version), Body: body})
 					if err != nil {
 						t.Fatal(err)
 					}
-					if !reflect.DeepEqual(asset, want) || asset.Ref.App != ID || asset.Ref.Kind != tc.kind || b.definitionAssetVersion(asset, tc.kind, tc.prefix) != version {
+					if !reflect.DeepEqual(asset, want) || asset.Ref.App != construction.ID || asset.Ref.Kind != tc.kind || b.definitionAssetVersion(asset, tc.kind, tc.prefix) != version {
 						t.Fatal("release descriptor or version changed", asset, want)
 					}
 				})
@@ -151,7 +153,7 @@ func TestRetainedDeclarationAssetsPreserveDescriptorsAndRejectInvalidVersions(t 
 				{"wrong app", func(a *platform.ReleaseAsset) { a.Ref.App = "other" }},
 				{"wrong kind", func(a *platform.ReleaseAsset) { a.Ref.Kind = platform.AssetPage }},
 				{"different dependencies", func(a *platform.ReleaseAsset) {
-					a.Requires = []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: "build.other"}}
+					a.Requires = []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.other"}}
 				}},
 			} {
 				t.Run(invalid.name, func(t *testing.T) {
@@ -173,7 +175,7 @@ func TestRetainedDeclarationAssetsPreserveDescriptorsAndRejectInvalidVersions(t 
 func TestRetainedDeclarationsSelectOldRuntimeAndKeepNextOrdinal(t *testing.T) {
 	t.Run("query", func(t *testing.T) {
 		b, rows := lifecycleBuild()
-		b.installed["build.receipt"] = Entity(Object{Name: "receipt", Title: "Receipt", Fields: []Field{{Name: "item", Title: "Item", Type: "text"}}})
+		b.installed["build.receipt"] = Entity(construction.Object{Name: "receipt", Title: "Receipt", Fields: []construction.Field{{Name: "item", Title: "Item", Type: "text"}}})
 		v1 := Query{Record: platform.Record{ID: "Q"}, Name: "lookup", Title: "Original", Object: "build.receipt", State: "published", Version: 1}
 		v2 := v1
 		v2.Version, v2.Title = 2, "Latest"
@@ -210,12 +212,12 @@ func TestRetainedDeclarationsSelectOldRuntimeAndKeepNextOrdinal(t *testing.T) {
 	})
 	t.Run("function", func(t *testing.T) {
 		b, rows := lifecycleBuild()
-		v1 := Function{Record: platform.Record{ID: "F"}, Name: "advice", Title: "Original", Description: "Review a record", Object: "build.receipt", Fields: []string{"item"}, Instructions: "Use the item", Output: []platform.Field{{Name: "summary", Type: "string", Required: true, Description: "Summary"}}, MaxInputBytes: 1024, MaxOutputBytes: 256, MaxTokens: 64, Roles: []string{User}, State: "published", Version: 1}
+		v1 := construction.Function{Record: platform.Record{ID: "F"}, Name: "advice", Title: "Original", Description: "Review a record", Object: "build.receipt", Fields: []string{"item"}, Instructions: "Use the item", Output: []platform.Field{{Name: "summary", Type: "string", Required: true, Description: "Summary"}}, MaxInputBytes: 1024, MaxOutputBytes: 256, MaxTokens: 64, Roles: []string{construction.User}, State: "published", Version: 1}
 		v2 := v1
 		v2.Version, v2.Title = 2, "Latest"
 		record := v2
 		record.Published, record.Versions = published(v2), []string{published(v1), published(v2)}
-		rows.rows[reflect.TypeFor[Function]()] = []any{record}
+		rows.rows[reflect.TypeFor[construction.Function]()] = []any{record}
 		b.functions[v2.Name] = v2
 		asset, err := functionReleaseAsset(v1, b.Manifest().Version)
 		if err != nil {
@@ -260,7 +262,7 @@ func TestRetainedDeclarationsSelectOldRuntimeAndKeepNextOrdinal(t *testing.T) {
 	})
 	t.Run("link", func(t *testing.T) {
 		b, rows := lifecycleBuild()
-		v1 := LinkType{Record: platform.Record{ID: "L"}, Name: "related", Title: "Original", Description: "Related receipts", Parent: "build.receipt", Child: "build.receipt", Forward: "children", Reverse: "parent", Storage: "edge", Cardinality: "one-to-many", DeletePolicy: "owner", Roles: []string{Builder}, State: "published", Version: 1}
+		v1 := LinkType{Record: platform.Record{ID: "L"}, Name: "related", Title: "Original", Description: "Related receipts", Parent: "build.receipt", Child: "build.receipt", Forward: "children", Reverse: "parent", Storage: "edge", Cardinality: "one-to-many", DeletePolicy: "owner", Roles: []string{construction.Builder}, State: "published", Version: 1}
 		v2 := v1
 		v2.Version, v2.Title = 2, "Latest"
 		record := v2

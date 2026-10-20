@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -13,19 +15,19 @@ import (
 	"platformserver/platform"
 )
 
-const SchemaAlertPublish = AlertType + ".publish"
+const SchemaAlertPublish = construction.AlertType + ".publish"
 
 func (b *Build) alertEntity() platform.Entity {
-	return platform.Entity{Type: AlertType, Title: "Alert rule", Plural: "Alert rules", Model: Alert{}, Display: "title",
+	return platform.Entity{Type: construction.AlertType, Title: "Alert rule", Plural: "Alert rules", Model: construction.Alert{}, Display: "title",
 		Description: "Tells a role when a record of an object comes to match a condition.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}},
 		Validate: func(c platform.Caller, record any) *kernel.Error {
-			a := record.(*Alert)
+			a := record.(*construction.Alert)
 			if c.Replaying {
 				return nil
 			}
-			if previous, ok := platform.Get[Alert](c, a.ID); ok {
+			if previous, ok := platform.Get[construction.Alert](c, a.ID); ok {
 				if legacyAlert(previous) {
 					if err := freezeLegacyAlert(&previous); err != nil {
 						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -42,23 +44,23 @@ func (b *Build) alertEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Payload: []platform.Field{}, Do: b.publishAlert}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Payload: []platform.Field{}, Do: b.publishAlert}}}}
 }
 
-func (b *Build) checkAlert(a Alert) error {
+func (b *Build) checkAlert(a construction.Alert) error {
 	if !named(a.Name) {
 		return fmt.Errorf("The alert name %s must be lower-case letters and digits", a.Name)
 	}
 	info, ok := b.lookupEntity(a.Object)
 	if !ok {
-		objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+		objects, err := readDefinitionInventory[construction.Object](b.host.Automation(platform.Caller{}, construction.ID))
 		if err != nil {
 			return err
 		}
 		for _, object := range objects {
 			if !object.Archived && "build."+object.Name == a.Object {
 				var err error
-				info, err = platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+				info, err = platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
 				ok = err == nil
 				break
 			}
@@ -83,7 +85,7 @@ func (b *Build) checkAlert(a Alert) error {
 }
 
 func (b *Build) publishAlert(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	a := record.(*Alert)
+	a := record.(*construction.Alert)
 	if err := b.checkAlert(*a); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}

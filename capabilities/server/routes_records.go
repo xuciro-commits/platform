@@ -11,8 +11,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
@@ -197,7 +197,7 @@ func (h *Host) routesRecords(rt *routes) {
 			return
 		}
 		page, err := t.Records(m, r.PathValue("type"), *q, h.Now())
-		if err == nil && r.PathValue("type") == build.ObjectType {
+		if err == nil && r.PathValue("type") == construction.ObjectType {
 			page, err = t.objectDraftPage(m, page)
 		}
 		if err != nil {
@@ -243,7 +243,7 @@ func (h *Host) routesRecords(rt *routes) {
 		fmt.Sscan(r.URL.Query().Get("offset"), &q.Offset)
 		fmt.Sscan(r.URL.Query().Get("limit"), &q.Limit)
 		page, err := t.Records(m, r.PathValue("type"), q, h.Now())
-		if err == nil && r.PathValue("type") == build.ObjectType {
+		if err == nil && r.PathValue("type") == construction.ObjectType {
 			page, err = t.objectDraftPage(m, page)
 		}
 		if err != nil {
@@ -384,7 +384,7 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
-		if r.PathValue("type") == build.ObjectType {
+		if r.PathValue("type") == construction.ObjectType {
 			if record, refusal := t.objectDraftRecord(m, view.Record); refusal == nil {
 				view.Record = record
 			} else {
@@ -404,14 +404,14 @@ func (h *Host) routesRecords(rt *routes) {
 // The HTTP record and shared live routes use the same authoring projection.
 // Internal record readers retain the accepted representation for execution.
 func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.Error) {
-	object, ok := record.(build.Object)
+	object, ok := record.(construction.Object)
 	m = t.authorizationMember(m)
-	if !ok || !m.Holds(build.ID, build.Builder) {
+	if !ok || !m.Holds(construction.ID, construction.Builder) {
 		return record, nil
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(build.ID).(host.ConstructionDraftReader)
+	owner, ok := t.app(construction.ID).(host.ConstructionDraftReader)
 	if !ok {
 		return record, nil
 	}
@@ -422,7 +422,7 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 	// Conversion receives only visible fields, and cannot restore a hidden
 	// destination field when replacing an older expression.
 	t.records.mu.Lock()
-	et := t.records.types[build.ObjectType]
+	et := t.records.types[construction.ObjectType]
 	t.records.mu.Unlock()
 	_, hidden := viewOf(m, et)
 	return masked(et, reflect.ValueOf(canonical), hidden), nil

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"slices"
@@ -26,25 +28,25 @@ func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T)
 	}
 	publishObject(t, tenant, "builder", "NOTES", map[string]any{
 		"name": "note", "title": "Note",
-		"fields": []build.Field{{Name: "text", Title: "Text", Type: "text", Read: []string{build.Builder}}},
+		"fields": []construction.Field{{Name: "text", Title: "Text", Type: "text", Read: []string{construction.Builder}}},
 	}, at)
-	definition := platform.RecordAdviceFunction("build.note", []string{"text"}, []string{build.User})
+	definition := platform.RecordAdviceFunction("build.note", []string{"text"}, []string{construction.User})
 	definition.Name = "advice"
-	decide(t, tenant, "builder", build.ID, build.FunctionType+".create", build.FunctionType, "ADVICE", definition, at)
-	decide(t, tenant, "builder", build.ID, build.SchemaFunction, build.FunctionType, "ADVICE", map[string]any{}, at)
-	decide(t, tenant, "builder", build.ID, "build.note.create", "build.note", "N", map[string]any{"text": "Synthetic task"}, at)
+	decide(t, tenant, "builder", construction.ID, construction.FunctionType+".create", construction.FunctionType, "ADVICE", definition, at)
+	decide(t, tenant, "builder", construction.ID, build.SchemaFunction, construction.FunctionType, "ADVICE", map[string]any{}, at)
+	decide(t, tenant, "builder", construction.ID, "build.note.create", "build.note", "N", map[string]any{"text": "Synthetic task"}, at)
 
 	// The grant permits the function even though the member's primary role
 	// is builder. Discovery and result reads must not invent a single-role gate.
 	directory := testConsoleOf(tenant)
 	directory.mu.Lock()
-	directory.members["builder"].Grants = []platform.Grant{{App: build.ID, Role: build.Builder}, {App: build.ID, Role: build.User}}
+	directory.members["builder"].Grants = []platform.Grant{{App: construction.ID, Role: construction.Builder}, {App: construction.ID, Role: construction.User}}
 	directory.mu.Unlock()
 	member := memberOf(t, tenant, "builder")
-	if member.Roles[build.ID] != build.Builder || !member.Holds(build.ID, build.User) {
+	if member.Roles[construction.ID] != construction.Builder || !member.Holds(construction.ID, construction.User) {
 		t.Fatalf("test needs a non-primary user grant: %+v", member)
 	}
-	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFunction, Name: definition.Name}
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetFunction, Name: definition.Name}
 	for _, version := range []int{0, 1} {
 		if descriptor, problem := tenant.DescribeCapability(member, ref, version); problem != nil || descriptor.Ref != ref {
 			t.Fatalf("function version %d ignored its effective grant: %+v %v", version, descriptor, problem)
@@ -60,7 +62,7 @@ func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T)
 		t.Fatalf("function result ignored its effective grant: %+v %v", result, problem)
 	}
 
-	owner := tenant.app(build.ID)
+	owner := tenant.app(construction.ID)
 	owner.Manifest().Actions.UsePolicies(func() []authz.Policy {
 		return []authz.Policy{{ID: "deny-advice", Effect: "deny", Permission: definition.Name}}
 	})
@@ -78,11 +80,11 @@ func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T)
 	assertDenied("owner deny policy")
 	owner.Manifest().Actions.UsePolicies(func() []authz.Policy { return nil })
 	directory.mu.Lock()
-	directory.members["builder"].Grants = []platform.Grant{{App: build.ID, Role: build.User}}
+	directory.members["builder"].Grants = []platform.Grant{{App: construction.ID, Role: construction.User}}
 	directory.mu.Unlock()
 	assertDenied("revoked source-field role with the function role retained")
 	directory.mu.Lock()
-	directory.members["builder"].Grants = []platform.Grant{{App: build.ID, Role: build.Builder}}
+	directory.members["builder"].Grants = []platform.Grant{{App: construction.ID, Role: construction.Builder}}
 	directory.mu.Unlock()
 	assertDenied("revoked grant in a stale member snapshot")
 }

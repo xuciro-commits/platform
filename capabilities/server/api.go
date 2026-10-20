@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
@@ -141,9 +141,9 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	s.of(reflect.TypeFor[platform.PageCollectionInput]())
 	s.of(reflect.TypeFor[platform.InputOptions]())
 	s.of(reflect.TypeFor[platform.ImageRegionsRequest]())
-	s.of(reflect.TypeFor[build.Table]())
-	s.of(reflect.TypeFor[build.Source]())
-	s.of(reflect.TypeFor[build.Connection]())
+	s.of(reflect.TypeFor[construction.Table]())
+	s.of(reflect.TypeFor[construction.Source]())
+	s.of(reflect.TypeFor[construction.Connection]())
 	s.of(reflect.TypeFor[platform.BusinessTxn]())
 	s.of(reflect.TypeFor[platform.ConfirmationRun]())
 	s.of(reflect.TypeFor[platform.DispatchRun]())

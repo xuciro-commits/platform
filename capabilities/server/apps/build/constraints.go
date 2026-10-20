@@ -1,15 +1,17 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"platformserver/platform"
 	"reflect"
 )
 
-func (b *Build) checkConstraints(o Object) error {
+func (b *Build) checkConstraints(o construction.Object) error {
 	if len(o.Constraints) == 0 {
 		return nil
 	}
-	info, err := platform.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
+	info, err := platform.Describe(construction.ID, Entity(o), func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}

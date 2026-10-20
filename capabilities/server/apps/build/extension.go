@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -8,7 +10,7 @@ import (
 	"platformserver/platform"
 )
 
-func (b *Build) captureExtensionSource(object *Object) error {
+func (b *Build) captureExtensionSource(object *construction.Object) error {
 	if object.Extends == "" {
 		object.ExtensionSource = nil
 		return b.checkExtensionDependents(*object)
@@ -18,9 +20,9 @@ func (b *Build) captureExtensionSource(object *Object) error {
 		return fmt.Errorf("extension base %s is unavailable", object.Extends)
 	}
 	binding, exists := b.host.EntitySource(object.Extends)
-	if !exists && base.App == ID {
+	if !exists && base.App == construction.ID {
 		if _, selected := b.jointEntities[base.Type]; selected {
-			binding, exists = platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: base.Type}, SourceVersion: b.Manifest().Version}, true
+			binding, exists = platform.AssetBinding{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: base.Type}, SourceVersion: b.Manifest().Version}, true
 		}
 	}
 	if !exists {
@@ -37,31 +39,31 @@ func (b *Build) captureExtensionSource(object *Object) error {
 		return err
 	}
 	object.ExtensionSource = &source
-	info, err := platform.Describe(ID, Entity(*object), func(reflect.Type) string { return "" })
+	info, err := platform.Describe(construction.ID, Entity(*object), func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}
 	return platform.CheckExtension(info, base)
 }
 
-func (b *Build) checkExtensionDependents(object Object) error {
+func (b *Build) checkExtensionDependents(object construction.Object) error {
 	objects, _, _, err := b.releaseInventory()
 	if err != nil {
 		return err
 	}
 	var base platform.EntityInfo
 	for _, record := range objects {
-		published, exists := wasPublished[Object](record.Published)
-		if !exists || published.Extends != ID+"."+object.Name {
+		published, exists := wasPublished[construction.Object](record.Published)
+		if !exists || published.Extends != construction.ID+"."+object.Name {
 			continue
 		}
 		if base.Type == "" {
-			base, err = platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+			base, err = platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
 			if err != nil {
 				return err
 			}
 		}
-		extension, err := platform.Describe(ID, Entity(published), func(reflect.Type) string { return "" })
+		extension, err := platform.Describe(construction.ID, Entity(published), func(reflect.Type) string { return "" })
 		if err != nil {
 			return err
 		}

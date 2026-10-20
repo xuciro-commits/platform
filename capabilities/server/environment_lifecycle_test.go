@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -24,7 +26,7 @@ import (
 // seams between them hold.
 func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	at := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
-	seats := append(upgradeSeats(), Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{build.ID: build.User}}})
+	seats := append(upgradeSeats(), Seat{Subjects: []string{"user:ops@example.test"}, Member: platform.Member{ID: "ops", Roles: map[string]string{construction.ID: construction.User}}})
 	compose := func(id string) *Tenant {
 		tn, err := NewTenant(id, NewConsole(id, seats...), work.New(id), build.New(id))
 		if err != nil {
@@ -67,14 +69,14 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 		t.Helper()
 		e.keys++
 		raw, _ := json.Marshal(payload)
-		if _, refusal := e.Submit(member(e, who), &pb.Submission{TenantId: e.ID, PrincipalId: who, Authority: build.ID,
+		if _, refusal := e.Submit(member(e, who), &pb.Submission{TenantId: e.ID, PrincipalId: who, Authority: construction.ID,
 			IdempotencyKey: fmt.Sprintf("%s-%d", e.ID, e.keys), Target: &pb.EntityRef{Type: typ, Id: target},
 			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, at); refusal != nil {
 			return refusal.Code.String()
 		}
 		return "ok"
 	}
-	freeze := func(e *env, drafts ...build.JointDraftRef) string {
+	freeze := func(e *env, drafts ...construction.JointDraftRef) string {
 		t.Helper()
 		preview, err := e.PreviewReleaseDrafts(member(e, "dana"), drafts)
 		if err != nil || preview.CandidateID == "" || preview.Diagnostic != "" {
@@ -93,8 +95,8 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 		"states":  []map[string]any{{"name": "open", "title": "Open"}, {"name": "done", "title": "Done"}},
 		"actions": []map[string]any{{"name": "close", "title": "Close", "from": []string{"open"}, "to": "done"}}}
 	deskV1 := map[string]any{"name": "desk", "title": "Visit desk", "object": "build.visit", "list": []string{"note"}, "detail": []string{"note"}}
-	appV1 := map[string]any{"name": "frontdesk", "title": "Front desk", "pages": []string{"desk"}, "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetAction, Name: "build.visit.close"}}, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.visit": 2}, Retention: map[string]string{"runs": "168h"}, RPO: "1h", RTO: "30m"}}
-	drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O1"}, {Kind: platform.AssetPage, ID: "P1"}, {Kind: platform.AssetApp, ID: "A1"}}
+	appV1 := map[string]any{"name": "frontdesk", "title": "Front desk", "pages": []string{"desk"}, "resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetAction, Name: "build.visit.close"}}, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.visit": 2}, Retention: map[string]string{"runs": "168h"}, RPO: "1h", RTO: "30m"}}
+	drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O1"}, {Kind: platform.AssetPage, ID: "P1"}, {Kind: platform.AssetApp, ID: "A1"}}
 
 	// 1. Definition and dependencies in dev; one joint candidate; activate.
 	dev := open("dev")
@@ -102,9 +104,9 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 		typ, target, schema string
 		payload             any
 	}{
-		{build.ObjectType, "O1", build.ObjectType + ".create", visitV1},
-		{build.PageType, "P1", build.PageType + ".create", deskV1},
-		{build.AppType, "A1", build.AppType + ".create", appV1},
+		{construction.ObjectType, "O1", construction.ObjectType + ".create", visitV1},
+		{construction.PageType, "P1", construction.PageType + ".create", deskV1},
+		{construction.AppType, "A1", construction.AppType + ".create", appV1},
 	} {
 		if got := submit(dev, "dana", step.typ, step.target, step.schema, step.payload); got != "ok" {
 			t.Fatalf("dev %s: %s", step.schema, got)
@@ -127,7 +129,7 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 		t.Fatalf("dev close: %s", got)
 	}
 
-	appRef := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "frontdesk"}
+	appRef := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "frontdesk"}
 	runtimeV1, refusal := dev.ApplicationRuntimeOf(member(dev, "ops"), appRef, at)
 	if refusal != nil || len(runtimeV1.Warnings) != 1 || runtimeV1.Warnings[0].Actual != 3 || runtimeV1.Artifact.Profile.RPO != "1h" || runtimeV1.Recovery.Predecessors != "admitted" {
 		t.Fatalf("application operating projection: %+v %v", runtimeV1, refusal)
@@ -136,7 +138,7 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if refusal != nil || len(diagnosticV1.Decisions) != 2 || diagnosticV1.Decisions[1].Definition == nil || diagnosticV1.Decisions[1].Content == nil || len(diagnosticV1.Decisions[1].Definition.Dependencies) == 0 {
 		t.Fatalf("original decision definitions absent: %+v %v", diagnosticV1, refusal)
 	}
-	if _, refusal := dev.ApplicationRecordDiagnostic(member(dev, "ops"), appRef, build.ObjectType, "O1", at); refusal == nil {
+	if _, refusal := dev.ApplicationRecordDiagnostic(member(dev, "ops"), appRef, construction.ObjectType, "O1", at); refusal == nil {
 		t.Fatal("application diagnostic reached unrelated owner metadata")
 	}
 
@@ -148,9 +150,9 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 		typ, target, schema string
 		payload             any
 	}{
-		{build.ObjectType, "O1", build.ObjectType + ".create", visitV1},
-		{build.PageType, "P1", build.PageType + ".create", deskV1},
-		{build.AppType, "A1", build.AppType + ".create", appV1},
+		{construction.ObjectType, "O1", construction.ObjectType + ".create", visitV1},
+		{construction.PageType, "P1", construction.PageType + ".create", deskV1},
+		{construction.AppType, "A1", construction.AppType + ".create", appV1},
 	} {
 		if got := submit(prod, "dana", step.typ, step.target, step.schema, step.payload); got != "ok" {
 			t.Fatalf("prod %s: %s", step.schema, got)
@@ -200,7 +202,7 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	// plan against its own rows and upgrades; the same sealed candidate is
 	// promoted without activation and prod activates it through its own plan.
 	visitV2 := map[string]any{"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}, {"name": "priority", "title": "Priority", "type": "integer"}}}
-	if got := submit(dev, "dana", build.ObjectType, "O1", build.ObjectType+".edit", visitV2); got != "ok" {
+	if got := submit(dev, "dana", construction.ObjectType, "O1", construction.ObjectType+".edit", visitV2); got != "ok" {
 		t.Fatalf("dev v2 draft: %s", got)
 	}
 	v2 := freeze(dev, drafts...)
@@ -217,7 +219,7 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if got := submit(dev, "ops", "build.visit", "V2", "build.visit.edit", map[string]any{"priority": 5}); got != "ok" {
 		t.Fatalf("dev cannot write the new optional field: %s", got)
 	}
-	if got := submit(prod, "dana", build.ObjectType, "O1", build.ObjectType+".edit", visitV2); got != "ok" {
+	if got := submit(prod, "dana", construction.ObjectType, "O1", construction.ObjectType+".edit", visitV2); got != "ok" {
 		t.Fatalf("prod v2 draft: %s", got)
 	}
 	if _, err := PromoteCandidate(dev.Tenant, prod.Tenant, v2, "promote-v2", true, member(prod, "pat"), at); err == nil {

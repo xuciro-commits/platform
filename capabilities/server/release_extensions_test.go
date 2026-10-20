@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -86,16 +88,16 @@ func extensionTenant(t *testing.T, id, version, added string, incompatible bool)
 	return composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "core:steward"), seatOf("user", "build:user")}, build.New(id), newExtensionCorePackage(id, version, added, incompatible))
 }
 
-func extensionObjectFields() []build.Field {
-	return []build.Field{{Name: "base", Title: "Material", Type: "reference", Ref: core.MaterialType, Required: true, Inverse: "materialextra"},
+func extensionObjectFields() []construction.Field {
+	return []construction.Field{{Name: "base", Title: "Material", Type: "reference", Ref: core.MaterialType, Required: true, Inverse: "materialextra"},
 		{Name: "customergrade", Title: "Customer grade", Type: "text", Search: true}, {Name: "inspectiondue", Title: "Inspection due", Type: "date"}}
 }
 
 func extensionFixture(t *testing.T, live *Tenant) string {
 	t.Helper()
 	publishObject(t, live, "builder", "extension", map[string]any{"name": "materialextra", "title": "Material extension", "extends": core.MaterialType, "fields": extensionObjectFields(),
-		"states":  []build.State{{Name: "open", Title: "Open"}, {Name: "reviewed", Title: "Reviewed"}},
-		"actions": []build.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed"}}}, txnAt)
+		"states":  []construction.State{{Name: "open", Title: "Open"}, {Name: "reviewed", Title: "Reviewed"}},
+		"actions": []construction.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed"}}}, txnAt)
 	from := saveExtensionDraft(t, live, "extension", "source")
 	if _, err := live.ActivateRelease(memberOf(t, live, "builder"), from, "source-activate", txnAt); err != nil {
 		t.Fatal(err)
@@ -103,7 +105,7 @@ func extensionFixture(t *testing.T, live *Tenant) string {
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("M%d", i)
 		decide(t, live, "builder", core.ID, core.MaterialType+".create", core.MaterialType, id, map[string]any{"name": id, "code": id, "kind": "raw", "baseUom": "uom-pce"}, txnAt)
-		decide(t, live, "user", build.ID, "build.materialextra.create", "build.materialextra", id, map[string]any{"base": id, "customergrade": fmt.Sprintf("Grade %d", i), "inspectiondue": "2027-01-01"}, txnAt)
+		decide(t, live, "user", construction.ID, "build.materialextra.create", "build.materialextra", id, map[string]any{"base": id, "customergrade": fmt.Sprintf("Grade %d", i), "inspectiondue": "2027-01-01"}, txnAt)
 	}
 	return from
 }
@@ -152,7 +154,7 @@ func TestCustomerExtensionsSurviveNativePackageUpgradeAndRecovery(t *testing.T) 
 			from := extensionFixture(t, live)
 			before := extensionImages(t, live)
 			original := slices.Clone(live.releases.raw(from))
-			metadata := live.records.types[build.ObjectType].rows.get("extension").value.Interface().(build.Object)
+			metadata := live.records.types[construction.ObjectType].rows.get("extension").value.Interface().(construction.Object)
 			if metadata.ExtensionSource == nil || metadata.ExtensionSource.Base.SourceVersion != "1" {
 				t.Fatal("publication did not capture the original Core package")
 			}
@@ -178,7 +180,7 @@ func TestCustomerExtensionsSurviveNativePackageUpgradeAndRecovery(t *testing.T) 
 				t.Fatal("recovery rewrote history or the old candidate")
 			}
 			// This candidate omits the extension. It must still validate and retain it.
-			decide(t, live, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "consumer", map[string]any{"name": "consumer", "title": "Material consumer", "fields": []build.Field{{Name: "material", Title: "Material", Type: "reference", Ref: core.MaterialType}}}, txnAt)
+			decide(t, live, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "consumer", map[string]any{"name": "consumer", "title": "Material consumer", "fields": []construction.Field{{Name: "material", Title: "Material", Type: "reference", Ref: core.MaterialType}}}, txnAt)
 			to := saveExtensionDraft(t, live, "consumer", "v2")
 			review, err := live.ReviewSavedRelease(memberOf(t, live, "builder"), to)
 			if err != nil || !review.CanActivate || len(review.Extensions) != 1 || review.Extensions[0].Base.SourceVersion != "1" || review.Extensions[0].TargetVersion != "2" || review.Extensions[0].Issue != "" {
@@ -200,7 +202,7 @@ func TestCustomerExtensionsSurviveNativePackageUpgradeAndRecovery(t *testing.T) 
 					t.Fatal("activation replaced extension data outside its closure")
 				}
 			}
-			decide(t, live, "user", build.ID, "build.materialextra.review", "build.materialextra", "M0", map[string]any{}, txnAt)
+			decide(t, live, "user", construction.ID, "build.materialextra.review", "build.materialextra", "M0", map[string]any{}, txnAt)
 			decide(t, live, "builder", core.ID, core.MaterialType+".edit", core.MaterialType, "M0", map[string]any{"name": "Upgraded material", "packagecode": "P-2"}, txnAt)
 			snapshot, pos, err := live.Snapshot(func() int64 { return journal.Position(id) })
 			if err != nil {
@@ -226,7 +228,7 @@ func TestCustomerExtensionsSurviveNativePackageUpgradeAndRecovery(t *testing.T) 
 					t.Fatal("recovery changed extension facts or actions")
 				}
 			}
-			if final.records.types[build.ObjectType].rows.get("extension").value.Interface().(build.Object).ExtensionSource.Base.SourceVersion != "1" {
+			if final.records.types[construction.ObjectType].rows.get("extension").value.Interface().(construction.Object).ExtensionSource.Base.SourceVersion != "1" {
 				t.Fatal("base upgrade silently rebound the published extension")
 			}
 		})
@@ -246,11 +248,11 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 		t.Fatalf("conflict should pause upgrades, not destroy recovery: %v", err)
 	}
 	upgraded.AcceptResult = persist
-	if got := refuse(t, upgraded, "user", build.ID, "build.materialextra.edit", "build.materialextra", "M0", map[string]any{"customergrade": "Overwrite"}, txnAt); !strings.Contains(got, "conflicts") {
+	if got := refuse(t, upgraded, "user", construction.ID, "build.materialextra.edit", "build.materialextra", "M0", map[string]any{"customergrade": "Overwrite"}, txnAt); !strings.Contains(got, "conflicts") {
 		t.Fatalf("incompatible extension wrote new data: %s", got)
 	}
 	// A candidate for a different app cannot escape the conflict.
-	decide(t, upgraded, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "consumer", map[string]any{"name": "consumer", "title": "Material consumer", "fields": []build.Field{{Name: "material", Title: "Material", Type: "reference", Ref: core.MaterialType}}}, txnAt)
+	decide(t, upgraded, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "consumer", map[string]any{"name": "consumer", "title": "Material consumer", "fields": []construction.Field{{Name: "material", Title: "Material", Type: "reference", Ref: core.MaterialType}}}, txnAt)
 	to := saveExtensionDraft(t, upgraded, "consumer", "conflicting-package")
 	review, err := upgraded.ReviewSavedRelease(memberOf(t, upgraded, "builder"), to)
 	if err != nil || review.CanActivate || len(review.Extensions) != 1 || !strings.Contains(review.Extensions[0].Issue, "customergrade") {
@@ -264,8 +266,8 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 	fields := extensionObjectFields()
 	fields[1].ReadOnly = true
 	fields[1].AliasOf = "localgrade"
-	fields = append(fields, build.Field{Name: "localgrade", Title: "Local customer grade", Type: "text", Search: true})
-	decide(t, upgraded, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "extension", map[string]any{"fields": fields}, txnAt)
+	fields = append(fields, construction.Field{Name: "localgrade", Title: "Local customer grade", Type: "text", Search: true})
+	decide(t, upgraded, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "extension", map[string]any{"fields": fields}, txnAt)
 	to = saveExtensionDraft(t, upgraded, "extension", "resolved-package")
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.materialextra"}, Steps: []platform.MigrateStep{{Kind: "rename", Types: []string{"build.materialextra"}, Batch: 2, Fields: []platform.MigrateField{{From: "customergrade", To: "localgrade"}}}}}
 	m := memberOf(t, upgraded, "builder")
@@ -273,8 +275,8 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decide(t, upgraded, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": migration.ID, "reviewedAt": migration.At}, txnAt)
-	decide(t, upgraded, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	decide(t, upgraded, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": migration.ID, "reviewedAt": migration.At}, txnAt)
+	decide(t, upgraded, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 	if _, err := upgraded.ActivateRelease(m, to, "early", txnAt); err == nil {
 		t.Fatal("partial conflict resolution activated")
 	}
@@ -283,7 +285,7 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	recovered.AcceptResult = persist
-	decide(t, recovered, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	decide(t, recovered, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 	if _, err := recovered.ActivateRelease(memberOf(t, recovered, "builder"), to, "resolved", txnAt); err != nil {
 		t.Fatal(err)
 	}
@@ -296,8 +298,8 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 			t.Fatal("conflict resolution lost a customer field")
 		}
 	}
-	decide(t, recovered, "user", build.ID, "build.materialextra.review", "build.materialextra", "M1", map[string]any{}, txnAt)
-	if got := refuse(t, recovered, "user", build.ID, "build.materialextra.edit", "build.materialextra", "M2", map[string]any{"customergrade": "Alias write"}, txnAt); got == "ok" {
+	decide(t, recovered, "user", construction.ID, "build.materialextra.review", "build.materialextra", "M1", map[string]any{}, txnAt)
+	if got := refuse(t, recovered, "user", construction.ID, "build.materialextra.edit", "build.materialextra", "M2", map[string]any{"customergrade": "Alias write"}, txnAt); got == "ok" {
 		t.Fatal("retained alias became writable")
 	}
 	final := extensionTenant(t, id, "3", "customergrade", false)
@@ -323,14 +325,14 @@ func TestCustomerExtensionIncompatibleBaseAndProvenanceAreRejected(t *testing.T)
 	if err := upgraded.checkExtensionSet(); err == nil || !strings.Contains(err.Error(), "weight") {
 		t.Fatalf("incompatible base accepted: %v", err)
 	}
-	if got := refuse(t, upgraded, "user", build.ID, "build.materialextra.review", "build.materialextra", "M0", map[string]any{}, txnAt); !strings.Contains(got, "incompatible") {
+	if got := refuse(t, upgraded, "user", construction.ID, "build.materialextra.review", "build.materialextra", "M0", map[string]any{}, txnAt); !strings.Contains(got, "incompatible") {
 		t.Fatalf("incompatible extension action ran: %s", got)
 	}
-	if got := refuse(t, live, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "extension", map[string]any{"extensionSource": map[string]any{"base": map[string]any{"sourceVersion": "forged"}}}, txnAt); got == "ok" {
+	if got := refuse(t, live, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "extension", map[string]any{"extensionSource": map[string]any{"base": map[string]any{"sourceVersion": "forged"}}}, txnAt); got == "ok" {
 		t.Fatal("builder supplied host-owned provenance")
 	}
-	decide(t, live, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "shadow", map[string]any{"name": "shadow", "title": "Shadow", "extends": core.MaterialType, "fields": []build.Field{{Name: "base", Title: "Material", Type: "reference", Ref: core.MaterialType, Required: true}, {Name: "code", Title: "Overridden code", Type: "text"}}}, txnAt)
-	if got := refuse(t, live, "builder", build.ID, build.SchemaPublish, build.ObjectType, "shadow", map[string]any{}, txnAt); !strings.Contains(got, "conflicts") {
+	decide(t, live, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "shadow", map[string]any{"name": "shadow", "title": "Shadow", "extends": core.MaterialType, "fields": []construction.Field{{Name: "base", Title: "Material", Type: "reference", Ref: core.MaterialType, Required: true}, {Name: "code", Title: "Overridden code", Type: "text"}}}, txnAt)
+	if got := refuse(t, live, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "shadow", map[string]any{}, txnAt); !strings.Contains(got, "conflicts") {
 		t.Fatalf("new extension shadows a base field: %s", got)
 	}
 }

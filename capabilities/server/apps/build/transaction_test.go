@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,15 +13,15 @@ import (
 
 func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 	b, _ := lifecycleBuild()
-	header := Object{Name: "header", Title: "Header", Plural: "Headers", Fields: []Field{{Name: "number", Title: "Number", Type: "text"}}}
-	detail := Object{Name: "detail", Title: "Detail", Plural: "Details", Fields: []Field{{Name: "header", Title: "Header", Type: "reference", Ref: "build.header"}}}
+	header := construction.Object{Name: "header", Title: "Header", Plural: "Headers", Fields: []construction.Field{{Name: "number", Title: "Number", Type: "text"}}}
+	detail := construction.Object{Name: "detail", Title: "Detail", Plural: "Details", Fields: []construction.Field{{Name: "header", Title: "Header", Type: "reference", Ref: "build.header"}}}
 	b.installed = map[string]platform.Entity{"build.header": Entity(header), "build.detail": Entity(detail)}
 	b.jointEntities = map[string]platform.EntityInfo{}
 	for typ, entity := range b.installed {
-		info, _ := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
+		info, _ := platform.Describe(construction.ID, entity, func(reflect.Type) string { return "" })
 		b.jointEntities[typ] = info
 	}
-	root := Object{Name: "request", Title: "Request", Plural: "Requests", Fields: []Field{{Name: "number", Title: "Number", Type: "text"}}, States: []State{{Name: "draft", Title: "Draft"}}, Actions: []Action{{Name: "apply", Title: "Apply", From: []string{"draft"}, Transaction: &platform.BusinessTxn{Subject: "build.request", Steps: []platform.TxnStep{
+	root := construction.Object{Name: "request", Title: "Request", Plural: "Requests", Fields: []construction.Field{{Name: "number", Title: "Number", Type: "text"}}, States: []construction.State{{Name: "draft", Title: "Draft"}}, Actions: []construction.Action{{Name: "apply", Title: "Apply", From: []string{"draft"}, Transaction: &platform.BusinessTxn{Subject: "build.request", Steps: []platform.TxnStep{
 		{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "documents", Pattern: "{n}"}},
 		{Name: "root", Kind: "update", Target: platform.TxnRef{Type: "build.request", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "number", From: "step.number"}}},
 		{Name: "head", Kind: "create", Target: platform.TxnRef{Type: "build.header"}, Changes: []platform.TxnSet{{Field: "number", From: "step.number"}}},
@@ -29,7 +31,7 @@ func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, conditional := range []bool{false, true} {
-		var candidate Object
+		var candidate construction.Object
 		_ = json.Unmarshal(platform.Raw(root), &candidate)
 		steps := candidate.Actions[0].Transaction.Steps
 		if conditional {
@@ -46,7 +48,7 @@ func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 	for _, which := range []string{"nested iteration", "undeclared set", "missing order", "step limit", "duplicate item writes"} {
 		t.Run(which, func(t *testing.T) {
 			raw, _ := json.Marshal(root)
-			var candidate Object
+			var candidate construction.Object
 			_ = json.Unmarshal(raw, &candidate)
 			item := platform.TxnStep{Name: "editline", Kind: "update", Target: platform.TxnRef{Type: "build.detail", ID: "$item"}}
 			loop := platform.TxnStep{Name: "lines", Kind: "for-each", ForEach: &platform.TxnForEach{Set: "lines", Steps: []platform.TxnStep{item}}}
@@ -80,7 +82,7 @@ func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 	for _, kind := range []string{"archive", "link", "unlink", "post", "journal", "effect", "work", "call", "ForEach"} {
 		t.Run(kind, func(t *testing.T) {
 			raw, _ := json.Marshal(root)
-			var bad Object
+			var bad construction.Object
 			_ = json.Unmarshal(raw, &bad)
 			bad.Actions[0].Transaction.Steps[2].Kind = kind
 			if err := b.checkTransactions(bad); err == nil {
@@ -91,7 +93,7 @@ func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 	for _, which := range []string{"duplicate write", "forward reference", "legacy mutations", "foreign type", "conflicting sequence"} {
 		t.Run(which, func(t *testing.T) {
 			raw, _ := json.Marshal(root)
-			var bad Object
+			var bad construction.Object
 			_ = json.Unmarshal(raw, &bad)
 			txn := bad.Actions[0].Transaction
 			switch which {
@@ -102,7 +104,7 @@ func TestBusinessTxnPublicationBoundaries(t *testing.T) {
 			case "forward reference":
 				txn.Steps[2], txn.Steps[3] = txn.Steps[3], txn.Steps[2]
 			case "legacy mutations":
-				bad.Actions[0].Sets = []Set{{Field: "number", From: "=old"}}
+				bad.Actions[0].Sets = []construction.Set{{Field: "number", From: "=old"}}
 			case "foreign type":
 				txn.Steps[2].Target.Type = "foreign.header"
 			case "conflicting sequence":

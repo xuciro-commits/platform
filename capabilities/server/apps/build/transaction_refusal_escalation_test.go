@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"testing"
 
@@ -11,7 +13,7 @@ func TestBusinessRefusalEscalationPublication(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			b, object := refusalPublication(t)
 			declaration := refusalDeclaration("block")
-			declaration.Escalation = &platform.RefusalEscalation{Count: 3, WindowSeconds: 60, ReviewerRole: Builder}
+			declaration.Escalation = &platform.RefusalEscalation{Count: 3, WindowSeconds: 60, ReviewerRole: construction.Builder}
 			switch scenario {
 			case "one request":
 				declaration.Escalation.Count = 1

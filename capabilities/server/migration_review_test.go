@@ -1,12 +1,13 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -14,14 +15,14 @@ func TestMigrationReviewUsesSealedShapesWithoutChangingLiveRows(t *testing.T) {
 	tn := builderTenant(t, "migration-review")
 	builder := memberOf(t, tn, "builder")
 	fields := []map[string]any{{"name": "name", "title": "Name", "type": "text", "sourceType": "user-input"}}
-	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "asset", map[string]any{"name": "asset", "title": "Asset", "fields": fields}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "asset", map[string]any{"name": "asset", "title": "Asset", "fields": fields}, txnAt)
 	save := func(key string) string {
 		t.Helper()
 		preview, err := tn.PreviewRelease(builder, platform.AssetObject, "asset")
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("preview: %+v %v", preview, err)
 		}
-		id, err := tn.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
+		id, err := tn.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -31,9 +32,9 @@ func TestMigrationReviewUsesSealedShapesWithoutChangingLiveRows(t *testing.T) {
 	if _, err := tn.ActivateRelease(builder, from, "source-activate", txnAt); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "user", build.ID, "build.asset.create", "build.asset", "A", map[string]any{"name": "Old value"}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.create", "build.asset", "A", map[string]any{"name": "Old value"}, txnAt)
 	fields = append(fields, map[string]any{"name": "enabled", "title": "Enabled", "type": "boolean", "required": true})
-	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "asset", map[string]any{"fields": fields}, txnAt)
 	to := save("target")
 	literal := platform.ExprLiteralValue("boolean", true)
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.asset"}, Steps: []platform.MigrateStep{{Kind: "default", Types: []string{"build.asset"}, Batch: 2, Fields: []platform.MigrateField{{To: "enabled", Expr: &literal}}}}}
@@ -69,7 +70,7 @@ func TestMigrationReviewUsesSealedShapesWithoutChangingLiveRows(t *testing.T) {
 func TestMigrationRetypeRequiresQuarantineForReferencesOutsideItsRelease(t *testing.T) {
 	tenant := builderTenant(t, "migration-referrer")
 	builder := memberOf(t, tenant, "builder")
-	fields := []build.Field{{Name: "value", Title: "Value", Type: "text"}}
+	fields := []construction.Field{{Name: "value", Title: "Value", Type: "text"}}
 	publishObject(t, tenant, "builder", "source", map[string]any{"name": "refasset", "title": "Source", "fields": fields}, txnAt)
 	save := func(key string) string {
 		t.Helper()
@@ -77,7 +78,7 @@ func TestMigrationRetypeRequiresQuarantineForReferencesOutsideItsRelease(t *test
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("candidate: %+v %v", preview, err)
 		}
-		id, err := tenant.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "source"}}, preview.CandidateID, key, txnAt)
+		id, err := tenant.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "source"}}, preview.CandidateID, key, txnAt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,11 +88,11 @@ func TestMigrationRetypeRequiresQuarantineForReferencesOutsideItsRelease(t *test
 	if _, err := tenant.ActivateRelease(builder, from, "activate-source", txnAt); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tenant, "user", build.ID, "build.refasset.create", "build.refasset", "A", map[string]any{"value": "12"}, txnAt)
-	publishObject(t, tenant, "builder", "consumer", map[string]any{"name": "consumer", "title": "Consumer", "fields": []build.Field{{Name: "source", Title: "Source", Type: "reference", Ref: "build.refasset"}}}, txnAt)
-	decide(t, tenant, "user", build.ID, "build.consumer.create", "build.consumer", "B", map[string]any{"source": "A"}, txnAt)
+	decide(t, tenant, "user", construction.ID, "build.refasset.create", "build.refasset", "A", map[string]any{"value": "12"}, txnAt)
+	publishObject(t, tenant, "builder", "consumer", map[string]any{"name": "consumer", "title": "Consumer", "fields": []construction.Field{{Name: "source", Title: "Source", Type: "reference", Ref: "build.refasset"}}}, txnAt)
+	decide(t, tenant, "user", construction.ID, "build.consumer.create", "build.consumer", "B", map[string]any{"source": "A"}, txnAt)
 	fields[0].Type = "decimal"
-	decide(t, tenant, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "source", map[string]any{"fields": fields}, txnAt)
+	decide(t, tenant, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "source", map[string]any{"fields": fields}, txnAt)
 	to := save("target")
 	parse := platform.Expr{Kind: "decimal", Op: "parse-decimal", Args: []platform.Expr{platform.ExprReference("text", "value")}}
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.refasset"}, Steps: []platform.MigrateStep{{Kind: "retype", Types: []string{"build.refasset"}, Batch: 1, OnFailure: "reject", Fields: []platform.MigrateField{{From: "value", To: "value", Expr: &parse}}}}}

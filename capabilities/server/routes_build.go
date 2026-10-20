@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -34,7 +34,7 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 func (h *Host) routesBuild(rt *routes) {
 	h.routesProtocolConnections(rt)
 	h.routesPackageDrafts(rt)
-	rt.authorized(Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []platform.CapabilityDescriptor{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []platform.CapabilityDescriptor{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		actions, err := t.DraftActionCapabilities(m)
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
@@ -62,7 +62,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/build/code/sdk", Summary: "Generate the Go/TinyGo input, output and command wrapper from the same bounded schema", Body: ComputeSDKRequest{}, Answer: ComputeSDK{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, _ *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/build/code/sdk", Summary: "Generate the Go/TinyGo input, output and command wrapper from the same bounded schema", Body: ComputeSDKRequest{}, Answer: ComputeSDK{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, _ *Tenant) {
 		var q ComputeSDKRequest
 		if !readCapabilityBody(w, r, &q) {
 			return
@@ -74,8 +74,8 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, ComputeSDK{Source: string(source)})
 	})
-	rt.authorized(Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Body: build.Process{}, Answer: ProcessDiagnostics{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var p build.Process
+	rt.authorized(Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Body: construction.Process{}, Answer: ProcessDiagnostics{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var p construction.Process
 		raw, err := io.ReadAll(io.LimitReader(r.Body, (128<<10)+1))
 		if err != nil || len(raw) > 128<<10 {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -93,13 +93,13 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+		owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
-		if refusal := owner.CheckProcess(platform.NewCaller(runtime{t}, m, build.ID, false, false), p); refusal != nil {
+		if refusal := owner.CheckProcess(platform.NewCaller(runtime{t}, m, construction.ID, false, false), p); refusal != nil {
 			answer.Valid = false
 			message := refusal.Message
 			node := ""
@@ -116,7 +116,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder and publisher saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}, {"application", "Application name; filter candidates before pagination"}}, Answer: ReleasePage{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder and publisher saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}, {"application", "Application name; filter candidates before pagination"}}, Answer: ReleasePage{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		offset, limit := 0, 20
 		for name, target := range map[string]*int{"offset": &offset, "limit": &limit} {
 			if raw := r.URL.Query().Get(name); raw != "" {
@@ -139,7 +139,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, h.withPromotions(t.ID, answer))
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/migrations/review", Summary: "Review explicit migration steps between sealed releases without changing data", Body: platform.MigrationPlan{}, Answer: MigrationReview{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/migrations/review", Summary: "Review explicit migration steps between sealed releases without changing data", Body: platform.MigrationPlan{}, Answer: MigrationReview{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
 		if err != nil || len(body) > 1<<20 {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -157,7 +157,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder and publisher review of sealed definitions against actual running definitions", Answer: SavedReleaseReview{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder and publisher review of sealed definitions against actual running definitions", Answer: SavedReleaseReview{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.ReviewSavedRelease(m, r.PathValue("id"))
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
@@ -166,7 +166,7 @@ func (h *Host) routesBuild(rt *routes) {
 		answer.PromotedTo = h.promotionsOf(t.ID, answer.Preview.CandidateID)
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "GET /v1/releases/drafts/changes", Summary: "Read saved authoring changes against original retained publications without creating a candidate", Answer: ReleaseDraftChanges{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "GET /v1/releases/drafts/changes", Summary: "Read saved authoring changes against original retained publications without creating a candidate", Answer: ReleaseDraftChanges{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.SavedDraftChanges(m, r.URL.Query().Get("application"), r.URL.Query().Get("type"), r.URL.Query().Get("id"))
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
@@ -174,7 +174,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0011)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0011)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
 		if readErr != nil || len(body) > 4096 {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -199,7 +199,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0011 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0011 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
 		if readErr != nil || len(body) > 4096 {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -240,13 +240,13 @@ func (h *Host) routesBuild(rt *routes) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
 	// One request carries either a single draft or a joint selection.
-	draftsOf := func(request ReleaseSaveRequest) []build.JointDraftRef {
+	draftsOf := func(request ReleaseSaveRequest) []construction.JointDraftRef {
 		if len(request.Drafts) > 0 {
 			return request.Drafts
 		}
-		return []build.JointDraftRef{{Kind: request.Kind, ID: request.ID}}
+		return []construction.JointDraftRef{{Kind: request.Kind, ID: request.ID}}
 	}
-	rt.authorized(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0011 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0011 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseSaveRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -272,7 +272,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseSaved{ID: id})
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate (ADR-0054)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate (ADR-0054)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseEvaluationRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -288,7 +288,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseEvaluationStarted{ID: id})
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/active", Summary: "Builder and publisher atomic installation and activation of a saved object/page/application closure (ADR-0011 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, build.ID, []string{build.Builder, build.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/active", Summary: "Builder and publisher atomic installation and activation of a saved object/page/application closure (ADR-0011 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseActivateRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -318,7 +318,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: PipelinePreviewRequest{}, Answer: PipelinePreview{}}, build.ID, []string{build.Builder, build.Integrator}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: PipelinePreviewRequest{}, Answer: PipelinePreview{}}, construction.ID, []string{construction.Builder, construction.Integrator}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request PipelinePreviewRequest
 		if err := decodeBodyLimit(r, &request, 1<<20); err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The pipeline trial must be a valid bounded JSON object"))
@@ -347,7 +347,7 @@ func (h *Host) routesBuild(rt *routes) {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	rt.authorized(Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test an application draft closure or retained candidate with synthetic samples, controlled members and original executor traces (ADR-0050)",
-		Body: CandidateSimulationRequest{}, Answer: CandidateSimulation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		Body: CandidateSimulationRequest{}, Answer: CandidateSimulation{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request CandidateSimulationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 		decoder.DisallowUnknownFields()

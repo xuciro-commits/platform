@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -12,10 +14,10 @@ import (
 )
 
 func (*Build) testPlanEntity() platform.Entity {
-	return platform.Entity{Type: TestPlanType, Title: "Test plan", Plural: "Test plans", Model: TestPlan{}, Display: "title",
+	return platform.Entity{Type: construction.TestPlanType, Title: "Test plan", Plural: "Test plans", Model: construction.TestPlan{}, Display: "title",
 		Description: "Fixed sample inputs and expected outcomes for testing a saved object, workflow or function draft.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"}}
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "objects"}}
 }
 
 // Validate only the supplied fields of a create/edit; the standard action owns
@@ -32,7 +34,7 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 		}
 	}
 	if given, ok := fields["evaluation"]; ok && !bytes.Equal(bytes.TrimSpace(given), []byte("null")) {
-		var policy []EvaluationPolicy
+		var policy []construction.EvaluationPolicy
 		decoder := json.NewDecoder(bytes.NewReader(given))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&policy) != nil || len(policy) != 1 || decoder.Decode(new(any)) != io.EOF {
@@ -40,7 +42,7 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 		}
 	}
 	if given, ok := fields["steps"]; ok {
-		var steps []TestStep
+		var steps []construction.TestStep
 		decoder := json.NewDecoder(bytes.NewReader(given))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&steps) != nil || len(steps) < 1 || len(steps) > 20 {
@@ -59,16 +61,16 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 // accidentally retain both roots or remove the only root. Standard records
 // still own reference validation, permissions, revisions and persistence.
 func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error {
-	if !c.Holds(c.App, Builder) {
+	if !c.Holds(c.App, construction.Builder) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if err := checkTestPlanFields(s.GetPayload()); err != nil {
 		return err
 	}
-	var plan TestPlan
-	var previous TestPlan
-	if s.GetSchema().GetName() == TestPlanType+".edit" {
-		plan, _ = platform.Get[TestPlan](c, s.GetTarget().GetId())
+	var plan construction.TestPlan
+	var previous construction.TestPlan
+	if s.GetSchema().GetName() == construction.TestPlanType+".edit" {
+		plan, _ = platform.Get[construction.TestPlan](c, s.GetTarget().GetId())
 		previous = plan
 	}
 	if json.Unmarshal(s.GetPayload(), &plan) != nil {
@@ -81,7 +83,7 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published test plan keeps its kind; create another plan")
 	}
 	if plan.Name != "" {
-		rows, err := readDefinitionInventory[TestPlan](b.host.Automation(c, ID))
+		rows, err := readDefinitionInventory[construction.TestPlan](b.host.Automation(c, construction.ID))
 		if err != nil {
 			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}

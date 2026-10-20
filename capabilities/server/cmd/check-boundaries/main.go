@@ -89,7 +89,7 @@ func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...st
 	}
 	root := strings.HasPrefix(path, "capabilities/server/") && !strings.Contains(strings.TrimPrefix(path, "capabilities/server/"), "/")
 	public := strings.HasPrefix(path, "capabilities/server/platform/")
-	internal := strings.HasPrefix(path, "capabilities/server/internal/host/")
+	internal := strings.HasPrefix(path, "capabilities/server/internal/")
 	external := strings.HasPrefix(path, "apps/") || strings.HasPrefix(path, "protocols/")
 	harness := external && strings.HasSuffix(file.Name.Name, "test")
 	self := ""
@@ -116,6 +116,9 @@ func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...st
 		}
 		if (public || internal) && (name == "platformserver" || strings.HasPrefix(name, "platformserver/apps/")) {
 			report(imported, "owner contract depends on implementation "+name)
+		}
+		if strings.HasPrefix(path, "capabilities/server/internal/construction/") && name == "platformserver/internal/host" {
+			report(imported, "construction declaration depends on host coordination")
 		}
 		if external && !harness {
 			if name == "platformserver" || strings.HasPrefix(name, "platformserver/apps/") || strings.HasPrefix(name, "platformserver/internal/") {

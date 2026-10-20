@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -24,45 +26,45 @@ func deviceDispatchTenant(t *testing.T) *Tenant {
 
 func prepareDeviceDispatch(t *testing.T, tn *Tenant, at time.Time, readKind string, safe bool) *platform.Dispatch {
 	t.Helper()
-	start := build.Action{Name: "send", Title: "Send movement", From: []string{"open"}, Roles: []string{build.User}, Transaction: &platform.BusinessTxn{Subject: "build.movement", Steps: []platform.TxnStep{{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: "build.movement", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "status", From: "=waiting"}}}}}}
-	publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "movement", "title": "Movement", "fields": []build.Field{{Name: "status", Title: "Status", Type: "text"}, {Name: "device", Title: "Device", Type: "text"}}, "states": []build.State{{Name: "open", Title: "Open"}}, "access": []build.Access{{Role: build.User, Read: "all", Create: true, Edit: true}, {Role: "reviewer", Read: "all"}}, "actions": []build.Action{start}}, at)
+	start := construction.Action{Name: "send", Title: "Send movement", From: []string{"open"}, Roles: []string{construction.User}, Transaction: &platform.BusinessTxn{Subject: "build.movement", Steps: []platform.TxnStep{{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: "build.movement", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "status", From: "=waiting"}}}}}}
+	publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "movement", "title": "Movement", "fields": []construction.Field{{Name: "status", Title: "Status", Type: "text"}, {Name: "device", Title: "Device", Type: "text"}}, "states": []construction.State{{Name: "open", Title: "Open"}}, "access": []construction.Access{{Role: construction.User, Read: "all", Create: true, Edit: true}, {Role: "reviewer", Read: "all"}}, "actions": []construction.Action{start}}, at)
 	tn.Outbound = func(*http.Request, bool) (*http.Response, error) { return confirmationResponse(200, `{}`) }
-	decide(t, tn, "builder", build.ID, "build.connection.create", build.ConnectionType, "TARGET", map[string]any{"name": "controller", "title": "Controller", "kind": "http", "address": "https://controller.example/api"}, at)
-	decide(t, tn, "builder", build.ID, "build.connection.check", build.ConnectionType, "TARGET", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.connection.create", construction.ConnectionType, "TARGET", map[string]any{"name": "controller", "title": "Controller", "kind": "http", "address": "https://controller.example/api"}, at)
+	decide(t, tn, "builder", construction.ID, "build.connection.check", construction.ConnectionType, "TARGET", map[string]any{}, at)
 	tn.CheckConnections(at)
-	decide(t, tn, "builder", build.ID, "build.writeback.create", build.WritebackType, "COMMAND", map[string]any{"name": "sendmovement", "title": "Send movement", "connection": "TARGET", "object": "build.movement", "on": "dispatch", "path": "/commands/{id}"}, at)
-	decide(t, tn, "builder", build.ID, "build.writeback.publish", build.WritebackType, "COMMAND", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.writeback.create", construction.WritebackType, "COMMAND", map[string]any{"name": "sendmovement", "title": "Send movement", "connection": "TARGET", "object": "build.movement", "on": "dispatch", "path": "/commands/{id}"}, at)
+	decide(t, tn, "builder", construction.ID, "build.writeback.publish", construction.WritebackType, "COMMAND", map[string]any{}, at)
 	read := platform.DispatchRead{Name: "movementstatus", KeyField: "id", ResultField: "state", States: map[string]string{"active": "running", "done": "completed", "blocked": "stuck", "failed": "failed"}, EverySeconds: 1}
 	switch readKind {
 	case "source":
-		decide(t, tn, "builder", build.ID, "build.source.create", build.SourceType, "SOURCE", map[string]any{"name": "movementstatus", "title": "Movement status", "connection": "TARGET", "profile": "json", "url": "/status", "object": "build.movement", "key": "id", "mapping": []build.SourceField{{From: "state", To: "status"}}}, at)
-		decide(t, tn, "builder", build.ID, "build.source.publish", build.SourceType, "SOURCE", map[string]any{}, at)
+		decide(t, tn, "builder", construction.ID, "build.source.create", construction.SourceType, "SOURCE", map[string]any{"name": "movementstatus", "title": "Movement status", "connection": "TARGET", "profile": "json", "url": "/status", "object": "build.movement", "key": "id", "mapping": []construction.SourceField{{From: "state", To: "status"}}}, at)
+		decide(t, tn, "builder", construction.ID, "build.source.publish", construction.SourceType, "SOURCE", map[string]any{}, at)
 		read.Source = "SOURCE"
 	case "record":
 		read.Record, read.ResultField = "build.movement", "status"
 	case "observation":
-		decide(t, tn, "builder", build.ID, "build.observation.create", build.ObservationType, "OBSERVATION", map[string]any{"name": "movementstatus", "title": "Movement status", "connection": "TARGET", "object": "build.movement", "deviceField": "device", "signal": "state", "unit": "code", "path": "/observations", "windowSeconds": 60, "expectedRetentionSeconds": 3600, "expectedGranularitySeconds": 1, "roles": []string{"user", "builder"}}, at)
-		decide(t, tn, "builder", build.ID, build.SchemaObservation, build.ObservationType, "OBSERVATION", map[string]any{}, at)
+		decide(t, tn, "builder", construction.ID, "build.observation.create", construction.ObservationType, "OBSERVATION", map[string]any{"name": "movementstatus", "title": "Movement status", "connection": "TARGET", "object": "build.movement", "deviceField": "device", "signal": "state", "unit": "code", "path": "/observations", "windowSeconds": 60, "expectedRetentionSeconds": 3600, "expectedGranularitySeconds": 1, "roles": []string{"user", "builder"}}, at)
+		decide(t, tn, "builder", construction.ID, construction.SchemaObservation, construction.ObservationType, "OBSERVATION", map[string]any{}, at)
 		read.Observation, read.KeyField, read.ResultField, read.States = "OBSERVATION", "", "", map[string]string{"1": "running", "2": "completed"}
 	}
 	spec := &platform.Dispatch{Command: "move", Target: "TARGET", Key: "$subject", DeadlineSeconds: 10, Readback: read, OnStuck: "manual", OnFail: "manual", ReviewerRole: "reviewer"}
 	start.Transaction.Dispatch = spec
 	commands := []platform.DispatchCommand{{Name: "move", Title: "Move", EndpointKind: "controller", Writeback: "COMMAND", Idempotent: safe}}
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "OBJECT", map[string]any{"actions": []build.Action{start}, "dispatchCommands": commands}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "OBJECT", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "OBJECT", map[string]any{"actions": []construction.Action{start}, "dispatchCommands": commands}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "OBJECT", map[string]any{}, at)
 	return spec
 }
 
 func startDeviceDispatch(t *testing.T, tn *Tenant, at time.Time) platform.DispatchRun {
 	t.Helper()
-	decide(t, tn, "operator", build.ID, "build.movement.create", "build.movement", "M1", map[string]any{"status": "new", "device": "controller-1"}, at)
-	decide(t, tn, "operator", build.ID, "build.movement.send", "build.movement", "M1", map[string]any{}, at)
+	decide(t, tn, "operator", construction.ID, "build.movement.create", "build.movement", "M1", map[string]any{"status": "new", "device": "controller-1"}, at)
+	decide(t, tn, "operator", construction.ID, "build.movement.send", "build.movement", "M1", map[string]any{}, at)
 	return currentDeviceDispatch(t, tn)
 }
 
 func currentDeviceDispatch(t *testing.T, tn *Tenant) platform.DispatchRun {
 	t.Helper()
-	runs, _, refusal := platform.Find[platform.DispatchRun](tn.automation(build.ID, false), platform.Query{})
+	runs, _, refusal := platform.Find[platform.DispatchRun](tn.automation(construction.ID, false), platform.Query{})
 	if refusal != nil || len(runs) != 1 {
 		t.Fatalf("dispatch runs=%d refusal=%v", len(runs), refusal)
 	}
@@ -203,7 +205,7 @@ func TestDeviceDispatchStatusWritesOnlyChanges(t *testing.T) {
 	if reads != readsBefore+1 || len(entries) != written {
 		t.Fatalf("restart lost polling or repeated saved evidence: reads=%d writes=%d", reads-readsBefore, len(entries)-written)
 	}
-	decide(t, tn, "reviewer", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retry", "reason": "Controller confirms the command was not executed"}, at.Add(15*time.Second))
+	decide(t, tn, "reviewer", construction.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retry", "reason": "Controller confirms the command was not executed"}, at.Add(15*time.Second))
 	written = len(entries)
 	tn.ReadDispatches(at.Add(15250 * time.Millisecond))
 	if run = currentDeviceDispatch(t, tn); len(entries) != written+1 || len(run.Readback) != 5 || run.State != "unknown" {
@@ -211,7 +213,7 @@ func TestDeviceDispatchStatusWritesOnlyChanges(t *testing.T) {
 	}
 	duringRead = func() {
 		duringRead = nil
-		decide(t, tn, "reviewer", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "complete", "reason": "Physical completion confirmed during the pending status read"}, at.Add(16250*time.Millisecond))
+		decide(t, tn, "reviewer", construction.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "complete", "reason": "Physical completion confirmed during the pending status read"}, at.Add(16250*time.Millisecond))
 	}
 	state, sourceError = "active", nil
 	written = len(entries)
@@ -299,13 +301,13 @@ func TestDeviceDispatchHumanRetryRetargetAndComplete(t *testing.T) {
 	}
 	run := startDeviceDispatch(t, tn, at)
 	tn.Dispatch(at)
-	if result := refuse(t, tn, "operator", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retry", "reason": "No task exists at the controller"}, at); result == "ok" {
+	if result := refuse(t, tn, "operator", construction.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retry", "reason": "No task exists at the controller"}, at); result == "ok" {
 		t.Fatal("applicant impersonated the declared reviewer")
 	}
-	decide(t, tn, "reviewer", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retry", "reason": "Controller confirms the task was not created"}, at.Add(time.Second))
+	decide(t, tn, "reviewer", construction.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retry", "reason": "Controller confirms the task was not created"}, at.Add(time.Second))
 	tn.Dispatch(at.Add(time.Second))
-	decide(t, tn, "builder", build.ID, "build.connection.create", build.ConnectionType, "SECOND", map[string]any{"name": "secondcontroller", "title": "Second controller", "kind": "http", "address": "https://second.example/api"}, at)
-	decide(t, tn, "builder", build.ID, "build.connection.check", build.ConnectionType, "SECOND", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.connection.create", construction.ConnectionType, "SECOND", map[string]any{"name": "secondcontroller", "title": "Second controller", "kind": "http", "address": "https://second.example/api"}, at)
+	decide(t, tn, "builder", construction.ID, "build.connection.check", construction.ConnectionType, "SECOND", map[string]any{}, at)
 	tn.CheckConnections(at)
 	targets, refusal := tn.DispatchTargets(memberOf(t, tn, "reviewer"), run.ID, at)
 	if refusal != nil || !slices.ContainsFunc(targets, func(target DispatchTarget) bool { return target.ID == "SECOND" && target.Title == "Second controller" }) {
@@ -314,12 +316,12 @@ func TestDeviceDispatchHumanRetryRetargetAndComplete(t *testing.T) {
 	if _, refusal := tn.DispatchTargets(memberOf(t, tn, "operator"), run.ID, at); refusal == nil {
 		t.Fatal("applicant read targets reserved for the current reviewer")
 	}
-	decide(t, tn, "reviewer", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retarget", "target": "SECOND", "reason": "First controller confirms no work exists; use standby"}, at.Add(2*time.Second))
+	decide(t, tn, "reviewer", construction.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "retarget", "target": "SECOND", "reason": "First controller confirms no work exists; use standby"}, at.Add(2*time.Second))
 	tn.Dispatch(at.Add(2 * time.Second))
 	if posts != 3 || hosts[2] != "second.example" {
 		t.Fatalf("authorized attempts=%d hosts=%v", posts, hosts)
 	}
-	decide(t, tn, "reviewer", build.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "complete", "reason": "Operator confirmed the physical move at the destination"}, at.Add(3*time.Second))
+	decide(t, tn, "reviewer", construction.ID, platform.DispatchReviewSchema, platform.DispatchType, run.ID, map[string]any{"outcome": "complete", "reason": "Operator confirmed the physical move at the destination"}, at.Add(3*time.Second))
 	run = currentDeviceDispatch(t, tn)
 	if run.State != "completed" || run.Attempt != 3 || len(run.Attempts) != 3 {
 		t.Fatalf("manual result lost original attempt history: %+v", run)
@@ -357,7 +359,7 @@ func TestDeviceDispatchRecordAndObservationReadbacks(t *testing.T) {
 				t.Fatal("transport acceptance was treated as execution completion")
 			}
 			if kind == "record" {
-				decide(t, tn, "operator", build.ID, "build.movement.edit", "build.movement", "M1", map[string]any{"status": "done"}, at)
+				decide(t, tn, "operator", construction.ID, "build.movement.edit", "build.movement", "M1", map[string]any{"status": "done"}, at)
 			}
 			tn.ReadDispatches(at.Add(time.Second))
 			if run := currentDeviceDispatch(t, tn); run.State != "completed" || len(run.Readback) != 1 {
@@ -397,14 +399,14 @@ func TestDeviceDispatchCompensationRequiresItsOwnEvidence(t *testing.T) {
 				return confirmationResponse(200, string(platform.Raw(rows)))
 			}
 			if kind == "record" {
-				decide(t, tn, "operator", build.ID, "build.movement.edit", "build.movement", "M1", map[string]any{"status": "done"}, at)
+				decide(t, tn, "operator", construction.ID, "build.movement.edit", "build.movement", "M1", map[string]any{"status": "done"}, at)
 			}
 			if reading := tn.readDispatchStatus(run, at.Add(3*time.Second)); reading.State != "unknown" {
 				t.Fatalf("the original command completed its compensation: %+v", reading)
 			}
 			ownEvidence = true
 			if kind == "record" {
-				decide(t, tn, "operator", build.ID, "build.movement.create", "build.movement", "M1:compensate", map[string]any{"status": "done"}, at)
+				decide(t, tn, "operator", construction.ID, "build.movement.create", "build.movement", "M1:compensate", map[string]any{"status": "done"}, at)
 			}
 			if reading := tn.readDispatchStatus(run, at.Add(3*time.Second)); reading.State != "completed" {
 				t.Fatalf("the compensation's own completion was not read: %+v", reading)

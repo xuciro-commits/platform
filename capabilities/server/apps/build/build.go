@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"slices"
 	"strings"
@@ -44,10 +44,10 @@ type Build struct {
 	linkTypes     map[string]LinkType
 	propertyTypes map[string]PropertyType
 	queries       map[string]Query
-	functions     map[string]Function
+	functions     map[string]construction.Function
 	agents        map[string]Agent
 	codes         map[string]Code
-	tables        map[string]Table // published decision tables, by name (ADR-0040)
+	tables        map[string]construction.Table // published decision tables, by name (ADR-0040)
 }
 
 // Attach is called by the host when a tenant is composed.
@@ -55,17 +55,17 @@ func (b *Build) AttachBuild(h host.BuildHost) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
+	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]construction.Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]construction.Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
 	actions = append(actions, platform.EntityActions(b.processEntity())...)
 	actions = append(actions, platform.EntityActions(b.functionEntity())...)
 	actions = append(actions, platform.EntityActions(b.linkTypeEntity())...)
-	actions = append(actions, platform.Action{Schema: LinkTypeType + ".migrate", Target: LinkTypeType, Title: "Migrate relationships", Description: "Move historical links into the endpoint owner's accepted records", Capability: LinkTypeType, Roles: []string{Builder}, Payload: []platform.Field{}})
+	actions = append(actions, platform.Action{Schema: construction.LinkTypeType + ".migrate", Target: construction.LinkTypeType, Title: "Migrate relationships", Description: "Move historical links into the endpoint owner's accepted records", Capability: construction.LinkTypeType, Roles: []string{construction.Builder}, Payload: []platform.Field{}})
 	actions = append(actions, platform.EntityActions(b.propertyTypeEntity())...)
 	actions = append(actions, platform.EntityActions(b.queryEntity())...)
-	actions = append(actions, functionCallActions([]string{Builder, User})...)
+	actions = append(actions, functionCallActions([]string{construction.Builder, construction.User})...)
 	actions = append(actions, evaluationActions()...)
 	actions = append(actions, platform.EntityActions(b.codeEntity())...)
 	actions = append(actions, platform.EntityActions(b.sourceEntity())...)
@@ -90,32 +90,32 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.observationEntity())...)
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
-	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType, SourceType, ConnectionType, DatasetType, DatasetVersionType, PipelineType, WritebackType, MatchType, TableType, AgentType, AlertType, platform.MigrationRunType, MigrationPlanType, SampleSetType, ObservationType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType)
+	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: construction.TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{construction.Builder}, Payload: []platform.Field{}})
+	b.ledger = platform.NewLedger(tenant, construction.ID, platform.NewCatalog(actions...), construction.ObjectType, construction.PageType, construction.AppType, construction.TestPlanType, construction.ProcessType, construction.FunctionType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionCallType, construction.EvaluationType, construction.CodeType, construction.SourceType, construction.ConnectionType, construction.DatasetType, construction.DatasetVersionType, construction.PipelineType, construction.WritebackType, MatchType, construction.TableType, AgentType, construction.AlertType, platform.MigrationRunType, MigrationPlanType, SampleSetType, construction.ObservationType, platform.OwnedRelationType(construction.ID), confirmationType, platform.DispatchType)
 	return b
 }
 
 func (b *Build) objectEntity() platform.Entity {
-	return platform.Entity{Type: ObjectType, Title: "Object", Plural: "Objects", Model: Object{}, Display: "title",
+	return platform.Entity{Type: construction.ObjectType, Title: "Object", Plural: "Objects", Model: construction.Object{}, Display: "title",
 		Description: "An object this organisation defines itself: its name, what people call it and its fields. Publishing it installs it, and records of it are kept like any other app's.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {
 				return nil
 			}
-			if err := b.normalizeObjectRules(record.(*Object)); err != nil {
+			if err := b.normalizeObjectRules(record.(*construction.Object)); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			return nil
 		},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "objects"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being defined; nothing is installed yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "Installed in this tenant: people work with its records."}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"},
-				Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{},
+				Roles: []string{construction.Builder}, Capability: "objects", Payload: []platform.Field{},
 				Description: "Install the object as it stands. Published again, it takes its new fields, and records keep the values of the fields that remain.",
 				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
-					object, ok := record.(*Object)
+					object, ok := record.(*construction.Object)
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
@@ -140,7 +140,7 @@ func (b *Build) objectEntity() platform.Entity {
 					} else if err := b.install(c, *object); err != nil {
 						return err
 					}
-					object.Installed = buildapi.TypeOf(object.Name) // what its records are kept as, for people to see
+					object.Installed = construction.TypeOf(object.Name) // what its records are kept as, for people to see
 					object.Published = published(*object)
 					return nil
 				}}}}}
@@ -159,7 +159,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.migrationPlanEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{platform.RelationEntity(construction.ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.migrationPlanEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	entities = append(entities, migrationEntity())
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
@@ -167,7 +167,7 @@ func (b *Build) Manifest() platform.Manifest {
 	// Every role an object names is a role of this app, which the Console
 	// grants — one that only reads grants no action (ADR-0044). Builder and
 	// Publisher are the two roles releases need (ADR-0016 §11).
-	roles := []string{User, Builder, Publisher, Integrator}
+	roles := []string{construction.User, construction.Builder, construction.Publisher, construction.Integrator}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
 			if !slices.Contains(roles, role) {
@@ -177,25 +177,25 @@ func (b *Build) Manifest() platform.Manifest {
 	}
 	slices.Sort(roles)
 	provisions, reads := b.objectProtocols()
-	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.confirmationProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: construction.ID, Title: "Builder", Version: construction.ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.confirmationProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
-			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
+			Layout: "list-detail", Object: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: construction.ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
 			DetailFields: []string{"title", "name", "plural", "description", "fields", "state", "installed"},
-			Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
-				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: ObjectType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}},
+			Actions: []platform.AssetRef{{App: construction.ID, Kind: platform.AssetAction, Name: construction.ObjectType + ".create"},
+				{App: construction.ID, Kind: platform.AssetAction, Name: construction.ObjectType + ".edit"}, {App: construction.ID, Kind: platform.AssetAction, Name: construction.ObjectType + ".archive"}, {App: construction.ID, Kind: platform.AssetAction, Name: construction.SchemaPublish}}},
 			{Name: "applications", Title: "Applications", Description: "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
-				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: AppType},
+				Layout: "list-detail", Object: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: construction.AppType},
 				ListFields:   []string{"title", "name", "icon", "state"},
 				DetailFields: []string{"title", "name", "description", "icon", "pages", "groups", "state"},
-				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: AppType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: AppType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaHandOver}}},
+				Actions: []platform.AssetRef{{App: construction.ID, Kind: platform.AssetAction, Name: construction.AppType + ".create"},
+					{App: construction.ID, Kind: platform.AssetAction, Name: construction.AppType + ".edit"}, {App: construction.ID, Kind: platform.AssetAction, Name: construction.AppType + ".archive"}, {App: construction.ID, Kind: platform.AssetAction, Name: construction.SchemaHandOver}}},
 			{Name: "pages", Title: "Pages", Description: "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
-				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: PageType},
+				Layout: "list-detail", Object: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: construction.PageType},
 				ListFields:   []string{"title", "name", "object", "state"},
 				DetailFields: []string{"title", "name", "description", "object", "list", "detail", "actions", "state"},
-				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: PageType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaRelease}}}}}
+				Actions: []platform.AssetRef{{App: construction.ID, Kind: platform.AssetAction, Name: construction.PageType + ".create"},
+					{App: construction.ID, Kind: platform.AssetAction, Name: construction.PageType + ".edit"}, {App: construction.ID, Kind: platform.AssetAction, Name: construction.PageType + ".archive"}, {App: construction.ID, Kind: platform.AssetAction, Name: construction.SchemaRelease}}}}}
 }
 
 // sortedTypes are the installed types, in a fixed order: a manifest and a
@@ -229,10 +229,10 @@ const (
 
 // directInstallSchemas are the builder's direct install entries: each installs a
 // definition for operators at once, without a saved candidate.
-var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
-	SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
+var directInstallSchemas = []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver, construction.SchemaProcess,
+	SchemaPropertyType, construction.SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
 	SchemaTablePublish, SchemaAlertPublish,
-	SourceType + ".publish", PipelineType + ".publish", WritebackType + ".publish", MatchType + ".publish"}
+	construction.SourceType + ".publish", construction.PipelineType + ".publish", construction.WritebackType + ".publish", MatchType + ".publish"}
 
 // checkReleaseProfile refuses a direct install that a production tenant has
 // retired, naming the schema and the route that replaces it. Replay and
@@ -249,7 +249,7 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
+	return []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver, construction.SchemaProcess, SchemaPropertyType, construction.SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
 // publicationImage reads and verifies the already committed record image
@@ -268,14 +268,14 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted agent has no published definition")
 		}
 		return b.agentEntity(), nil, nil, nil, nil
-	case SchemaPublish:
-		var record Object
+	case construction.SchemaPublish:
+		var record construction.Object
 		if err := json.Unmarshal(image, &record); err != nil {
 			return platform.Entity{}, nil, nil, nil, err
 		}
-		published, ok := wasPublished[Object](record.Published)
+		published, ok := wasPublished[construction.Object](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
-			record.Name != published.Name || record.Installed != buildapi.TypeOf(published.Name) {
+			record.Name != published.Name || record.Installed != construction.TypeOf(published.Name) {
 			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted object has no matching published definition")
 		}
 		if published.ExtensionSource != nil {
@@ -293,7 +293,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 		}
 		actions := objectActions(published, entity)
 		return entity, actions, []platform.Page{page(published)}, nil, nil
-	case SchemaRelease:
+	case construction.SchemaRelease:
 		var record Page
 		if err := json.Unmarshal(image, &record); err != nil {
 			return platform.Entity{}, nil, nil, nil, err
@@ -304,7 +304,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted page has no published definition")
 		}
 		return platform.Entity{}, nil, []platform.Page{descriptor(published)}, nil, nil
-	case SchemaHandOver:
+	case construction.SchemaHandOver:
 		var record Application
 		if err := json.Unmarshal(image, &record); err != nil {
 			return platform.Entity{}, nil, nil, nil, err
@@ -362,7 +362,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallPropertyType(l.Definition())
 	}
-	if schema == SchemaLinkType {
+	if schema == construction.SchemaLinkType {
 		l, err := linkTypeImage(image)
 		if err != nil {
 			return err
@@ -390,7 +390,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallFunction(f.Definition())
 	}
-	if schema == SchemaProcess {
+	if schema == construction.SchemaProcess {
 		p, err := processImage(image)
 		if err != nil {
 			return err
@@ -405,19 +405,19 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		return err
 	}
 	switch schema {
-	case SchemaPublish:
-		var record Object
+	case construction.SchemaPublish:
+		var record construction.Object
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		published, ok := wasPublished[Object](record.Published)
+		published, ok := wasPublished[construction.Object](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted object has no published definition")
 		}
 		return b.validateObjectInstallation(published)
-	case SchemaRelease:
+	case construction.SchemaRelease:
 		return b.host.ValidateInstallPage(pages[0])
-	case SchemaHandOver:
+	case construction.SchemaHandOver:
 		return b.host.ValidateInstallApplication(*app)
 	}
 	return fmt.Errorf("unknown builder publication: %s", schema)
@@ -439,7 +439,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		if err != nil {
 			return err
 		}
-		var record Table
+		var record construction.Table
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
@@ -462,7 +462,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if schema == SchemaPropertyType {
 		return applyDefinitionHistory(image, propertyTypeImage, b.installPropertyType)
 	}
-	if schema == SchemaLinkType {
+	if schema == construction.SchemaLinkType {
 		return applyDefinitionHistory(image, linkTypeImage, b.installLinkType)
 	}
 	if schema == SchemaQuery {
@@ -482,7 +482,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.installFunction(platform.Caller{Replaying: true}, f)
 	}
-	if schema == SchemaProcess {
+	if schema == construction.SchemaProcess {
 		p, err := processImage(image)
 		if err != nil {
 			return err
@@ -497,12 +497,12 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		return err
 	}
 	switch schema {
-	case SchemaPublish:
-		var record Object
+	case construction.SchemaPublish:
+		var record construction.Object
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		published, ok := wasPublished[Object](record.Published)
+		published, ok := wasPublished[construction.Object](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted object has no published definition")
 		}
@@ -518,11 +518,11 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 			return fmt.Errorf("install accepted object: %w", err)
 		}
 		b.installed[entity.Type] = entity
-	case SchemaRelease:
+	case construction.SchemaRelease:
 		if err := b.host.InstallPage(platform.Caller{Replaying: true}, pages[0]); err != nil {
 			return fmt.Errorf("install accepted page: %w", err)
 		}
-	case SchemaHandOver:
+	case construction.SchemaHandOver:
 		if err := b.host.InstallApplication(platform.Caller{Replaying: true}, *app); err != nil {
 			return fmt.Errorf("install accepted application: %w", err)
 		}
@@ -557,54 +557,54 @@ type ReleaseProfile struct {
 
 // Draft archival never retires installed definitions or retained runtime versions.
 func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kernel.Error {
-	if !c.Holds(c.App, Builder) && !(typ == ObservationType && c.Holds(c.App, Integrator)) {
+	if !c.Holds(c.App, construction.Builder) && !(typ == construction.ObservationType && c.Holds(c.App, construction.Integrator)) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	published := false
 	switch typ {
-	case ObjectType:
-		record, _ := platform.Get[Object](c, id)
+	case construction.ObjectType:
+		record, _ := platform.Get[construction.Object](c, id)
 		published = record.Published != ""
-	case PageType:
+	case construction.PageType:
 		record, _ := platform.Get[Page](c, id)
 		published = record.Published != ""
-	case AppType:
+	case construction.AppType:
 		record, _ := platform.Get[Application](c, id)
 		published = record.Published != ""
-	case ProcessType:
-		record, _ := platform.Get[Process](c, id)
+	case construction.ProcessType:
+		record, _ := platform.Get[construction.Process](c, id)
 		published = record.Published != ""
-	case PropertyTypeType:
+	case construction.PropertyTypeType:
 		record, _ := platform.Get[PropertyType](c, id)
 		published = record.Published != ""
-	case LinkTypeType:
+	case construction.LinkTypeType:
 		record, _ := platform.Get[LinkType](c, id)
 		published = record.Published != ""
-	case QueryType:
+	case construction.QueryType:
 		record, _ := platform.Get[Query](c, id)
 		published = record.Published != ""
-	case FunctionType:
-		record, _ := platform.Get[Function](c, id)
+	case construction.FunctionType:
+		record, _ := platform.Get[construction.Function](c, id)
 		published = record.Published != ""
-	case TableType:
-		record, _ := platform.Get[Table](c, id)
+	case construction.TableType:
+		record, _ := platform.Get[construction.Table](c, id)
 		published = record.Published != ""
-	case AlertType:
-		record, _ := platform.Get[Alert](c, id)
+	case construction.AlertType:
+		record, _ := platform.Get[construction.Alert](c, id)
 		published = record.Published != "" || legacyAlert(record)
 	case AgentType:
 		record, _ := platform.Get[Agent](c, id)
 		published = record.Published != ""
-	case ObservationType:
-		record, _ := platform.Get[Observation](c, id)
+	case construction.ObservationType:
+		record, _ := platform.Get[construction.Observation](c, id)
 		published = record.Published != ""
 	case SampleSetType:
 		record, _ := platform.Get[SampleSetRecord](c, id)
 		published = record.Published != ""
-	case TestPlanType:
-		record, _ := platform.Get[TestPlan](c, id)
+	case construction.TestPlanType:
+		record, _ := platform.Get[construction.TestPlan](c, id)
 		published = record.Published != ""
-	case CodeType:
+	case construction.CodeType:
 		record, _ := platform.Get[Code](c, id)
 		published = record.Published != ""
 		if record.State == "compiling" {
@@ -614,7 +614,7 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	if !published {
 		return nil
 	}
-	if typ == ObjectType {
+	if typ == construction.ObjectType {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published object cannot be archived; its installed definition must be retained")
 	}
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained")
@@ -623,7 +623,7 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	if s.GetSchema().GetName() == LinkTypeType+".migrate" {
+	if s.GetSchema().GetName() == construction.LinkTypeType+".migrate" {
 		return b.migrateLinkType(c, s, now)
 	}
 	if !c.Replaying {
@@ -637,19 +637,19 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaCodeCompiled {
 		return b.submitCodeCompiled(c, s, now)
 	}
-	if s.GetSchema().GetName() == SchemaSourcePulled {
+	if s.GetSchema().GetName() == construction.SchemaSourcePulled {
 		return b.submitSourcePulled(c, s, now)
 	}
-	if s.GetSchema().GetName() == SchemaConnectionChecked {
+	if s.GetSchema().GetName() == construction.SchemaConnectionChecked {
 		return b.submitConnectionChecked(c, s, now)
 	}
-	if s.GetSchema().GetName() == SchemaDatasetLoad {
+	if s.GetSchema().GetName() == construction.SchemaDatasetLoad {
 		return b.submitDatasetLoad(c, s, now)
 	}
-	if s.GetSchema().GetName() == SchemaPipelineRan {
+	if s.GetSchema().GetName() == construction.SchemaPipelineRan {
 		return b.submitPipelineRan(c, s, now)
 	}
-	if s.GetSchema().GetName() == SchemaWritebackAnswered {
+	if s.GetSchema().GetName() == construction.SchemaWritebackAnswered {
 		return b.submitWritebackAnswered(c, s, now)
 	}
 	if name := s.GetSchema().GetName(); name == migrationStart || name == migrationAdvance || name == migrationCancel {
@@ -664,31 +664,31 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaProposalReview {
 		return b.submitProposalReview(c, s, now)
 	}
-	if name := s.GetSchema().GetName(); name == SchemaFunctionCall || name == SchemaFunctionAnswer {
+	if name := s.GetSchema().GetName(); name == construction.SchemaFunctionCall || name == construction.SchemaFunctionAnswer {
 		return b.submitFunctionCall(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
 		return b.submitTestPlan(c, s, now)
 	}
-	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
+	if name := s.GetSchema().GetName(); name == construction.SchemaEvaluationStart || name == construction.SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType, TableType, AlertType, AgentType, TestPlanType, SampleSetType, ObservationType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{construction.ObjectType, construction.PageType, construction.AppType, construction.ProcessType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionType, construction.CodeType, construction.TableType, construction.AlertType, AgentType, construction.TestPlanType, SampleSetType, construction.ObservationType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
 	}
-	if name := s.GetSchema().GetName(); (name == TestPlanType+".create" || name == TestPlanType+".edit") && !c.Replaying {
+	if name := s.GetSchema().GetName(); (name == construction.TestPlanType+".create" || name == construction.TestPlanType+".edit") && !c.Replaying {
 		if err := b.checkTestPlan(c, s); err != nil {
 			return nil, err
 		}
 	}
-	if name := s.GetSchema().GetName(); (name == ObjectType+".create" || name == ObjectType+".edit") && !c.Replaying {
+	if name := s.GetSchema().GetName(); (name == construction.ObjectType+".create" || name == construction.ObjectType+".edit") && !c.Replaying {
 		// What the payload carries is checked while it is still a draft, so the
 		// person is told at once; publishing checks the whole definition again.
 		var p struct {
-			Name   *string  `json:"name"`
-			Fields *[]Field `json:"fields"`
+			Name   *string               `json:"name"`
+			Fields *[]construction.Field `json:"fields"`
 		}
 		if json.Unmarshal(s.GetPayload(), &p) == nil {
 			var err error
@@ -706,7 +706,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	if name := s.GetSchema().GetName(); (name == PageType+".create" || name == PageType+".edit") && !c.Replaying {
+	if name := s.GetSchema().GetName(); (name == construction.PageType+".create" || name == construction.PageType+".edit") && !c.Replaying {
 		var p Page
 		if json.Unmarshal(s.GetPayload(), &p) == nil && p.Object != "" {
 			if !b.fieldKnown(p.Object) {
@@ -715,7 +715,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		}
 	}
 	pageEntity := b.pageEntity()
-	if name := s.GetSchema().GetName(); name == PageType+".create" || name == PageType+".edit" {
+	if name := s.GetSchema().GetName(); name == construction.PageType+".create" || name == construction.PageType+".edit" {
 		pageEntity = b.pageDraftEntity()
 	}
 	agentEntity := b.agentEntity()
@@ -742,7 +742,7 @@ func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
 	return b.lookupEntity(typ)
 }
 
-func (b *Build) Check(o Object, id string) error {
+func (b *Build) Check(o construction.Object, id string) error {
 	if err := b.checkName(o.Name, id); err != nil {
 		return err
 	}
@@ -794,7 +794,7 @@ func (b *Build) Check(o Object, id string) error {
 	return checkAccess(o)
 }
 
-func checkEnterpriseUse(o Object) error {
+func checkEnterpriseUse(o construction.Object) error {
 	if o.EnterpriseUse == nil {
 		return nil
 	}
@@ -819,13 +819,13 @@ const BaseField = "base"
 // checkShape refuses an interface the tenant's apps do not declare or whose
 // fields the object lacks, and an extension of a type that is not there, of
 // itself, with a lifecycle of its own, or whose base field is not the base.
-func (b *Build) checkShape(o Object) error {
+func (b *Build) checkShape(o construction.Object) error {
 	if len(o.Implements) > 0 {
 		var declared []platform.Interface
 		if b.host != nil {
 			declared = b.host.Interfaces()
 		}
-		info, err := platform.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
+		info, err := platform.Describe(construction.ID, Entity(o), func(reflect.Type) string { return "" })
 		if err != nil {
 			return err
 		}
@@ -843,15 +843,15 @@ func (b *Build) checkShape(o Object) error {
 		}
 	}
 	if o.Extends != "" {
-		if o.Extends == buildapi.TypeOf(o.Name) || !b.fieldKnown(o.Extends) {
+		if o.Extends == construction.TypeOf(o.Name) || !b.fieldKnown(o.Extends) {
 			return fmt.Errorf("the object cannot extend %s: not an object type this tenant has", o.Extends)
 		}
-		k := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == BaseField })
+		k := slices.IndexFunc(o.Fields, func(f construction.Field) bool { return f.Name == BaseField })
 		if k < 0 || o.Fields[k].Type != "reference" || o.Fields[k].Ref != o.Extends || !o.Fields[k].Required {
 			return fmt.Errorf("an extension of %s needs a required reference field %q pointing at it", o.Extends, BaseField)
 		}
 		if base, exists := b.lookupEntity(o.Extends); exists {
-			info, err := platform.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
+			info, err := platform.Describe(construction.ID, Entity(o), func(reflect.Type) string { return "" })
 			if err != nil {
 				return err
 			}
@@ -898,20 +898,20 @@ func (b *Build) fieldKnown(ref string) bool {
 	if b.host.Declares(ref) {
 		return true
 	}
-	name, derived := strings.CutPrefix(ref, ID+".")
+	name, derived := strings.CutPrefix(ref, construction.ID+".")
 	if !derived {
 		return false
 	}
-	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+	objects, err := readDefinitionInventory[construction.Object](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return false
 	}
-	return slices.ContainsFunc(objects, func(o Object) bool { return !o.Archived && o.Name == name })
+	return slices.ContainsFunc(objects, func(o construction.Object) bool { return !o.Archived && o.Name == name })
 }
 
 // checkFields refuses a field the platform has no type for, a choice without
 // values, or a reference to an object this tenant has not.
-func checkFields(fields []Field, known func(string) bool) error {
+func checkFields(fields []construction.Field, known func(string) bool) error {
 	seen := map[string]bool{}
 	for _, f := range fields {
 		switch {
@@ -974,7 +974,7 @@ func checkEnterpriseReference(kind, ref, stereotype string, stereotypes []string
 // checkConditions reads every "Only when" as the kit will (field=value,value)
 // and refuses one that names no other unconditional choice or boolean field,
 // or a value it never takes.
-func checkConditions(fields []Field) error {
+func checkConditions(fields []construction.Field) error {
 	for _, f := range fields {
 		if f.When == "" {
 			continue
@@ -983,7 +983,7 @@ func checkConditions(fields []Field) error {
 		if !ok || name == "" || values == "" {
 			return fmt.Errorf("the field %q applies \"only when\" %q, which is not field=value,value", f.Name, f.When)
 		}
-		i := slices.IndexFunc(fields, func(x Field) bool { return x.Name == name })
+		i := slices.IndexFunc(fields, func(x construction.Field) bool { return x.Name == name })
 		switch {
 		case i < 0 || name == f.Name:
 			return fmt.Errorf("the field %q applies only when %q is set, which is not another field of this object", f.Name, name)
@@ -994,7 +994,7 @@ func checkConditions(fields []Field) error {
 		}
 		allowed := []string{"true", "false"}
 		if fields[i].Type == "choice" {
-			allowed = buildapi.ValueChoices(fields[i].Choices)
+			allowed = construction.ValueChoices(fields[i].Choices)
 		}
 		for _, v := range strings.Split(values, ",") {
 			if !slices.Contains(allowed, v) {
@@ -1012,10 +1012,10 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 	if b.host == nil {
 		return "", false, nil
 	}
-	if _, mine := b.installed[buildapi.TypeOf(name)]; !mine && b.host.Declares(buildapi.TypeOf(name)) {
+	if _, mine := b.installed[construction.TypeOf(name)]; !mine && b.host.Declares(construction.TypeOf(name)) {
 		return "an app's own type", true, nil
 	}
-	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+	objects, err := readDefinitionInventory[construction.Object](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return "", false, err
 	}
@@ -1043,7 +1043,7 @@ func named(s string) bool {
 // records, the ledger takes its generated actions, and the asset registry
 // offers it and its page (ADR-0048). Installed again, it takes its new
 // fields and its records come with it (D3).
-func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
+func (b *Build) install(c platform.Caller, o construction.Object) *kernel.Error {
 	if c.Staging() {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
@@ -1083,7 +1083,7 @@ func published[T any](definition T) string {
 	// preceding publication. Keeping the old Published string inside the new
 	// image would double its size at each edit and exhaust the bounded result.
 	switch value := any(definition).(type) {
-	case Object:
+	case construction.Object:
 		value.Published = ""
 		definition = any(value).(T)
 	case Page:
@@ -1105,7 +1105,7 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case Function:
+	case construction.Function:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
@@ -1113,7 +1113,7 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case Process:
+	case construction.Process:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
@@ -1153,7 +1153,7 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("object %s: %v: %s", was.Name, err, err.Message)
 		}
 	}
-	if err := restoreDefinitionPublications(b, b.linkTypeInventory, SchemaLinkType); err != nil {
+	if err := restoreDefinitionPublications(b, b.linkTypeInventory, construction.SchemaLinkType); err != nil {
 		return err
 	}
 	if err := restoreDefinitionPublications(b, b.queryInventory, SchemaQuery); err != nil {
@@ -1229,13 +1229,15 @@ func (b *Build) Reinstall() error {
 
 // Entity is the declaration a defined object amounts to: a Go type built now,
 // with the tags a developer would have written (ADR-0048).
-func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
+func Entity(o construction.Object) platform.Entity { return entityWith(o, nil, nil) }
 
 // entity is the declaration as installed: its actions may create related
 // records through this builder's host (ADR-0047 21c).
-func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b, b.conditionLookup) }
+func (b *Build) entity(o construction.Object) platform.Entity {
+	return entityWith(o, b, b.conditionLookup)
+}
 
-func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
+func entityWith(o construction.Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
 	creation := o.CreateTransaction
 	var creationError error
 	if creation == nil && o.Numbering != nil {
@@ -1245,7 +1247,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	// objects distinct, just as two named Go record types are distinct; this
 	// tag adds no JSON field and stays stable across draft/publication/restore.
 	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[platform.Record](), Anonymous: true,
-		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, buildapi.TypeOf(o.Name)))}}
+		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, construction.TypeOf(o.Name)))}}
 	for _, f := range o.Fields {
 		tag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, f.Name, f.Title)
 		if f.AIInput != nil {
@@ -1262,7 +1264,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		case "longtext", "date", "datetime":
 			tag += fmt.Sprintf(` type:"%s"`, f.Type)
 		case "choice":
-			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(buildapi.ValueChoices(f.Choices), ","))
+			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(construction.ValueChoices(f.Choices), ","))
 		case "reference":
 			tag += fmt.Sprintf(` ref:"%s"`, f.Ref)
 			if f.Stereotype != "" {
@@ -1298,10 +1300,10 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 			tag += fmt.Sprintf(` when:"%s"`, f.When)
 		}
 		if len(f.Read) > 0 { // the builder always reads and sets what it builds
-			tag += fmt.Sprintf(` read:"%s"`, strings.Join(append([]string{Builder}, f.Read...), ","))
+			tag += fmt.Sprintf(` read:"%s"`, strings.Join(append([]string{construction.Builder}, f.Read...), ","))
 		}
 		if len(f.Write) > 0 {
-			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{Builder}, f.Write...), ","))
+			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{construction.Builder}, f.Write...), ","))
 		}
 		fieldType := goType(f.Type)
 		// Optional scalar values need a nil state. Otherwise an omitted number
@@ -1345,7 +1347,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		}
 	}
 	std, scope, roles := access(o)
-	entity := platform.Entity{Type: buildapi.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
+	entity := platform.Entity{Type: construction.TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
 		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, PropertyBindings: propertyBindings(o.Fields), Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, ComputeAt: computeRulesOf(o, lookup), Validate: validateOf(o, model, lookup), ValidateAt: numberingOf(o, model)}
 	entity.CreateTxn = creation
 	entity.EnterpriseUse = o.EnterpriseUse
@@ -1380,7 +1382,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 
 // page is the list and detail page a defined object comes with: the same
 // descriptor a code page has (ADR-0048).
-func page(o Object) platform.Page {
+func page(o construction.Object) platform.Page {
 	names := []string{}
 	for _, f := range o.Fields {
 		names = append(names, f.Name)
@@ -1392,17 +1394,17 @@ func page(o Object) platform.Page {
 	if len(o.States) > 0 { // where each record stands, in the list and on its page
 		list, names = append(list, "state"), append(names, "state")
 	}
-	typ := buildapi.TypeOf(o.Name)
-	actions := []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: typ + ".create"}, {App: ID, Kind: platform.AssetAction, Name: typ + ".edit"}}
+	typ := construction.TypeOf(o.Name)
+	actions := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetAction, Name: typ + ".create"}, {App: construction.ID, Kind: platform.AssetAction, Name: typ + ".edit"}}
 	for _, a := range o.Actions {
-		actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: typ + "." + a.Name})
+		actions = append(actions, platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: typ + "." + a.Name})
 	}
 	title := o.Plural
 	if title == "" { // a plural is optional; the page is never nameless (UX-10)
 		title = o.Title
 	}
 	return platform.Page{Name: o.Name, Title: title, Description: o.Description, Layout: "list-detail",
-		Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: typ}, ListFields: list, DetailFields: names, Actions: actions}
+		Object: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: typ}, ListFields: list, DetailFields: names, Actions: actions}
 }
 
 func goType(kind string) reflect.Type {

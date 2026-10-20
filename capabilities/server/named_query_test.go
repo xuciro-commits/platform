@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"net/http"
@@ -218,7 +220,7 @@ func TestNamedQueryHTTP(t *testing.T) {
 func TestReleaseCandidateIncludesQueryAsset(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	crmApp := newTestCRMApp("t-rc-test")
-	seatDana := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder, "crm": "sales-manager"}}}
+	seatDana := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{construction.ID: construction.Builder, "crm": "sales-manager"}}}
 	b := build.New("t-rc-test")
 	tn, err := NewTenant("t-rc-test", NewConsole("t-rc-test", seatDana), b, crmApp)
 	if err != nil {
@@ -234,23 +236,23 @@ func TestReleaseCandidateIncludesQueryAsset(t *testing.T) {
 		},
 	})
 	if _, kerr := tn.Submit(dana, &pb.Submission{
-		TenantId: "t-rc-test", PrincipalId: "dana", Authority: build.ID,
-		IdempotencyKey: "p-create-1", Target: &pb.EntityRef{Type: build.PageType, Id: "P1"},
-		Schema: &pb.SchemaRef{Name: build.PageType + ".create", Version: 1}, Payload: pagePayload,
+		TenantId: "t-rc-test", PrincipalId: "dana", Authority: construction.ID,
+		IdempotencyKey: "p-create-1", Target: &pb.EntityRef{Type: construction.PageType, Id: "P1"},
+		Schema: &pb.SchemaRef{Name: construction.PageType + ".create", Version: 1}, Payload: pagePayload,
 	}, now); kerr != nil {
 		t.Fatalf("create page: %v (%s)", kerr, kerr.Message)
 	}
 
 	// Publish the page
 	if _, kerr := tn.Submit(dana, &pb.Submission{
-		TenantId: "t-rc-test", PrincipalId: "dana", Authority: build.ID,
-		IdempotencyKey: "p-pub-1", Target: &pb.EntityRef{Type: build.PageType, Id: "P1"},
-		Schema: &pb.SchemaRef{Name: build.SchemaRelease, Version: 1}, Payload: []byte(`{}`),
+		TenantId: "t-rc-test", PrincipalId: "dana", Authority: construction.ID,
+		IdempotencyKey: "p-pub-1", Target: &pb.EntityRef{Type: construction.PageType, Id: "P1"},
+		Schema: &pb.SchemaRef{Name: construction.SchemaRelease, Version: 1}, Payload: []byte(`{}`),
 	}, now); kerr != nil {
 		t.Fatalf("publish page: %v (%s)", kerr, kerr.Message)
 	}
 
-	candidate, err := tn.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "itemspage"}})
+	candidate, err := tn.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "itemspage"}})
 	if err != nil {
 		t.Fatalf("ReleaseCandidate: %v", err)
 	}

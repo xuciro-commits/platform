@@ -3,15 +3,15 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"slices"
 	"strconv"
 
 	"platformserver/platform"
 )
 
-func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, sourceVersion+".function-"+strconv.Itoa(f.Version), f.Definition())
+func functionReleaseAsset(f construction.Function, sourceVersion string) (platform.ReleaseAsset, error) {
+	return definitionReleaseAsset(platform.AssetRef{App: construction.ID, Kind: platform.AssetFunction, Name: f.Name}, sourceVersion+".function-"+strconv.Itoa(f.Version), f.Definition())
 }
 
 // FunctionReleaseAsset resolves only a retained version from this owner.
@@ -20,7 +20,7 @@ func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platfor
 }
 
 func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
-	return installedDefinitionAssets(b.functions, func(record Function) (platform.ReleaseAsset, error) {
+	return installedDefinitionAssets(b.functions, func(record construction.Function) (platform.ReleaseAsset, error) {
 		return functionReleaseAsset(record, b.Manifest().Version)
 	})
 }
@@ -30,7 +30,7 @@ func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
 // The candidate constructor repeats this compilation before snapshot restore.
 func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
 	version := b.definitionAssetVersion(asset, platform.AssetFunction, "function")
-	var f Function
+	var f construction.Function
 	if version == 0 || asset.ContractVersion != 1 ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
 		f.Definition().Check() != nil {
@@ -44,18 +44,18 @@ func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
 }
 
 func (b *Build) functionDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	return draftDefinitionAssets(b, id, platform.AssetFunction, "function", b.functionInventory, func(record Function) (Function, error) {
+	return draftDefinitionAssets(b, id, platform.AssetFunction, "function", b.functionInventory, func(record construction.Function) (construction.Function, error) {
 		return record, b.checkFunction(record)
-	}, func(record Function) (platform.ReleaseAsset, error) {
+	}, func(record construction.Function) (platform.ReleaseAsset, error) {
 		record.Version++
 		return functionReleaseAsset(record, b.Manifest().Version)
 	})
 }
 
-func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
-	return prepareDefinitionPublications(b, assets, b.functionInventory, platform.AssetFunction, "function", SchemaFunction, "function", b.FunctionReleaseAsset, func(record Function, asset platform.ReleaseAsset, version int) (Function, error) {
-		var frozen Function
-		if version != record.Version+1 || buildapi.ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
+func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
+	return prepareDefinitionPublications(b, assets, b.functionInventory, platform.AssetFunction, "function", SchemaFunction, "function", b.FunctionReleaseAsset, func(record construction.Function, asset platform.ReleaseAsset, version int) (construction.Function, error) {
+		var frozen construction.Function
+		if version != record.Version+1 || construction.ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
 			return record, fmt.Errorf("function version requires its retained predecessors and matching target definition")
 		}
 		if asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {

@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"errors"
@@ -52,7 +54,7 @@ func TestPublishedImageKeepsOnlyTheCurrentDefinition(t *testing.T) {
 		next func(string) string
 	}{
 		{"object", func(previous string) string {
-			return published(Object{Name: "visit", Published: previous})
+			return published(construction.Object{Name: "visit", Published: previous})
 		}},
 		{"page", func(previous string) string {
 			return published(Page{Name: "visits", Published: previous})
@@ -61,10 +63,10 @@ func TestPublishedImageKeepsOnlyTheCurrentDefinition(t *testing.T) {
 			return published(Application{Name: "frontdesk", Published: previous})
 		}},
 		{"function", func(previous string) string {
-			return published(Function{Name: "advice", Published: previous, Versions: []string{previous}})
+			return published(construction.Function{Name: "advice", Published: previous, Versions: []string{previous}})
 		}},
 		{"process", func(previous string) string {
-			return published(Process{Name: "review", Published: previous, Versions: []string{previous}})
+			return published(construction.Process{Name: "review", Published: previous, Versions: []string{previous}})
 		}},
 	} {
 		t.Run(initial.name, func(t *testing.T) {
@@ -80,33 +82,33 @@ func TestPublishedImageKeepsOnlyTheCurrentDefinition(t *testing.T) {
 }
 
 func TestProcessImageValidatesSavedFamilyIndependentlyOfDraft(t *testing.T) {
-	v1 := Process{Record: platform.Record{ID: "P"}, Name: "review", Object: "build.visit", Version: 1}
+	v1 := construction.Process{Record: platform.Record{ID: "P"}, Name: "review", Object: "build.visit", Version: 1}
 	v2 := v1
 	v2.Version = 2
-	family := Process{Record: v1.Record, Name: "unfinished", Object: "build.missing", State: "published", Version: 2, Published: published(v2), Versions: []string{published(v1), published(v2)}}
-	image := func(p Process) []byte { raw, _ := json.Marshal(p); return raw }
+	family := construction.Process{Record: v1.Record, Name: "unfinished", Object: "build.missing", State: "published", Version: 2, Published: published(v2), Versions: []string{published(v1), published(v2)}}
+	image := func(p construction.Process) []byte { raw, _ := json.Marshal(p); return raw }
 	if latest, err := processImage(image(family)); err != nil || latest.Name != "review" || latest.Version != 2 {
 		t.Fatalf("draft replaced the saved family: %+v %v", latest, err)
 	}
 	for _, corrupt := range []struct {
 		name string
-		edit func(*Process)
+		edit func(*construction.Process)
 	}{
-		{"missing version", func(p *Process) { p.Versions = p.Versions[:1] }},
-		{"wrong published pointer", func(p *Process) { p.Published = p.Versions[0] }},
-		{"changed identity", func(p *Process) {
+		{"missing version", func(p *construction.Process) { p.Versions = p.Versions[:1] }},
+		{"wrong published pointer", func(p *construction.Process) { p.Published = p.Versions[0] }},
+		{"changed identity", func(p *construction.Process) {
 			bad := v2
 			bad.Name = "other"
 			p.Versions[1] = published(bad)
 			p.Published = p.Versions[1]
 		}},
-		{"skipped version", func(p *Process) {
+		{"skipped version", func(p *construction.Process) {
 			bad := v2
 			bad.Version = 3
 			p.Versions[1] = published(bad)
 			p.Published = p.Versions[1]
 		}},
-		{"recursive image", func(p *Process) {
+		{"recursive image", func(p *construction.Process) {
 			bad := v2
 			bad.Versions = []string{published(v1)}
 			raw, _ := json.Marshal(bad)

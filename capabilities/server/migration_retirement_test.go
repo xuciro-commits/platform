@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -54,12 +56,12 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 	attach()
 	fields := []map[string]any{{"name": "name", "title": "Name", "type": "text", "sourceType": "user-input"}}
 	states := []map[string]any{{"name": "open", "title": "Open"}, {"name": "pending", "title": "Pending"}, {"name": "done", "title": "Done"}, {"name": "rejected", "title": "Rejected"}}
-	levels := []map[string]any{{"title": "Builder", "role": build.Builder}}
+	levels := []map[string]any{{"title": "Builder", "role": construction.Builder}}
 	if scenario.multilevel {
-		levels = append(levels, map[string]any{"title": "Final review", "role": build.Builder})
+		levels = append(levels, map[string]any{"title": "Final review", "role": construction.Builder})
 	}
-	action := map[string]any{"name": "finish", "title": "Finish", "from": []string{"open"}, "to": "done", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": levels}}
-	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "asset", map[string]any{"name": "asset", "title": "Asset", "fields": fields, "states": states, "actions": []any{action}}, txnAt)
+	action := map[string]any{"name": "finish", "title": "Finish", "from": []string{"open"}, "to": "done", "roles": []string{construction.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": levels}}
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "asset", map[string]any{"name": "asset", "title": "Asset", "fields": fields, "states": states, "actions": []any{action}}, txnAt)
 	builder := memberOf(t, tn, "builder")
 	save := func(key string) string {
 		t.Helper()
@@ -67,7 +69,7 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("preview: %+v %v", preview, err)
 		}
-		id, err := tn.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
+		id, err := tn.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,10 +79,10 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 	if _, err := tn.ActivateRelease(builder, from, "source-activate", txnAt); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "user", build.ID, "build.asset.create", "build.asset", "A", map[string]any{"name": "Waiting"}, txnAt)
-	decide(t, tn, "user", build.ID, "build.asset.finish", "build.asset", "A", map[string]any{}, txnAt)
-	decide(t, tn, "user", build.ID, "build.asset.create", "build.asset", "B", map[string]any{"name": "Also waiting"}, txnAt)
-	decide(t, tn, "user", build.ID, "build.asset.finish", "build.asset", "B", map[string]any{}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.create", "build.asset", "A", map[string]any{"name": "Waiting"}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.finish", "build.asset", "A", map[string]any{}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.create", "build.asset", "B", map[string]any{"name": "Also waiting"}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.finish", "build.asset", "B", map[string]any{}, txnAt)
 	requests, _, refusal := platform.Find[platform.ApprovalRequest](tn.automation(work.ID, false), platform.Query{})
 	if refusal != nil || len(requests) != 2 || requests[0].State != "pending" {
 		t.Fatalf("pending approval: %+v %v", requests, refusal)
@@ -98,10 +100,10 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 	original := bytes.Clone([]byte(requests[0].Submission))
 	targetActions := []any{}
 	if redirect {
-		newAction := map[string]any{"name": "finishnew", "title": "New finish", "from": []string{"open"}, "to": "done", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": levels}}
+		newAction := map[string]any{"name": "finishnew", "title": "New finish", "from": []string{"open"}, "to": "done", "roles": []string{construction.User}, "approval": map[string]any{"pending": "pending", "rejected": "rejected", "levels": levels}}
 		targetActions = append(targetActions, newAction)
 	}
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "asset", map[string]any{"actions": targetActions}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "asset", map[string]any{"actions": targetActions}, txnAt)
 	to := save("target")
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.asset"}, Steps: []platform.MigrateStep{{Kind: "retire-action", Types: []string{"build.asset"}, Action: "build.asset.finish", Batch: 1}}}
 	if redirect {
@@ -111,8 +113,8 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
-	advance := submission(tn, builder, build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+	advance := submission(tn, builder, construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{})
 	before, count := snapshot(tn), len(entries)
 	failAppend = true
 	if _, err := tn.Submit(builder, advance, txnAt.Add(time.Hour)); err == nil || snapshot(tn) != before || len(entries) != count {
@@ -134,7 +136,7 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 	if _, err := tn.ActivateRelease(builder, to, "early-retire-activation", txnAt); err == nil {
 		t.Fatal("retirement activated with unresolved pending requests")
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(2*time.Hour))
+	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(2*time.Hour))
 	a, found := platform.Get[platform.ApprovalRequest](tn.automation(work.ID, false), requests[0].ID)
 	wantState := "rejected"
 	if redirect {
@@ -180,11 +182,11 @@ func testActionRetirement(t *testing.T, scenario actionRetirementCase) {
 			t.Fatal("retired action remained in the live catalog")
 		}
 	}
-	if got := refuse(t, tn, "user", build.ID, "build.asset.finish", "build.asset", "A", map[string]any{}, txnAt); got == "ok" {
+	if got := refuse(t, tn, "user", construction.ID, "build.asset.finish", "build.asset", "A", map[string]any{}, txnAt); got == "ok" {
 		t.Fatal("retired action accepted a new submission")
 	}
 	if redirect && deny {
-		tn.app(build.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
+		tn.app(construction.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
 			return []authz.Policy{{ID: "redirect-denied", Effect: "deny", Permission: "build.asset.finishnew"}}
 		})
 		tn.Work(txnAt.Add(4 * time.Hour))

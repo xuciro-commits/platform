@@ -14,7 +14,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 
 	"platformserver/platform"
 )
@@ -48,11 +48,11 @@ type SimulationStep struct {
 	AdvanceSeconds int             `json:"advanceSeconds,omitempty"`
 	// Answer identifies a candidate flow's native ask token, never an arbitrary
 	// production task. The ordinary work action still checks the chosen actor.
-	Flow     string                 `json:"flow,omitempty"`
-	Step     string                 `json:"step,omitempty"`
-	Answer   string                 `json:"answer,omitempty"`
-	Function *build.FunctionFixture `json:"function,omitempty"`
-	Compute  *build.ComputeFixture  `json:"compute,omitempty"`
+	Flow     string                        `json:"flow,omitempty"`
+	Step     string                        `json:"step,omitempty"`
+	Answer   string                        `json:"answer,omitempty"`
+	Function *construction.FunctionFixture `json:"function,omitempty"`
+	Compute  *construction.ComputeFixture  `json:"compute,omitempty"`
 }
 
 type SimulationActor struct {
@@ -82,8 +82,8 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if err := t.admits(builder); err != nil {
 		return empty, err
 	}
-	caller := platform.NewCaller(runtime{t}, builder, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
+	caller := platform.NewCaller(runtime{t}, builder, construction.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{construction.Builder}, true)); err != nil {
 		return empty, err
 	}
 	roots := 0
@@ -96,7 +96,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		roots++
 		seen := map[platform.AssetRef]bool{}
 		for _, root := range request.Roots {
-			if root.Check() != nil || root.App != build.ID || root.Kind != platform.AssetObject && root.Kind != platform.AssetFlow || seen[root] {
+			if root.Check() != nil || root.App != construction.ID || root.Kind != platform.AssetObject && root.Kind != platform.AssetFlow || seen[root] {
 				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test roots must be distinct objects or workflows")
 			}
 			seen[root] = true
@@ -180,7 +180,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if request.FunctionID != "" {
 		kind, id = platform.AssetFunction, request.FunctionID
 	}
-	drafts := []build.JointDraftRef{{Kind: kind, ID: id}}
+	drafts := []construction.JointDraftRef{{Kind: kind, ID: id}}
 	var candidate platform.ReleaseCandidate
 	var err error
 	diagnostic := ""
@@ -188,7 +188,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		candidate, err = t.releases.candidate(request.CandidateID)
 	} else {
 		if len(request.Roots) > 0 {
-			owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+			owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 			if !ok {
 				err = fmt.Errorf("Construction draft owner is unavailable")
 			} else {
@@ -196,7 +196,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 			}
 		}
 		if request.ApplicationID != "" {
-			owner, ok := t.app(build.ID).(host.ConstructionDrafts)
+			owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
 			if !ok {
 				err = fmt.Errorf("Construction draft owner is unavailable")
 			} else {
@@ -232,7 +232,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	}
 	functionName := ""
 	if request.FunctionID != "" {
-		selected, _ := platform.Get[build.Function](t.automation(build.ID, false), request.FunctionID)
+		selected, _ := platform.Get[construction.Function](t.automation(construction.ID, false), request.FunctionID)
 		functionName = selected.Name
 	}
 	if err == nil && diagnostic != "" {
@@ -369,7 +369,7 @@ type candidateRun struct {
 
 // step runs test step i in the sandbox and appends its result.
 func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
-	if r.request.FunctionID != "" && step.Action == build.SchemaFunctionCall {
+	if r.request.FunctionID != "" && step.Action == construction.SchemaFunctionCall {
 		var call platform.FunctionRequest
 		if json.Unmarshal(step.Payload, &call) == nil {
 			r.functionAttempted = r.functionAttempted || call.Name == r.functionName
@@ -436,7 +436,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		}) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A read step needs a candidate object and record ID")
 		}
-		caller := r.sandbox.caller(actor, r.sandbox.app(build.ID), false)
+		caller := r.sandbox.caller(actor, r.sandbox.app(construction.ID), false)
 		read, refusal = caller.ReadRecord(step.Type, step.ID, r.now)
 	} else if step.Answer != "" {
 		if step.Action != "" || step.Flow == "" || step.Step == "" || step.ID == "" {
@@ -468,7 +468,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 			payload, _ := json.Marshal(map[string]string{"answer": step.Answer})
 			sub = &pb.Submission{Authority: platform.WorkApp, Target: &pb.EntityRef{Type: platform.WorkTaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
 		}
-	} else if step.Type == build.ProcessType && step.Action == build.SchemaProcessRun && step.ID == r.request.ProcessID {
+	} else if step.Type == construction.ProcessType && step.Action == construction.SchemaProcessRun && step.ID == r.request.ProcessID {
 		processID := ""
 		for _, asset := range r.candidate.Assets {
 			if asset.Ref.Kind == platform.AssetFlow {
@@ -478,8 +478,8 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 				break
 			}
 		}
-		sub = &pb.Submission{Authority: build.ID, Target: &pb.EntityRef{Type: step.Type, Id: processID}, Schema: &pb.SchemaRef{Name: step.Action, Version: 1}, Payload: step.Payload}
-	} else if step.Type == build.ProcessType && step.Action == "" && step.AdvanceSeconds > 0 && r.request.ProcessID != "" {
+		sub = &pb.Submission{Authority: construction.ID, Target: &pb.EntityRef{Type: step.Type, Id: processID}, Schema: &pb.SchemaRef{Name: step.Action, Version: 1}, Payload: step.Payload}
+	} else if step.Type == construction.ProcessType && step.Action == "" && step.AdvanceSeconds > 0 && r.request.ProcessID != "" {
 		var instanceExists bool
 		for _, asset := range r.candidate.Assets {
 			if asset.Ref.Kind == platform.AssetFlow {
@@ -503,18 +503,18 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 	} else {
 		action := r.sandbox.owner["action:"+step.Action]
 		business := slices.ContainsFunc(r.candidate.Assets, func(asset platform.ReleaseAsset) bool {
-			return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == step.Type
+			return asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == step.Type
 		})
-		function := step.Type == build.FunctionCallType && slices.ContainsFunc(r.candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
-		if (!business && !function) || action == nil || step.ID == "" || action.Manifest().ID != build.ID || !strings.HasPrefix(step.Type, build.ID+".") ||
-			step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == build.FunctionType {
+		function := step.Type == construction.FunctionCallType && slices.ContainsFunc(r.candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
+		if (!business && !function) || action == nil || step.ID == "" || action.Manifest().ID != construction.ID || !strings.HasPrefix(step.Type, construction.ID+".") ||
+			step.Type == construction.ObjectType || step.Type == construction.PageType || step.Type == construction.AppType || step.Type == construction.TestPlanType || step.Type == construction.ProcessType || step.Type == construction.FunctionType {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the r.candidate objects", fmt.Sprint(i+1))
 		}
 		payload := step.Payload
 		if len(payload) == 0 {
 			payload = json.RawMessage(`{}`)
 		}
-		sub = &pb.Submission{Authority: build.ID, Target: &pb.EntityRef{Type: step.Type, Id: step.ID},
+		sub = &pb.Submission{Authority: construction.ID, Target: &pb.EntityRef{Type: step.Type, Id: step.ID},
 			Schema: &pb.SchemaRef{Name: step.Action, Version: 1}, Payload: payload}
 	}
 	if sub != nil {
@@ -544,10 +544,10 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		r.passed = r.passed && matched
 	}
 	if r.sandbox.ai != nil {
-		page, problem := r.sandbox.Records(actor, build.FunctionCallType, platform.Query{Limit: 100}, r.now)
+		page, problem := r.sandbox.Records(actor, construction.FunctionCallType, platform.Query{Limit: 100}, r.now)
 		if problem == nil {
 			for _, record := range page.Records {
-				result.Functions = append(result.Functions, record.(build.FunctionRun))
+				result.Functions = append(result.Functions, record.(construction.FunctionRun))
 			}
 		}
 	}
@@ -638,11 +638,11 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		}
 		return app, nil
 	}
-	construction, err := fresh(build.ID)
+	builderOwner, err := fresh(construction.ID)
 	if err != nil {
 		return nil, err
 	}
-	b, ok := construction.(host.ConstructionSandbox)
+	b, ok := builderOwner.(host.ConstructionSandbox)
 	if !ok {
 		return nil, fmt.Errorf("construction owner has no isolated asset installer")
 	}
@@ -663,14 +663,14 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		})
 	}
 	hasBooks := slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
-		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
 			return false
 		}
-		var object build.Object
+		var object construction.Object
 		if json.Unmarshal(asset.Body, &object) != nil {
 			return false
 		}
-		return object.CreateTransaction != nil && journalSteps(object.CreateTransaction.Steps) || slices.ContainsFunc(object.Actions, func(action build.Action) bool {
+		return object.CreateTransaction != nil && journalSteps(object.CreateTransaction.Steps) || slices.ContainsFunc(object.Actions, func(action construction.Action) bool {
 			return action.Journal != nil || action.Reverses != "" || action.Transaction != nil && journalSteps(action.Transaction.Steps)
 		})
 	})
@@ -691,11 +691,11 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		return json.Unmarshal(a.Body, &definition) == nil && definition.Proposal != nil
 	})
 	hasApproval := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
-		if a.Ref.Kind != platform.AssetObject || a.Ref.App != build.ID {
+		if a.Ref.Kind != platform.AssetObject || a.Ref.App != construction.ID {
 			return false
 		}
-		var object build.Object
-		return json.Unmarshal(a.Body, &object) == nil && slices.ContainsFunc(object.Actions, func(action build.Action) bool { return action.Approval != nil })
+		var object construction.Object
+		return json.Unmarshal(a.Body, &object) == nil && slices.ContainsFunc(object.Actions, func(action construction.Action) bool { return action.Approval != nil })
 	})
 	if (hasProposal || hasApproval) && !hasFlow {
 		app, err := fresh(platform.WorkApp)
@@ -752,16 +752,16 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		}
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetPropertyType {
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetPropertyType {
 			if err := b.InstallPropertyTypeAsset(asset); err != nil {
 				return nil, err
 			}
 		}
 	}
-	definitions := map[string][]recordState{build.ObjectType: {}}
+	definitions := map[string][]recordState{construction.ObjectType: {}}
 	processes := map[string][]recordState{}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App != build.ID {
+		if asset.Ref.App != construction.ID {
 			continue
 		}
 		// Native Build records (for example a proposal's original function
@@ -779,14 +779,14 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			if _, err := fmt.Sscanf(asset.SourceVersion, b.Manifest().Version+".alert-%d", &version); err != nil || version < 1 || version > 64 || asset.SourceVersion != fmt.Sprintf("%s.alert-%d", b.Manifest().Version, version) {
 				return nil, fmt.Errorf("invalid candidate alert version")
 			}
-			alert := build.Alert{Record: platform.Record{ID: asset.Ref.Name}, Name: d.Name, Title: d.Title, Object: d.Object.Name, Field: d.Field, Operator: d.Operator, Value: d.Value, Message: d.Message, Role: d.Role, Every: d.Every, Active: d.Active, State: "published", Version: version, DefinitionVersion: version, Published: string(platform.Raw(asset))}
-			definitions[build.AlertType] = append(definitions[build.AlertType], recordState{Value: platform.Raw(alert)})
+			alert := construction.Alert{Record: platform.Record{ID: asset.Ref.Name}, Name: d.Name, Title: d.Title, Object: d.Object.Name, Field: d.Field, Operator: d.Operator, Value: d.Value, Message: d.Message, Role: d.Role, Every: d.Every, Active: d.Active, State: "published", Version: version, DefinitionVersion: version, Published: string(platform.Raw(asset))}
+			definitions[construction.AlertType] = append(definitions[construction.AlertType], recordState{Value: platform.Raw(alert)})
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || b.DefinitionMetadataKind(asset.Ref.Kind) {
 			continue // compiled after its source objects below
 		}
-		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
+		if asset.Ref.App != construction.ID || asset.SourceVersion != b.Manifest().Version {
 			return nil, fmt.Errorf("unsupported test dependency or compiler version %s", asset.Ref)
 		}
 		if asset.Ref.Kind == platform.AssetFlow {
@@ -795,7 +795,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 				return nil, err
 			}
 			raw, _ := json.Marshal(process)
-			processes[build.ProcessType] = append(processes[build.ProcessType], recordState{Value: raw})
+			processes[construction.ProcessType] = append(processes[construction.ProcessType], recordState{Value: raw})
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetAction || asset.Ref.Kind == platform.AssetPage || asset.Ref.Kind == platform.AssetApp {
@@ -804,7 +804,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if asset.Ref.Kind != platform.AssetObject {
 			return nil, fmt.Errorf("unsupported test dependency %s", asset.Ref)
 		}
-		var object build.Object
+		var object construction.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return nil, err
 		}
@@ -815,7 +815,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		}
 		object.Published = string(published)
 		raw, _ := json.Marshal(object)
-		definitions[build.ObjectType] = append(definitions[build.ObjectType], recordState{Value: raw})
+		definitions[construction.ObjectType] = append(definitions[construction.ObjectType], recordState{Value: raw})
 	}
 	if _, err := sandbox.restoreRecords(definitions); err != nil {
 		return nil, err
@@ -825,7 +825,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	}
 	if hasFunctions {
 		for _, asset := range candidate.Assets {
-			if asset.Ref.Kind == platform.AssetFunction && asset.Ref.App == build.ID {
+			if asset.Ref.Kind == platform.AssetFunction && asset.Ref.App == construction.ID {
 				if err := b.InstallFunctionAsset(asset); err != nil {
 					return nil, err
 				}
@@ -834,28 +834,28 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.Kind == platform.AssetCompute && asset.Ref.App == build.ID {
+		if asset.Ref.Kind == platform.AssetCompute && asset.Ref.App == construction.ID {
 			if err := b.InstallOperationAsset(asset); err != nil {
 				return nil, err
 			}
 		}
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetLinkType {
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetLinkType {
 			if err := b.InstallLinkTypeAsset(asset); err != nil {
 				return nil, err
 			}
 		}
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetQuery {
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetQuery {
 			if err := b.InstallQueryAsset(asset); err != nil {
 				return nil, err
 			}
 		}
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.Kind == platform.AssetAgent && asset.Ref.App == build.ID {
+		if asset.Ref.Kind == platform.AssetAgent && asset.Ref.App == construction.ID {
 			if err := b.InstallAgentAsset(asset); err != nil {
 				return nil, err
 			}

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 
 	"strings"
@@ -24,14 +24,14 @@ func BalanceID(object string, values []string) string {
 	return "bal-" + hex.EncodeToString(sum[:12])
 }
 
-func (b *Build) checkPosts(o Object) error {
+func (b *Build) checkPosts(o construction.Object) error {
 	for _, a := range o.Actions {
 		for _, p := range a.Posts {
 			where := fmt.Sprintf("the action %q posts to %q", a.Name, p.Object)
-			if !strings.HasPrefix(p.Object, ID+".") {
+			if !strings.HasPrefix(p.Object, construction.ID+".") {
 				return fmt.Errorf("%s, which is another app's object; change it through that app's actions", where)
 			}
-			if p.Object == buildapi.TypeOf(o.Name) {
+			if p.Object == construction.TypeOf(o.Name) {
 				return fmt.Errorf("%s, which is this object itself", where)
 			}
 			if len(p.Match) == 0 {
@@ -68,7 +68,7 @@ func (b *Build) checkPosts(o Object) error {
 
 // checkSource is where a posting's value comes from: an input of the action,
 // a field of this record, the member, or a literal.
-func checkSource(o Object, a Action, from string) error {
+func checkSource(o construction.Object, a construction.Action, from string) error {
 	switch {
 	case from == "$me", strings.HasPrefix(from, "="):
 		return nil
@@ -91,7 +91,7 @@ func checkSource(o Object, a Action, from string) error {
 
 // post builds the balance record after this posting; take checks it, After
 // stores it (the same shape as create).
-func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error) {
+func (b *Build) post(c platform.Caller, p construction.Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error) {
 	if b.host == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Postings need the host")
 	}
@@ -99,7 +99,7 @@ func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record an
 	if !known {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} is not published", p.Object)
 	}
-	info, err := platform.Describe(ID, balance, func(reflect.Type) string { return "" })
+	info, err := platform.Describe(construction.ID, balance, func(reflect.Type) string { return "" })
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -120,7 +120,7 @@ func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record an
 	}
 	keys := make([]string, 0, len(p.Match))
 	for _, m := range p.Match {
-		keys = append(keys, buildapi.ValueTextOf(source(m.From)))
+		keys = append(keys, construction.ValueTextOf(source(m.From)))
 	}
 	id := BalanceID(p.Object, keys)
 	v := reflect.New(reflect.TypeOf(balance.Model)).Elem()
@@ -141,7 +141,7 @@ func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record an
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The posting cannot match {field}: {why}", m.Field, err.Error())
 		}
 	}
-	amount, amountErr := buildapi.ValueNumber(source(p.Amount))
+	amount, amountErr := construction.ValueNumber(source(p.Amount))
 	if amountErr != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The posting's amount {amount} is not a number", p.Amount)
 	}

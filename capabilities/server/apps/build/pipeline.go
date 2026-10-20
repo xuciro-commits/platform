@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	construction "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"regexp"
 	"slices"
 

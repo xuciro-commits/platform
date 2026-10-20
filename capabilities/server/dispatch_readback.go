@@ -10,18 +10,18 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
 // ReadDispatches uses the source loop's outside lane. Only the small status
 // evidence becomes an input; external reads never execute during recovery.
 func (t *Tenant) ReadDispatches(at time.Time) {
-	if t.quarantined() || t.app(build.ID) == nil {
+	if t.quarantined() || t.app(construction.ID) == nil {
 		return
 	}
 	t.mu.Lock()
-	runs, refusal := platform.PendingDispatches(t.automation(build.ID, false))
+	runs, refusal := platform.PendingDispatches(t.automation(construction.ID, false))
 	if refusal != nil {
 		t.mu.Unlock()
 		return
@@ -49,7 +49,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 			continue
 		}
 		t.mu.Lock()
-		run, exists := platform.Get[platform.DispatchRun](t.automation(build.ID, false), saved.ID)
+		run, exists := platform.Get[platform.DispatchRun](t.automation(construction.ID, false), saved.ID)
 		attempt := t.dispatchReads[run.Intent]
 		valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State) && !run.ReadDue.After(at) && !attempt.Busy && !attempt.Due.After(at)
 		var stamp string
@@ -75,7 +75,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		reading := t.readDispatchStatus(run, at)
 		t.mu.Lock()
 		t.dispatchReads[run.Intent] = statusReadAttempt{Due: at.Add(time.Duration(run.Definition.Readback.EverySeconds) * time.Second)}
-		current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
+		current, found := platform.Get[platform.DispatchRun](t.automation(construction.ID, false), run.ID)
 		currentStamp, valid := t.dispatchReadStamp(current)
 		if !found || current.Revision != run.Revision || !valid || currentStamp != stamp || (hostView{t: t}).CheckDispatchRead(current, at) != nil {
 			t.mu.Unlock()
@@ -100,12 +100,12 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 				continue // Polling time alone is not new business evidence.
 			}
 		}
-		caller := t.automation(build.ID, false).Member
-		submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID,
+		caller := t.automation(construction.ID, false).Member
+		submission := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: construction.ID,
 			IdempotencyKey: fmt.Sprintf("dispatch-read:%s:%d:%s", run.ID, run.Revision, at.UTC().Format(time.RFC3339Nano)),
 			Target:         &pb.EntityRef{Type: platform.DispatchType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.DispatchAnswerSchema, Version: 1},
 			Payload: platform.Raw(map[string]any{"revision": run.Revision, "intent": run.Intent, "outcome": reading.State, "reason": reading.Reason, "reading": reading, "answer": reading.Observed})}
-		_, _ = t.submitAccepted(t.app(build.ID), caller, submission, at, true)
+		_, _ = t.submitAccepted(t.app(construction.ID), caller, submission, at, true)
 		t.mu.Unlock()
 	}
 }
@@ -117,13 +117,13 @@ func (t *Tenant) dispatchReadStamp(run platform.DispatchRun) (string, bool) {
 	if !found {
 		return "", false
 	}
-	var connection build.Connection
+	var connection construction.Connection
 	_ = json.Unmarshal(run.Connection, &connection)
 	var credential []byte
 	if connection.Secret != "" {
 		credential, _ = t.secret(connection.Secret)
 	}
-	var source build.Source
+	var source construction.Source
 	_ = json.Unmarshal(run.Source, &source)
 	publisher, _ := t.Member(source.Puller)
 	marking := ""
@@ -164,8 +164,8 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			}
 		}
 	case policy.Source != "":
-		var source build.Source
-		var connection build.Connection
+		var source construction.Source
+		var connection construction.Connection
 		if json.Unmarshal(run.Source, &source) != nil || json.Unmarshal(run.Connection, &connection) != nil {
 			problem = fmt.Errorf("The original dispatch status source is unavailable")
 		} else if connection.Secret != "" && len(t.authorization(connection)) == 0 {
@@ -178,7 +178,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 		}
 	case policy.Observation != "":
 		var definition platform.ObservationDefinition
-		var connection build.Connection
+		var connection construction.Connection
 		if json.Unmarshal(run.Observation, &definition) != nil || json.Unmarshal(run.Connection, &connection) != nil || run.Device == "" {
 			problem = fmt.Errorf("The original dispatch observation is unavailable")
 			break
@@ -227,20 +227,20 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 	if policy.Observation == "" && problem == nil {
 		matches := 0
 		for _, row := range rows {
-			key, found := build.ValueLookupPath(row, policy.KeyField)
-			if !found || build.ValueScalar(key) != commandKey {
+			key, found := construction.ValueLookupPath(row, policy.KeyField)
+			if !found || construction.ValueScalar(key) != commandKey {
 				continue
 			}
 			matches++
-			value, found := build.ValueLookupPath(row, policy.ResultField)
+			value, found := construction.ValueLookupPath(row, policy.ResultField)
 			if !found {
 				problem = fmt.Errorf("The dispatch status field is absent")
 				continue
 			}
-			reading.Value, reading.Observed = build.ValueScalar(value), platform.Raw(value)
+			reading.Value, reading.Observed = construction.ValueScalar(value), platform.Raw(value)
 			if policy.ReasonField != "" {
-				if reason, found := build.ValueLookupPath(row, policy.ReasonField); found {
-					reading.Reason = build.ValueScalar(reason)
+				if reason, found := construction.ValueLookupPath(row, policy.ReasonField); found {
+					reading.Reason = construction.ValueScalar(reason)
 				}
 			}
 		}

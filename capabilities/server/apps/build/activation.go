@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"slices"
 
@@ -14,7 +14,7 @@ import (
 // prepareReleasePublications compiles frozen owner descriptors. It neither
 // installs definitions nor edits drafts. Renaming an owning draft is not yet
 // supported: the candidate has logical identities rather than editor row IDs.
-func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
+func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
 		return nil, err
@@ -23,16 +23,16 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 	if err != nil {
 		return nil, err
 	}
-	var publications []ReleasePublication
+	var publications []construction.ReleasePublication
 	add := func(schema string, record any) error {
 		raw, err := json.Marshal(record)
 		if err == nil {
-			publications = append(publications, ReleasePublication{Schema: schema, Image: raw})
+			publications = append(publications, construction.ReleasePublication{Schema: schema, Image: raw})
 		}
 		return err
 	}
 	for _, asset := range assets {
-		if asset.Ref.App != ID {
+		if asset.Ref.App != construction.ID {
 			continue
 		}
 		switch asset.Ref.Kind {
@@ -44,23 +44,23 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			if code {
 				continue
 			}
-			var frozen Object
-			if err := json.Unmarshal(asset.Body, &frozen); err != nil || buildapi.TypeOf(frozen.Name) != asset.Ref.Name {
+			var frozen construction.Object
+			if err := json.Unmarshal(asset.Body, &frozen); err != nil || construction.TypeOf(frozen.Name) != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid saved object %s", asset.Ref)
 			}
 			if err := mapDispatchIntegrations(&frozen, b.integrationID); err != nil {
 				return nil, err
 			}
-			i := slices.IndexFunc(objects, func(o Object) bool { return !o.Archived && o.Name == frozen.Name })
+			i := slices.IndexFunc(objects, func(o construction.Object) bool { return !o.Archived && o.Name == frozen.Name })
 			if i < 0 {
 				return nil, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
 			}
 			frozen.Record = objects[i].Record
-			objects[i].State, objects[i].Installed = "published", buildapi.TypeOf(frozen.Name)
+			objects[i].State, objects[i].Installed = "published", construction.TypeOf(frozen.Name)
 			objects[i].Published = published(frozen)
 			objects[i].ExtensionSource = frozen.ExtensionSource
 			objects[i].SchemaVersions = frozen.SchemaVersions
-			if err := add(SchemaPublish, objects[i]); err != nil {
+			if err := add(construction.SchemaPublish, objects[i]); err != nil {
 				return nil, err
 			}
 		case platform.AssetPage:
@@ -86,7 +86,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				return nil, err
 			}
 			pages[i].State, pages[i].Published, pages[i].Versions = "published", frozen.Published, frozen.Versions
-			if err := add(SchemaRelease, pages[i]); err != nil {
+			if err := add(construction.SchemaRelease, pages[i]); err != nil {
 				return nil, err
 			}
 		case platform.AssetApp:
@@ -100,11 +100,11 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			}
 			frozen.Record = apps[i].Record
 			apps[i].State, apps[i].Published = "published", published(frozen)
-			if err := add(SchemaHandOver, apps[i]); err != nil {
+			if err := add(construction.SchemaHandOver, apps[i]); err != nil {
 				return nil, err
 			}
 		case platform.AssetFlow:
-			i := slices.IndexFunc(processes, func(p Process) bool { return !p.Archived && buildapi.TypeOf(p.Name) == asset.Ref.Name })
+			i := slices.IndexFunc(processes, func(p construction.Process) bool { return !p.Archived && construction.TypeOf(p.Name) == asset.Ref.Name })
 			if i < 0 {
 				return nil, fmt.Errorf("saved flow %s has no matching owner", asset.Ref)
 			}
@@ -112,7 +112,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			if err != nil {
 				return nil, err
 			}
-			if prior, ok := wasPublished[Process](processes[i].Published); ok {
+			if prior, ok := wasPublished[construction.Process](processes[i].Published); ok {
 				priorAsset, err := processReleaseAsset(prior, asset.SourceVersion)
 				if err == nil {
 					var a, z any
@@ -131,13 +131,13 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			processes[i].Version, processes[i].State = frozen.Version, "published"
 			processes[i].Published = published(frozen)
 			processes[i].Versions = append(slices.Clone(processes[i].Versions), processes[i].Published)
-			if err := add(SchemaProcess, processes[i]); err != nil {
+			if err := add(construction.SchemaProcess, processes[i]); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]ReleasePublication, error){b.prepareQueryReleasePublications, b.preparePropertyTypeReleasePublications, b.prepareLinkTypeReleasePublications, b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications, b.prepareAlertPublications} {
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]construction.ReleasePublication, error){b.prepareQueryReleasePublications, b.preparePropertyTypeReleasePublications, b.prepareLinkTypeReleasePublications, b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications, b.prepareAlertPublications} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, err
@@ -186,7 +186,7 @@ func pageDraft(pageDescriptor platform.Page) (Page, error) {
 		}
 		if s.Function != nil {
 			var version int
-			if _, err := fmt.Sscanf(s.Function.SourceVersion, definitionVersion+".function-%d", &version); err != nil || version < 1 {
+			if _, err := fmt.Sscanf(s.Function.SourceVersion, construction.ValueDefinitionVersion+".function-%d", &version); err != nil || version < 1 {
 				return Page{}, fmt.Errorf("invalid saved function binding")
 			}
 			section.Function = &platform.FunctionRef{Name: s.Function.Ref.Name, Version: version}
@@ -211,8 +211,8 @@ type Draft struct {
 func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
 	generated := map[string]bool{}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject {
-			var o Object
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetObject {
+			var o construction.Object
 			if json.Unmarshal(asset.Body, &o) == nil {
 				generated[page(o).Name] = true
 			}
@@ -228,19 +228,19 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 		return nil
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App != ID {
+		if asset.Ref.App != construction.ID {
 			continue
 		}
 		switch asset.Ref.Kind {
 		case platform.AssetObject:
-			var o Object
+			var o construction.Object
 			if err := json.Unmarshal(asset.Body, &o); err != nil || o.Name == "" {
 				continue // code-owned metadata is not a draft
 			}
 			if err := mapDispatchIntegrations(&o, b.integrationID); err != nil {
 				return nil, err
 			}
-			if err := add(ObjectType, o.Name, o); err != nil {
+			if err := add(construction.ObjectType, o.Name, o); err != nil {
 				return nil, err
 			}
 		case platform.AssetPage:
@@ -255,7 +255,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			if err != nil {
 				return nil, fmt.Errorf("%w in page %s", err, asset.Ref)
 			}
-			if err := add(PageType, p.Name, p); err != nil {
+			if err := add(construction.PageType, p.Name, p); err != nil {
 				return nil, err
 			}
 		case platform.AssetApp:
@@ -263,7 +263,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			if err := json.Unmarshal(asset.Body, &a); err != nil {
 				return nil, fmt.Errorf("invalid saved application %s", asset.Ref)
 			}
-			if err := add(AppType, a.Name, a); err != nil {
+			if err := add(construction.AppType, a.Name, a); err != nil {
 				return nil, err
 			}
 		case platform.AssetFlow:
@@ -271,7 +271,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			if err != nil {
 				return nil, err
 			}
-			if err := add(ProcessType, p.Name, p); err != nil {
+			if err := add(construction.ProcessType, p.Name, p); err != nil {
 				return nil, err
 			}
 		}

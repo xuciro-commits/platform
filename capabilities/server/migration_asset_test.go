@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -13,16 +15,16 @@ func TestMigrationPlanAssetsRetainVersionsAndUseTheOriginalExecutor(t *testing.T
 	tn, plan, entries := migrationFixture(t, "migration-plan-asset", []string{"One", "Two", "Three"})
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	member := memberOf(t, tn, "builder")
-	decide(t, tn, "builder", build.ID, build.MigrationPlanType+".create", build.MigrationPlanType, "P", map[string]any{"name": "evolution", "title": "Evolution", "plan": plan}, txnAt)
-	if got := refuse(t, tn, "user", build.ID, build.SchemaMigrationPlan, build.MigrationPlanType, "P", map[string]any{}, txnAt); got == "ok" {
+	decide(t, tn, "builder", construction.ID, build.MigrationPlanType+".create", build.MigrationPlanType, "P", map[string]any{"name": "evolution", "title": "Evolution", "plan": plan}, txnAt)
+	if got := refuse(t, tn, "user", construction.ID, build.SchemaMigrationPlan, build.MigrationPlanType, "P", map[string]any{}, txnAt); got == "ok" {
 		t.Fatal("an operator published a migration asset")
 	}
-	decide(t, tn, "builder", build.ID, build.SchemaMigrationPlan, build.MigrationPlanType, "P", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, build.SchemaMigrationPlan, build.MigrationPlanType, "P", map[string]any{}, txnAt)
 	registry, err := tn.assetRegistryLocked()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetMigration, Name: "evolution"}
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetMigration, Name: "evolution"}
 	first, err := registry.ResolvePinned(ref, "1.migration-1")
 	if err != nil {
 		t.Fatal(err)
@@ -37,12 +39,12 @@ func TestMigrationPlanAssetsRetainVersionsAndUseTheOriginalExecutor(t *testing.T
 	second := plan
 	second.Steps = append([]platform.MigrateStep{}, plan.Steps...)
 	second.Steps[0].Batch = 1
-	decide(t, tn, "builder", build.ID, build.MigrationPlanType+".edit", build.MigrationPlanType, "P", map[string]any{"plan": second}, txnAt)
+	decide(t, tn, "builder", construction.ID, build.MigrationPlanType+".edit", build.MigrationPlanType, "P", map[string]any{"plan": second}, txnAt)
 	preview, err := tn.PreviewRelease(member, platform.AssetMigration, "P")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("migration candidate: %+v %v", preview, err)
 	}
-	candidate, err := tn.SaveReleaseCandidates(member, []build.JointDraftRef{{Kind: platform.AssetMigration, ID: "P"}}, preview.CandidateID, "save-plan-candidate", txnAt)
+	candidate, err := tn.SaveReleaseCandidates(member, []construction.JointDraftRef{{Kind: platform.AssetMigration, ID: "P"}}, preview.CandidateID, "save-plan-candidate", txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestMigrationPlanAssetsRetainVersionsAndUseTheOriginalExecutor(t *testing.T
 	if installations[0].Ref != ref || installations[0].Record != build.MigrationPlanType+"/P" || registry.ApplyInstallation(installations[0], platform.AssetApplyContext{Private: true}) != nil {
 		t.Fatal("migration plan bypassed its lifecycle owner")
 	}
-	decide(t, tn, "builder", build.ID, build.SchemaMigrationPlan, build.MigrationPlanType, "P", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, build.SchemaMigrationPlan, build.MigrationPlanType, "P", map[string]any{}, txnAt)
 	old, err := registry.ResolvePinned(ref, "1.migration-1")
 	if err != nil || !bytes.Equal(old.Body, first.Body) {
 		t.Fatal("editing changed retained migration bytes")
@@ -75,16 +77,16 @@ func TestMigrationPlanAssetsRetainVersionsAndUseTheOriginalExecutor(t *testing.T
 		t.Fatal(err)
 	}
 	binding := platform.AssetBinding{Ref: ref, SourceVersion: first.SourceVersion}
-	if got := refuse(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "bad", map[string]any{"plan": second, "asset": binding, "review": review.ID, "reviewedAt": review.At}, txnAt); got == "ok" {
+	if got := refuse(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "bad", map[string]any{"plan": second, "asset": binding, "review": review.ID, "reviewedAt": review.At}, txnAt); got == "ok" {
 		t.Fatal("a pinned plan was silently replaced with the latest draft")
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"asset": binding, "review": review.ID, "reviewedAt": review.At}, txnAt)
-	decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"asset": binding, "review": review.ID, "reviewedAt": review.At}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 	run := migrationRun(t, tn, "M")
 	if run.Asset == nil || *run.Asset != binding || run.Processed != 2 {
 		t.Fatalf("start ignored the exact retained plan: %+v", run)
 	}
-	decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 	if _, err := tn.ActivateRelease(member, plan.To, "target-activate", txnAt); err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"strings"
@@ -17,7 +19,7 @@ import (
 
 func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 	at := time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC)
-	tenant, err := NewTenant("cap-approval", NewConsole("cap-approval", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, flow.ID: flow.Admin}}}, Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{build.ID: build.User}}}), work.New("cap-approval"), flow.New("cap-approval"), build.New("cap-approval"))
+	tenant, err := NewTenant("cap-approval", NewConsole("cap-approval", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder, flow.ID: flow.Admin}}}, Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{construction.ID: construction.User}}}), work.New("cap-approval"), flow.New("cap-approval"), build.New("cap-approval"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,15 +28,15 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 	user, _ := tenant.Member("user")
 	submit := func(member platform.Member, key, schema, typ, id string, payload any) {
 		t.Helper()
-		if _, problem := tenant.Submit(member, &pb.Submission{TenantId: tenant.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}, at); problem != nil {
+		if _, problem := tenant.Submit(member, &pb.Submission{TenantId: tenant.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}, at); problem != nil {
 			t.Fatal(problem.Message)
 		}
 	}
-	object := map[string]any{"name": "review", "title": "Review", "fields": []any{}, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "approved", Title: "Approved"}}, "actions": []map[string]any{{"name": "approve", "title": "Approve", "from": []string{"open"}, "to": "approved", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "levels": []map[string]string{{"title": "Builder", "role": build.Builder}}}}}}
-	submit(builder, "object", build.ObjectType+".create", build.ObjectType, "O", object)
-	submit(builder, "publish", build.SchemaPublish, build.ObjectType, "O", struct{}{})
+	object := map[string]any{"name": "review", "title": "Review", "fields": []any{}, "states": []construction.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "approved", Title: "Approved"}}, "actions": []map[string]any{{"name": "approve", "title": "Approve", "from": []string{"open"}, "to": "approved", "roles": []string{construction.User}, "approval": map[string]any{"pending": "pending", "levels": []map[string]string{{"title": "Builder", "role": construction.Builder}}}}}}
+	submit(builder, "object", construction.ObjectType+".create", construction.ObjectType, "O", object)
+	submit(builder, "publish", construction.SchemaPublish, construction.ObjectType, "O", struct{}{})
 	submit(user, "row", "build.review.create", "build.review", "R", struct{}{})
-	request := platform.CapabilityInvocation{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.review.approve"}, Key: "approve", Target: "R", Inputs: json.RawMessage(`{}`)}
+	request := platform.CapabilityInvocation{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: "build.review.approve"}, Key: "approve", Target: "R", Inputs: json.RawMessage(`{}`)}
 	result, problem := tenant.InvokeCapability(user, request, at)
 	if problem != nil {
 		t.Fatal(problem.Message)
@@ -47,8 +49,8 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 	if problem != nil || string(again.Result) != string(result.Result) || again.State != "pending" {
 		t.Fatal("retry replaced the canonical approval receipt")
 	}
-	submit(builder, "process", build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review flow", "object": "build.review", "when": "open", "steps": []build.ProcessStep{{Name: "approve", Kind: "action", Act: "approve", Next: "end"}, {Name: "end", Kind: "end"}}})
-	submit(builder, "process-publish", build.SchemaProcess, build.ProcessType, "P", struct{}{})
+	submit(builder, "process", construction.ProcessType+".create", construction.ProcessType, "P", map[string]any{"name": "review", "title": "Review flow", "object": "build.review", "when": "open", "steps": []construction.ProcessStep{{Name: "approve", Kind: "action", Act: "approve", Next: "end"}, {Name: "end", Kind: "end"}}})
+	submit(builder, "process-publish", construction.SchemaProcess, construction.ProcessType, "P", struct{}{})
 	submit(user, "second-row", "build.review.create", "build.review", "R2", struct{}{})
 	tenant.Work(at)
 	process, _ := tenant.RecordOf(builder, flow.InstanceType, "build.review:R2", at)
@@ -80,10 +82,10 @@ func TestApprovalDoesNotBindUnrelatedRelease(t *testing.T) {
 	}
 	object := map[string]any{
 		"name": "review", "title": "Review", "fields": []any{},
-		"states": []build.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "approved", Title: "Approved"}, {Name: "rejected", Title: "Rejected"}},
-		"actions": []build.Action{{
-			Name: "approve", Title: "Approve", From: []string{"open"}, To: "approved", Roles: []string{build.User},
-			Approval: &build.ActionApproval{Pending: "pending", Levels: []build.ApproverLevel{{Title: "Builder", Role: build.Builder}}},
+		"states": []construction.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "approved", Title: "Approved"}, {Name: "rejected", Title: "Rejected"}},
+		"actions": []construction.Action{{
+			Name: "approve", Title: "Approve", From: []string{"open"}, To: "approved", Roles: []string{construction.User},
+			Approval: &construction.ActionApproval{Pending: "pending", Levels: []construction.ApproverLevel{{Title: "Builder", Role: construction.Builder}}},
 		}},
 	}
 	publishObject(t, tenant, "builder", "REVIEW", object, at)
@@ -104,9 +106,9 @@ func TestApprovalDoesNotBindUnrelatedRelease(t *testing.T) {
 		return preview.CandidateID
 	}
 	activate("OTHER", "other")
-	decide(t, tenant, "user", build.ID, "build.review.create", "build.review", "R", map[string]any{}, at)
+	decide(t, tenant, "user", construction.ID, "build.review.create", "build.review", "R", map[string]any{}, at)
 	result, problem := tenant.InvokeCapability(memberOf(t, tenant, "user"), platform.CapabilityInvocation{
-		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.review.approve"},
+		Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: "build.review.approve"},
 		Key: "approve", Target: "R", Inputs: json.RawMessage(`{}`),
 	}, at)
 	if problem != nil || result.State != "pending" {
@@ -125,9 +127,9 @@ func TestApprovalDoesNotBindUnrelatedRelease(t *testing.T) {
 	// waiting approval must retain A even when A is subsequently upgraded.
 	source := activate("REVIEW", "review")
 	activate("OTHER", "other-again")
-	decide(t, tenant, "user", build.ID, "build.review.create", "build.review", "FROZEN", map[string]any{}, at)
+	decide(t, tenant, "user", construction.ID, "build.review.create", "build.review", "FROZEN", map[string]any{}, at)
 	result, problem = tenant.InvokeCapability(memberOf(t, tenant, "user"), platform.CapabilityInvocation{
-		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.review.approve"},
+		Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: "build.review.approve"},
 		Key: "approve-frozen", Target: "FROZEN", Inputs: json.RawMessage(`{}`),
 	}, at)
 	if problem != nil || result.State != "pending" {
@@ -137,9 +139,9 @@ func TestApprovalDoesNotBindUnrelatedRelease(t *testing.T) {
 	if !ok || request.Release != source {
 		t.Fatalf("approval lost the still-installed release: %+v", request)
 	}
-	actions := object["actions"].([]build.Action)
+	actions := object["actions"].([]construction.Action)
 	actions[0].To = "rejected"
-	decide(t, tenant, "builder", build.ID, "build.object.edit", build.ObjectType, "REVIEW", map[string]any{"actions": actions}, at)
+	decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "REVIEW", map[string]any{"actions": actions}, at)
 	next, err := tenant.PreviewRelease(builder, platform.AssetObject, "REVIEW")
 	if err != nil || next.Diagnostic != "" {
 		t.Fatalf("upgraded release: %+v %v", next, err)

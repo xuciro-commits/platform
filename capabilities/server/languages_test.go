@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -32,7 +34,7 @@ func TestLanguages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, app := range []string{PlatformApp, enterprise.ID, relations.ID, work.ID, flow.ID, ai.ID, AgentApp, knowledge.ID, core.ID, build.ID} {
+	for _, app := range []string{PlatformApp, enterprise.ID, relations.ID, work.ID, flow.ID, ai.ID, AgentApp, knowledge.ID, core.ID, construction.ID} {
 		if missing := tn.Untranslated(app, "zh-CN"); len(missing) > 0 {
 			t.Errorf("%s lacks Chinese for %q", app, missing)
 		}

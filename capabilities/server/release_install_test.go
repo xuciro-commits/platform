@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -80,7 +82,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 	live.AcceptResult = persist
 	do := func(member platform.Member, typ, target, schema, payload string) {
 		t.Helper()
-		decide(t, live, member.ID, build.ID, schema, typ, target, json.RawMessage(payload), at)
+		decide(t, live, member.ID, construction.ID, schema, typ, target, json.RawMessage(payload), at)
 	}
 	save := func(kind platform.AssetKind, target string) string {
 		t.Helper()
@@ -93,9 +95,9 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		}
 		return preview.CandidateID
 	}
-	do(builder, build.ObjectType, "O1", build.ObjectType+".create", `{"name":"visit","title":"Saved Visit","fields":[{"name":"note","title":"Note","type":"text"}],"states":[{"name":"open","title":"Open"},{"name":"done","title":"Done"}],"actions":[{"name":"close","title":"Close","from":["open"],"to":"done"}]}`)
+	do(builder, construction.ObjectType, "O1", construction.ObjectType+".create", `{"name":"visit","title":"Saved Visit","fields":[{"name":"note","title":"Note","type":"text"}],"states":[{"name":"open","title":"Open"},{"name":"done","title":"Done"}],"actions":[{"name":"close","title":"Close","from":["open"],"to":"done"}]}`)
 	candidate := save(platform.AssetObject, "O1")
-	do(builder, build.ObjectType, "O1", build.ObjectType+".edit", `{"title":"Later Draft"}`)
+	do(builder, construction.ObjectType, "O1", construction.ObjectType+".edit", `{"title":"Later Draft"}`)
 	if _, ok := live.entity("build.visit"); ok {
 		t.Fatal("saving or editing installed the object")
 	}
@@ -142,7 +144,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 	if !ok || info.Title != "Saved Visit" {
 		t.Fatalf("activation installed today's draft instead of frozen bytes: %+v", info)
 	}
-	row, _ := platform.Get[build.Object](live.caller(builder, live.app(build.ID), false), "O1")
+	row, _ := platform.Get[construction.Object](live.caller(builder, live.app(construction.ID), false), "O1")
 	if row.Title != "Later Draft" || row.Revision != 2 {
 		t.Fatalf("activation overwrote the mutable draft: %+v", row)
 	}
@@ -166,7 +168,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		document.Events = []platform.PageEventBinding{{Source: "trigger", Event: "click", Effects: []platform.PageEffect{{Kind: "set", Target: "open", Value: json.RawMessage(`true`)}}}}
 		document.Nodes["loop"] = platform.PageLayoutNode{Kind: "loop", Children: []string{"loopDetail"}, Loop: &platform.PageLoop{Collection: "window", ItemVariable: "item", Limit: 20}}
 		document.Nodes["loopDetail"] = platform.PageLayoutNode{Kind: "widget", Section: "loopDetail"}
-		document.Interface = &platform.PageInterface{Version: 1, Inputs: map[string]platform.PagePort{"flag": {Variable: "inputFlag", Type: "boolean"}}, Outputs: map[string]platform.PagePort{"selected": {Variable: "record", Type: "record", Object: &platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.visit"}}}}
+		document.Interface = &platform.PageInterface{Version: 1, Inputs: map[string]platform.PagePort{"flag": {Variable: "inputFlag", Type: "boolean"}}, Outputs: map[string]platform.PagePort{"selected": {Variable: "record", Type: "record", Object: &platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.visit"}}}}
 		document.Variables["inputFlag"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "input", Initial: json.RawMessage(`false`)}
 		document.Variables["window"] = platform.PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "query", Section: "list"}}
 		document.Variables["item"] = platform.PageVariable{Scope: "loop-item", Owner: "loop", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "item", Node: "loop"}}
@@ -176,12 +178,12 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		pageDraft = string(bytes)
 	}
 
-	do(builder, build.PageType, "P1", build.PageType+".create", pageDraft)
+	do(builder, construction.PageType, "P1", construction.PageType+".create", pageDraft)
 	page := save(platform.AssetPage, "P1")
 	if v2 {
 		// Alter the mutable layout after freezing. Activation must retain the
 		// saved tree while preserving this later draft beside it.
-		stored, _ := platform.Get[build.Page](live.caller(builder, live.app(build.ID), false), "P1")
+		stored, _ := platform.Get[build.Page](live.caller(builder, live.app(construction.ID), false), "P1")
 		raw, _ := json.Marshal(stored.Document)
 		var edited platform.PageDocument
 		_ = json.Unmarshal(raw, &edited)
@@ -190,12 +192,12 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		o.Title = "Later panel"
 		edited.Overlays["panel"] = o
 		payload, _ := json.Marshal(map[string]any{"title": "Later page draft", "document": edited})
-		do(builder, build.PageType, "P1", build.PageType+".edit", string(payload))
+		do(builder, construction.PageType, "P1", construction.PageType+".edit", string(payload))
 	}
 	if _, err := live.ActivateRelease(builder, page, "activate-page", at); err != nil {
 		t.Fatal(err)
 	}
-	do(builder, build.AppType, "A1", build.AppType+".create", `{"name":"frontdesk","title":"Front desk","pages":["visits"]}`)
+	do(builder, construction.AppType, "A1", construction.AppType+".create", `{"name":"frontdesk","title":"Front desk","pages":["visits"]}`)
 	app := save(platform.AssetApp, "A1")
 	if _, err := live.ActivateRelease(builder, app, "activate-app", at); err != nil {
 		t.Fatal(err)
@@ -223,7 +225,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 		if tn.ActiveRelease() != app {
 			t.Fatal("recovery lost the active release")
 		}
-		stored, ok := platform.Get[build.Object](tn.caller(builder, tn.app(build.ID), false), "O1")
+		stored, ok := platform.Get[construction.Object](tn.caller(builder, tn.app(construction.ID), false), "O1")
 		if !ok || stored.Title != "Later Draft" {
 			t.Fatal("recovery discarded the draft beside its publication")
 		}
@@ -237,7 +239,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 			if installed == nil || installed.Document == nil || installed.Document.Nodes["root"].Kind != "rows" || installed.Document.Overlays["panel"].Title != "Frozen panel" || len(installed.Document.Events) != 1 || installed.Document.Events[0].Effects[0].Target != "open" || installed.Document.Nodes["overlay"].Kind != "flow" || installed.Document.Interface == nil || installed.Document.Interface.Version != 1 || installed.Document.Interface.Outputs["selected"].Variable != "record" || installed.Document.Variables["inputFlag"].Mode != "input" || installed.Document.Nodes["loop"].Loop == nil || installed.Document.Nodes["loop"].Loop.ItemVariable != "item" || installed.Sections[len(installed.Sections)-1].RecordVariable != "item" || installed.Sections[0].ID != "list" || installed.Sections[1].ConfigVersion != 1 || installed.Document.Nodes["columns"].Kind != "tabs" || string(installed.Document.Variables["active"].Initial) != `"list"` || installed.Document.Variables["record"].Source == nil || installed.Document.Variables["record"].Source.Section != "list" {
 				t.Fatalf("recovery lost the frozen V2 layout: %+v", installed)
 			}
-			draft, _ := platform.Get[build.Page](tn.caller(builder, tn.app(build.ID), false), "P1")
+			draft, _ := platform.Get[build.Page](tn.caller(builder, tn.app(construction.ID), false), "P1")
 			if draft.Title != "Later page draft" || draft.Document.Nodes["root"].Kind != "columns" {
 				t.Fatal("activation or recovery discarded the later layout draft")
 			}
@@ -245,7 +247,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 	}
 	// A candidate can become incompatible between save and activation: do not
 	// migrate new operator records or expose a partial closure in that case.
-	do(builder, build.ObjectType, "O1", build.ObjectType+".edit", `{"fields":[{"name":"note","title":"Note","type":"text"},{"name":"priority","title":"Priority","type":"integer"}]}`)
+	do(builder, construction.ObjectType, "O1", construction.ObjectType+".edit", `{"fields":[{"name":"note","title":"Note","type":"text"},{"name":"priority","title":"Priority","type":"integer"}]}`)
 	// The preview accepts additive fields; activation requires an explicit
 	// record migration plan once real rows exist.
 	changed := save(platform.AssetObject, "O1")

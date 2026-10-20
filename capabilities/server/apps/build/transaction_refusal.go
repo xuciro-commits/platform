@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 	"reflect"
@@ -13,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-func (b *Build) checkRefusalDeclarations(object Object, action Action, declarations []platform.Refusal, scope platform.RuleReadSpec, row string, lookup func(string) (platform.EntityInfo, bool)) error {
+func (b *Build) checkRefusalDeclarations(object construction.Object, action construction.Action, declarations []platform.Refusal, scope platform.RuleReadSpec, row string, lookup func(string) (platform.EntityInfo, bool)) error {
 	if len(declarations) > 16 {
 		return fmt.Errorf("transaction refusals exceed their limit")
 	}
@@ -27,7 +29,7 @@ func (b *Build) checkRefusalDeclarations(object Object, action Action, declarati
 			if err := declaration.Escalation.Check(); err != nil {
 				return err
 			}
-			if declaration.Escalation.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(access Access) bool { return access.Role == declaration.Escalation.ReviewerRole }) {
+			if declaration.Escalation.ReviewerRole != construction.Builder && !slices.ContainsFunc(object.Access, func(access construction.Access) bool { return access.Role == declaration.Escalation.ReviewerRole }) {
 				return fmt.Errorf("Refusal escalation reviewer role must be declared on the original object")
 			}
 		}
@@ -51,7 +53,7 @@ func (b *Build) checkRefusalDeclarations(object Object, action Action, declarati
 			if target.Type != scope.Object || target.ID != "$subject" || target.Via != "" || !named(target.Action) || target.Action == action.Name {
 				return fmt.Errorf("refusal route needs another declared transaction on its subject")
 			}
-			index := slices.IndexFunc(object.Actions, func(candidate Action) bool { return candidate.Name == target.Action })
+			index := slices.IndexFunc(object.Actions, func(candidate construction.Action) bool { return candidate.Name == target.Action })
 			if index < 0 || object.Actions[index].Transaction == nil || object.Actions[index].Approval != nil || object.Actions[index].Adoption != nil {
 				return fmt.Errorf("refusal route target must be an ordinary declared transaction")
 			}
@@ -77,7 +79,7 @@ func (b *Build) checkRefusalDeclarations(object Object, action Action, declarati
 				return fmt.Errorf("refusal route created records must declare their original subject relationship")
 			}
 			for _, input := range alternative.Inputs {
-				if !slices.ContainsFunc(action.Inputs, func(source Input) bool {
+				if !slices.ContainsFunc(action.Inputs, func(source construction.Input) bool {
 					return source.Name == input.Name && source.Type == input.Type && source.Ref == input.Ref
 				}) {
 					return fmt.Errorf("refusal route target inputs must come from the original action")
@@ -96,7 +98,7 @@ func (b *Build) checkRefusalDeclarations(object Object, action Action, declarati
 				return fmt.Errorf("refusal records must be an unconditional create on a distinct object")
 			}
 			info, ok := lookup(record.Target.Type)
-			if !ok || info.App != ID || !strings.HasPrefix(record.Target.Type, ID+".") {
+			if !ok || info.App != construction.ID || !strings.HasPrefix(record.Target.Type, construction.ID+".") {
 				return fmt.Errorf("refusal record must belong to its transaction authority")
 			}
 			installed, exists := b.installed[record.Target.Type]
@@ -151,7 +153,7 @@ func businessRefusalCode(code string) bool {
 
 var txnRefusalSignal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transaction chose a refusal branch")
 
-func checkRefusalCycles(object Object) error {
+func checkRefusalCycles(object construction.Object) error {
 	graph := map[string][]string{}
 	for _, action := range object.Actions {
 		if action.Transaction == nil {
@@ -231,7 +233,7 @@ func (b *Build) refusalRecord(c platform.Caller, receipt *pb.ChangeRecord, step 
 	if !ok || id == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Refusal record identity is unavailable / 拒绝记录标识不可用")
 	}
-	info, _ := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
+	info, _ := platform.Describe(construction.ID, entity, func(reflect.Type) string { return "" })
 	patch := map[string]any{}
 	for _, assignment := range step.Changes {
 		field, _ := info.Field(assignment.Field)

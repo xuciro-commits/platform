@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -85,7 +87,7 @@ func txnResult(spec *platform.RuleReadSpec, step platform.TxnStep) {
 	}
 }
 
-func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(string) (platform.EntityInfo, bool)) error {
+func (b *Build) normalizeTransaction(object construction.Object, action *construction.Action, lookup func(string) (platform.EntityInfo, bool)) error {
 	var lower func([]platform.TxnStep, platform.RuleReadSpec) error
 	lower = func(steps []platform.TxnStep, scope platform.RuleReadSpec) error {
 		scope.Inputs = maps.Clone(scope.Inputs)
@@ -154,7 +156,7 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 				continue
 			}
 			if len(step.Changes) > 0 {
-				if !strings.HasPrefix(step.Target.Type, ID+".") {
+				if !strings.HasPrefix(step.Target.Type, construction.ID+".") {
 					return fmt.Errorf("transaction cannot change another application")
 				}
 				for i := range step.Changes {
@@ -207,7 +209,7 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 func (b *Build) transactionLink(binding platform.AssetBinding) (platform.LinkType, error) {
 	ordinal, ok := strings.CutPrefix(binding.SourceVersion, b.Manifest().Version+".link-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || strconv.Itoa(version) != ordinal || binding.Ref.App != ID || binding.Ref.Kind != platform.AssetLinkType {
+	if !ok || err != nil || version < 1 || strconv.Itoa(version) != ordinal || binding.Ref.App != construction.ID || binding.Ref.Kind != platform.AssetLinkType {
 		return platform.LinkType{}, fmt.Errorf("transaction needs its owner's retained relationship")
 	}
 	if declaration, retained, found := b.LinkTypeDefinition(binding.Ref.Name, version); found && retained == version {
@@ -221,7 +223,7 @@ func checkTxnRef(ref platform.TxnRef, subject, row string, scope platform.RuleRe
 		return fmt.Errorf("record references cannot name a transaction action")
 	}
 	info, ok := lookup(ref.Type)
-	if !ok || info.App != ID || !strings.HasPrefix(ref.Type, ID+".") {
+	if !ok || info.App != construction.ID || !strings.HasPrefix(ref.Type, construction.ID+".") {
 		return fmt.Errorf("transaction target must belong to its authority")
 	}
 	if (ref.ID == "") == (ref.Via == "") {
@@ -263,16 +265,16 @@ type txnWrite struct {
 	when           *platform.Expr
 }
 
-func (b *Build) checkTransactions(object Object) error {
+func (b *Build) checkTransactions(object construction.Object) error {
 	if object.CreateTransaction != nil {
 		clone := object
 		clone.Actions = slices.Clone(object.Actions)
-		action := Action{Name: "creation", Transaction: object.CreateTransaction}
+		action := construction.Action{Name: "creation", Transaction: object.CreateTransaction}
 		if len(object.States) > 0 {
 			action.From = []string{object.States[0].Name}
 		}
 		for _, field := range object.Fields {
-			action.Inputs = append(action.Inputs, Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
+			action.Inputs = append(action.Inputs, construction.Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
 		}
 		clone.Actions = append(clone.Actions, action)
 		clone.CreateTransaction = nil
@@ -313,7 +315,7 @@ func (b *Build) checkTransactions(object Object) error {
 		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Journal != nil || action.Reverses != "" || len(action.Conditions) > 0 || action.To != "" || action.ToInput != "" {
 			return fmt.Errorf("transaction replaces legacy mutations and state routing")
 		}
-		ownInfo, _ := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+		ownInfo, _ := platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
 		lookup := func(typ string) (platform.EntityInfo, bool) {
 			if typ == subject {
 				return ownInfo, true
@@ -392,7 +394,7 @@ func (b *Build) checkTransactions(object Object) error {
 						return fmt.Errorf("%s needs stable iteration order", where)
 					}
 					item, ok := lookup(set.Object)
-					if !ok || item.App != ID {
+					if !ok || item.App != construction.ID {
 						return fmt.Errorf("%s cannot iterate writes in another authority", where)
 					}
 					if err := check(step.ForEach.Steps, withTxnRow(scope, item), set.Object, step.Name); err != nil {
@@ -478,7 +480,7 @@ func (b *Build) checkTransactions(object Object) error {
 					return fmt.Errorf("%s has an unsupported kind or payload", where)
 				}
 				info, ok := lookup(step.Target.Type)
-				if !ok || info.App != ID || !strings.HasPrefix(info.Type, ID+".") {
+				if !ok || info.App != construction.ID || !strings.HasPrefix(info.Type, construction.ID+".") {
 					return fmt.Errorf("%s needs its owner's object", where)
 				}
 				if step.Target.Type != subject {
@@ -522,7 +524,7 @@ func (b *Build) checkTransactions(object Object) error {
 					}
 					if field.Name == "state" && step.Target.Type == subject && expr.Lit != nil {
 						var state string
-						if json.Unmarshal(expr.Lit.Value, &state) != nil || !slices.ContainsFunc(object.States, func(s State) bool { return s.Name == state }) {
+						if json.Unmarshal(expr.Lit.Value, &state) != nil || !slices.ContainsFunc(object.States, func(s construction.State) bool { return s.Name == state }) {
 							return fmt.Errorf("the action %q leaves records in %q, which is not a state of the object", action.Name, state)
 						}
 					}

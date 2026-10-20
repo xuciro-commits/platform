@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -26,14 +28,14 @@ func agentReleaseAsset(a Agent, source string) (platform.ReleaseAsset, error) {
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: a.Name}, ContractVersion: 1, SourceVersion: source + ".agent-" + strconv.Itoa(a.Version), Body: body})
+	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetAgent, Name: a.Name}, ContractVersion: 1, SourceVersion: source + ".agent-" + strconv.Itoa(a.Version), Body: body})
 }
 
 func decodeAgentAsset(asset platform.ReleaseAsset) (Agent, error) {
 	var descriptor platform.AgentReleaseDescriptor
 	versionText, found := strings.CutPrefix(asset.SourceVersion, "1.agent-")
 	version, err := strconv.Atoi(versionText)
-	if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != versionText || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetAgent || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Native || descriptor.Name != asset.Ref.Name || descriptor.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+	if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != versionText || asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetAgent || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Native || descriptor.Name != asset.Ref.Name || descriptor.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return Agent{}, fmt.Errorf("invalid builder agent asset")
 	}
 	record := Agent{Name: descriptor.Name, Title: descriptor.Title, Description: descriptor.Description, Instructions: descriptor.Instructions, Tools: slices.Clone(descriptor.Tools), Steps: descriptor.Budget.Steps, Tokens: descriptor.Budget.Tokens, Actions: descriptor.Budget.Actions, Cost: descriptor.Budget.Cost, Checkpoints: slices.Clone(descriptor.Checkpoints), HandoffRole: descriptor.HandoffRole, Version: version, State: "published"}
@@ -103,7 +105,7 @@ func (b *Build) agentDraftAssets(id string) (before, after []platform.ReleaseAss
 	}
 	record := rows[index]
 	if previous, ok := wasPublished[Agent](record.Published); ok {
-		prior = platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: previous.Name}
+		prior = platform.AssetRef{App: construction.ID, Kind: platform.AssetAgent, Name: previous.Name}
 		hadPrior = true
 	}
 	if err = b.checkAgent(record); err != nil {
@@ -114,7 +116,7 @@ func (b *Build) agentDraftAssets(id string) (before, after []platform.ReleaseAss
 		return
 	}
 	record.Version++
-	next = platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: record.Name}
+	next = platform.AssetRef{App: construction.ID, Kind: platform.AssetAgent, Name: record.Name}
 	asset, problem := agentReleaseAsset(record, b.Manifest().Version)
 	if problem != nil {
 		err = problem
@@ -125,14 +127,14 @@ func (b *Build) agentDraftAssets(id string) (before, after []platform.ReleaseAss
 	return
 }
 
-func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
+func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
 	rows, err := b.agentInventory()
 	if err != nil {
 		return nil, err
 	}
-	out := []ReleasePublication{}
+	out := []construction.ReleasePublication{}
 	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetAgent {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetAgent {
 			continue
 		}
 		frozen, err := decodeAgentAsset(asset)
@@ -175,7 +177,7 @@ func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) 
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ReleasePublication{Schema: SchemaAgentPublish, Image: image})
+		out = append(out, construction.ReleasePublication{Schema: SchemaAgentPublish, Image: image})
 	}
 	return out, nil
 }

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -69,7 +71,7 @@ func TestProductionBatchPackagesCoordinateIndependentTenants(t *testing.T) {
 	}))
 	defer server.Close()
 	consumer.Secrets = func(name string) ([]byte, bool) { return []byte("Bearer operator"), name == "production-upstream" }
-	install := func(tn *Tenant, pkg PackageDescriptor, configure func()) []build.JointDraftRef {
+	install := func(tn *Tenant, pkg PackageDescriptor, configure func()) []construction.JointDraftRef {
 		t.Helper()
 		decide(t, tn, "builder", PlatformApp, SchemaPackageInstall, PackageType, pkg.ID, map[string]any{"id": pkg.ID, "version": pkg.Version}, at)
 		drafts, err := tn.CreatePackageDrafts(memberOf(t, tn, "builder"), pkg.ID, pkg.Version, "production-drafts", at)
@@ -79,9 +81,9 @@ func TestProductionBatchPackagesCoordinateIndependentTenants(t *testing.T) {
 		if configure != nil {
 			configure()
 		}
-		var selection []build.JointDraftRef
+		var selection []construction.JointDraftRef
 		for _, draft := range drafts.Drafts {
-			selection = append(selection, build.JointDraftRef{Kind: draft.Ref.Kind, ID: draft.ID})
+			selection = append(selection, construction.JointDraftRef{Kind: draft.Ref.Kind, ID: draft.ID})
 		}
 		preview, err := tn.PreviewReleaseDrafts(memberOf(t, tn, "builder"), selection)
 		if err != nil || preview.Diagnostic != "" {
@@ -98,8 +100,8 @@ func TestProductionBatchPackagesCoordinateIndependentTenants(t *testing.T) {
 	}
 	install(provider, providerPackage, nil)
 	install(consumer, consumerPackage, func() {
-		decide(t, consumer, "builder", build.ID, build.ConnectionType+".edit", build.ConnectionType, "productionupstream", map[string]any{"address": server.URL, "secret": "production-upstream", "allowPrivate": true}, at)
-		decide(t, consumer, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, "productionupstream", map[string]any{}, at)
+		decide(t, consumer, "builder", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, "productionupstream", map[string]any{"address": server.URL, "secret": "production-upstream", "allowPrivate": true}, at)
+		decide(t, consumer, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "productionupstream", map[string]any{}, at)
 		consumer.CheckConnections(at)
 	})
 	read := func(tn *Tenant, typ, id string) map[string]any {
@@ -115,20 +117,20 @@ func TestProductionBatchPackagesCoordinateIndependentTenants(t *testing.T) {
 		return record
 	}
 	createUpstream := func(id string, quantity int) {
-		decide(t, provider, "operator", build.ID, "build.productionorder.create", "build.productionorder", id, map[string]any{"number": id, "product": "P-100", "quantity": quantity, "unitcost": 10, "yield": 0, "scrap": 0}, at)
+		decide(t, provider, "operator", construction.ID, "build.productionorder.create", "build.productionorder", id, map[string]any{"number": id, "product": "P-100", "quantity": quantity, "unitcost": 10, "yield": 0, "scrap": 0}, at)
 	}
 	createShop := func(id, upstream string, quantity int) {
-		decide(t, consumer, "operator", build.ID, "build.shoporder.create", "build.shoporder", id, map[string]any{"number": id, "order": upstream, "product": "P-100", "quantity": quantity, "yield": 0, "scrap": 0}, at)
+		decide(t, consumer, "operator", construction.ID, "build.shoporder.create", "build.shoporder", id, map[string]any{"number": id, "order": upstream, "product": "P-100", "quantity": quantity, "yield": 0, "scrap": 0}, at)
 	}
 	advance := func() {
 		t.Helper()
 		at = at.Add(time.Second)
 		consumer.Dispatch(at)
 		at = at.Add(time.Second)
-		runJob(t, consumer, build.ID, "confirmations", at)
+		runJob(t, consumer, construction.ID, "confirmations", at)
 	}
 	start := func(shop, order string) {
-		decide(t, consumer, "operator", build.ID, "build.shoporder.start", "build.shoporder", shop, map[string]any{"order": order}, at)
+		decide(t, consumer, "operator", construction.ID, "build.shoporder.start", "build.shoporder", shop, map[string]any{"order": order}, at)
 		if state := read(consumer, "build.shoporder", shop)["state"]; state != "pending" {
 			t.Fatalf("start lacked independent pending state: %v", state)
 		}
@@ -139,7 +141,7 @@ func TestProductionBatchPackagesCoordinateIndependentTenants(t *testing.T) {
 	}
 	confirm := func(shop, order, batch string, good, scrap int, final bool) {
 		member := memberOf(t, consumer, "operator")
-		if _, refusal, issues := consumer.submitDiagnosed(member, submission(consumer, member, build.ID, "build.shoporder.confirm", "build.shoporder", shop, map[string]any{"order": order, "batch": batch, "yield": good, "scrap": scrap, "final": final}), at); refusal != nil {
+		if _, refusal, issues := consumer.submitDiagnosed(member, submission(consumer, member, construction.ID, "build.shoporder.confirm", "build.shoporder", shop, map[string]any{"order": order, "batch": batch, "yield": good, "scrap": scrap, "final": final}), at); refusal != nil {
 			t.Fatalf("local confirmation: %v issues=%+v", refusal, issues)
 		}
 		advance()
@@ -226,9 +228,9 @@ func TestProductionBatchPackagesCoordinateIndependentTenants(t *testing.T) {
 	at = at.Add(time.Second)
 	consumer.ReconcileConfirmations(at)
 	at = at.Add(time.Second)
-	runJob(t, consumer, build.ID, "confirmations", at)
+	runJob(t, consumer, construction.ID, "confirmations", at)
 	if posts != 1 || read(consumer, "build.shoporder", "W7")["state"] != "running" {
-		t.Fatalf("batch readback did not reconcile without resend: posts=%d confirmations=%s", posts, platform.Raw(platform.Records[platform.ConfirmationRun](consumer.automation(build.ID, false))))
+		t.Fatalf("batch readback did not reconcile without resend: posts=%d confirmations=%s", posts, platform.Raw(platform.Records[platform.ConfirmationRun](consumer.automation(construction.ID, false))))
 	}
 	consumer.Outbound = nil
 
@@ -248,13 +250,13 @@ func TestProductionBatchPackagesCoordinateIndependentTenants(t *testing.T) {
 		t.Fatalf("refusal rewrote local facts or claimed success: %+v", got)
 	}
 	refused := false
-	for _, run := range platform.Records[platform.ConfirmationRun](consumer.automation(build.ID, false)) {
+	for _, run := range platform.Records[platform.ConfirmationRun](consumer.automation(construction.ID, false)) {
 		if run.Subject == "build.shoporder/W5" && len(run.Parties) == 1 && run.Parties[0].State == "rejected" {
 			refused = true
 		}
 	}
 	if !refused {
-		for _, run := range platform.Records[platform.ConfirmationRun](consumer.automation(build.ID, false)) {
+		for _, run := range platform.Records[platform.ConfirmationRun](consumer.automation(construction.ID, false)) {
 			if run.Subject == "build.shoporder/W5" {
 				t.Errorf("upstream receipt: state=%s parties=%s", run.State, platform.Raw(run.Parties))
 			}
@@ -345,9 +347,9 @@ func TestDeclarativeProtocolPublicationAndRecovery(t *testing.T) {
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	object := map[string]any{"name": "job", "title": "Job", "fields": []map[string]any{{"name": "title", "title": "Title", "type": "text"}}, "access": []map[string]any{{"role": "user", "read": "own", "create": true, "edit": true}}, "states": []map[string]any{{"name": "open", "title": "Open"}}, "actions": []map[string]any{{"name": "first", "title": "First", "from": []string{"open"}, "inputs": []map[string]any{{"name": "batch", "title": "Batch", "type": "text", "required": true}}, "transaction": map[string]any{"subject": "build.job", "steps": []map[string]any{{"name": "update", "kind": "update", "target": map[string]any{"type": "build.job", "id": "$subject"}, "changes": []map[string]any{{"field": "title", "expr": platform.ExprReference("text", "input.batch")}}}}}}, {"name": "second", "title": "Second", "from": []string{"open"}, "inputs": []map[string]any{{"name": "batch", "title": "Batch", "type": "text", "required": true}}, "transaction": map[string]any{"subject": "build.job", "steps": []map[string]any{{"name": "update", "kind": "update", "target": map[string]any{"type": "build.job", "id": "$subject"}, "changes": []map[string]any{{"field": "title", "expr": platform.ExprLiteralValue("text", "second")}}}}}}}, "protocols": []platform.ProtocolBinding{{Name: "example.jobs", Version: 1, Actions: map[string]string{"confirm": "first"}, Reads: []string{"jobs"}}}}
 	publishObject(t, tn, "builder", "job", object, at)
-	decide(t, tn, "alice", build.ID, "build.job.create", "build.job", "A", map[string]any{"title": "Alice"}, at)
+	decide(t, tn, "alice", construction.ID, "build.job.create", "build.job", "A", map[string]any{"title": "Alice"}, at)
 	for i := 0; i < 201; i++ {
-		decide(t, tn, "bob", build.ID, "build.job.create", "build.job", "B"+time.Duration(i).String(), map[string]any{"title": "Bob"}, at)
+		decide(t, tn, "bob", construction.ID, "build.job.create", "build.job", "B"+time.Duration(i).String(), map[string]any{"title": "Bob"}, at)
 	}
 	result, refusal := tn.Query(memberOf(t, tn, "alice"), "example.jobs/1", "jobs")
 	if refusal != nil {
@@ -357,10 +359,10 @@ func TestDeclarativeProtocolPublicationAndRecovery(t *testing.T) {
 	if err := json.Unmarshal(platform.Raw(result), &rows); err != nil || len(rows) != 1 || rows[0]["id"] != "A" {
 		t.Fatalf("protocol did not use visible records: %s %v", platform.Raw(result), err)
 	}
-	decide(t, tn, "builder", PlatformApp, "platform.protocol.bind", "platform.protocol", "example.jobs/1", map[string]any{"provider": build.ID}, at)
+	decide(t, tn, "builder", PlatformApp, "platform.protocol.bind", "platform.protocol", "example.jobs/1", map[string]any{"provider": construction.ID}, at)
 	bindings := []platform.ProtocolBinding{{Name: "example.jobs", Version: 1, Actions: map[string]string{"confirm": "second"}, Reads: []string{"jobs"}}}
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "job", map[string]any{"protocols": bindings}, at)
-	decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "job", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "job", map[string]any{"protocols": bindings}, at)
+	decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "job", map[string]any{}, at)
 	if _, _, refusal := tn.Invoke(memberOf(t, tn, "alice"), "example.jobs/1", "confirm", "A", []byte(`{"batch":"one"}`), "mapped-second", at); refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -368,8 +370,8 @@ func TestDeclarativeProtocolPublicationAndRecovery(t *testing.T) {
 	if refusal != nil || !bytes.Contains(platform.Raw(view.Record), []byte(`"title":"second"`)) {
 		t.Fatalf("bound protocol retained its old mapping: %s %v", platform.Raw(view.Record), refusal)
 	}
-	decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "job", map[string]any{"protocols": []platform.ProtocolBinding{}}, at)
-	if got := refuse(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "job", map[string]any{}, at); got == "ok" {
+	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "job", map[string]any{"protocols": []platform.ProtocolBinding{}}, at)
+	if got := refuse(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "job", map[string]any{}, at); got == "ok" {
 		t.Fatal("removed a bound provider needed by control recovery")
 	}
 	CheckReplay(t, tn, entries, compose)
@@ -380,7 +382,7 @@ func TestDeclarativeProtocolPublicationAndRecovery(t *testing.T) {
 	if err != nil || json.Unmarshal(raw, &pkg) != nil {
 		t.Fatalf("provider package: %v", err)
 	}
-	var declared build.Object
+	var declared construction.Object
 	if err := json.Unmarshal(pkg.Blueprint.Assets[0].Body, &declared); err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +404,7 @@ func TestDeclarativeProtocolPublicationAndRecovery(t *testing.T) {
 	}
 	badPayload := map[string]any{"name": declared.Name, "title": declared.Title, "fields": declared.Fields, "access": declared.Access, "states": declared.States, "actions": declared.Actions, "protocols": declared.Protocols}
 	bad := builderTenant(t, "bad-production-protocol")
-	if got := refuse(t, bad, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "bad", badPayload, at); !strings.Contains(got, "incompatible payload") {
+	if got := refuse(t, bad, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "bad", badPayload, at); !strings.Contains(got, "incompatible payload") {
 		t.Fatalf("production contract must reject confirm without batch/final: %s", got)
 	}
 }
@@ -417,10 +419,10 @@ func TestDeclarativeProtocolReleaseMatchesInstalledAndRestored(t *testing.T) {
 		return entry.Body, nil
 	}
 	bindings := []platform.ProtocolBinding{{Name: "example.release", Version: 2, Actions: map[string]string{"release": "complete"}, Reads: []string{"records"}, Events: map[string]string{"released": "complete"}}}
-	decide(t, tenant, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "provider", map[string]any{
-		"name": "provider", "title": "Protocol provider", "fields": []build.Field{{Name: "note", Title: "Order note", Type: "text"}},
-		"states":  []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}},
-		"actions": []build.Action{{Name: "complete", Title: "Complete order", From: []string{"open"}, To: "done"}}, "protocols": bindings,
+	decide(t, tenant, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "provider", map[string]any{
+		"name": "provider", "title": "Protocol provider", "fields": []construction.Field{{Name: "note", Title: "Order note", Type: "text"}},
+		"states":  []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}},
+		"actions": []construction.Action{{Name: "complete", Title: "Complete order", From: []string{"open"}, To: "done"}}, "protocols": bindings,
 	}, at)
 	assertReview := func(target *Tenant, candidate string) {
 		t.Helper()
@@ -431,8 +433,8 @@ func TestDeclarativeProtocolReleaseMatchesInstalledAndRestored(t *testing.T) {
 	}
 	for _, pinned := range []bool{false, true} {
 		if pinned {
-			bindings[0].Contract = &tenant.app(build.ID).Manifest().Provides[0].Protocol
-			decide(t, tenant, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "provider", map[string]any{"protocols": bindings}, at)
+			bindings[0].Contract = &tenant.app(construction.ID).Manifest().Provides[0].Protocol
+			decide(t, tenant, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "provider", map[string]any{"protocols": bindings}, at)
 		}
 		builder := memberOf(t, tenant, "builder")
 		preview, err := tenant.PreviewRelease(builder, platform.AssetObject, "provider")

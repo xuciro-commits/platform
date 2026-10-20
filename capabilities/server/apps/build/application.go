@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -36,7 +38,7 @@ type Application struct {
 	// sits under the application's own name.
 	Resources []platform.AssetRef   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
 	Concepts  []platform.AppConcept `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
-	Groups    []Group               `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
+	Groups    []construction.Group  `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
 	State     string                `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the application as it was last handed over: what people open,
 	// and what a restore puts back.
@@ -44,7 +46,7 @@ type Application struct {
 }
 
 func (b *Build) applicationEntity() platform.Entity {
-	return platform.Entity{Type: AppType, Title: "Application", Plural: "Applications", Model: Application{}, Display: "title",
+	return platform.Entity{Type: construction.AppType, Title: "Application", Plural: "Applications", Model: Application{}, Display: "title",
 		Description: "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {
@@ -69,12 +71,12 @@ func (b *Build) applicationEntity() platform.Entity {
 			}
 			return nil
 		},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "applications"},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "applications"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being put together; nobody has it yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "In the launcher of everyone who may open one of its pages."}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Hand it over", From: []string{"draft", "published"}, To: []string{"published"},
-				Roles: []string{Builder}, Capability: "applications", Payload: []platform.Field{},
+				Roles: []string{construction.Builder}, Capability: "applications", Payload: []platform.Field{},
 				Description: "Put the application in people's launcher as it stands. Handed over again, it takes its new pages and name.",
 				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
 					application, ok := record.(*Application)

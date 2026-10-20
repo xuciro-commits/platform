@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -604,7 +604,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	d := a.def(p.Agent)
 	digest, config := "", ""
 	if p.Candidate != "" {
-		if !p.Suite || !c.Holds(build.ID, build.Builder) {
+		if !p.Suite || !c.Holds(construction.ID, construction.Builder) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A builder and declared cases are required for candidate agent evaluation")
 		}
 		var err error

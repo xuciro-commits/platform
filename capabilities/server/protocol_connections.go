@@ -13,7 +13,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -85,17 +85,17 @@ func (t *Tenant) connectionKinds() ConnectionKindPage {
 }
 
 func (h *Host) routesProtocolConnections(rt *routes) {
-	roles := []string{build.Builder, build.Integrator}
-	rt.authorized(Route{Pattern: "GET /v1/connection-kinds", Summary: "Built-in transports and installed versioned protocol profiles", Answer: ConnectionKindPage{}}, build.ID, roles, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	roles := []string{construction.Builder, construction.Integrator}
+	rt.authorized(Route{Pattern: "GET /v1/connection-kinds", Summary: "Built-in transports and installed versioned protocol profiles", Answer: ConnectionKindPage{}}, construction.ID, roles, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.connectionKinds(), t.Language(m, r)))
 	})
-	rt.authorized(Route{Pattern: "POST /v1/connections/preview", Summary: "Read-only preview of a protocol connection draft without changing its published binding", Body: build.Connection{}, Answer: build.ConnectionCheck{}}, build.ID, roles, func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
-		var connection build.Connection
+	rt.authorized(Route{Pattern: "POST /v1/connections/preview", Summary: "Read-only preview of a protocol connection draft without changing its published binding", Body: construction.Connection{}, Answer: construction.ConnectionCheck{}}, construction.ID, roles, func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
+		var connection construction.Connection
 		if err := decodeBodyLimit(r, &connection, 128<<10); err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Protocol connection preview needs a valid draft"))
 			return
 		}
-		result := build.ConnectionCheck{At: h.Now()}
+		result := construction.ConnectionCheck{At: h.Now()}
 		if connection.Protocol == nil {
 			result.Error = "Choose an installed protocol package"
 		} else {
@@ -107,7 +107,7 @@ func (h *Host) routesProtocolConnections(rt *routes) {
 }
 
 // protocolHTTP is the existing outbound policy, shared by checks and original integration reads.
-func (t *Tenant) protocolHTTP(ctx context.Context, connection build.Connection, method, path string, body any, answer any) error {
+func (t *Tenant) protocolHTTP(ctx context.Context, connection construction.Connection, method, path string, body any, answer any) error {
 	u, err := url.Parse(connection.Address)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Scheme != "https" && !(u.Scheme == "http" && connection.AllowPrivate) {
 		return fmt.Errorf("the protocol gateway requires a service root without credentials; HTTP needs private access enabled")
@@ -157,7 +157,7 @@ func (t *Tenant) protocolHTTP(ctx context.Context, connection build.Connection, 
 	return nil
 }
 
-func (t *Tenant) configureProtocol(ctx context.Context, connection build.Connection, readOnly bool) error {
+func (t *Tenant) configureProtocol(ctx context.Context, connection construction.Connection, readOnly bool) error {
 	if connection.Protocol == nil {
 		return nil
 	}
@@ -179,8 +179,8 @@ func (t *Tenant) configureProtocol(ctx context.Context, connection build.Connect
 	return t.protocolHTTP(ctx, connection, http.MethodPost, path, connection.Protocol, nil)
 }
 
-func (t *Tenant) checkProtocolConnection(ctx context.Context, connection build.Connection, at time.Time) build.ConnectionCheck {
-	result := build.ConnectionCheck{At: at}
+func (t *Tenant) checkProtocolConnection(ctx context.Context, connection construction.Connection, at time.Time) construction.ConnectionCheck {
+	result := construction.ConnectionCheck{At: at}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if err := t.configureProtocol(ctx, connection, strings.HasPrefix(connection.ID, "preview-")); err != nil {

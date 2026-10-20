@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"testing"
@@ -22,24 +24,24 @@ func TestBusinessRefusalHoldDeadlineAndDecisionReturnToSubject(t *testing.T) {
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	publishObject(t, tn, "builder", "CASE", map[string]any{
 		"name": "case", "title": "Case", "plural": "Cases",
-		"fields": []build.Field{{Name: "reason", Title: "Reason", Type: "text"}},
-		"states": []build.State{{Name: "draft", Title: "Draft"}, {Name: "hold", Title: "Hold"}, {Name: "review", Title: "Awaiting review"}, {Name: "ready", Title: "Ready"}},
-		"access": []build.Access{{Role: "operator", Read: "all", Create: true}, {Role: "manager", Read: "all"}},
-		"actions": []build.Action{
+		"fields": []construction.Field{{Name: "reason", Title: "Reason", Type: "text"}},
+		"states": []construction.State{{Name: "draft", Title: "Draft"}, {Name: "hold", Title: "Hold"}, {Name: "review", Title: "Awaiting review"}, {Name: "ready", Title: "Ready"}},
+		"access": []construction.Access{{Role: "operator", Read: "all", Create: true}, {Role: "manager", Read: "all"}},
+		"actions": []construction.Action{
 			{Name: "hold", Title: "Hold", From: []string{"draft"}, To: "hold", Roles: []string{"operator"}},
-			{Name: "resolve", Title: "Resolve hold", From: []string{"hold"}, To: "ready", Roles: []string{"operator"}, Approval: &build.ActionApproval{Pending: "review", Levels: []build.ApproverLevel{{Title: "Review expired hold", Role: "manager"}}}},
+			{Name: "resolve", Title: "Resolve hold", From: []string{"hold"}, To: "ready", Roles: []string{"operator"}, Approval: &construction.ActionApproval{Pending: "review", Levels: []construction.ApproverLevel{{Title: "Review expired hold", Role: "manager"}}}},
 		},
 	}, txnAt)
-	decide(t, tn, "builder", build.ID, build.ProcessType+".create", build.ProcessType, "HOLD", map[string]any{
+	decide(t, tn, "builder", construction.ID, construction.ProcessType+".create", construction.ProcessType, "HOLD", map[string]any{
 		"name": "holdreview", "title": "Review expired hold", "object": "build.case", "when": "hold",
-		"steps": []build.ProcessStep{
+		"steps": []construction.ProcessStep{
 			{Name: "deadline", Kind: "wait", UntilSeconds: 60, Next: "review"},
 			{Name: "review", Kind: "action", Act: "resolve"},
 		},
 	}, txnAt)
-	decide(t, tn, "builder", build.ID, build.SchemaProcess, build.ProcessType, "HOLD", map[string]any{}, txnAt)
-	decide(t, tn, "operator", build.ID, "build.case.create", "build.case", "C1", map[string]any{}, txnAt)
-	decide(t, tn, "operator", build.ID, "build.case.hold", "build.case", "C1", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.SchemaProcess, construction.ProcessType, "HOLD", map[string]any{}, txnAt)
+	decide(t, tn, "operator", construction.ID, "build.case.create", "build.case", "C1", map[string]any{}, txnAt)
+	decide(t, tn, "operator", construction.ID, "build.case.hold", "build.case", "C1", map[string]any{}, txnAt)
 	tn.Work(txnAt)
 	tn.Work(txnAt.Add(59 * time.Second))
 	if tn.records.types[work.TaskType].rows.len() != 0 {

@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"os"
@@ -33,7 +35,7 @@ func TestCompleteDefaultTelemetryRetainsSceneSamplesAndSharedAsset(t *testing.T)
 	if err := p.CheckCollectionPorts(); err != nil {
 		t.Fatal(err)
 	}
-	asset, err := platform.PageReleaseAsset(ID, "1.page-1", p)
+	asset, err := platform.PageReleaseAsset(construction.ID, "1.page-1", p)
 	if err != nil {
 		t.Fatal(err)
 	}

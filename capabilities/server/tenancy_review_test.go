@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"context"
 	"crypto/ed25519"
@@ -18,7 +20,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
+
 	"platformserver/apps/enterprise"
 	"platformserver/idp"
 	"platformserver/platform"
@@ -64,36 +66,36 @@ func TestProjectDelegationWithIndependentReadRole(t *testing.T) {
 	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", project); got != "ok" {
 		t.Fatal(got)
 	}
-	grant, _ := json.Marshal(map[string]string{"app": build.ID, "role": build.User})
+	grant, _ := json.Marshal(map[string]string{"app": construction.ID, "role": construction.User})
 	if _, err := tn.Submit(member("dana"), &pb.Submission{TenantId: tn.ID, PrincipalId: "dana", Authority: PlatformApp, IdempotencyKey: "grant-reader", Target: &pb.EntityRef{Type: MemberType, Id: "mo"}, Schema: &pb.SchemaRef{Name: SchemaGrant, Version: 1}, Payload: grant}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	object := map[string]any{"name": "outside", "title": "Outside", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("mo", "build.object.create", build.ObjectType, "outside", object); got != "ERROR_CODE_POLICY_DENIED" {
+	if got := submit("mo", "build.object.create", construction.ObjectType, "outside", object); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("project builder + user created outside scope: %s", got)
 	}
 	object["name"] = "allowed"
-	if got := submit("mo", "build.object.create", build.ObjectType, "allowed", object); got != "ok" {
+	if got := submit("mo", "build.object.create", construction.ObjectType, "allowed", object); got != "ok" {
 		t.Fatalf("project asset refused: %s", got)
 	}
 	// The project names the asset; the editor's record ID differs (UX-11).
 	named := map[string]any{"name": "allowed", "title": "Allowed", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("dana", "build.object.create", build.ObjectType, "UX-ITEM", map[string]any{"name": "uxitem", "title": "Item", "fields": named["fields"]}); got != "ok" {
+	if got := submit("dana", "build.object.create", construction.ObjectType, "UX-ITEM", map[string]any{"name": "uxitem", "title": "Item", "fields": named["fields"]}); got != "ok" {
 		t.Fatal(got)
 	}
 	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "uxitem"}}}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := submit("mo", "build.object.edit", build.ObjectType, "UX-ITEM", map[string]any{"title": "Item renamed"}); got != "ok" {
+	if got := submit("mo", "build.object.edit", construction.ObjectType, "UX-ITEM", map[string]any{"title": "Item renamed"}); got != "ok" {
 		t.Fatalf("delegated edit of a draft whose ID differs from its name refused: %s", got)
 	}
-	if got := submit("mo", "build.object.edit", build.ObjectType, "allowed", map[string]any{"title": "No longer named"}); got != "ERROR_CODE_POLICY_DENIED" {
+	if got := submit("mo", "build.object.edit", construction.ObjectType, "allowed", map[string]any{"title": "No longer named"}); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("an asset the project no longer names was edited: %s", got)
 	}
 	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "future"}}}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := submit("mo", "build.object.edit", build.ObjectType, "allowed", map[string]any{"name": "future", "title": "Claimed by payload"}); got != "ERROR_CODE_POLICY_DENIED" {
+	if got := submit("mo", "build.object.edit", construction.ObjectType, "allowed", map[string]any{"name": "future", "title": "Claimed by payload"}); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("a payload name claimed an existing draft outside the project: %s", got)
 	}
 
@@ -435,7 +437,7 @@ func TestAcceptedProjectAndPackageState(t *testing.T) {
 					t.Fatal("accepted project was not installed")
 				}
 				mo, _ := tn.Member("mo")
-				if !mo.Holds(build.ID, build.Builder) {
+				if !mo.Holds(construction.ID, construction.Builder) {
 					t.Fatal("accepted project did not grant builder")
 				}
 			} else if d.packages[id] == nil || d.packages[id].State != "active" {

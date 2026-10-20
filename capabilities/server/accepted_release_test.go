@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -22,7 +24,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	const tenantID = "release-candidate"
 	compose := func() *Tenant {
 		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{build.ID: build.Builder}}}
+			Roles: map[string]string{construction.ID: construction.Builder}}}
 		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seat), build.New(tenantID))
 		if err != nil {
 			t.Fatal(err)
@@ -52,8 +54,8 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 		return e.Body, nil
 	}
 	if _, err := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
-		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
+		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -141,9 +143,9 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) {
 	const id = "release-route"
 	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-		Roles: map[string]string{build.ID: build.Builder}}}
+		Roles: map[string]string{construction.ID: construction.Builder}}}
 	reader := Seat{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin",
-		Roles: map[string]string{build.ID: build.User}}}
+		Roles: map[string]string{construction.ID: construction.User}}}
 	tenant, err := NewTenant(id, NewConsole(id, seat, reader), build.New(id))
 	if err != nil {
 		t.Fatal(err)
@@ -151,8 +153,8 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 	member, _ := tenant.Member("dana")
 	at := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
 	if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
+		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -224,8 +226,8 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 		t.Fatalf("uninstalled saved draft was reported as running: %+v", review)
 	}
 	if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-		Authority: build.ID, IdempotencyKey: "publish", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
-		Schema: &pb.SchemaRef{Name: build.ObjectType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err != nil {
+		Authority: construction.ID, IdempotencyKey: "publish", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+		Schema: &pb.SchemaRef{Name: construction.ObjectType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tenant.ActivateRelease(member, preview.CandidateID, "activate", at); err != nil {
@@ -239,8 +241,8 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 		{"edit", `{"title":"Changed draft"}`}, {"publish", `{}`},
 	} {
 		if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-			Authority: build.ID, IdempotencyKey: "changed-" + change.schema, Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
-			Schema: &pb.SchemaRef{Name: build.ObjectType + "." + change.schema, Version: 1}, Payload: []byte(change.payload)}, at); err != nil {
+			Authority: construction.ID, IdempotencyKey: "changed-" + change.schema, Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+			Schema: &pb.SchemaRef{Name: construction.ObjectType + "." + change.schema, Version: 1}, Payload: []byte(change.payload)}, at); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -270,7 +272,7 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	compose := func() *Tenant {
 		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{build.ID: build.Builder}}}
+			Roles: map[string]string{construction.ID: construction.Builder}}}
 		tenant, err := NewTenant(id, NewConsole(id, seat), build.New(id))
 		if err != nil {
 			t.Fatal(err)
@@ -287,8 +289,8 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 		return journal.AppendAccepted(ctx, id, entry, key, hash)
 	}
 	if _, err := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
+		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +342,7 @@ func TestAcceptedReleaseCandidateRejectsCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: "t", App: build.ID,
+	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: "t", App: construction.ID,
 		Member: "dana", Key: "release:k", At: time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC),
 		CandidateID: candidate.ID, Bytes: candidate.Bytes}
 	saved.RequestHash, _ = releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, false)
@@ -369,7 +371,7 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 	const tenantID = "release-memory"
 	compose := func() *Tenant {
 		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{build.ID: build.Builder}}}
+			Roles: map[string]string{construction.ID: construction.Builder}}}
 		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seat), build.New(tenantID))
 		if err != nil {
 			t.Fatal(err)
@@ -382,8 +384,8 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 	member, _ := live.Member("dana")
 	at := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
 	if _, err := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
-		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
+		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -414,8 +416,8 @@ func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 	const tenantID = "release-activate"
 	compose := func() *Tenant {
 		seats := []Seat{{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{build.ID: build.Builder}}},
-			{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin", Roles: map[string]string{build.ID: build.User}}}}
+			Roles: map[string]string{construction.ID: construction.Builder}}},
+			{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin", Roles: map[string]string{construction.ID: construction.User}}}}
 		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seats...), build.New(tenantID))
 		if err != nil {
 			t.Fatal(err)
@@ -431,12 +433,12 @@ func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 	submit := func(key, schema string, payload string) {
 		t.Helper()
 		if _, err := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
-			Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+			Authority: construction.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
 			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at); err != nil {
 			t.Fatal(err)
 		}
 	}
-	submit("create", build.ObjectType+".create", `{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)
+	submit("create", construction.ObjectType+".create", `{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)
 	draft, _ := live.PreviewRelease(member, platform.AssetObject, "O1")
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", draft.CandidateID, "s1", at); err != nil {
 		t.Fatal(err)

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"slices"
@@ -19,11 +21,11 @@ func businessRefusalEscalationTenant(t *testing.T) *Tenant {
 
 func setBusinessRefusalEscalation(t *testing.T, tn *Tenant, level string, policy *platform.RefusalEscalation) {
 	t.Helper()
-	view, err := tn.RecordOf(memberOf(t, tn, "builder"), build.ObjectType, "REQUEST", txnAt)
+	view, err := tn.RecordOf(memberOf(t, tn, "builder"), construction.ObjectType, "REQUEST", txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var object build.Object
+	var object construction.Object
 	if err := json.Unmarshal(platform.Raw(view.Record), &object); err != nil {
 		t.Fatal(err)
 	}
@@ -35,8 +37,8 @@ func setBusinessRefusalEscalation(t *testing.T, tn *Tenant, level string, policy
 			}
 		}
 	}
-	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "REQUEST", map[string]any{"actions": object.Actions}, txnAt)
-	decide(t, tn, "builder", build.ID, build.ObjectType+".publish", build.ObjectType, "REQUEST", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "REQUEST", map[string]any{"actions": object.Actions}, txnAt)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".publish", construction.ObjectType, "REQUEST", map[string]any{}, txnAt)
 }
 
 func TestBusinessRefusalEscalationUsesDistinctDurableDecisions(t *testing.T) {

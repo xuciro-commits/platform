@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,24 +13,24 @@ import (
 	"platformserver/platform"
 )
 
-const SchemaFunction = FunctionType + ".publish"
+const SchemaFunction = construction.FunctionType + ".publish"
 
 func (b *Build) functionEntity() platform.Entity {
-	return platform.Entity{Type: FunctionType, Title: "AI function", Plural: "AI functions", Model: Function{}, Display: "title",
+	return platform.Entity{Type: construction.FunctionType, Title: "AI function", Plural: "AI functions", Model: construction.Function{}, Display: "title",
 		Description: "A bounded typed inference over one published object; draft edits do not change installed calls.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "functions"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "functions"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this typed function as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishFunction}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this typed function as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishFunction}}}}
 }
 
-func (b *Build) checkFunction(f Function) error {
+func (b *Build) checkFunction(f construction.Function) error {
 	if !named(f.Name) {
 		return fmt.Errorf("The function name %s must be lower-case letters and digits", f.Name)
 	}
 	_, installed := b.installed[f.Object]
 	shape, selected := b.jointEntities[f.Object]
-	if !installed && (!selected || shape.App != ID) {
+	if !installed && (!selected || shape.App != construction.ID) {
 		return fmt.Errorf("Function %s needs a published object of this builder", f.Name)
 	}
 	if f.Proposal != nil && f.Proposal.HandoffRole != "" && !slices.Contains(b.Manifest().AllRoles(), f.Proposal.HandoffRole) {
@@ -49,19 +51,19 @@ func (b *Build) checkFunction(f Function) error {
 		return err
 	}
 	for _, other := range list {
-		installed, _ := wasPublished[Function](other.Published)
+		installed, _ := wasPublished[construction.Function](other.Published)
 		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
 			return fmt.Errorf("Function %s is already declared", f.Name)
 		}
 	}
-	if old, ok := wasPublished[Function](f.Published); ok && (old.Name != f.Name || old.Object != f.Object) {
+	if old, ok := wasPublished[construction.Function](f.Published); ok && (old.Name != f.Name || old.Object != f.Object) {
 		return fmt.Errorf("A published function keeps its name and source object")
 	}
 	return nil
 }
 
 func (b *Build) publishFunction(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	f, ok := record.(*Function)
+	f, ok := record.(*construction.Function)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -71,17 +73,17 @@ func (b *Build) publishFunction(c platform.Caller, record any, _ json.RawMessage
 	return publishRetainedDefinition(c, f, "An AI function may retain at most 64 published versions", b.installFunction)
 }
 
-func functionImage(image []byte) (Function, error) {
-	return definitionImage[Function](image, "function", func(before, after Function) bool {
+func functionImage(image []byte) (construction.Function, error) {
+	return definitionImage[construction.Function](image, "function", func(before, after construction.Function) bool {
 		return before.Name == after.Name && before.Object == after.Object
 	})
 }
 
-func (b *Build) functionInventory() ([]Function, error) {
-	return readDefinitionInventory[Function](b.host.Automation(platform.Caller{}, ID))
+func (b *Build) functionInventory() ([]construction.Function, error) {
+	return readDefinitionInventory[construction.Function](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
-func (b *Build) installFunction(c platform.Caller, f Function) error {
+func (b *Build) installFunction(c platform.Caller, f construction.Function) error {
 	b.ledger.Catalog.Add(functionCallActions(b.Manifest().AllRoles())...)
 	if err := b.host.InstallFunction(c, f.Definition(), f.Version); err != nil {
 		return err

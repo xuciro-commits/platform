@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"context"
 	"crypto/sha256"
@@ -29,7 +31,7 @@ type fixtureCodeCompiler struct{}
 func TestApplicationPreviewRetainsPublishedCompute(t *testing.T) {
 	store := &memoryFiles{}
 	compose := func() *Tenant {
-		tn, err := NewTenant("compute-app", NewConsole("compute-app", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}, Seat{Subjects: []string{"operator-token"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}), work.New("compute-app"), flow.New("compute-app"), build.New("compute-app"))
+		tn, err := NewTenant("compute-app", NewConsole("compute-app", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder}}}, Seat{Subjects: []string{"operator-token"}, Member: platform.Member{ID: "operator", Roles: map[string]string{construction.ID: construction.User}}}), work.New("compute-app"), flow.New("compute-app"), build.New("compute-app"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -45,7 +47,7 @@ func TestApplicationPreviewRetainsPublishedCompute(t *testing.T) {
 	submit := func(typ, id, verb string, value any) {
 		t.Helper()
 		payload, _ := json.Marshal(value)
-		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: typ + id + verb, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + "." + verb, Version: 1}, Payload: payload}, now); err != nil {
+		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: typ + id + verb, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + "." + verb, Version: 1}, Payload: payload}, now); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -64,20 +66,20 @@ func TestApplicationPreviewRetainsPublishedCompute(t *testing.T) {
 		return preview
 	}
 	schema := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"value": {Type: "integer"}}, Required: []string{"value"}}
-	submit(build.CodeType, "C", "create", map[string]any{"name": "double", "title": "Double", "language": "go", "source": "package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*2},nil}", "input": schema, "output": schema, "roles": []string{build.Builder, build.User}, "limits": platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 512, MaxInputBytes: 4096, MaxOutputBytes: 4096}})
-	submit(build.CodeType, "C", "compile", map[string]any{})
+	submit(construction.CodeType, "C", "create", map[string]any{"name": "double", "title": "Double", "language": "go", "source": "package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*2},nil}", "input": schema, "output": schema, "roles": []string{construction.Builder, construction.User}, "limits": platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 512, MaxInputBytes: 4096, MaxOutputBytes: 4096}})
+	submit(construction.CodeType, "C", "compile", map[string]any{})
 	for _, run := range tn.operationDispatches(now) {
 		run()
 	}
 	activate(platform.AssetCompute, "C")
-	submit(build.ObjectType, "O", "create", map[string]any{"name": "sample", "title": "Sample", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "value", Title: "Value", Type: "integer"}}, "states": []build.State{{Name: "open", Title: "Open"}}})
-	submit(build.ObjectType, "O", "publish", map[string]any{})
-	submit(build.ObjectType, "CHILD", "create", map[string]any{"name": "child", "title": "Child", "fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.sample", Inverse: "children"}}})
-	submit(build.ObjectType, "CHILD", "publish", map[string]any{})
-	submit(build.PageType, "P", "create", map[string]any{"name": "computed", "title": "Computed", "object": "build.sample", "actions": []string{"build.sample.create"}, "sections": []build.Section{{Widget: "compute", Operation: &platform.AssetBinding{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetCompute, Name: "double"}, SourceVersion: "1.compute-1"}}, {Widget: "table", Object: "build.child", Relation: "children", Fields: []string{"parent"}}, {Widget: "actions", Actions: []string{"build.sample.edit"}}}})
-	submit(build.PageType, "P", "publish", map[string]any{})
-	submit(build.AppType, "A", "create", map[string]any{"name": "computedapp", "title": "Computed app", "pages": []string{"computed"}})
-	submit(build.AppType, "A", "publish", map[string]any{})
+	submit(construction.ObjectType, "O", "create", map[string]any{"name": "sample", "title": "Sample", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "value", Title: "Value", Type: "integer"}}, "states": []construction.State{{Name: "open", Title: "Open"}}})
+	submit(construction.ObjectType, "O", "publish", map[string]any{})
+	submit(construction.ObjectType, "CHILD", "create", map[string]any{"name": "child", "title": "Child", "fields": []construction.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.sample", Inverse: "children"}}})
+	submit(construction.ObjectType, "CHILD", "publish", map[string]any{})
+	submit(construction.PageType, "P", "create", map[string]any{"name": "computed", "title": "Computed", "object": "build.sample", "actions": []string{"build.sample.create"}, "sections": []build.Section{{Widget: "compute", Operation: &platform.AssetBinding{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: "double"}, SourceVersion: "1.compute-1"}}, {Widget: "table", Object: "build.child", Relation: "children", Fields: []string{"parent"}}, {Widget: "actions", Actions: []string{"build.sample.edit"}}}})
+	submit(construction.PageType, "P", "publish", map[string]any{})
+	submit(construction.AppType, "A", "create", map[string]any{"name": "computedapp", "title": "Computed app", "pages": []string{"computed"}})
+	submit(construction.AppType, "A", "publish", map[string]any{})
 	preview := activate(platform.AssetApp, "A")
 	found := false
 	for _, ref := range preview.Included {
@@ -92,17 +94,17 @@ func TestApplicationPreviewRetainsPublishedCompute(t *testing.T) {
 	if err != nil || child.CandidateID == "" {
 		t.Fatalf("related object preview: %+v %v", child, err)
 	}
-	submit(build.ProcessType, "FLOW", "create", map[string]any{"name": "calculate", "title": "Calculate", "object": "build.sample", "when": "open", "steps": []build.ProcessStep{{Name: "calculate", Kind: "compute", Operation: &build.OperationRef{App: build.ID, Name: "double", Version: 1}, Inputs: map[string]platform.Binding{"value": {Source: "subject", Path: []string{"value"}}}, Next: "end"}, {Name: "end", Kind: "end"}}})
-	submit(build.ProcessType, "FLOW", "publish", map[string]any{})
-	resources := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.sample"}, {App: build.ID, Kind: platform.AssetFlow, Name: "build.calculate"}, {App: build.ID, Kind: platform.AssetCompute, Name: "double"}}
-	submit(build.AppType, "A", "edit", map[string]any{"resources": resources})
+	submit(construction.ProcessType, "FLOW", "create", map[string]any{"name": "calculate", "title": "Calculate", "object": "build.sample", "when": "open", "steps": []construction.ProcessStep{{Name: "calculate", Kind: "compute", Operation: &construction.OperationRef{App: construction.ID, Name: "double", Version: 1}, Inputs: map[string]platform.Binding{"value": {Source: "subject", Path: []string{"value"}}}, Next: "end"}, {Name: "end", Kind: "end"}}})
+	submit(construction.ProcessType, "FLOW", "publish", map[string]any{})
+	resources := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.sample"}, {App: construction.ID, Kind: platform.AssetFlow, Name: "build.calculate"}, {App: construction.ID, Kind: platform.AssetCompute, Name: "double"}}
+	submit(construction.AppType, "A", "edit", map[string]any{"resources": resources})
 	preview = activate(platform.AssetApp, "A")
 	if !slices.Contains(preview.Included, resources[1]) || !slices.Contains(preview.Included, resources[2]) {
 		t.Fatalf("application omitted its explicit flow/compute: %v", preview.Included)
 	}
 
 	operator, _ := tn.Member("operator")
-	if _, err := tn.Submit(operator, &pb.Submission{TenantId: tn.ID, PrincipalId: operator.ID, Authority: build.ID, IdempotencyKey: "operator:create", Target: &pb.EntityRef{Type: "build.sample", Id: "SAMPLE"}, Schema: &pb.SchemaRef{Name: "build.sample.create", Version: 1}, Payload: []byte(`{"name":"Sample","value":3}`)}, now); err != nil {
+	if _, err := tn.Submit(operator, &pb.Submission{TenantId: tn.ID, PrincipalId: operator.ID, Authority: construction.ID, IdempotencyKey: "operator:create", Target: &pb.EntityRef{Type: "build.sample", Id: "SAMPLE"}, Schema: &pb.SchemaRef{Name: "build.sample.create", Version: 1}, Payload: []byte(`{"name":"Sample","value":3}`)}, now); err != nil {
 		t.Fatal(err)
 	}
 	tn.Work(now.Add(time.Second))
@@ -125,7 +127,7 @@ func (fixtureCodeCompiler) Compile(_ context.Context, q platform.CodeBuildReques
 	return platform.CodeBuildResult{SourceHash: hex.EncodeToString(hash[:]), BuildHash: buildHash, Toolchain: "fixture@sha256:123"}, module, nil
 }
 func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
-	tn, err := NewTenant("code-owner", NewConsole("code-owner", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}), build.New("code-owner"))
+	tn, err := NewTenant("code-owner", NewConsole("code-owner", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder}}}), build.New("code-owner"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,22 +137,22 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	member, _ := tn.Member("builder")
 	now := time.Date(2026, 9, 30, 14, 0, 0, 0, time.UTC)
 	schema := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"value": {Type: "integer"}}, Required: []string{"value"}}
-	code := build.Code{Name: "code-double", Title: "Double", Language: "go", Source: "package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value},nil}", Input: schema, Output: schema, Roles: []string{build.Builder}, Limits: platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 512, MaxInputBytes: 4096, MaxOutputBytes: 4096}}
+	code := build.Code{Name: "code-double", Title: "Double", Language: "go", Source: "package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value},nil}", Input: schema, Output: schema, Roles: []string{construction.Builder}, Limits: platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 512, MaxInputBytes: 4096, MaxOutputBytes: 4096}}
 	create, _ := json.Marshal(map[string]any{"name": code.Name, "title": code.Title, "language": code.Language, "source": code.Source, "input": code.Input, "output": code.Output, "roles": code.Roles, "limits": code.Limits})
 	submit := func(key, schema string, payload []byte) {
 		t.Helper()
-		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: build.CodeType, Id: "C"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: payload}, now); err != nil {
+		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: construction.CodeType, Id: "C"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: payload}, now); err != nil {
 			t.Fatal(err)
 		}
 	}
-	submit("create", build.CodeType+".create", create)
+	submit("create", construction.CodeType+".create", create)
 	submit("compile", build.SchemaCodeCompile, []byte(`{}`))
 	runs := tn.operationDispatches(now)
 	if len(runs) != 1 {
 		t.Fatal("compiler task was not admitted")
 	}
 	runs[0]()
-	saved, ok := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	saved, ok := platform.Get[build.Code](tn.automation(construction.ID, false), "C")
 	if !ok || saved.State != "compiled" || saved.Module == "" || saved.BuiltSource != code.Source {
 		t.Fatalf("build output was not accepted: %+v", saved)
 	}
@@ -164,15 +166,15 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	if _, err := tn.SaveReleaseCandidate(member, platform.AssetCompute, "C", preview.CandidateID, "save", now); err != nil {
 		t.Fatal(err)
 	}
-	submit("edit", build.CodeType+".edit", []byte(`{"source":"package main\n// next draft"}`))
+	submit("edit", construction.CodeType+".edit", []byte(`{"source":"package main\n// next draft"}`))
 	if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", now); err != nil {
 		t.Fatal(err)
 	}
-	published, _ := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	published, _ := platform.Get[build.Code](tn.automation(construction.ID, false), "C")
 	if published.Version != 1 || published.Source == code.Source {
 		t.Fatal("activation overwrote the current source draft")
 	}
-	op, version, ok := operationDefinition(tn.app(build.ID), code.Name, 1)
+	op, version, ok := operationDefinition(tn.app(construction.ID), code.Name, 1)
 	if !ok || version != 1 || op.Binding.Module != saved.Module {
 		t.Fatal("activated compute did not use the frozen module")
 	}
@@ -182,7 +184,7 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 		t.Fatal("ordinary upload sweeping removed the compute artifact")
 	}
 	// A later standalone activation cannot invalidate an existing exact binding.
-	submit("edit2", build.CodeType+".edit", []byte(`{"source":"package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*2},nil}"}`))
+	submit("edit2", construction.CodeType+".edit", []byte(`{"source":"package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*2},nil}"}`))
 	submit("compile2", build.SchemaCodeCompile, []byte(`{}`))
 	// Dispatch completion records wall time; do not dispatch the next build
 	// from the fixture's earlier clock.
@@ -196,7 +198,7 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	for _, run := range secondBuild {
 		run()
 	}
-	if current, ok := platform.Get[build.Code](tn.automation(build.ID, false), "C"); !ok || current.State != "compiled" {
+	if current, ok := platform.Get[build.Code](tn.automation(construction.ID, false), "C"); !ok || current.State != "compiled" {
 		t.Fatalf("second build did not finish: %+v", current)
 	}
 	next, err := tn.PreviewRelease(member, platform.AssetCompute, "C")
@@ -209,22 +211,22 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	if _, err := tn.ActivateRelease(member, next.CandidateID, "activate2", now); err != nil {
 		t.Fatal(err)
 	}
-	old, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: code.Name, Version: 1, Key: "old-page-binding", Inputs: json.RawMessage(`{"value":5}`)}, now)
+	old, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: construction.ID, Name: code.Name, Version: 1, Key: "old-page-binding", Inputs: json.RawMessage(`{"value":5}`)}, now)
 	if refusal != nil || old.Version != 1 || old.Release != preview.CandidateID {
 		t.Fatalf("retained binding chose current activation: %+v %v", old, refusal)
 	}
 	if _, err := tn.ActivateRelease(member, preview.CandidateID, "rollback-first", now); err != nil {
 		t.Fatal(err)
 	}
-	active, activeVersion, exists := operationDefinition(tn.app(build.ID), code.Name, 0)
+	active, activeVersion, exists := operationDefinition(tn.app(construction.ID), code.Name, 0)
 	if !exists || activeVersion != 1 || active.Binding.Module != saved.Module {
 		t.Fatal("rollback did not change the active compute")
 	}
-	rolledBack, _ := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	rolledBack, _ := platform.Get[build.Code](tn.automation(construction.ID, false), "C")
 	if rolledBack.Version != 2 || len(rolledBack.Versions) != 2 {
 		t.Fatal("compute rollback lost its highest issued ordinal")
 	}
-	submit("edit3", build.CodeType+".edit", []byte(`{"title":"Third publication","source":"package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*3},nil}"}`))
+	submit("edit3", construction.CodeType+".edit", []byte(`{"title":"Third publication","source":"package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*3},nil}"}`))
 	submit("compile3", build.SchemaCodeCompile, []byte(`{}`))
 	if clock := time.Now().UTC(); clock.After(now) {
 		now = clock
@@ -233,7 +235,7 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	for _, run := range thirdBuild {
 		run()
 	}
-	thirdCode, _ := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	thirdCode, _ := platform.Get[build.Code](tn.automation(construction.ID, false), "C")
 	if thirdCode.State != "compiled" || !strings.Contains(thirdCode.BuiltSource, "input.Value*3") {
 		t.Fatal("third build did not finish with its declared source")
 	}
@@ -247,7 +249,7 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	if _, err := tn.ActivateRelease(member, third.CandidateID, "activate3", now); err != nil {
 		t.Fatal(err)
 	}
-	latest, _ := platform.Get[build.Code](tn.automation(build.ID, false), "C")
+	latest, _ := platform.Get[build.Code](tn.automation(construction.ID, false), "C")
 	if latest.Version != 3 || len(latest.Versions) != 3 {
 		t.Fatal("compute reused an old publication identity")
 	}
@@ -452,11 +454,11 @@ func TestWasmDataABIChannels(t *testing.T) {
 			now := time.Now().UTC()
 			limits := request.Limits
 			limits.StagedOutputBytes = 8 << 20
-			decide(t, tn, "builder", build.ID, "build.code.create", build.CodeType, "C", map[string]any{
+			decide(t, tn, "builder", construction.ID, "build.code.create", construction.CodeType, "C", map[string]any{
 				"name": "data", "title": "Data", "abi": platform.WasmDataABI, "language": language, "source": source,
-				"input": schema, "output": schema, "roles": []string{build.Builder}, "limits": limits,
+				"input": schema, "output": schema, "roles": []string{construction.Builder}, "limits": limits,
 			}, now)
-			decide(t, tn, "builder", build.ID, build.SchemaCodeCompile, build.CodeType, "C", map[string]any{}, now)
+			decide(t, tn, "builder", construction.ID, build.SchemaCodeCompile, construction.CodeType, "C", map[string]any{}, now)
 			for _, run := range tn.operationDispatches(now) {
 				run()
 			}
@@ -469,15 +471,15 @@ func TestWasmDataABIChannels(t *testing.T) {
 			if _, err := tn.SaveReleaseCandidate(member, platform.AssetCompute, "C", preview.CandidateID, "save", now); err != nil {
 				t.Fatal(err)
 			}
-			decide(t, tn, "builder", build.ID, "build.code.edit", build.CodeType, "C", map[string]any{"abi": ""}, now)
+			decide(t, tn, "builder", construction.ID, "build.code.edit", construction.CodeType, "C", map[string]any{"abi": ""}, now)
 			if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", now); err != nil {
 				t.Fatal(err)
 			}
-			op, _, ok := operationDefinition(tn.app(build.ID), "data", 1)
+			op, _, ok := operationDefinition(tn.app(construction.ID), "data", 1)
 			if !ok || op.Binding.ABI != platform.WasmDataABI {
 				t.Fatal("activation lost the frozen ABI")
 			}
-			call, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
+			call, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: construction.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
 			if refusal != nil {
 				t.Fatal(refusal)
 			}
@@ -487,7 +489,7 @@ func TestWasmDataABIChannels(t *testing.T) {
 			files.mu.Lock()
 			beforeFiles := len(files.m)
 			files.mu.Unlock()
-			retry, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
+			retry, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: construction.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
 			files.mu.Lock()
 			afterFiles := len(files.m)
 			files.mu.Unlock()
@@ -513,9 +515,9 @@ func TestWasmDataABIChannels(t *testing.T) {
 				t.Fatal("the input artifact lost its size")
 			}
 			for _, altered := range []platform.OperationRequest{
-				{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: json.RawMessage(`"different"`)},
-				{App: build.ID, Name: "data", Version: 1, Key: "unreadable", Inputs: raw, Sources: []string{"build.code/missing"}},
-				{App: build.ID, Name: "data", Version: 1, Key: "over-budget", Inputs: json.RawMessage(`"` + strings.Repeat("x", limits.DataInputBytes) + `"`)},
+				{App: construction.ID, Name: "data", Version: 1, Key: "invoke", Inputs: json.RawMessage(`"different"`)},
+				{App: construction.ID, Name: "data", Version: 1, Key: "unreadable", Inputs: raw, Sources: []string{"build.code/missing"}},
+				{App: construction.ID, Name: "data", Version: 1, Key: "over-budget", Inputs: json.RawMessage(`"` + strings.Repeat("x", limits.DataInputBytes) + `"`)},
 			} {
 				if _, refusal := tn.InvokeOperation(member, altered, now); refusal == nil {
 					t.Fatal("changed, unreadable or over-budget input was accepted")
@@ -523,7 +525,7 @@ func TestWasmDataABIChannels(t *testing.T) {
 			}
 			foreign := member
 			foreign.Tenant = "other"
-			if _, refusal := tn.InvokeOperation(foreign, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "foreign", Inputs: raw}, now); refusal == nil {
+			if _, refusal := tn.InvokeOperation(foreign, platform.OperationRequest{App: construction.ID, Name: "data", Version: 1, Key: "foreign", Inputs: raw}, now); refusal == nil {
 				t.Fatal("another tenant prepared the input")
 			}
 			files.mu.Lock()

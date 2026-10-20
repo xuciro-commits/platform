@@ -7,8 +7,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -25,7 +25,7 @@ func (a agentEvaluationApp) Manifest() platform.Manifest {
 
 func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.App, string, error) {
 	owner, name, valid := strings.Cut(agent, ".")
-	if !valid || owner != build.ID {
+	if !valid || owner != construction.ID {
 		return nil, "", fmt.Errorf("candidate evaluations require a controlled builder agent")
 	}
 	saved, err := h.t.releases.candidate(candidate)
@@ -104,7 +104,7 @@ func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEv
 
 func (t *Tenant) agentEvaluationsReadyLocked(candidate platform.ReleaseCandidate) error {
 	for _, asset := range candidate.Assets {
-		if asset.Ref.Kind != platform.AssetAgent || asset.Ref.App != build.ID {
+		if asset.Ref.Kind != platform.AssetAgent || asset.Ref.App != construction.ID {
 			continue
 		}
 		if t.agents == nil || t.ai == nil {

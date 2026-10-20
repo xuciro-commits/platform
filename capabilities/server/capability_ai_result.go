@@ -6,7 +6,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -18,13 +18,13 @@ func (t *Tenant) ReadCapabilityAI(m platform.Member, id string, now time.Time) (
 		return answer, refusal
 	}
 	m = t.authorizationMember(m)
-	run, ok := platform.Get[build.FunctionRun](t.automation(build.ID, false), id)
+	run, ok := platform.Get[construction.FunctionRun](t.automation(construction.ID, false), id)
 	if !ok {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Function call is unavailable")
 	}
 	owner := run.App
 	if owner == "" {
-		owner = build.ID
+		owner = construction.ID
 	}
 	contract := run.Contract
 	if len(contract.Roles) == 0 {
@@ -34,7 +34,7 @@ func (t *Tenant) ReadCapabilityAI(m platform.Member, id string, now time.Time) (
 			return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Retained function definition is unavailable")
 		}
 	}
-	if run.Member != m.ID && !m.Holds(build.ID, build.Builder) {
+	if run.Member != m.ID && !m.Holds(construction.ID, construction.Builder) {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Function call is unavailable to this member")
 	}
 	caller := platform.NewCaller(runtime{t}, m, owner, false, false)

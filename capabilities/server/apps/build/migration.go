@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -21,9 +23,9 @@ func migrationEntity() platform.Entity {
 
 func migrationActions() []platform.Action {
 	return []platform.Action{
-		{Schema: migrationStart, Target: platform.MigrationRunType, Capability: "migrations", Title: "Start migration", Description: "Start the reviewed migration between sealed releases", Roles: []string{Builder}, New: true, Payload: []platform.Field{{Name: "plan", Type: "json", Description: "The reviewed migration plan"}, {Name: "asset", Type: "json", Description: "The pinned migration plan asset"}, {Name: "review", Type: "string", Required: true, Description: "The sealed review identity"}, {Name: "reviewedAt", Type: "datetime", Required: true, Description: "The captured migration review time"}}},
-		{Schema: migrationAdvance, Target: platform.MigrationRunType, Capability: "migrations", Title: "Run migration batch", Description: "Accept the next bounded migration batch and its progress", Roles: []string{Builder}, Payload: []platform.Field{}},
-		{Schema: migrationCancel, Target: platform.MigrationRunType, Capability: "migrations", Title: "Cancel migration", Description: "Restore source facts in bounded accepted batches before releasing the migration", Roles: []string{Builder}, Payload: []platform.Field{}},
+		{Schema: migrationStart, Target: platform.MigrationRunType, Capability: "migrations", Title: "Start migration", Description: "Start the reviewed migration between sealed releases", Roles: []string{construction.Builder}, New: true, Payload: []platform.Field{{Name: "plan", Type: "json", Description: "The reviewed migration plan"}, {Name: "asset", Type: "json", Description: "The pinned migration plan asset"}, {Name: "review", Type: "string", Required: true, Description: "The sealed review identity"}, {Name: "reviewedAt", Type: "datetime", Required: true, Description: "The captured migration review time"}}},
+		{Schema: migrationAdvance, Target: platform.MigrationRunType, Capability: "migrations", Title: "Run migration batch", Description: "Accept the next bounded migration batch and its progress", Roles: []string{construction.Builder}, Payload: []platform.Field{}},
+		{Schema: migrationCancel, Target: platform.MigrationRunType, Capability: "migrations", Title: "Cancel migration", Description: "Restore source facts in bounded accepted batches before releasing the migration", Roles: []string{construction.Builder}, Payload: []platform.Field{}},
 	}
 }
 

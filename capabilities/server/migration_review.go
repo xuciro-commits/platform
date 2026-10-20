@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -55,8 +55,8 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 		captured = evaluation[0].UTC()
 	}
 	m = t.authorizationMember(m)
-	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/migrations/review", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/migrations/review", "read", []string{construction.Builder, construction.Publisher}, true)); err != nil {
 		return MigrationReview{}, err
 	}
 	prepared, err := t.prepareMigrationLocked(plan, m, at, t.records)

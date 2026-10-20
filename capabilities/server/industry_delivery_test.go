@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -131,10 +133,10 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 				if _, installed := tn.entity("build.device"); installed || tn.ActiveRelease() != "" {
 					t.Fatal("creating the industry drafts published their runtime")
 				}
-				selection := make([]build.JointDraftRef, 0, len(drafts.Drafts))
+				selection := make([]construction.JointDraftRef, 0, len(drafts.Drafts))
 				ids := map[platform.AssetRef]string{}
 				for _, draft := range drafts.Drafts {
-					selection = append(selection, build.JointDraftRef{Kind: draft.Ref.Kind, ID: draft.ID})
+					selection = append(selection, construction.JointDraftRef{Kind: draft.Ref.Kind, ID: draft.ID})
 					ids[draft.Ref] = draft.ID
 				}
 				service, err := gateway.New(gateway.Config{Directory: directory, StateDir: t.TempDir(), Token: "heating-delivery-test", Samples: io.Discard,
@@ -165,20 +167,20 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 					_, _ = io.WriteString(w, `{}`)
 				}))
 				defer property.Close()
-				propertyID := ids[platform.AssetRef{App: build.ID, Kind: platform.AssetConnection, Name: "propertyfeed"}]
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".edit", build.ConnectionType, propertyID, map[string]any{"address": property.URL + "/", "secret": "property-notice", "allowPrivate": true}, at)
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, propertyID, map[string]any{}, at)
+				propertyID := ids[platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: "propertyfeed"}]
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, propertyID, map[string]any{"address": property.URL + "/", "secret": "property-notice", "allowPrivate": true}, at)
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, propertyID, map[string]any{}, at)
 				var configuration platform.DriverConfiguration
 				raw, err := os.ReadFile("../../deploy/examples/heating/" + city + ".json")
 				if err != nil || json.Unmarshal(raw, &configuration) != nil {
 					t.Fatalf("city environment: %v", err)
 				}
 				binding := platform.DriverBinding{Package: native.ID, Version: native.Version, Digest: target.Artifact, Profile: "simulator", Configuration: configuration}
-				connectionID := ids[platform.AssetRef{App: build.ID, Kind: platform.AssetConnection, Name: "heatingfield"}]
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".edit", build.ConnectionType, connectionID, map[string]any{"address": server.URL, "secret": "heating-gateway", "allowPrivate": true, "protocol": binding}, at)
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, connectionID, map[string]any{}, at)
+				connectionID := ids[platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: "heatingfield"}]
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, connectionID, map[string]any{"address": server.URL, "secret": "heating-gateway", "allowPrivate": true, "protocol": binding}, at)
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, connectionID, map[string]any{}, at)
 				tn.CheckConnections(at)
-				connection, _ := platform.Get[build.Connection](tn.automation(build.ID, false), connectionID)
+				connection, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), connectionID)
 				if connection.Last == nil || !connection.Last.OK {
 					t.Fatalf("native simulator connection: %+v", connection.Last)
 				}
@@ -208,7 +210,7 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 						}
 						tn.settleWithUsage(effect.ID, outcome, usage, at)
 					}
-					measurement, ok := platform.Get[build.Evaluation](tn.automation(build.ID, false), measured)
+					measurement, ok := platform.Get[construction.Evaluation](tn.automation(construction.ID, false), measured)
 					if !ok || measurement.State != "passed" {
 						t.Fatalf("heating advice did not pass its declared synthetic cases: %+v", measurement)
 					}
@@ -222,7 +224,7 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 				if err := json.Unmarshal(tn.releases.raw(from), &candidate); err != nil {
 					t.Fatal(err)
 				}
-				app := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "heatingops"}
+				app := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "heatingops"}
 				artifact, err := platform.ArtifactOfApplication(app, candidate.Assets)
 				if err != nil {
 					t.Fatal(err)
@@ -283,18 +285,18 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 						for _, name := range []string{"id", "revision", "created", "changed", "archived", "state"} {
 							delete(fields, name)
 						}
-						decide(t, tn, "operator", build.ID, group.Type+".create", group.Type, rid, fields, at)
+						decide(t, tn, "operator", construction.ID, group.Type+".create", group.Type, rid, fields, at)
 					}
 				}
 				// The live access pass must enter its normal lifecycle explicitly.
-				decide(t, tn, "operator", build.ID, "build.accesspass.grant", "build.accesspass", "passvalid", map[string]any{}, at)
-				decide(t, tn, "operator", build.ID, "build.accesspoint.checkpass", "build.accesspoint", "accesspointdemo", map[string]any{"pass": "passvalid", "holder": "operator-demo"}, at)
+				decide(t, tn, "operator", construction.ID, "build.accesspass.grant", "build.accesspass", "passvalid", map[string]any{}, at)
+				decide(t, tn, "operator", construction.ID, "build.accesspoint.checkpass", "build.accesspoint", "accesspointdemo", map[string]any{"pass": "passvalid", "holder": "operator-demo"}, at)
 				binding.Configuration.Scenario = "anomaly"
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".edit", build.ConnectionType, connectionID, map[string]any{"protocol": binding}, at)
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, connectionID, map[string]any{}, at)
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, connectionID, map[string]any{"protocol": binding}, at)
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, connectionID, map[string]any{}, at)
 				tn.CheckConnections(at)
-				positionRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObservation, Name: "heatingposition"}
-				temperatureRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObservation, Name: "heatingtemperature"}
+				positionRef := platform.AssetRef{App: construction.ID, Kind: platform.AssetObservation, Name: "heatingposition"}
+				temperatureRef := platform.AssetRef{App: construction.ID, Kind: platform.AssetObservation, Name: "heatingtemperature"}
 				before := journal.Position(id)
 				answer, failure := tn.EvaluateObservation(ctx, memberOf(t, tn, "operator"), temperatureRef, ObservationEvaluate{Record: "devicedemo", Until: at, Key: "temperature-alarm"}, at)
 				if failure != nil || !answer.Matched || answer.Receipt == nil {
@@ -320,9 +322,9 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 				}
 				deviceBefore, _ := tn.Held("build.device/devicedemo")
 				acceptedDevice := bytes.Clone(platform.Raw(deviceBefore))
-				decide(t, tn, "operator", build.ID, "build.function-call.start", build.FunctionCallType, "device-advice", map[string]any{"app": build.ID, "name": "heatingadvice", "source": "devicedemo"}, at)
+				decide(t, tn, "operator", construction.ID, "build.function-call.start", construction.FunctionCallType, "device-advice", map[string]any{"app": construction.ID, "name": "heatingadvice", "source": "devicedemo"}, at)
 				tn.Dispatch(at)
-				advice, ok := platform.Get[build.FunctionRun](tn.automation(build.ID, false), "device-advice")
+				advice, ok := platform.Get[construction.FunctionRun](tn.automation(construction.ID, false), "device-advice")
 				deviceAfter, _ := tn.Held("build.device/devicedemo")
 				if !ok || advice.State != "ready" || len(advice.SourceValues) != 4 || !bytes.Equal(acceptedDevice, platform.Raw(deviceAfter)) {
 					t.Fatalf("advice was not a separate read-only result over accepted device evidence: %+v", advice)
@@ -352,9 +354,9 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 
 				// Add a field, rename an existing field and retire the old action
 				// while the original operator confirmation is still outstanding.
-				workorderRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.workorder"}
-				processRef := platform.AssetRef{App: build.ID, Kind: platform.AssetFlow, Name: "build.heatingrepair"}
-				workorder, ok := platform.Get[build.Object](tn.automation(build.ID, false), ids[workorderRef])
+				workorderRef := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.workorder"}
+				processRef := platform.AssetRef{App: construction.ID, Kind: platform.AssetFlow, Name: "build.heatingrepair"}
+				workorder, ok := platform.Get[construction.Object](tn.automation(construction.ID, false), ids[workorderRef])
 				if !ok {
 					t.Fatal("import omitted the workorder draft")
 				}
@@ -363,13 +365,13 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 						workorder.Fields[i].ReadOnly, workorder.Fields[i].AliasOf = true, "instructions"
 					}
 				}
-				workorder.Fields = append(workorder.Fields, build.Field{Name: "instructions", Title: "Inspection instructions", Type: "longtext"}, build.Field{Name: "verified", Title: "Site configuration verified", Type: "boolean", Required: true})
+				workorder.Fields = append(workorder.Fields, construction.Field{Name: "instructions", Title: "Inspection instructions", Type: "longtext"}, construction.Field{Name: "verified", Title: "Site configuration verified", Type: "boolean", Required: true})
 				for i := range workorder.Actions {
 					if workorder.Actions[i].Name == "complete" {
 						workorder.Actions[i].Name, workorder.Actions[i].Title = "finishinspection", "Finish inspection"
 					}
 				}
-				process, ok := platform.Get[build.Process](tn.automation(build.ID, false), ids[processRef])
+				process, ok := platform.Get[construction.Process](tn.automation(construction.ID, false), ids[processRef])
 				if !ok {
 					t.Fatal("import omitted the repair workflow draft")
 				}
@@ -378,10 +380,10 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 						process.Steps[i].Act = "build.workorder.finishinspection"
 					}
 				}
-				decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, workorder.ID, map[string]any{"fields": workorder.Fields, "actions": workorder.Actions}, at)
-				decide(t, tn, "builder", build.ID, build.ProcessType+".edit", build.ProcessType, process.ID, map[string]any{"steps": process.Steps}, at)
-				deviceRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.device"}
-				device, _ := platform.Get[build.Object](tn.automation(build.ID, false), ids[deviceRef])
+				decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, workorder.ID, map[string]any{"fields": workorder.Fields, "actions": workorder.Actions}, at)
+				decide(t, tn, "builder", construction.ID, construction.ProcessType+".edit", construction.ProcessType, process.ID, map[string]any{"steps": process.Steps}, at)
+				deviceRef := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.device"}
+				device, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), ids[deviceRef])
 				for _, action := range device.Actions {
 					if action.Transaction == nil {
 						continue
@@ -397,15 +399,15 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 						}
 					}
 				}
-				decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, device.ID, map[string]any{"actions": device.Actions}, at)
+				decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, device.ID, map[string]any{"actions": device.Actions}, at)
 				// Upgrade the changed drafts; unchanged functions and test plans
 				// retain their explicit published versions in the same closure.
-				selection = []build.JointDraftRef{{Kind: platform.AssetObject, ID: workorder.ID}, {Kind: platform.AssetObject, ID: device.ID}, {Kind: platform.AssetFlow, ID: process.ID}, {Kind: platform.AssetApp, ID: drafts.ApplicationID}}
+				selection = []construction.JointDraftRef{{Kind: platform.AssetObject, ID: workorder.ID}, {Kind: platform.AssetObject, ID: device.ID}, {Kind: platform.AssetFlow, ID: process.ID}, {Kind: platform.AssetApp, ID: drafts.ApplicationID}}
 				for ref, pageID := range ids {
 					if ref.Kind != platform.AssetPage {
 						continue
 					}
-					page, _ := platform.Get[build.Page](tn.automation(build.ID, false), pageID)
+					page, _ := platform.Get[build.Page](tn.automation(construction.ID, false), pageID)
 					raw := platform.Raw(page)
 					changed := bytes.ReplaceAll(raw, []byte("build.workorder.complete"), []byte("build.workorder.finishinspection"))
 					if bytes.Equal(raw, changed) {
@@ -414,8 +416,8 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 					if err := json.Unmarshal(changed, &page); err != nil {
 						t.Fatal(err)
 					}
-					decide(t, tn, "builder", build.ID, build.PageType+".edit", build.PageType, pageID, map[string]any{"actions": page.Actions, "sections": page.Sections, "document": page.Document}, at)
-					selection = append(selection, build.JointDraftRef{Kind: platform.AssetPage, ID: pageID})
+					decide(t, tn, "builder", construction.ID, construction.PageType+".edit", construction.PageType, pageID, map[string]any{"actions": page.Actions, "sections": page.Sections, "document": page.Document}, at)
+					selection = append(selection, construction.JointDraftRef{Kind: platform.AssetPage, ID: pageID})
 				}
 				to := save("heating-v2")
 				defaultValue := platform.ExprLiteralValue("boolean", true)
@@ -428,9 +430,9 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "heating-evolution", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
+				decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "heating-evolution", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
 				for range plan.Steps {
-					decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "heating-evolution", map[string]any{}, at)
+					decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "heating-evolution", map[string]any{}, at)
 				}
 				if _, err := tn.ActivateRelease(memberOf(t, tn, "builder"), to, "activate-heating-v2", at); err != nil {
 					t.Fatal(err)
@@ -480,17 +482,17 @@ func TestHeatingIndustryPackageTwoCitiesAndRetainedRepair(t *testing.T) {
 					t.Fatalf("old repair lost migrated data or used the retired catalog: %+v", result)
 				}
 				alarmID, _ := toMap(alarms.Records[0])["id"].(string)
-				decide(t, tn, "operator", build.ID, "build.alarm.acknowledge", "build.alarm", alarmID, map[string]any{"note": "Inspection owner confirmed the accepted alarm"}, at)
-				decide(t, tn, "operator", build.ID, "build.alarm.resolve", "build.alarm", alarmID, map[string]any{"note": "Repair confirmation reviewed; this exception is resolved"}, at)
+				decide(t, tn, "operator", construction.ID, "build.alarm.acknowledge", "build.alarm", alarmID, map[string]any{"note": "Inspection owner confirmed the accepted alarm"}, at)
+				decide(t, tn, "operator", construction.ID, "build.alarm.resolve", "build.alarm", alarmID, map[string]any{"note": "Repair confirmation reviewed; this exception is resolved"}, at)
 
 				// A lost command reply stays uncertain even though the simulator
 				// applied the setting; only a subsequent exact observation completes it.
 				binding.Configuration.Scenario = "unknown"
 				at = time.Now().UTC()
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".edit", build.ConnectionType, connectionID, map[string]any{"protocol": binding}, at)
-				decide(t, tn, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, connectionID, map[string]any{}, at)
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, connectionID, map[string]any{"protocol": binding}, at)
+				decide(t, tn, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, connectionID, map[string]any{}, at)
 				tn.CheckConnections(at)
-				decide(t, tn, "operator", build.ID, "build.circuit.setvalve", "build.circuit", "circuitdemo", map[string]any{"opening": 62}, at)
+				decide(t, tn, "operator", construction.ID, "build.circuit.setvalve", "build.circuit", "circuitdemo", map[string]any{"opening": 62}, at)
 				requests, _, failure := platform.Find[platform.ApprovalRequest](tn.automation(work.ID, false), platform.Query{Domain: platform.Raw([]any{[]any{"state", "=", "pending"}})})
 				if failure != nil || len(requests) != 1 {
 					t.Fatalf("valve request bypassed approval: %+v %v", requests, failure)

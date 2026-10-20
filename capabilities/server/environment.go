@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -168,7 +168,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if from == nil || to == nil || from.ID == to.ID {
 		return PromotionResult{}, fmt.Errorf("promotion needs two different environments")
 	}
-	if !holdsIndependentBuildRole(member, build.Builder, build.Publisher) {
+	if !holdsIndependentBuildRole(member, construction.Builder, construction.Publisher) {
 		return PromotionResult{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to.ID)
 	}
 	raw, artifact, err := from.sealedOrSeal(candidateID, now)
@@ -211,7 +211,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 			return result, err
 		}
 	}
-	saved := acceptedRelease{Version: 2, Kind: "release-result", Tenant: to.ID, App: build.ID, Member: member.ID,
+	saved := acceptedRelease{Version: 2, Kind: "release-result", Tenant: to.ID, App: construction.ID, Member: member.ID,
 		Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, Bootstrap: bootstrap, From: from.ID}
 	if activate {
 		saved.Version = 4

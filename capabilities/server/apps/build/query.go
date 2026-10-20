@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-const SchemaQuery = QueryType + ".publish"
+const SchemaQuery = construction.QueryType + ".publish"
 
 // Query owns one bounded declaration and its retained publications. Draft
 // edits never replace what callers use until the publication result commits.
@@ -41,12 +43,12 @@ func (f Query) Definition() platform.NamedQuery {
 }
 
 func (b *Build) queryEntity() platform.Entity {
-	return platform.Entity{Type: QueryType, Title: "Query", Plural: "Queries", Model: Query{}, Display: "title",
+	return platform.Entity{Type: construction.QueryType, Title: "Query", Plural: "Queries", Model: Query{}, Display: "title",
 		Description: "A reusable record query over a published object or interface; draft edits do not change published bindings.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "queries"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "queries"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this record query as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "queries", Payload: []platform.Field{}, Do: b.publishQuery}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this record query as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "queries", Payload: []platform.Field{}, Do: b.publishQuery}}}}
 }
 
 func (b *Build) checkQuery(f Query) error {
@@ -54,7 +56,7 @@ func (b *Build) checkQuery(f Query) error {
 		return fmt.Errorf("The query name %s must be lower-case letters and digits", f.Name)
 	}
 	shape, selected := b.jointEntities[f.Object]
-	if _, ok := b.installed[f.Object]; f.Interface == "" && !ok && (!selected || shape.App != ID) {
+	if _, ok := b.installed[f.Object]; f.Interface == "" && !ok && (!selected || shape.App != construction.ID) {
 		return fmt.Errorf("Query %s needs a published object of this builder", f.Name)
 	}
 	var validation error
@@ -127,7 +129,7 @@ func queryImage(image []byte) (Query, error) {
 }
 
 func (b *Build) queryInventory() ([]Query, error) {
-	return readDefinitionInventory[Query](b.host.Automation(platform.Caller{}, ID))
+	return readDefinitionInventory[Query](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
 func (b *Build) installQuery(c platform.Caller, f Query) error {

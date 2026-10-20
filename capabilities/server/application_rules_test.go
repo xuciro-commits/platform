@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"context"
 	"errors"
@@ -26,14 +28,14 @@ func TestApplicationRulesPromoteUpgradeRollbackAndRecover(t *testing.T) {
 		entries = append(entries, e)
 		return e.Body, nil
 	}
-	object := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.device"}
-	table := platform.AssetRef{App: build.ID, Kind: platform.AssetCompute, Name: "gate"}
-	alert := platform.AssetRef{App: build.ID, Kind: platform.AssetAlert, Name: "warning"}
-	decide(t, source, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "OBJECT", map[string]any{"name": "device", "title": "Device", "fields": []build.Field{{Name: "condition", Title: "Condition", Type: "text"}}}, at)
-	decide(t, source, "builder", build.ID, build.TableType+".create", build.TableType, "TABLE", map[string]any{"name": "gate", "title": "Device gate", "inputs": []build.TableColumn{{Name: "condition", Type: "text"}}, "outputs": []build.TableColumn{{Name: "allowed", Type: "boolean"}}, "rows": []build.TableRow{{When: []string{"bad"}, Then: []string{"true"}}}, "default": []string{"false"}}, at)
-	decide(t, source, "builder", build.ID, build.AlertType+".create", build.AlertType, "ALERT", map[string]any{"name": "warning", "title": "Device warning", "object": object.Name, "field": "condition", "operator": "=", "value": "bad", "message": "Original warning", "role": build.User, "active": true, "every": true}, at)
-	decide(t, source, "builder", build.ID, build.AppType+".create", build.AppType, "APP", map[string]any{"name": "operations", "title": "Device operations", "resources": []platform.AssetRef{object, table, alert}}, at)
-	selection := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetCompute, ID: "TABLE"}, {Kind: platform.AssetAlert, ID: "ALERT"}, {Kind: platform.AssetApp, ID: "APP"}}
+	object := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.device"}
+	table := platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: "gate"}
+	alert := platform.AssetRef{App: construction.ID, Kind: platform.AssetAlert, Name: "warning"}
+	decide(t, source, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "OBJECT", map[string]any{"name": "device", "title": "Device", "fields": []construction.Field{{Name: "condition", Title: "Condition", Type: "text"}}}, at)
+	decide(t, source, "builder", construction.ID, construction.TableType+".create", construction.TableType, "TABLE", map[string]any{"name": "gate", "title": "Device gate", "inputs": []construction.TableColumn{{Name: "condition", Type: "text"}}, "outputs": []construction.TableColumn{{Name: "allowed", Type: "boolean"}}, "rows": []construction.TableRow{{When: []string{"bad"}, Then: []string{"true"}}}, "default": []string{"false"}}, at)
+	decide(t, source, "builder", construction.ID, construction.AlertType+".create", construction.AlertType, "ALERT", map[string]any{"name": "warning", "title": "Device warning", "object": object.Name, "field": "condition", "operator": "=", "value": "bad", "message": "Original warning", "role": construction.User, "active": true, "every": true}, at)
+	decide(t, source, "builder", construction.ID, construction.AppType+".create", construction.AppType, "APP", map[string]any{"name": "operations", "title": "Device operations", "resources": []platform.AssetRef{object, table, alert}}, at)
+	selection := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetCompute, ID: "TABLE"}, {Kind: platform.AssetAlert, ID: "ALERT"}, {Kind: platform.AssetApp, ID: "APP"}}
 	save := func(key string) string {
 		t.Helper()
 		preview, err := source.PreviewReleaseDrafts(memberOf(t, source, "builder"), selection)
@@ -50,7 +52,7 @@ func TestApplicationRulesPromoteUpgradeRollbackAndRecover(t *testing.T) {
 	}
 	check := func(tn *Tenant, expected string, message string) {
 		t.Helper()
-		owner := tn.app(build.ID).(*build.Build)
+		owner := tn.app(construction.ID).(*build.Build)
 		result, err := owner.Compute(context.Background(), table.Name, platform.Raw(map[string]any{"condition": "bad"}))
 		if err != nil || string(result) != expected {
 			t.Fatalf("running table = %s, %v; expected %s", result, err, expected)
@@ -65,12 +67,12 @@ func TestApplicationRulesPromoteUpgradeRollbackAndRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(target, `{"allowed":true}`, "Original warning")
-	decide(t, target, "builder", build.ID, object.Name+".create", object.Name, "D1", map[string]any{"condition": "bad"}, at)
+	decide(t, target, "builder", construction.ID, object.Name+".create", object.Name, "D1", map[string]any{"condition": "bad"}, at)
 	if notices := target.notificationsFor("user"); len(notices) != 1 || notices[0].Body != "Original warning" {
 		t.Fatalf("published alert did not notify its original role: %+v", notices)
 	}
-	decide(t, source, "builder", build.ID, build.TableType+".edit", build.TableType, "TABLE", map[string]any{"rows": []build.TableRow{{When: []string{"bad"}, Then: []string{"false"}}}}, at)
-	decide(t, source, "builder", build.ID, build.AlertType+".edit", build.AlertType, "ALERT", map[string]any{"message": "Updated warning"}, at)
+	decide(t, source, "builder", construction.ID, construction.TableType+".edit", construction.TableType, "TABLE", map[string]any{"rows": []construction.TableRow{{When: []string{"bad"}, Then: []string{"false"}}}}, at)
+	decide(t, source, "builder", construction.ID, construction.AlertType+".edit", construction.AlertType, "ALERT", map[string]any{"message": "Updated warning"}, at)
 	check(source, `{"allowed":true}`, "Original warning")
 	v2 := save("v2")
 	if _, err := PromoteCandidate(source, target, v2, "promote-v2", false, memberOf(t, target, "builder"), at); err != nil {
@@ -90,7 +92,7 @@ func TestApplicationRulesPromoteUpgradeRollbackAndRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(target, `{"allowed":true}`, "Original warning")
-	decide(t, target, "builder", build.ID, object.Name+".edit", object.Name, "D1", map[string]any{"condition": "bad"}, at)
+	decide(t, target, "builder", construction.ID, object.Name+".edit", object.Name, "D1", map[string]any{"condition": "bad"}, at)
 	if notices := target.notificationsFor("user"); len(notices) != 2 || notices[0].Body != "Original warning" {
 		t.Fatalf("rolled-back rule did not execute: %+v", notices)
 	}
@@ -105,18 +107,18 @@ func TestApplicationRulesPromoteUpgradeRollbackAndRecover(t *testing.T) {
 func TestSharedApplicationRulesKeepDependentsAndHistory(t *testing.T) {
 	at := time.Date(2026, 10, 15, 10, 0, 0, 0, time.UTC)
 	tn := builderTenant(t, "shared-rules")
-	publishObject(t, tn, "builder", "DEVICE", map[string]any{"name": "device", "title": "Device", "fields": []build.Field{{Name: "condition", Title: "Condition", Type: "text"}}}, at)
-	object := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.device"}
-	table := platform.AssetRef{App: build.ID, Kind: platform.AssetCompute, Name: "gate"}
-	decide(t, tn, "builder", build.ID, build.TableType+".create", build.TableType, "TABLE", map[string]any{"name": "gate", "title": "Gate", "inputs": []build.TableColumn{{Name: "condition", Type: "text"}}, "outputs": []build.TableColumn{{Name: "allowed", Type: "boolean"}}, "rows": []build.TableRow{{When: []string{"bad"}, Then: []string{"true"}}}}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaTablePublish, build.TableType, "TABLE", map[string]any{}, at)
+	publishObject(t, tn, "builder", "DEVICE", map[string]any{"name": "device", "title": "Device", "fields": []construction.Field{{Name: "condition", Title: "Condition", Type: "text"}}}, at)
+	object := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.device"}
+	table := platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: "gate"}
+	decide(t, tn, "builder", construction.ID, construction.TableType+".create", construction.TableType, "TABLE", map[string]any{"name": "gate", "title": "Gate", "inputs": []construction.TableColumn{{Name: "condition", Type: "text"}}, "outputs": []construction.TableColumn{{Name: "allowed", Type: "boolean"}}, "rows": []construction.TableRow{{When: []string{"bad"}, Then: []string{"true"}}}}, at)
+	decide(t, tn, "builder", construction.ID, build.SchemaTablePublish, construction.TableType, "TABLE", map[string]any{}, at)
 	apps := []platform.AssetRef{}
 	for _, id := range []string{"first", "second"} {
-		decide(t, tn, "builder", build.ID, build.AppType+".create", build.AppType, id, map[string]any{"name": id, "title": id, "resources": []platform.AssetRef{object, table}}, at)
-		decide(t, tn, "builder", build.ID, build.SchemaHandOver, build.AppType, id, map[string]any{}, at)
-		apps = append(apps, platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: id})
+		decide(t, tn, "builder", construction.ID, construction.AppType+".create", construction.AppType, id, map[string]any{"name": id, "title": id, "resources": []platform.AssetRef{object, table}}, at)
+		decide(t, tn, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, id, map[string]any{}, at)
+		apps = append(apps, platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: id})
 	}
-	decide(t, tn, "builder", build.ID, build.TableType+".edit", build.TableType, "TABLE", map[string]any{"rows": []build.TableRow{{When: []string{"bad"}, Then: []string{"false"}}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.TableType+".edit", construction.TableType, "TABLE", map[string]any{"rows": []construction.TableRow{{When: []string{"bad"}, Then: []string{"false"}}}}, at)
 	preview, err := tn.PreviewRelease(memberOf(t, tn, "builder"), platform.AssetCompute, "TABLE")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatal(preview.Diagnostic, err)
@@ -132,19 +134,19 @@ func TestSharedApplicationRulesKeepDependentsAndHistory(t *testing.T) {
 	if _, err := tn.ActivateRelease(memberOf(t, tn, "builder"), preview.CandidateID, "activate-shared", at); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "builder", build.ID, build.AppType+".edit", build.AppType, "first", map[string]any{"resources": []platform.AssetRef{object}}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaHandOver, build.AppType, "first", map[string]any{}, at)
-	second, _ := platform.Get[build.Application](tn.automation(build.ID, false), "second")
+	decide(t, tn, "builder", construction.ID, construction.AppType+".edit", construction.AppType, "first", map[string]any{"resources": []platform.AssetRef{object}}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, "first", map[string]any{}, at)
+	second, _ := platform.Get[build.Application](tn.automation(construction.ID, false), "second")
 	if !slices.Contains(second.Resources, table) {
 		t.Fatal("removing one application member changed another application")
 	}
-	before, _ := platform.Get[build.Table](tn.automation(build.ID, false), "TABLE")
-	refuse(t, tn, "builder", build.ID, build.TableType+".archive", build.TableType, "TABLE", map[string]any{}, at)
-	after, _ := platform.Get[build.Table](tn.automation(build.ID, false), "TABLE")
+	before, _ := platform.Get[construction.Table](tn.automation(construction.ID, false), "TABLE")
+	refuse(t, tn, "builder", construction.ID, construction.TableType+".archive", construction.TableType, "TABLE", map[string]any{}, at)
+	after, _ := platform.Get[construction.Table](tn.automation(construction.ID, false), "TABLE")
 	if string(platform.Raw(after)) != string(platform.Raw(before)) {
 		t.Fatal("rejected retirement changed the shared definition")
 	}
-	owner := tn.app(build.ID).(*build.Build)
+	owner := tn.app(construction.ID).(*build.Build)
 	value, err := owner.Compute(context.Background(), "gate", platform.Raw(map[string]any{"condition": "bad"}))
 	if err != nil || string(value) != `{"allowed":false}` {
 		t.Fatal(string(value), err)

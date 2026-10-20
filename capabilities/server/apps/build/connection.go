@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"net/url"
@@ -15,33 +17,33 @@ import (
 )
 
 func (b *Build) connectionEntity() platform.Entity {
-	return platform.Entity{Type: ConnectionType, Title: "Connection", Plural: "Connections", Model: Connection{}, Display: "title",
+	return platform.Entity{Type: construction.ConnectionType, Title: "Connection", Plural: "Connections", Model: construction.Connection{}, Display: "title",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
-			next := record.(*Connection)
+			next := record.(*construction.Connection)
 			if err := b.validConnection(*next); err != nil {
 				return err
 			}
-			if old, ok := platform.Get[Connection](c, next.ID); ok && (old.Kind != next.Kind || old.Address != next.Address || old.Secret != next.Secret || old.AllowPrivate != next.AllowPrivate || !reflect.DeepEqual(old.Protocol, next.Protocol)) {
+			if old, ok := platform.Get[construction.Connection](c, next.ID); ok && (old.Kind != next.Kind || old.Address != next.Address || old.Secret != next.Secret || old.AllowPrivate != next.AllowPrivate || !reflect.DeepEqual(old.Protocol, next.Protocol)) {
 				next.State, next.Requested, next.Last = "draft", false, nil
 			}
 			return nil
 		},
 		Description: "An external system the tenant reads from: a kind, an address and the name of its credential in the host's secret store.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant, construction.Integrator: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "ready", Title: "Ready", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.checkConnection},
-				{Name: "retire", Title: "Retire", Description: "Stop sources from using the connection; the definition stays.", From: []string{"ready"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"draft"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.checkConnection},
+				{Name: "retire", Title: "Retire", Description: "Stop sources from using the connection; the definition stays.", From: []string{"ready"}, To: []string{"draft"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
 func connectionActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaConnectionChecked, Target: ConnectionType, Capability: "integrations", Title: "Keep check result", Description: "Retain what one check of a connection found.", Automation: true,
+	return []platform.Action{{Schema: construction.SchemaConnectionChecked, Target: construction.ConnectionType, Capability: "integrations", Title: "Keep check result", Description: "Retain what one check of a connection found.", Automation: true,
 		Payload: []platform.Field{{Name: "revision", Type: "integer", Required: true, Description: "The connection revision checked"}, {Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
 }
 
 func (b *Build) checkConnection(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	c, ok := record.(*Connection)
+	c, ok := record.(*construction.Connection)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -55,14 +57,14 @@ func (b *Build) checkConnection(_ platform.Caller, record any, _ json.RawMessage
 	return nil
 }
 
-func (b *Build) validConnection(c Connection) *kernel.Error {
+func (b *Build) validConnection(c construction.Connection) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if err := b.checkName(c.Name, c.ID); err != nil {
 		return refuse(err.Error())
 	}
-	if !slices.Contains(ConnectionKinds, c.Kind) {
+	if !slices.Contains(construction.ConnectionKinds, c.Kind) {
 		return refuse("A connection is one of http, odata, postgres")
 	}
 	if c.Address == "" && c.State != "ready" && !c.Requested && c.Protocol == nil {
@@ -106,10 +108,10 @@ func (b *Build) validConnection(c Connection) *kernel.Error {
 func (b *Build) submitConnectionChecked(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
-			Revision uint32          `json:"revision"`
-			Check    ConnectionCheck `json:"check"`
+			Revision uint32                       `json:"revision"`
+			Check    construction.ConnectionCheck `json:"check"`
 		}
-		conn, ok := platform.Get[Connection](c, s.GetTarget().GetId())
+		conn, ok := platform.Get[construction.Connection](c, s.GetTarget().GetId())
 		if !ok || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Check.At.IsZero() || !conn.Requested || conn.Revision != payload.Revision {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Check result has no connection")
 		}

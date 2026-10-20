@@ -2,7 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"slices"
 	"strings"
 	"testing"
@@ -19,13 +19,13 @@ import (
 func TestTenantDefinedAccess(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	var journal []Entry
-	seats := []Seat{seatOf("dana", "build:"+build.Builder), seatOf("ann", "build:desk"), seatOf("bea", "build:desk"), seatOf("sam", "build:supervisor"), seatOf("cy", "build:cleaner")}
+	seats := []Seat{seatOf("dana", "build:"+construction.Builder), seatOf("ann", "build:desk"), seatOf("bea", "build:desk"), seatOf("sam", "build:supervisor"), seatOf("cy", "build:cleaner")}
 	compose := func() *Tenant { return composeTenant(t, "t-1", seats, build.New("t-1")) }
 	tn := compose()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
 	member := func(id string) platform.Member { return memberOf(t, tn, id) }
 	do := func(who, schema, typ, id string, payload any) string {
-		return refuse(t, tn, who, build.ID, schema, typ, id, payload, now)
+		return refuse(t, tn, who, construction.ID, schema, typ, id, payload, now)
 	}
 	object := map[string]any{"name": "lost", "title": "Lost item", "plural": "Lost property",
 		"fields": []map[string]any{
@@ -54,7 +54,7 @@ func TestTenantDefinedAccess(t *testing.T) {
 		{"the builder's own role", map[string]any{"access": []map[string]any{{"role": "builder", "read": "own"}}}, "always does everything"},
 	} {
 		draft := "O-" + strings.ReplaceAll(x.why, " ", "-")
-		if got := do("dana", build.ObjectType+".create", build.ObjectType, draft, merge(object, merge(x.with, map[string]any{"name": "bad" + strings.Map(func(r rune) rune {
+		if got := do("dana", construction.ObjectType+".create", construction.ObjectType, draft, merge(object, merge(x.with, map[string]any{"name": "bad" + strings.Map(func(r rune) rune {
 			if r >= 'a' && r <= 'z' {
 				return r
 			}
@@ -62,20 +62,20 @@ func TestTenantDefinedAccess(t *testing.T) {
 		}, x.why)}))); got != "ok" {
 			t.Fatalf("%s: draft: %s", x.why, got)
 		}
-		if got := do("dana", build.SchemaPublish, build.ObjectType, draft, map[string]any{}); !strings.Contains(got, x.want) {
+		if got := do("dana", construction.SchemaPublish, construction.ObjectType, draft, map[string]any{}); !strings.Contains(got, x.want) {
 			t.Errorf("%s: %s, want %q", x.why, got, x.want)
 		}
 	}
-	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-1", object); got != "ok" {
+	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "O-1", object); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
-	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaPublish, construction.ObjectType, "O-1", map[string]any{}); got != "ok" {
 		t.Fatalf("publish: %s", got)
 	}
-	lost := buildapi.TypeOf("lost")
+	lost := construction.TypeOf("lost")
 
 	// The roles an object names are the builder app's: the Console grants them.
-	if roles := tn.app(build.ID).Manifest().AllRoles(); !slices.Contains(roles, "cleaner") || !slices.Contains(roles, "desk") {
+	if roles := tn.app(construction.ID).Manifest().AllRoles(); !slices.Contains(roles, "cleaner") || !slices.Contains(roles, "desk") {
 		t.Errorf("the object's roles are not the app's: %v", roles)
 	}
 	// Each desk logs what it finds; a value is not theirs to set.

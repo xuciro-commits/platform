@@ -113,8 +113,8 @@ type Expr struct {
 
 ## 3. 后果
 
-- 条件不再是"字段/运算符/值"，`buildapi.ValueHolds`（`actions.go:150`）与 `ValueFormulaParser` 的求值路径被一个求值器取代；两处旧实现退出。
-- 决策表的单元格语法保留（客户熟悉），但底层是同一棵树——表的"无匹配行"语义（首行匹配胜出，`buildapi/table.go:61-88`）不变。
+- 条件不再是"字段/运算符/值"，`construction.ValueHolds`（`actions.go:150`）与 `ValueFormulaParser` 的求值路径被一个求值器取代；两处旧实现退出。
+- 决策表的单元格语法保留（客户熟悉），但底层是同一棵树——表的"无匹配行"语义（首行匹配胜出，`construction/table.go`）不变。
 - 计算字段能力大幅扩张：可聚合、可跨关系、可参与条件。旧公式升级时须明确缺省值和币种；新定义不继承静默归零。
 - 前端 Inspector 需要一门语言的编辑器（字段/路径选择、算子提示、类型错误就地标红）。归 ADR-0048。
 

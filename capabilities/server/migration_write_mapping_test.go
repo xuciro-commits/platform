@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"testing"
@@ -7,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/internal/host"
@@ -32,26 +34,26 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			original, nextValue := "12", "25"
 			if reference {
 				for _, target := range []string{"oldtarget", "newtarget"} {
-					decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, target, map[string]any{"name": target, "title": target, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
-					decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, target, map[string]any{}, at)
+					decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, target, map[string]any{"name": target, "title": target, "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
+					decide(t, tn, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, target, map[string]any{}, at)
 					for _, id := range []string{"a", "b", "unmapped"} {
-						decide(t, tn, "user", build.ID, "build."+target+".create", "build."+target, id, map[string]any{"name": id}, at)
+						decide(t, tn, "user", construction.ID, "build."+target+".create", "build."+target, id, map[string]any{"name": id}, at)
 					}
 				}
 				field["type"], field["ref"] = "reference", "build.oldtarget"
 				original, nextValue = "a", "b"
 			}
-			states := []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}
-			actions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}}
-			decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "O", map[string]any{"name": "sample", "title": "Sample", "fields": []any{field}, "states": states, "actions": actions}, at)
-			decide(t, tn, "builder", build.ID, build.SchemaPublish, build.ObjectType, "O", map[string]any{}, at)
-			steps := []build.ProcessStep{{Name: "ask", Title: "Confirm", Kind: "ask", Ask: build.User, Answers: []string{"yes"}, Next: "write"}, {Name: "write", Kind: "action", Act: "edit", Inputs: map[string]platform.Binding{"value": {Source: "literal", Value: platform.Raw(nextValue)}}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}}
-			decide(t, tn, "builder", build.ID, "build.process.create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.sample", "when": "open", "steps": steps}, at)
-			decide(t, tn, "builder", build.ID, build.SchemaProcess, build.ProcessType, "P", map[string]any{}, at)
+			states := []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}
+			actions := []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}}
+			decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "O", map[string]any{"name": "sample", "title": "Sample", "fields": []any{field}, "states": states, "actions": actions}, at)
+			decide(t, tn, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "O", map[string]any{}, at)
+			steps := []construction.ProcessStep{{Name: "ask", Title: "Confirm", Kind: "ask", Ask: construction.User, Answers: []string{"yes"}, Next: "write"}, {Name: "write", Kind: "action", Act: "edit", Inputs: map[string]platform.Binding{"value": {Source: "literal", Value: platform.Raw(nextValue)}}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}}
+			decide(t, tn, "builder", construction.ID, "build.process.create", construction.ProcessType, "P", map[string]any{"name": "review", "title": "Review", "object": "build.sample", "when": "open", "steps": steps}, at)
+			decide(t, tn, "builder", construction.ID, construction.SchemaProcess, construction.ProcessType, "P", map[string]any{}, at)
 			builder := memberOf(t, tn, "builder")
 			save := func(key string) string {
 				t.Helper()
-				drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "P"}}
+				drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetFlow, ID: "P"}}
 				preview, err := tn.PreviewReleaseDrafts(builder, drafts)
 				if err != nil || preview.Diagnostic != "" {
 					t.Fatalf("preview %+v %v", preview, err)
@@ -66,7 +68,7 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			if _, err := tn.ActivateRelease(builder, from, "source-activate", at); err != nil {
 				t.Fatal(err)
 			}
-			decide(t, tn, "user", build.ID, "build.sample.create", "build.sample", "A", map[string]any{"value": original}, at)
+			decide(t, tn, "user", construction.ID, "build.sample.create", "build.sample", "A", map[string]any{"value": original}, at)
 			at = at.Add(2 * time.Second)
 			tn.Work(at)
 			tasks, _, _ := platform.Find[platform.WorkTask](tn.automation(work.ID, false), platform.Query{})
@@ -84,27 +86,27 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 				step.Fields = []platform.MigrateField{{From: "value", To: "value", Expr: &parse}}
 				steps[1].Inputs = map[string]platform.Binding{"value": {Source: "literal", Value: platform.Raw(99)}}
 			}
-			decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "O", map[string]any{"fields": []any{field}}, at)
-			decide(t, tn, "builder", build.ID, "build.process.edit", build.ProcessType, "P", map[string]any{"steps": steps}, at)
+			decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "O", map[string]any{"fields": []any{field}}, at)
+			decide(t, tn, "builder", construction.ID, "build.process.edit", construction.ProcessType, "P", map[string]any{"steps": steps}, at)
 			to := save("target")
 			plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.sample"}, Steps: []platform.MigrateStep{step}}
 			review, err := tn.ReviewMigrationPlan(builder, plan, at)
 			if err != nil {
 				t.Fatal(err)
 			}
-			decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
-			decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, at)
+			decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, at)
+			decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, at)
 			if _, err := tn.ActivateRelease(builder, to, "target-activate", at); err != nil {
 				t.Fatal(err)
 			}
 			draft := tn.newStagedDecision()
 			parent := platform.NewCaller(draft, memberOf(t, tn, "user"), flow.ID, false, false)
 			starting, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:A")
-			execution, bindErr := (hostView{t: tn, decision: draft}).FlowExecution(parent, build.ID, "review", 1, host.FlowBinding{Dependencies: starting.Dependencies, Release: starting.Release})
+			execution, bindErr := (hostView{t: tn, decision: draft}).FlowExecution(parent, construction.ID, "review", 1, host.FlowBinding{Dependencies: starting.Dependencies, Release: starting.Release})
 			if bindErr != nil {
 				t.Fatal(bindErr)
 			}
-			caller := execution.Caller(parent, memberOf(t, tn, "user"), build.ID)
+			caller := execution.Caller(parent, memberOf(t, tn, "user"), construction.ID)
 			retained, ok := execution.(flowExecution)
 			if !ok {
 				t.Fatal("migration did not select its retained executor")
@@ -126,12 +128,12 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			// image. Reading the original subject must not decode that record.
 			pointDraft := tn.newStagedDecision()
 			pointParent := platform.NewCaller(pointDraft, memberOf(t, tn, "user"), flow.ID, false, false)
-			pointExecution, bindErr := (hostView{t: tn, decision: pointDraft}).FlowExecution(pointParent, build.ID, "review", 1, host.FlowBinding{Dependencies: starting.Dependencies, Release: starting.Release})
+			pointExecution, bindErr := (hostView{t: tn, decision: pointDraft}).FlowExecution(pointParent, construction.ID, "review", 1, host.FlowBinding{Dependencies: starting.Dependencies, Release: starting.Release})
 			if bindErr != nil {
 				t.Fatal(bindErr)
 			}
 			point := pointExecution.(flowExecution)
-			pointCaller := pointExecution.Caller(pointParent, memberOf(t, tn, "user"), build.ID)
+			pointCaller := pointExecution.Caller(pointParent, memberOf(t, tn, "user"), construction.ID)
 			current := pointDraft.records.types["build.sample"]
 			newValue := copyOf(current.info.Go, current.rows.get("A").value.Interface())
 			recordOf(newValue).ID = "new-only"
@@ -143,7 +145,7 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			}
 			beforeRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows.get("A"))
 			_, invalid := platform.Attempt(caller, func() (*pb.ChangeRecord, *kernel.Error) {
-				return execution.Submit(caller, submission(tn, caller.Member, build.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "unmapped"}), at)
+				return execution.Submit(caller, submission(tn, caller.Member, construction.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "unmapped"}), at)
 			})
 			if invalid == nil {
 				t.Fatal("invalid retained conversion accepted")
@@ -152,7 +154,7 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			if !bytes.Equal(jsonOf(beforeRejected), jsonOf(afterRejected)) {
 				t.Fatal("invalid conversion exposed a partial target or source image")
 			}
-			if _, refusal := execution.Submit(caller, submission(tn, caller.Member, build.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": nextValue}), at); refusal != nil {
+			if _, refusal := execution.Submit(caller, submission(tn, caller.Member, construction.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": nextValue}), at); refusal != nil {
 				t.Fatalf("retained write refusal: %#v; draft failure: %#v", refusal, draft.failure)
 			}
 			decide(t, tn, "user", work.ID, "work.task.complete", work.TaskType, tasks[0].ID, map[string]any{"answer": "yes"}, at)

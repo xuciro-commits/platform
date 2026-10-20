@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -14,10 +16,10 @@ import (
 )
 
 func (b *Build) writebackEntity() platform.Entity {
-	return platform.Entity{Type: WritebackType, Title: "Writeback", Plural: "Writebacks", Model: Writeback{}, Display: "title",
+	return platform.Entity{Type: construction.WritebackType, Title: "Writeback", Plural: "Writebacks", Model: construction.Writeback{}, Display: "title",
 		Description: "An accepted action on an object sent to an external system through a connection: queued, in order, retried with the same key for receiver deduplication.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
-			w := record.(*Writeback)
+			w := record.(*construction.Writeback)
 			if w.State == "published" {
 				fixed, err := b.ExecutionWriteback(*w)
 				if err != nil {
@@ -30,21 +32,21 @@ func (b *Build) writebackEntity() platform.Entity {
 			}
 			return nil
 		},
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant, Integrator: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant, construction.Integrator: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Check the writeback and send every matching decision from now on.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishWriteback},
-				{Name: "pause", Title: "Pause", Description: "Stop sending; what is queued still goes.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+				{Name: "publish", Title: "Publish", Description: "Check the writeback and send every matching decision from now on.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishWriteback},
+				{Name: "pause", Title: "Pause", Description: "Stop sending; what is queued still goes.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
 func writebackActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaWritebackAnswered, Target: WritebackType, Capability: "integrations", Title: "Keep answer", Description: "Retain what the external system answered to one writeback.", Automation: true,
+	return []platform.Action{{Schema: construction.SchemaWritebackAnswered, Target: construction.WritebackType, Capability: "integrations", Title: "Keep answer", Description: "Retain what the external system answered to one writeback.", Automation: true,
 		Payload: []platform.Field{{Name: "answer", Type: "json", Required: true, Description: "The attempt's result and the answer's first bytes"}}}}
 }
 
 func (b *Build) publishWriteback(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	w, ok := record.(*Writeback)
+	w, ok := record.(*construction.Writeback)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -57,12 +59,12 @@ func (b *Build) publishWriteback(c platform.Caller, record any, _ json.RawMessag
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		*w = fixed.(Writeback)
+		*w = fixed.(construction.Writeback)
 	}
 	return nil
 }
 
-func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
+func (b *Build) checkWriteback(c platform.Caller, w construction.Writeback) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -76,7 +78,7 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 	if !ok {
 		return refuse("The object {object} is not installed", w.Object)
 	}
-	if info.App != ID {
+	if info.App != construction.ID {
 		return refuse("A writeback currently listens to objects owned by Build; native application objects need an owner callback")
 	}
 	if w.On == "" || strings.ContainsAny(w.On, "./ ") {
@@ -104,11 +106,11 @@ func (b *Build) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 	return nil
 }
 
-func (b *Build) checkWritebackConnection(c platform.Caller, w Writeback) *kernel.Error {
+func (b *Build) checkWritebackConnection(c platform.Caller, w construction.Writeback) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
-	conn, ok := platform.Get[Connection](c, w.Connection)
+	conn, ok := platform.Get[construction.Connection](c, w.Connection)
 	if ok {
 		fixed, err := b.ExecutionConnection(conn)
 		if err != nil {
@@ -131,9 +133,9 @@ func (b *Build) checkWritebackConnection(c platform.Caller, w Writeback) *kernel
 func (b *Build) submitWritebackAnswered(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
-			Answer WritebackAns `json:"answer"`
+			Answer construction.WritebackAns `json:"answer"`
 		}
-		w, ok := platform.Get[Writeback](c, s.GetTarget().GetId())
+		w, ok := platform.Get[construction.Writeback](c, s.GetTarget().GetId())
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback does not exist")
 		}
@@ -152,9 +154,9 @@ func (b *Build) submitWritebackAnswered(c platform.Caller, s *pb.Submission, now
 				w.Failed++
 			}
 			payload.Answer.At = now
-			w.Answers = append([]WritebackAns{payload.Answer}, w.Answers...)
-			if len(w.Answers) > writebackAnswerKept {
-				w.Answers = w.Answers[:writebackAnswerKept]
+			w.Answers = append([]construction.WritebackAns{payload.Answer}, w.Answers...)
+			if len(w.Answers) > construction.ValueWritebackAnswerKept {
+				w.Answers = w.Answers[:construction.ValueWritebackAnswerKept]
 			}
 			c.Put(r, w)
 		}, nil
@@ -165,7 +167,7 @@ func (b *Build) submitWritebackAnswered(c platform.Caller, s *pb.Submission, now
 // answer on the writeback and, when delivered with a Result mapping, writes
 // the answer's fields onto the record through the object's own edit.
 func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
-	var req WritebackRequest
+	var req construction.WritebackRequest
 	if json.Unmarshal([]byte(effect.Body), &req) != nil || req.Writeback == "" {
 		return nil
 	}
@@ -194,7 +196,7 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 		_, err := platform.Decide(c, b, confirmationSubmission(c, req.Confirmation, confirmationAnswer, key, map[string]any{"tag": tag, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
 		return err
 	}
-	w, ok := platform.Get[Writeback](c, req.Writeback)
+	w, ok := platform.Get[construction.Writeback](c, req.Writeback)
 	if !ok {
 		return nil
 	}
@@ -208,13 +210,13 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 	} else if req.Version != 0 || w.DefinitionVersion != 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Historical writeback request requires its original unversioned definition")
 	}
-	ans := WritebackAns{Effect: effect.ID, Target: effect.Target, Result: out.Result, Detail: out.Detail, Answer: clipAnswer(out.Answer)}
+	ans := construction.WritebackAns{Effect: effect.ID, Target: effect.Target, Result: out.Result, Detail: out.Detail, Answer: clipAnswer(out.Answer)}
 	if out.Result != "delivered" && out.Result != "rejected" && out.Result != "unknown" {
 		ans.Result = "failed"
 	}
 	payload, _ := json.Marshal(map[string]any{"answer": ans})
-	if _, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "answered:" + effect.ID + map[bool]string{true: ":unknown"}[out.Result == "unknown"],
-		Target: &pb.EntityRef{Type: WritebackType, Id: w.ID}, Schema: &pb.SchemaRef{Name: SchemaWritebackAnswered, Version: 1}, Payload: payload}, now); err != nil {
+	if _, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: construction.ID, IdempotencyKey: "answered:" + effect.ID + map[bool]string{true: ":unknown"}[out.Result == "unknown"],
+		Target: &pb.EntityRef{Type: construction.WritebackType, Id: w.ID}, Schema: &pb.SchemaRef{Name: construction.SchemaWritebackAnswered, Version: 1}, Payload: payload}, now); err != nil {
 		return err
 	}
 	typ, id, ok := strings.Cut(effect.Target, "/")
@@ -226,7 +228,7 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 		return nil
 	}
 	edit, _ := json.Marshal(fields)
-	_, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "answer-fields:" + effect.ID,
+	_, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: construction.ID, IdempotencyKey: "answer-fields:" + effect.ID,
 		Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".edit", Version: 1}, Payload: edit}, now)
 	return err
 }

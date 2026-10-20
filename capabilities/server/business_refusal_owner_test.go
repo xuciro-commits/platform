@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"testing"
@@ -18,8 +20,8 @@ func businessRefusalOwnerSetup(t *testing.T, tenant *Tenant) {
 
 func businessRefusalOwnerSetupApproval(t *testing.T, tenant *Tenant, approval bool) {
 	t.Helper()
-	publishObject(t, tenant, "builder", "REQUEST", map[string]any{"name": "request", "title": "Request", "plural": "Requests", "fields": []build.Field{{Name: "number", Title: "Number", Type: "text"}, {Name: "done", Title: "Done", Type: "boolean"}, {Name: "note", Title: "Note", Type: "text"}}, "states": []build.State{{Name: "draft", Title: "Draft"}}, "access": []build.Access{{Role: "operator", Read: "own", Create: true, Edit: true}, {Role: "limited", Read: "own", Create: true, Edit: true}, {Role: "manager", Read: "all"}}}, txnAt)
-	publishObject(t, tenant, "builder", "DISPOSITION", map[string]any{"name": "disposition", "title": "Disposition", "plural": "Dispositions", "fields": []build.Field{{Name: "request", Title: "Request", Type: "reference", Ref: "build.request", Required: true}, {Name: "reason", Title: "Reason", Type: "text", Required: true}}, "access": []build.Access{{Role: "operator", Read: "own", Create: true}, {Role: "limited", Read: "own"}}}, txnAt)
+	publishObject(t, tenant, "builder", "REQUEST", map[string]any{"name": "request", "title": "Request", "plural": "Requests", "fields": []construction.Field{{Name: "number", Title: "Number", Type: "text"}, {Name: "done", Title: "Done", Type: "boolean"}, {Name: "note", Title: "Note", Type: "text"}}, "states": []construction.State{{Name: "draft", Title: "Draft"}}, "access": []construction.Access{{Role: "operator", Read: "own", Create: true, Edit: true}, {Role: "limited", Read: "own", Create: true, Edit: true}, {Role: "manager", Read: "all"}}}, txnAt)
+	publishObject(t, tenant, "builder", "DISPOSITION", map[string]any{"name": "disposition", "title": "Disposition", "plural": "Dispositions", "fields": []construction.Field{{Name: "request", Title: "Request", Type: "reference", Ref: "build.request", Required: true}, {Name: "reason", Title: "Reason", Type: "text", Required: true}}, "access": []construction.Access{{Role: "operator", Read: "own", Create: true}, {Role: "limited", Read: "own"}}}, txnAt)
 	declarations := []platform.Refusal{}
 	for _, level := range []string{"block", "flag", "route"} {
 		when := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "input.label"), platform.ExprLiteralValue("text", level)}}
@@ -43,15 +45,15 @@ func businessRefusalOwnerSetupApproval(t *testing.T, tenant *Tenant, approval bo
 		{Name: "hold", Kind: "update", Target: platform.TxnRef{Type: "build.request", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "done", From: "=false"}, {Field: "note", From: "=Rework required"}}},
 		{Name: "rework", Kind: "create", Target: platform.TxnRef{Type: "build.disposition"}, Changes: []platform.TxnSet{{Field: "request", From: "$subject"}, {Field: "reason", From: "=Rework route"}}},
 	}}
-	inputs := []build.Input{{Name: "label", Title: "Label", Type: "text", Required: true}}
-	apply := build.Action{Name: "apply", Title: "Apply", From: []string{"draft"}, Roles: []string{"operator", "limited"}, Inputs: inputs, Transaction: transaction}
+	inputs := []construction.Input{{Name: "label", Title: "Label", Type: "text", Required: true}}
+	apply := construction.Action{Name: "apply", Title: "Apply", From: []string{"draft"}, Roles: []string{"operator", "limited"}, Inputs: inputs, Transaction: transaction}
 	if approval {
-		apply.Approval = &build.ActionApproval{Levels: []build.ApproverLevel{{Title: "Manager disposition", Role: "manager"}}}
+		apply.Approval = &construction.ActionApproval{Levels: []construction.ApproverLevel{{Title: "Manager disposition", Role: "manager"}}}
 	}
-	decide(t, tenant, "builder", build.ID, "build.object.edit", build.ObjectType, "REQUEST", map[string]any{"actions": []build.Action{apply, {Name: "rework", Title: "Rework", From: []string{"draft"}, Roles: []string{"operator"}, Inputs: inputs, Transaction: alternative}}}, txnAt)
-	decide(t, tenant, "builder", build.ID, "build.object.publish", build.ObjectType, "REQUEST", map[string]any{}, txnAt)
-	decide(t, tenant, "operator", build.ID, "build.request.create", "build.request", "operator", map[string]any{"note": "Original request"}, txnAt)
-	decide(t, tenant, "limited", build.ID, "build.request.create", "build.request", "limited", map[string]any{"note": "Original request"}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "REQUEST", map[string]any{"actions": []construction.Action{apply, {Name: "rework", Title: "Rework", From: []string{"draft"}, Roles: []string{"operator"}, Inputs: inputs, Transaction: alternative}}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.object.publish", construction.ObjectType, "REQUEST", map[string]any{}, txnAt)
+	decide(t, tenant, "operator", construction.ID, "build.request.create", "build.request", "operator", map[string]any{"note": "Original request"}, txnAt)
+	decide(t, tenant, "limited", construction.ID, "build.request.create", "build.request", "limited", map[string]any{"note": "Original request"}, txnAt)
 }
 
 func TestBusinessRefusalOwnerApproval(t *testing.T) {
@@ -89,7 +91,7 @@ func TestBusinessRefusalOwnerApproval(t *testing.T) {
 			if len(tenant.sequences.last) != 0 || tenant.records.types["build.disposition"].rows.len() != 0 {
 				t.Fatal("approval preflight committed a business flag or route")
 			}
-			id := build.ID + "." + request.IdempotencyKey
+			id := construction.ID + "." + request.IdempotencyKey
 			position := len(entries)
 			decide(t, tenant, "manager", work.ID, work.ApprovalType+".approve", work.ApprovalType, id, map[string]any{}, txnAt.Add(time.Minute))
 			if len(entries) != position+1 || tenant.records.types["build.disposition"].rows.len() != 2 {
@@ -186,7 +188,7 @@ func TestBusinessRefusalOwnerAtomicBranches(t *testing.T) {
 	t.Run("target action input checks", func(t *testing.T) {
 		tenant := txnTenant(t)
 		businessRefusalOwnerSetup(t, tenant)
-		catalog := tenant.app(build.ID).AcceptedLedger().Catalog
+		catalog := tenant.app(construction.ID).AcceptedLedger().Catalog
 		action, ok := catalog.Action("build.request.rework")
 		if !ok || len(action.Payload) != 1 {
 			t.Fatal("target action input is unavailable")

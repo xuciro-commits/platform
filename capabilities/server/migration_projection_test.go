@@ -1,11 +1,12 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"encoding/json"
 	"testing"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -16,12 +17,12 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 	fields := []map[string]any{{"name": "name", "title": "Amount", "type": "decimal", "sourceType": "user-input"}}
 	save := func(title, key string) string {
 		t.Helper()
-		decide(t, tn, "builder", build.ID, "build.object.edit", build.ObjectType, "asset", map[string]any{"title": title, "fields": fields}, txnAt)
+		decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "asset", map[string]any{"title": title, "fields": fields}, txnAt)
 		preview, err := tn.PreviewRelease(builder, platform.AssetObject, "asset")
 		if err != nil || preview.Diagnostic != "" {
 			t.Fatalf("preview: %+v %v", preview, err)
 		}
-		id, err := tn.SaveReleaseCandidates(builder, []build.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
+		id, err := tn.SaveReleaseCandidates(builder, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "asset"}}, preview.CandidateID, key, txnAt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -33,8 +34,8 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 		if err != nil {
 			t.Fatal(err)
 		}
-		decide(t, tn, "builder", build.ID, "build.migration.start", platform.MigrationRunType, id, map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
-		decide(t, tn, "builder", build.ID, "build.migration.advance", platform.MigrationRunType, id, map[string]any{}, txnAt)
+		decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, id, map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+		decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, id, map[string]any{}, txnAt)
 	}
 	second := save("Amount version", "second")
 	parse := platform.Expr{Kind: "decimal", Op: "parse-decimal", Args: []platform.Expr{platform.ExprReference("text", "name")}}
@@ -43,7 +44,7 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 	if _, err := tn.ActivateRelease(builder, second, "second-activate", txnAt); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": 21}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": 21}, txnAt)
 	check := func(release string, want string) {
 		t.Helper()
 		row := tn.records.types["build.asset"].rows.get("A")
@@ -68,7 +69,7 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 	start(plan, "M2")
 	check(initial.From, `"12"`)
 	check(second, `21`)
-	decide(t, tn, "builder", build.ID, "build.migration.cancel", platform.MigrationRunType, "M2", map[string]any{}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.cancel", platform.MigrationRunType, "M2", map[string]any{}, txnAt)
 	check(initial.From, `"12"`)
 	if projectionFor(tn.records.types["build.asset"].rows.get("A").projection, second) != nil {
 		t.Fatal("cancel kept the cancelled migration's source layer")
@@ -77,7 +78,7 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 	if _, err := tn.ActivateRelease(builder, third, "third-activate", txnAt); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "user", build.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": 34}, txnAt)
+	decide(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": 34}, txnAt)
 	check(initial.From, `"12"`)
 	check(second, `21`)
 	before, _ := acceptedRowOf("build.asset", "A", tn.records.types["build.asset"].rows.get("A"))

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"net/url"
-	construction "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"regexp"
 	"slices"

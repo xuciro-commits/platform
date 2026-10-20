@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -101,7 +103,7 @@ func constraintTenant(t *testing.T) *Tenant {
 }
 
 func publishConstraintEntry(t *testing.T, tenant *Tenant) string {
-	object := map[string]any{"name": "entry", "title": "Entry", "fields": []build.Field{{Name: "number", Title: "Number", Type: "text"}, {Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "start", Title: "Start", Type: "date"}, {Name: "end", Title: "End", Type: "date"}, {Name: "version", Title: "Version", Type: "text"}}, "constraints": commonConstraints(), "states": []build.State{{Name: "draft", Title: "Draft"}, {Name: "released", Title: "Released"}}, "actions": []build.Action{{Name: "release", Title: "Release", From: []string{"draft"}, To: "released"}, {Name: "return", Title: "Return", From: []string{"released"}, To: "draft"}}}
+	object := map[string]any{"name": "entry", "title": "Entry", "fields": []construction.Field{{Name: "number", Title: "Number", Type: "text"}, {Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "start", Title: "Start", Type: "date"}, {Name: "end", Title: "End", Type: "date"}, {Name: "version", Title: "Version", Type: "text"}}, "constraints": commonConstraints(), "states": []construction.State{{Name: "draft", Title: "Draft"}, {Name: "released", Title: "Released"}}, "actions": []construction.Action{{Name: "release", Title: "Release", From: []string{"draft"}, To: "released"}, {Name: "return", Title: "Return", From: []string{"released"}, To: "draft"}}}
 	return publishObject(t, tenant, "builder", "ENTRY", object, txnAt)
 }
 
@@ -288,7 +290,7 @@ func TestBusinessConstraintsAllWriteEntrances(t *testing.T) {
 				}
 				t.Run(path, func(t *testing.T) {
 					tenant := constraintTenant(t)
-					typ, app := publishConstraintEntry(t, tenant), build.ID
+					typ, app := publishConstraintEntry(t, tenant), construction.ID
 					if path == "protocol" || path == "unchecked-put" {
 						typ, app = "invariants.entry", "invariants"
 					}
@@ -298,14 +300,14 @@ func TestBusinessConstraintsAllWriteEntrances(t *testing.T) {
 						decide(t, tenant, "builder", app, typ+".release", typ, "TWO", nil, txnAt)
 					}
 					if path == "transaction" {
-						object, err := tenant.RecordOf(memberOf(t, tenant, "builder"), build.ObjectType, "ENTRY", txnAt)
+						object, err := tenant.RecordOf(memberOf(t, tenant, "builder"), construction.ObjectType, "ENTRY", txnAt)
 						if err != nil {
 							t.Fatal(err)
 						}
-						definition := object.Record.(build.Object)
-						definition.Actions = append(definition.Actions, build.Action{Name: "apply", Title: "Apply", From: []string{"draft", "released"}, Inputs: []build.Input{{Name: "value", Title: "Value", Type: map[string]string{"qty": "integer", "number": "text", "end": "date", "version": "text"}[entry.field]}}, Transaction: &platform.BusinessTxn{Subject: typ, Steps: []platform.TxnStep{{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "entrynumbers", Pattern: "{n}"}}, {Name: "write", Kind: "update", Target: platform.TxnRef{Type: typ, ID: "$subject"}, Changes: []platform.TxnSet{{Field: entry.field, From: "value"}}}}}})
-						decide(t, tenant, "builder", build.ID, "build.object.edit", build.ObjectType, "ENTRY", map[string]any{"actions": definition.Actions}, txnAt)
-						decide(t, tenant, "builder", build.ID, "build.object.publish", build.ObjectType, "ENTRY", nil, txnAt)
+						definition := object.Record.(construction.Object)
+						definition.Actions = append(definition.Actions, construction.Action{Name: "apply", Title: "Apply", From: []string{"draft", "released"}, Inputs: []construction.Input{{Name: "value", Title: "Value", Type: map[string]string{"qty": "integer", "number": "text", "end": "date", "version": "text"}[entry.field]}}, Transaction: &platform.BusinessTxn{Subject: typ, Steps: []platform.TxnStep{{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "entrynumbers", Pattern: "{n}"}}, {Name: "write", Kind: "update", Target: platform.TxnRef{Type: typ, ID: "$subject"}, Changes: []platform.TxnSet{{Field: entry.field, From: "value"}}}}}})
+						decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "ENTRY", map[string]any{"actions": definition.Actions}, txnAt)
+						decide(t, tenant, "builder", construction.ID, "build.object.publish", construction.ObjectType, "ENTRY", nil, txnAt)
 					}
 					before := txnState(tenant)
 					member := memberOf(t, tenant, "builder")
@@ -373,7 +375,7 @@ func TestBusinessConstraintsUniqueConcurrentAndHistory(t *testing.T) {
 	var group sync.WaitGroup
 	answers := make(chan *kernel.Error, 2)
 	for _, id := range []string{"A", "B"} {
-		request := submission(tenant, member, build.ID, typ+".create", typ, id, validConstraintEntry("SAME"))
+		request := submission(tenant, member, construction.ID, typ+".create", typ, id, validConstraintEntry("SAME"))
 		group.Add(1)
 		go func() { defer group.Done(); _, err := tenant.Submit(member, request, txnAt); answers <- err }()
 	}
@@ -392,21 +394,21 @@ func TestBusinessConstraintsUniqueConcurrentAndHistory(t *testing.T) {
 	if success != 1 || denied != 1 {
 		t.Fatalf("uniqueness raced: %d/%d", success, denied)
 	}
-	decide(t, tenant, "builder", build.ID, typ+".create", typ, "HISTORY", validConstraintEntry("HISTORY"), txnAt)
-	decide(t, tenant, "builder", build.ID, typ+".release", typ, "HISTORY", nil, txnAt)
-	decide(t, tenant, "builder", build.ID, typ+".return", typ, "HISTORY", nil, txnAt)
-	if result := refuse(t, tenant, "builder", build.ID, typ+".edit", typ, "HISTORY", map[string]any{"version": "v2"}, txnAt); !strings.Contains(result, "Released version is immutable") {
+	decide(t, tenant, "builder", construction.ID, typ+".create", typ, "HISTORY", validConstraintEntry("HISTORY"), txnAt)
+	decide(t, tenant, "builder", construction.ID, typ+".release", typ, "HISTORY", nil, txnAt)
+	decide(t, tenant, "builder", construction.ID, typ+".return", typ, "HISTORY", nil, txnAt)
+	if result := refuse(t, tenant, "builder", construction.ID, typ+".edit", typ, "HISTORY", map[string]any{"version": "v2"}, txnAt); !strings.Contains(result, "Released version is immutable") {
 		t.Fatalf("return unlocked history: %s", result)
 	}
 	// Tightening an invariant changes new writes, not already accepted bytes.
 	constraints := commonConstraints()
 	constraints[1].Expr = booleanRule(">", platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 10))
-	decide(t, tenant, "builder", build.ID, "build.object.edit", build.ObjectType, "ENTRY", map[string]any{"constraints": constraints}, txnAt)
-	decide(t, tenant, "builder", build.ID, "build.object.publish", build.ObjectType, "ENTRY", nil, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "ENTRY", map[string]any{"constraints": constraints}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.object.publish", construction.ObjectType, "ENTRY", nil, txnAt)
 	if _, err := tenant.RecordOf(member, typ, "HISTORY", txnAt); err != nil {
 		t.Fatal("tightening hid historical row", err)
 	}
-	if result := refuse(t, tenant, "builder", build.ID, typ+".edit", typ, "HISTORY", map[string]any{"number": "CHANGED"}, txnAt); !strings.Contains(result, "Quantity must be positive") {
+	if result := refuse(t, tenant, "builder", construction.ID, typ+".edit", typ, "HISTORY", map[string]any{"number": "CHANGED"}, txnAt); !strings.Contains(result, "Quantity must be positive") {
 		t.Fatal("new write escaped tighter rule", result)
 	}
 	// Include the definition prefix; replay may neither call the current rules
@@ -438,11 +440,11 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 	tenant := constraintTenant(t)
 	var entries []Entry
 	tenant.Record = func(entry Entry) { entries = append(entries, entry) }
-	header := publishObject(t, tenant, "builder", "HEADER", map[string]any{"name": "header", "title": "Header", "fields": []build.Field{{Name: "number", Title: "Number", Type: "text"}, {Name: "total", Title: "Total", Type: "integer"}}}, txnAt)
-	line := publishObject(t, tenant, "builder", "LINE", map[string]any{"name": "line", "title": "Line", "fields": []build.Field{{Name: "header", Title: "Header", Type: "reference", Ref: header, Required: true}, {Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "debit", Title: "Debit", Type: "decimal"}, {Name: "credit", Title: "Credit", Type: "decimal"}}}, txnAt)
-	decide(t, tenant, "builder", build.ID, "build.query.create", build.QueryType, "LINES", map[string]any{"name": "lines", "title": "Lines", "description": "All lines of a header", "object": line, "by": "header", "limit": 200}, txnAt)
-	decide(t, tenant, "builder", build.ID, "build.query.publish", build.QueryType, "LINES", nil, txnAt)
-	reads := &platform.RuleReadSpec{Collections: map[string]platform.RuleCollection{"lines": {App: build.ID, Query: "lines", Version: 1, Object: line, Of: "$subject", Policy: "complete"}}}
+	header := publishObject(t, tenant, "builder", "HEADER", map[string]any{"name": "header", "title": "Header", "fields": []construction.Field{{Name: "number", Title: "Number", Type: "text"}, {Name: "total", Title: "Total", Type: "integer"}}}, txnAt)
+	line := publishObject(t, tenant, "builder", "LINE", map[string]any{"name": "line", "title": "Line", "fields": []construction.Field{{Name: "header", Title: "Header", Type: "reference", Ref: header, Required: true}, {Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "debit", Title: "Debit", Type: "decimal"}, {Name: "credit", Title: "Credit", Type: "decimal"}}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.query.create", construction.QueryType, "LINES", map[string]any{"name": "lines", "title": "Lines", "description": "All lines of a header", "object": line, "by": "header", "limit": 200}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.query.publish", construction.QueryType, "LINES", nil, txnAt)
+	reads := &platform.RuleReadSpec{Collections: map[string]platform.RuleCollection{"lines": {App: construction.ID, Query: "lines", Version: 1, Object: line, Of: "$subject", Policy: "complete"}}}
 	sum := platform.Expr{Op: "sum", Kind: "integer", Agg: &platform.ExprAggregate{Source: "lines", Field: []string{"qty"}}}
 	count := platform.Expr{Op: "count", Kind: "integer", Agg: &platform.ExprAggregate{Source: "lines"}}
 	debits := platform.Expr{Op: "sum", Kind: "decimal", Agg: &platform.ExprAggregate{Source: "lines", Field: []string{"debit"}}}
@@ -453,8 +455,8 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 		{Name: "balanced", Kind: "expression", Fields: []string{"total"}, Level: "txn", Message: "Debit and credit must balance within 0.005.", Expr: booleanRule("<=", difference, platform.ExprLiteralValue("decimal", "0.005")), Reads: reads},
 		{Name: "children", Kind: "cardinality", Fields: []string{"archived"}, Level: "txn", Message: "A header with active lines cannot be archived.", Expr: booleanRule("or", platform.Expr{Op: "not", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("boolean", "archived")}}, *booleanRule("=", count, platform.ExprLiteralValue("integer", 0))), Reads: reads},
 	}
-	decide(t, tenant, "builder", build.ID, "build.object.edit", build.ObjectType, "HEADER", map[string]any{"constraints": constraints}, txnAt)
-	decide(t, tenant, "builder", build.ID, "build.object.publish", build.ObjectType, "HEADER", nil, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "HEADER", map[string]any{"constraints": constraints}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.object.publish", construction.ObjectType, "HEADER", nil, txnAt)
 	txn := &platform.BusinessTxn{Subject: "build.request", Steps: []platform.TxnStep{
 		{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "documents", Pattern: "D-{n:3}"}},
 		{Name: "request", Kind: "update", Target: platform.TxnRef{Type: "build.request", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "consumed", From: "=true"}}},
@@ -462,12 +464,12 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 		{Name: "first", Kind: "create", Target: platform.TxnRef{Type: line}, Changes: []platform.TxnSet{{Field: "header", From: "step.head"}, {Field: "qty", From: "=2"}, {Field: "debit", From: "=1.005"}, {Field: "credit", From: "=0"}}},
 		{Name: "second", Kind: "create", Target: platform.TxnRef{Type: line}, Changes: []platform.TxnSet{{Field: "header", From: "step.head"}, {Field: "qty", From: "qty"}, {Field: "debit", From: "=0"}, {Field: "credit", From: "credit"}}},
 	}}
-	request := publishObject(t, tenant, "builder", "REQUEST", map[string]any{"name": "request", "title": "Request", "fields": []build.Field{{Name: "consumed", Title: "Consumed", Type: "boolean"}}, "states": []build.State{{Name: "draft", Title: "Draft"}}, "actions": []build.Action{{Name: "apply", Title: "Apply", From: []string{"draft"}, Inputs: []build.Input{{Name: "qty", Title: "Second quantity", Type: "integer"}, {Name: "credit", Title: "Credit", Type: "decimal"}}, Transaction: txn}}}, txnAt)
-	decide(t, tenant, "builder", build.ID, request+".create", request, "R1", map[string]any{}, txnAt)
+	request := publishObject(t, tenant, "builder", "REQUEST", map[string]any{"name": "request", "title": "Request", "fields": []construction.Field{{Name: "consumed", Title: "Consumed", Type: "boolean"}}, "states": []construction.State{{Name: "draft", Title: "Draft"}}, "actions": []construction.Action{{Name: "apply", Title: "Apply", From: []string{"draft"}, Inputs: []construction.Input{{Name: "qty", Title: "Second quantity", Type: "integer"}, {Name: "credit", Title: "Credit", Type: "decimal"}}, Transaction: txn}}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, request+".create", request, "R1", map[string]any{}, txnAt)
 	before := txnState(tenant)
 	position := len(entries)
 	member := memberOf(t, tenant, "builder")
-	_, err, issues := tenant.submitDiagnosed(member, submission(tenant, member, build.ID, request+".apply", request, "R1", map[string]any{"qty": 4, "credit": 1}), txnAt)
+	_, err, issues := tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, request+".apply", request, "R1", map[string]any{"qty": 4, "credit": 1}), txnAt)
 	if err == nil || len(issues) != 1 || issues[0].Constraint != "total" {
 		t.Fatalf("unbalanced transaction accepted: %v %+v", err, issues)
 	}
@@ -481,11 +483,11 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 	if decodeErr != nil || saved.Version != 3 {
 		t.Fatal("constraint refusal not versioned", decodeErr)
 	}
-	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, build.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 0.99}), txnAt)
+	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 0.99}), txnAt)
 	if err == nil || len(issues) != 1 || issues[0].Constraint != "balanced" || txnState(tenant) != before || len(tenant.sequences.clone()) != 0 {
 		t.Fatal("unbalanced amounts escaped the atomic boundary", err, issues)
 	}
-	receipt := decide(t, tenant, "builder", build.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 1}, txnAt)
+	receipt := decide(t, tenant, "builder", construction.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 1}, txnAt)
 	batch, _, decodeErr := decodeAcceptedBatch(entries[len(entries)-1].Body)
 	if decodeErr != nil || len(batch.Rows) != 4 || len(batch.Decisions) != 1 || len(batch.Sequences) != 1 {
 		t.Fatalf("reference and rows did not share one result: %+v %v", batch, decodeErr)
@@ -501,12 +503,12 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 		}
 	}
 	before = txnState(tenant)
-	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, build.ID, line+".edit", line, receipt.ChangeId+"-second", map[string]any{"qty": 4}), txnAt)
+	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, line+".edit", line, receipt.ChangeId+"-second", map[string]any{"qty": 4}), txnAt)
 	if err == nil || len(issues) != 1 || issues[0].Constraint != "total" || txnState(tenant) != before {
 		t.Fatal("child edit bypassed unchanged parent total", err, issues)
 	}
 	// Preserve the total while independently demonstrating archive cardinality.
-	if result := refuse(t, tenant, "builder", build.ID, header+".archive", header, headID, nil, txnAt); !strings.Contains(result, "active lines") {
+	if result := refuse(t, tenant, "builder", construction.ID, header+".archive", header, headID, nil, txnAt); !strings.Contains(result, "active lines") {
 		t.Fatal("archive escaped relation constraint", result)
 	}
 	restored := constraintTenant(t)
@@ -520,21 +522,21 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 
 func TestBusinessConstraintsRequiredPatternTemporalAndScopedUnique(t *testing.T) {
 	tenant := constraintTenant(t)
-	parent := publishObject(t, tenant, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, txnAt)
-	decide(t, tenant, "builder", build.ID, parent+".create", parent, "P1", map[string]any{"name": "One"}, txnAt)
-	decide(t, tenant, "builder", build.ID, parent+".create", parent, "P2", map[string]any{"name": "Two"}, txnAt)
+	parent := publishObject(t, tenant, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, parent+".create", parent, "P1", map[string]any{"name": "One"}, txnAt)
+	decide(t, tenant, "builder", construction.ID, parent+".create", parent, "P2", map[string]any{"name": "Two"}, txnAt)
 	constraints := []platform.Constraint{
 		{Name: "value", Kind: "required", Fields: []string{"code"}, Message: "Code is required."},
 		{Name: "perparent", Kind: "unique", Fields: []string{"code"}, Scope: "parent", Message: "Code is unique within its parent."},
 		{Name: "shape", Kind: "pattern", Fields: []string{"code"}, Message: "Use two uppercase letters.", Expr: booleanRule("matches", platform.ExprReference("text", "code"), platform.ExprLiteralValue("text", "[A-Z]{2}"))},
 		{Name: "valid", Kind: "temporal", Fields: []string{"date"}, Message: "Date must be in the validity period.", Expr: booleanRule("within-period", platform.ExprReference("date", "date"), platform.ExprLiteralValue("date", "2026-10-01"), platform.ExprLiteralValue("date", "2026-10-31"))},
 	}
-	typ := publishObject(t, tenant, "builder", "CHILD", map[string]any{"name": "child", "title": "Child", "fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: parent}, {Name: "code", Title: "Code", Type: "text"}, {Name: "date", Title: "Date", Type: "date"}}, "constraints": constraints}, txnAt)
+	typ := publishObject(t, tenant, "builder", "CHILD", map[string]any{"name": "child", "title": "Child", "fields": []construction.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: parent}, {Name: "code", Title: "Code", Type: "text"}, {Name: "date", Title: "Date", Type: "date"}}, "constraints": constraints}, txnAt)
 	valid := map[string]any{"parent": "P1", "code": "AB", "date": "2026-10-12"}
-	decide(t, tenant, "builder", build.ID, typ+".create", typ, "C1", valid, txnAt)
+	decide(t, tenant, "builder", construction.ID, typ+".create", typ, "C1", valid, txnAt)
 	other := maps.Clone(valid)
 	other["parent"] = "P2"
-	decide(t, tenant, "builder", build.ID, typ+".create", typ, "C2", other, txnAt)
+	decide(t, tenant, "builder", construction.ID, typ+".create", typ, "C2", other, txnAt)
 	for _, bad := range []struct {
 		field string
 		value any
@@ -543,7 +545,7 @@ func TestBusinessConstraintsRequiredPatternTemporalAndScopedUnique(t *testing.T)
 		payload := maps.Clone(valid)
 		payload["code"] = "CD"
 		payload[bad.field] = bad.value
-		_, err, issues := tenant.submitDiagnosed(memberOf(t, tenant, "builder"), submission(tenant, memberOf(t, tenant, "builder"), build.ID, typ+".create", typ, "BAD"+bad.name, payload), txnAt)
+		_, err, issues := tenant.submitDiagnosed(memberOf(t, tenant, "builder"), submission(tenant, memberOf(t, tenant, "builder"), construction.ID, typ+".create", typ, "BAD"+bad.name, payload), txnAt)
 		if err == nil || len(issues) != 1 || issues[0].Constraint != bad.name {
 			t.Fatalf("%s: %v %+v", bad.name, err, issues)
 		}
@@ -557,28 +559,28 @@ func TestBusinessConstraintsRequiredPatternTemporalAndScopedUnique(t *testing.T)
 
 func TestBusinessConstraintsAffectedReferencesAndWithheldFacts(t *testing.T) {
 	tenant := constraintTenant(t)
-	holder := publishObject(t, tenant, "builder", "HOLDER", map[string]any{"name": "holder", "title": "Holder", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, txnAt)
-	decide(t, tenant, "builder", build.ID, holder+".create", holder, "H1", map[string]any{"name": "Group"}, txnAt)
-	parent := publishObject(t, tenant, "builder", "RESOURCE", map[string]any{"name": "resource", "title": "Resource", "fields": []build.Field{{Name: "capacity", Title: "Capacity", Type: "integer", Read: []string{"builder"}}}}, txnAt)
-	decide(t, tenant, "builder", build.ID, parent+".create", parent, "P1", map[string]any{"capacity": 10}, txnAt)
+	holder := publishObject(t, tenant, "builder", "HOLDER", map[string]any{"name": "holder", "title": "Holder", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, holder+".create", holder, "H1", map[string]any{"name": "Group"}, txnAt)
+	parent := publishObject(t, tenant, "builder", "RESOURCE", map[string]any{"name": "resource", "title": "Resource", "fields": []construction.Field{{Name: "capacity", Title: "Capacity", Type: "integer", Read: []string{"builder"}}}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, parent+".create", parent, "P1", map[string]any{"capacity": 10}, txnAt)
 	path := platform.Expr{Op: "path", Kind: "integer", Args: []platform.Expr{platform.ExprReference("reference", "resource")}, Path: []string{"capacity"}}
 	rule := platform.Constraint{Name: "capacity", Kind: "expression", Fields: []string{"qty"}, Message: "Capacity must cover quantity.", Expr: booleanRule("<=", platform.ExprReference("integer", "qty"), path)}
-	child := publishObject(t, tenant, "builder", "RESERVATION", map[string]any{"name": "reservation", "title": "Reservation", "fields": []build.Field{{Name: "resource", Title: "Resource", Type: "reference", Ref: parent}, {Name: "holder", Title: "Holder", Type: "reference", Ref: holder}, {Name: "qty", Title: "Quantity", Type: "integer"}}, "constraints": []platform.Constraint{rule}}, txnAt)
-	decide(t, tenant, "builder", build.ID, child+".create", child, "C1", map[string]any{"resource": "P1", "holder": "H1", "qty": 2}, txnAt)
+	child := publishObject(t, tenant, "builder", "RESERVATION", map[string]any{"name": "reservation", "title": "Reservation", "fields": []construction.Field{{Name: "resource", Title: "Resource", Type: "reference", Ref: parent}, {Name: "holder", Title: "Holder", Type: "reference", Ref: holder}, {Name: "qty", Title: "Quantity", Type: "integer"}}, "constraints": []platform.Constraint{rule}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, child+".create", child, "C1", map[string]any{"resource": "P1", "holder": "H1", "qty": 2}, txnAt)
 	before := txnState(tenant)
 	member := memberOf(t, tenant, "builder")
-	_, err, issues := tenant.submitDiagnosed(member, submission(tenant, member, build.ID, parent+".edit", parent, "P1", map[string]any{"capacity": 1}), txnAt)
+	_, err, issues := tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, parent+".edit", parent, "P1", map[string]any{"capacity": 1}), txnAt)
 	if err == nil || len(issues) != 1 || issues[0].Constraint != "capacity" || txnState(tenant) != before {
 		t.Fatal("source edit broke an unchanged dependent record", err, issues)
 	}
-	decide(t, tenant, "builder", build.ID, "build.query.create", build.QueryType, "RESERVATIONS", map[string]any{"name": "reservations", "title": "Reservations", "description": "Reservations of one holder", "object": child, "by": "holder", "limit": 200}, txnAt)
-	decide(t, tenant, "builder", build.ID, "build.query.publish", build.QueryType, "RESERVATIONS", nil, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.query.create", construction.QueryType, "RESERVATIONS", map[string]any{"name": "reservations", "title": "Reservations", "description": "Reservations of one holder", "object": child, "by": "holder", "limit": 200}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.query.publish", construction.QueryType, "RESERVATIONS", nil, txnAt)
 	itemPath := platform.Expr{Op: "path", Kind: "integer", Args: []platform.Expr{platform.ExprReference("reference", "item.resource")}, Path: []string{"capacity"}}
 	predicate := booleanRule("<=", platform.ExprReference("integer", "item.qty"), itemPath)
-	groupRule := platform.Constraint{Name: "itemsafety", Kind: "expression", Fields: []string{"name"}, Level: "txn", Message: "Every item must fit its resource.", Expr: &platform.Expr{Op: "all", Kind: "boolean", Agg: &platform.ExprAggregate{Source: "items"}, In: predicate}, Reads: &platform.RuleReadSpec{Collections: map[string]platform.RuleCollection{"items": {App: build.ID, Query: "reservations", Version: 1, Object: child, Of: "$subject", Policy: "complete"}}}}
-	decide(t, tenant, "builder", build.ID, "build.object.edit", build.ObjectType, "HOLDER", map[string]any{"constraints": []platform.Constraint{groupRule}}, txnAt)
-	decide(t, tenant, "builder", build.ID, "build.object.publish", build.ObjectType, "HOLDER", nil, txnAt)
-	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, build.ID, parent+".edit", parent, "P1", map[string]any{"capacity": 1}), txnAt)
+	groupRule := platform.Constraint{Name: "itemsafety", Kind: "expression", Fields: []string{"name"}, Level: "txn", Message: "Every item must fit its resource.", Expr: &platform.Expr{Op: "all", Kind: "boolean", Agg: &platform.ExprAggregate{Source: "items"}, In: predicate}, Reads: &platform.RuleReadSpec{Collections: map[string]platform.RuleCollection{"items": {App: construction.ID, Query: "reservations", Version: 1, Object: child, Of: "$subject", Policy: "complete"}}}}
+	decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "HOLDER", map[string]any{"constraints": []platform.Constraint{groupRule}}, txnAt)
+	decide(t, tenant, "builder", construction.ID, "build.object.publish", construction.ObjectType, "HOLDER", nil, txnAt)
+	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, parent+".edit", parent, "P1", map[string]any{"capacity": 1}), txnAt)
 	if err == nil || len(issues) != 1 || issues[0].Constraint != "itemsafety" {
 		t.Fatal("a reference reached from a collection escaped affected closure", err, issues)
 	}
@@ -587,7 +589,7 @@ func TestBusinessConstraintsAffectedReferencesAndWithheldFacts(t *testing.T) {
 	user := memberOf(t, tenant, "reader")
 	d := tenant.newStagedDecision()
 	d.at = txnAt
-	c := platform.NewCaller(d, user, build.ID, false, false)
+	c := platform.NewCaller(d, user, construction.ID, false, false)
 	info := d.records.types[child].info
 	after := d.records.types[child].rows.get("C1")
 	if err := d.checkConstraint(c, info, rule, after, after); err == nil {

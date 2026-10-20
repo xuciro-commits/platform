@@ -8,7 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -197,10 +197,10 @@ func (s *recordStore) checkLinkWriteLocked(et *entityType, value reflect.Value) 
 // Publications derive their constraint from the same frozen Build descriptor;
 // staging and accepted replay never maintain a second writable link declaration.
 func (t *Tenant) installPublicationLinkConstraint(store *recordStore, schema string, image []byte) error {
-	if schema != build.SchemaLinkType {
+	if schema != construction.SchemaLinkType {
 		return nil
 	}
-	owner, ok := t.app(build.ID).(host.LinkPublicationReader)
+	owner, ok := t.app(construction.ID).(host.LinkPublicationReader)
 	if !ok {
 		return fmt.Errorf("link publication owner is unavailable")
 	}

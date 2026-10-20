@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"errors"
@@ -22,9 +24,9 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
 		seat := func(id, role string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{build.ID: role, flow.ID: flow.Admin}}}
+			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{construction.ID: role, flow.ID: flow.Admin}}}
 		}
-		tn, err := NewTenant("process", NewConsole("process", seat("builder", build.Builder), seat("user", build.User)), work.New("process"), flow.New("process"), build.New("process"))
+		tn, err := NewTenant("process", NewConsole("process", seat("builder", construction.Builder), seat("user", construction.User)), work.New("process"), flow.New("process"), build.New("process"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +48,7 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	request := func(who, schema, typ, id string, payload any) *pb.Submission {
 		keys++
 		raw, _ := json.Marshal(payload)
-		authority := build.ID
+		authority := construction.ID
 		if typ == work.TaskType {
 			authority = work.ID
 		}
@@ -58,27 +60,27 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 			t.Fatalf("%s: %s %s", schema, err.Code, err.Message)
 		}
 	}
-	must("builder", build.ObjectType+".create", build.ObjectType, "GROUP", map[string]any{"name": "group", "title": "Group", "fields": []build.Field{{Name: "label", Title: "Label", Type: "text"}}})
-	must("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{})
-	must("builder", build.ObjectType+".create", build.ObjectType, "O", map[string]any{"name": "visit", "title": "Visit", "fields": []build.Field{{Name: "guest", Title: "Guest", Type: "text"}, {Name: "group", Title: "Group", Type: "reference", Ref: "build.group"}}, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}, "actions": []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}})
-	must("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{})
-	steps := []build.ProcessStep{{Name: "check", Title: "Check visit", Kind: "ask", Ask: build.User, Answers: []string{"approve", "reject"}, Cases: map[string]string{"approve": "close", "reject": "reject"}}, {Name: "close", Kind: "action", Act: "close"}, {Name: "reject", Kind: "action", Act: "reject"}}
-	must("builder", build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Visit review", "object": "build.visit", "when": "open", "steps": steps})
+	must("builder", construction.ObjectType+".create", construction.ObjectType, "GROUP", map[string]any{"name": "group", "title": "Group", "fields": []construction.Field{{Name: "label", Title: "Label", Type: "text"}}})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "GROUP", map[string]any{})
+	must("builder", construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{"name": "visit", "title": "Visit", "fields": []construction.Field{{Name: "guest", Title: "Guest", Type: "text"}, {Name: "group", Title: "Group", Type: "reference", Ref: "build.group"}}, "states": []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}, "actions": []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "O", map[string]any{})
+	steps := []construction.ProcessStep{{Name: "check", Title: "Check visit", Kind: "ask", Ask: construction.User, Answers: []string{"approve", "reject"}, Cases: map[string]string{"approve": "close", "reject": "reject"}}, {Name: "close", Kind: "action", Act: "close"}, {Name: "reject", Kind: "action", Act: "reject"}}
+	must("builder", construction.ProcessType+".create", construction.ProcessType, "P", map[string]any{"name": "review", "title": "Visit review", "object": "build.visit", "when": "open", "steps": steps})
 	// Standard edit replaces supplied nested maps/slices and keeps omitted
 	// top-level fields. The old decoder retained the removed reject branch.
-	patchedSteps := []build.ProcessStep{steps[0], steps[1], steps[2]}
+	patchedSteps := []construction.ProcessStep{steps[0], steps[1], steps[2]}
 	patchedSteps[0].Cases = map[string]string{"approve": "close"}
-	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": patchedSteps})
-	patched, err := tn.RecordOf(member("builder"), build.ProcessType, "P", at)
+	must("builder", construction.ProcessType+".edit", construction.ProcessType, "P", map[string]any{"steps": patchedSteps})
+	patched, err := tn.RecordOf(member("builder"), construction.ProcessType, "P", at)
 	if err != nil {
 		t.Fatal(err)
 	}
-	draft := patched.Record.(build.Process)
+	draft := patched.Record.(construction.Process)
 	if draft.Title != "Visit review" || len(draft.Steps[0].Cases) != 1 || draft.Steps[0].Cases["approve"] != "close" {
 		t.Fatalf("standard edit retained a removed branch or lost an omitted field: %+v", draft)
 	}
-	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": steps})
-	publish := request("builder", build.SchemaProcess, build.ProcessType, "P", map[string]any{})
+	must("builder", construction.ProcessType+".edit", construction.ProcessType, "P", map[string]any{"steps": steps})
+	publish := request("builder", construction.SchemaProcess, construction.ProcessType, "P", map[string]any{})
 	before, count := snapshot(tn), len(journal)
 	fail = true
 	if _, err := tn.Submit(member("builder"), publish, at); err == nil || snapshot(tn) != before || len(journal) != count {
@@ -97,8 +99,8 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	if err != nil || !proto.Equal(first, again) || len(journal) != count+1 {
 		t.Fatal("publication retry added a version")
 	}
-	must("builder", build.ObjectType+".create", build.ObjectType, "UNRELATED", map[string]any{"name": "unrelated", "title": "Unrelated", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}})
-	must("builder", build.SchemaPublish, build.ObjectType, "UNRELATED", map[string]any{})
+	must("builder", construction.ObjectType+".create", construction.ObjectType, "UNRELATED", map[string]any{"name": "unrelated", "title": "Unrelated", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "UNRELATED", map[string]any{})
 	other, previewErr := tn.PreviewRelease(member("builder"), platform.AssetObject, "UNRELATED")
 	if previewErr != nil {
 		t.Fatal(previewErr)
@@ -109,7 +111,7 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	if _, err := tn.ActivateRelease(member("builder"), other.CandidateID, "other-active", at); err != nil {
 		t.Fatal(err)
 	}
-	development, bindingErr := (hostView{t: tn}).BindFlow(build.ID, "review", 1, host.FlowBinding{})
+	development, bindingErr := (hostView{t: tn}).BindFlow(construction.ID, "review", 1, host.FlowBinding{})
 	if bindingErr != nil || development.Dependencies == "" || development.Release != "" {
 		t.Fatalf("unrelated active pointer bound a development flow: %+v %v", development, bindingErr)
 	}
@@ -130,15 +132,15 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 		return preview.CandidateID
 	}
 	release1 := activate()
-	if _, err := tn.RecordOf(member("user"), build.ProcessType, "P", at); err == nil {
+	if _, err := tn.RecordOf(member("user"), construction.ProcessType, "P", at); err == nil {
 		t.Fatal("user read a private process definition")
 	}
 	foreign := member("builder")
 	foreign.Tenant = "other"
-	if _, err := tn.Submit(foreign, request("builder", build.SchemaProcess, build.ProcessType, "P", map[string]any{}), at); err == nil {
+	if _, err := tn.Submit(foreign, request("builder", construction.SchemaProcess, construction.ProcessType, "P", map[string]any{}), at); err == nil {
 		t.Fatal("foreign builder published a process")
 	}
-	if _, err := tn.Submit(member("user"), request("user", build.SchemaProcess, build.ProcessType, "P", map[string]any{}), at); err == nil {
+	if _, err := tn.Submit(member("user"), request("user", construction.SchemaProcess, construction.ProcessType, "P", map[string]any{}), at); err == nil {
 		t.Fatal("user published a process")
 	}
 	tick := func() { at = at.Add(2 * time.Second); tn.Work(at) }
@@ -158,30 +160,30 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 		t.Fatalf("native task missing: %+v", tasks)
 	}
 	for _, id := range []string{"O", "GROUP"} {
-		if _, err := tn.Submit(member("builder"), request("builder", build.ObjectType+".archive", build.ObjectType, id, map[string]any{}), at); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
+		if _, err := tn.Submit(member("builder"), request("builder", construction.ObjectType+".archive", construction.ObjectType, id, map[string]any{}), at); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
 			t.Fatalf("archived workflow dependency %s: %v", id, err)
 		}
-		row, err := tn.RecordOf(member("builder"), build.ObjectType, id, at)
-		if err != nil || row.Record.(build.Object).Archived {
+		row, err := tn.RecordOf(member("builder"), construction.ObjectType, id, at)
+		if err != nil || row.Record.(construction.Object).Archived {
 			t.Fatal("archive refusal removed its source definition")
 		}
 	}
-	must("builder", build.ObjectType+".edit", build.ObjectType, "GROUP", map[string]any{"title": "Changed group"})
-	must("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{})
-	must("builder", build.ObjectType+".edit", build.ObjectType, "GROUP", map[string]any{"title": "Group"})
-	must("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{})
+	must("builder", construction.ObjectType+".edit", construction.ObjectType, "GROUP", map[string]any{"title": "Changed group"})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "GROUP", map[string]any{})
+	must("builder", construction.ObjectType+".edit", construction.ObjectType, "GROUP", map[string]any{"title": "Group"})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "GROUP", map[string]any{})
 	// A waiting v1 must not silently execute a changed object's close action.
-	originalActions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
-	changedActions := []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "rejected"}, originalActions[1]}
-	must("builder", build.ObjectType+".edit", build.ObjectType, "O", map[string]any{"actions": changedActions})
-	must("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{})
+	originalActions := []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}
+	changedActions := []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "rejected"}, originalActions[1]}
+	must("builder", construction.ObjectType+".edit", construction.ObjectType, "O", map[string]any{"actions": changedActions})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "O", map[string]any{})
 	// Republishing the identical source is safe, even with a waiting instance.
-	must("builder", build.ObjectType+".edit", build.ObjectType, "O", map[string]any{"actions": originalActions})
-	must("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{})
+	must("builder", construction.ObjectType+".edit", construction.ObjectType, "O", map[string]any{"actions": originalActions})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "O", map[string]any{})
 	// Publishing a different path leaves the already waiting instance on v1.
-	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": []build.ProcessStep{{Name: "reject", Kind: "action", Act: "reject"}}})
-	must("builder", build.SchemaProcess, build.ProcessType, "P", map[string]any{})
-	if _, err := (hostView{t: tn}).BindFlow(build.ID, "review", 2, host.FlowBinding{}); err == nil {
+	must("builder", construction.ProcessType+".edit", construction.ProcessType, "P", map[string]any{"steps": []construction.ProcessStep{{Name: "reject", Kind: "action", Act: "reject"}}})
+	must("builder", construction.SchemaProcess, construction.ProcessType, "P", map[string]any{})
+	if _, err := (hostView{t: tn}).BindFlow(construction.ID, "review", 2, host.FlowBinding{}); err == nil {
 		t.Fatal("started a changed flow under the old active release")
 	}
 	release2 := activate()
@@ -189,7 +191,7 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 		t.Fatal("new release changed the old instance's dependencies")
 	}
 	// An unfinished or invalid draft cannot replace the saved runtime family.
-	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"name": "unfinished", "object": "build.missing", "steps": []build.ProcessStep{}})
+	must("builder", construction.ProcessType+".edit", construction.ProcessType, "P", map[string]any{"name": "unfinished", "object": "build.missing", "steps": []construction.ProcessStep{}})
 	// Snapshot restoration must install both versions before validating instances.
 	raw, _, snapshotErr := tn.Snapshot(func() int64 { return 0 })
 	if snapshotErr != nil {
@@ -221,7 +223,7 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 			t.Fatal("recovery accepted a missing or forged flow binding")
 		}
 	}
-	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"name": "review", "object": "build.visit", "steps": []build.ProcessStep{{Name: "reject", Kind: "action", Act: "reject"}}})
+	must("builder", construction.ProcessType+".edit", construction.ProcessType, "P", map[string]any{"name": "review", "object": "build.visit", "steps": []construction.ProcessStep{{Name: "reject", Kind: "action", Act: "reject"}}})
 	must("user", "work.task.complete", work.TaskType, tasks[0].ID, map[string]string{"answer": "approve"})
 	tick()
 	state := func(id string) string {
@@ -246,35 +248,35 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	if err != nil || v2.Record.(flow.FlowInstance).Version != 2 || v2.Record.(flow.FlowInstance).Dependencies != release2 || v2.Record.(flow.FlowInstance).Release != release2 {
 		t.Fatal("new instance did not pin version 2")
 	}
-	must("builder", build.ObjectType+".edit", build.ObjectType, "GROUP", map[string]any{"title": "Changed group"})
-	must("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{})
-	if _, err := tn.Submit(member("builder"), request("builder", build.ObjectType+".archive", build.ObjectType, "O", map[string]any{}), at); err == nil {
+	must("builder", construction.ObjectType+".edit", construction.ObjectType, "GROUP", map[string]any{"title": "Changed group"})
+	must("builder", construction.SchemaPublish, construction.ObjectType, "GROUP", map[string]any{})
+	if _, err := tn.Submit(member("builder"), request("builder", construction.ObjectType+".archive", construction.ObjectType, "O", map[string]any{}), at); err == nil {
 		t.Fatal("archived a source still required by its installed workflow after all runs ended")
 	}
-	if _, err := tn.Submit(member("builder"), request("builder", build.ObjectType+".archive", build.ObjectType, "UNRELATED", map[string]any{}), at); err == nil {
+	if _, err := tn.Submit(member("builder"), request("builder", construction.ObjectType+".archive", construction.ObjectType, "UNRELATED", map[string]any{}), at); err == nil {
 		t.Fatal("archived an installed data class still retained by records/history")
 	}
-	must("builder", build.ObjectType+".create", build.ObjectType, "DRAFT-ARCHIVE", map[string]any{"name": "draftarchive", "title": "Draft", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}})
-	must("builder", build.ObjectType+".archive", build.ObjectType, "DRAFT-ARCHIVE", map[string]any{})
+	must("builder", construction.ObjectType+".create", construction.ObjectType, "DRAFT-ARCHIVE", map[string]any{"name": "draftarchive", "title": "Draft", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}})
+	must("builder", construction.ObjectType+".archive", construction.ObjectType, "DRAFT-ARCHIVE", map[string]any{})
 
 	definitions, _ := tn.Read(member("builder"), "flows")
 	encodedDefinitions, _ := json.Marshal(definitions)
 	for index, bad := range []map[string]any{
-		{"name": "badbranch", "steps": []build.ProcessStep{{Name: "ask", Kind: "ask", Ask: build.User, Answers: []string{"yes"}, Cases: map[string]string{"no": "ask"}}}},
-		{"name": "badrole", "steps": []build.ProcessStep{{Name: "ask", Kind: "ask", Ask: "outsider"}}},
-		{"name": "badaction", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "missing"}}},
-		{"name": "badpath", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "close", Next: "missing"}}},
-		{"name": "duplicate", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "close"}, {Name: "act", Kind: "action", Act: "reject"}}},
-		{"name": "review", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "close"}}},
+		{"name": "badbranch", "steps": []construction.ProcessStep{{Name: "ask", Kind: "ask", Ask: construction.User, Answers: []string{"yes"}, Cases: map[string]string{"no": "ask"}}}},
+		{"name": "badrole", "steps": []construction.ProcessStep{{Name: "ask", Kind: "ask", Ask: "outsider"}}},
+		{"name": "badaction", "steps": []construction.ProcessStep{{Name: "act", Kind: "action", Act: "missing"}}},
+		{"name": "badpath", "steps": []construction.ProcessStep{{Name: "act", Kind: "action", Act: "close", Next: "missing"}}},
+		{"name": "duplicate", "steps": []construction.ProcessStep{{Name: "act", Kind: "action", Act: "close"}, {Name: "act", Kind: "action", Act: "reject"}}},
+		{"name": "review", "steps": []construction.ProcessStep{{Name: "act", Kind: "action", Act: "close"}}},
 	} {
 		id := fmt.Sprint("BAD", index)
 		bad["title"], bad["object"], bad["when"] = "Bad review", "build.visit", "open"
-		must("builder", build.ProcessType+".create", build.ProcessType, id, bad)
-		if _, err := tn.Submit(member("builder"), request("builder", build.SchemaProcess, build.ProcessType, id, map[string]any{}), at); err == nil {
+		must("builder", construction.ProcessType+".create", construction.ProcessType, id, bad)
+		if _, err := tn.Submit(member("builder"), request("builder", construction.SchemaProcess, construction.ProcessType, id, map[string]any{}), at); err == nil {
 			t.Fatal("invalid process published")
 		}
-		row, _ := tn.RecordOf(member("builder"), build.ProcessType, id, at)
-		if row.Record.(build.Process).Version != 0 || row.Record.(build.Process).State != "draft" {
+		row, _ := tn.RecordOf(member("builder"), construction.ProcessType, id, at)
+		if row.Record.(construction.Process).Version != 0 || row.Record.(construction.Process).State != "draft" {
 			t.Fatal("refusal exposed partial publication")
 		}
 		after, _ := tn.Read(member("builder"), "flows")
@@ -289,7 +291,7 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 // The store caps each read page at 500. Definitions and running dependencies
 // on later pages must participate in publication checks too.
 func TestProcessChecksBeyondFirstReadPage(t *testing.T) {
-	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
+	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder}}}
 	codeFlow := platform.Flow{Name: "review", Title: "Review", Version: 1,
 		Start: platform.Start{On: []string{"shop.order.place"}, Begin: func(platform.Caller, platform.Event) (string, any, bool) { return "", nil, false }},
 		Steps: []platform.Step{{Name: "wait", Wait: &platform.Wait{Until: func(_ platform.Caller, r *platform.Run) bool { return r.ID == "P0500" }}}}}
@@ -314,19 +316,19 @@ func TestProcessChecksBeyondFirstReadPage(t *testing.T) {
 		if index == 500 {
 			name, subject = "duplicate", "build.source/record"
 		}
-		put(build.ID, build.ProcessType, id, 1, build.Process{Record: platform.Record{ID: id}, Name: name, Title: name, Object: "build.source", When: "open", State: "draft"})
+		put(construction.ID, construction.ProcessType, id, 1, construction.Process{Record: platform.Record{ID: id}, Name: name, Title: name, Object: "build.source", When: "open", State: "draft"})
 		put(flow.ID, flow.InstanceType, id, 1, flow.FlowInstance{Record: platform.Record{ID: id}, Flow: "shop.review", Subject: subject, State: "waiting", Version: 1})
 	}
 	member, _ := tn.Member("builder")
 	submit := func(schema, key string, payload string) *kernel.Error {
-		_, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
-			Target: &pb.EntityRef{Type: build.ProcessType, Id: "NEW"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at)
+		_, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: construction.ProcessType, Id: "NEW"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at)
 		return err
 	}
-	if err := submit(build.ProcessType+".create", "create", `{"name":"duplicate","title":"Duplicate","object":"build.source","when":"open"}`); err != nil {
+	if err := submit(construction.ProcessType+".create", "create", `{"name":"duplicate","title":"Duplicate","object":"build.source","when":"open"}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := submit(build.SchemaProcess, "publish", `{}`); err == nil || !strings.Contains(err.Message, "already used") {
+	if err := submit(construction.SchemaProcess, "publish", `{}`); err == nil || !strings.Contains(err.Message, "already used") {
 		t.Fatalf("ignored a duplicate name after row 500: %v", err)
 	}
 	procs := tn.app(flow.ID).(*flow.Flows)

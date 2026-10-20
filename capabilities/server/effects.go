@@ -25,7 +25,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -681,7 +681,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 		x = t.outbound[i]
 	}
 	t.opsMu.Unlock()
-	if x != nil && x.App == build.ID && x.Event == build.ID+"/dispatch" {
+	if x != nil && x.App == construction.ID && x.Event == construction.ID+"/dispatch" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Manage this command through its dispatch review and declared reviewer role")
 	}
 	if s.GetSchema().GetName() == SchemaEffectApprove {

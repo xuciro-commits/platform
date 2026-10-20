@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 	"platformserver/platform"
@@ -8,15 +10,15 @@ import (
 
 // Reinstall retained sources before their pin consumers. Ordinary recursive
 // data references retain their existing installation semantics.
-func businessVersionInstallOrder(objects []Object) ([]Object, error) {
-	byType := map[string]Object{}
+func businessVersionInstallOrder(objects []construction.Object) ([]construction.Object, error) {
+	byType := map[string]construction.Object{}
 	for _, record := range objects {
-		if object, ok := wasPublished[Object](record.Published); ok && !record.Archived {
+		if object, ok := wasPublished[construction.Object](record.Published); ok && !record.Archived {
 			byType["build."+object.Name] = object
 		}
 	}
 	status := map[string]int{}
-	ordered := []Object{}
+	ordered := []construction.Object{}
 	var visit func(string) error
 	visit = func(typ string) error {
 		if status[typ] == 2 {
@@ -51,11 +53,11 @@ func businessVersionInstallOrder(objects []Object) ([]Object, error) {
 	return ordered, nil
 }
 
-func (b *Build) checkVersioning(o Object) error {
+func (b *Build) checkVersioning(o construction.Object) error {
 	if o.Versioning == nil && len(o.VersionPins) == 0 {
 		return nil
 	}
-	info, err := platform.Describe(ID, b.entity(o), func(reflect.Type) string { return "" })
+	info, err := platform.Describe(construction.ID, b.entity(o), func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}
@@ -68,7 +70,7 @@ func (b *Build) checkVersioning(o Object) error {
 	if err := platform.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
-	if old, ok := wasPublished[Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
+	if old, ok := wasPublished[construction.Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
 		return fmt.Errorf("published business versioning and pin bindings are retained")
 	}
 	return nil

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
-	build "platformserver/internal/host/buildapi"
 	"platformserver/platform"
 )
 
@@ -246,7 +246,7 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 
 func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]releaseInstallation, json.RawMessage, error) {
 	if t.agents == nil && slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
-		return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetAgent
+		return asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetAgent
 	}) {
 		return nil, nil, fmt.Errorf("agent artifacts require the target's original agent runtime")
 	}
@@ -295,7 +295,7 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 			return nil, nil, err
 		}
 		ref := plan.Ref
-		installations = append(installations, releaseInstallation{ReleasePublication: build.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Before: before, Ref: &ref, Record: plan.Record})
+		installations = append(installations, releaseInstallation{ReleasePublication: construction.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Before: before, Ref: &ref, Record: plan.Record})
 	}
 	trial, err := view.stageReleaseInstallationLocked(installations, true, upgrade)
 	if err != nil {

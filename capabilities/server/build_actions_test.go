@@ -3,7 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"strings"
 	"testing"
 	"time"
@@ -21,9 +21,9 @@ func TestTenantDefinedActions(t *testing.T) {
 	var journal []Entry
 	compose := func() *Tenant {
 		seat := func(id, role string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{build.ID: role}}}
+			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{construction.ID: role}}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("dana", build.Builder), seat("eli", build.User)), build.New("t-1"))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("dana", construction.Builder), seat("eli", construction.User)), build.New("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -39,7 +39,7 @@ func TestTenantDefinedActions(t *testing.T) {
 	do := func(who, schema, typ, id string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		if _, err := tn.Submit(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: build.ID, IdempotencyKey: fmt.Sprint("a", keys),
+		if _, err := tn.Submit(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: construction.ID, IdempotencyKey: fmt.Sprint("a", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
 			return fmt.Sprintf("%s: %s", err.Code, err.Message)
 		}
@@ -65,7 +65,7 @@ func TestTenantDefinedActions(t *testing.T) {
 		"inputs": []map[string]any{{"name": "who", "title": "Who asked", "type": "text"}}, "sets": []map[string]any{{"field": "claimant", "from": "who"}}}
 	verify := map[string]any{"name": "verify", "title": "Verify unchecked", "from": []string{"found"},
 		"conditions": []map[string]any{{"field": "checked", "operator": "=", "value": "false", "message": "This item has not been marked unchecked."}}}
-	lost := buildapi.TypeOf("lost")
+	lost := construction.TypeOf("lost")
 
 	// What the host refuses while it is a draft, with the reason.
 	for _, x := range []struct {
@@ -86,7 +86,7 @@ func TestTenantDefinedActions(t *testing.T) {
 	} {
 		draft := "O-" + strings.ReplaceAll(x.why, " ", "-")
 		payload := merge(map[string]any{"name": "lost", "title": "Lost item", "plural": "Lost property", "fields": fields}, x.payload)
-		got := do("dana", build.ObjectType+".create", build.ObjectType, draft, payload)
+		got := do("dana", construction.ObjectType+".create", construction.ObjectType, draft, payload)
 		if got != "ok" {
 			if strings.Contains(x.why, "field") || strings.Contains(x.why, "input") || strings.Contains(x.why, "condition") || strings.Contains(x.why, "choice") || strings.Contains(x.why, "money") {
 				if !strings.Contains(got, x.want) {
@@ -97,20 +97,20 @@ func TestTenantDefinedActions(t *testing.T) {
 			t.Fatalf("%s: draft: %s", x.why, got)
 		}
 
-		if got := do("dana", build.SchemaPublish, build.ObjectType, draft, map[string]any{}); !strings.Contains(got, x.want) {
+		if got := do("dana", construction.SchemaPublish, construction.ObjectType, draft, map[string]any{}); !strings.Contains(got, x.want) {
 			t.Errorf("%s: %s, want %q", x.why, got, x.want)
 		}
-		if got := do("dana", build.ObjectType+".archive", build.ObjectType, draft, map[string]any{}); got != "ok" {
+		if got := do("dana", construction.ObjectType+".archive", construction.ObjectType, draft, map[string]any{}); got != "ok" {
 			t.Fatalf("%s: archive the draft: %s", x.why, got)
 		}
 	}
 
 	// Published with its states and actions.
-	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-1",
+	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "O-1",
 		map[string]any{"name": "lost", "title": "Lost item", "plural": "Lost property", "fields": fields, "states": states, "actions": []any{handBack, note, verify}}); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
-	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
+	if got := do("dana", construction.SchemaPublish, construction.ObjectType, "O-1", map[string]any{}); got != "ok" {
 		t.Fatalf("publish: %s", got)
 	}
 	record := func(id string) map[string]any {

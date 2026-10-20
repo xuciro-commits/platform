@@ -1,12 +1,14 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 
 	"platformserver/platform"
 )
 
-func propertyBindings(fields []Field) map[string]platform.AssetBinding {
+func propertyBindings(fields []construction.Field) map[string]platform.AssetBinding {
 	out := map[string]platform.AssetBinding{}
 	for _, f := range fields {
 		if f.Property != nil {
@@ -18,12 +20,12 @@ func propertyBindings(fields []Field) map[string]platform.AssetBinding {
 	}
 	return out
 }
-func (b *Build) checkPropertyFields(fields []Field) error {
+func (b *Build) checkPropertyFields(fields []construction.Field) error {
 	for _, f := range fields {
 		if f.Property == nil {
 			continue
 		}
-		if b.host == nil || f.Property.Ref.App != ID {
+		if b.host == nil || f.Property.Ref.App != construction.ID {
 			return fmt.Errorf("shared property needs its canonical tenant owner")
 		}
 		p, ok := b.host.ResolvePropertyType(*f.Property)

@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -10,7 +12,7 @@ import (
 )
 
 func linkTypeReleaseAsset(f LinkType, sourceVersion string) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, sourceVersion+".link-"+strconv.Itoa(f.Version), f.Definition())
+	return definitionReleaseAsset(platform.AssetRef{App: construction.ID, Kind: platform.AssetLinkType, Name: f.Name}, sourceVersion+".link-"+strconv.Itoa(f.Version), f.Definition())
 }
 
 // LinkTypeReleaseAsset resolves only a retained version from this owner.
@@ -30,7 +32,7 @@ func (b *Build) linkTypeAssets() ([]platform.ReleaseAsset, error) {
 func (b *Build) InstallLinkTypeAsset(asset platform.ReleaseAsset) error {
 	version := b.definitionAssetVersion(asset, platform.AssetLinkType, "link")
 	var declaration platform.LinkType
-	if version == 0 || json.Unmarshal(asset.Body, &declaration) != nil || asset.ContractVersion != declaration.Contract() || declaration.Check() != nil || declaration.Name != asset.Ref.Name || declaration.Parent.App != ID || declaration.Child.App != ID {
+	if version == 0 || json.Unmarshal(asset.Body, &declaration) != nil || asset.ContractVersion != declaration.Contract() || declaration.Check() != nil || declaration.Name != asset.Ref.Name || declaration.Parent.App != construction.ID || declaration.Child.App != construction.ID {
 		return fmt.Errorf("invalid builder link type asset %s", asset.Ref)
 	}
 	f := linkTypeFromDeclaration(declaration)
@@ -53,8 +55,8 @@ func (b *Build) linkTypeDraftAssets(id string) (before, after []platform.Release
 
 // Freeze the immutable candidate beside the mutable editor row. Existing
 // ordinals must match retained bytes; only the next ordinal can publish.
-func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, error) {
-	return prepareDefinitionPublications(b, assets, b.linkTypeInventory, platform.AssetLinkType, "link", SchemaLinkType, "link type", b.LinkTypeReleaseAsset, func(record LinkType, asset platform.ReleaseAsset, version int) (LinkType, error) {
+func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
+	return prepareDefinitionPublications(b, assets, b.linkTypeInventory, platform.AssetLinkType, "link", construction.SchemaLinkType, "link type", b.LinkTypeReleaseAsset, func(record LinkType, asset platform.ReleaseAsset, version int) (LinkType, error) {
 		prior, _ := wasPublished[LinkType](record.Published)
 		var q platform.LinkType
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Parent.Name != record.Parent || q.Child.Name != record.Child || q.Via != record.Via || !linkKeepsGuarantees(prior, linkTypeFromDeclaration(q)) {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -12,10 +12,10 @@ import (
 // A crash after that append cannot turn the original pending effect into a
 // second physical action. The live attempt may still record its actual answer.
 func (t *Tenant) beginDispatchAttempt(x platform.Effect, at time.Time) bool {
-	if x.App != build.ID || x.Event != build.ID+"/dispatch" {
+	if x.App != construction.ID || x.Event != construction.ID+"/dispatch" {
 		return true
 	}
-	var request build.WritebackRequest
+	var request construction.WritebackRequest
 	if json.Unmarshal([]byte(x.Body), &request) != nil || request.Dispatch == "" {
 		return false
 	}

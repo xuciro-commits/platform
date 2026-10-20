@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"context"
 	"encoding/binary"
@@ -62,10 +64,10 @@ func TestProtocolConnectionLoadsReadOnlyPackages(t *testing.T) {
 			defer server.Close()
 			tn.Secrets = func(name string) ([]byte, bool) { return []byte("Bearer read-integration-token"), name == "gateway" }
 			binding := platform.DriverBinding{Package: descriptor.ID, Version: descriptor.Version, Digest: artifact.Artifact, Profile: protocol.profile, Configuration: configuration}
-			decide(t, tn, "builder", build.ID, "build.connection.create", build.ConnectionType, "PLC", map[string]any{"name": "plc", "title": "Local protocol test service", "kind": "http", "address": server.URL, "secret": "gateway", "allowPrivate": true, "protocol": binding}, at)
-			decide(t, tn, "builder", build.ID, "build.connection.check", build.ConnectionType, "PLC", map[string]any{}, at)
+			decide(t, tn, "builder", construction.ID, "build.connection.create", construction.ConnectionType, "PLC", map[string]any{"name": "plc", "title": "Local protocol test service", "kind": "http", "address": server.URL, "secret": "gateway", "allowPrivate": true, "protocol": binding}, at)
+			decide(t, tn, "builder", construction.ID, "build.connection.check", construction.ConnectionType, "PLC", map[string]any{}, at)
 			tn.CheckConnections(at)
-			connection, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "PLC")
+			connection, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "PLC")
 			if connection.Last == nil || !connection.Last.OK || connection.Last.BindingRevision != binding.Revision() || len(connection.Last.Samples) != 0 {
 				t.Fatalf("package did not load through the original connection check: %+v", connection.Last)
 			}
@@ -89,8 +91,8 @@ func TestProtocolConnectionLoadsReadOnlyPackages(t *testing.T) {
 			// granting the member access to connection settings or making history.
 			publishObject(t, tn, "builder", "EQUIPMENT", map[string]any{
 				"name": "equipment", "title": "Equipment",
-				"fields": []build.Field{{Name: "device", Title: "Device", Type: "text"}},
-				"access": []build.Access{{Role: "user", Read: "all", Create: true}},
+				"fields": []construction.Field{{Name: "device", Title: "Device", Type: "text"}},
+				"access": []construction.Access{{Role: "user", Read: "all", Create: true}},
 			}, at)
 			var point platform.DriverPoint
 			for _, candidate := range configuration.Points {
@@ -99,13 +101,13 @@ func TestProtocolConnectionLoadsReadOnlyPackages(t *testing.T) {
 					break
 				}
 			}
-			decide(t, tn, "operator", build.ID, "build.equipment.create", "build.equipment", "DEVICE", map[string]any{"device": point.Device}, at)
-			decide(t, tn, "builder", build.ID, "build.observation.create", build.ObservationType, "CURRENT", map[string]any{
+			decide(t, tn, "operator", construction.ID, "build.equipment.create", "build.equipment", "DEVICE", map[string]any{"device": point.Device}, at)
+			decide(t, tn, "builder", construction.ID, "build.observation.create", construction.ObservationType, "CURRENT", map[string]any{
 				"name": "current", "title": "Current equipment reading", "connection": "PLC", "object": "build.equipment", "deviceField": "device",
 				"signal": point.ID, "unit": point.Unit, "path": "/observation", "windowSeconds": 60,
 				"expectedRetentionSeconds": 3600, "expectedGranularitySeconds": 1, "roles": []string{"user", "builder"},
 			}, at)
-			decide(t, tn, "builder", build.ID, build.SchemaObservation, build.ObservationType, "CURRENT", map[string]any{}, at)
+			decide(t, tn, "builder", construction.ID, construction.SchemaObservation, construction.ObservationType, "CURRENT", map[string]any{}, at)
 			member := memberOf(t, tn, "operator")
 			observations, refusal := tn.Observations(member)
 			if refusal != nil || len(observations) != 1 || !observations[0].SupportsLatest {

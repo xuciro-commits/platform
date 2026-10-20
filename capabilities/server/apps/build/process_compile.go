@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 	"maps"
@@ -11,8 +13,8 @@ import (
 
 // checkProcessScopes checks one graph, one binding grammar and explicit scope
 // boundaries. Layout/React Flow edge JSON is never an execution definition.
-func checkProcessScopes(p Process) error {
-	nodes := map[string]ProcessStep{}
+func checkProcessScopes(p construction.Process) error {
+	nodes := map[string]construction.ProcessStep{}
 	for _, node := range p.Steps {
 		nodes[node.Name] = node
 	}

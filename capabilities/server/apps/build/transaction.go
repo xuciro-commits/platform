@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -164,7 +166,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 		}
 	}
 	if receipt.GetSubmission().GetSchema().GetName() == txn.Subject+".create" {
-		info, _ := platform.Describe(ID, b.installed[txn.Subject], func(reflect.Type) string { return "" })
+		info, _ := platform.Describe(construction.ID, b.installed[txn.Subject], func(reflect.Type) string { return "" })
 		for _, field := range info.Fields {
 			spec.Inputs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 		}
@@ -428,7 +430,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				continue
 			}
 			if step.Effect != nil {
-				w, found := platform.Get[Writeback](c, step.Effect.Writeback)
+				w, found := platform.Get[construction.Writeback](c, step.Effect.Writeback)
 				if !found {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction writeback is unavailable")
 				}
@@ -436,7 +438,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				if err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 				}
-				conn, found := platform.Get[Connection](c, w.Connection)
+				conn, found := platform.Get[construction.Connection](c, w.Connection)
 				if !found {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction effect connection is unavailable")
 				}
@@ -491,7 +493,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 						if err != nil {
 							return err
 						}
-						*item.target = buildapiText(value)
+						*item.target = constructionText(value)
 					}
 				}
 				if w.Member != nil {
@@ -499,7 +501,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 					if err != nil {
 						return err
 					}
-					assignment.To = []platform.Recipient{{Member: buildapiText(value)}}
+					assignment.To = []platform.Recipient{{Member: constructionText(value)}}
 				}
 				if w.Due != nil {
 					value, err := ruleAssignment(*w.Due, scope, c, subject, facts, now, b.conditionLookup)
@@ -538,7 +540,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 			if err := reserve(entity.Type + "/" + id); err != nil {
 				return err
 			}
-			info, _ := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
+			info, _ := platform.Describe(construction.ID, entity, func(reflect.Type) string { return "" })
 			patch := map[string]any{}
 			sources := []string{}
 			for _, assignment := range step.Changes {

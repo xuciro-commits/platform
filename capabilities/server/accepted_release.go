@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -80,7 +80,7 @@ func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		return saved, err
 	}
 	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active, saved.UpgradeID)
-	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3 && saved.Version != 4) || saved.Kind != "release-result" || saved.App != build.ID ||
+	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3 && saved.Version != 4) || saved.Kind != "release-result" || saved.App != construction.ID ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid release result identity")
@@ -164,7 +164,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if err != nil {
 		return saved, err
 	}
-	if saved.Tenant != t.ID || t.app(build.ID) == nil {
+	if saved.Tenant != t.ID || t.app(construction.ID) == nil {
 		return saved, fmt.Errorf("release result belongs to another tenant or unavailable builder")
 	}
 	if prior := t.releases.raw(saved.CandidateID); prior != nil && !bytes.Equal(prior, saved.Bytes) {
@@ -262,17 +262,17 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 // preview cannot be persisted by submitting its ID alone. A retry of an
 // already-saved ID remains possible even after the editor changes the draft.
 func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind, draftID, candidateID, key string, now time.Time) (string, error) {
-	return t.SaveReleaseCandidates(m, []build.JointDraftRef{{Kind: kind, ID: draftID}}, candidateID, key, now)
+	return t.SaveReleaseCandidates(m, []construction.JointDraftRef{{Kind: kind, ID: draftID}}, candidateID, key, now)
 }
 
 // SaveReleaseCandidates persists one or several saved drafts as one immutable
 // candidate. The bytes are recomputed under the tenant lock, so a joint
 // selection cannot be frozen from a stale browser image (ADR-0011).
-func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
+func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []construction.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if !holdsIndependentBuildRole(m, build.Builder, build.Publisher) {
+	if !holdsIndependentBuildRole(m, construction.Builder, construction.Publisher) {
 		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
@@ -299,7 +299,7 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 		}
 		candidateBytes = candidate.Bytes
 	}
-	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
+	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: construction.ID,
 		Member: m.ID, Key: "release:" + key, At: now.UTC(), CandidateID: candidateID,
 		Bytes: candidateBytes}
 	// The idempotency key has a separate namespace from builder submissions.
@@ -322,7 +322,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if !holdsIndependentBuildRole(m, build.Builder, build.Publisher) {
+	if !holdsIndependentBuildRole(m, construction.Builder, construction.Publisher) {
 		return "", fmt.Errorf("builder or publisher role required")
 	}
 	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
@@ -375,7 +375,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if err := t.evaluationsReadyLocked(candidateID, raw); err != nil {
 		return "", err
 	}
-	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
+	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: construction.ID,
 		Member: m.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidateID,
 		Bytes: slices.Clone(raw), Active: true, Installations: installations, Bootstrap: bootstrap}
 	if len(installations) > 0 {
@@ -518,7 +518,7 @@ func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedRelease) (
 	if err != nil {
 		return "", err
 	}
-	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: saved.At}
+	entry := Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: saved.At}
 	if prior, ok := t.releases.request(saved.Key); ok {
 		if prior != saved.RequestHash {
 			return "", fmt.Errorf("release key %s belongs to another request", saved.Key)

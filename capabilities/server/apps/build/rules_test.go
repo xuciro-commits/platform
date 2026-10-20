@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"platformserver/platform"
@@ -8,7 +10,7 @@ import (
 
 func TestRuleSugarMigrationPreservesFrozenBytes(t *testing.T) {
 	raw := `{"name":"job","title":"Job","fields":[{"name":"qty","title":"Qty","type":"integer"},{"name":"total","title":"Total","type":"decimal","formula":"qty * 2"}],"states":[{"name":"ready","title":"Ready"}],"actions":[{"name":"go","title":"Go","from":["ready"],"conditions":[{"field":"qty","operator":">","value":"0","message":"Positive quantity required"}]}]}`
-	var o Object
+	var o construction.Object
 	if err := json.Unmarshal([]byte(raw), &o); err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +22,7 @@ func TestRuleSugarMigrationPreservesFrozenBytes(t *testing.T) {
 	if o.Published != raw || o.Fields[1].FormulaExpr == nil || o.Fields[1].Formula != "" || len(o.Actions[0].Conditions) > 0 || o.Actions[0].Transaction == nil || o.Actions[0].Transaction.Guard == nil {
 		t.Fatal("migration rewrote frozen bytes or retained old writer")
 	}
-	var table Table
+	var table construction.Table
 	tableRaw := `{"name":"table","title":"Table","inputs":[{"name":"qty","type":"number"}],"outputs":[{"name":"ok","type":"boolean"}],"rows":[{"when":["1..5"],"then":["true"]}]}`
 	json.Unmarshal([]byte(tableRaw), &table)
 	table.Published = tableRaw
@@ -46,10 +48,10 @@ func TestRuleSugarMigrationPreservesFrozenBytes(t *testing.T) {
 
 func TestRulePublicationRejectsEveryBranch(t *testing.T) {
 	b := New("rules")
-	base := Object{Name: "job", Title: "Job", Fields: []Field{{Name: "ok", Title: "OK", Type: "boolean"}}, States: []State{{Name: "ready", Title: "Ready"}}}
+	base := construction.Object{Name: "job", Title: "Job", Fields: []construction.Field{{Name: "ok", Title: "OK", Type: "boolean"}}, States: []construction.State{{Name: "ready", Title: "Ready"}}}
 	for _, e := range []platform.Expr{{Op: "unknown", Kind: "boolean"}, {Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("boolean", "ok"), platform.ExprLiteralValue("text", "true")}}, {Op: "count", Kind: "integer", Agg: &platform.ExprAggregate{Source: "undeclared"}}, {Op: "and", Kind: "boolean", Args: []platform.Expr{platform.ExprLiteralValue("boolean", false), {Op: "unknown", Kind: "boolean"}}}} {
 		o := base
-		o.Actions = []Action{{Name: "go", Title: "Go", From: []string{"ready"}, Conditions: []Condition{{Expr: &e, Message: "Rule rejected"}}}}
+		o.Actions = []construction.Action{{Name: "go", Title: "Go", From: []string{"ready"}, Conditions: []construction.Condition{{Expr: &e, Message: "Rule rejected"}}}}
 		if err := b.checkObjectRules(o); err == nil {
 			t.Fatalf("invalid published rule accepted: %+v", e)
 		}

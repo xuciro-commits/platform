@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -28,7 +30,7 @@ func definitionFamilyOf(record any) definitionFamily {
 	switch r := record.(type) {
 	case Query:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case Function:
+	case construction.Function:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case PropertyType:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
@@ -46,7 +48,7 @@ func setDefinitionFamily(record any, family definitionFamily) {
 	switch r := record.(type) {
 	case *Query:
 		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
-	case *Function:
+	case *construction.Function:
 		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
 	case *PropertyType:
 		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
@@ -220,7 +222,7 @@ func retainedDefinitionAsset[D any](source, prefix, label string, kind platform.
 	if !ok || ordinal != version || version < 1 {
 		return platform.ReleaseAsset{}, fmt.Errorf("%s %s version %d is not retained", kind, name, version)
 	}
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: kind, Name: name}, versionText, definition)
+	return definitionReleaseAsset(platform.AssetRef{App: construction.ID, Kind: kind, Name: name}, versionText, definition)
 }
 
 func definitionReleaseAsset(ref platform.AssetRef, version string, definition any) (platform.ReleaseAsset, error) {
@@ -238,20 +240,20 @@ func definitionReleaseAsset(ref platform.AssetRef, version string, definition an
 func (b *Build) definitionAssetVersion(asset platform.ReleaseAsset, kind platform.AssetKind, prefix string) int {
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+"."+prefix+"-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != kind || platform.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != construction.ID || asset.Ref.Kind != kind || platform.CheckAssetDependencies(asset) != nil {
 		return 0
 	}
 	return version
 }
 
-func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAsset, inventory func() ([]T, error), kind platform.AssetKind, prefix, schema, label string, resolve func(string, string) (platform.ReleaseAsset, error), freeze func(T, platform.ReleaseAsset, int) (T, error)) ([]ReleasePublication, error) {
+func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAsset, inventory func() ([]T, error), kind platform.AssetKind, prefix, schema, label string, resolve func(string, string) (platform.ReleaseAsset, error), freeze func(T, platform.ReleaseAsset, int) (T, error)) ([]construction.ReleasePublication, error) {
 	records, err := inventory()
 	if err != nil {
 		return nil, err
 	}
-	var out []ReleasePublication
+	var out []construction.ReleasePublication
 	for _, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != kind {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != kind {
 			continue
 		}
 		text, found := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+"."+prefix+"-")
@@ -304,7 +306,7 @@ func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAss
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ReleasePublication{Schema: schema, Image: raw})
+		out = append(out, construction.ReleasePublication{Schema: schema, Image: raw})
 	}
 	return out, nil
 }
@@ -330,10 +332,10 @@ func draftDefinitionAssets[T any](b *Build, id string, kind platform.AssetKind, 
 	record := records[i]
 	family := definitionFamilyOf(record)
 	if old, ok := wasPublished[T](family.Published); ok {
-		prior = platform.AssetRef{App: ID, Kind: kind, Name: definitionFamilyOf(old).Name}
+		prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: definitionFamilyOf(old).Name}
 		hadPrior = true
 	}
-	next = platform.AssetRef{App: ID, Kind: kind, Name: family.Name}
+	next = platform.AssetRef{App: construction.ID, Kind: kind, Name: family.Name}
 	record, err = check(record)
 	if err != nil {
 		return

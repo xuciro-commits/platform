@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"crypto/sha256"
 	"encoding/json"
@@ -35,8 +37,8 @@ func (m MigrationPlanRecord) descriptor() platform.MigrationDescriptor {
 
 func (b *Build) migrationPlanEntity() platform.Entity {
 	return platform.Entity{Type: MigrationPlanType, Title: "Migration plan", Plural: "Migration plans", Model: MigrationPlanRecord{}, Display: "title",
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "migrations"},
+		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "migrations"},
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {
 				return nil
@@ -48,7 +50,7 @@ func (b *Build) migrationPlanEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain this migration plan as an immutable asset without executing it", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "migrations", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain this migration plan as an immutable asset without executing it", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "migrations", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 				m := record.(*MigrationPlanRecord)
 				next, err := b.retainMigrationPlan(*m)
 				if err != nil {
@@ -60,7 +62,7 @@ func (b *Build) migrationPlanEntity() platform.Entity {
 }
 
 func (b *Build) migrationPlanInventory() ([]MigrationPlanRecord, error) {
-	return readDefinitionInventory[MigrationPlanRecord](b.host.Automation(platform.Caller{}, ID))
+	return readDefinitionInventory[MigrationPlanRecord](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
 func (b *Build) checkMigrationPlan(m MigrationPlanRecord) error {
@@ -89,14 +91,14 @@ func (b *Build) checkMigrationPlan(m MigrationPlanRecord) error {
 }
 
 func migrationPlanAsset(m MigrationPlanRecord, version int) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetMigration, Name: m.Name}, definitionVersion+".migration-"+strconv.Itoa(version), m.descriptor())
+	return definitionReleaseAsset(platform.AssetRef{App: construction.ID, Kind: platform.AssetMigration, Name: m.Name}, construction.ValueDefinitionVersion+".migration-"+strconv.Itoa(version), m.descriptor())
 }
 
 func decodeMigrationAsset(asset platform.ReleaseAsset) (platform.MigrationDescriptor, int, error) {
 	var d platform.MigrationDescriptor
-	ordinal, ok := strings.CutPrefix(asset.SourceVersion, definitionVersion+".migration-")
+	ordinal, ok := strings.CutPrefix(asset.SourceVersion, construction.ValueDefinitionVersion+".migration-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetMigration || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetMigration || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil {
 		return d, 0, fmt.Errorf("Invalid migration asset")
 	}
 	return d, version, nil
@@ -153,7 +155,7 @@ func (b *Build) migrationPlanDraftAssets(id string) (before, after []platform.Re
 		err = fmt.Errorf("The migration plan version family is full")
 		return
 	}
-	next = platform.AssetRef{App: ID, Kind: platform.AssetMigration, Name: m.Name}
+	next = platform.AssetRef{App: construction.ID, Kind: platform.AssetMigration, Name: m.Name}
 	prior, hadPrior = next, m.Published != ""
 	a, e := migrationPlanAsset(m, m.DefinitionVersion+1)
 	if e != nil {
@@ -172,7 +174,7 @@ func (b *Build) prepareMigrationPlanInstallations(assets []platform.ReleaseAsset
 	}
 	out := []platform.AssetInstallation{}
 	for _, a := range assets {
-		if a.Ref.Kind != platform.AssetMigration || a.Ref.App != ID {
+		if a.Ref.Kind != platform.AssetMigration || a.Ref.App != construction.ID {
 			continue
 		}
 		d, version, err := decodeMigrationAsset(a)

@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"os"
@@ -29,7 +31,7 @@ func TestCompleteDefaultWorkflowRetainsOriginalContextAndDependencies(t *testing
 	if err = page.CheckRecordPorts(); err != nil {
 		t.Fatal(err)
 	}
-	asset, err := platform.PageReleaseAsset(ID, "1.page-1", page)
+	asset, err := platform.PageReleaseAsset(construction.ID, "1.page-1", page)
 	if err != nil {
 		t.Fatal(err)
 	}

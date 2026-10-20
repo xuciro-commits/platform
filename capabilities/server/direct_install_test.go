@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"strings"
 	"testing"
@@ -33,16 +35,16 @@ func TestProductionProfileRefusesDirectInstallAndKeepsDelivery(t *testing.T) {
 	}
 	profile := func(value string) {
 		t.Helper()
-		must(PlatformApp, SchemaSettingSet, SettingType, build.ID+"/"+build.SettingReleaseProfile, map[string]string{"value": value})
+		must(PlatformApp, SchemaSettingSet, SettingType, construction.ID+"/"+build.SettingReleaseProfile, map[string]string{"value": value})
 	}
 
 	// The default profile is the development/import one the authoring surfaces
 	// have always used: the direct install still installs.
-	must(build.ID, build.ObjectType+".create", build.ObjectType, "DEV", map[string]any{
+	must(construction.ID, construction.ObjectType+".create", construction.ObjectType, "DEV", map[string]any{
 		"name": "devsigned", "title": "Signed off", "plural": "Signed off",
-		"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}})
-	must(build.ID, build.SchemaPublish, build.ObjectType, "DEV", struct{}{})
-	if installed, _ := tn.RecordOf(member, build.ObjectType, "DEV", at); installed.Record.(build.Object).Published == "" {
+		"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}})
+	must(construction.ID, construction.SchemaPublish, construction.ObjectType, "DEV", struct{}{})
+	if installed, _ := tn.RecordOf(member, construction.ObjectType, "DEV", at); installed.Record.(construction.Object).Published == "" {
 		t.Fatal("the development profile lost its direct install")
 	}
 
@@ -55,18 +57,18 @@ func TestProductionProfileRefusesDirectInstallAndKeepsDelivery(t *testing.T) {
 	// Declared production: the same entry is refused, and the draft is still a
 	// draft with nothing installed behind it.
 	profile(build.ProfileProduction)
-	must(build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{
+	must(construction.ID, construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{
 		"name": "prodintake", "title": "Prod intake", "plural": "Prod intakes",
-		"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}})
+		"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}})
 	if out, err := tn.Read(member, build.ReadReleaseProfile); err != nil || out.(build.ReleaseProfile).DirectInstall {
 		t.Fatalf("production profile read: %+v %v", out, err)
 	}
-	_, refused := tn.Submit(member, submission(tn, member, build.ID, build.SchemaPublish, build.ObjectType, "O", struct{}{}), at)
+	_, refused := tn.Submit(member, submission(tn, member, construction.ID, construction.SchemaPublish, construction.ObjectType, "O", struct{}{}), at)
 	if refused == nil || refused.Message == "" {
 		t.Fatalf("production accepted a direct install: %v", refused)
 	}
-	draft, _ := tn.RecordOf(member, build.ObjectType, "O", at)
-	if object := draft.Record.(build.Object); object.Published != "" || object.Installed != "" {
+	draft, _ := tn.RecordOf(member, construction.ObjectType, "O", at)
+	if object := draft.Record.(construction.Object); object.Published != "" || object.Installed != "" {
 		t.Fatalf("the refused install changed the draft: %+v", object)
 	}
 	// The refusal is the profile's, not the draft's: it names what to do instead.
@@ -78,10 +80,10 @@ func TestProductionProfileRefusesDirectInstallAndKeepsDelivery(t *testing.T) {
 
 	// Delivery itself is unchanged: the joint candidate installs the same
 	// definition, and replaying the accepted log keeps it.
-	must(build.ID, build.PageType+".create", build.PageType, "PAGE", map[string]any{
+	must(construction.ID, construction.PageType+".create", construction.PageType, "PAGE", map[string]any{
 		"name": "prodintakes", "title": "Prod intakes", "object": "build.prodintake",
 		"sections": []build.Section{{Widget: "table", Fields: []string{"note"}}}})
-	preview, err := tn.PreviewReleaseDrafts(member, []build.JointDraftRef{
+	preview, err := tn.PreviewReleaseDrafts(member, []construction.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetPage, ID: "PAGE"}})
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
 		t.Fatalf("production joint preview: %+v %v", preview, err)

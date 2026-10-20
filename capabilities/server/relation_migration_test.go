@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"errors"
@@ -7,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"platformserver/apps/build"
 	"platformserver/apps/relations"
 	"platformserver/platform"
 )
@@ -17,8 +18,8 @@ func TestOwnedRelationMigrationPreservesHistoryAndOneActiveTruth(t *testing.T) {
 	compose := func() *Tenant { return builderTenant(t, tenant, relations.New(tenant)) }
 	tn := compose()
 	for _, name := range []string{"parent", "child"} {
-		typ := publishObject(t, tn, "builder", strings.ToUpper(name), map[string]any{"name": name, "title": name, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, txnAt)
-		decide(t, tn, "builder", build.ID, typ+".create", typ, name, map[string]any{"name": name}, txnAt)
+		typ := publishObject(t, tn, "builder", strings.ToUpper(name), map[string]any{"name": name, "title": name, "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, txnAt)
+		decide(t, tn, "builder", construction.ID, typ+".create", typ, name, map[string]any{"name": name}, txnAt)
 	}
 	legacy := tn.app(relations.ID).(*relations.Relations)
 	oldLink := platform.RelationLink{From: "build.parent/parent", To: "build.child/child", By: "historical-builder", At: txnAt}
@@ -31,15 +32,15 @@ func TestOwnedRelationMigrationPreservesHistoryAndOneActiveTruth(t *testing.T) {
 	if err := legacy.Restore(platform.Raw(state)); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "builder", build.ID, "build.linktype.create", build.LinkTypeType, "LINK", map[string]any{"name": "children", "title": "Children", "description": "Owned historical children", "storage": "edge", "parent": "build.parent", "child": "build.child", "forward": "children", "reverse": "parent", "cardinality": "one-to-many"}, txnAt)
-	decide(t, tn, "builder", build.ID, "build.linktype.publish", build.LinkTypeType, "LINK", nil, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.linktype.create", construction.LinkTypeType, "LINK", map[string]any{"name": "children", "title": "Children", "description": "Owned historical children", "storage": "edge", "parent": "build.parent", "child": "build.child", "forward": "children", "reverse": "parent", "cardinality": "one-to-many"}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.linktype.publish", construction.LinkTypeType, "LINK", nil, txnAt)
 	before, _, snapshotErr := tn.Snapshot(func() int64 { return 0 })
 	if snapshotErr != nil {
 		t.Fatal(snapshotErr)
 	}
 	legacyBefore, _ := legacy.Snapshot()
-	binding := platform.AssetBinding{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetLinkType, Name: "children"}, SourceVersion: "1.link-1"}
-	plan, err := tn.relationMigrationPlan(tn.records, tn.caller(memberOf(t, tn, "builder"), tn.app(build.ID), false), binding, txnAt)
+	binding := platform.AssetBinding{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetLinkType, Name: "children"}, SourceVersion: "1.link-1"}
+	plan, err := tn.relationMigrationPlan(tn.records, tn.caller(memberOf(t, tn, "builder"), tn.app(construction.ID), false), binding, txnAt)
 	if err != nil || plan.Partial || !reflect.DeepEqual(plan.Links, []platform.RelationLink{oldLink}) {
 		t.Fatalf("migration preview: %+v %v", plan, err)
 	}
@@ -52,14 +53,14 @@ func TestOwnedRelationMigrationPreservesHistoryAndOneActiveTruth(t *testing.T) {
 		entries = append(entries, entry)
 		return entry.Body, nil
 	}
-	if got := refuse(t, tn, "builder", build.ID, "build.linktype.migrate", build.LinkTypeType, "LINK", nil, txnAt); got == "ok" {
+	if got := refuse(t, tn, "builder", construction.ID, "build.linktype.migrate", construction.LinkTypeType, "LINK", nil, txnAt); got == "ok" {
 		t.Fatal("failed append accepted migration")
 	}
-	if tn.records.types[platform.OwnedRelationType(build.ID)].rows.len() != 0 {
+	if tn.records.types[platform.OwnedRelationType(construction.ID)].rows.len() != 0 {
 		t.Fatal("failed append left migration rows")
 	}
 	fail = false
-	decide(t, tn, "builder", build.ID, "build.linktype.migrate", build.LinkTypeType, "LINK", nil, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.linktype.migrate", construction.LinkTypeType, "LINK", nil, txnAt)
 	legacyAfter, _ := legacy.Snapshot()
 	if string(legacyBefore) != string(legacyAfter) {
 		t.Fatal("migration rewrote historical relation state")

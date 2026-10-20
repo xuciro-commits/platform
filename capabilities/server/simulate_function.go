@@ -10,7 +10,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -60,7 +60,7 @@ func pendingFunctionEffects(t *Tenant) []platform.Effect {
 	return pending
 }
 
-func settleFunctionFixture(t *Tenant, actor platform.Member, fixture build.FunctionFixture, now time.Time) (bool, error) {
+func settleFunctionFixture(t *Tenant, actor platform.Member, fixture construction.FunctionFixture, now time.Time) (bool, error) {
 	pending := pendingFunctionEffects(t)
 	if len(pending) == 0 {
 		return false, nil
@@ -96,14 +96,14 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture build.Funct
 		return false, fmt.Errorf("fixture settlement failed")
 	}
 	kind, id, ok := strings.Cut(ask.Record, "/")
-	if !ok || kind != build.FunctionCallType {
+	if !ok || kind != construction.FunctionCallType {
 		return false, fmt.Errorf("fixture reply is not a builder function call")
 	}
 	view, refusal := t.RecordOf(actor, kind, id, now)
 	if refusal != nil {
 		return false, nil
 	}
-	run, ok := view.Record.(build.FunctionRun)
+	run, ok := view.Record.(construction.FunctionRun)
 	if !ok || run.State != fixture.ExpectState {
 		return false, nil
 	}

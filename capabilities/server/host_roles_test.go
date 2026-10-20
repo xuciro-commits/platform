@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"platformserver/apps/build"
 	"platformserver/internal/host"
@@ -32,7 +34,7 @@ func TestCompositionReadyRequiresAllDeclarations(t *testing.T) {
 	if c.ready != 1 {
 		t.Fatalf("Ready called %d times", c.ready)
 	}
-	if m, ok := tenant.Member("admin"); !ok || !m.Holds(build.ID, build.Builder) {
+	if m, ok := tenant.Member("admin"); !ok || !m.Holds(construction.ID, construction.Builder) {
 		t.Fatal("ready identity roles missing")
 	}
 	failed := &readyConsole{Console: NewConsole("invalid", seatOf("admin", "platform:admin")), testing: t}

@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -25,27 +27,27 @@ func observationTenant(t *testing.T) (*Tenant, func() *Tenant, platform.AssetRef
 	tn := compose()
 	at := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
 	publishObject(t, tn, "builder", "DEVICE", map[string]any{
-		"name": "device", "title": "Device", "fields": []build.Field{{Name: "device", Title: "Device", Type: "text"}, {Name: "limit", Title: "Limit", Type: "decimal"}, {Name: "latest", Title: "Latest", Type: "decimal"}, {Name: "trend", Title: "Trend", Type: "decimal"}, {Name: "samples", Title: "Sample count", Type: "integer"}},
-		"states":  []build.State{{Name: "normal", Title: "Normal"}, {Name: "warning", Title: "Warning"}},
-		"access":  []build.Access{{Role: "user", Read: "all", Create: true, Edit: true}, {Role: "observer", Read: "all"}},
-		"actions": []build.Action{{Name: "warn", Title: "Record warning", From: []string{"normal"}, To: "warning", Roles: []string{"user"}, Inputs: []build.Input{{Name: "latest", Title: "Latest", Type: "decimal", Required: true}, {Name: "trend", Title: "Trend", Type: "decimal", Required: true}, {Name: "samples", Title: "Sample count", Type: "integer", Required: true}}, Sets: []build.Set{{Field: "latest", From: "latest"}, {Field: "trend", From: "trend"}, {Field: "samples", From: "samples"}}}},
+		"name": "device", "title": "Device", "fields": []construction.Field{{Name: "device", Title: "Device", Type: "text"}, {Name: "limit", Title: "Limit", Type: "decimal"}, {Name: "latest", Title: "Latest", Type: "decimal"}, {Name: "trend", Title: "Trend", Type: "decimal"}, {Name: "samples", Title: "Sample count", Type: "integer"}},
+		"states":  []construction.State{{Name: "normal", Title: "Normal"}, {Name: "warning", Title: "Warning"}},
+		"access":  []construction.Access{{Role: "user", Read: "all", Create: true, Edit: true}, {Role: "observer", Read: "all"}},
+		"actions": []construction.Action{{Name: "warn", Title: "Record warning", From: []string{"normal"}, To: "warning", Roles: []string{"user"}, Inputs: []construction.Input{{Name: "latest", Title: "Latest", Type: "decimal", Required: true}, {Name: "trend", Title: "Trend", Type: "decimal", Required: true}, {Name: "samples", Title: "Sample count", Type: "integer", Required: true}}, Sets: []construction.Set{{Field: "latest", From: "latest"}, {Field: "trend", From: "trend"}, {Field: "samples", From: "samples"}}}},
 	}, at)
-	decide(t, tn, "operator", build.ID, "build.device.create", "build.device", "D1", map[string]any{"device": "boiler-1", "limit": 35}, at)
-	decide(t, tn, "builder", build.ID, "build.connection.create", build.ConnectionType, "CONNECTION", map[string]any{"name": "thermalstore", "title": "External thermal store", "kind": "http", "address": "http://observation.test", "allowPrivate": true}, at)
-	decide(t, tn, "builder", build.ID, "build.connection.check", build.ConnectionType, "CONNECTION", map[string]any{}, at)
+	decide(t, tn, "operator", construction.ID, "build.device.create", "build.device", "D1", map[string]any{"device": "boiler-1", "limit": 35}, at)
+	decide(t, tn, "builder", construction.ID, "build.connection.create", construction.ConnectionType, "CONNECTION", map[string]any{"name": "thermalstore", "title": "External thermal store", "kind": "http", "address": "http://observation.test", "allowPrivate": true}, at)
+	decide(t, tn, "builder", construction.ID, "build.connection.check", construction.ConnectionType, "CONNECTION", map[string]any{}, at)
 	tn.Outbound = func(*http.Request, bool) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{}`)), Header: make(http.Header)}, nil
 	}
 	tn.CheckConnections(at)
 
-	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetObservation, Name: "temperature"}
-	decision := &platform.ObservationDecision{Action: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.device.warn"}, When: platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetObservation, Name: "temperature"}
+	decision := &platform.ObservationDecision{Action: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: "build.device.warn"}, When: platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{
 		{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("choice", "record.state"), platform.ExprLiteralValue("choice", "normal")}},
 		{Op: ">", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("decimal", "observation.latest"), platform.ExprReference("decimal", "record.limit")}},
 		{Op: ">", Kind: "boolean", Args: []platform.Expr{{Op: "rate", Kind: "decimal", Window: &platform.ExprWindowReference{Source: "observation"}}, platform.ExprLiteralValue("decimal", "0.1")}},
 	}}, Inputs: map[string]platform.Expr{"latest": platform.ExprReference("decimal", "observation.latest"), "trend": {Op: "delta", Kind: "decimal", Window: &platform.ExprWindowReference{Source: "observation"}}, "samples": {Op: "over-window", Kind: "integer", Window: &platform.ExprWindowReference{Source: "observation", Aggregate: "count"}}}}
-	decide(t, tn, "builder", build.ID, "build.observation.create", build.ObservationType, "OBSERVATION", map[string]any{"name": ref.Name, "title": "Building temperature", "connection": "CONNECTION", "object": "build.device", "deviceField": "device", "signal": "temperature", "unit": "C", "path": "/observations", "windowSeconds": 120, "expectedRetentionSeconds": 86400, "expectedGranularitySeconds": 1, "roles": []string{"user", "builder"}, "decision": decision}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaObservation, build.ObservationType, "OBSERVATION", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.observation.create", construction.ObservationType, "OBSERVATION", map[string]any{"name": ref.Name, "title": "Building temperature", "connection": "CONNECTION", "object": "build.device", "deviceField": "device", "signal": "temperature", "unit": "C", "path": "/observations", "windowSeconds": 120, "expectedRetentionSeconds": 86400, "expectedGranularitySeconds": 1, "roles": []string{"user", "builder"}, "decision": decision}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaObservation, construction.ObservationType, "OBSERVATION", map[string]any{}, at)
 	return tn, compose, ref, at
 }
 
@@ -145,7 +147,7 @@ func TestObservationReadRevalidatesOriginalRecordAfterExternalIO(t *testing.T) {
 	tn, _, ref, at := observationTenant(t)
 	count, calls := int64(1000), 0
 	tn.Outbound = observationSender(t, &count, &calls, func() {
-		decide(t, tn, "operator", build.ID, "build.device.edit", "build.device", "D1", map[string]any{"limit": 99}, at)
+		decide(t, tn, "operator", construction.ID, "build.device.edit", "build.device", "D1", map[string]any{"limit": 99}, at)
 	})
 	_, refusal := tn.ReadObservation(context.Background(), memberOf(t, tn, "operator"), ref, ObservationRead{Record: "D1", Since: at.Add(-120 * time.Second), Until: at, Mode: "summary"}, at)
 	if refusal == nil || !strings.Contains(refusal.Message, "changed") || calls != 1 {
@@ -155,8 +157,8 @@ func TestObservationReadRevalidatesOriginalRecordAfterExternalIO(t *testing.T) {
 
 func TestScheduledObservationSharesSourceLoopWithoutPointWrites(t *testing.T) {
 	tn, _, ref, at := observationTenant(t)
-	decide(t, tn, "builder", build.ID, "build.observation.edit", build.ObservationType, "OBSERVATION", map[string]any{"scheduled": true}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaObservation, build.ObservationType, "OBSERVATION", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.observation.edit", construction.ObservationType, "OBSERVATION", map[string]any{"scheduled": true}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaObservation, construction.ObservationType, "OBSERVATION", map[string]any{}, at)
 	count, calls := int64(60000), 0
 	tn.Outbound = observationSender(t, &count, &calls, nil)
 	entries := []Entry{}
@@ -181,7 +183,7 @@ func TestScheduledObservationSharesSourceLoopWithoutPointWrites(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatal("restarting the outside schedule duplicated business state")
 	}
-	decide(t, tn, "builder", build.ID, "build.observation.retire", build.ObservationType, "OBSERVATION", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, "build.observation.retire", construction.ObservationType, "OBSERVATION", map[string]any{}, at)
 	beforeCalls := calls
 	_, refusal := tn.ReadObservation(context.Background(), memberOf(t, tn, "operator"), ref, ObservationRead{Record: "D1", Since: at.Add(-120 * time.Second), Until: at, Mode: "summary"}, at)
 	if refusal == nil || calls != beforeCalls {
@@ -191,9 +193,9 @@ func TestScheduledObservationSharesSourceLoopWithoutPointWrites(t *testing.T) {
 
 func TestObservationStorageReplacementOnlyChangesTheEnvironmentBinding(t *testing.T) {
 	tn, _, ref, at := observationTenant(t)
-	decide(t, tn, "builder", build.ID, "build.app.create", build.AppType, "APPLICATION", map[string]any{"name": "heating", "title": "Heating", "resources": []platform.AssetRef{ref}}, at)
-	decide(t, tn, "builder", build.ID, build.SchemaHandOver, build.AppType, "APPLICATION", map[string]any{}, at)
-	application, refusal := tn.ApplicationRuntimeOf(memberOf(t, tn, "builder"), platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "heating"}, at)
+	decide(t, tn, "builder", construction.ID, "build.app.create", construction.AppType, "APPLICATION", map[string]any{"name": "heating", "title": "Heating", "resources": []platform.AssetRef{ref}}, at)
+	decide(t, tn, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, "APPLICATION", map[string]any{}, at)
+	application, refusal := tn.ApplicationRuntimeOf(memberOf(t, tn, "builder"), platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "heating"}, at)
 	if refusal != nil || !slices.ContainsFunc(application.Artifact.Integrations, func(binding platform.AssetBinding) bool { return binding.Ref == ref }) {
 		t.Fatalf("application omitted observation integration: %+v %v", application.Artifact.Integrations, refusal)
 	}
@@ -216,20 +218,20 @@ func TestObservationStorageReplacementOnlyChangesTheEnvironmentBinding(t *testin
 	first, second := storage(1000), storage(10_000_000)
 	defer first.Close()
 	defer second.Close()
-	original, _ := platform.Get[build.Observation](tn.automation(build.ID, false), "OBSERVATION")
+	original, _ := platform.Get[construction.Observation](tn.automation(construction.ID, false), "OBSERVATION")
 	tn.Outbound = nil // use real guarded HTTP against the two independent external adapters
 	for index, test := range []struct {
 		address string
 		count   int64
 	}{{first.URL, 1000}, {second.URL, 10_000_000}} {
-		decide(t, tn, "builder", build.ID, "build.connection.edit", build.ConnectionType, "CONNECTION", map[string]any{"address": test.address}, at)
-		decide(t, tn, "builder", build.ID, "build.connection.check", build.ConnectionType, "CONNECTION", map[string]any{}, at)
+		decide(t, tn, "builder", construction.ID, "build.connection.edit", construction.ConnectionType, "CONNECTION", map[string]any{"address": test.address}, at)
+		decide(t, tn, "builder", construction.ID, "build.connection.check", construction.ConnectionType, "CONNECTION", map[string]any{}, at)
 		tn.CheckConnections(at.Add(time.Duration(index+1) * time.Second))
 		result, refusal := tn.ReadObservation(context.Background(), memberOf(t, tn, "operator"), ref, ObservationRead{Record: "D1", Since: at.Add(-120 * time.Second), Until: at, Mode: "summary"}, at)
 		if refusal != nil || result.Window.Count != test.count {
 			t.Fatalf("environment source replacement: %+v %v", result, refusal)
 		}
-		current, _ := platform.Get[build.Observation](tn.automation(build.ID, false), "OBSERVATION")
+		current, _ := platform.Get[construction.Observation](tn.automation(construction.ID, false), "OBSERVATION")
 		if current.Published != original.Published || current.DefinitionVersion != original.DefinitionVersion {
 			t.Fatal("storage replacement changed the application definition")
 		}

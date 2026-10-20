@@ -1,15 +1,15 @@
 package build
 
 import (
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"testing"
 )
 
 func TestTableDecide(t *testing.T) {
-	tb := Table{Name: "discount", Title: "Discount",
-		Inputs:  []TableColumn{{Name: "tier", Type: "text"}, {Name: "amount", Type: "number"}, {Name: "rush", Type: "boolean"}},
-		Outputs: []TableColumn{{Name: "percent", Type: "number"}, {Name: "approver", Type: "text"}},
-		Rows: []TableRow{
+	tb := construction.Table{Name: "discount", Title: "Discount",
+		Inputs:  []construction.TableColumn{{Name: "tier", Type: "text"}, {Name: "amount", Type: "number"}, {Name: "rush", Type: "boolean"}},
+		Outputs: []construction.TableColumn{{Name: "percent", Type: "number"}, {Name: "approver", Type: "text"}},
+		Rows: []construction.TableRow{
 			{When: []string{"gold|platinum", ">= 1000", ""}, Then: []string{"12", "none"}},
 			{When: []string{"gold", "100..999.99", "false"}, Then: []string{"5", "none"}},
 			{When: []string{"*", "> 5000", "true"}, Then: []string{"0", "manager"}},
@@ -42,7 +42,7 @@ func TestTableDecide(t *testing.T) {
 	if _, err := tb.Decide(map[string]any{"tier": "silver", "amount": 10.0, "rush": false}); err == nil {
 		t.Fatal("no default: expected a refusal")
 	}
-	if _, err := buildapi.ValueParseCondition("> 3", "text"); err == nil {
+	if _, err := construction.ValueParseCondition("> 3", "text"); err == nil {
 		t.Fatal("comparison on text must be refused")
 	}
 }

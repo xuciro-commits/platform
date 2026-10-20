@@ -1,6 +1,6 @@
 package build
 
-import construction "platformserver/internal/host/buildapi"
+import "platformserver/internal/construction"
 
 import (
 	"encoding/json"

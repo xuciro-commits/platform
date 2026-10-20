@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"platformkernel/kernel"
-	build "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -13,39 +13,39 @@ import (
 type ConstructionDrafts interface {
 	platform.App
 	CompleteBlueprintAssets([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
-	RootDrafts([]platform.AssetRef) ([]build.JointDraftRef, error)
-	ApplicationDrafts(string) ([]build.JointDraftRef, error)
-	ReferencedDrafts(platform.AssetKind, string) ([]build.JointDraftRef, error)
-	SavedDraftChanges(platform.Caller, string, string, string) ([]build.DraftChange, error)
+	RootDrafts([]platform.AssetRef) ([]construction.JointDraftRef, error)
+	ApplicationDrafts(string) ([]construction.JointDraftRef, error)
+	ReferencedDrafts(platform.AssetKind, string) ([]construction.JointDraftRef, error)
+	SavedDraftChanges(platform.Caller, string, string, string) ([]construction.DraftChange, error)
 	SavedObjectActions(platform.Caller) ([]platform.Action, error)
-	DraftReleaseAssetsMulti([]build.JointDraftRef, platform.Member) (build.JointDraftAssets, error)
+	DraftReleaseAssetsMulti([]construction.JointDraftRef, platform.Member) (construction.JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
-	CheckProcess(platform.Caller, build.Process) *kernel.Error
-	CheckPipeline(platform.Caller, build.Pipeline) *kernel.Error
+	CheckProcess(platform.Caller, construction.Process) *kernel.Error
+	CheckPipeline(platform.Caller, construction.Pipeline) *kernel.Error
 }
 
 // ConstructionDraftReader converts a copied, already authorized object draft
 // to the owner's current expression without changing retained publications.
 type ConstructionDraftReader interface {
-	CanonicalObject(build.Object) (build.Object, error)
+	CanonicalObject(construction.Object) (construction.Object, error)
 }
 
 // IntegrationDefinitions resolves accepted typed configuration. It owns no
 // transport or host lock; consumers capture values before outside I/O.
 type IntegrationDefinitions interface {
-	ExecutionSource(build.Source) (build.Source, error)
-	ExecutionConnection(build.Connection) (build.Connection, error)
-	ExecutionDataset(build.Dataset) (build.Dataset, error)
-	ExecutionPipeline(build.Pipeline) (build.Pipeline, error)
-	ExecutionWriteback(build.Writeback) (build.Writeback, error)
-	ExecutionMatching(build.Match) (build.Match, error)
+	ExecutionSource(construction.Source) (construction.Source, error)
+	ExecutionConnection(construction.Connection) (construction.Connection, error)
+	ExecutionDataset(construction.Dataset) (construction.Dataset, error)
+	ExecutionPipeline(construction.Pipeline) (construction.Pipeline, error)
+	ExecutionWriteback(construction.Writeback) (construction.Writeback, error)
+	ExecutionMatching(construction.Match) (construction.Match, error)
 }
 
 type ConstructionSandbox interface {
 	platform.App
 	AssetDefinitionReader
 	Reinstall() error
-	ProcessFromAsset(platform.ReleaseAsset) (build.Process, error)
+	ProcessFromAsset(platform.ReleaseAsset) (construction.Process, error)
 	InstallPropertyTypeAsset(platform.ReleaseAsset) error
 	InstallFunctionAsset(platform.ReleaseAsset) error
 	InstallAgentAsset(platform.ReleaseAsset) error
@@ -73,7 +73,7 @@ type OperationDefinitions interface {
 }
 
 type AlertDefinitions interface {
-	AlertRules(string) ([]build.Alert, error)
+	AlertRules(string) ([]construction.Alert, error)
 }
 type FlowDefinitionPresence interface {
 	HasDefinition(string, string, int) bool
@@ -91,7 +91,7 @@ type NativeFlowAssets interface {
 // ObservationDefinitions retains only the source declaration. External points
 // and summaries are read transiently by the host transport.
 type ObservationDefinitions interface {
-	ExecutionObservation(build.Observation) (platform.ObservationDefinition, error)
+	ExecutionObservation(construction.Observation) (platform.ObservationDefinition, error)
 }
 
 // AssetDefinitionReader projects the original controlled owner's accepted

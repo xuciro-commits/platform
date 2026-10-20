@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 	"platformserver/platform"
@@ -21,7 +23,7 @@ func retainPagePublication(p *Page) error {
 			return fmt.Errorf("invalid original page publication history")
 		}
 		view := descriptor(saved)
-		if _, err := platform.PageReleaseAsset(ID, "", view); err != nil {
+		if _, err := platform.PageReleaseAsset(construction.ID, "", view); err != nil {
 			return err
 		}
 		version, err := platform.PageContentVersion(view)
@@ -47,7 +49,7 @@ func (b *Build) PageContent(name, version string) (platform.Page, bool) {
 	if platform.CheckPageContentVersion(version) != nil || b.host == nil {
 		return platform.Page{}, false
 	}
-	rows, err := readDefinitionInventory[Page](b.host.Automation(platform.Caller{}, ID))
+	rows, err := readDefinitionInventory[Page](b.host.Automation(platform.Caller{}, construction.ID))
 	if err != nil {
 		return platform.Page{}, false
 	}

@@ -6,14 +6,14 @@ import (
 	"reflect"
 	"slices"
 
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
 // The object owner declares compatibility before publication. No historical
 // definition is rewritten; old publications without this metadata contribute
 // their original version-1 identity when their next version is published.
-func (b *Build) captureObjectSchema(object *Object) error {
+func (b *Build) captureObjectSchema(object *construction.Object) error {
 	portable, err := b.dispatchSchemaObject(*object)
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func (b *Build) captureObjectSchema(object *Object) error {
 	}
 	var versions []platform.SchemaVersion
 	family := uint32(1)
-	if previous, exists := wasPublished[Object](object.Published); exists {
+	if previous, exists := wasPublished[construction.Object](object.Published); exists {
 		versions = slices.Clone(previous.SchemaVersions)
 		if len(versions) == 0 {
 			portable, err := b.dispatchSchemaObject(previous)
@@ -69,12 +69,12 @@ func (b *Build) captureObjectSchema(object *Object) error {
 	return nil
 }
 
-func objectSchemaBody(object Object) (json.RawMessage, error) {
+func objectSchemaBody(object construction.Object) (json.RawMessage, error) {
 	object.SchemaVersions = nil
-	return definitionBody(object, buildapi.TypeOf(object.Name))
+	return definitionBody(object, construction.TypeOf(object.Name))
 }
 
-func checkObjectSchemas(object Object) error {
+func checkObjectSchemas(object construction.Object) error {
 	if len(object.SchemaVersions) == 0 {
 		return nil
 	}
@@ -99,9 +99,9 @@ func checkObjectSchemas(object Object) error {
 	return nil
 }
 
-func compatibleObjectSchema(previous, next Object) bool {
+func compatibleObjectSchema(previous, next construction.Object) bool {
 	// Display and publication provenance do not alter a submission contract.
-	normalize := func(object Object) Object {
+	normalize := func(object construction.Object) construction.Object {
 		object.Record = platform.Record{}
 		object.Title, object.Plural, object.Description = "", "", ""
 		object.State, object.Installed, object.Published = "", "", ""
@@ -124,20 +124,20 @@ func compatibleObjectSchema(previous, next Object) bool {
 	if !reflect.DeepEqual(normalize(previous), normalize(next)) {
 		return false
 	}
-	fieldContract := func(field Field) Field {
+	fieldContract := func(field construction.Field) construction.Field {
 		field.Title, field.SourceType = "", ""
 		field.AIInput = nil
 		field.Search = false
 		return field
 	}
 	for _, old := range previous.Fields {
-		index := slices.IndexFunc(next.Fields, func(field Field) bool { return field.Name == old.Name })
+		index := slices.IndexFunc(next.Fields, func(field construction.Field) bool { return field.Name == old.Name })
 		if index < 0 || !reflect.DeepEqual(fieldContract(old), fieldContract(next.Fields[index])) {
 			return false
 		}
 	}
 	for _, field := range next.Fields {
-		if slices.ContainsFunc(previous.Fields, func(old Field) bool { return old.Name == field.Name }) {
+		if slices.ContainsFunc(previous.Fields, func(old construction.Field) bool { return old.Name == field.Name }) {
 			continue
 		}
 		if field.Required || field.Ref != "" || field.Property != nil || field.Formula != "" || field.FormulaExpr != nil || field.ReadOnly || field.AliasOf != "" || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
@@ -147,7 +147,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 	return true
 }
 
-func objectActions(object Object, entity platform.Entity) []platform.Action {
+func objectActions(object construction.Object, entity platform.Entity) []platform.Action {
 	actions := platform.EntityActions(entity)
 	var binding platform.SchemaVersion
 	if len(object.SchemaVersions) > 0 {

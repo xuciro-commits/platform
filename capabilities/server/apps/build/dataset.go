@@ -2,7 +2,7 @@ package build
 
 import (
 	"encoding/json"
-	construction "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 
 	"sort"
 	"time"

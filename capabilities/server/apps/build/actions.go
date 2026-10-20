@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 
 	"reflect"
 	"slices"
@@ -25,8 +25,8 @@ import (
 // the decision being taken; nil where no host is attached (descriptors,
 // validation), which refuses a Create or a Post.
 type creator interface {
-	create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
-	post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error)
+	create(c platform.Caller, cr construction.Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
+	post(c platform.Caller, p construction.Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error)
 	transact(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) *kernel.Error
 }
 
@@ -36,7 +36,7 @@ var Operators = []string{"=", "!=", "<", "<=", ">", ">=", "empty", "not empty"}
 // checkProcess refuses states and actions people could not take: names that are
 // not names, an action from or to a state the object has not, an input or a
 // field it does not have, a condition that compares nothing.
-func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) error {
+func checkProcess(o construction.Object, lookup func(string) (platform.EntityInfo, bool)) error {
 	if len(o.States) == 0 && len(o.Actions) > 0 {
 		return fmt.Errorf("an object needs states before it has actions")
 	}
@@ -52,7 +52,7 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 		}
 		states[s.Name] = true
 	}
-	fields := map[string]Field{}
+	fields := map[string]construction.Field{}
 	for _, f := range o.Fields {
 		fields[f.Name] = f
 	}
@@ -102,7 +102,7 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 				if strings.TrimSpace(level.Title) == "" || level.Role == "" {
 					return fmt.Errorf("%s approval level %d needs a title and role", where, i+1)
 				}
-				if level.Role != Builder && (len(o.Access) == 0 && level.Role != User || len(o.Access) > 0 && !slices.ContainsFunc(o.Access, func(x Access) bool { return x.Role == level.Role && x.Read == "all" })) {
+				if level.Role != construction.Builder && (len(o.Access) == 0 && level.Role != construction.User || len(o.Access) > 0 && !slices.ContainsFunc(o.Access, func(x construction.Access) bool { return x.Role == level.Role && x.Read == "all" })) {
 					return fmt.Errorf("%s approval level %d names %q, which cannot read every record of this object", where, i+1, level.Role)
 				}
 			}
@@ -110,7 +110,7 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 		if a.To == "" && len(a.From) == 0 {
 			return fmt.Errorf("%s leaves nothing to stay in", where)
 		}
-		inputs := map[string]Input{}
+		inputs := map[string]construction.Input{}
 		for _, in := range a.Inputs {
 			switch {
 			case !named(in.Name):
@@ -119,9 +119,9 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 				return fmt.Errorf("%s: the input %q is declared twice", where, in.Name)
 			case in.Title == "":
 				return fmt.Errorf("%s: the input %q has no label", where, in.Name)
-			case inputTypes[in.Type] == "":
+			case construction.ValueInputTypes[in.Type] == "":
 				return fmt.Errorf("%s: the input %q has no type %q", where, in.Name, in.Type)
-			case in.Type == "choice" && len(buildapi.ValueChoices(in.Choices)) == 0:
+			case in.Type == "choice" && len(construction.ValueChoices(in.Choices)) == 0:
 				return fmt.Errorf("%s: the choice input %q has no values", where, in.Name)
 			}
 			if in.Type == "reference" {
@@ -155,10 +155,10 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 		}
 		if a.ToInput != "" {
 			in := inputs[a.ToInput]
-			if in.Type != "choice" || !in.Required || len(buildapi.ValueChoices(in.Choices)) == 0 {
+			if in.Type != "choice" || !in.Required || len(construction.ValueChoices(in.Choices)) == 0 {
 				return fmt.Errorf("%s needs a required state choice input", where)
 			}
-			for _, state := range buildapi.ValueChoices(in.Choices) {
+			for _, state := range construction.ValueChoices(in.Choices) {
 				if !states[state] {
 					return fmt.Errorf("%s input chooses an undeclared state", where)
 				}
@@ -194,8 +194,8 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 					return fmt.Errorf("%s sets %q (%s) from %q (%s), which does not fit", where, f.Name, f.Type, in.Name, in.Type)
 				}
 				if f.Type == "choice" {
-					for _, option := range buildapi.ValueChoices(in.Choices) {
-						if !slices.Contains(buildapi.ValueChoices(f.Choices), option) {
+					for _, option := range construction.ValueChoices(in.Choices) {
+						if !slices.Contains(construction.ValueChoices(f.Choices), option) {
 							return fmt.Errorf("%s sets %q from %q, whose value %q is not one of the field's choices", where, f.Name, in.Name, option)
 						}
 					}
@@ -219,7 +219,7 @@ func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) err
 	return nil
 }
 
-func checkActionCondition(o Object, a Action, cond Condition, lookup func(string) (platform.EntityInfo, bool), requireMessage bool) error {
+func checkActionCondition(o construction.Object, a construction.Action, cond construction.Condition, lookup func(string) (platform.EntityInfo, bool), requireMessage bool) error {
 	if cond.Expr != nil {
 		return nil
 	}
@@ -256,17 +256,17 @@ func checkActionCondition(o Object, a Action, cond Condition, lookup func(string
 
 // conditionField resolves a typed operand against this draft and installed
 // related objects. It never infers a field from an arbitrary JSON expression.
-func conditionField(o Object, a Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.FieldInfo, error) {
+func conditionField(o construction.Object, a construction.Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.FieldInfo, error) {
 	if input, ok := strings.CutPrefix(name, "input."); ok {
 		for _, in := range a.Inputs {
 			if in.Name == input {
-				return platform.FieldInfo{Name: name, Type: in.Type, Ref: in.Ref, Choices: buildapi.ValueChoices(in.Choices)}, nil
+				return platform.FieldInfo{Name: name, Type: in.Type, Ref: in.Ref, Choices: construction.ValueChoices(in.Choices)}, nil
 			}
 		}
 		return platform.FieldInfo{}, fmt.Errorf("condition input %q is not declared", input)
 	}
-	return platform.RecordPathField(buildapi.TypeOf(o.Name), strings.Split(name, "."), func(typ string) (platform.EntityInfo, bool) {
-		if typ != buildapi.TypeOf(o.Name) {
+	return platform.RecordPathField(construction.TypeOf(o.Name), strings.Split(name, "."), func(typ string) (platform.EntityInfo, bool) {
+		if typ != construction.TypeOf(o.Name) {
 			if lookup == nil {
 				return platform.EntityInfo{}, false
 			}
@@ -274,7 +274,7 @@ func conditionField(o Object, a Action, name string, lookup func(string) (platfo
 		}
 		info := platform.EntityInfo{Type: typ}
 		for _, f := range o.Fields {
-			info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Choices: buildapi.ValueChoices(f.Choices)})
+			info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Choices: construction.ValueChoices(f.Choices)})
 		}
 		if len(o.States) > 0 {
 			state := platform.FieldInfo{Name: "state", Type: "choice"}
@@ -319,7 +319,7 @@ func inputFits(input, field string) bool {
 
 // checkCondition prevents a published rule from silently changing meaning
 // through lexical comparison (for example an integer compared with "abc").
-func checkCondition(kind string, options []string, c Condition) error {
+func checkCondition(kind string, options []string, c construction.Condition) error {
 	if c.Operator == "empty" || c.Operator == "not empty" {
 		return nil
 	}
@@ -335,7 +335,7 @@ func checkCondition(kind string, options []string, c Condition) error {
 	if c.Operator != "=" && c.Operator != "!=" && kind != "integer" && kind != "decimal" && kind != "date" && kind != "datetime" {
 		return fmt.Errorf("%s does not support ordered comparison", kind)
 	}
-	if _, err := buildapi.ValueConditionValue(kind, c.Value); err != nil {
+	if _, err := construction.ValueConditionValue(kind, c.Value); err != nil {
 		return fmt.Errorf("%q does not fit %s: %w", c.Value, kind, err)
 	}
 	if kind == "choice" && !slices.Contains(options, c.Value) {
@@ -347,7 +347,7 @@ func checkCondition(kind string, options []string, c Condition) error {
 // lifecycle is the object's states and actions as the platform's own lifecycle
 // (ADR-0044): each action a transition whose Do checks its conditions and
 // sets its fields, inside the decision and again in replay.
-func lifecycle(o Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
+func lifecycle(o construction.Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
 	if len(o.States) == 0 {
 		return nil
 	}
@@ -367,7 +367,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 		if a.ToInput != "" {
 			for _, in := range a.Inputs {
 				if in.Name == a.ToInput {
-					reach = buildapi.ValueChoices(in.Choices)
+					reach = construction.ValueChoices(in.Choices)
 				}
 			}
 		}
@@ -378,7 +378,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 		action := a
 		takers := slices.Clone(roles)
 		if len(a.Roles) > 0 { // the builder always tries what it builds
-			takers = append([]string{Builder}, a.Roles...)
+			takers = append([]string{construction.Builder}, a.Roles...)
 		}
 		var approval *platform.Approval
 		if a.Approval != nil {
@@ -430,7 +430,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 
 // stored puts an action's related records under the change that took it, as
 // Do built and checked them from the same inputs (ADR-0047 21c).
-func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
+func stored(o construction.Object, a construction.Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
 	if len(a.Creates) == 0 && len(a.Posts) == 0 || creates == nil {
 		return nil
 	}
@@ -443,7 +443,7 @@ func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.Chang
 		_ = json.Unmarshal(r.GetSubmission().GetPayload(), &inputs)
 		rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
 		for i, cr := range a.Creates {
-			if value, err := creates.create(c, cr, inputs, buildapi.TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err == nil {
+			if value, err := creates.create(c, cr, inputs, construction.TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err == nil {
 				c.Put(r, value)
 			}
 		}
@@ -457,7 +457,7 @@ func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.Chang
 
 // take is one action on a record: its required inputs, its conditions, then
 // the fields it sets. A refusal says what the builder wrote.
-func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator, lookup func(string) (platform.EntityInfo, bool)) *kernel.Error {
+func take(o construction.Object, a construction.Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator, lookup func(string) (platform.EntityInfo, bool)) *kernel.Error {
 	if !c.Replaying {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Legacy action execution is reserved for historical inputs")
 	}
@@ -479,7 +479,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		state, ok := inputs[a.ToInput].(string)
 		allowed := false
 		for _, in := range a.Inputs {
-			if in.Name == a.ToInput && slices.Contains(buildapi.ValueChoices(in.Choices), state) {
+			if in.Name == a.ToInput && slices.Contains(construction.ValueChoices(in.Choices), state) {
 				allowed = true
 			}
 		}
@@ -515,7 +515,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		if creates == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot create records here", a.Title)
 		}
-		if _, err := creates.create(c, cr, inputs, buildapi.TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err != nil {
+		if _, err := creates.create(c, cr, inputs, construction.TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err != nil {
 			return err
 		}
 	}
@@ -571,16 +571,16 @@ var readLevels = map[string]string{"all": platform.ScopeTenant, "below": platfor
 
 // checkScope: the scope fields exist and suit their use, and every read level
 // that needs one has it.
-func checkScope(o Object) error {
-	field := func(name string) *Field {
-		if i := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == name }); i >= 0 {
+func checkScope(o construction.Object) error {
+	field := func(name string) *construction.Field {
+		if i := slices.IndexFunc(o.Fields, func(f construction.Field) bool { return f.Name == name }); i >= 0 {
 			return &o.Fields[i]
 		}
 		return nil
 	}
 	sc := o.Scope
 	if sc == nil {
-		sc = &ObjectScope{}
+		sc = &construction.ObjectScope{}
 	}
 	if sc.Owner != "" {
 		if f := field(sc.Owner); f == nil || f.Type != "text" && f.Type != "reference" {
@@ -603,14 +603,14 @@ func checkScope(o Object) error {
 // checkAccess refuses access people could not be given: a role that is not a
 // name, one listed twice, one that writes what it may not read, and actions or
 // fields naming roles the object does not declare.
-func checkAccess(o Object) error {
-	roles := map[string]bool{Builder: true}
+func checkAccess(o construction.Object) error {
+	roles := map[string]bool{construction.Builder: true}
 	for _, a := range o.Access {
 		switch {
 		case !named(a.Role):
 			return fmt.Errorf("the role %q is not lower-case letters and digits", a.Role)
-		case a.Role == Builder:
-			return fmt.Errorf("the role %q always does everything with what it builds", Builder)
+		case a.Role == construction.Builder:
+			return fmt.Errorf("the role %q always does everything with what it builds", construction.Builder)
 		case roles[a.Role]:
 			return fmt.Errorf("the role %q is given access twice", a.Role)
 		case readLevels[a.Read] == "":
@@ -620,7 +620,7 @@ func checkAccess(o Object) error {
 		}
 		roles[a.Role] = true
 	}
-	known := func(role string) bool { return roles[role] || len(o.Access) == 0 && role == User }
+	known := func(role string) bool { return roles[role] || len(o.Access) == 0 && role == construction.User }
 	for _, act := range o.Actions {
 		for _, r := range act.Roles {
 			if !known(r) {
@@ -648,13 +648,13 @@ func checkAccess(o Object) error {
 // access is the object's access as the platform's own declarations: its
 // generated actions' roles per verb, and its scope (ADR-0044, D5). With no
 // access declared an object keeps the rule of 15a: builder and user do everything.
-func access(o Object) (platform.Standard, platform.Scope, []string) {
-	std := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, User}, Capability: o.Name}
+func access(o construction.Object) (platform.Standard, platform.Scope, []string) {
+	std := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.User}, Capability: o.Name}
 	if len(o.Access) == 0 {
-		return std, platform.Scope{}, []string{Builder, User}
+		return std, platform.Scope{}, []string{construction.Builder, construction.User}
 	}
-	std.Roles = []string{Builder}
-	std.CreateRoles, std.EditRoles, std.ArchiveRoles = []string{Builder}, []string{Builder}, []string{Builder}
+	std.Roles = []string{construction.Builder}
+	std.CreateRoles, std.EditRoles, std.ArchiveRoles = []string{construction.Builder}, []string{construction.Builder}, []string{construction.Builder}
 	scope := platform.Scope{Owner: platform.OwnerCreated, Levels: map[string]string{}, Default: platform.ScopeNone}
 	if o.Scope != nil {
 		if o.Scope.Owner != "" {
@@ -662,8 +662,8 @@ func access(o Object) (platform.Standard, platform.Scope, []string) {
 		}
 		scope.Unit, scope.Structure = o.Scope.Unit, o.Scope.Structure
 	}
-	scope.Levels[Builder] = platform.ScopeTenant
-	roles := []string{Builder}
+	scope.Levels[construction.Builder] = platform.ScopeTenant
+	roles := []string{construction.Builder}
 	for _, a := range o.Access {
 		roles = append(roles, a.Role)
 		scope.Levels[a.Role] = readLevels[a.Read]

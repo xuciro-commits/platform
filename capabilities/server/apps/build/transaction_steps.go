@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -47,7 +49,7 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 	case "post":
 		p := step.Post
 		info, found := lookup(step.Target.Type)
-		if p == nil || !found || info.App != ID || len(p.Match) == 0 || step.Target.ID != "" || step.Target.Via != "" {
+		if p == nil || !found || info.App != construction.ID || len(p.Match) == 0 || step.Target.ID != "" || step.Target.Via != "" {
 			return fmt.Errorf("Post steps need their owner's balance object and declared match fields")
 		}
 		field, found := info.Field(p.Field)
@@ -123,8 +125,8 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 			return err
 		}
 		if b.host != nil {
-			record, found := b.host.Record(WritebackType + "/" + step.Effect.Writeback)
-			w, valid := record.(Writeback)
+			record, found := b.host.Record(construction.WritebackType + "/" + step.Effect.Writeback)
+			w, valid := record.(construction.Writeback)
 			if !found || !valid {
 				return fmt.Errorf("Transaction writeback is unavailable")
 			}
@@ -197,7 +199,7 @@ func (b *Build) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.Txn
 	if !found {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction balance object is unavailable")
 	}
-	info, _ := platform.Describe(ID, entity, func(reflect.Type) string { return "" })
+	info, _ := platform.Describe(construction.ID, entity, func(reflect.Type) string { return "" })
 	patch := map[string]any{}
 	keys := []string{}
 	for _, match := range p.Match {
@@ -211,7 +213,7 @@ func (b *Build) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.Txn
 			return "", problem
 		}
 		patch[match.Field] = value
-		keys = append(keys, buildapiText(value))
+		keys = append(keys, constructionText(value))
 	}
 	id := BalanceID(entity.Type, keys)
 	if err := reserve(entity.Type + "/" + id); err != nil {
@@ -273,7 +275,7 @@ func (b *Build) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.Txn
 	return id, b.ledger.ApplyTxnRecord(c, r, entity, verb, id, platform.Raw(patch), now)
 }
 
-func buildapiText(value any) string {
+func constructionText(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v
@@ -336,14 +338,14 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 		}
 		return ruleAssignment(*expr, scope, c, subject, inputs, now, b.conditionLookup)
 	}
-	entry := platform.Journal{Record: platform.Record{ID: "jnl-" + r.GetChangeId() + "-" + key}, Date: c.Today(now), Source: ID + "/" + r.GetChangeId()}
+	entry := platform.Journal{Record: platform.Record{ID: "jnl-" + r.GetChangeId() + "-" + key}, Date: c.Today(now), Source: construction.ID + "/" + r.GetChangeId()}
 	if spec.Reverses != "" {
 		if spec.Date != nil {
 			value, err := eval(spec.Date)
 			if err != nil {
 				return err
 			}
-			entry.Date = buildapiText(value)
+			entry.Date = constructionText(value)
 		}
 		return c.TxnTransport().QueueTxnJournal(c, r, key, entry, spec.Reverses, now)
 	}
@@ -356,7 +358,7 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 			if err != nil {
 				return err
 			}
-			text := buildapiText(value)
+			text := constructionText(value)
 			if item.value != &entry.Date || text != "" {
 				*item.value = text
 			}
@@ -369,7 +371,7 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 		if err != nil {
 			return err
 		}
-		value.Account = buildapiText(account)
+		value.Account = constructionText(account)
 		for _, item := range []struct {
 			expr  *platform.Expr
 			value *string
@@ -379,7 +381,7 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 				if err != nil {
 					return err
 				}
-				*item.value = buildapiText(v)
+				*item.value = constructionText(v)
 			}
 		}
 		amountExpr := line.Debit
@@ -399,7 +401,7 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 		if convertErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid accounting amount")
 		}
-		number, numberErr := json.Number(buildapiText(v)).Float64()
+		number, numberErr := json.Number(constructionText(v)).Float64()
 		if numberErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid accounting amount")
 		}

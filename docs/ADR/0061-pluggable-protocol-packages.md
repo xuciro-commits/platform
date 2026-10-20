@@ -24,7 +24,7 @@
 |---|---|---|
 | [`packages.go`](../../capabilities/server/packages.go) | 描述、预检、安装、升级、排空、退役、制品封存 | 增加可执行制品、目标平台、运行接口版本、驱动描述及确切版本依赖 |
 | [`platform/dependencies.go`](../../capabilities/server/platform/dependencies.go) | `Definition` 的依赖与能力投影 | 连接所需协议包及其能力进入原依赖检查，不新建协议目录权威 |
-| [`buildapi/connection.go`](../../capabilities/server/internal/host/buildapi/connection.go) | Connection、环境地址、密钥引用、检查与发布版本；种类为 http/odata/postgres | 原 Connection 增加协议包与网关绑定；编辑器从包描述生成配置 |
+| [`construction/connection.go`](../../capabilities/server/internal/construction/connection.go) | Connection、环境地址、密钥引用、检查与发布版本；种类为 http/odata/postgres | 原 Connection 增加协议包与网关绑定；编辑器从包描述生成配置 |
 | [ADR-0058](0058-observations-and-timeseries.md#as-built) | 外部 HTTP Observation，窗口汇总及有界点读取；原始点不入业务日志 | 网关/外部存储实现该读取接口；原 Observation 补齐数据覆盖、质量与完成时间的明确语义 |
 | [ADR-0059](0059-device-dispatch.md#as-built) | Dispatch、Writeback、稳定指令键、状态回读、未知结果与人工处理 | 原派发请求补充尝试身份与配置版本；网关转换具名命令，保留原派发权威 |
 | [ADR-0013](0013-capability-fabric.md) | 受控编译、版本化制品与隔离执行；现有 Wasm 用于受限计算 | 可信原生驱动的独立进程，不冒充现有 Wasm 已经提供网络驱动能力 |

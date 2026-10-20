@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"slices"
@@ -10,13 +12,13 @@ import (
 
 func TestConstraintPublicationAndFrozenObject(t *testing.T) {
 	b := New("test")
-	object := Object{Name: "entry", Title: "Entry", Fields: []Field{{Name: "qty", Title: "Quantity", Type: "integer"}}, Constraints: []platform.Constraint{{Name: "positive", Kind: "expression", Fields: []string{"qty"}, Message: "Positive quantities only.", Expr: &platform.Expr{Op: ">", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 0)}}}}}
+	object := construction.Object{Name: "entry", Title: "Entry", Fields: []construction.Field{{Name: "qty", Title: "Quantity", Type: "integer"}}, Constraints: []platform.Constraint{{Name: "positive", Kind: "expression", Fields: []string{"qty"}, Message: "Positive quantities only.", Expr: &platform.Expr{Op: ">", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 0)}}}}}
 	if err := b.checkConstraints(object); err != nil {
 		t.Fatal(err)
 	}
 	object.ID = "ENTRY"
 	object.Published = published(object)
-	assets, err := releaseAssets([]Object{object}, nil, nil, nil, "1")
+	assets, err := releaseAssets([]construction.Object{object}, nil, nil, nil, "1")
 	if err != nil {
 		t.Fatal(err)
 	}

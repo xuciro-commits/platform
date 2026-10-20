@@ -2,7 +2,7 @@ package build
 
 import (
 	"encoding/json"
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"reflect"
 	"slices"
 	"strconv"
@@ -47,7 +47,7 @@ type lifecycleHost struct {
 }
 
 func (h lifecycleHost) Automation(platform.Caller, string) platform.Caller {
-	return platform.NewCaller(h.runtime, platform.Member{ID: "app:build", Tenant: "target"}, ID, false, true)
+	return platform.NewCaller(h.runtime, platform.Member{ID: "app:build", Tenant: "target"}, construction.ID, false, true)
 }
 func (h lifecycleHost) Caller(_ platform.Caller, m platform.Member, app string) platform.Caller {
 	return platform.NewCaller(h.runtime, m, app, false, false)
@@ -59,35 +59,35 @@ func (h lifecycleHost) Entity(name string) (platform.EntityInfo, bool) {
 func (h lifecycleHost) Declares(string) bool                             { return false }
 func (h lifecycleHost) ValidateInstallQuery(q platform.NamedQuery) error { return q.Check() }
 func (h lifecycleHost) Action(schema string) (string, platform.Action, bool) {
-	return ID, platform.Action{Schema: schema, Roles: []string{"writer"}}, strings.HasPrefix(schema, h.info.Type+".")
+	return construction.ID, platform.Action{Schema: schema, Roles: []string{"writer"}}, strings.HasPrefix(schema, h.info.Type+".")
 }
 func lifecycleBuild() (*Build, *lifecycleRows) {
 	rows := &lifecycleRows{rows: map[reflect.Type][]any{}}
 	b := New("target")
-	b.host = lifecycleHost{runtime: rows, member: platform.Member{ID: "target-builder", Tenant: "target", Roles: map[string]string{ID: Builder}}, info: platform.EntityInfo{App: ID, Type: "build.receipt", Fields: []platform.FieldInfo{{Name: "item", Type: "text"}, {Name: "document", Type: "text"}}}}
+	b.host = lifecycleHost{runtime: rows, member: platform.Member{ID: "target-builder", Tenant: "target", Roles: map[string]string{construction.ID: construction.Builder}}, info: platform.EntityInfo{App: construction.ID, Type: "build.receipt", Fields: []platform.FieldInfo{{Name: "item", Type: "text"}, {Name: "document", Type: "text"}}}}
 	return b, rows
 }
 
 func TestAssetEnvironmentResolutionUsesBuildConnectionRules(t *testing.T) {
-	ref := platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: "external"}
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: "external"}
 	requirement := platform.AssetEnvironmentRequirement{Ref: ref, Profile: "http", Credential: true}
-	ready := Connection{Record: platform.Record{ID: "target"}, Name: ref.Name, Kind: "http", State: "ready", Secret: "target-credential"}
+	ready := construction.Connection{Record: platform.Record{ID: "target"}, Name: ref.Name, Kind: "http", State: "ready", Secret: "target-credential"}
 	for _, test := range []struct {
 		name string
-		rows []Connection
+		rows []construction.Connection
 	}{
 		{"missing", nil},
-		{"archived", func() []Connection { c := ready; c.Archived = true; return []Connection{c} }()},
-		{"different name", func() []Connection { c := ready; c.Name = "other"; return []Connection{c} }()},
-		{"ambiguous", []Connection{ready, ready}},
-		{"not ready", func() []Connection { c := ready; c.State = "draft"; return []Connection{c} }()},
-		{"different kind", func() []Connection { c := ready; c.Kind = "odata"; return []Connection{c} }()},
-		{"missing credential", func() []Connection { c := ready; c.Secret = ""; return []Connection{c} }()},
+		{"archived", func() []construction.Connection { c := ready; c.Archived = true; return []construction.Connection{c} }()},
+		{"different name", func() []construction.Connection { c := ready; c.Name = "other"; return []construction.Connection{c} }()},
+		{"ambiguous", []construction.Connection{ready, ready}},
+		{"not ready", func() []construction.Connection { c := ready; c.State = "draft"; return []construction.Connection{c} }()},
+		{"different kind", func() []construction.Connection { c := ready; c.Kind = "odata"; return []construction.Connection{c} }()},
+		{"missing credential", func() []construction.Connection { c := ready; c.Secret = ""; return []construction.Connection{c} }()},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			b, rows := lifecycleBuild()
 			for _, connection := range test.rows {
-				rows.rows[reflect.TypeFor[Connection]()] = append(rows.rows[reflect.TypeFor[Connection]()], connection)
+				rows.rows[reflect.TypeFor[construction.Connection]()] = append(rows.rows[reflect.TypeFor[construction.Connection]()], connection)
 			}
 			if _, err := b.ResolveAssetEnvironment(requirement); err == nil {
 				t.Fatal("invalid local connection resolved")
@@ -97,13 +97,13 @@ func TestAssetEnvironmentResolutionUsesBuildConnectionRules(t *testing.T) {
 	b, rows := lifecycleBuild()
 	archived := ready
 	archived.ID, archived.Archived = "archived", true
-	rows.rows[reflect.TypeFor[Connection]()] = []any{archived, ready}
-	before := string(platform.Raw(rows.rows[reflect.TypeFor[Connection]()]))
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{archived, ready}
+	before := string(platform.Raw(rows.rows[reflect.TypeFor[construction.Connection]()]))
 	target, err := b.ResolveAssetEnvironment(requirement)
 	if err != nil || target.TargetRecord != ready.ID || target.Credential != ready.Secret {
 		t.Fatal(target, err)
 	}
-	if string(platform.Raw(rows.rows[reflect.TypeFor[Connection]()])) != before {
+	if string(platform.Raw(rows.rows[reflect.TypeFor[construction.Connection]()])) != before {
 		t.Fatal("environment resolution changed the owner record")
 	}
 	requirement.Credential = false
@@ -125,16 +125,16 @@ func TestNativeInstallationDecodePreservesOuterIdentityAndImage(t *testing.T) {
 		kind   platform.AssetKind
 		name   string
 	}{
-		{SchemaPublish, ObjectType, platform.AssetObject, "build.outer"},
-		{SchemaRelease, PageType, platform.AssetPage, "outer"},
-		{SchemaHandOver, AppType, platform.AssetApp, "outer"},
-		{SchemaProcess, ProcessType, platform.AssetFlow, "build.outer"},
-		{SchemaPropertyType, PropertyTypeType, platform.AssetPropertyType, "outer"},
-		{SchemaLinkType, LinkTypeType, platform.AssetLinkType, "outer"},
-		{SchemaQuery, QueryType, platform.AssetQuery, "outer"},
-		{SchemaFunction, FunctionType, platform.AssetFunction, "outer"},
+		{construction.SchemaPublish, construction.ObjectType, platform.AssetObject, "build.outer"},
+		{construction.SchemaRelease, construction.PageType, platform.AssetPage, "outer"},
+		{construction.SchemaHandOver, construction.AppType, platform.AssetApp, "outer"},
+		{construction.SchemaProcess, construction.ProcessType, platform.AssetFlow, "build.outer"},
+		{SchemaPropertyType, construction.PropertyTypeType, platform.AssetPropertyType, "outer"},
+		{construction.SchemaLinkType, construction.LinkTypeType, platform.AssetLinkType, "outer"},
+		{SchemaQuery, construction.QueryType, platform.AssetQuery, "outer"},
+		{SchemaFunction, construction.FunctionType, platform.AssetFunction, "outer"},
 		{SchemaAgentPublish, AgentType, platform.AssetAgent, "outer"},
-		{SchemaCodePublish, CodeType, platform.AssetCompute, "outer"},
+		{SchemaCodePublish, construction.CodeType, platform.AssetCompute, "outer"},
 	} {
 		t.Run(tc.typ, func(t *testing.T) {
 			image := platform.Raw(map[string]any{"id": "row", "name": "outer", "published": string(platform.Raw(map[string]string{"name": "published"}))})
@@ -142,7 +142,7 @@ func TestNativeInstallationDecodePreservesOuterIdentityAndImage(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := platform.AssetRef{App: ID, Kind: tc.kind, Name: tc.name}
+			want := platform.AssetRef{App: construction.ID, Kind: tc.kind, Name: tc.name}
 			if decoded.Ref != want || decoded.Schema != tc.schema || decoded.Record != tc.typ+"/row" || !slices.Equal(decoded.Image, image) {
 				t.Fatal("installation lost its outer record identity or saved image", decoded)
 			}
@@ -158,11 +158,11 @@ func TestNativeInstallationDecodePreservesOuterIdentityAndImage(t *testing.T) {
 		image  json.RawMessage
 	}{
 		{"unknown schema", "build.unknown.publish", platform.Raw(map[string]string{"id": "row", "name": "outer"})},
-		{"empty id", SchemaPublish, platform.Raw(map[string]string{"name": "outer"})},
-		{"invalid json", SchemaPublish, json.RawMessage(`{`)},
-		{"evaluation publication", SchemaEvaluationSetPublish, platform.Raw(TestPlan{Record: platform.Record{ID: "row"}, Name: "outer", DefinitionVersion: 1, Published: "broken", Versions: []string{"broken"}})},
-		{"table publication", SchemaTablePublish, platform.Raw(Table{Record: platform.Record{ID: "row"}, Name: "outer", State: "published", Version: 1, Published: "broken"})},
-		{"alert publication", SchemaAlertPublish, platform.Raw(Alert{Record: platform.Record{ID: "row"}, Name: "outer", State: "published", Published: "broken"})},
+		{"empty id", construction.SchemaPublish, platform.Raw(map[string]string{"name": "outer"})},
+		{"invalid json", construction.SchemaPublish, json.RawMessage(`{`)},
+		{"evaluation publication", SchemaEvaluationSetPublish, platform.Raw(construction.TestPlan{Record: platform.Record{ID: "row"}, Name: "outer", DefinitionVersion: 1, Published: "broken", Versions: []string{"broken"}})},
+		{"table publication", SchemaTablePublish, platform.Raw(construction.Table{Record: platform.Record{ID: "row"}, Name: "outer", State: "published", Version: 1, Published: "broken"})},
+		{"alert publication", SchemaAlertPublish, platform.Raw(construction.Alert{Record: platform.Record{ID: "row"}, Name: "outer", State: "published", Published: "broken"})},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := b.DecodeAssetInstallation(tc.schema, tc.image); err == nil {
@@ -174,21 +174,21 @@ func TestNativeInstallationDecodePreservesOuterIdentityAndImage(t *testing.T) {
 
 func TestIntegrationInstallationDecodePreservesImagesAndRejectsMalformedRecords(t *testing.T) {
 	b, rows := lifecycleBuild()
-	connection := Connection{Record: platform.Record{ID: "connection"}, Name: "erp", Title: "ERP", Kind: "http", State: "ready"}
-	dataset := Dataset{Record: platform.Record{ID: "dataset"}, Name: "raw", Title: "Raw"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{connection}
-	rows.rows[reflect.TypeFor[Dataset]()] = []any{dataset}
+	connection := construction.Connection{Record: platform.Record{ID: "connection"}, Name: "erp", Title: "ERP", Kind: "http", State: "ready"}
+	dataset := construction.Dataset{Record: platform.Record{ID: "dataset"}, Name: "raw", Title: "Raw"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{connection}
+	rows.rows[reflect.TypeFor[construction.Dataset]()] = []any{dataset}
 	for _, tc := range []struct {
 		kind   platform.AssetKind
 		record any
 	}{
 		{platform.AssetConnection, connection},
-		{platform.AssetSource, Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: connection.ID, Dataset: dataset.ID, URL: "rows"}},
+		{platform.AssetSource, construction.Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: connection.ID, Dataset: dataset.ID, URL: "rows"}},
 		{platform.AssetDataset, dataset},
-		{platform.AssetPipeline, Pipeline{Record: platform.Record{ID: "pipeline"}, Name: "landing", Title: "Landing", Input: dataset.ID, OutputObject: "build.receipt", Key: "id"}},
-		{platform.AssetWriteback, Writeback{Record: platform.Record{ID: "writeback"}, Name: "delivery", Title: "Delivery", Connection: connection.ID, Object: "build.receipt", On: "create", Path: "receipts"}},
-		{platform.AssetObservation, Observation{Record: platform.Record{ID: "observation"}, Name: "temperature", Title: "Temperature", Connection: connection.ID, Object: "build.receipt", DeviceField: "item", Signal: "temperature", Unit: "C", Path: "/observations", WindowSeconds: 60, ExpectedRetentionSeconds: 3600, ExpectedGranularitySeconds: 1, Roles: []string{Builder}}},
-		{platform.AssetMatching, Match{Record: platform.Record{ID: "matching"}, Name: "identity", Title: "Identity", Object: "build.receipt", Keys: []MatchKey{{Fields: []string{"item"}}}}},
+		{platform.AssetPipeline, construction.Pipeline{Record: platform.Record{ID: "pipeline"}, Name: "landing", Title: "Landing", Input: dataset.ID, OutputObject: "build.receipt", Key: "id"}},
+		{platform.AssetWriteback, construction.Writeback{Record: platform.Record{ID: "writeback"}, Name: "delivery", Title: "Delivery", Connection: connection.ID, Object: "build.receipt", On: "create", Path: "receipts"}},
+		{platform.AssetObservation, construction.Observation{Record: platform.Record{ID: "observation"}, Name: "temperature", Title: "Temperature", Connection: connection.ID, Object: "build.receipt", DeviceField: "item", Signal: "temperature", Unit: "C", Path: "/observations", WindowSeconds: 60, ExpectedRetentionSeconds: 3600, ExpectedGranularitySeconds: 1, Roles: []string{construction.Builder}}},
+		{platform.AssetMatching, construction.Match{Record: platform.Record{ID: "matching"}, Name: "identity", Title: "Identity", Object: "build.receipt", Keys: []construction.MatchKey{{Fields: []string{"item"}}}}},
 	} {
 		t.Run(string(tc.kind), func(t *testing.T) {
 			rows.rows[reflect.TypeOf(tc.record)] = []any{tc.record}
@@ -239,9 +239,9 @@ func TestIntegrationInventoryReadsSecondPageFiltersArchivedAndKeepsLimit(t *test
 	b, rows := lifecycleBuild()
 	records := make([]any, 1001)
 	for i := range records {
-		records[i] = Source{Record: platform.Record{ID: "source-" + strconv.Itoa(i), Archived: i == 0 || i == 499 || i >= 501}, Name: "feed" + strconv.Itoa(i)}
+		records[i] = construction.Source{Record: platform.Record{ID: "source-" + strconv.Itoa(i), Archived: i == 0 || i == 499 || i >= 501}, Name: "feed" + strconv.Itoa(i)}
 	}
-	rows.rows[reflect.TypeFor[Source]()] = records[:501]
+	rows.rows[reflect.TypeFor[construction.Source]()] = records[:501]
 	inventory, err := b.integrationInventory(platform.AssetSource)
 	if err != nil || len(inventory) != 499 {
 		t.Fatal("integration inventory omitted a page or exposed archived records", len(inventory), err)
@@ -255,7 +255,7 @@ func TestIntegrationInventoryReadsSecondPageFiltersArchivedAndKeepsLimit(t *test
 			t.Fatal("integration inventory changed record order or included an archived record", record)
 		}
 	}
-	rows.rows[reflect.TypeFor[Source]()] = records
+	rows.rows[reflect.TypeFor[construction.Source]()] = records
 	if _, err := b.integrationInventory(platform.AssetSource); err == nil {
 		t.Fatal("integration inventory accepted more than 1000 saved definitions")
 	}
@@ -263,15 +263,15 @@ func TestIntegrationInventoryReadsSecondPageFiltersArchivedAndKeepsLimit(t *test
 
 func TestMatchingReleaseClosureAndPrivateInstallation(t *testing.T) {
 	b, rows := lifecycleBuild()
-	rows.rows[reflect.TypeFor[Source]()] = []any{Source{Record: platform.Record{ID: "local-source"}, Name: "feed", State: "draft"}}
-	m := Match{Record: platform.Record{ID: "local-match"}, Name: "identity", Title: "Receipt identity", Object: "build.receipt", Keys: []MatchKey{{Fields: []string{"item"}, Normalize: "folded"}}, Prefer: []Preference{{Field: "document", Producer: "feed"}}, State: "published", Publisher: "source-builder"}
-	rows.rows[reflect.TypeFor[Match]()] = []any{m}
+	rows.rows[reflect.TypeFor[construction.Source]()] = []any{construction.Source{Record: platform.Record{ID: "local-source"}, Name: "feed", State: "draft"}}
+	m := construction.Match{Record: platform.Record{ID: "local-match"}, Name: "identity", Title: "Receipt identity", Object: "build.receipt", Keys: []construction.MatchKey{{Fields: []string{"item"}, Normalize: "folded"}}, Prefer: []construction.Preference{{Field: "document", Producer: "feed"}}, State: "published", Publisher: "source-builder"}
+	rows.rows[reflect.TypeFor[construction.Match]()] = []any{m}
 	asset, err := b.integrationAsset(platform.AssetMatching, m, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	producer := platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: "feed"}
-	object := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: "build.receipt"}
+	producer := platform.AssetRef{App: construction.ID, Kind: platform.AssetSource, Name: "feed"}
+	object := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.receipt"}
 	if !slices.Contains(asset.Requires, producer) || !slices.Contains(asset.Requires, object) {
 		t.Fatal("matching rule omitted its producer/object release dependencies")
 	}
@@ -286,20 +286,20 @@ func TestMatchingReleaseClosureAndPrivateInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.(Match).Publisher != "target-builder" {
+	if saved.(construction.Match).Publisher != "target-builder" {
 		t.Fatal("source actor was transported")
 	}
 	if err := b.ValidateAssetInstallation(plans[0]); err != nil {
 		t.Fatal(err)
 	}
 	// A changed mutable editor does not replace the accepted matching rule.
-	live := saved.(Match)
-	live.Keys = []MatchKey{{Fields: []string{"unknown"}}}
+	live := saved.(construction.Match)
+	live.Keys = []construction.MatchKey{{Fields: []string{"unknown"}}}
 	fixed, err := b.ExecutionMatching(live)
 	if err != nil || fixed.Keys[0].Fields[0] != "item" {
 		t.Fatal("mutable keys replaced accepted matching", err)
 	}
-	b.host = lifecycleHost{runtime: rows, member: platform.Member{ID: "target-builder", Tenant: "target", Roles: map[string]string{ID: User}}, info: platform.EntityInfo{App: ID, Type: "build.receipt"}}
+	b.host = lifecycleHost{runtime: rows, member: platform.Member{ID: "target-builder", Tenant: "target", Roles: map[string]string{construction.ID: construction.User}}, info: platform.EntityInfo{App: construction.ID, Type: "build.receipt"}}
 	if err := b.ValidateAssetInstallation(plans[0]); err == nil {
 		t.Fatal("publication member lacking original matching permission accepted")
 	}
@@ -317,11 +317,11 @@ func TestMatchingReleaseClosureAndPrivateInstallation(t *testing.T) {
 }
 func TestPortableIntegrationOmitsEnvironmentAndRuntime(t *testing.T) {
 	b, rows := lifecycleBuild()
-	conn := Connection{Record: platform.Record{ID: "dev-connection"}, Name: "sap", Title: "SAP", Kind: "http", Address: "https://dev.example", Secret: "DEV_SECRET_NAME", AllowPrivate: true, State: "ready"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{conn}
-	ds := Dataset{Record: platform.Record{ID: "dev-data"}, Name: "raw", Title: "Raw", Version: 23, Producer: "source:feed", Schema: []DatasetField{{Name: "private", Type: "text"}}}
-	rows.rows[reflect.TypeFor[Dataset]()] = []any{ds}
-	source := Source{Record: platform.Record{ID: "dev-source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: ds.ID, URL: "rows", Cursor: "917", Puller: "dev-principal", State: "published"}
+	conn := construction.Connection{Record: platform.Record{ID: "dev-connection"}, Name: "sap", Title: "SAP", Kind: "http", Address: "https://dev.example", Secret: "DEV_SECRET_NAME", AllowPrivate: true, State: "ready"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{conn}
+	ds := construction.Dataset{Record: platform.Record{ID: "dev-data"}, Name: "raw", Title: "Raw", Version: 23, Producer: "source:feed", Schema: []construction.DatasetField{{Name: "private", Type: "text"}}}
+	rows.rows[reflect.TypeFor[construction.Dataset]()] = []any{ds}
+	source := construction.Source{Record: platform.Record{ID: "dev-source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: ds.ID, URL: "rows", Cursor: "917", Puller: "dev-principal", State: "published"}
 	for _, pair := range []struct {
 		kind platform.AssetKind
 		row  any
@@ -344,7 +344,7 @@ func TestPortableIntegrationOmitsEnvironmentAndRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	live := saved.(Source)
+	live := saved.(construction.Source)
 	live.URL = "draft-path"
 	live.Cursor = "1000"
 	fixed, err := b.ExecutionSource(live)
@@ -353,9 +353,9 @@ func TestPortableIntegrationOmitsEnvironmentAndRuntime(t *testing.T) {
 	}
 }
 func TestOwnerInstallationOrderFollowsActualDependencies(t *testing.T) {
-	object := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: "build.receipt"}
-	page := platform.AssetRef{App: ID, Kind: platform.AssetPage, Name: "desk"}
-	app := platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: "receiving"}
+	object := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.receipt"}
+	page := platform.AssetRef{App: construction.ID, Kind: platform.AssetPage, Name: "desk"}
+	app := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "receiving"}
 	assets := []platform.ReleaseAsset{{Ref: app, Requires: []platform.AssetRef{page}}, {Ref: page, Requires: []platform.AssetRef{object}}, {Ref: object}}
 	plans := []platform.AssetInstallation{{Ref: app}, {Ref: page}, {Ref: object}}
 	ordered, err := orderOwnerInstallations(assets, plans)
@@ -368,8 +368,8 @@ func TestOwnerInstallationOrderFollowsActualDependencies(t *testing.T) {
 	}
 }
 func TestWritebackRequestPinsOriginalAnswerMapping(t *testing.T) {
-	w := Writeback{Record: platform.Record{ID: "writeback"}, Object: "build.receipt", Result: []SourceField{{From: "document", To: "document"}}}
-	req, err := w.Request(Connection{Address: "https://target.example"}, "R", json.RawMessage(`{}`))
+	w := construction.Writeback{Record: platform.Record{ID: "writeback"}, Object: "build.receipt", Result: []construction.SourceField{{From: "document", To: "document"}}}
+	req, err := w.Request(construction.Connection{Address: "https://target.example"}, "R", json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,11 +381,11 @@ func TestWritebackRequestPinsOriginalAnswerMapping(t *testing.T) {
 
 func TestSourceUpgradePreservesLocalCursorAndRejectsNewIdentity(t *testing.T) {
 	b, rows := lifecycleBuild()
-	conn := Connection{Record: platform.Record{ID: "target-connection"}, Name: "sap", Title: "SAP", Kind: "http", State: "ready"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{conn}
-	dataset := Dataset{Record: platform.Record{ID: "target-data"}, Name: "raw", Title: "Raw"}
-	rows.rows[reflect.TypeFor[Dataset]()] = []any{dataset}
-	source := Source{Record: platform.Record{ID: "target-source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: dataset.ID, URL: "rows", Since: "seq", Cursor: "91", Puller: "target-builder", State: "published"}
+	conn := construction.Connection{Record: platform.Record{ID: "target-connection"}, Name: "sap", Title: "SAP", Kind: "http", State: "ready"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{conn}
+	dataset := construction.Dataset{Record: platform.Record{ID: "target-data"}, Name: "raw", Title: "Raw"}
+	rows.rows[reflect.TypeFor[construction.Dataset]()] = []any{dataset}
+	source := construction.Source{Record: platform.Record{ID: "target-source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: dataset.ID, URL: "rows", Since: "seq", Cursor: "91", Puller: "target-builder", State: "published"}
 	first, err := b.integrationAsset(platform.AssetSource, source, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -394,15 +394,15 @@ func TestSourceUpgradePreservesLocalCursorAndRejectsNewIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source = saved.(Source)
-	rows.rows[reflect.TypeFor[Source]()] = []any{source}
+	source = saved.(construction.Source)
+	rows.rows[reflect.TypeFor[construction.Source]()] = []any{source}
 	edited := source
 	edited.Title = "Improved title"
 	second, err := b.integrationAsset(platform.AssetSource, edited, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := platform.AssetReleaseContext{Member: platform.Member{ID: "target-builder"}, Upgrade: true, Bindings: []platform.AssetEnvironmentBinding{{Ref: platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: "sap"}, TargetRecord: conn.ID}}}
+	ctx := platform.AssetReleaseContext{Member: platform.Member{ID: "target-builder"}, Upgrade: true, Bindings: []platform.AssetEnvironmentBinding{{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: "sap"}, TargetRecord: conn.ID}}}
 	plans, err := b.PrepareReleaseAssets([]platform.ReleaseAsset{second}, ctx)
 	if err != nil || len(plans) != 1 {
 		t.Fatal(plans, err)
@@ -411,7 +411,7 @@ func TestSourceUpgradePreservesLocalCursorAndRejectsNewIdentity(t *testing.T) {
 		t.Fatal("compatible title upgrade refused", err)
 	}
 	record, err := integrationInstallationRecord(platform.AssetSource, plans[0].Image)
-	if err != nil || record.(Source).Cursor != "91" || record.(Source).Puller != "target-builder" {
+	if err != nil || record.(construction.Source).Cursor != "91" || record.(construction.Source).Puller != "target-builder" {
 		t.Fatal("target runtime cursor/actor not preserved", record, err)
 	}
 	edited.URL = "other-rows"
@@ -435,11 +435,11 @@ func TestSourceUpgradePreservesLocalCursorAndRejectsNewIdentity(t *testing.T) {
 
 func TestIssuedResultsUseRetainedExecutionSemantics(t *testing.T) {
 	b, rows := lifecycleBuild()
-	conn := Connection{Record: platform.Record{ID: "connection"}, Name: "sap", Title: "SAP", Kind: "http", State: "ready"}
-	ds := Dataset{Record: platform.Record{ID: "dataset"}, Name: "raw", Title: "Raw"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{conn}
-	rows.rows[reflect.TypeFor[Dataset]()] = []any{ds}
-	source := Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: ds.ID, URL: "rows", Since: "seq", Cursor: "9"}
+	conn := construction.Connection{Record: platform.Record{ID: "connection"}, Name: "sap", Title: "SAP", Kind: "http", State: "ready"}
+	ds := construction.Dataset{Record: platform.Record{ID: "dataset"}, Name: "raw", Title: "Raw"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{conn}
+	rows.rows[reflect.TypeFor[construction.Dataset]()] = []any{ds}
+	source := construction.Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: ds.ID, URL: "rows", Since: "seq", Cursor: "9"}
 	v1, err := b.integrationAsset(platform.AssetSource, source, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -450,13 +450,13 @@ func TestIssuedResultsUseRetainedExecutionSemantics(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name       string
-		edit       func(*Source)
+		edit       func(*construction.Source)
 		equivalent bool
 	}{
-		{"title", func(s *Source) { s.Title = "Clearer feed title" }, true},
-		{"endpoint", func(s *Source) { s.URL = "other-rows" }, false},
-		{"filter", func(s *Source) { s.Filter = "active = true" }, false},
-		{"mapping", func(s *Source) { s.Mapping = []SourceField{{From: "sku", To: "item"}} }, false},
+		{"title", func(s *construction.Source) { s.Title = "Clearer feed title" }, true},
+		{"endpoint", func(s *construction.Source) { s.URL = "other-rows" }, false},
+		{"filter", func(s *construction.Source) { s.Filter = "active = true" }, false},
+		{"mapping", func(s *construction.Source) { s.Mapping = []construction.SourceField{{From: "sku", To: "item"}} }, false},
 	} {
 		t.Run("source-"+tc.name, func(t *testing.T) {
 			edited := source
@@ -470,7 +470,7 @@ func TestIssuedResultsUseRetainedExecutionSemantics(t *testing.T) {
 				t.Fatal(err)
 			}
 			// A later editor change cannot reinterpret either saved definition.
-			mutable := current.(Source)
+			mutable := current.(construction.Source)
 			mutable.URL = "unsaved-editor-path"
 			ok, err := retainedExecutionEquivalent(mutable, v1.SourceVersion)
 			if err != nil || ok != tc.equivalent {
@@ -484,7 +484,7 @@ func TestIssuedResultsUseRetainedExecutionSemantics(t *testing.T) {
 			}
 		})
 	}
-	pipeline := Pipeline{Record: platform.Record{ID: "pipeline"}, Name: "landing", Title: "Landing", Input: ds.ID, OutputObject: "build.receipt", Key: "id", Steps: []Step{}}
+	pipeline := construction.Pipeline{Record: platform.Record{ID: "pipeline"}, Name: "landing", Title: "Landing", Input: ds.ID, OutputObject: "build.receipt", Key: "id", Steps: []construction.Step{}}
 	first, err := b.integrationAsset(platform.AssetPipeline, pipeline, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -495,12 +495,16 @@ func TestIssuedResultsUseRetainedExecutionSemantics(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name       string
-		edit       func(*Pipeline)
+		edit       func(*construction.Pipeline)
 		equivalent bool
 	}{
-		{"title", func(p *Pipeline) { p.Title = "Clearer pipeline title" }, true},
-		{"expectations", func(p *Pipeline) { p.Expectations = []Expectation{{Column: "qty", Rule: "range", Value: "1..20"}} }, false},
-		{"transform", func(p *Pipeline) { p.Steps = []Step{{Kind: "cast", Column: "qty", Type: "number"}} }, false},
+		{"title", func(p *construction.Pipeline) { p.Title = "Clearer pipeline title" }, true},
+		{"expectations", func(p *construction.Pipeline) {
+			p.Expectations = []construction.Expectation{{Column: "qty", Rule: "range", Value: "1..20"}}
+		}, false},
+		{"transform", func(p *construction.Pipeline) {
+			p.Steps = []construction.Step{{Kind: "cast", Column: "qty", Type: "number"}}
+		}, false},
 	} {
 		t.Run("pipeline-"+tc.name, func(t *testing.T) {
 			edited := pipeline
@@ -519,10 +523,10 @@ func TestIssuedResultsUseRetainedExecutionSemantics(t *testing.T) {
 			}
 		})
 	}
-	if ok, err := retainedExecutionEquivalent(Source{}, ""); err != nil || !ok {
+	if ok, err := retainedExecutionEquivalent(construction.Source{}, ""); err != nil || !ok {
 		t.Fatal("original legacy result compatibility was lost", ok, err)
 	}
-	if ok, err := retainedExecutionEquivalent(Source{}, v1.SourceVersion); err != nil || ok {
+	if ok, err := retainedExecutionEquivalent(construction.Source{}, v1.SourceVersion); err != nil || ok {
 		t.Fatal("legacy record claimed a retained typed version", ok, err)
 	}
 }
@@ -530,11 +534,11 @@ func TestIssuedResultsUseRetainedExecutionSemantics(t *testing.T) {
 func TestBootstrapObjectShapesAreCompleteScopedAndPrivate(t *testing.T) {
 	b, _ := lifecycleBuild()
 	original := b.jointEntities
-	objects := []Object{{Name: "left", Title: "Left", Fields: []Field{{Name: "other", Title: "Other", Type: "reference", Ref: "build.right"}, {Name: "item", Title: "Item", Type: "text"}}, States: []State{{Name: "open", Title: "Open"}}}, {Name: "right", Title: "Right", Fields: []Field{{Name: "other", Title: "Other", Type: "reference", Ref: "build.left"}}}}
+	objects := []construction.Object{{Name: "left", Title: "Left", Fields: []construction.Field{{Name: "other", Title: "Other", Type: "reference", Ref: "build.right"}, {Name: "item", Title: "Item", Type: "text"}}, States: []construction.State{{Name: "open", Title: "Open"}}}, {Name: "right", Title: "Right", Fields: []construction.Field{{Name: "other", Title: "Other", Type: "reference", Ref: "build.left"}}}}
 	var assets []platform.ReleaseAsset
 	for _, object := range objects {
 		raw, _ := json.Marshal(object)
-		assets = append(assets, platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: buildapi.TypeOf(object.Name)}, Body: raw})
+		assets = append(assets, platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: construction.TypeOf(object.Name)}, Body: raw})
 	}
 	catalogSize := len(b.ledger.Catalog.All())
 	release, err := b.BeginAssetBootstrap(assets)
@@ -558,20 +562,20 @@ func TestBootstrapObjectShapesAreCompleteScopedAndPrivate(t *testing.T) {
 }
 func TestFreshDeclarationDraftsRetainOwnerRefAndFunctionPlan(t *testing.T) {
 	b, rows := lifecycleBuild()
-	f := Function{Name: "advice", Title: "Advice", Description: "Advice from a receipt", Object: "build.receipt", Fields: []string{"item"}, Instructions: "Return a brief comment", Output: []platform.Field{{Name: "comment", Type: "string", Description: "A brief comment"}}, MaxInputBytes: 1024, MaxOutputBytes: 1024, MaxTokens: 128, Roles: []string{Builder}, Version: 1}
-	function, err := functionReleaseAsset(f, definitionVersion)
+	f := construction.Function{Name: "advice", Title: "Advice", Description: "Advice from a receipt", Object: "build.receipt", Fields: []string{"item"}, Instructions: "Return a brief comment", Output: []platform.Field{{Name: "comment", Type: "string", Description: "A brief comment"}}, MaxInputBytes: 1024, MaxOutputBytes: 1024, MaxTokens: 128, Roles: []string{construction.Builder}, Version: 1}
+	function, err := functionReleaseAsset(f, construction.ValueDefinitionVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	property, err := propertyTypeReleaseAsset(PropertyType{Name: "itemcode", Title: "Item code", Description: "The external item identifier", Type: "text", Version: 1}, definitionVersion)
+	property, err := propertyTypeReleaseAsset(PropertyType{Name: "itemcode", Title: "Item code", Description: "The external item identifier", Type: "text", Version: 1}, construction.ValueDefinitionVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	query, err := queryReleaseAsset(Query{Name: "receipts", Title: "Receipts", Description: "Receipt rows", Object: "build.receipt", Limit: 50, Version: 1}, definitionVersion)
+	query, err := queryReleaseAsset(Query{Name: "receipts", Title: "Receipts", Description: "Receipt rows", Object: "build.receipt", Limit: 50, Version: 1}, construction.ValueDefinitionVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	link, err := linkTypeReleaseAsset(LinkType{Name: "receiptitems", Title: "Receipt items", Description: "Receipt items", Parent: "build.receipt", Child: "build.item", Via: "receipt", Forward: "items", Reverse: "receipt", Version: 1}, definitionVersion)
+	link, err := linkTypeReleaseAsset(LinkType{Name: "receiptitems", Title: "Receipt items", Description: "Receipt items", Parent: "build.receipt", Child: "build.item", Via: "receipt", Forward: "items", Reverse: "receipt", Version: 1}, construction.ValueDefinitionVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -580,7 +584,7 @@ func TestFreshDeclarationDraftsRetainOwnerRefAndFunctionPlan(t *testing.T) {
 	if err != nil || len(drafts) != 4 {
 		t.Fatal("supported declaration kinds omitted bootstrap", drafts, err)
 	}
-	expected := map[platform.AssetRef]string{function.Ref: FunctionType, property.Ref: PropertyTypeType, query.Ref: QueryType, link.Ref: LinkTypeType}
+	expected := map[platform.AssetRef]string{function.Ref: construction.FunctionType, property.Ref: construction.PropertyTypeType, query.Ref: construction.QueryType, link.Ref: construction.LinkTypeType}
 	for _, draft := range drafts {
 		if draft.Type != expected[draft.Ref] || draft.Schema != draft.Type+".create" {
 			t.Fatal("draft lost its candidate owner reference", draft)
@@ -589,7 +593,7 @@ func TestFreshDeclarationDraftsRetainOwnerRefAndFunctionPlan(t *testing.T) {
 	draft := f
 	draft.Record = platform.Record{ID: "target-advice"}
 	draft.Version = 0
-	rows.rows[reflect.TypeFor[Function]()] = []any{draft}
+	rows.rows[reflect.TypeFor[construction.Function]()] = []any{draft}
 	plans, err := b.PrepareReleaseAssets([]platform.ReleaseAsset{function}, platform.AssetReleaseContext{})
 	if err != nil || len(plans) != 1 {
 		t.Fatal("first function version omitted its installation plan", plans, err)
@@ -603,7 +607,7 @@ func TestFreshDeclarationDraftsRetainOwnerRefAndFunctionPlan(t *testing.T) {
 	if _, err := b.PrepareReleaseAssets([]platform.ReleaseAsset{newer}, platform.AssetReleaseContext{}); err == nil {
 		t.Fatal("missing source version family was fabricated at first deployment")
 	}
-	compute := platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: "algorithm"}}
+	compute := platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: "algorithm"}}
 	if _, err := b.ReleaseDrafts([]platform.ReleaseAsset{compute}, platform.AssetReleaseContext{}); err == nil {
 		t.Fatal("module descriptor fabricated source/compilation evidence")
 	}
@@ -611,9 +615,9 @@ func TestFreshDeclarationDraftsRetainOwnerRefAndFunctionPlan(t *testing.T) {
 
 func TestWritebackRequestAfterRetainedDefinitionRollback(t *testing.T) {
 	b, rows := lifecycleBuild()
-	connection := Connection{Record: platform.Record{ID: "connection"}, Name: "erp", Title: "ERP", Kind: "http", Address: "https://target.example", State: "ready"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{connection}
-	initial := Writeback{Record: platform.Record{ID: "writeback"}, Name: "delivery", Title: "Delivery", Connection: connection.ID, Object: "build.receipt", On: "create", Path: "v1/receipts", Result: []SourceField{{From: "document", To: "document"}}}
+	connection := construction.Connection{Record: platform.Record{ID: "connection"}, Name: "erp", Title: "ERP", Kind: "http", Address: "https://target.example", State: "ready"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{connection}
+	initial := construction.Writeback{Record: platform.Record{ID: "writeback"}, Name: "delivery", Title: "Delivery", Connection: connection.ID, Object: "build.receipt", On: "create", Path: "v1/receipts", Result: []construction.SourceField{{From: "document", To: "document"}}}
 	v1, err := b.integrationAsset(platform.AssetWriteback, initial, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -622,7 +626,7 @@ func TestWritebackRequestAfterRetainedDefinitionRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := first.(Writeback)
+	updated := first.(construction.Writeback)
 	updated.Path = "v2/receipts"
 	v2, err := b.integrationAsset(platform.AssetWriteback, updated, 2)
 	if err != nil {
@@ -636,7 +640,7 @@ func TestWritebackRequestAfterRetainedDefinitionRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	live := rolledBack.(Writeback)
+	live := rolledBack.(construction.Writeback)
 	if live.DefinitionVersion != 2 || len(live.Versions) != 2 {
 		t.Fatal("rollback discarded retained history")
 	}
@@ -673,10 +677,10 @@ func (h confirmationBindingHost) Record(ref string) (any, bool) {
 func TestConfirmationReleaseBindsStableAssetsOnTheStartingAction(t *testing.T) {
 	b, _ := lifecycleBuild()
 	b.host = confirmationBindingHost{lifecycleHost: b.host.(lifecycleHost), records: map[string]any{
-		WritebackType + "/local-writeback": Writeback{Name: "submit-order"},
-		SourceType + "/local-source":       Source{Name: "order-status"},
+		construction.WritebackType + "/local-writeback": construction.Writeback{Name: "submit-order"},
+		construction.SourceType + "/local-source":       construction.Source{Name: "order-status"},
 	}}
-	object := Object{Name: "order", Title: "Order", States: []State{{Name: "ready", Title: "Ready"}}, Actions: []Action{
+	object := construction.Object{Name: "order", Title: "Order", States: []construction.State{{Name: "ready", Title: "Ready"}}, Actions: []construction.Action{
 		{Name: "start", Title: "Start", From: []string{"ready"}, To: "ready", Transaction: &platform.BusinessTxn{Subject: "build.order", Confirmation: &platform.Confirmation{
 			Parties: []platform.ConfirmationParty{{Name: "warehouse", Writeback: "local-writeback", Reconcile: &platform.ConfirmationRead{Source: "local-source"}}}, OnComplete: "finish",
 		}}},
@@ -684,7 +688,7 @@ func TestConfirmationReleaseBindsStableAssetsOnTheStartingAction(t *testing.T) {
 	}}
 	object.ID = "order"
 	object.Published = published(object)
-	assets, err := releaseAssets([]Object{object}, nil, nil, nil, "1")
+	assets, err := releaseAssets([]construction.Object{object}, nil, nil, nil, "1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -704,9 +708,9 @@ func TestConfirmationReleaseBindsStableAssetsOnTheStartingAction(t *testing.T) {
 			continue
 		}
 		for _, ref := range []platform.AssetRef{
-			{App: ID, Kind: platform.AssetWriteback, Name: "submit-order"},
-			{App: ID, Kind: platform.AssetSource, Name: "order-status"},
-			{App: ID, Kind: platform.AssetAction, Name: "build.order.finish"},
+			{App: construction.ID, Kind: platform.AssetWriteback, Name: "submit-order"},
+			{App: construction.ID, Kind: platform.AssetSource, Name: "order-status"},
+			{App: construction.ID, Kind: platform.AssetAction, Name: "build.order.finish"},
 		} {
 			if !slices.Contains(asset.Requires, ref) {
 				t.Fatalf("starting action omitted its frozen transport %s", ref)
@@ -725,14 +729,14 @@ func TestConfirmationReleaseBindsStableAssetsOnTheStartingAction(t *testing.T) {
 
 func TestIssuedResultSurvivesExplicitOwnerBindings(t *testing.T) {
 	b, rows := lifecycleBuild()
-	conn := Connection{Record: platform.Record{ID: "connection"}, Name: "sap", Kind: "http"}
-	rows.rows[reflect.TypeFor[Connection]()] = []any{conn}
-	source := Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: conn.ID, URL: "rows", Object: "build.receipt", Key: "id"}
+	conn := construction.Connection{Record: platform.Record{ID: "connection"}, Name: "sap", Kind: "http"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{conn}
+	source := construction.Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: conn.ID, URL: "rows", Object: "build.receipt", Key: "id"}
 	first, err := b.integrationAsset(platform.AssetSource, source, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var legacy SourceDefinition
+	var legacy construction.SourceDefinition
 	if err := json.Unmarshal(first.Body, &legacy); err != nil {
 		t.Fatal(err)
 	}
@@ -755,7 +759,7 @@ func TestIssuedResultSurvivesExplicitOwnerBindings(t *testing.T) {
 		t.Fatal("explicit owner metadata changed original execution semantics", ok, err)
 	}
 	// A different resolved owner still changes the frozen dependency identity.
-	var changed SourceDefinition
+	var changed construction.SourceDefinition
 	if err := json.Unmarshal(second.Body, &changed); err != nil {
 		t.Fatal(err)
 	}
@@ -776,26 +780,26 @@ func TestIssuedResultSurvivesExplicitOwnerBindings(t *testing.T) {
 
 func TestLegacyIntegrationCandidateUsesFrozenReferences(t *testing.T) {
 	b, rows := lifecycleBuild()
-	object := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: "build.receipt"}
-	producer := platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: "feed"}
-	definition := MatchingDefinition{Name: "identity", Title: "Receipt identity", Object: object.Name, Keys: []MatchKey{{Fields: []string{"item"}}}, Prefer: []Preference{{Field: "document", Producer: producer.Name}}}
+	object := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.receipt"}
+	producer := platform.AssetRef{App: construction.ID, Kind: platform.AssetSource, Name: "feed"}
+	definition := construction.MatchingDefinition{Name: "identity", Title: "Receipt identity", Object: object.Name, Keys: []construction.MatchKey{{Fields: []string{"item"}}}, Prefer: []construction.Preference{{Field: "document", Producer: producer.Name}}}
 	body, _ := json.Marshal(definition)
-	original := platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetMatching, Name: definition.Name}, ContractVersion: 1, SourceVersion: integrationVersion(1, platform.AssetMatching), Requires: []platform.AssetRef{object, producer}, Body: body}
+	original := platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetMatching, Name: definition.Name}, ContractVersion: 1, SourceVersion: integrationVersion(1, platform.AssetMatching), Requires: []platform.AssetRef{object, producer}, Body: body}
 	raw, _ := json.Marshal(original)
-	retained := Match{Record: platform.Record{ID: "matching"}, Name: definition.Name, Title: definition.Title, Object: definition.Object, Keys: definition.Keys, Prefer: definition.Prefer, State: "published", DefinitionVersion: 1, Published: string(raw), Versions: []string{string(raw)}}
+	retained := construction.Match{Record: platform.Record{ID: "matching"}, Name: definition.Name, Title: definition.Title, Object: definition.Object, Keys: definition.Keys, Prefer: definition.Prefer, State: "published", DefinitionVersion: 1, Published: string(raw), Versions: []string{string(raw)}}
 	// Today's draft names a different object and producer. A pipeline also
 	// reuses the old source name. None may reinterpret the accepted version.
 	mutable := retained
 	mutable.Object = "build.other"
-	mutable.Prefer = []Preference{{Field: "document", Producer: "edited-feed"}}
-	rows.rows[reflect.TypeFor[Match]()] = []any{mutable}
-	rows.rows[reflect.TypeFor[Pipeline]()] = []any{Pipeline{Name: producer.Name, State: "draft"}}
+	mutable.Prefer = []construction.Preference{{Field: "document", Producer: "edited-feed"}}
+	rows.rows[reflect.TypeFor[construction.Match]()] = []any{mutable}
+	rows.rows[reflect.TypeFor[construction.Pipeline]()] = []any{construction.Pipeline{Name: producer.Name, State: "draft"}}
 	assets, err := b.integrationAssets()
 	if err != nil || len(assets) != 1 {
 		t.Fatal("legacy matching was not projected for a new candidate", assets, err)
 	}
 	projected := assets[0]
-	var current MatchingDefinition
+	var current construction.MatchingDefinition
 	if json.Unmarshal(projected.Body, &current) != nil || current.Producers[producer.Name] != producer || current.ObjectBindings[object.Name] != object || projected.Provides == nil || !slices.Equal(projected.Requires, original.Requires) {
 		t.Fatal("projection did not retain the exact accepted identities", projected, current)
 	}
@@ -807,7 +811,7 @@ func TestLegacyIntegrationCandidateUsesFrozenReferences(t *testing.T) {
 		}
 		return asset
 	}
-	connection := platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: "sap"}
+	connection := platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: "sap"}
 	available := append(slices.Clone(assets),
 		prerequisite(object, `{"type":"build.receipt","fields":[{"name":"item","type":"text"},{"name":"document","type":"text"}]}`),
 		prerequisite(producer, `{"name":"feed","title":"Feed","connection":"sap","url":"rows"}`),
@@ -847,9 +851,9 @@ func TestLegacyIntegrationCandidateUsesFrozenReferences(t *testing.T) {
 
 	// The old virtual confirmation edge cannot be silently erased. Reading
 	// old execution metadata remains valid; a new publication removes it.
-	writebackBody, _ := json.Marshal(WritebackDefinition{Name: "confirm", Title: "Confirm", Connection: connection.Name, Object: object.Name, On: "confirmation"})
-	oldWriteback := platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: "confirm"}, ContractVersion: 1, SourceVersion: integrationVersion(1, platform.AssetWriteback), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: object.Name + ".confirmation"}, connection, object}, Body: writebackBody}
-	if err := buildapi.ValueValidateIntegrationDescriptor(oldWriteback); err != nil {
+	writebackBody, _ := json.Marshal(construction.WritebackDefinition{Name: "confirm", Title: "Confirm", Connection: connection.Name, Object: object.Name, On: "confirmation"})
+	oldWriteback := platform.ReleaseAsset{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetWriteback, Name: "confirm"}, ContractVersion: 1, SourceVersion: integrationVersion(1, platform.AssetWriteback), Requires: []platform.AssetRef{{App: construction.ID, Kind: platform.AssetAction, Name: object.Name + ".confirmation"}, connection, object}, Body: writebackBody}
+	if err := construction.ValueValidateIntegrationDescriptor(oldWriteback); err != nil {
 		t.Fatal("original confirmation metadata became unreadable", err)
 	}
 	if _, err := integrationCandidateAsset(oldWriteback); err == nil || !strings.Contains(err.Error(), "publish a new writeback version") {
@@ -859,8 +863,8 @@ func TestLegacyIntegrationCandidateUsesFrozenReferences(t *testing.T) {
 
 func TestDefinitionDescriptorReadsAcceptedVersionWithoutLiveHost(t *testing.T) {
 	owner := New("definition-reader")
-	ref := platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: "retained"}
-	dependency := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: "build.oldobject"}
+	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetSampleSet, Name: "retained"}
+	dependency := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.oldobject"}
 	asset := platform.ReleaseAsset{Ref: ref, SourceVersion: "1.sample-1", ContractVersion: 1, Requires: []platform.AssetRef{dependency}, Provides: []platform.Capability{{Kind: "interface", Name: "retained"}}, Body: platform.Raw(platform.SampleSet{Name: "retained", Title: "Accepted original title"})}
 	descriptor, err := owner.DefinitionDescriptor(asset)
 	if err != nil || descriptor.Ref != ref || descriptor.Version != "1.sample-1" || descriptor.SampleSet == nil || descriptor.SampleSet.Title != "Accepted original title" || !slices.Equal(descriptor.Requires, asset.Requires) || !reflect.DeepEqual(descriptor.Provides, asset.Provides) {

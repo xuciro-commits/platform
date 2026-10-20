@@ -1,14 +1,14 @@
 package build
 
 import (
-	buildapi "platformserver/internal/host/buildapi"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 	"testing"
 	"time"
 )
 
 func TestFormula(t *testing.T) {
-	o := Object{Name: "line", Fields: []Field{
+	o := construction.Object{Name: "line", Fields: []construction.Field{
 		{Name: "price", Title: "Price", Type: "decimal"},
 		{Name: "qty", Title: "Qty", Type: "integer", Required: true},
 		{Name: "total", Title: "Total", Type: "decimal", Formula: "price * qty - (1 / 0)"},
@@ -17,13 +17,13 @@ func TestFormula(t *testing.T) {
 	if err := checkFormulas(o.Fields); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkFormulas([]Field{{Name: "a", Type: "text", Formula: "1"}}); err == nil {
+	if err := checkFormulas([]construction.Field{{Name: "a", Type: "text", Formula: "1"}}); err == nil {
 		t.Fatal("a text field took a formula")
 	}
-	if err := checkFormulas([]Field{{Name: "a", Type: "integer", Formula: "b + 1"}}); err == nil {
+	if err := checkFormulas([]construction.Field{{Name: "a", Type: "integer", Formula: "b + 1"}}); err == nil {
 		t.Fatal("an unknown operand passed")
 	}
-	if _, err := buildapi.ValueParseFormula("1 +"); err == nil {
+	if _, err := construction.ValueParseFormula("1 +"); err == nil {
 		t.Fatal("a broken formula parsed")
 	}
 	type rec struct {

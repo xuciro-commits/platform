@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"fmt"
 	"net/http"
@@ -16,7 +18,7 @@ import (
 // Discovery must see installed declarations at the same boundary as their
 // publication, rather than iterating Build's caches during an installation.
 func TestMetadataConcurrentPublication(t *testing.T) {
-	tn, err := NewTenant("metadata", NewConsole("metadata", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}), build.New("metadata"))
+	tn, err := NewTenant("metadata", NewConsole("metadata", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder}}}), build.New("metadata"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +55,8 @@ func TestMetadataConcurrentPublication(t *testing.T) {
 			for _, step := range []struct {
 				schema  string
 				payload any
-			}{{build.ObjectType + ".create", map[string]any{"name": fmt.Sprintf("task%d", i), "title": "Task", "fields": []build.Field{}}}, {build.SchemaPublish, struct{}{}}} {
-				_, refusal := tn.Submit(m, &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: id + step.schema, Target: &pb.EntityRef{Type: build.ObjectType, Id: id}, Schema: &pb.SchemaRef{Name: step.schema, Version: 1}, Payload: platform.Raw(step.payload)}, time.Now())
+			}{{construction.ObjectType + ".create", map[string]any{"name": fmt.Sprintf("task%d", i), "title": "Task", "fields": []construction.Field{}}}, {construction.SchemaPublish, struct{}{}}} {
+				_, refusal := tn.Submit(m, &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: construction.ID, IdempotencyKey: id + step.schema, Target: &pb.EntityRef{Type: construction.ObjectType, Id: id}, Schema: &pb.SchemaRef{Name: step.schema, Version: 1}, Payload: platform.Raw(step.payload)}, time.Now())
 				if refusal != nil {
 					failures <- fmt.Errorf("publish %s: %s", id, refusal.Message)
 					return

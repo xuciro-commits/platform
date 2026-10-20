@@ -1,5 +1,7 @@
 package build
 
+import "platformserver/internal/construction"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -58,8 +60,8 @@ type AgentCase struct {
 func (b *Build) agentEntity() platform.Entity {
 	return platform.Entity{Type: AgentType, Title: "Agent", Plural: "Agents", Model: Agent{}, Display: "title",
 		Description: "An AI agent over the ontology: bounded tools, a budget, checkpoints and cases; publishing installs it.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "functions"},
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}},
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "functions"},
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if err := b.checkAgent(*record.(*Agent)); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
@@ -67,7 +69,7 @@ func (b *Build) agentEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this agent as its next version; a changed definition stops existing runs.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishAgent}}}}
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this agent as its next version; a changed definition stops existing runs.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishAgent}}}}
 }
 
 // Only create/edit may refer to readable saved definitions. Publication and
@@ -78,7 +80,7 @@ func (b *Build) agentDraftEntity() platform.Entity {
 		if c.Replaying {
 			return nil
 		}
-		objects, err := readDefinitionInventory[Object](c)
+		objects, err := readDefinitionInventory[construction.Object](c)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
@@ -130,7 +132,7 @@ func (b *Build) checkAgent(a Agent) error {
 		}
 	}
 	for ref := range b.jointDeclarations {
-		if ref.App == ID && ref.Kind == platform.AssetQuery {
+		if ref.App == construction.ID && ref.Kind == platform.AssetQuery {
 			tools["query:"+ref.Name] = true
 		}
 	}
@@ -152,7 +154,7 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 			continue
 		}
 		if query, ok := strings.CutPrefix(tool, "query:"); ok {
-			if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: query}] {
+			if b.jointAssets[platform.AssetRef{App: construction.ID, Kind: platform.AssetQuery, Name: query}] {
 				continue
 			}
 			if _, found := b.queries[query]; !found {
@@ -160,10 +162,10 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 			}
 			continue
 		}
-		if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: tool}] {
+		if b.jointAssets[platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: tool}] {
 			continue
 		}
-		if _, ok := b.ledger.Catalog.Action(tool); !ok || !strings.HasPrefix(tool, ID+".") || b.installedActionOf(tool) == "" {
+		if _, ok := b.ledger.Catalog.Action(tool); !ok || !strings.HasPrefix(tool, construction.ID+".") || b.installedActionOf(tool) == "" {
 			return fmt.Errorf("The agent %s uses %s, which is not an action of a published object", a.Name, tool)
 		}
 	}
@@ -231,7 +233,7 @@ func (b *Build) publishAgent(c platform.Caller, record any, _ json.RawMessage, _
 }
 
 func (b *Build) agentInventory() ([]Agent, error) {
-	return readDefinitionInventory[Agent](b.host.Automation(platform.Caller{}, ID))
+	return readDefinitionInventory[Agent](b.host.Automation(platform.Caller{}, construction.ID))
 }
 
 // AgentStamp changes whenever the set of installed agents or any of their
@@ -263,7 +265,7 @@ func (a Agent) Definition() platform.Agent {
 		},
 		To: func(platform.Caller, platform.AgentRun) []platform.Recipient {
 			if role == "" {
-				return []platform.Recipient{{AppRole: Builder}}
+				return []platform.Recipient{{AppRole: construction.Builder}}
 			}
 			return []platform.Recipient{{AppRole: role}}
 		}}

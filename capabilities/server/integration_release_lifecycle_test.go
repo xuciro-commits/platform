@@ -1,5 +1,7 @@
 package platformserver
 
+import "platformserver/internal/construction"
+
 import (
 	"bytes"
 	"context"
@@ -106,16 +108,16 @@ func TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels(t *testing.T) {
 		_, _ = w.Write([]byte(`[]`))
 	}))
 	t.Cleanup(server.Close)
-	decide(t, tn, "builder", build.ID, build.ConnectionType+".create", build.ConnectionType, "CONNECTION", map[string]any{"name": "authoringconnection", "title": "Authoring connection", "kind": "http", "address": server.URL + "/", "allowPrivate": true}, at)
-	decide(t, tn, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, "CONNECTION", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "CONNECTION", map[string]any{"name": "authoringconnection", "title": "Authoring connection", "kind": "http", "address": server.URL + "/", "allowPrivate": true}, at)
+	decide(t, tn, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "CONNECTION", map[string]any{}, at)
 	tn.CheckConnections(at)
-	connection, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "CONNECTION")
+	connection, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "CONNECTION")
 	if connection.State != "ready" {
 		t.Fatalf("connection did not become ready: %+v", connection.Last)
 	}
-	decide(t, tn, "builder", build.ID, build.ConnectionType+".create", build.ConnectionType, "UNCHECKED", map[string]any{"name": "uncheckedauthoring", "title": "Unchecked authoring connection", "kind": "http", "address": server.URL + "/", "allowPrivate": true}, at)
-	decide(t, tn, "builder", build.ID, build.DatasetType+".create", build.DatasetType, "DATASET", map[string]any{"name": "authoringrows", "title": "Authoring rows"}, at)
-	object := publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "integrationauthoring", "title": "Integration authoring", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "UNCHECKED", map[string]any{"name": "uncheckedauthoring", "title": "Unchecked authoring connection", "kind": "http", "address": server.URL + "/", "allowPrivate": true}, at)
+	decide(t, tn, "builder", construction.ID, construction.DatasetType+".create", construction.DatasetType, "DATASET", map[string]any{"name": "authoringrows", "title": "Authoring rows"}, at)
+	object := publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "integrationauthoring", "title": "Integration authoring", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
 	const nextObject = "build.integrationnext"
 	integrations := []struct {
 		typ, id string
@@ -123,54 +125,54 @@ func TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels(t *testing.T) {
 		payload map[string]any
 		edit    map[string]any
 	}{
-		{build.SourceType, "SOURCE", platform.AssetSource,
-			map[string]any{"name": "authoringfeed", "title": "Authoring feed", "connection": "CONNECTION", "url": "rows", "object": object, "key": "id", "mapping": []build.SourceField{{From: "note", To: "note"}}},
-			map[string]any{"mapping": []build.SourceField{{From: "note", To: "extra"}}}},
-		{build.PipelineType, "PIPELINE", platform.AssetPipeline,
+		{construction.SourceType, "SOURCE", platform.AssetSource,
+			map[string]any{"name": "authoringfeed", "title": "Authoring feed", "connection": "CONNECTION", "url": "rows", "object": object, "key": "id", "mapping": []construction.SourceField{{From: "note", To: "note"}}},
+			map[string]any{"mapping": []construction.SourceField{{From: "note", To: "extra"}}}},
+		{construction.PipelineType, "PIPELINE", platform.AssetPipeline,
 			map[string]any{"name": "authoringpipeline", "title": "Authoring pipeline", "input": "DATASET", "outputObject": object, "key": "id"},
 			map[string]any{"outputObject": nextObject}},
-		{build.WritebackType, "WRITEBACK", platform.AssetWriteback,
-			map[string]any{"name": "authoringdelivery", "title": "Authoring delivery", "connection": "CONNECTION", "object": object, "on": "edit", "path": "receipts", "result": []build.SourceField{{From: "document", To: "note"}}},
-			map[string]any{"result": []build.SourceField{{From: "document", To: "extra"}}}},
+		{construction.WritebackType, "WRITEBACK", platform.AssetWriteback,
+			map[string]any{"name": "authoringdelivery", "title": "Authoring delivery", "connection": "CONNECTION", "object": object, "on": "edit", "path": "receipts", "result": []construction.SourceField{{From: "document", To: "note"}}},
+			map[string]any{"result": []construction.SourceField{{From: "document", To: "extra"}}}},
 		{build.MatchType, "MATCH", platform.AssetMatching,
-			map[string]any{"name": "authoringidentity", "title": "Authoring identity", "object": object, "keys": []build.MatchKey{{Fields: []string{"note"}}}},
-			map[string]any{"keys": []build.MatchKey{{Fields: []string{"extra"}}}}},
+			map[string]any{"name": "authoringidentity", "title": "Authoring identity", "object": object, "keys": []construction.MatchKey{{Fields: []string{"note"}}}},
+			map[string]any{"keys": []construction.MatchKey{{Fields: []string{"extra"}}}}},
 	}
 	for _, integration := range integrations {
-		decide(t, tn, "builder", build.ID, integration.typ+".create", integration.typ, integration.id, integration.payload, at)
-		decide(t, tn, "builder", build.ID, integration.typ+".publish", integration.typ, integration.id, map[string]any{}, at)
+		decide(t, tn, "builder", construction.ID, integration.typ+".create", integration.typ, integration.id, integration.payload, at)
+		decide(t, tn, "builder", construction.ID, integration.typ+".publish", integration.typ, integration.id, map[string]any{}, at)
 	}
-	if why := refuse(t, tn, "builder", build.ID, build.SourceType+".edit", build.SourceType, "SOURCE", map[string]any{"connection": "UNCHECKED"}, at); !strings.Contains(why, "not ready") {
+	if why := refuse(t, tn, "builder", construction.ID, construction.SourceType+".edit", construction.SourceType, "SOURCE", map[string]any{"connection": "UNCHECKED"}, at); !strings.Contains(why, "not ready") {
 		t.Fatalf("published source bypassed the declared connection check: %s", why)
 	}
 	before := platform.Raw(tn.Definitions(member))
-	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "OBJECT", map[string]any{"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "extra", Title: "Extra", Type: "text"}}}, at)
-	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "NEXT", map[string]any{"name": "integrationnext", "title": "Next integration target", "fields": []build.Field{{Name: "extra", Title: "Extra", Type: "text"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "OBJECT", map[string]any{"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "extra", Title: "Extra", Type: "text"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "NEXT", map[string]any{"name": "integrationnext", "title": "Next integration target", "fields": []construction.Field{{Name: "extra", Title: "Extra", Type: "text"}}}, at)
 	for _, integration := range integrations {
-		decide(t, tn, "builder", build.ID, integration.typ+".edit", integration.typ, integration.id, integration.edit, at)
-		if why := refuse(t, tn, "builder", build.ID, integration.typ+".publish", integration.typ, integration.id, map[string]any{}, at); why == "ok" {
+		decide(t, tn, "builder", construction.ID, integration.typ+".edit", integration.typ, integration.id, integration.edit, at)
+		if why := refuse(t, tn, "builder", construction.ID, integration.typ+".publish", integration.typ, integration.id, map[string]any{}, at); why == "ok" {
 			t.Fatalf("direct %s publication used an unselected saved model", integration.typ)
 		}
-		if preview, err := tn.PreviewReleaseDrafts(member, []build.JointDraftRef{{Kind: integration.kind, ID: integration.id}}); err == nil && preview.Diagnostic == "" {
+		if preview, err := tn.PreviewReleaseDrafts(member, []construction.JointDraftRef{{Kind: integration.kind, ID: integration.id}}); err == nil && preview.Diagnostic == "" {
 			t.Fatalf("%s-only candidate used an unselected saved model", integration.typ)
 		}
 	}
 	// A saved change of matching target cannot make its still-running rule
 	// disappear and allow a second published rule on the original object.
-	decide(t, tn, "builder", build.ID, build.MatchType+".edit", build.MatchType, "MATCH", map[string]any{"object": nextObject}, at)
-	decide(t, tn, "builder", build.ID, build.MatchType+".create", build.MatchType, "DUPLICATE", map[string]any{"name": "duplicateidentity", "title": "Duplicate identity", "object": object, "keys": []build.MatchKey{{Fields: []string{"note"}}}}, at)
-	if why := refuse(t, tn, "builder", build.ID, build.MatchType+".publish", build.MatchType, "DUPLICATE", map[string]any{}, at); !strings.Contains(why, "already has") {
+	decide(t, tn, "builder", construction.ID, build.MatchType+".edit", build.MatchType, "MATCH", map[string]any{"object": nextObject}, at)
+	decide(t, tn, "builder", construction.ID, build.MatchType+".create", build.MatchType, "DUPLICATE", map[string]any{"name": "duplicateidentity", "title": "Duplicate identity", "object": object, "keys": []construction.MatchKey{{Fields: []string{"note"}}}}, at)
+	if why := refuse(t, tn, "builder", construction.ID, build.MatchType+".publish", build.MatchType, "DUPLICATE", map[string]any{}, at); !strings.Contains(why, "already has") {
 		t.Fatalf("matching draft hid the still-published rule: %s", why)
 	}
-	decide(t, tn, "builder", build.ID, build.MatchType+".edit", build.MatchType, "MATCH", map[string]any{"object": object}, at)
-	owner := tn.app(build.ID).(*build.Build)
+	decide(t, tn, "builder", construction.ID, build.MatchType+".edit", build.MatchType, "MATCH", map[string]any{"object": object}, at)
+	owner := tn.app(construction.ID).(*build.Build)
 	checkInstalled := func() {
 		t.Helper()
-		caller := tn.automation(build.ID, false)
-		source, _ := platform.Get[build.Source](caller, "SOURCE")
-		pipeline, _ := platform.Get[build.Pipeline](caller, "PIPELINE")
-		writeback, _ := platform.Get[build.Writeback](caller, "WRITEBACK")
-		matching, _ := platform.Get[build.Match](caller, "MATCH")
+		caller := tn.automation(construction.ID, false)
+		source, _ := platform.Get[construction.Source](caller, "SOURCE")
+		pipeline, _ := platform.Get[construction.Pipeline](caller, "PIPELINE")
+		writeback, _ := platform.Get[construction.Writeback](caller, "WRITEBACK")
+		matching, _ := platform.Get[construction.Match](caller, "MATCH")
 		fixedSource, sourceErr := owner.ExecutionSource(source)
 		fixedPipeline, pipelineErr := owner.ExecutionPipeline(pipeline)
 		fixedWriteback, writebackErr := owner.ExecutionWriteback(writeback)
@@ -183,15 +185,15 @@ func TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels(t *testing.T) {
 		}
 	}
 	checkInstalled()
-	selection := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetObject, ID: "NEXT"}, {Kind: platform.AssetConnection, ID: "CONNECTION"}, {Kind: platform.AssetDataset, ID: "DATASET"}}
+	selection := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetObject, ID: "NEXT"}, {Kind: platform.AssetConnection, ID: "CONNECTION"}, {Kind: platform.AssetDataset, ID: "DATASET"}}
 	for _, integration := range integrations {
-		selection = append(selection, build.JointDraftRef{Kind: integration.kind, ID: integration.id})
+		selection = append(selection, construction.JointDraftRef{Kind: integration.kind, ID: integration.id})
 	}
-	decide(t, tn, "builder", build.ID, build.SourceType+".edit", build.SourceType, "SOURCE", map[string]any{"mapping": []build.SourceField{{From: "note", To: "missing"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.SourceType+".edit", construction.SourceType, "SOURCE", map[string]any{"mapping": []construction.SourceField{{From: "note", To: "missing"}}}, at)
 	if preview, err := tn.PreviewReleaseDrafts(member, selection); err == nil && preview.Diagnostic == "" {
 		t.Fatal("joint integration candidate skipped the selected model's field checks")
 	}
-	decide(t, tn, "builder", build.ID, build.SourceType+".edit", build.SourceType, "SOURCE", integrations[0].edit, at)
+	decide(t, tn, "builder", construction.ID, construction.SourceType+".edit", construction.SourceType, "SOURCE", integrations[0].edit, at)
 	preview, err := tn.PreviewReleaseDrafts(member, selection)
 	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
 		t.Fatalf("explicit integration/model selection could not form a candidate: %+v %v", preview, err)
@@ -204,11 +206,11 @@ func TestIntegrationDraftEditsUseOnlyExplicitlySelectedModels(t *testing.T) {
 	if _, err := tn.ActivateRelease(member, candidate, "activate-integration-authoring", at); err != nil {
 		t.Fatal(err)
 	}
-	caller := tn.automation(build.ID, false)
-	source, _ := platform.Get[build.Source](caller, "SOURCE")
-	pipeline, _ := platform.Get[build.Pipeline](caller, "PIPELINE")
-	writeback, _ := platform.Get[build.Writeback](caller, "WRITEBACK")
-	matching, _ := platform.Get[build.Match](caller, "MATCH")
+	caller := tn.automation(construction.ID, false)
+	source, _ := platform.Get[construction.Source](caller, "SOURCE")
+	pipeline, _ := platform.Get[construction.Pipeline](caller, "PIPELINE")
+	writeback, _ := platform.Get[construction.Writeback](caller, "WRITEBACK")
+	matching, _ := platform.Get[construction.Match](caller, "MATCH")
 	fixedSource, sourceErr := owner.ExecutionSource(source)
 	fixedPipeline, pipelineErr := owner.ExecutionPipeline(pipeline)
 	fixedWriteback, writebackErr := owner.ExecutionWriteback(writeback)
@@ -283,7 +285,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	}
 	devServer, prodServer := server(false), server(true)
 	compose := func(id string) *Tenant {
-		tenant := composeTenant(t, id, []Seat{seatOf(releaseFabricBuilder(id), build.ID+":"+build.Builder), seatOf("user", build.ID+":"+build.User), seatOf("publisher", build.ID+":"+build.Publisher)}, work.New(id), flow.New(id), build.New(id))
+		tenant := composeTenant(t, id, []Seat{seatOf(releaseFabricBuilder(id), construction.ID+":"+construction.Builder), seatOf("user", construction.ID+":"+construction.User), seatOf("publisher", construction.ID+":"+construction.Publisher)}, work.New(id), flow.New(id), build.New(id))
 		tenant.Secrets = func(name string) ([]byte, bool) {
 			return []byte("Bearer " + name), strings.HasPrefix(name, "local-")
 		}
@@ -338,47 +340,47 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	}
 	dev, prod := open(prefix+"-dev"), open(prefix+"-prod")
 	connection := func(e *releaseFabricEnvironment, id, address string) {
-		decide(t, e.tenant, releaseFabricBuilder(e.tenant.ID), build.ID, build.ConnectionType+".create", build.ConnectionType, id, map[string]any{"name": "external", "title": "Environment connection", "kind": "http", "address": address + "/", "secret": "local-" + e.tenant.ID, "allowPrivate": true}, at)
-		decide(t, e.tenant, releaseFabricBuilder(e.tenant.ID), build.ID, build.ConnectionType+".check", build.ConnectionType, id, map[string]any{}, at)
+		decide(t, e.tenant, releaseFabricBuilder(e.tenant.ID), construction.ID, construction.ConnectionType+".create", construction.ConnectionType, id, map[string]any{"name": "external", "title": "Environment connection", "kind": "http", "address": address + "/", "secret": "local-" + e.tenant.ID, "allowPrivate": true}, at)
+		decide(t, e.tenant, releaseFabricBuilder(e.tenant.ID), construction.ID, construction.ConnectionType+".check", construction.ConnectionType, id, map[string]any{}, at)
 		e.tenant.CheckConnections(at)
-		c, _ := platform.Get[build.Connection](e.tenant.automation(build.ID, false), id)
+		c, _ := platform.Get[construction.Connection](e.tenant.automation(construction.ID, false), id)
 		if c.State != "ready" {
 			t.Fatalf("connection did not become a usable local binding: %+v", c.Last)
 		}
 	}
 	connection(dev, "dev-connection", devServer.URL)
-	typ := publishObject(t, dev.tenant, "dev-builder", "O", map[string]any{"name": "receipt", "title": domain + " receipt", "fields": []map[string]any{{"name": "item", "title": "Item", "type": "text"}, {"name": "qty", "title": "Quantity", "type": "integer"}, {"name": "document", "title": "Delivery document", "type": "text"}}, "states": []map[string]any{{"name": "open", "title": "Open"}, {"name": "received", "title": "Received"}}, "actions": []map[string]any{{"name": "receive", "title": "Receive", "from": []string{"open"}, "to": "received", "roles": []string{build.User, build.Builder}}}}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.MatchType+".create", build.MatchType, "dev-matching", map[string]any{"name": "receiptidentity", "title": "Match received items", "object": typ, "keys": []build.MatchKey{{Fields: []string{"item"}, Normalize: "folded"}}}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.MatchType+".publish", build.MatchType, "dev-matching", map[string]any{}, at)
+	typ := publishObject(t, dev.tenant, "dev-builder", "O", map[string]any{"name": "receipt", "title": domain + " receipt", "fields": []map[string]any{{"name": "item", "title": "Item", "type": "text"}, {"name": "qty", "title": "Quantity", "type": "integer"}, {"name": "document", "title": "Delivery document", "type": "text"}}, "states": []map[string]any{{"name": "open", "title": "Open"}, {"name": "received", "title": "Received"}}, "actions": []map[string]any{{"name": "receive", "title": "Receive", "from": []string{"open"}, "to": "received", "roles": []string{construction.User, construction.Builder}}}}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, build.MatchType+".create", build.MatchType, "dev-matching", map[string]any{"name": "receiptidentity", "title": "Match received items", "object": typ, "keys": []construction.MatchKey{{Fields: []string{"item"}, Normalize: "folded"}}}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, build.MatchType+".publish", build.MatchType, "dev-matching", map[string]any{}, at)
 	for _, ds := range []struct{ id, name string }{{"dev-raw", "raw"}, {"dev-clean", "clean"}} {
-		decide(t, dev.tenant, "dev-builder", build.ID, build.DatasetType+".create", build.DatasetType, ds.id, map[string]any{"name": ds.name, "title": ds.name + " rows"}, at)
+		decide(t, dev.tenant, "dev-builder", construction.ID, construction.DatasetType+".create", construction.DatasetType, ds.id, map[string]any{"name": ds.name, "title": ds.name + " rows"}, at)
 	}
-	decide(t, dev.tenant, "dev-builder", build.ID, build.SourceType+".create", build.SourceType, "dev-source", map[string]any{"name": "feed", "title": "External rows", "connection": "dev-connection", "profile": "json", "url": "rows", "since": "seq", "dataset": "dev-raw"}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.SourceType+".publish", build.SourceType, "dev-source", map[string]any{}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.SourceType+".create", construction.SourceType, "dev-source", map[string]any{"name": "feed", "title": "External rows", "connection": "dev-connection", "profile": "json", "url": "rows", "since": "seq", "dataset": "dev-raw"}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.SourceType+".publish", construction.SourceType, "dev-source", map[string]any{}, at)
 	dev.tenant.PullSources(at)
 	for _, p := range []struct {
 		id, name, input, output string
 		object                  bool
 	}{{"dev-clean-pipeline", "cleaning", "dev-raw", "dev-clean", false}, {"dev-land-pipeline", "landing", "dev-clean", typ, true}} {
-		definition := map[string]any{"name": p.name, "title": p.name, "input": p.input, "steps": []build.Step{{Kind: "select", Columns: []string{"id", "sku", "qty"}}, {Kind: "cast", Column: "qty", Type: "number"}, {Kind: "rename", From: "sku", To: "item"}}}
+		definition := map[string]any{"name": p.name, "title": p.name, "input": p.input, "steps": []construction.Step{{Kind: "select", Columns: []string{"id", "sku", "qty"}}, {Kind: "cast", Column: "qty", Type: "number"}, {Kind: "rename", From: "sku", To: "item"}}}
 		if p.object {
 			definition["outputObject"], definition["key"] = p.output, "id"
-			definition["steps"] = []build.Step{}
+			definition["steps"] = []construction.Step{}
 		} else {
 			definition["outputDataset"] = p.output
 		}
-		decide(t, dev.tenant, "dev-builder", build.ID, build.PipelineType+".create", build.PipelineType, p.id, definition, at)
-		decide(t, dev.tenant, "dev-builder", build.ID, build.PipelineType+".publish", build.PipelineType, p.id, map[string]any{}, at)
+		decide(t, dev.tenant, "dev-builder", construction.ID, construction.PipelineType+".create", construction.PipelineType, p.id, definition, at)
+		decide(t, dev.tenant, "dev-builder", construction.ID, construction.PipelineType+".publish", construction.PipelineType, p.id, map[string]any{}, at)
 	}
 	dev.tenant.RunPipelines(at)
 	dev.tenant.RunPipelines(at.Add(time.Second))
-	decide(t, dev.tenant, "dev-builder", build.ID, build.WritebackType+".create", build.WritebackType, "dev-writeback", map[string]any{"name": "receiptdelivery", "title": "Receipt delivery", "connection": "dev-connection", "object": typ, "on": "receive", "path": "receipts", "result": []build.SourceField{{From: "document", To: "document"}}}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.WritebackType+".publish", build.WritebackType, "dev-writeback", map[string]any{}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.PageType+".create", build.PageType, "P", map[string]any{"name": "desk", "title": "Receiving desk", "object": typ, "list": []string{"item", "qty", "state", "document"}, "detail": []string{"item", "qty", "state", "document"}}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.ProcessType+".create", build.ProcessType, "F", map[string]any{"name": "receipthold", "title": "Keep receipt work in flight", "object": typ, "when": "received", "steps": []build.ProcessStep{{Name: "hold", Kind: "wait", UntilSeconds: 3600, Next: "done"}, {Name: "done", Kind: "end"}}}, at)
-	resources := []platform.AssetRef{{App: build.ID, Kind: platform.AssetFlow, Name: "build.receipthold"}, {App: build.ID, Kind: platform.AssetSource, Name: "feed"}, {App: build.ID, Kind: platform.AssetPipeline, Name: "cleaning"}, {App: build.ID, Kind: platform.AssetPipeline, Name: "landing"}, {App: build.ID, Kind: platform.AssetWriteback, Name: "receiptdelivery"}, {App: build.ID, Kind: platform.AssetMatching, Name: "receiptidentity"}}
-	decide(t, dev.tenant, "dev-builder", build.ID, build.AppType+".create", build.AppType, "A", map[string]any{"name": "receiving", "title": domain + " receiving", "pages": []string{"desk"}, "resources": resources}, at)
-	drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetPage, ID: "P"}, {Kind: platform.AssetApp, ID: "A"}, {Kind: platform.AssetFlow, ID: "F"}}
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.WritebackType+".create", construction.WritebackType, "dev-writeback", map[string]any{"name": "receiptdelivery", "title": "Receipt delivery", "connection": "dev-connection", "object": typ, "on": "receive", "path": "receipts", "result": []construction.SourceField{{From: "document", To: "document"}}}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.WritebackType+".publish", construction.WritebackType, "dev-writeback", map[string]any{}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.PageType+".create", construction.PageType, "P", map[string]any{"name": "desk", "title": "Receiving desk", "object": typ, "list": []string{"item", "qty", "state", "document"}, "detail": []string{"item", "qty", "state", "document"}}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.ProcessType+".create", construction.ProcessType, "F", map[string]any{"name": "receipthold", "title": "Keep receipt work in flight", "object": typ, "when": "received", "steps": []construction.ProcessStep{{Name: "hold", Kind: "wait", UntilSeconds: 3600, Next: "done"}, {Name: "done", Kind: "end"}}}, at)
+	resources := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetFlow, Name: "build.receipthold"}, {App: construction.ID, Kind: platform.AssetSource, Name: "feed"}, {App: construction.ID, Kind: platform.AssetPipeline, Name: "cleaning"}, {App: construction.ID, Kind: platform.AssetPipeline, Name: "landing"}, {App: construction.ID, Kind: platform.AssetWriteback, Name: "receiptdelivery"}, {App: construction.ID, Kind: platform.AssetMatching, Name: "receiptidentity"}}
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.AppType+".create", construction.AppType, "A", map[string]any{"name": "receiving", "title": domain + " receiving", "pages": []string{"desk"}, "resources": resources}, at)
+	drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetPage, ID: "P"}, {Kind: platform.AssetApp, ID: "A"}, {Kind: platform.AssetFlow, ID: "F"}}
 	freeze := func(key string) platform.ReleaseCandidate {
 		builder := memberOf(t, dev.tenant, "dev-builder")
 		preview, err := dev.tenant.PreviewReleaseDrafts(builder, drafts)
@@ -410,8 +412,8 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	if bytes.Contains(candidate.Bytes, []byte(devServer.URL)) || bytes.Contains(candidate.Bytes, []byte("local-"+dev.tenant.ID)) || bytes.Contains(candidate.Bytes, []byte("dev-builder")) || bytes.Contains(candidate.Bytes, []byte("dev-connection")) || bytes.Contains(candidate.Bytes, []byte("SOURCE-ONLY")) {
 		t.Fatal("portable candidate contains source environment bindings or runtime data")
 	}
-	devData, _ := platform.Get[build.Dataset](dev.tenant.automation(build.ID, false), "dev-raw")
-	devSource, _ := platform.Get[build.Source](dev.tenant.automation(build.ID, false), "dev-source")
+	devData, _ := platform.Get[construction.Dataset](dev.tenant.automation(construction.ID, false), "dev-raw")
+	devSource, _ := platform.Get[construction.Source](dev.tenant.automation(construction.ID, false), "dev-source")
 	if devSource.Cursor != "5" {
 		t.Fatal("source fixture lacks a non-empty runtime cursor")
 	}
@@ -426,8 +428,8 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 		t.Fatal("missing binding left target drafts, data, release pointer or outside reads")
 	}
 	wrong := open(prefix + "-wrong")
-	decide(t, wrong.tenant, "target-builder", build.ID, build.ConnectionType+".create", build.ConnectionType, "wrong-connection", map[string]any{"name": "external", "title": "Wrong binding kind", "kind": "odata", "address": prodServer.URL + "/", "secret": "local-" + wrong.tenant.ID, "allowPrivate": true}, at)
-	decide(t, wrong.tenant, "target-builder", build.ID, build.ConnectionType+".check", build.ConnectionType, "wrong-connection", map[string]any{}, at)
+	decide(t, wrong.tenant, "target-builder", construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "wrong-connection", map[string]any{"name": "external", "title": "Wrong binding kind", "kind": "odata", "address": prodServer.URL + "/", "secret": "local-" + wrong.tenant.ID, "allowPrivate": true}, at)
+	decide(t, wrong.tenant, "target-builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "wrong-connection", map[string]any{}, at)
 	wrong.tenant.CheckConnections(at)
 	wrongBefore := snapshot(wrong.tenant)
 	if _, err := PromoteCandidate(dev.tenant, wrong.tenant, candidate.ID, "wrong-binding", true, memberOf(t, wrong.tenant, "target-builder"), at); err == nil || err.Error() == "" {
@@ -472,7 +474,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	incompatible := open(prefix + "-incompatible")
 	connection(incompatible, "local-connection", prodServer.URL)
 	legacyType := publishObject(t, incompatible.tenant, "target-builder", "legacy-object", map[string]any{"name": "receipt", "title": "Existing receipt", "fields": []map[string]any{{"name": "legacy", "title": "Legacy value", "type": "text"}}}, at)
-	decide(t, incompatible.tenant, "user", build.ID, legacyType+".create", legacyType, "existing", map[string]any{"legacy": "PRESERVE"}, at)
+	decide(t, incompatible.tenant, "user", construction.ID, legacyType+".create", legacyType, "existing", map[string]any{"legacy": "PRESERVE"}, at)
 	incompatibleBefore := snapshot(incompatible.tenant)
 	if _, err := PromoteCandidate(dev.tenant, incompatible.tenant, candidate.ID, "incompatible-storage", true, memberOf(t, incompatible.tenant, "target-builder"), at); err == nil || err.Error() == "" {
 		t.Fatal("unsupported existing storage change was not refused")
@@ -533,9 +535,9 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	}
 	// Replay is the definition handoff only. Target data comes exclusively from
 	// its own bound connection, whose row IDs need not equal the source IDs.
-	c := prod.tenant.automation(build.ID, false)
-	datasets, _, _ := platform.Find[build.Dataset](c, platform.Query{})
-	sources, _, _ := platform.Find[build.Source](c, platform.Query{})
+	c := prod.tenant.automation(construction.ID, false)
+	datasets, _, _ := platform.Find[construction.Dataset](c, platform.Query{})
+	sources, _, _ := platform.Find[construction.Source](c, platform.Query{})
 	if len(datasets) != 2 || len(sources) != 1 || sources[0].Connection != "prod-connection" || sources[0].Cursor != "" || sources[0].Last != nil || sources[0].Puller != "target-builder" {
 		t.Fatalf("target did not resolve local references or copied source runtime: datasets=%+v sources=%+v", datasets, sources)
 	}
@@ -544,11 +546,11 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 			t.Fatal("promotion copied dataset contents/version")
 		}
 	}
-	connectionRow, _ := platform.Get[build.Connection](c, "prod-connection")
+	connectionRow, _ := platform.Get[construction.Connection](c, "prod-connection")
 	if connectionRow.Address != prodServer.URL+"/" || connectionRow.Secret != "local-"+prod.tenant.ID {
 		t.Fatal("promotion replaced the target environment binding")
 	}
-	decide(t, prod.tenant, "target-builder", build.ID, build.SourceType+".pull", build.SourceType, sources[0].ID, map[string]any{}, at)
+	decide(t, prod.tenant, "target-builder", construction.ID, construction.SourceType+".pull", construction.SourceType, sources[0].ID, map[string]any{}, at)
 	prod.tenant.PullSources(at)
 	prod.tenant.RunPipelines(at)
 	prod.tenant.RunPipelines(at.Add(time.Second))
@@ -563,7 +565,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	if targetCredential.Load() != "Bearer local-"+prod.tenant.ID {
 		t.Fatal("target source did not resolve its own environment credential")
 	}
-	decide(t, prod.tenant, "user", build.ID, typ+".receive", typ, "IN-1", map[string]any{}, at)
+	decide(t, prod.tenant, "user", construction.ID, typ+".receive", typ, "IN-1", map[string]any{}, at)
 	prod.tenant.Work(at)
 	view, refusal = prod.tenant.RecordOf(memberOf(t, prod.tenant, "user"), typ, "IN-1", at)
 	if refusal != nil {
@@ -581,7 +583,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	// versions. It changes no storage shape or environment binding.
 	beforeRow := slices.Clone(body)
 	pullAt := at.Add(2 * time.Second)
-	decide(t, prod.tenant, "target-builder", build.ID, build.SourceType+".pull", build.SourceType, sources[0].ID, map[string]any{}, pullAt)
+	decide(t, prod.tenant, "target-builder", construction.ID, construction.SourceType+".pull", construction.SourceType, sources[0].ID, map[string]any{}, pullAt)
 	blockNextTarget.Store(true)
 	pullDone := make(chan struct{})
 	go func() {
@@ -594,18 +596,18 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	case <-time.After(5 * time.Second):
 		t.Fatal("source call did not reach its captured definition boundary")
 	}
-	beforeSource, _ := platform.Get[build.Source](prod.tenant.automation(build.ID, false), sources[0].ID)
+	beforeSource, _ := platform.Get[construction.Source](prod.tenant.automation(construction.ID, false), sources[0].ID)
 	beforeDataset := map[string]int{}
 	for _, dataset := range datasets {
-		current, _ := platform.Get[build.Dataset](prod.tenant.automation(build.ID, false), dataset.ID)
+		current, _ := platform.Get[construction.Dataset](prod.tenant.automation(construction.ID, false), dataset.ID)
 		beforeDataset[dataset.ID] = current.Version
 	}
-	decide(t, dev.tenant, "dev-builder", build.ID, build.PipelineType+".edit", build.PipelineType, "dev-clean-pipeline", map[string]any{"title": "Clean rows v2", "expectations": []build.Expectation{{Column: "qty", Rule: "range", Value: "0..10"}}}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.PipelineType+".publish", build.PipelineType, "dev-clean-pipeline", map[string]any{}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.WritebackType+".edit", build.WritebackType, "dev-writeback", map[string]any{"result": []build.SourceField{{From: "document", To: "item"}}}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.WritebackType+".publish", build.WritebackType, "dev-writeback", map[string]any{}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.SourceType+".edit", build.SourceType, "dev-source", map[string]any{"title": "External rows v2"}, at)
-	decide(t, dev.tenant, "dev-builder", build.ID, build.SourceType+".publish", build.SourceType, "dev-source", map[string]any{}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.PipelineType+".edit", construction.PipelineType, "dev-clean-pipeline", map[string]any{"title": "Clean rows v2", "expectations": []construction.Expectation{{Column: "qty", Rule: "range", Value: "0..10"}}}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.PipelineType+".publish", construction.PipelineType, "dev-clean-pipeline", map[string]any{}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.WritebackType+".edit", construction.WritebackType, "dev-writeback", map[string]any{"result": []construction.SourceField{{From: "document", To: "item"}}}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.WritebackType+".publish", construction.WritebackType, "dev-writeback", map[string]any{}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.SourceType+".edit", construction.SourceType, "dev-source", map[string]any{"title": "External rows v2"}, at)
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.SourceType+".publish", construction.SourceType, "dev-source", map[string]any{}, at)
 	v2 := freeze("save-v2")
 	if v2.ID == candidate.ID {
 		t.Fatal("changed integration definition did not change the candidate")
@@ -615,12 +617,12 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	}
 	view, _ = prod.tenant.RecordOf(memberOf(t, prod.tenant, "user"), typ, "IN-1", at)
 	afterRow, _ := json.Marshal(view.Record)
-	afterSource, _ := platform.Get[build.Source](prod.tenant.automation(build.ID, false), sources[0].ID)
+	afterSource, _ := platform.Get[construction.Source](prod.tenant.automation(construction.ID, false), sources[0].ID)
 	if beforeSource.Cursor != "9" || beforeSource.Cursor != afterSource.Cursor || beforeSource.Last == nil || afterSource.Last == nil || !beforeSource.Last.At.Equal(afterSource.Last.At) {
 		t.Fatal("definition upgrade reset source runtime/cursor")
 	}
 	for datasetID, version := range beforeDataset {
-		current, _ := platform.Get[build.Dataset](prod.tenant.automation(build.ID, false), datasetID)
+		current, _ := platform.Get[construction.Dataset](prod.tenant.automation(construction.ID, false), datasetID)
 		if current.Version != version {
 			t.Fatal("definition upgrade rewrote dataset runtime versions")
 		}
@@ -638,7 +640,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	case <-time.After(5 * time.Second):
 		t.Fatal("source call did not finish after its title-only upgrade")
 	}
-	finishedSource, _ := platform.Get[build.Source](prod.tenant.automation(build.ID, false), sources[0].ID)
+	finishedSource, _ := platform.Get[construction.Source](prod.tenant.automation(construction.ID, false), sources[0].ID)
 	if finishedSource.Last == nil || !finishedSource.Last.At.Equal(pullAt) || finishedSource.Last.DefinitionVersion != beforeSource.Last.DefinitionVersion || finishedSource.Requested {
 		t.Fatalf("compatible title upgrade did not complete the captured source version: %+v", finishedSource)
 	}
@@ -653,20 +655,20 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	if !bytes.Contains(completed, []byte("DELIVERED")) || !bytes.Contains(completed, []byte("TARGET-ONLY")) || targetWrites.Load() != 1 {
 		t.Fatalf("pending writeback lost its original result mapping during upgrade: %s", completed)
 	}
-	pipelines, _, _ := platform.Find[build.Pipeline](prod.tenant.automation(build.ID, false), platform.Query{})
+	pipelines, _, _ := platform.Find[construction.Pipeline](prod.tenant.automation(construction.ID, false), platform.Query{})
 	checkedPipeline := false
 	for _, pipeline := range pipelines {
 		if pipeline.Name != "cleaning" {
 			continue
 		}
 		checkedPipeline = true
-		owner := prod.tenant.app(build.ID).(*build.Build)
+		owner := prod.tenant.app(construction.ID).(*build.Build)
 		accepted, err := owner.ExecutionPipeline(pipeline)
 		if err != nil || accepted.Title != "Clean rows v2" || len(accepted.Expectations) != 1 || accepted.Expectations[0].Value != "0..10" {
 			t.Fatalf("target execution did not select the upgraded integration definition: %+v %v", accepted, err)
 		}
-		decide(t, prod.tenant, "target-builder", build.ID, build.PipelineType+".edit", build.PipelineType, pipeline.ID, map[string]any{"title": "Unpublished target edit", "expectations": []build.Expectation{{Column: "qty", Rule: "range", Value: "50..60"}}}, at)
-		edited, _ := platform.Get[build.Pipeline](prod.tenant.automation(build.ID, false), pipeline.ID)
+		decide(t, prod.tenant, "target-builder", construction.ID, construction.PipelineType+".edit", construction.PipelineType, pipeline.ID, map[string]any{"title": "Unpublished target edit", "expectations": []construction.Expectation{{Column: "qty", Rule: "range", Value: "50..60"}}}, at)
+		edited, _ := platform.Get[construction.Pipeline](prod.tenant.automation(construction.ID, false), pipeline.ID)
 		accepted, err = owner.ExecutionPipeline(edited)
 		if err != nil || accepted.Title != "Clean rows v2" || len(accepted.Expectations) != 1 || accepted.Expectations[0].Value != "0..10" {
 			t.Fatal("mutable target editor draft replaced the accepted integration definition")
@@ -691,7 +693,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 		}
 		checkpoint = persisted
 	}
-	decide(t, prod.tenant, "user", build.ID, typ+".edit", typ, "IN-1", map[string]any{"item": "AFTER-SNAPSHOT"}, at)
+	decide(t, prod.tenant, "user", construction.ID, typ+".edit", typ, "IN-1", map[string]any{"item": "AFTER-SNAPSHOT"}, at)
 	final := compose(prod.tenant.ID)
 	if err := final.Restore(checkpoint); err != nil {
 		t.Fatal(err)
