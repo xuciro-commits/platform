@@ -5,6 +5,7 @@ import "platformserver/internal/construction"
 import (
 	"bytes"
 	"encoding/json"
+	"platformserver/internal/records"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ func TestMigrationRenameAliasFollowsNewWritesAndPreservesHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	originalRelease := bytes.Clone(tn.releases.raw(plan.From))
-	originalHistory := copyHistory(tn.records.types["build.asset"].rows.Get("A").recordHistory())
+	originalHistory := records.CopyHistory(tn.records.types["build.asset"].rows.Get("A").RecordHistory())
 	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
 	for i := 0; i < 2; i++ {
 		decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
@@ -50,19 +51,19 @@ func TestMigrationRenameAliasFollowsNewWritesAndPreservesHistory(t *testing.T) {
 	}
 	decide(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"title": "Changed"}, txnAt.Add(2*time.Hour))
 	for _, name := range []string{"name", "title"} {
-		if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.Get("A").value, name); got != "Changed" {
+		if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.Get("A").Value, name); got != "Changed" {
 			t.Fatalf("alias %s lost the current value: %s", name, got)
 		}
 	}
-	if !bytes.Equal(originalRelease, tn.releases.raw(plan.From)) || string(platform.Raw(originalHistory)) != string(platform.Raw(tn.records.types["build.asset"].rows.Get("A").recordHistory()[:len(originalHistory)])) {
+	if !bytes.Equal(originalRelease, tn.releases.raw(plan.From)) || string(platform.Raw(originalHistory)) != string(platform.Raw(tn.records.types["build.asset"].rows.Get("A").RecordHistory()[:len(originalHistory)])) {
 		t.Fatal("rename rewrote its frozen source or original history")
 	}
 	recovered := builderTenant(t, tn.ID)
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := tn.records.types["build.asset"].rows.Get("A").image()
-	after, _ := recovered.records.types["build.asset"].rows.Get("A").image()
+	before, _ := tn.records.types["build.asset"].rows.Get("A").Image()
+	after, _ := recovered.records.types["build.asset"].rows.Get("A").Image()
 	if !bytes.Equal(before, after) {
 		t.Fatal("recovery recalculated or changed the accepted alias facts")
 	}
@@ -103,13 +104,13 @@ func TestMigrationRetiredFieldStaysReadableWithoutNewWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, _ := tn.records.types["build.asset"].rows.Get("A").image()
+	before, _ := tn.records.types["build.asset"].rows.Get("A").Image()
 	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
 	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 	if _, err := tn.ActivateRelease(builder, plan.To, "retire-activate", txnAt); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := tn.records.types["build.asset"].rows.Get("A").image()
+	after, _ := tn.records.types["build.asset"].rows.Get("A").Image()
 	if !bytes.Equal(before, after) {
 		t.Fatal("retirement rewrote a retained record")
 	}
@@ -121,7 +122,7 @@ func TestMigrationRetiredFieldStaysReadableWithoutNewWrites(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if got := businessField(recovered.records.types["build.asset"].info, recovered.records.types["build.asset"].rows.Get("A").value, "name"); got != "Historical value" {
+	if got := businessField(recovered.records.types["build.asset"].info, recovered.records.types["build.asset"].rows.Get("A").Value, "name"); got != "Historical value" {
 		t.Fatal("retirement lost the old field's readable value")
 	}
 }

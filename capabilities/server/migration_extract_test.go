@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"platformserver/internal/records"
 	"testing"
 	"time"
 
@@ -172,7 +173,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 							t.Fatal("cancellation did not finish its bounded compensation")
 						}
 						for _, rowID := range []string{"A", "B"} {
-							if !recordOf(tn.records.types["build.detail"].rows.Get(rowID).value).Archived {
+							if !records.Header(tn.records.types["build.detail"].rows.Get(rowID).Value).Archived {
 								t.Fatal("cancellation left an extracted record active")
 							}
 						}
@@ -184,7 +185,7 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 						}
 						for _, rowID := range []string{"A", "B", "C"} {
 							et := tn.records.types["build.detail"]
-							if businessField(et.info, et.rows.Get(rowID).value, "name") != "Name "+rowID {
+							if businessField(et.info, et.rows.Get(rowID).Value, "name") != "Name "+rowID {
 								t.Fatal("extraction lost its declared source value")
 							}
 						}
@@ -208,11 +209,11 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 					for _, rowID := range []string{"A", "B", "C"} {
 						instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:"+rowID)
 						if instance.State != "done" || instance.Release != from {
-							t.Fatalf("old flow lost its extraction binding: %s; projection: %s; source: %s", jsonOf(instance), jsonOf(tn.records.types["build.sample"].rows.Get(rowID).projection), jsonOf(tn.records.types["build.sample"].rows.Get(rowID).value.Interface()))
+							t.Fatalf("old flow lost its extraction binding: %s; projection: %s; source: %s", jsonOf(instance), jsonOf(tn.records.types["build.sample"].rows.Get(rowID).Projection), jsonOf(tn.records.types["build.sample"].rows.Get(rowID).Value.Interface()))
 						}
 						if !cancel {
 							et := tn.records.types["build.detail"]
-							if businessField(et.info, et.rows.Get(rowID).value, "name") != "Updated" {
+							if businessField(et.info, et.rows.Get(rowID).Value, "name") != "Updated" {
 								t.Fatal("retained extraction did not write its target")
 							}
 						}
@@ -226,8 +227,8 @@ func TestMigrationExtractsDeclaredObjectsAndResumes(t *testing.T) {
 						t.Fatal(err)
 					}
 					for rowID, row := range tn.records.types["build.detail"].rows.All() {
-						before, _ := acceptedRowOf("build.detail", rowID, row)
-						after, _ := acceptedRowOf("build.detail", rowID, recovered.records.types["build.detail"].rows.Get(rowID))
+						before, _ := records.FullImage("build.detail", rowID, row)
+						after, _ := records.FullImage("build.detail", rowID, recovered.records.types["build.detail"].rows.Get(rowID))
 						if !bytes.Equal(jsonOf(before), jsonOf(after)) {
 							t.Fatal("recovery reran extraction or compensation")
 						}

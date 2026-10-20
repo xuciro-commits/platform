@@ -8,6 +8,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strconv"
@@ -108,7 +109,7 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	}
 	for _, row := range result.Rows {
 		if result.Version >= 4 {
-			if err := validateHistoryRef(row.acceptedRow); err != nil {
+			if err := records.ValidateHistoryRef(row.Image); err != nil {
 				return result, err
 			}
 		} else if row.HistoryRef != nil || row.Predecessor != "" || row.Format != "" {

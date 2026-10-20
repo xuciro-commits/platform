@@ -5,6 +5,7 @@ import "platformserver/internal/construction"
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -293,7 +294,7 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 		copy.ID = fmt.Sprintf("inventory-%05d", i)
 		value := reflect.New(reflect.TypeOf(copy)).Elem()
 		value.Set(reflect.ValueOf(copy))
-		source.records.types[platform.FlowInstanceType].setRow(copy.ID, &row{value: value})
+		source.records.types[platform.FlowInstanceType].setRow(copy.ID, &records.Row{Value: value})
 	}
 	source.records.mu.Unlock()
 	scale, refusal := source.ApplicationRuntimeOf(member, root, at.Add(time.Second))

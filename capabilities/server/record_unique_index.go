@@ -25,9 +25,9 @@ func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constrai
 		field, _ := info.Field(name)
 		switch name {
 		case "id":
-			values = append(values, recordOf(value).ID)
+			values = append(values, records.Header(value).ID)
 		case "archived":
-			values = append(values, recordOf(value).Archived)
+			values = append(values, records.Header(value).Archived)
 		default:
 			x := value.FieldByIndex(field.Index).Interface()
 			if constraintEmpty(x) {
@@ -59,7 +59,7 @@ func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constrai
 			if parent == nil || parent.info.App != info.App || parent.rows.Get(x.String()) == nil {
 				return "", fmt.Errorf("unique scope reference is unavailable")
 			}
-			current, currentType = parent.rows.Get(x.String()).value, parent.info
+			current, currentType = parent.rows.Get(x.String()).Value, parent.info
 		}
 	}
 	raw, err := json.Marshal(values)
@@ -96,7 +96,7 @@ func (et *entityType) uniqueIndex(s *recordStore, rule platform.Constraint) uniq
 	index := uniqueIndex{rule: rule}
 	s.prepareUniqueScopeReferences(et.info, rule)
 	for id, r := range et.rows.All() {
-		key, err := s.uniqueKey(et.info, rule, r.value)
+		key, err := s.uniqueKey(et.info, rule, r.Value)
 		if err == nil {
 			index.replace(id, key)
 		}
@@ -193,7 +193,7 @@ func (s *recordStore) refreshUniqueIndexes(changedType, changedID string) {
 			for id := range ids.All() {
 				key := ""
 				if current := et.rows.Get(id); current != nil {
-					key, _ = s.uniqueKey(et.info, index.rule, current.value)
+					key, _ = s.uniqueKey(et.info, index.rule, current.Value)
 				}
 				index.replace(id, key)
 			}
@@ -219,7 +219,7 @@ func (s *recordStore) uniqueKeys(typ, id string) map[string]string {
 		if rule.Kind != "unique" {
 			continue
 		}
-		key, err := s.uniqueKey(et.info, rule, r.value)
+		key, err := s.uniqueKey(et.info, rule, r.Value)
 		if err == nil && key != "" {
 			keys[rule.Name] = key
 		}

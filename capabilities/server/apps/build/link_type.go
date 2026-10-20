@@ -67,7 +67,7 @@ func (b *Build) linkTypeEntity() platform.Entity {
 }
 
 func (b *Build) checkLinkType(f *LinkType) error {
-	if !named(f.Name) || !named(f.Forward) || !named(f.Reverse) {
+	if !construction.Named(f.Name) || !construction.Named(f.Forward) || !construction.Named(f.Reverse) {
 		return fmt.Errorf("Link names must use lower-case letters and digits")
 	}
 	parent, parentFound := b.lookupEntity(f.Parent)
@@ -104,12 +104,12 @@ func (b *Build) checkLinkType(f *LinkType) error {
 		return err
 	}
 	for _, other := range list {
-		installed, _ := wasPublished[LinkType](other.Published)
+		installed, _ := construction.ReadPublication[LinkType](other.Published)
 		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
 			return fmt.Errorf("Link type %s is already declared", f.Name)
 		}
 	}
-	if old, ok := wasPublished[LinkType](f.Published); ok && (old.Name != f.Name || old.Parent != f.Parent || old.Child != f.Child || old.Via != f.Via || old.Definition().Storage == "reference" && old.Required != f.Required || !linkKeepsGuarantees(old, *f)) {
+	if old, ok := construction.ReadPublication[LinkType](f.Published); ok && (old.Name != f.Name || old.Parent != f.Parent || old.Child != f.Child || old.Via != f.Via || old.Definition().Storage == "reference" && old.Required != f.Required || !linkKeepsGuarantees(old, *f)) {
 		return fmt.Errorf("A published link keeps its identity, objects, reference shape and retained constraints")
 	}
 	return nil
@@ -157,7 +157,7 @@ func linkKeepsGuarantees(old, next LinkType) bool {
 func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		record, ok := platform.Get[LinkType](c, submission.GetTarget().GetId())
-		installed, retained := wasPublished[LinkType](record.Published)
+		installed, retained := construction.ReadPublication[LinkType](record.Published)
 		if !ok || record.Archived || !retained || installed.Definition().Storage != "edge" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Publish an owned relationship before migrating")
 		}

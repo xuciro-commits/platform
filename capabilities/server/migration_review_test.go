@@ -38,7 +38,7 @@ func TestMigrationReviewUsesSealedShapesWithoutChangingLiveRows(t *testing.T) {
 	to := save("target")
 	literal := platform.ExprLiteralValue("boolean", true)
 	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.asset"}, Steps: []platform.MigrateStep{{Kind: "default", Types: []string{"build.asset"}, Batch: 2, Fields: []platform.MigrateField{{To: "enabled", Expr: &literal}}}}}
-	before, err := tn.records.types["build.asset"].rows.Get("A").image()
+	before, err := tn.records.types["build.asset"].rows.Get("A").Image()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestMigrationReviewUsesSealedShapesWithoutChangingLiveRows(t *testing.T) {
 	if err != nil || answer.ID == "" || len(answer.Types) != 1 || answer.Types[0].Records != 1 || answer.Types[0].SourceShape == answer.Types[0].TargetShape {
 		t.Fatalf("migration review: %+v %v", answer, err)
 	}
-	after, _ := tn.records.types["build.asset"].rows.Get("A").image()
+	after, _ := tn.records.types["build.asset"].rows.Get("A").Image()
 	if !bytes.Equal(before, after) || tn.releases.active != from {
 		t.Fatal("read-only review changed a row or activated its target")
 	}

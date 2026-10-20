@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -37,20 +38,8 @@ type acceptedResult struct {
 	RequestHash    string                  `json:"requestHash"`
 	Digest         string                  `json:"digest,omitempty"`
 	Receipt        json.RawMessage         `json:"receipt"`
-	Row            acceptedRow             `json:"row"`
+	Row            records.Image           `json:"row"`
 	Event          acceptedEvent           `json:"event"`
-}
-
-type acceptedRow struct {
-	Type        string              `json:"type"`
-	Format      string              `json:"format,omitempty"`
-	HistoryRef  *acceptedHistoryRef `json:"historyRef,omitempty"`
-	Predecessor string              `json:"predecessor,omitempty"`
-	ID          string              `json:"id"`
-	Value       json.RawMessage     `json:"value"`
-	History     []RecordChange      `json:"history"`
-	Projection  *recordProjection   `json:"projection,omitempty"`
-	Extraction  *extractionOrigin   `json:"extraction,omitempty"`
 }
 
 type acceptedEvent struct {
@@ -116,17 +105,17 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("decision has no declared record image")
 	}
-	if et.rows.Get(id).projection != nil {
+	if et.rows.Get(id).Projection != nil {
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("versioned migration row requires the complete record batch")
 	}
-	var prior *row
+	var prior *records.Row
 	if old := d.records.parent.types[typ]; old != nil {
 		prior = old.rows.Get(id)
 	}
-	image, err := acceptedRowChange(typ, id, et.rows.Get(id), prior)
+	image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
 	if err == nil {
-		image.Predecessor, err = recordPredecessor(typ, id, prior)
+		image.Predecessor, err = records.Predecessor(typ, id, prior)
 	}
 	d.records.mu.Unlock()
 	if err != nil {
@@ -237,7 +226,7 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 		return result, nil, fmt.Errorf("legacy result has unique-key metadata")
 	}
 	if result.Version == 5 {
-		if err := validateHistoryRef(result.Row); err != nil {
+		if err := records.ValidateHistoryRef(result.Row); err != nil {
 			return result, nil, err
 		}
 	} else if result.Row.HistoryRef != nil || result.Row.Predecessor != "" || result.Row.Format != "" {
@@ -293,7 +282,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return false, fmt.Errorf("accepted result needs installed entity %s", result.Row.Type)
 	}
 	value := reflect.New(et.info.Go).Elem()
-	decoded, err := rowDecodeFormattedImage(et.info, result.Row.Value, result.Row.Projection, draft.readRelease, result.Row.Format)
+	decoded, err := records.DecodeFormattedImage(et.info, result.Row.Value, result.Row.Projection, draft.readRelease, result.Row.Format)
 	if err != nil {
 		draft.mu.Unlock()
 		return false, err
@@ -312,7 +301,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.mu.Unlock()
 		return false, err
 	}
-	rec := recordOf(value)
+	rec := records.Header(value)
 	if rec.ID != result.Row.ID || rec.Revision != receipt.GetRevision() ||
 		rec.Changed.By != receipt.GetSubmission().GetPrincipalId() ||
 		rec.Changed.Change != receipt.GetChangeId() ||
@@ -335,8 +324,8 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		}
 	}
 	prior := et.rows.Get(rec.ID)
-	if prior != nil && reflect.DeepEqual(prior.value.Interface(), value.Interface()) &&
-		acceptedRowAlreadyApplied(prior, result.Row) {
+	if prior != nil && reflect.DeepEqual(prior.Value.Interface(), value.Interface()) &&
+		records.ImageAlreadyApplied(prior, result.Row) {
 		draft.mu.Unlock()
 		changed, err := l.ApplyAcceptedChange(receipt)
 		if err == nil {
@@ -346,12 +335,12 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return changed, err
 	}
 	if result.Version == 5 {
-		if err := checkHistoryPredecessor(result.Row, prior); err != nil {
+		if err := records.CheckHistoryPredecessor(result.Row, prior); err != nil {
 			draft.mu.Unlock()
 			return false, err
 		}
-		before, err := recordPredecessor(result.Row.Type, result.Row.ID, prior)
-		if err != nil || before != result.Row.Predecessor || prior != nil && !reflect.DeepEqual(recordOf(prior.value).Created, rec.Created) || prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) {
+		before, err := records.Predecessor(result.Row.Type, result.Row.ID, prior)
+		if err != nil || before != result.Row.Predecessor || prior != nil && !reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created) || prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) {
 			draft.mu.Unlock()
 			return false, fmt.Errorf("accepted record predecessor differs: %v", err)
 		}
@@ -360,21 +349,21 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		before := len(result.Row.History) - 1
 		if verb == "create" && prior != nil || verb != "create" && prior == nil ||
 			prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
-			prior == nil && before != 0 || prior != nil && (len(prior.recordHistory()) != before ||
-			before > 0 && !reflect.DeepEqual(prior.recordHistory(), result.Row.History[:before]) ||
-			!reflect.DeepEqual(recordOf(prior.value).Created, rec.Created)) {
+			prior == nil && before != 0 || prior != nil && (len(prior.RecordHistory()) != before ||
+			before > 0 && !reflect.DeepEqual(prior.RecordHistory(), result.Row.History[:before]) ||
+			!reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created)) {
 			draft.mu.Unlock()
 			return false, fmt.Errorf("accepted record is missing its predecessor")
 		}
 	}
-	recovered := &row{value: value, format: result.Row.Format, history: copyHistory(result.Row.History)}
+	recovered := &records.Row{Value: value, Format: result.Row.Format, History: records.CopyHistory(result.Row.History)}
 	if result.Version == 5 {
-		if err := appendRowHistory(recovered, prior, result.Row.History); err != nil {
+		if err := records.AppendRowHistory(recovered, prior, result.Row.History); err != nil {
 			draft.mu.Unlock()
 			return false, err
 		}
 	}
-	recovered.retainOriginal(result.Row.Value)
+	recovered.RetainOriginal(result.Row.Value)
 	et.setRow(rec.ID, recovered)
 	draft.writes[result.Row.Type+"/"+rec.ID] = true
 	draft.remember(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)

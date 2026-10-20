@@ -220,7 +220,7 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 			et := t.records.types[typ]
 			var v reflect.Value
 			if et != nil && et.rows.Get(id) != nil {
-				v = et.rows.Get(id).value
+				v = et.rows.Get(id).Value
 			}
 			t.records.mu.Unlock()
 			if et == nil || !v.IsValid() || v.FieldByName("Record").Interface().(platform.Record).Archived {
@@ -411,7 +411,7 @@ func (t *Tenant) knowledgeSourceReadable(store *recordStore, m platform.Member, 
 	if et == nil || et.rows.Get(id) == nil {
 		return false
 	}
-	d, ok := et.rows.Get(id).value.Interface().(platform.KnowledgeDocument)
+	d, ok := et.rows.Get(id).Value.Interface().(platform.KnowledgeDocument)
 	return ok && !d.Archived && knowledgeAppsReadable(d.Apps, &m, "")
 }
 

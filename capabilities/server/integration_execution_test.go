@@ -48,11 +48,11 @@ func TestIntegrationSourceAcceptsReturningValuesAndRetainsRefusals(t *testing.T)
 		}
 		previous = source.Last.Execution.ID
 		row := tn.records.types[typ].rows.Get("R1")
-		if row == nil || len(row.recordHistory()) != n+1 {
+		if row == nil || len(row.RecordHistory()) != n+1 {
 			t.Fatalf("returning value was lost: history after %q", value)
 		}
 		var current map[string]any
-		if err := json.Unmarshal(platform.Raw(row.value.Interface()), &current); err != nil || current["note"] != value {
+		if err := json.Unmarshal(platform.Raw(row.Value.Interface()), &current); err != nil || current["note"] != value {
 			t.Fatalf("current value after %q: %+v %v", value, current, err)
 		}
 	}
@@ -131,7 +131,7 @@ func TestIntegrationSourceResumesFrozenInputAfterRestart(t *testing.T) {
 				t.Fatalf("restart did not finish the original input: %+v", done.Last)
 			}
 			for _, rowID := range []string{"R1", "R2"} {
-				if row := restored.records.types[typ].rows.Get(rowID); row == nil || len(row.recordHistory()) != 1 {
+				if row := restored.records.types[typ].rows.Get(rowID); row == nil || len(row.RecordHistory()) != 1 {
 					t.Fatalf("row %s was lost or applied twice", rowID)
 				}
 			}

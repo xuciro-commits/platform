@@ -140,7 +140,7 @@ func (b *Build) checkAgent(a Agent) error {
 }
 
 func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []string) error {
-	if !named(a.Name) {
+	if !construction.Named(a.Name) {
 		return fmt.Errorf("The agent name %s must be lower-case letters and digits", a.Name)
 	}
 	if strings.TrimSpace(a.Instructions) == "" || strings.TrimSpace(a.Description) == "" {
@@ -192,7 +192,7 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 			return fmt.Errorf("Agent %s is already declared", a.Name)
 		}
 	}
-	if old, ok := wasPublished[Agent](a.Published); ok && old.Name != a.Name {
+	if old, ok := construction.ReadPublication[Agent](a.Published); ok && old.Name != a.Name {
 		return fmt.Errorf("A published agent keeps its name")
 	}
 	return nil

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -87,10 +88,10 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 	}
 	info := et.info
 	value := copyOf(info.Go, entity)
-	record := recordOf(value)
+	record := records.Header(value)
 	before := et.rows.Get(record.ID)
 	if before != nil {
-		record.VersionPins = slices.Clone(recordOf(before.value).VersionPins)
+		record.VersionPins = slices.Clone(records.Header(before.Value).VersionPins)
 	} else {
 		record.VersionPins = nil
 	}
@@ -111,7 +112,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		if _, err := platform.EffectiveAt(field.Type, from, until, from); err != nil {
 			return refuse(err.Error())
 		}
-		if before != nil && (businessField(info, value, versioning.Key) != businessField(info, before.value, versioning.Key) || businessField(info, value, versioning.Version) != businessField(info, before.value, versioning.Version)) {
+		if before != nil && (businessField(info, value, versioning.Key) != businessField(info, before.Value, versioning.Key) || businessField(info, value, versioning.Version) != businessField(info, before.Value, versioning.Version)) {
 			return refuse("The business key and version are retained")
 		}
 	}
@@ -125,7 +126,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		}
 		d.records.mu.Lock()
 		source := d.records.types[field.Ref]
-		var selected *row
+		var selected *records.Row
 		if source != nil {
 			selected = source.rows.Get(id)
 		}
@@ -133,7 +134,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		if source == nil || source.info.Versioning == nil {
 			continue
 		}
-		if selected == nil || recordOf(selected.value).Archived {
+		if selected == nil || records.Header(selected.Value).Archived {
 			return refuse("The selected business version is unavailable")
 		}
 		pinAt := slices.IndexFunc(record.VersionPins, func(pin platform.RecordVersionPin) bool { return pin.Reference == field.Name })
@@ -151,11 +152,11 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		if strings.HasPrefix(versioning.Pin, "on_state:") && info.Lifecycle != nil {
 			ready = businessField(info, value, info.Lifecycle.Field) == strings.TrimPrefix(versioning.Pin, "on_state:")
 		}
-		if before != nil && businessField(info, before.value, field.Name) == id && (bindingAt < 0 || !ready) {
+		if before != nil && businessField(info, before.Value, field.Name) == id && (bindingAt < 0 || !ready) {
 			continue
 		}
 		clock := businessQuery(source.info, platform.Query{}, c.Member, at).BusinessTime.At
-		from, until := businessField(source.info, selected.value, versioning.ValidFrom), businessField(source.info, selected.value, versioning.ValidUntil)
+		from, until := businessField(source.info, selected.Value, versioning.ValidFrom), businessField(source.info, selected.Value, versioning.ValidUntil)
 		timeField, _ := source.info.Field(versioning.ValidFrom)
 		active, err := platform.EffectiveAt(timeField.Type, from, until, clock)
 		if err != nil || !active {
@@ -175,7 +176,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		if _, readErr := c.ReadRecord(source.info.Type, id, at); readErr != nil {
 			return refuse("The selected business version is not readable")
 		}
-		raw := platform.Raw(selected.value.FieldByIndex(versionField.Index).Interface())
+		raw := platform.Raw(selected.Value.FieldByIndex(versionField.Index).Interface())
 		target, _ := info.Field(binding.Version)
 		if json.Unmarshal(raw, value.FieldByIndex(target.Index).Addr().Interface()) != nil {
 			return refuse("The pinned version has an incompatible field type")
@@ -203,7 +204,7 @@ func (d *stagedDecision) checkBusinessVersionPins() *kernel.Error {
 	// A new version, its children and its first consumer may be accepted together.
 	for _, et := range d.records.parent.sortedTypes() {
 		for _, current := range et.rows.All() {
-			for _, pin := range recordOf(current.value).VersionPins {
+			for _, pin := range records.Header(current.Value).VersionPins {
 				pinned[pin.Source] = true
 			}
 		}
@@ -227,7 +228,7 @@ func (d *stagedDecision) checkBusinessVersionPins() *kernel.Error {
 					if field.Name == et.info.Versioning.ValidUntil {
 						continue
 					}
-					if !reflect.DeepEqual(current.value.FieldByIndex(field.Index).Interface(), write.before.value.FieldByIndex(field.Index).Interface()) {
+					if !reflect.DeepEqual(current.Value.FieldByIndex(field.Index).Interface(), write.before.Value.FieldByIndex(field.Index).Interface()) {
 						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Pinned business version content is retained; create another version")
 					}
 				}

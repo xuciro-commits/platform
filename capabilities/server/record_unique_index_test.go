@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"platformserver/internal/records"
 	"platformserver/journal"
 	"platformserver/platform"
 	"reflect"
@@ -44,7 +45,7 @@ func uniqueIndexStore(t *testing.T) (*recordStore, platform.Constraint) {
 }
 func putUniqueTest(store *recordStore, typ string, value any) {
 	v := copyOf(reflect.TypeOf(value), value)
-	store.types[typ].setRow(recordOf(v).ID, &row{value: v})
+	store.types[typ].setRow(records.Header(v).ID, &records.Row{Value: v})
 }
 func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	store, rule := uniqueIndexStore(t)
@@ -72,7 +73,7 @@ func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	putUniqueTest(draft, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "2"}, Group: "1"})
 	draft.writes["unique.parent/2"] = true
 	updated := draft.types["unique.child"].uniqueIndexes[rule.Name]
-	key, _ := draft.uniqueKey(et.info, rule, draft.types["unique.child"].rows.Get("1").value)
+	key, _ := draft.uniqueKey(et.info, rule, draft.types["unique.child"].rows.Get("1").Value)
 	if updated.keys.Get(key).Len() != 2 {
 		t.Fatal("parent scope change missed dependent key")
 	}
@@ -86,7 +87,7 @@ func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	if len(changes) != 2 || changes["unique.child/2"][rule.Name] != key {
 		t.Fatal("derived changes missed unchanged child", changes)
 	}
-	if store.types["unique.parent"].rows.Get("2").value.Interface().(indexedUniqueParent).Group != "2" {
+	if store.types["unique.parent"].rows.Get("2").Value.Interface().(indexedUniqueParent).Group != "2" {
 		t.Fatal("discarded change reached live state")
 	}
 	draft = store.forkRecords()
@@ -107,7 +108,7 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 	putUniqueTest(store, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "incomplete"}, Parent: "missing", Code: "same"})
 	et := store.types["unique.child"]
 	store.prepareUniqueIndexes()
-	existing := et.rows.Get("a").value
+	existing := et.rows.Get("a").Value
 	if ok, err := store.uniqueConstraint(et.info, rule, existing); ok || err != nil {
 		t.Fatal("historical duplicate lost", ok, err)
 	}

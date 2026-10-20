@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strconv"
@@ -101,9 +102,9 @@ func (et *entityType) grouping(name string) (grouping, bool) {
 	case "created", "changed":
 		col.Title = map[string]string{"created": "Created", "changed": "Changed"}[field]
 		date = func(v reflect.Value) (time.Time, bool) {
-			s := recordOf(v).Created
+			s := records.Header(v).Created
 			if field == "changed" {
-				s = recordOf(v).Changed
+				s = records.Header(v).Changed
 			}
 			return s.At, !s.At.IsZero()
 		}
@@ -245,7 +246,7 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 	var order []*acc
 	// Exact arithmetic is deterministic; sorted identities also make budget
 	// refusal independent of the record store's map iteration order.
-	slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(recordOf(a).ID, recordOf(b).ID) })
+	slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(records.Header(a).ID, records.Header(b).ID) })
 	for _, value := range rows {
 		keys := make([]any, len(groups))
 		for i, group := range groups {
@@ -297,7 +298,7 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 	}
 	slices.SortFunc(order, func(a, b *acc) int {
 		for i := range a.keys {
-			if c := compareValues(comparable(platform.FieldInfo{}, a.keys[i]), comparable(platform.FieldInfo{}, b.keys[i])); c != 0 {
+			if c := records.CompareValues(records.Comparable(a.keys[i]), records.Comparable(b.keys[i])); c != 0 {
 				return c
 			}
 		}

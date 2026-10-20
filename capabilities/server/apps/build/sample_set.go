@@ -65,7 +65,7 @@ func (b *Build) sampleSetInventory() ([]SampleSetRecord, error) {
 }
 
 func (b *Build) checkSampleSet(m SampleSetRecord) error {
-	if !named(m.Name) {
+	if !construction.Named(m.Name) {
 		return fmt.Errorf("The sample set name must use lower-case letters and digits")
 	}
 	if err := m.descriptor().Check(); err != nil {

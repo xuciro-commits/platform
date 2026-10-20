@@ -3,6 +3,7 @@ package platformserver
 import (
 	"context"
 	"fmt"
+	"platformserver/internal/records"
 	"reflect"
 	"strings"
 	"testing"
@@ -137,7 +138,7 @@ func TestContinuousOrphanCollectionPreservesHistoryAndRecoveryBoundary(t *testin
 	live.Files = files
 	live.records.mu.Lock()
 	row := live.records.types[platform.FlowInstanceType].rows.Get(id)
-	row.history = append(row.history, RecordChange{Fields: []FieldChange{{Field: "batch", Before: []byte("{")}}})
+	row.History = append(row.History, records.RecordChange{Fields: []records.FieldChange{{Field: "batch", Before: []byte("{")}}})
 	live.records.mu.Unlock()
 	if err := live.collectUnacceptedFlowArtifacts(context.Background(), now); err == nil {
 		t.Fatal("invalid historical reference image authorized collection")
@@ -161,11 +162,11 @@ func TestFlowArtifactReferencesRetainOriginalRecoveryBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	records := newRecordStore()
+	recordView := newRecordStore()
 	et := &entityType{}
-	et.setRow("old", &row{value: reflect.ValueOf(platform.FlowInstance{}), original: platform.Raw(map[string]any{"batch": map[string]any{"sealed": ref}})})
-	records.types[platform.FlowInstanceType] = et
-	keep, err := records.flowArtifactReferences(store)
+	et.setRow("old", &records.Row{Value: reflect.ValueOf(platform.FlowInstance{}), Original: platform.Raw(map[string]any{"batch": map[string]any{"sealed": ref}})})
+	recordView.types[platform.FlowInstanceType] = et
+	keep, err := recordView.flowArtifactReferences(store)
 	if err != nil || !keep[key] {
 		t.Fatal("original recovery bytes lost their artifact root", err)
 	}

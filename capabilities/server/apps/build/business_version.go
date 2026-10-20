@@ -13,7 +13,7 @@ import (
 func businessVersionInstallOrder(objects []construction.Object) ([]construction.Object, error) {
 	byType := map[string]construction.Object{}
 	for _, record := range objects {
-		if object, ok := wasPublished[construction.Object](record.Published); ok && !record.Archived {
+		if object, ok := construction.ReadPublication[construction.Object](record.Published); ok && !record.Archived {
 			byType["build."+object.Name] = object
 		}
 	}
@@ -70,7 +70,7 @@ func (b *Build) checkVersioning(o construction.Object) error {
 	if err := platform.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
-	if old, ok := wasPublished[construction.Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
+	if old, ok := construction.ReadPublication[construction.Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
 		return fmt.Errorf("published business versioning and pin bindings are retained")
 	}
 	return nil

@@ -69,7 +69,7 @@ func (b *Build) retainedAgentAsset(ref platform.AssetRef, sourceVersion string) 
 			continue
 		}
 		for _, raw := range append(slices.Clone(record.Versions), record.Published) {
-			retained, ok := wasPublished[Agent](raw)
+			retained, ok := construction.ReadPublication[Agent](raw)
 			if !ok {
 				continue
 			}
@@ -104,7 +104,7 @@ func (b *Build) agentDraftAssets(id string) (before, after []platform.ReleaseAss
 		return
 	}
 	record := rows[index]
-	if previous, ok := wasPublished[Agent](record.Published); ok {
+	if previous, ok := construction.ReadPublication[Agent](record.Published); ok {
 		prior = platform.AssetRef{App: construction.ID, Kind: platform.AssetAgent, Name: previous.Name}
 		hadPrior = true
 	}
@@ -160,7 +160,7 @@ func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) 
 		frozen.Record = record.Record
 		selected := published(frozen)
 		for _, raw := range record.Versions {
-			if old, ok := wasPublished[Agent](raw); ok && old.Version == frozen.Version {
+			if old, ok := construction.ReadPublication[Agent](raw); ok && old.Version == frozen.Version {
 				selected = raw
 				break
 			}

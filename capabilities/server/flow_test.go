@@ -658,7 +658,7 @@ func TestContinuousComputeRemainsWithinAcceptedResultBudget(t *testing.T) {
 		}
 		cursor = batch.ID
 	}
-	if tn.records.types[flow.InstanceType].rows.Get(id).historyLength() <= 128 {
+	if tn.records.types[flow.InstanceType].rows.Get(id).HistoryLength() <= 128 {
 		t.Fatal("bounding the current trace discarded accepted history")
 	}
 	CheckReplay(t, tn, entries, compose)

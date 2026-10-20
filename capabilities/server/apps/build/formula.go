@@ -128,14 +128,14 @@ func computeRulesOf(o construction.Object, lookup func(string) (platform.EntityI
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Field {field}: {reason} / 字段 {field}：{reason}", f.Name, err.Error(), f.Name, err.Error())
 			}
 			if f.FormulaExpr != nil {
-				holder := reflect.ValueOf(record).Elem().FieldByName("RuleSources" + goName(f.Name))
+				holder := reflect.ValueOf(record).Elem().FieldByName("RuleSources" + construction.GoName(f.Name))
 				if holder.IsValid() {
 					holder.Set(reflect.ValueOf(ctx.Sources))
 				}
 			}
 			value, err := platform.ExprGoValue(result.Value)
 			if err == nil {
-				err = assign(reflect.ValueOf(record).Elem().FieldByName(goName(f.Name)), value)
+				err = assign(reflect.ValueOf(record).Elem().FieldByName(construction.GoName(f.Name)), value)
 			}
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -168,7 +168,7 @@ func validateOf(o construction.Object, model any, lookup func(string) (platform.
 			}
 		}
 		v := reflect.ValueOf(record).Elem()
-		base := v.FieldByName(goName(BaseField))
+		base := v.FieldByName(construction.GoName(BaseField))
 		if !base.IsValid() || base.String() == "" {
 			return nil
 		}

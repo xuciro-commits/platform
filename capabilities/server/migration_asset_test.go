@@ -32,7 +32,7 @@ func TestMigrationPlanAssetsRetainVersionsAndUseTheOriginalExecutor(t *testing.T
 	if tn.records.types[platform.MigrationRunType].rows.Len() != 0 {
 		t.Fatal("publishing executed the migration")
 	}
-	versions := tn.records.types[build.MigrationPlanType].rows.Get("P").value.Interface().(build.MigrationPlanRecord)
+	versions := tn.records.types[build.MigrationPlanType].rows.Get("P").Value.Interface().(build.MigrationPlanRecord)
 	if versions.DefinitionVersion != 1 || len(versions.Versions) != 1 {
 		t.Fatal("publication did not retain its version")
 	}

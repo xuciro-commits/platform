@@ -74,7 +74,7 @@ func numberingOf(o construction.Object, model any) func(c platform.Caller, recor
 	n, typ := *o.Numbering, reflect.TypeOf(model)
 	return func(c platform.Caller, record any, now time.Time) *kernel.Error {
 		v := reflect.ValueOf(record).Elem()
-		field := v.FieldByName(goName(n.Field))
+		field := v.FieldByName(construction.GoName(n.Field))
 		if !field.IsValid() || field.Kind() != reflect.String || field.String() != "" || v.Field(0).Interface().(platform.Record).Revision > 0 {
 			return nil
 		}
@@ -89,7 +89,7 @@ func numberingOf(o construction.Object, model any) func(c platform.Caller, recor
 			all, _, _ := c.FindOf(typ, platform.Query{Limit: 100000, Archived: true})
 			seq = 1
 			for _, r := range all {
-				if strings.HasPrefix(reflect.ValueOf(r).FieldByName(goName(n.Field)).String(), prefix) {
+				if strings.HasPrefix(reflect.ValueOf(r).FieldByName(construction.GoName(n.Field)).String(), prefix) {
 					seq++
 				}
 			}

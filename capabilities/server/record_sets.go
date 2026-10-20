@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -81,15 +82,15 @@ func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, n
 		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection candidate is outside its owner")
 	}
 	value := reflect.New(et.info.Go).Elem()
-	if json.Unmarshal(raw, value.Addr().Interface()) != nil || recordOf(value).ID != id {
+	if json.Unmarshal(raw, value.Addr().Interface()) != nil || records.Header(value).ID != id {
 		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Collection candidate is invalid")
 	}
 	if before := et.rows.Get(id); before != nil {
-		recordOf(value).Created = recordOf(before.value).Created
+		records.Header(value).Created = records.Header(before.Value).Created
 	} else {
-		recordOf(value).Created.By = c.ID
+		records.Header(value).Created.By = c.ID
 	}
-	et.setRow(id, &row{value: value})
+	et.setRow(id, &records.Row{Value: value})
 	return d.tenant.readRecordSetFrom(store, c, object, id, name, at)
 }
 
@@ -203,7 +204,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	walk := newAuthorizationWalk()
 	question.Type = set.Object
 	for _, value := range raw {
-		question.Record = recordOf(value).ID
+		question.Record = records.Header(value).ID
 		decision := t.authorizeDepth(store, c, question, at, true, 0, walk)
 		if !decision.Allow && result.Authorization.Filtered == nil {
 			result.Authorization.Filtered = &decision

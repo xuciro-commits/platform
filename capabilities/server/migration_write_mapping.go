@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"time"
@@ -30,7 +31,7 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 		var selected *platform.MigrationRun
 		if runs := r.records.types[platform.MigrationRunType]; runs != nil {
 			for _, value := range runs.rows.All() {
-				run := value.value.Interface().(platform.MigrationRun)
+				run := value.Value.Interface().(platform.MigrationRun)
 				if run.State != "complete" || len(run.Failures) != 0 || run.Plan.From != release || run.SourceShapes[typ] == "" {
 					continue
 				}
@@ -123,7 +124,7 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 				writes = append(writes, nested...)
 				var id string
 				_ = json.Unmarshal(after["id"], &id)
-				writes = append(writes, retainedExtractionWrite{typ: step.Target, before: a, after: b, origin: extractionOrigin{Migration: selected.ID, Source: typ + "/" + id, Step: index}})
+				writes = append(writes, retainedExtractionWrite{typ: step.Target, before: a, after: b, origin: records.Extraction{Migration: selected.ID, Source: typ + "/" + id, Step: index}})
 				for _, field := range step.Fields {
 					convertedSources[field.From] = true
 				}

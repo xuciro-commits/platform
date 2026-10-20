@@ -6,7 +6,7 @@ import (
 	"platformserver/platform"
 )
 
-// compileRecordSet has already checked the complete expression. Only plain
+// records.CompileSet has already checked the complete expression. Only plain
 // conjunctions of physical text/reference equality are reduced here; the
 // original evaluator remains the authority for every supported expression.
 func sqlRecordFilters(info platform.EntityInfo, domain json.RawMessage) []journal.StateFilter {

@@ -60,7 +60,7 @@ func (s *recordStore) validateChangedLinkConstraintsLocked() error {
 		}
 		for _, id := range changed[link.Child.Name] {
 			if value := et.rows.Get(id); value != nil {
-				target := value.value.FieldByIndex(field.Index).String()
+				target := value.Value.FieldByIndex(field.Index).String()
 				if target != "" && et.referenceIndex(field).Get(target).IDs.Len() > 1 {
 					return fmt.Errorf("%s", linkCardinalityFailure)
 				}
@@ -81,20 +81,20 @@ func (s *recordStore) validateChangedLinkConstraintsLocked() error {
 		}
 		for _, id := range changed[link.Child.Name] {
 			row := child.rows.Get(id)
-			if row == nil || row.value.Field(0).Interface().(platform.Record).Archived {
+			if row == nil || row.Value.Field(0).Interface().(platform.Record).Archived {
 				continue
 			}
-			target := row.value.FieldByIndex(field.Index).String()
+			target := row.Value.FieldByIndex(field.Index).String()
 			if target != "" {
 				value := parent.rows.Get(target)
-				if value == nil || value.value.Field(0).Interface().(platform.Record).Archived {
+				if value == nil || value.Value.Field(0).Interface().(platform.Record).Archived {
 					return fmt.Errorf("%s", linkArchiveFailure)
 				}
 			}
 		}
 		for _, id := range changed[link.Parent.Name] {
 			row := parent.rows.Get(id)
-			if (row == nil || row.value.Field(0).Interface().(platform.Record).Archived) && child.referenceIndex(field).Get(id).Active > 0 {
+			if (row == nil || row.Value.Field(0).Interface().(platform.Record).Archived) && child.referenceIndex(field).Get(id).Active > 0 {
 				return fmt.Errorf("%s", linkArchiveFailure)
 			}
 		}

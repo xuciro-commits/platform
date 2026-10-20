@@ -3,6 +3,7 @@ package platformserver
 import (
 	"fmt"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -285,7 +286,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 		store.mu.Lock()
 	}
 	et := store.types[q.Type]
-	var current *row
+	var current *records.Row
 	if et != nil {
 		current = et.rows.Get(q.Record)
 	}
@@ -334,7 +335,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 				context.Row = authz.Gate{Allowed: t.knowledgeSourceReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
 			} else if through := et.info.Scope.Through; through != nil {
 				if current != nil && depth < 16 && !cycle {
-					typ, id, _ := strings.Cut(through(current.value.Interface()), "/")
+					typ, id, _ := strings.Cut(through(current.Value.Interface()), "/")
 					parent := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk)
 					context.Row = authz.Gate{Allowed: parent.Allow, Reason: "The owning record is outside the caller's row scope"}
 				} else {
@@ -342,7 +343,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 				}
 			} else {
 				visible, err := t.scopeVisibility(store, c.Member, et, at)
-				context.Row = authz.Gate{Allowed: current != nil && err == nil && (visible == nil || visible(current.value)), Reason: "The record is outside the caller's row scope"}
+				context.Row = authz.Gate{Allowed: current != nil && err == nil && (visible == nil || visible(current.Value)), Reason: "The record is outside the caller's row scope"}
 			}
 		}
 		for _, name := range q.Fields {
@@ -378,7 +379,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 			}
 		}
 		if current != nil && depth < 16 && !cycle && slices.Contains([]string{"read", "derive", "export"}, q.Kind) {
-			context.Withheld = append(context.Withheld, t.sourceWithheld(store, c, et, current.value, q.Fields, at, depth, walk)...)
+			context.Withheld = append(context.Withheld, t.sourceWithheld(store, c, et, current.Value, q.Fields, at, depth, walk)...)
 		}
 	} else if q.Action == "" {
 		if q.Type == "enterprise.element" && t.directory != nil && q.Record != "" {
@@ -441,7 +442,7 @@ func (t *Tenant) sourceWithheld(store *recordStore, c platform.Caller, et *entit
 		if alias.AliasOf == "" || len(fields) > 0 && !slices.Contains(fields, alias.Name) {
 			continue
 		}
-		request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: et.info.Type, Record: recordOf(value).ID, Fields: []string{alias.AliasOf}}
+		request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: et.info.Type, Record: records.Header(value).ID, Fields: []string{alias.AliasOf}}
 		grant := t.authorizeDepth(store, c, request, at, true, depth+1, walk)
 		if !grant.Allow || len(grant.Withheld) > 0 {
 			withheld = append(withheld, alias.Name)
@@ -470,7 +471,7 @@ func (t *Tenant) sourceWithheld(store *recordStore, c platform.Caller, et *entit
 		for _, ref := range refs {
 			// Collection/formula witnesses retain their own owner identity.
 			// Its row scope was already checked; it is not a copied source field.
-			if ref == et.info.Type+"/"+recordOf(value).ID {
+			if ref == et.info.Type+"/"+records.Header(value).ID {
 				continue
 			}
 			if name, named := strings.CutPrefix(ref, "read:"); named {
@@ -507,7 +508,7 @@ func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType
 	cache := map[string]platform.AuthzDecision{}
 	walk := newAuthorizationWalk()
 	return func(value reflect.Value) bool {
-		id := recordOf(value).ID
+		id := records.Header(value).ID
 		if result, ok := cache[id]; ok {
 			return result.Allow
 		}

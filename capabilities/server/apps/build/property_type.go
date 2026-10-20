@@ -43,7 +43,7 @@ func (b *Build) propertyTypeEntity() platform.Entity {
 }
 
 func (b *Build) checkPropertyType(f *PropertyType) error {
-	if !named(f.Name) {
+	if !construction.Named(f.Name) {
 		return fmt.Errorf("Property name must use lower-case letters and digits")
 	}
 	if err := f.Definition().Check(); err != nil {
@@ -54,12 +54,12 @@ func (b *Build) checkPropertyType(f *PropertyType) error {
 		return err
 	}
 	for _, other := range list {
-		installed, _ := wasPublished[PropertyType](other.Published)
+		installed, _ := construction.ReadPublication[PropertyType](other.Published)
 		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
 			return fmt.Errorf("Property type %s is already declared", f.Name)
 		}
 	}
-	if old, ok := wasPublished[PropertyType](f.Published); ok && (old.Name != f.Name || old.Type != f.Type) {
+	if old, ok := construction.ReadPublication[PropertyType](f.Published); ok && (old.Name != f.Name || old.Type != f.Type) {
 		return fmt.Errorf("A published property keeps its identity and scalar type")
 	}
 	return nil

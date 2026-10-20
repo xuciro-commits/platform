@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -32,16 +33,16 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 		if !ok || et == nil || et.info.App != owner || et.rows.Get(id) == nil {
 			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
 		}
-		var prior *row
+		var prior *records.Row
 		if old := d.records.parent.types[typ]; old != nil {
 			prior = old.rows.Get(id)
 		}
-		image, err := acceptedRowChange(typ, id, et.rows.Get(id), prior)
+		image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
 		if err != nil {
 			return nil, err
 		}
-		row := acceptedInputRow{acceptedRow: image, App: owner}
-		row.Before, err = recordPredecessor(typ, id, prior)
+		row := acceptedInputRow{Image: image, App: owner}
+		row.Before, err = records.Predecessor(typ, id, prior)
 		if err != nil {
 			return nil, err
 		}
@@ -70,11 +71,11 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 		prior := et.rows.Get(image.ID)
 		before, previousHistory, revision := "", 0, uint32(0)
 		if image.HistoryRef != nil {
-			if err := checkHistoryPredecessor(image.acceptedRow, prior); err != nil {
+			if err := records.CheckHistoryPredecessor(image.Image, prior); err != nil {
 				return nil, err
 			}
 			var err error
-			before, err = recordPredecessor(image.Type, image.ID, prior)
+			before, err = records.Predecessor(image.Type, image.ID, prior)
 			if err != nil {
 				return nil, err
 			}
@@ -82,11 +83,11 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 				return nil, fmt.Errorf("direct record image predecessor differs")
 			}
 			if prior != nil {
-				revision = recordOf(prior.value).Revision
+				revision = records.Header(prior.Value).Revision
 			}
 		} else {
 			if prior != nil {
-				row, err := acceptedRowOf(image.Type, image.ID, prior)
+				row, err := records.FullImage(image.Type, image.ID, prior)
 				if err != nil {
 					return nil, err
 				}
@@ -94,14 +95,14 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 				if err != nil {
 					return nil, err
 				}
-				previousHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
+				previousHistory, revision = len(prior.RecordHistory()), records.Header(prior.Value).Revision
 			}
 			if image.Before != before || len(image.History) <= previousHistory {
 				return nil, fmt.Errorf("direct record predecessor differs")
 			}
 			if prior != nil {
 				old, err := acceptance.Digest(image.History[:previousHistory])
-				actual, actualErr := acceptance.Digest(prior.recordHistory())
+				actual, actualErr := acceptance.Digest(prior.RecordHistory())
 				if err != nil || actualErr != nil || old != actual {
 					return nil, fmt.Errorf("direct record history predecessor differs")
 				}
@@ -113,7 +114,7 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 			}
 		}
 		value := reflect.New(et.info.Go).Elem()
-		decode, err := rowDecodeFormattedImage(et.info, image.Value, image.Projection, draft.readRelease, image.Format)
+		decode, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, draft.readRelease, image.Format)
 		if err != nil {
 			return nil, err
 		}
@@ -123,23 +124,23 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 		if err := checkRunApplicationBindings(value.Interface()); err != nil {
 			return nil, err
 		}
-		rec := recordOf(value)
+		rec := records.Header(value)
 		last := image.History[len(image.History)-1]
 		if rec.ID != image.ID || rec.Revision != revision || rec.Changed != (platform.Stamp{
 			By: member, At: at, Change: ""}) ||
-			prior != nil && rec.Created != recordOf(prior.value).Created ||
+			prior != nil && rec.Created != records.Header(prior.Value).Created ||
 			prior == nil && rec.Created != (platform.Stamp{By: member,
 				At: image.History[0].At, Change: ""}) ||
 			last.Schema == "" {
 			return nil, fmt.Errorf("direct record image differs from history")
 		}
-		recovered := &row{value: value, format: image.Format, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
+		recovered := &records.Row{Value: value, Format: image.Format, History: records.CopyHistory(image.History), Projection: records.CloneProjection(image.Projection), Extraction: image.Extraction}
 		if image.HistoryRef != nil {
-			if err := appendRowHistory(recovered, prior, image.History); err != nil {
+			if err := records.AppendRowHistory(recovered, prior, image.History); err != nil {
 				return nil, err
 			}
 		}
-		recovered.retainOriginal(image.Value)
+		recovered.RetainOriginal(image.Value)
 		et.setRow(image.ID, recovered)
 		draft.writes[image.Type+"/"+image.ID] = true
 		if et.knowledge {

@@ -36,7 +36,7 @@ type flowExecutionRuntime struct {
 
 type retainedReadOrigin struct {
 	typ  *entityType
-	rows records.Index[*row]
+	rows records.Index[*records.Row]
 }
 
 func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding host.FlowBinding) (host.FlowHost, error) {
@@ -213,8 +213,8 @@ func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb
 
 // Rows stay current; the selected metadata decodes retained fields. A renamed
 // field follows its explicit alias, while a retyped field needs its saved image.
-func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info platform.EntityInfo, value *row) (*row, *kernel.Error) {
-	raw, err := value.image()
+func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info platform.EntityInfo, value *records.Row) (*records.Row, *kernel.Error) {
+	raw, err := value.Image()
 	if err != nil {
 		return nil, migrationRefusal(err)
 	}
@@ -227,9 +227,9 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 		next, found := current.Field(old.Name)
 		if found && next.AliasOf != "" {
 			fields[old.Name] = fields[next.AliasOf]
-		} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && projectionFor(value.projection, r.release) != nil {
+		} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && records.ProjectionFor(value.Projection, r.release) != nil {
 			if prior == nil {
-				source := projectionFor(value.projection, r.release)
+				source := records.ProjectionFor(value.Projection, r.release)
 				shape, _ := acceptance.Digest(info.Fields)
 				if source == nil || source.Shape != shape || json.Unmarshal(source.Value, &prior) != nil {
 					return nil, migrationRefusal(fmt.Errorf("retained field %s.%s has no saved source image", info.Type, old.Name))
@@ -243,7 +243,7 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
 		return nil, migrationRefusal(err)
 	}
-	return &row{value: decoded.Elem(), format: value.format, historyHead: value.historyHead, historyParent: value.historyParent, history: value.history, loadHistory: value.loadHistory, historyCount: value.historyCount}, nil
+	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
 }
 
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
@@ -273,13 +273,13 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 			if current == nil {
 				return nil, migrationRefusal(fmt.Errorf("retained object %s has no current storage", typ))
 			}
-			entries := make([]records.Entry[*row], 0, current.rows.Len())
+			entries := make([]records.Entry[*records.Row], 0, current.rows.Len())
 			for id, value := range current.rows.All() {
 				decoded, refusal := r.retainedRow(current.info, info, value)
 				if refusal != nil {
 					return nil, refusal
 				}
-				entries = append(entries, records.Entry[*row]{Key: id, Value: decoded})
+				entries = append(entries, records.Entry[*records.Row]{Key: id, Value: decoded})
 			}
 			rows, err := records.From(entries)
 			if err != nil {
@@ -301,7 +301,7 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 		}
 		r.records.mu.Lock()
 		current := r.records.types[name]
-		var value *row
+		var value *records.Row
 		var stored platform.EntityInfo
 		if current != nil {
 			value, stored = current.rows.Get(id), current.info
@@ -315,7 +315,7 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 			r.FailDecision(refusal)
 			return nil, false
 		}
-		return decoded.value.Interface(), true
+		return decoded.Value.Interface(), true
 	}
 	return r.records.get(c, typ, id)
 }
@@ -438,13 +438,13 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		return r.stagedDecision.Put(c, receipt, entity)
 	}
 	current := r.records.types[old.info.Type]
-	id := recordOf(copyOf(old.info.Go, entity)).ID
+	id := records.Header(copyOf(old.info.Go, entity)).ID
 	var input, before, result map[string]json.RawMessage
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
 		return migrationRefusal(fmt.Errorf("retained action wrote an invalid record"))
 	}
 	if prior := old.rows.Get(id); prior != nil {
-		_ = json.Unmarshal(jsonOf(prior.value.Interface()), &before)
+		_ = json.Unmarshal(jsonOf(prior.Value.Interface()), &before)
 	}
 	mappedBefore, mappedInput, extractions, mappingErr := r.mapRetainedWrite(c.ID, old.info.Type, before, input)
 	if mappingErr != nil {
@@ -454,7 +454,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		return err
 	}
 	if prior := current.rows.Get(id); prior != nil {
-		raw, _ := prior.image()
+		raw, _ := prior.Image()
 		_ = json.Unmarshal(raw, &result)
 	} else {
 		result = maps.Clone(mappedInput)
@@ -501,11 +501,11 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	}
 	// Keep the newly accepted source values for another old-version step.
 	updated := *current.rows.Get(id)
-	updated.projection = cloneRecordProjection(updated.projection)
-	if source := projectionFor(updated.projection, r.release); source != nil {
+	updated.Projection = records.CloneProjection(updated.Projection)
+	if source := records.ProjectionFor(updated.Projection, r.release); source != nil {
 		source.Value = jsonOf(input)
-		if refusal := refreshRecordProjection(updated.projection, updated.value.Interface()); refusal != nil {
-			return refusal
+		if err := records.RefreshProjection(updated.Projection, updated.Value.Interface()); err != nil {
+			return migrationRefusal(err)
 		}
 		current.setRow(id, &updated)
 	}

@@ -87,7 +87,7 @@ func TestProcessImageValidatesSavedFamilyIndependentlyOfDraft(t *testing.T) {
 	v2.Version = 2
 	family := construction.Process{Record: v1.Record, Name: "unfinished", Object: "build.missing", State: "published", Version: 2, Published: published(v2), Versions: []string{published(v1), published(v2)}}
 	image := func(p construction.Process) []byte { raw, _ := json.Marshal(p); return raw }
-	if latest, err := processImage(image(family)); err != nil || latest.Name != "review" || latest.Version != 2 {
+	if latest, err := construction.ReadProcessImage(image(family)); err != nil || latest.Name != "review" || latest.Version != 2 {
 		t.Fatalf("draft replaced the saved family: %+v %v", latest, err)
 	}
 	for _, corrupt := range []struct {
@@ -120,7 +120,7 @@ func TestProcessImageValidatesSavedFamilyIndependentlyOfDraft(t *testing.T) {
 			p := family
 			p.Versions = append([]string(nil), family.Versions...)
 			corrupt.edit(&p)
-			if _, err := processImage(image(p)); err == nil {
+			if _, err := construction.ReadProcessImage(image(p)); err == nil {
 				t.Fatal("accepted corrupt saved versions")
 			}
 		})

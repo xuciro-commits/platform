@@ -134,11 +134,11 @@ func BenchmarkFinalConstraintScan(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				entries := make([]records.Entry[*row], count)
+				entries := make([]records.Entry[*records.Row], count)
 				for i := range entries {
 					id := fmt.Sprintf("ROW-%06d", i)
 					value := constraintEntry{Record: platform.Record{ID: id, Revision: 1}, Qty: 2, Start: "2026-10-12", End: "2026-10-13", State: "draft"}
-					entries[i] = records.Entry[*row]{Key: id, Value: &row{value: reflect.ValueOf(&value).Elem()}}
+					entries[i] = records.Entry[*records.Row]{Key: id, Value: &records.Row{Value: reflect.ValueOf(&value).Elem()}}
 				}
 				index, err := records.From(entries)
 				if err != nil {
@@ -147,18 +147,18 @@ func BenchmarkFinalConstraintScan(b *testing.B) {
 				store := newRecordStore()
 				store.types[info.Type] = &entityType{info: info, rows: index}
 				store.types[unrelated.Type] = &entityType{info: unrelated}
-				store.types[unrelated.Type].setRow("NOTE", &row{value: reflect.ValueOf(&note{Record: platform.Record{ID: "NOTE", Revision: 1}, Text: "before"}).Elem()})
+				store.types[unrelated.Type].setRow("NOTE", &records.Row{Value: reflect.ValueOf(&note{Record: platform.Record{ID: "NOTE", Revision: 1}, Text: "before"}).Elem()})
 				tenant := &Tenant{records: store}
 				draft := &stagedDecision{tenant: tenant, records: store.forkRecords(), at: txnAt, constraintWrites: map[string]constraintWrite{}}
 				caller := platform.NewCaller(draft, platform.Member{ID: "operator", Roles: map[string]string{"invariants": "operator"}}, "invariants", false, false)
 				typ, id := unrelated.Type, "NOTE"
-				after := &row{value: reflect.ValueOf(&note{Record: platform.Record{ID: id, Revision: 2}, Text: "after"}).Elem()}
+				after := &records.Row{Value: reflect.ValueOf(&note{Record: platform.Record{ID: id, Revision: 2}, Text: "after"}).Elem()}
 				if affected {
 					typ, id = info.Type, "ROW-000000"
-					value := store.types[typ].rows.Get(id).value.Interface().(constraintEntry)
+					value := store.types[typ].rows.Get(id).Value.Interface().(constraintEntry)
 					value.Qty = 3
 					value.Revision++
-					after = &row{value: reflect.ValueOf(&value).Elem()}
+					after = &records.Row{Value: reflect.ValueOf(&value).Elem()}
 				}
 				draft.constraintWrites[typ+"/"+id] = constraintWrite{caller: caller, before: store.types[typ].rows.Get(id)}
 				draft.records.types[typ].setRow(id, after)
@@ -203,7 +203,7 @@ func TestFinalLocalConstraintsKeepOrderingAndIgnoreUntouchedHistory(t *testing.T
 	for _, et := range []*entityType{second, first} {
 		for _, id := range []string{"Z", "OLD", "A"} {
 			value := constraintEntry{Record: platform.Record{ID: id, Revision: 1}, Qty: 0, Start: "2026-10-12", End: "2026-10-13", State: "draft"}
-			et.setRow(id, &row{value: reflect.ValueOf(&value).Elem()})
+			et.setRow(id, &records.Row{Value: reflect.ValueOf(&value).Elem()})
 		}
 	}
 	var trace []string
@@ -221,7 +221,7 @@ func TestFinalLocalConstraintsKeepOrderingAndIgnoreUntouchedHistory(t *testing.T
 		draft.constraintWrites[ref] = constraintWrite{caller: caller, before: tenant.records.types[typ].rows.Get(id)}
 	}
 	value := constraintEntry{Record: platform.Record{ID: "A", Revision: 2}, Qty: 2, Start: "2026-10-12", End: "2026-10-11", State: "draft"}
-	draft.records.types[first.info.Type].setRow("A", &row{value: reflect.ValueOf(&value).Elem()})
+	draft.records.types[first.info.Type].setRow("A", &records.Row{Value: reflect.ValueOf(&value).Elem()})
 	err := draft.checkFinalConstraints()
 	issues := draft.inputIssues[err]
 	if err == nil || len(issues) != 1 || issues[0].Record != first.info.Type+"/A" || issues[0].Constraint != "period" {
@@ -236,7 +236,7 @@ func TestFinalLocalConstraintsKeepOrderingAndIgnoreUntouchedHistory(t *testing.T
 	caller = platform.NewCaller(draft, memberOf(t, tenant, "builder"), "invariants", false, false)
 	draft.constraintWrites = map[string]constraintWrite{first.info.Type + "/A": {caller: caller, before: first.rows.Get("A")}}
 	value.End = "2026-10-13"
-	draft.records.types[first.info.Type].setRow("A", &row{value: reflect.ValueOf(&value).Elem()})
+	draft.records.types[first.info.Type].setRow("A", &records.Row{Value: reflect.ValueOf(&value).Elem()})
 	if err := draft.checkFinalConstraints(); err != nil {
 		t.Fatal("untouched historical violations blocked a valid local write", err)
 	}

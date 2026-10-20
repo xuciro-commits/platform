@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"platformserver/internal/construction"
+	"platformserver/internal/records"
 	"slices"
 	"strings"
 	"testing"
@@ -389,7 +390,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		result.Version, result.Kind = 3, ""
 		result.Unique = nil
 		result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
-		result.Row.History = copyHistory(live.records.types[result.Row.Type].rows.Get(result.Row.ID).recordHistory())
+		result.Row.History = records.CopyHistory(live.records.types[result.Row.Type].rows.Get(result.Row.ID).RecordHistory())
 		result.Digest, err = digestAcceptedResult(result)
 		if err != nil {
 			t.Fatal(err)

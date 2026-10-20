@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"platformserver/internal/records"
 	"testing"
 	"time"
 
@@ -102,7 +103,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 					}
 					at = at.Add(2 * time.Second)
 					tn.Work(at)
-					history := map[string][]RecordChange{}
+					history := map[string][]records.RecordChange{}
 					for _, rowID := range []string{"A", "B", "C"} {
 						instance, found := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:"+rowID)
 						if !found || instance.State != "waiting" || instance.Release != from {
@@ -111,7 +112,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						if kind == "retire-action" {
 							decide(t, tn, "user", construction.ID, "build.sample.hold", "build.sample", rowID, map[string]any{}, at)
 						}
-						history[rowID] = copyHistory(tn.records.types["build.sample"].rows.Get(rowID).recordHistory())
+						history[rowID] = records.CopyHistory(tn.records.types["build.sample"].rows.Get(rowID).RecordHistory())
 					}
 					step := platform.MigrateStep{Kind: kind, Types: []string{"build.sample"}, Batch: 2}
 					want := map[string]string{"value": updated}
@@ -239,10 +240,10 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						et := tn.records.types["build.sample"]
 						row := et.rows.Get(rowID)
 						instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:"+rowID)
-						if instance.State != "done" || instance.Release != from || businessField(et.info, row.value, "state") != "done" {
-							t.Fatalf("retained flow did not finish: %s; record: %s", jsonOf(instance), jsonOf(row.value.Interface()))
+						if instance.State != "done" || instance.Release != from || businessField(et.info, row.Value, "state") != "done" {
+							t.Fatalf("retained flow did not finish: %s; record: %s", jsonOf(instance), jsonOf(row.Value.Interface()))
 						}
-						fullHistory := row.recordHistory()
+						fullHistory := row.RecordHistory()
 						if len(fullHistory) < len(history[rowID]) || !bytes.Equal(jsonOf(history[rowID]), jsonOf(fullHistory[:len(history[rowID])])) {
 							t.Fatal("migration or retained execution rewrote historical decisions")
 						}
@@ -251,7 +252,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 							t.Fatal("the member could no longer read the retained history")
 						}
 						for field, expected := range want {
-							if got := businessField(et.info, row.value, field); got != expected {
+							if got := businessField(et.info, row.Value, field); got != expected {
 								t.Fatalf("%s/%s = %s, want %s", rowID, field, got, expected)
 							}
 						}
@@ -268,8 +269,8 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						t.Fatal(err)
 					}
 					for _, rowID := range []string{"A", "B", "C"} {
-						before, _ := acceptedRowOf("build.sample", rowID, tn.records.types["build.sample"].rows.Get(rowID))
-						after, _ := acceptedRowOf("build.sample", rowID, recovered.records.types["build.sample"].rows.Get(rowID))
+						before, _ := records.FullImage("build.sample", rowID, tn.records.types["build.sample"].rows.Get(rowID))
+						after, _ := records.FullImage("build.sample", rowID, recovered.records.types["build.sample"].rows.Get(rowID))
 						if !bytes.Equal(jsonOf(before), jsonOf(after)) {
 							t.Fatal("recovery changed saved values or history")
 						}

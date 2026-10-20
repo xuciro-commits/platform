@@ -2,10 +2,10 @@ package platformserver
 
 import (
 	"fmt"
+	"platformserver/internal/records"
 	"platformserver/platform"
 	"slices"
 	"strconv"
-	"strings"
 )
 
 func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo) error {
@@ -19,7 +19,7 @@ func checkNamedQuery(q platform.NamedQuery, info platform.EntityInfo) error {
 }
 
 func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo) error {
-	if _, err := compileDomain(info, q.Domain); err != nil {
+	if _, err := records.CompileDomain(info, q.Domain); err != nil {
 		return err
 	}
 	if q.By != "" {
@@ -28,16 +28,8 @@ func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo) error {
 			return fmt.Errorf("query parent input needs a readable reference")
 		}
 	}
-	for _, key := range q.Sort {
-		name := strings.TrimPrefix(key, "-")
-		if name == "id" || name == "created" || name == "changed" {
-			continue
-		}
-		if _, ok := info.Field(name); !ok {
-			return fmt.Errorf("query sort field %s is unavailable", name)
-		}
-	}
-	return nil
+	_, err := records.CompileOrder(info, q.Sort)
+	return err
 }
 
 func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {

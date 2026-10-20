@@ -137,7 +137,7 @@ func (b *Build) post(c platform.Caller, p construction.Post, inputs map[string]a
 		if s, isText := x.(string); isText && strings.HasPrefix(m.From, "=") {
 			x, _ = literal(f.Type, s)
 		}
-		if err := assign(v.FieldByName(goName(m.Field)), x); err != nil {
+		if err := assign(v.FieldByName(construction.GoName(m.Field)), x); err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The posting cannot match {field}: {why}", m.Field, err.Error())
 		}
 	}
@@ -149,7 +149,7 @@ func (b *Build) post(c platform.Caller, p construction.Post, inputs map[string]a
 		amount = -amount
 	}
 	f, _ := info.Field(p.Field)
-	target := v.FieldByName(goName(p.Field))
+	target := v.FieldByName(construction.GoName(p.Field))
 	if !target.IsValid() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The balance has no field {field}", p.Field)
 	}

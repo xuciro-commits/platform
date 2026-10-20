@@ -99,8 +99,8 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		draft := tn.records.forkRecords()
 		private := draft.types[child]
 		changed := *private.rows.Get("C2")
-		changed.value = copyOf(private.info.Go, changed.value.Interface())
-		changed.value.FieldByIndex(field.Index).SetString("P1")
+		changed.Value = copyOf(private.info.Go, changed.Value.Interface())
+		changed.Value.FieldByIndex(field.Index).SetString("P1")
 		private.setRow("C2", &changed)
 		draft.writes[child+"/C2"] = true
 		if private.referenceIndex(field).Get("P1").IDs.Len() != 2 || et.referenceIndex(field).Get("P1").IDs.Len() != 1 {
@@ -110,7 +110,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 			t.Fatal("final image admitted conflicting references or changed its predecessor")
 		}
 		bulk := tn.records.forkRecords()
-		image, err := records.From([]records.Entry[*row]{{Key: "C1", Value: et.rows.Get("C1")}, {Key: "C2", Value: &changed}})
+		image, err := records.From([]records.Entry[*records.Row]{{Key: "C1", Value: et.rows.Get("C1")}, {Key: "C2", Value: &changed}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +148,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		if err := tn.records.install(before.info); err != nil {
 			t.Fatal(err)
 		}
-		if next := tn.records.types[child]; next == before || next.referenceIndexes != nil || !reflect.DeepEqual(next.rows.Get("C1").value.Interface(), before.rows.Get("C1").value.Interface()) {
+		if next := tn.records.types[child]; next == before || next.referenceIndexes != nil || !reflect.DeepEqual(next.rows.Get("C1").Value.Interface(), before.rows.Get("C1").Value.Interface()) {
 			t.Fatal("schema replacement retained a stale index or changed record facts")
 		}
 	})

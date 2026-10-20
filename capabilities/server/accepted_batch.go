@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -54,7 +55,7 @@ type acceptedBatch struct {
 }
 
 type acceptedBatchRow struct {
-	acceptedRow
+	records.Image
 	App         string   `json:"app"`
 	Before      string   `json:"before,omitempty"`
 	Authorities []string `json:"authorities,omitempty"` // receipt authority for each new history entry
@@ -78,11 +79,6 @@ type acceptedPublication struct {
 	Format string          `json:"format,omitempty"`
 	Schema string          `json:"schema"`
 	Image  json.RawMessage `json:"image"`
-}
-
-func acceptedRowOf(typ, id string, r *row) (acceptedRow, error) {
-	value, err := r.image()
-	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.recordHistory()), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}, err
 }
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
@@ -209,16 +205,16 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if !ok || et == nil || et.rows.Get(id) == nil {
 			return nil, fmt.Errorf("batch includes an undeclared record")
 		}
-		var prior *row
+		var prior *records.Row
 		if old := d.records.parent.types[typ]; old != nil {
 			prior = old.rows.Get(id)
 		}
-		image, err := acceptedRowChange(typ, id, et.rows.Get(id), prior)
+		image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
 		if err != nil {
 			return nil, err
 		}
-		row := acceptedBatchRow{acceptedRow: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
-		row.Before, err = recordPredecessor(typ, id, prior)
+		row := acceptedBatchRow{Image: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
+		row.Before, err = records.Predecessor(typ, id, prior)
 		if err != nil {
 			return nil, err
 		}
@@ -371,7 +367,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 			if row.HistoryRef == nil || row.HistoryBase != row.HistoryRef.Base {
 				return result, nil, fmt.Errorf("record batch has no versioned history")
 			}
-			if err := validateHistoryRef(row.acceptedRow); err != nil {
+			if err := records.ValidateHistoryRef(row.Image); err != nil {
 				return result, nil, err
 			}
 		} else if row.HistoryRef != nil || row.Format != "" || row.Predecessor != "" {
@@ -397,7 +393,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	for _, direct := range result.DirectRows {
 		row := direct.Row
 		if result.Version == 8 {
-			if err := validateHistoryRef(row.acceptedRow); err != nil {
+			if err := records.ValidateHistoryRef(row.Image); err != nil {
 				return result, nil, err
 			}
 		} else if row.HistoryRef != nil || row.Format != "" {
@@ -570,7 +566,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		if et == nil {
 			return nil, fmt.Errorf("publication record type is unavailable")
 		}
-		decoded, err := rowDecodeFormattedImage(et.info, decision.Publication.Image, nil, draft.readRelease, decision.Publication.Format)
+		decoded, err := records.DecodeFormattedImage(et.info, decision.Publication.Image, nil, draft.readRelease, decision.Publication.Format)
 		if err != nil {
 			return nil, err
 		}
@@ -700,7 +696,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			return fmt.Errorf("record batch needs installed entity %s", image.Type)
 		}
 		prior := et.rows.Get(image.ID)
-		if prior != nil && !reflect.DeepEqual(prior.extraction, image.Extraction) {
+		if prior != nil && !reflect.DeepEqual(prior.Extraction, image.Extraction) {
 			return fmt.Errorf("record extraction origin changed")
 		}
 		if result.Version == 1 {
@@ -711,11 +707,11 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		before := ""
 		baseHistory, revision := 0, uint32(0)
 		if result.Version == 8 {
-			if err := checkHistoryPredecessor(image.acceptedRow, prior); err != nil {
+			if err := records.CheckHistoryPredecessor(image.Image, prior); err != nil {
 				return err
 			}
 			var err error
-			before, err = recordPredecessor(image.Type, image.ID, prior)
+			before, err = records.Predecessor(image.Type, image.ID, prior)
 			if err != nil {
 				return err
 			}
@@ -723,11 +719,11 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 				return fmt.Errorf("record batch image predecessor differs")
 			}
 			if prior != nil {
-				revision = recordOf(prior.value).Revision
+				revision = records.Header(prior.Value).Revision
 			}
 		} else {
 			if prior != nil {
-				row, err := acceptedRowOf(image.Type, image.ID, prior)
+				row, err := records.FullImage(image.Type, image.ID, prior)
 				if err != nil {
 					return err
 				}
@@ -735,19 +731,19 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 				if err != nil {
 					return err
 				}
-				baseHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
+				baseHistory, revision = len(prior.RecordHistory()), records.Header(prior.Value).Revision
 			}
 			if result.Version >= 2 {
 				if image.HistoryBase != baseHistory {
 					return fmt.Errorf("record batch history predecessor differs for %s/%s", image.Type, image.ID)
 				}
 				if prior != nil {
-					image.History = append(copyHistory(prior.recordHistory()), image.History...)
+					image.History = append(records.CopyHistory(prior.RecordHistory()), image.History...)
 				}
 			}
 			prefixEqual := true
 			if result.Version == 1 && prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
-				oldDigest, oldErr := acceptance.Digest(prior.recordHistory())
+				oldDigest, oldErr := acceptance.Digest(prior.RecordHistory())
 				savedDigest, savedErr := acceptance.Digest(image.History[:baseHistory])
 				prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
 			}
@@ -760,7 +756,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			}
 		}
 		value := reflect.New(et.info.Go).Elem()
-		decode, err := rowDecodeFormattedImage(et.info, image.Value, image.Projection, draft.readRelease, image.Format)
+		decode, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, draft.readRelease, image.Format)
 		if err != nil {
 			return err
 		}
@@ -775,7 +771,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		if err := checkRunApplicationBindings(value.Interface()); err != nil {
 			return err
 		}
-		rec := recordOf(value)
+		rec := records.Header(value)
 		var last *pb.ChangeRecord
 		if len(image.Authorities) > 0 && len(image.Authorities) != len(image.History)-baseHistory {
 			return fmt.Errorf("record batch history authorities differ")
@@ -799,18 +795,18 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		if rec.ID != image.ID || rec.Revision != revision || last == nil ||
 			rec.Changed.Change != last.GetChangeId() || rec.Changed.By != last.GetSubmission().GetPrincipalId() ||
 			!rec.Changed.At.Equal(last.GetRecordedTime().AsTime()) ||
-			prior != nil && !reflect.DeepEqual(rec.Created, recordOf(prior.value).Created) ||
+			prior != nil && !reflect.DeepEqual(rec.Created, records.Header(prior.Value).Created) ||
 			prior == nil && (rec.Created.Change != image.History[0].Change ||
 				rec.Created.By != image.History[0].By || !rec.Created.At.Equal(image.History[0].At)) {
 			return fmt.Errorf("record batch image differs from its decisions")
 		}
-		recovered := &row{value: value, format: image.Format, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
+		recovered := &records.Row{Value: value, Format: image.Format, History: records.CopyHistory(image.History), Projection: records.CloneProjection(image.Projection), Extraction: image.Extraction}
 		if result.Version == 8 {
-			if err := appendRowHistory(recovered, prior, image.History); err != nil {
+			if err := records.AppendRowHistory(recovered, prior, image.History); err != nil {
 				return err
 			}
 		}
-		recovered.retainOriginal(image.Value)
+		recovered.RetainOriginal(image.Value)
 		et.setRow(rec.ID, recovered)
 		draft.writes[image.Type+"/"+rec.ID] = true
 		for _, change := range image.History[baseHistory:] {

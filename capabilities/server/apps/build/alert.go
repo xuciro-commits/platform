@@ -48,7 +48,7 @@ func (b *Build) alertEntity() platform.Entity {
 }
 
 func (b *Build) checkAlert(a construction.Alert) error {
-	if !named(a.Name) {
+	if !construction.Named(a.Name) {
 		return fmt.Errorf("The alert name %s must be lower-case letters and digits", a.Name)
 	}
 	info, ok := b.lookupEntity(a.Object)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"testing"
 	"time"
@@ -47,9 +48,9 @@ func TestRecordImageRestoreAndReinstallRetainOriginal(t *testing.T) {
 	check := func() {
 		t.Helper()
 		saved := store.types["example.item"].rows.Get("one")
-		image, err := saved.image()
-		value := saved.value.Interface().(currentModel)
-		if err != nil || string(image) != string(raw) || saved.format != "" || value.Title != "Original" || value.Revision != 2 {
+		image, err := saved.Image()
+		value := saved.Value.Interface().(currentModel)
+		if err != nil || string(image) != string(raw) || saved.Format != "" || value.Title != "Original" || value.Revision != 2 {
 			t.Fatalf("recovery changed the historical image or format: %s, %+v, %v", image, value, err)
 		}
 	}
@@ -65,9 +66,9 @@ func TestRecordImageRestoreAndReinstallRetainOriginal(t *testing.T) {
 		t.Fatal(err)
 	}
 	shape, _ := acceptance.Digest(view.Fields)
-	projection := &recordProjection{From: "source-release", Shape: shape, Value: raw}
+	projection := &records.Projection{From: "source-release", Shape: shape, Value: raw}
 	actual, _ := json.Marshal(currentModel{Record: platform.Record{ID: "one", Revision: 2}, Title: "Original"})
-	decoded, err := rowDecodeFormattedImage(view, actual, projection, "source-release", "item.v2")
+	decoded, err := records.DecodeFormattedImage(view, actual, projection, "source-release", "item.v2")
 	if err != nil || string(decoded) != string(raw) {
 		t.Fatalf("projection used the current image's format: %s, %v", decoded, err)
 	}
@@ -138,13 +139,13 @@ func TestPostgresRecordImageConvertedFieldQueryRetainsOriginal(t *testing.T) {
 	}
 	store.historyStore, store.tenant, store.appliedPosition = pg, tenant, 0
 	matches, refusal := store.matchingQuery(store.types[info.Type], platform.Query{Domain: json.RawMessage(`[["title","=","Original"]]`)},
-		func(value reflect.Value) bool { return recordOf(value).ID != "row-000" })
+		func(value reflect.Value) bool { return records.Header(value).ID != "row-000" })
 	if refusal != nil || len(matches) != 1 || matches[0].Interface().(currentModel).ID != "row-256" {
 		t.Fatalf("converted-field query lost its visible match or bypassed filtering: %v, %v", matches, refusal)
 	}
 	saved := store.types[info.Type].rows.Get("row-256")
-	image, err := saved.image()
-	if err != nil || string(image) != string(original) || saved.format != "" {
+	image, err := saved.Image()
+	if err != nil || string(image) != string(original) || saved.Format != "" {
 		t.Fatalf("query rewrote the original Go image: %s, %v", image, err)
 	}
 	raw, err := pg.StateRecord(ctx, tenant, info.Type, "row-256")

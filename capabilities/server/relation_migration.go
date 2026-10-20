@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -30,10 +31,10 @@ func appendOwnedRelationNeighbors(out []string, links []platform.RelationLink, e
 	return out
 }
 
-func relationImage(row *row) ownedRelationImage {
+func relationImage(row *records.Row) ownedRelationImage {
 	var image ownedRelationImage
 	if row != nil {
-		_ = json.Unmarshal(platform.Raw(row.value.Interface()), &image)
+		_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &image)
 	}
 	return image
 }
@@ -135,7 +136,7 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 		request := platform.TxnLink{Binding: binding, Parent: platform.TxnRef{Type: parentType, ID: parentID}, Child: platform.TxnRef{Type: childType, ID: childID}}
 		id := ownedRelationID(binding.Ref.String(), parent, child)
 		prior := d.records.types[entity.Type].rows.Get(id)
-		if prior != nil && !recordOf(prior.value).Archived {
+		if prior != nil && !records.Header(prior.Value).Archived {
 			return fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration overlaps an existing owned relationship"))
 		}
 		if err := d.putOwnedRelation(c, receipt, request, false, at, []platform.RelationLink{legacy}); err != nil {

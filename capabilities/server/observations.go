@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"slices"
 	"strings"
 	"time"
@@ -246,7 +247,7 @@ func (t *Tenant) observationSourceActive(record string) bool {
 		return false
 	}
 	row := owner.rows.Get(id)
-	return row != nil && !recordOf(row.value).Archived && businessField(owner.info, row.value, "state") == "published"
+	return row != nil && !records.Header(row.Value).Archived && businessField(owner.info, row.Value, "state") == "published"
 }
 
 func observationDecisionFields(decision platform.ObservationDecision) []string {

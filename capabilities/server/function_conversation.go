@@ -47,7 +47,7 @@ func (t *Tenant) functionConversation(store *recordStore, member platform.Member
 		if row == nil {
 			return nil, nil, fmt.Errorf("conversation history is unavailable")
 		}
-		run, ok := row.value.Interface().(construction.FunctionRun)
+		run, ok := row.Value.Interface().(construction.FunctionRun)
 		if !ok || run.Archived || run.State != "ready" || run.Member != member.ID || run.App != owner || run.Function != f.Name || run.Version != version || run.Definition != definition || run.Source != source || f.ValidateOutput([]byte(run.Output)) != nil {
 			return nil, nil, fmt.Errorf("conversation history belongs to another context")
 		}

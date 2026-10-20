@@ -122,13 +122,13 @@ func checkedSnapshot(t *Tenant) (string, error) {
 		bindings = append(bindings, []string{p.ID, p.Bound})
 	}
 	t.records.mu.Lock()
-	records := map[string]any{}
+	recordView := map[string]any{}
 	for typ, et := range t.records.types {
 		rows := map[string]any{}
 		for id, r := range et.rows.All() {
-			rows[id] = []any{r.value.Interface(), r.recordHistory()}
+			rows[id] = []any{r.Value.Interface(), r.RecordHistory()}
 		}
-		records[typ] = rows
+		recordView[typ] = rows
 	}
 	t.records.mu.Unlock()
 	// Include the installed catalog: matching record bytes alone do not prove
@@ -137,7 +137,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	raw, err := json.Marshal([]any{records, definitions, t.Audit(), t.committed.allRefusals(), t.committed.allAnswers(), t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	raw, err := json.Marshal([]any{recordView, definitions, t.Audit(), t.committed.allRefusals(), t.committed.allAnswers(), t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
 	if err != nil {
 		return "", err
 	}

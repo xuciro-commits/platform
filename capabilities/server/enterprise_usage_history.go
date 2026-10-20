@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/records"
 	"slices"
 	"strings"
 
@@ -53,11 +54,11 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 	}
 	if objects := store.types[construction.ObjectType]; objects != nil {
 		for _, row := range objects.rows.All() {
-			typ := construction.TypeOf(businessField(objects.info, row.value, "name"))
-			if published := businessField(objects.info, row.value, "published"); published != "" {
+			typ := construction.TypeOf(businessField(objects.info, row.Value, "name"))
+			if published := businessField(objects.info, row.Value, "published"); published != "" {
 				bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
 			}
-			for _, change := range row.recordHistory() {
+			for _, change := range row.RecordHistory() {
 				for _, field := range change.Fields {
 					if field.Field != "published" {
 						continue
@@ -119,7 +120,7 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 
 // History stores field before/after JSON in the shape of that decision, not
 // the current Go type. Descend declared paths through nested line arrays.
-func historyNamesEnterprisePaths(paths [][]string, changes []RecordChange, id string) bool {
+func historyNamesEnterprisePaths(paths [][]string, changes []records.RecordChange, id string) bool {
 	for _, change := range changes {
 		for _, field := range change.Fields {
 			for _, path := range paths {

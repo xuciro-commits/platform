@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"slices"
 	"time"
 
@@ -44,7 +45,7 @@ type acceptedInput struct {
 }
 
 type acceptedInputRow struct {
-	acceptedRow
+	records.Image
 	App    string `json:"app"`
 	Before string `json:"before,omitempty"`
 }
@@ -308,7 +309,7 @@ func decodeAcceptedInput(raw []byte) (acceptedInput, error) {
 	seen := map[string]bool{}
 	for _, row := range result.Rows {
 		if result.Version >= 2 {
-			if err := validateHistoryRef(row.acceptedRow); err != nil {
+			if err := records.ValidateHistoryRef(row.Image); err != nil {
 				return result, err
 			}
 		} else if row.HistoryRef != nil || row.Predecessor != "" || row.Format != "" {

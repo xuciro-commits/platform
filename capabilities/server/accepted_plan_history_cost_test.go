@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	"platformserver/internal/records"
 	"testing"
 	"time"
 
@@ -20,21 +21,21 @@ func TestAcceptedEffectDirectAndChildDoNotReadRetainedHistory(t *testing.T) {
 					map[string]any{"name": "Bolt", "qty": 1, "line": "L1"}, at)
 				et := live.records.types["stock.item"]
 				prior := et.rows.Get("I1")
-				history := make([]RecordChange, count)
-				first := prior.recordHistory()[0]
+				history := make([]records.RecordChange, count)
+				first := prior.RecordHistory()[0]
 				for i := range history {
 					history[i] = first
 				}
 				retained := *prior
-				retained.history, retained.historyParent = history, nil
-				retained.historyCount, retained.historyHead = count, ""
-				head, err := retained.historyDigest()
+				retained.History, retained.HistoryParent = history, nil
+				retained.HistoryCount, retained.HistoryHead = count, ""
+				head, err := retained.HistoryDigest()
 				if err != nil {
 					t.Fatal(err)
 				}
 				reads := 0
-				retained.history, retained.historyHead = nil, head
-				retained.loadHistory = func(start int) []RecordChange {
+				retained.History, retained.HistoryHead = nil, head
+				retained.LoadHistory = func(start int) []records.RecordChange {
 					reads++
 					return history[start:]
 				}
@@ -69,11 +70,11 @@ func TestAcceptedEffectDirectAndChildDoNotReadRetainedHistory(t *testing.T) {
 				t.Fatalf("saved effect application read retained history: reads=%d, error=%v, applied=%t", *recoveryReads, err, applied)
 			}
 			current := fresh.records.types["stock.item"].rows.Get("I1")
-			if current.historyLength() != count+1 || current.value.Interface().(Item).Note != "accepted" ||
+			if current.HistoryLength() != count+1 || current.Value.Interface().(Item).Note != "accepted" ||
 				fresh.records.types["stock.bin"].rows.Get("B2") == nil {
 				t.Fatal("pure application lost the direct suffix or child record")
 			}
-			all := current.recordHistory()
+			all := current.RecordHistory()
 			if *recoveryReads != 1 || len(all) != count+1 || all[count].Schema != "Effect answer" {
 				t.Fatal("explicit historical read lost its retained prefix")
 			}

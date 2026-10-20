@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"platformserver/internal/records"
 	"reflect"
 	"regexp"
 	"slices"
@@ -56,9 +57,9 @@ func columns(info platform.EntityInfo) []column {
 	stamp := func(created bool) func(reflect.Value) platform.Stamp {
 		return func(v reflect.Value) platform.Stamp {
 			if created {
-				return recordOf(v).Created
+				return records.Header(v).Created
 			}
-			return recordOf(v).Changed
+			return records.Header(v).Changed
 		}
 	}
 	at := func(s func(reflect.Value) platform.Stamp) func(reflect.Value) any {
@@ -70,13 +71,13 @@ func columns(info platform.EntityInfo) []column {
 		}
 	}
 	out := []column{
-		{"id", "text primary key", func(v reflect.Value) any { return recordOf(v).ID }},
-		{"revision", "bigint", func(v reflect.Value) any { return recordOf(v).Revision }},
+		{"id", "text primary key", func(v reflect.Value) any { return records.Header(v).ID }},
+		{"revision", "bigint", func(v reflect.Value) any { return records.Header(v).Revision }},
 		{"created_at", "timestamptz", at(stamp(true))},
-		{"created_by", "text", func(v reflect.Value) any { return recordOf(v).Created.By }},
+		{"created_by", "text", func(v reflect.Value) any { return records.Header(v).Created.By }},
 		{"changed_at", "timestamptz", at(stamp(false))},
-		{"changed_by", "text", func(v reflect.Value) any { return recordOf(v).Changed.By }},
-		{"archived", "boolean", func(v reflect.Value) any { return recordOf(v).Archived }},
+		{"changed_by", "text", func(v reflect.Value) any { return records.Header(v).Changed.By }},
+		{"archived", "boolean", func(v reflect.Value) any { return records.Header(v).Archived }},
 	}
 	for _, f := range info.Fields {
 		if len(f.Read) > 0 { // a field some roles may not read is not copied where no role applies (ADR-0038)
@@ -90,9 +91,9 @@ func columns(info platform.EntityInfo) []column {
 				column{name + "_amount", "bigint", func(v reflect.Value) any { return read(v).Interface().(platform.Money).Amount }},
 				column{name + "_currency", "text", func(v reflect.Value) any { return read(v).Interface().(platform.Money).Currency }})
 		case "integer":
-			out = append(out, column{name, "bigint", func(v reflect.Value) any { x, _ := comparable(f, read(v).Interface()).(float64); return int64(x) }})
+			out = append(out, column{name, "bigint", func(v reflect.Value) any { x, _ := records.Comparable(read(v).Interface()).(float64); return int64(x) }})
 		case "decimal":
-			out = append(out, column{name, "double precision", func(v reflect.Value) any { return comparable(f, read(v).Interface()) }})
+			out = append(out, column{name, "double precision", func(v reflect.Value) any { return records.Comparable(read(v).Interface()) }})
 		case "boolean":
 			out = append(out, column{name, "boolean", func(v reflect.Value) any { return read(v).Bool() }})
 		case "date":
@@ -296,21 +297,21 @@ func (p *Projection) rows(typ string, ids map[string]bool) (rows [][]any, change
 	et := s.types[typ]
 	cols := columns(et.info)
 	ends = map[string]int{}
-	take := func(id string, r *row) {
+	take := func(id string, r *records.Row) {
 		if r == nil {
 			return
 		}
 		row := make([]any, len(cols))
 		for i, c := range cols {
-			row[i] = c.value(r.value)
+			row[i] = c.value(r.Value)
 		}
 		rows = append(rows, row)
-		for offset, h := range r.historyAfter(written[id]) { // one decision may change a record twice
+		for offset, h := range r.HistoryAfter(written[id]) { // one decision may change a record twice
 			seq := written[id] + offset
 			fields, _ := json.Marshal(h.Fields)
 			changes = append(changes, []any{id, seq, h.Change, h.Schema, h.By, h.At, fields})
 		}
-		ends[typ+"/"+id] = r.historyLength()
+		ends[typ+"/"+id] = r.HistoryLength()
 	}
 	if ids == nil {
 		for id, row := range et.rows.All() {

@@ -116,7 +116,7 @@ func (t *Tenant) currentPassageReadable(c *chunk, reader *platform.Member, app s
 			if r == nil {
 				return false
 			}
-			file := r.value.Interface().(platform.File)
+			file := r.Value.Interface().(platform.File)
 			if file.Archived {
 				return false
 			}
@@ -133,7 +133,7 @@ func (t *Tenant) currentPassageReadable(c *chunk, reader *platform.Member, app s
 		if r == nil {
 			return false
 		}
-		d := r.value.Interface().(platform.KnowledgeDocument)
+		d := r.Value.Interface().(platform.KnowledgeDocument)
 		return !d.Archived && knowledgeAppsReadable(d.Apps, reader, app)
 	}
 	m := t.host()

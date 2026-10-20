@@ -14,7 +14,7 @@ import (
 
 func TestEnterpriseReferenceFieldsAndInputsKeepOriginalTypes(t *testing.T) {
 	fields := []construction.Field{{Name: "unit", Title: "Unit", Type: "reference", Ref: "enterprise.element", Stereotype: "ActualOrganization"}, {Name: "place", Title: "Place", Type: "reference", Ref: "enterprise.element", Stereotypes: []string{"ActualOrganization", "ActualLocation"}}}
-	if err := checkFields(fields, func(string) bool { return false }); err != nil {
+	if err := construction.CheckFields(fields, func(string) bool { return false }); err != nil {
 		t.Fatal(err)
 	}
 	rule := platform.ExprReference("boolean", "active")
@@ -38,7 +38,7 @@ func TestEnterpriseReferenceFieldsAndInputsKeepOriginalTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, invalid := range []construction.Field{{Name: "bad", Title: "Bad", Type: "text", Stereotype: "ActualPerson"}, {Name: "bad", Title: "Bad", Type: "reference", Ref: "enterprise.element", Stereotype: "not-a-type"}, {Name: "bad", Title: "Bad", Type: "reference", Ref: "enterprise.element", Inverse: "records"}} {
-		if err := checkFields([]construction.Field{invalid}, nil); err == nil {
+		if err := construction.CheckFields([]construction.Field{invalid}, nil); err == nil {
 			t.Fatalf("invalid enterprise field accepted: %+v", invalid)
 		}
 	}
@@ -54,12 +54,12 @@ func TestEnterpriseUseRuleOnlyReadsCurrentRecord(t *testing.T) {
 	object := construction.Object{Name: "assignment", Fields: []construction.Field{{Name: "active", Title: "Active", Type: "boolean"}}}
 	valid := platform.ExprReference("boolean", "active")
 	object.EnterpriseUse = &valid
-	if err := checkEnterpriseUse(object); err != nil {
+	if err := construction.CheckEnterpriseUse(object); err != nil {
 		t.Fatal(err)
 	}
 	for _, invalid := range []platform.Expr{platform.ExprReference("text", "active"), platform.ExprReference("boolean", "input.active"), {Op: "path", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", "other")}, Path: []string{"active"}}} {
 		object.EnterpriseUse = &invalid
-		if err := checkEnterpriseUse(object); err == nil {
+		if err := construction.CheckEnterpriseUse(object); err == nil {
 			t.Fatalf("nonlocal or nonboolean current-use rule accepted: %+v", invalid)
 		}
 	}

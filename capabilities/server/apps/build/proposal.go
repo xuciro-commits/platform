@@ -176,7 +176,7 @@ func proposalEntity(e platform.Entity, changed map[string]any, p *proposalConsum
 		slices.Sort(sources)
 		sources = slices.Compact(sources)
 		for field := range changed {
-			destination := rv.FieldByName("AISources" + goName(field))
+			destination := rv.FieldByName("AISources" + construction.GoName(field))
 			if destination.IsValid() && destination.CanSet() {
 				destination.Set(reflect.ValueOf(sources))
 			}

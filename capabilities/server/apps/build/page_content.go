@@ -18,7 +18,7 @@ func retainPagePublication(p *Page) error {
 		if raw == "" {
 			continue
 		}
-		saved, ok := wasPublished[Page](raw)
+		saved, ok := construction.ReadPublication[Page](raw)
 		if !ok || saved.ID != p.ID || saved.Name == "" || saved.Published != "" || len(saved.Versions) != 0 {
 			return fmt.Errorf("invalid original page publication history")
 		}
@@ -58,7 +58,7 @@ func (b *Build) PageContent(name, version string) (platform.Page, bool) {
 			continue
 		}
 		for _, raw := range append(slices.Clone(p.Versions), p.Published) {
-			saved, ok := wasPublished[Page](raw)
+			saved, ok := construction.ReadPublication[Page](raw)
 			if !ok || saved.ID != p.ID || saved.Name == "" || saved.Published != "" || len(saved.Versions) != 0 {
 				return platform.Page{}, false
 			}

@@ -127,7 +127,7 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 			var metadata struct {
 				Published string `json:"published"`
 			}
-			raw, _ := row.image()
+			raw, _ := row.Image()
 			if json.Unmarshal(raw, &metadata) != nil {
 				continue
 			}

@@ -100,7 +100,7 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 		err = fmt.Errorf("decision table draft %s was not found", id)
 		return
 	}
-	if old, ok := wasPublished[construction.Table](tb.Published); ok {
+	if old, ok := construction.ReadPublication[construction.Table](tb.Published); ok {
 		prior, hadPrior = platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: old.Name}, true
 	}
 	if err = tb.NormalizeRules(); err == nil {
@@ -159,7 +159,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]cons
 		frozen.Record = record.Record
 		raw := published(frozen)
 		for _, retained := range record.Versions {
-			if prior, ok := wasPublished[construction.Table](retained); ok && prior.Version == frozen.Version {
+			if prior, ok := construction.ReadPublication[construction.Table](retained); ok && prior.Version == frozen.Version {
 				raw = retained
 				break
 			}

@@ -45,7 +45,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 		decide(t, live, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": n}, at.Add(time.Duration(n)*time.Second))
 	}
 	row := live.records.types["stock.item"].rows.Get("I1")
-	if row.history != nil || row.loadHistory == nil || len(row.recordHistory()) != 5 {
+	if row.History != nil || row.LoadHistory == nil || len(row.RecordHistory()) != 5 {
 		t.Fatal("complete record history remained resident or was lost")
 	}
 	if len(live.committed.allAnswers()) == 0 && len(live.app("stock").AcceptedLedger().RecordsFor(id)) != 5 {
@@ -102,7 +102,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(row.recordHistory()) != 5 {
+	if len(row.RecordHistory()) != 5 {
 		t.Fatal("committed future history leaked into the old working set")
 	}
 	if len(live.committed.answer("stock/"+next.GetSubmission().GetIdempotencyKey())) != 0 {
@@ -111,7 +111,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if got, refusal := live.Submit(memberOf(t, live, "ana"), next.GetSubmission(), at.Add(time.Minute)); refusal != nil || !proto.Equal(got, next) {
 		t.Fatalf("unknown-outcome retry did not apply its original result: %v", refusal)
 	}
-	if qty := live.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Qty; qty != 6 || j.Position(id) != position+1 {
+	if qty := live.records.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Qty; qty != 6 || j.Position(id) != position+1 {
 		t.Fatalf("unknown-outcome retry returned without applying or appended twice: %d", qty)
 	}
 	restored := compose()
@@ -120,7 +120,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 		t.Fatalf("restore failed: %v %v", err, restored.fault.Load())
 	}
 	current := restored.records.types["stock.item"].rows.Get("I1")
-	if current.history != nil || len(current.recordHistory()) != 6 || current.value.Interface().(Item).Qty != 6 {
+	if current.History != nil || len(current.RecordHistory()) != 6 || current.Value.Interface().(Item).Qty != 6 {
 		t.Fatal("restart did not load committed current/history")
 	}
 	if saved, err := j.AppendAccepted(ctx, id, entry, identity.Key, identity.Hash); err != nil || !sameStoredJSON(saved, raw) || j.Position(id) != position+1 {

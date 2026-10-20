@@ -157,7 +157,7 @@ func (t *Tenant) bookBody(entry map[string]any, typ, id, reverses string) string
 	t.records.mu.Lock()
 	if et := t.records.types[typ]; et != nil {
 		if row := et.rows.Get(id); row != nil {
-			history := row.recordHistory()
+			history := row.RecordHistory()
 			for i := len(history) - 1; i >= 0; i-- {
 				h := history[i]
 				if h.Schema == typ+"."+reverses {

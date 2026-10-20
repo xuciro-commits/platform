@@ -157,7 +157,7 @@ func definitionImage[T interface{ Definition() D }, D interface{ Check() error }
 	}
 	var latest T
 	for i, raw := range family.Versions {
-		f, ok := wasPublished[T](raw)
+		f, ok := construction.ReadPublication[T](raw)
 		entry := definitionFamilyOf(f)
 		if !ok || entry.State != "published" || entry.ID != family.ID || entry.Version != i+1 || entry.Published != "" || len(entry.Versions) != 0 || f.Definition().Check() != nil || i > 0 && !keeps(latest, f) {
 			var zero T
@@ -195,7 +195,7 @@ func retainedDefinition[T interface{ Definition() D }, D any](installed map[stri
 		if err != nil || definitionFamilyOf(latest).Name != name {
 			continue
 		}
-		f, found := wasPublished[T](family.Versions[version-1])
+		f, found := construction.ReadPublication[T](family.Versions[version-1])
 		if found && definitionFamilyOf(f).Version == version {
 			return f.Definition(), version, true
 		}
@@ -331,7 +331,7 @@ func draftDefinitionAssets[T any](b *Build, id string, kind platform.AssetKind, 
 	}
 	record := records[i]
 	family := definitionFamilyOf(record)
-	if old, ok := wasPublished[T](family.Published); ok {
+	if old, ok := construction.ReadPublication[T](family.Published); ok {
 		prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: definitionFamilyOf(old).Name}
 		hadPrior = true
 	}
@@ -367,7 +367,7 @@ func applyDefinitionHistory[T any](image []byte, decode func([]byte) (T, error),
 		return err
 	}
 	for _, raw := range definitionFamilyOf(record).Versions {
-		version, _ := wasPublished[T](raw)
+		version, _ := construction.ReadPublication[T](raw)
 		if err := install(platform.Caller{Replaying: true}, version); err != nil {
 			return err
 		}

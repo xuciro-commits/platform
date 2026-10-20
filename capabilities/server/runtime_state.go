@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 
@@ -46,7 +47,7 @@ func (b *storageDeltaBuilder) value(owner, key string, image any) {
 	}
 	b.values[owner+"/"+key] = journal.StateValue{Owner: owner, Key: key, Image: raw}
 }
-func (b *storageDeltaBuilder) record(r acceptedRow, base int) error {
+func (b *storageDeltaBuilder) record(r records.Image, base int) error {
 	image, err := json.Marshal(recordState{Value: r.Value, Format: r.Format, Projection: r.Projection, Extraction: r.Extraction})
 	if err != nil {
 		return err
@@ -93,7 +94,7 @@ func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definitio
 // a loosely typed envelope with coincidentally matching field names.
 func (b *storageDeltaBuilder) plan(plan acceptedChangePlan) error {
 	for _, row := range plan.Rows {
-		if err := b.record(row.acceptedRow, -1); err != nil {
+		if err := b.record(row.Image, -1); err != nil {
 			return err
 		}
 	}
@@ -191,12 +192,12 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 			if result.Version >= 2 {
 				base = row.HistoryBase
 			}
-			if err := b.record(row.acceptedRow, base); err != nil {
+			if err := b.record(row.Image, base); err != nil {
 				return err
 			}
 		}
 		for _, callback := range result.DirectRows {
-			if err := b.record(callback.Row.acceptedRow, -1); err != nil {
+			if err := b.record(callback.Row.Image, -1); err != nil {
 				return err
 			}
 		}
@@ -315,12 +316,12 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 				t.records.mu.Unlock()
 				return err
 			}
-			actual, _ := r.image()
+			actual, _ := r.Image()
 			if !sameStoredJSON(actual, image.Value) {
 				t.records.mu.Unlock()
 				return fmt.Errorf("SQL current image differs: %s/%s", typ, id)
 			}
-			decoded, err := rowDecodeFormattedImage(et.info, image.Value, image.Projection, t.records.readRelease, image.Format)
+			decoded, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, t.records.readRelease, image.Format)
 			if err != nil {
 				t.records.mu.Unlock()
 				return err
@@ -331,14 +332,14 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 				return err
 			}
 			emptyLists(value)
-			count := r.historyLength()
-			head, err := r.historyDigest()
+			count := r.HistoryLength()
+			head, err := r.HistoryDigest()
 			if err != nil {
 				t.records.mu.Unlock()
 				return err
 			}
-			current := &row{value: value, format: image.Format, historyCount: count, historyHead: head, projection: image.Projection, extraction: image.Extraction}
-			current.retainOriginal(image.Value)
+			current := &records.Row{Value: value, Format: image.Format, HistoryCount: count, HistoryHead: head, Projection: image.Projection, Extraction: image.Extraction}
+			current.RetainOriginal(image.Value)
 			t.records.attachHistory(et, id, current, store, t.ID)
 		}
 	}
@@ -368,19 +369,19 @@ func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 	t.records.mu.Lock()
 	for typ, et := range t.records.types {
 		for id, r := range et.rows.All() {
-			image, err := r.image()
+			image, err := r.Image()
 			if err != nil {
 				t.records.mu.Unlock()
 				return journal.StateDelta{}, err
 			}
-			state := recordState{Value: image, Format: r.format, Projection: r.projection, Extraction: r.extraction}
-			head, err := r.historyDigest()
+			state := recordState{Value: image, Format: r.Format, Projection: r.Projection, Extraction: r.Extraction}
+			head, err := r.HistoryDigest()
 			if err != nil {
 				t.records.mu.Unlock()
 				return journal.StateDelta{}, err
 			}
 			rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1, HistoryHead: head}
-			for _, h := range r.recordHistory() {
+			for _, h := range r.RecordHistory() {
 				rr.History = append(rr.History, jsonOf(h))
 			}
 			d.Records = append(d.Records, rr)

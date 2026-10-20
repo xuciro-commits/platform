@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"slices"
 	"strconv"
 	"strings"
@@ -104,7 +105,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
 	}
 	row := et.rows.Get(source)
-	if row == nil || recordOf(row.value).Archived || !t.readableIn(store, member, sourceRef, at) {
+	if row == nil || records.Header(row.Value).Archived || !t.readableIn(store, member, sourceRef, at) {
 		store.mu.Unlock()
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 	}
@@ -115,9 +116,9 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			store.mu.Unlock()
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 		}
-		input[name] = row.value.FieldByIndex(field.Index).Interface()
+		input[name] = row.Value.FieldByIndex(field.Index).Interface()
 	}
-	sourceRevision := recordOf(row.value).Revision
+	sourceRevision := records.Header(row.Value).Revision
 	sourceValues := map[string]json.RawMessage{}
 	for field, value := range input {
 		sourceValues[field] = platform.Raw(value)
@@ -192,7 +193,7 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	var sourcePresent bool
 	if sourceTypeInfo != nil {
 		row := sourceTypeInfo.rows.Get(sourceID)
-		sourcePresent = row != nil && !recordOf(row.value).Archived
+		sourcePresent = row != nil && !records.Header(row.Value).Archived
 	}
 	t.records.mu.Unlock()
 	if !sourcePresent {

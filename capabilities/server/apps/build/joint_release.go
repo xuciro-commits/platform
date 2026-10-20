@@ -240,7 +240,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			return prior, next, false, fmt.Errorf("draft process %q not found", id)
 		}
 		record := inv.processes[i]
-		if was, ok := wasPublished[construction.Process](record.Published); ok {
+		if was, ok := construction.ReadPublication[construction.Process](record.Published); ok {
 			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(was.Name)}
 			hadPrior = true
 		}
@@ -286,7 +286,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			return prior, next, false, fmt.Errorf("draft object %q not found", id)
 		}
 		record := inv.objects[i]
-		if was, ok := wasPublished[construction.Object](record.Published); ok {
+		if was, ok := construction.ReadPublication[construction.Object](record.Published); ok {
 			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(was.Name)}
 			hadPrior = true
 		}
@@ -309,7 +309,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			return prior, next, false, fmt.Errorf("draft page %q not found", id)
 		}
 		record := inv.pages[i]
-		if was, ok := wasPublished[Page](record.Published); ok {
+		if was, ok := construction.ReadPublication[Page](record.Published); ok {
 			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: was.Name}
 			hadPrior = true
 		}
@@ -327,7 +327,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			return prior, next, false, fmt.Errorf("draft application %q not found", id)
 		}
 		record := inv.apps[i]
-		if was, ok := wasPublished[Application](record.Published); ok {
+		if was, ok := construction.ReadPublication[Application](record.Published); ok {
 			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: was.Name}
 			hadPrior = true
 		}

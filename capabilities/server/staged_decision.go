@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -205,12 +206,12 @@ func (d *stagedDecision) bindPrivateFacts(l *platform.Ledger) {
 func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
 	d.records.mu.Lock()
 	et := d.records.of(c, reflect.TypeOf(entity))
-	var before *row
+	var before *records.Row
 	var info platform.EntityInfo
 	var ref string
 	if et != nil {
 		info = et.info
-		id := recordOf(copyOf(et.info.Go, entity)).ID
+		id := records.Header(copyOf(et.info.Go, entity)).ID
 		before, ref = et.rows.Get(id), et.info.Type+"/"+id
 	}
 	d.records.mu.Unlock()
@@ -233,9 +234,9 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 	if err == nil {
 		d.records.mu.Lock()
 		et := d.records.of(c, reflect.TypeOf(entity))
-		id := recordOf(copyOf(et.info.Go, entity)).ID
+		id := records.Header(copyOf(et.info.Go, entity)).ID
 		ref := et.info.Type + "/" + id
-		history := et.rows.Get(id).historyLength()
+		history := et.rows.Get(id).HistoryLength()
 		d.records.mu.Unlock()
 		if origin := d.callbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
 			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&
@@ -279,7 +280,7 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 		var raw []byte
 		var err error
 		if et != nil && et.rows.Get(ref.GetId()) != nil {
-			raw, err = json.Marshal(et.rows.Get(ref.GetId()).value.Interface())
+			raw, err = json.Marshal(et.rows.Get(ref.GetId()).Value.Interface())
 		}
 		d.records.mu.Unlock()
 		if len(raw) == 0 || err != nil || publisher.ValidateAcceptedPublication(schema, raw) != nil {

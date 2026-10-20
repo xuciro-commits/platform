@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -32,7 +33,7 @@ func (s *recordStore) migrationWriteLocked(info platform.EntityInfo, r *pb.Chang
 		return nil
 	}
 	for _, value := range progress.rows.All() {
-		run := value.value.Interface().(platform.MigrationRun)
+		run := value.Value.Interface().(platform.MigrationRun)
 		if run.State == "cancelled" || run.Plan.From != s.readRelease {
 			continue
 		}
@@ -65,7 +66,7 @@ func (s *recordStore) migrationDefinitionLocked(info platform.EntityInfo) error 
 		return nil
 	}
 	for _, value := range progress.rows.All() {
-		run := value.value.Interface().(platform.MigrationRun)
+		run := value.Value.Interface().(platform.MigrationRun)
 		if run.State == "cancelled" || run.Plan.From != s.readRelease || run.SourceShapes[info.Type] == "" && run.TargetShapes[info.Type] == "" {
 			continue
 		}
@@ -97,7 +98,7 @@ func (d *stagedDecision) BeginMigration(c platform.Caller, r *pb.ChangeRecord, p
 		return platform.MigrationRun{}, migrationRefusal(err)
 	}
 	for _, value := range d.records.types[platform.MigrationRunType].rows.All() {
-		prior := value.value.Interface().(platform.MigrationRun)
+		prior := value.Value.Interface().(platform.MigrationRun)
 		if prior.State == "cancelled" {
 			continue
 		}
@@ -134,7 +135,7 @@ func (d *stagedDecision) BeginMigration(c platform.Caller, r *pb.ChangeRecord, p
 		}
 		run.TargetShapes[typ] = target
 		for id, row := range d.records.types[typ].rows.All() {
-			if !recordOf(row.value).Archived {
+			if !records.Header(row.Value).Archived {
 				run.Targets = append(run.Targets, typ+"/"+id)
 			}
 		}
@@ -229,7 +230,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			return run, err
 		}
 		d.RecordAuthorization(c, read, decision)
-		image, err := et.rows.Get(id).image()
+		image, err := et.rows.Get(id).Image()
 		if err != nil {
 			return run, migrationRefusal(err)
 		}
@@ -289,7 +290,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			if err != nil || json.Unmarshal(raw, v.Addr().Interface()) != nil {
 				return run, migrationRefusal(fmt.Errorf("migration value does not match its target shape"))
 			}
-			trialType.setRow(id, &row{value: v, history: copyHistory(et.rows.Get(id).recordHistory())})
+			trialType.setRow(id, &records.Row{Value: v, History: records.CopyHistory(et.rows.Get(id).RecordHistory())})
 			decision := d.tenant.authorizeFrom(prepared.trial.records, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: typ, Record: id, Fields: writeFields}, at, false)
 			if err := authorizationRefusal(decision); err != nil {
 				return run, err
@@ -334,7 +335,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			}
 			written := d.records.types[write.typ]
 			updated := *written.rows.Get(write.id)
-			updated.extraction = &extractionOrigin{Migration: run.ID, Source: write.source, Step: before.Step}
+			updated.Extraction = &records.Extraction{Migration: run.ID, Source: write.source, Step: before.Step}
 			written.setRow(write.id, &updated)
 			sourceType, sourceID, _ := strings.Cut(write.source, "/")
 			question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: sourceType, Record: sourceID}
@@ -363,7 +364,7 @@ func (t *Tenant) migrationActivationLocked(candidate string) (bool, error) {
 	}
 	migrated := false
 	for _, value := range progress.rows.All() {
-		run := value.value.Interface().(platform.MigrationRun)
+		run := value.Value.Interface().(platform.MigrationRun)
 		if run.State == "cancelled" || run.Plan.From != t.releases.active {
 			continue
 		}
@@ -381,7 +382,7 @@ func (t *Tenant) completedActionRetirement(action string) bool {
 		return false
 	}
 	for _, value := range progress.rows.All() {
-		run := value.value.Interface().(platform.MigrationRun)
+		run := value.Value.Interface().(platform.MigrationRun)
 		if run.Plan.From == t.releases.active && run.State == "complete" && len(run.Failures) == 0 && slices.ContainsFunc(run.Plan.Steps, func(step platform.MigrateStep) bool { return step.Kind == "retire-action" && step.Action == action }) {
 			return true
 		}
@@ -430,14 +431,14 @@ func (d *stagedDecision) cancelMigrationBatch(c platform.Caller, r *pb.ChangeRec
 				return run, err
 			}
 			d.RecordAuthorization(c, question, grant)
-			archived := copyOf(et.info.Go, current.value.Interface())
-			record := recordOf(archived)
+			archived := copyOf(et.info.Go, current.Value.Interface())
+			record := records.Header(archived)
 			record.Archived = true
 			if err := d.Put(c, r, archived.Interface()); err != nil {
 				return run, err
 			}
 		}
-		if source := projectionFor(current.projection, run.Plan.From); source != nil {
+		if source := records.ProjectionFor(current.Projection, run.Plan.From); source != nil {
 			if source.Shape != run.SourceShapes[typ] {
 				return run, migrationRefusal(fmt.Errorf("migration source projection changed"))
 			}
@@ -449,12 +450,12 @@ func (d *stagedDecision) cancelMigrationBatch(c platform.Caller, r *pb.ChangeRec
 				return run, err
 			}
 			updated := *et.rows.Get(id)
-			remaining := updated.projection.Prior
-			updated.projection = nil
+			remaining := updated.Projection.Prior
+			updated.Projection = nil
 			if len(remaining) > 0 {
 				retained := remaining[0]
 				retained.Prior = slices.Clone(remaining[1:])
-				updated.projection = &retained
+				updated.Projection = &retained
 			}
 			et.setRow(id, &updated)
 		}
@@ -483,7 +484,7 @@ func (t *Tenant) migratedStorageLocked(old, next platform.EntityInfo) bool {
 		return false
 	}
 	for _, value := range progress.rows.All() {
-		run := value.value.Interface().(platform.MigrationRun)
+		run := value.Value.Interface().(platform.MigrationRun)
 		if run.Plan.From == t.releases.active && run.State == "complete" && len(run.Failures) == 0 && run.SourceShapes[old.Type] == source && run.TargetShapes[old.Type] == target {
 			return true
 		}
@@ -507,14 +508,14 @@ func (t *Tenant) validateMigratedRecordsLocked(trial *Tenant, member platform.Me
 			fields = append(fields, field.Name)
 		}
 		for id, current := range et.rows.All() {
-			if recordOf(current.value).Archived {
+			if records.Header(current.Value).Archived {
 				continue
 			}
 			request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.info.Type, Record: id, Fields: fields}
 			if err := authorizationRefusal(t.authorizeFrom(checks.records, c, request, at, false)); err != nil {
 				return err
 			}
-			if err := checks.Check(c, current.value.Interface()); err != nil {
+			if err := checks.Check(c, current.Value.Interface()); err != nil {
 				return fmt.Errorf("migrated %s/%s does not satisfy its target declaration: %w", et.info.Type, id, err)
 			}
 			checks.constraintWrites[et.info.Type+"/"+id] = constraintWrite{caller: c}
@@ -528,19 +529,19 @@ func (t *Tenant) validateMigratedRecordsLocked(trial *Tenant, member platform.Me
 
 func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord, et *entityType, id string, values map[string]json.RawMessage, shape string) *kernel.Error {
 	prior := et.rows.Get(id)
-	before, err := prior.image()
+	before, err := prior.Image()
 	if err != nil {
 		return migrationRefusal(err)
 	}
-	source := copyOf(et.info.Go, prior.value.Interface())
+	source := copyOf(et.info.Go, prior.Value.Interface())
 	if err := d.Put(c, r, source.Interface()); err != nil {
 		return err
 	}
 	updated := *et.rows.Get(id)
-	updated.history = copyHistory(updated.history)
-	updated.loadHistory = nil
+	updated.History = records.CopyHistory(updated.History)
+	updated.LoadHistory = nil
 	current := &updated
-	projection, err := json.Marshal(current.value.Interface())
+	projection, err := json.Marshal(current.Value.Interface())
 	if err != nil {
 		return migrationRefusal(err)
 	}
@@ -559,7 +560,7 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 	}
 	var old map[string]json.RawMessage
 	_ = json.Unmarshal(before, &old)
-	last := &current.history[len(current.history)-1]
+	last := &current.History[len(current.History)-1]
 	last.Fields = nil
 	keys := []string{}
 	for name := range values {
@@ -576,22 +577,22 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 			continue
 		}
 		if string(old[name]) != string(values[name]) {
-			last.Fields = append(last.Fields, FieldChange{Field: name, Before: old[name], After: values[name]})
+			last.Fields = append(last.Fields, records.FieldChange{Field: name, Before: old[name], After: values[name]})
 		}
 	}
-	if err := appendRowHistory(current, prior, current.history); err != nil {
+	if err := records.AppendRowHistory(current, prior, current.History); err != nil {
 		return migrationRefusal(err)
 	}
-	current.original = actual
-	retained := current.projection
-	current.projection = &recordProjection{Format: current.format, From: d.tenant.releases.active, Shape: shape, Value: projection}
+	current.Original = actual
+	retained := current.Projection
+	current.Projection = &records.Projection{Format: current.Format, From: d.tenant.releases.active, Shape: shape, Value: projection}
 	if retained != nil {
-		if retained.From != current.projection.From {
+		if retained.From != current.Projection.From {
 			previous := *retained
 			previous.Prior = nil
-			current.projection.Prior = append(current.projection.Prior, previous)
+			current.Projection.Prior = append(current.Projection.Prior, previous)
 		}
-		current.projection.Prior = append(current.projection.Prior, retained.Prior...)
+		current.Projection.Prior = append(current.Projection.Prior, retained.Prior...)
 	}
 	et.setRow(id, current)
 	return nil

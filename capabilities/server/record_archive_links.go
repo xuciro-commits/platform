@@ -23,7 +23,7 @@ func (s *recordStore) validateArchiveLinkLocked(l platform.LinkType) error {
 			continue
 		}
 		target := parent.rows.Get(id)
-		if target == nil || target.value.Field(0).Interface().(platform.Record).Archived {
+		if target == nil || target.Value.Field(0).Interface().(platform.Record).Archived {
 			return fmt.Errorf("%s", linkArchiveFailure)
 		}
 	}
@@ -61,7 +61,7 @@ func (s *recordStore) checkArchiveWriteLocked(et *entityType, value reflect.Valu
 				continue
 			} // prospective self is active
 			target := parent.rows.Get(id)
-			if target == nil || target.value.Field(0).Interface().(platform.Record).Archived {
+			if target == nil || target.Value.Field(0).Interface().(platform.Record).Archived {
 				return fail()
 			}
 		}

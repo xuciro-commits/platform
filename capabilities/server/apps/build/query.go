@@ -52,7 +52,7 @@ func (b *Build) queryEntity() platform.Entity {
 }
 
 func (b *Build) checkQuery(f Query) error {
-	if !named(f.Name) {
+	if !construction.Named(f.Name) {
 		return fmt.Errorf("The query name %s must be lower-case letters and digits", f.Name)
 	}
 	shape, selected := b.jointEntities[f.Object]
@@ -77,12 +77,12 @@ func (b *Build) checkQuery(f Query) error {
 		return err
 	}
 	for _, other := range list {
-		installed, _ := wasPublished[Query](other.Published)
+		installed, _ := construction.ReadPublication[Query](other.Published)
 		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
 			return fmt.Errorf("Query %s is already declared", f.Name)
 		}
 	}
-	if old, ok := wasPublished[Query](f.Published); ok && (old.Name != f.Name || old.Object != f.Object || old.Interface != f.Interface) {
+	if old, ok := construction.ReadPublication[Query](f.Published); ok && (old.Name != f.Name || old.Object != f.Object || old.Interface != f.Interface) {
 		return fmt.Errorf("A published query keeps its name and source object")
 	}
 	return nil

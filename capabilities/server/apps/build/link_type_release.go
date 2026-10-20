@@ -57,7 +57,7 @@ func (b *Build) linkTypeDraftAssets(id string) (before, after []platform.Release
 // ordinals must match retained bytes; only the next ordinal can publish.
 func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, b.linkTypeInventory, platform.AssetLinkType, "link", construction.SchemaLinkType, "link type", b.LinkTypeReleaseAsset, func(record LinkType, asset platform.ReleaseAsset, version int) (LinkType, error) {
-		prior, _ := wasPublished[LinkType](record.Published)
+		prior, _ := construction.ReadPublication[LinkType](record.Published)
 		var q platform.LinkType
 		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Parent.Name != record.Parent || q.Child.Name != record.Child || q.Via != record.Via || !linkKeepsGuarantees(prior, linkTypeFromDeclaration(q)) {
 			return record, fmt.Errorf("invalid next link type version")

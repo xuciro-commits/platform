@@ -84,7 +84,7 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 			if err := authorizationRefusal(decision); err != nil {
 				return MigrationReview{}, err
 			}
-			image, err := et.rows.Get(id).image()
+			image, err := et.rows.Get(id).Image()
 			if err != nil {
 				return MigrationReview{}, err
 			}
@@ -193,7 +193,7 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 			return nil, fmt.Errorf("migration source type is outside the sealed release")
 		}
 		sources[typ] = old.info
-		old.setRows(records.Index[*row]{})
+		old.setRows(records.Index[*records.Row]{})
 	}
 	view, err := t.assetInstallationView(draftRecords)
 	if err != nil {

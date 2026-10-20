@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -68,10 +69,10 @@ func (d *stagedDecision) putOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 		return fail("Relationship owner has not declared its relation records")
 	}
 	prior := et.rows.Get(id)
-	if remove && (prior == nil || recordOf(prior.value).Archived) {
+	if remove && (prior == nil || records.Header(prior.Value).Archived) {
 		return fail("Owned relationship does not exist")
 	}
-	if !remove && prior != nil && !recordOf(prior.value).Archived {
+	if !remove && prior != nil && !records.Header(prior.Value).Archived {
 		return fail("Owned relationship already exists")
 	}
 	return d.Put(c, receipt, platform.RelationValue(entity, id, request.Binding.Ref.Name, request.Binding.SourceVersion, parent, child, remove, legacy...))
@@ -90,14 +91,14 @@ func (t *Tenant) ownedRelationTargets(store *recordStore, c platform.Caller, lin
 	refs := []string{}
 	if et != nil {
 		for _, row := range et.rows.All() {
-			if recordOf(row.value).Archived {
+			if records.Header(row.Value).Archived {
 				continue
 			}
 			var value struct {
 				Binding, Parent, Child string
 				Migration              bool
 			}
-			_ = json.Unmarshal(platform.Raw(row.value.Interface()), &value)
+			_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &value)
 			if value.Migration || value.Binding != link.Name {
 				continue
 			}
@@ -142,14 +143,14 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 	var edges []edge
 	parents, children := map[string]int{}, map[string]int{}
 	for id, row := range et.rows.All() {
-		if recordOf(row.value).Archived {
+		if records.Header(row.Value).Archived {
 			continue
 		}
 		var value struct {
 			Binding, Parent, Child string
 			Migration              bool
 		}
-		if err := json.Unmarshal(platform.Raw(row.value.Interface()), &value); err != nil {
+		if err := json.Unmarshal(platform.Raw(row.Value.Interface()), &value); err != nil {
 			return nil, err
 		}
 		if value.Migration || value.Binding != link.Name {
@@ -171,7 +172,7 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 		parent, child := s.types[parentType], s.types[childType]
 		if !parentOK || !childOK || parentType != link.Parent.Name || childType != link.Child.Name || parent == nil || child == nil || parent.rows.Get(parentID) == nil || child.rows.Get(childID) == nil {
 			invalid = "endpoint"
-		} else if link.DeletePolicy == "restrict-active" && recordOf(parent.rows.Get(parentID).value).Archived && !recordOf(child.rows.Get(childID).value).Archived {
+		} else if link.DeletePolicy == "restrict-active" && records.Header(parent.rows.Get(parentID).Value).Archived && !records.Header(child.rows.Get(childID).Value).Archived {
 			invalid = "archive"
 		}
 		if invalid != "" {
@@ -185,7 +186,7 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 		}
 		ids := []string{}
 		for id, row := range child.rows.All() {
-			if !recordOf(row.value).Archived && children[child.info.Type+"/"+id] == 0 {
+			if !records.Header(row.Value).Archived && children[child.info.Type+"/"+id] == 0 {
 				ids = append(ids, id)
 			}
 		}
@@ -220,7 +221,7 @@ func (d *stagedDecision) checkOwnedRelationConstraints() *kernel.Error {
 					}
 					id := strings.TrimPrefix(edgeRef, platform.OwnedRelationType(link.Child.App)+"/")
 					et := d.records.types[platform.OwnedRelationType(link.Child.App)]
-					for _, row := range []*row{candidate.before, et.rows.Get(id)} {
+					for _, row := range []*records.Row{candidate.before, et.rows.Get(id)} {
 						image := relationImage(row)
 						if image.Binding == link.Name && image.Child == violation.child {
 							write, changed = candidate, true

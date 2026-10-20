@@ -5,6 +5,7 @@ import (
 	"math/big"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/records"
 	"platformserver/platform"
 	"reflect"
 	"regexp"
@@ -116,7 +117,7 @@ func (s *recordStore) aggregateWindow(et *entityType, q AggregateQuery, visible 
 			out.MissingTime++
 			continue
 		}
-		timed = append(timed, timedRow{row, at, recordOf(row).ID})
+		timed = append(timed, timedRow{row, at, records.Header(row).ID})
 	}
 	slices.SortFunc(timed, func(a, b timedRow) int {
 		if a.at.Before(b.at) {
@@ -131,7 +132,7 @@ func (s *recordStore) aggregateWindow(et *entityType, q AggregateQuery, visible 
 	timed = timed[:min(len(timed), w.Rows)]
 	out.Count = len(timed)
 	edge := func(row timedRow) *AggregateWindowEdge {
-		record := recordOf(row.value)
+		record := records.Header(row.value)
 		return &AggregateWindowEdge{ID: record.ID, Revision: record.Revision, Time: row.at}
 	}
 	if len(timed) > 0 {

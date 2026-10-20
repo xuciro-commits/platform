@@ -484,7 +484,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	}
 	for _, row := range saved.Rows {
 		r := restarted.records.types[row.Type].rows.Get(row.ID)
-		image, err := r.image()
+		image, err := r.Image()
 		if err != nil || !bytes.Equal(image, row.Value) {
 			t.Fatalf("recovered image differs for %s: %v", row.Type, err)
 		}

@@ -66,7 +66,7 @@ func (b *Build) migrationPlanInventory() ([]MigrationPlanRecord, error) {
 }
 
 func (b *Build) checkMigrationPlan(m MigrationPlanRecord) error {
-	if !named(m.Name) {
+	if !construction.Named(m.Name) {
 		return fmt.Errorf("The migration plan name must use lower-case letters and digits")
 	}
 	if err := m.descriptor().Check(); err != nil {

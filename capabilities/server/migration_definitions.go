@@ -60,8 +60,8 @@ func (d *stagedDecision) stageExtractionDefinitions(c platform.Caller, receipt *
 	return nil
 }
 
-func (t *Tenant) installExtractionDefinitions(records *recordStore, definitions []releaseInstallation) (*Tenant, error) {
-	view, err := t.assetInstallationView(records)
+func (t *Tenant) installExtractionDefinitions(recordView *recordStore, definitions []releaseInstallation) (*Tenant, error) {
+	view, err := t.assetInstallationView(recordView)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (t *Tenant) installExtractionDefinitions(records *recordStore, definitions 
 
 // Recovery validates the saved source/target pins and predecessor, then only
 // installs saved images. No expression, member policy or migration runs here.
-func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.ChangeRecord, records *recordStore) (*recordStore, error) {
+func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.ChangeRecord, recordView *recordStore) (*recordStore, error) {
 	sub := receipt.GetSubmission()
 	if result.App != "build" || sub.GetTarget().GetType() != platform.MigrationRunType || sub.GetSchema().GetName() != platform.MigrationRunType+".start" {
 		return nil, fmt.Errorf("object declaration has no migration start")
@@ -110,7 +110,7 @@ func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.
 	if err != nil {
 		return nil, err
 	}
-	view, err := t.installExtractionDefinitions(records, result.Definitions)
+	view, err := t.installExtractionDefinitions(recordView, result.Definitions)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.
 			return nil, err
 		}
 		installed := *et.rows.Get(id)
-		installed.value, installed.original = value, nil
+		installed.Value, installed.Original = value, nil
 		et.setRow(id, &installed)
 	}
 	assets, err := check.releaseAssetsLocked(nil, false)

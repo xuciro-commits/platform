@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 )
 
@@ -14,19 +15,19 @@ import (
 // original history and predecessor digest: recover only that omitted summary,
 // and require the entire reconstructed row to match that exact digest. Never
 // accept differences in business values, receipts or other history fields.
-func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
+func legacyAgentContextPredecessor(prior *records.Row, image acceptedBatchRow) *records.Row {
 	prior = legacyAgentBindingImage(prior, image)
 	if prior != nil {
-		if before, err := acceptedRowOf(image.Type, image.ID, prior); err == nil {
+		if before, err := records.FullImage(image.Type, image.ID, prior); err == nil {
 			if digest, err := acceptance.Digest(before); err == nil && digest == image.Before {
 				return prior
 			}
 		}
 	}
-	if prior == nil || image.App != AgentApp || image.Type != RunType || len(prior.recordHistory()) == 0 || len(image.History) <= len(prior.recordHistory()) {
+	if prior == nil || image.App != AgentApp || image.Type != RunType || len(prior.RecordHistory()) == 0 || len(image.History) <= len(prior.RecordHistory()) {
 		return nil
 	}
-	run, ok := prior.value.Interface().(AgentRunRecord)
+	run, ok := prior.Value.Interface().(AgentRunRecord)
 	if !ok || run.Flow == "" || run.OnBehalf != "" {
 		return nil
 	}
@@ -55,7 +56,7 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 	if err != nil || currentErr != nil || oldDigest != currentDigest {
 		return nil
 	}
-	history := copyHistory(prior.recordHistory())
+	history := records.CopyHistory(prior.RecordHistory())
 	for i, field := range history[0].Fields {
 		if field.Field == "seen" {
 			var seen string
@@ -66,8 +67,8 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 		}
 	}
 	run.Seen = historical
-	recovered := &row{value: reflect.ValueOf(&run).Elem(), history: history}
-	before, err := acceptedRowOf(image.Type, image.ID, recovered)
+	recovered := &records.Row{Value: reflect.ValueOf(&run).Elem(), History: history}
+	before, err := records.FullImage(image.Type, image.ID, recovered)
 	if err != nil {
 		return nil
 	}
@@ -83,11 +84,11 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 // Additive startup fields omitted by a legacy replay may be recovered only
 // from the already committed row image. The caller still requires the exact
 // predecessor digest; no version is inferred from today's agent registry.
-func legacyAgentBindingImage(prior *row, image acceptedBatchRow) *row {
-	if prior == nil || image.App != AgentApp || image.Type != RunType || len(image.History) < len(prior.recordHistory()) {
+func legacyAgentBindingImage(prior *records.Row, image acceptedBatchRow) *records.Row {
+	if prior == nil || image.App != AgentApp || image.Type != RunType || len(image.History) < len(prior.RecordHistory()) {
 		return prior
 	}
-	run, ok := prior.value.Interface().(AgentRunRecord)
+	run, ok := prior.Value.Interface().(AgentRunRecord)
 	if !ok {
 		return prior
 	}
@@ -107,13 +108,13 @@ func legacyAgentBindingImage(prior *row, image acceptedBatchRow) *row {
 	if !changed {
 		return prior
 	}
-	history := copyHistory(prior.recordHistory())
+	history := records.CopyHistory(prior.RecordHistory())
 	for i, entry := range history {
-		fields := map[string]FieldChange{}
+		fields := map[string]records.FieldChange{}
 		for _, field := range entry.Fields {
 			fields[field.Field] = field
 		}
-		ordered := []FieldChange{}
+		ordered := []records.FieldChange{}
 		for _, field := range image.History[i].Fields {
 			if field.Field == "release" || field.Field == "definitionVersion" {
 				if existing, ok := fields[field.Field]; ok {
@@ -136,5 +137,5 @@ func legacyAgentBindingImage(prior *row, image acceptedBatchRow) *row {
 		}
 		history[i].Fields = ordered
 	}
-	return &row{value: reflect.ValueOf(&run).Elem(), history: history}
+	return &records.Row{Value: reflect.ValueOf(&run).Elem(), History: history}
 }

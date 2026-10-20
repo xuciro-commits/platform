@@ -136,7 +136,7 @@ func (s *recordStore) flowArtifactReferences(store flowFrameStore) (map[string]b
 		return walk(value, depth)
 	}
 	for _, row := range entity.rows.All() {
-		image, err := row.image()
+		image, err := row.Image()
 		if err != nil {
 			return nil, err
 		}
@@ -144,14 +144,14 @@ func (s *recordStore) flowArtifactReferences(store flowFrameStore) (map[string]b
 			return nil, err
 		}
 		// Original recovery bytes may differ from the current typed image.
-		current, err := json.Marshal(row.value.Interface())
+		current, err := json.Marshal(row.Value.Interface())
 		if err != nil {
 			return nil, err
 		}
 		if err := visit(current, 0); err != nil {
 			return nil, err
 		}
-		for _, change := range row.recordHistory() {
+		for _, change := range row.RecordHistory() {
 			for _, field := range change.Fields {
 				if err := visit(field.Before, 0); err != nil {
 					return nil, err

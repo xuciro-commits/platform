@@ -187,7 +187,7 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if visits := prod.records.types["build.visit"]; visits == nil || visits.rows.Len() != 3 {
 		t.Fatal("prod does not hold the migrated visits")
 	}
-	if image, _ := prod.records.types["build.visit"].rows.Get("V1").image(); !strings.Contains(string(image), `"visit 1"`) {
+	if image, _ := prod.records.types["build.visit"].rows.Get("V1").Image(); !strings.Contains(string(image), `"visit 1"`) {
 		t.Fatalf("migrated V1 lost its note: %s", image)
 	}
 	repeat, err := MigrateRecords(dev.Tenant, prod.Tenant, member(dev, "ops"), member(prod, "ops"), []string{"build.visit"}, at.Add(time.Minute))
@@ -262,11 +262,11 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if err != nil || prodReview.UpgradePlan == nil || prodReview.UpgradePlan.Additions[0].Records != 4 || prodReview.UpgradePlan.ID == review.UpgradePlan.ID {
 		t.Fatalf("prod did not re-derive its plan: %+v %v", prodReview, err)
 	}
-	before, _ := prod.records.types["build.visit"].rows.Get("V1").image()
+	before, _ := prod.records.types["build.visit"].rows.Get("V1").Image()
 	if _, err := prod.ActivateReleaseWithUpgrade(member(prod, "pat"), v2, "activate-v2", prodReview.UpgradePlan.ID, at); err != nil {
 		t.Fatalf("prod upgrade: %v", err)
 	}
-	if after, _ := prod.records.types["build.visit"].rows.Get("V1").image(); string(after) != string(before) {
+	if after, _ := prod.records.types["build.visit"].rows.Get("V1").Image(); string(after) != string(before) {
 		t.Fatal("the prod upgrade rewrote an existing record")
 	}
 	if field, ok := prod.records.types["build.visit"].info.Field("priority"); !ok || field.Required {
@@ -309,7 +309,7 @@ func TestApplicationLifecycleAcrossEnvironments(t *testing.T) {
 	if field, ok := restored.records.types["build.visit"].info.Field("priority"); !ok || field.Required {
 		t.Fatal("recovery lost the upgraded shape")
 	}
-	if image, _ := restored.records.types["build.visit"].rows.Get("V3").image(); !strings.Contains(string(image), `"priority":9`) {
+	if image, _ := restored.records.types["build.visit"].rows.Get("V3").Image(); !strings.Contains(string(image), `"priority":9`) {
 		t.Fatalf("recovery lost the write after the upgrade: %s", image)
 	}
 	if restored.records.types["build.visit"].rows.Len() != 4 {

@@ -2,9 +2,9 @@ package platformserver
 
 import (
 	"fmt"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -173,38 +173,24 @@ func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, dec
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	var rows []interfaceRow
+	var order records.SortOrder
 	for _, read := range reads {
-		part, _, err := store.find(read.view, platform.Query{Domain: query.Domain, Search: query.Search, Sort: query.Sort, Archived: query.Archived}, read.visible)
+		var problem error
+		order, problem = records.CompileOrder(read.view.info, query.Sort)
+		if problem != nil {
+			return InterfaceRecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+		part, err := store.matchingQuery(read.view, platform.Query{Domain: query.Domain, Search: query.Search, Archived: query.Archived}, read.visible)
 		if err != nil {
 			return InterfaceRecordPage{}, err
 		}
 		for _, value := range part {
-			row := interfaceRow{read: read, value: value}
-			for _, name := range query.Sort {
-				key := strings.TrimPrefix(name, "-")
-				field, found := read.view.info.Field(key)
-				sort := sortKey{field: field}
-				if !found {
-					sort.stamp = key
-				}
-				row.keys = append(row.keys, sort.of(value))
-			}
-			row.keys = append(row.keys, recordOf(value).ID, read.entity.info.Type)
+			row := interfaceRow{read: read, value: value, keys: order.Keys(value)}
+			row.keys = append(row.keys, read.entity.info.Type)
 			rows = append(rows, row)
 		}
 	}
-	slices.SortFunc(rows, func(a, b interfaceRow) int {
-		for i, key := range a.keys {
-			order := compareValues(key, b.keys[i])
-			if i < len(query.Sort) && strings.HasPrefix(query.Sort[i], "-") {
-				order = -order
-			}
-			if order != 0 {
-				return order
-			}
-		}
-		return 0
-	})
+	slices.SortFunc(rows, func(a, b interfaceRow) int { return order.Compare(a.keys, b.keys) })
 	out := InterfaceRecordPage{Records: []InterfaceRecord{}, Total: len(rows)}
 	start := min(query.Offset, len(rows))
 	end := min(start+query.Limit, len(rows))
@@ -213,7 +199,7 @@ func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, dec
 		if row.read.entity.info.HasReadSources() {
 			value, _ = t.narrowerIn(store, m, now, true).derive(row.read.entity, value)
 		}
-		rec := recordOf(row.value)
+		rec := records.Header(row.value)
 		fields := map[string]any{"id": rec.ID, "revision": rec.Revision, "created": rec.Created, "changed": rec.Changed}
 		for _, common := range q.InterfaceShape.Fields {
 			f, _ := row.read.entity.info.Field(common.Name)

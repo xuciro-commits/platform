@@ -72,7 +72,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]co
 			if err := json.Unmarshal(asset.Body, &pageDescriptor); err != nil || pageDescriptor.Name != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid saved page %s", asset.Ref)
 			}
-			if previous, ok := wasPublished[Page](pages[i].Published); ok && !maps.Equal(pageFunctionBindings(pageDescriptor), pageFunctionBindings(descriptor(previous))) {
+			if previous, ok := construction.ReadPublication[Page](pages[i].Published); ok && !maps.Equal(pageFunctionBindings(pageDescriptor), pageFunctionBindings(descriptor(previous))) {
 				return nil, fmt.Errorf("page %s changes AI function bindings; publish the binding through its owner before release activation", asset.Ref)
 			}
 			frozen, err := pageDraft(pageDescriptor)
@@ -112,7 +112,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]co
 			if err != nil {
 				return nil, err
 			}
-			if prior, ok := wasPublished[construction.Process](processes[i].Published); ok {
+			if prior, ok := construction.ReadPublication[construction.Process](processes[i].Published); ok {
 				priorAsset, err := processReleaseAsset(prior, asset.SourceVersion)
 				if err == nil {
 					var a, z any
@@ -214,7 +214,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetObject {
 			var o construction.Object
 			if json.Unmarshal(asset.Body, &o) == nil {
-				generated[page(o).Name] = true
+				generated[construction.CompileObjectPage(o).Name] = true
 			}
 		}
 	}

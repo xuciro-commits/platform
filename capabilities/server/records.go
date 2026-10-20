@@ -14,7 +14,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/acceptance"
 	"platformserver/internal/records"
 	"platformserver/journal"
 	"platformserver/platform"
@@ -87,14 +86,14 @@ func (t *Tenant) Held(ref string) (any, bool) {
 	if et == nil || et.rows.Get(id) == nil {
 		return nil, false
 	}
-	return copyOf(et.info.Go, et.rows.Get(id).value.Interface()).Interface(), true
+	return copyOf(et.info.Go, et.rows.Get(id).Value.Interface()).Interface(), true
 }
 
 type entityType struct {
 	store         *recordStore
 	uniqueIndexes map[string]uniqueIndex
 	info          platform.EntityInfo
-	rows          records.Index[*row]
+	rows          records.Index[*records.Row]
 	// Derived indexes share the same immutable rows. Writes update only built
 	// reference buckets; schema replacement discards them with its type image.
 	referenceIndexes map[string]records.References
@@ -143,13 +142,13 @@ func masked(et *entityType, v reflect.Value, hidden []platform.FieldInfo) any {
 }
 
 // maskedHistory drops the hidden fields from a record's changes.
-func maskedHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange {
+func maskedHistory(h []records.RecordChange, hidden []platform.FieldInfo) []records.RecordChange {
 	if len(hidden) == 0 {
 		return h
 	}
-	out := make([]RecordChange, 0, len(h))
+	out := make([]records.RecordChange, 0, len(h))
 	for _, c := range h {
-		c.Fields = slices.DeleteFunc(slices.Clone(c.Fields), func(f FieldChange) bool {
+		c.Fields = slices.DeleteFunc(slices.Clone(c.Fields), func(f records.FieldChange) bool {
 			return slices.ContainsFunc(hidden, func(x platform.FieldInfo) bool { return x.Name == f.Field })
 		})
 		out = append(out, c)
@@ -157,163 +156,9 @@ func maskedHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange
 	return out
 }
 
-// A row and its nested values are immutable once stored. Writers replace it;
-// readers that expose editable values copy them at the API boundary.
-type row struct {
-	value         reflect.Value // the entity struct, a private copy
-	historyParent *row
-	historyHead   string
-	format        string
-	history       []RecordChange
-	loadHistory   func(int) []RecordChange
-	historyCount  int
-	// Recovery bytes preserve an accepted predecessor's identity when typed
-	// decoding normalises its definition. The next mutation writes only the
-	// current format; these bytes have no writable or executable API.
-	original   json.RawMessage
-	projection *recordProjection
-	extraction *extractionOrigin
-}
-
-type extractionOrigin struct {
-	Migration string `json:"migration"`
-	Source    string `json:"source"`
-	Step      int    `json:"step"`
-}
-
-// A migration retains the source release's read image while its target facts
-// are accepted in batches. Only that exact shape can select this projection.
-type recordProjection struct {
-	Format string             `json:"format,omitempty"`
-	From   string             `json:"from"`
-	Shape  string             `json:"shape"`
-	Value  json.RawMessage    `json:"value"`
-	Prior  []recordProjection `json:"prior,omitempty"`
-}
-
-func cloneRecordProjection(p *recordProjection) *recordProjection {
-	if p == nil {
-		return nil
-	}
-	copy := &recordProjection{Format: p.Format, From: p.From, Shape: p.Shape, Value: slices.Clone(p.Value)}
-	for _, prior := range p.Prior {
-		copy.Prior = append(copy.Prior, *cloneRecordProjection(&prior))
-	}
-	return copy
-}
-
-func projectionFor(p *recordProjection, release string) *recordProjection {
-	if p == nil {
-		return nil
-	}
-	if p.From == release {
-		return p
-	}
-	for i := range p.Prior {
-		if p.Prior[i].From == release {
-			return &p.Prior[i]
-		}
-	}
-	return nil
-}
-
-// Source values remain facts of their release. Only the common record header
-// follows subsequent accepted writes, so every image names the same record.
-func refreshRecordProjection(p *recordProjection, value any) *kernel.Error {
-	if p == nil {
-		return nil
-	}
-	var header map[string]json.RawMessage
-	if json.Unmarshal(jsonOf(value), &header) != nil {
-		return migrationRefusal(fmt.Errorf("versioned record header is invalid"))
-	}
-	refresh := func(image *recordProjection) *kernel.Error {
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(image.Value, &fields) != nil {
-			return migrationRefusal(fmt.Errorf("versioned source image is invalid"))
-		}
-		for _, name := range []string{"id", "revision", "created", "changed", "archived", "versionPins"} {
-			if value, present := header[name]; present {
-				fields[name] = value
-			} else {
-				delete(fields, name)
-			}
-		}
-		raw, err := json.Marshal(fields)
-		image.Value = raw
-		return migrationRefusal(err)
-	}
-	if err := refresh(p); err != nil {
-		return err
-	}
-	for i := range p.Prior {
-		if err := refresh(&p.Prior[i]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func rowDecodeImage(info platform.EntityInfo, value json.RawMessage, projection *recordProjection, release string) (json.RawMessage, error) {
-	if projection == nil {
-		return value, nil
-	}
-	shape, err := acceptance.Digest(info.Fields)
-	if err != nil {
-		return nil, err
-	}
-	var actual platform.Record
-	if json.Unmarshal(value, &actual) != nil {
-		return nil, fmt.Errorf("versioned record identity is invalid")
-	}
-	seen := map[string]bool{}
-	images := append([]recordProjection{*projection}, projection.Prior...)
-	for i, image := range images {
-		if image.From == "" || image.Shape == "" || len(image.Value) == 0 || seen[image.From] || i > 0 && len(image.Prior) != 0 {
-			return nil, fmt.Errorf("incomplete or duplicate versioned record projection")
-		}
-		seen[image.From] = true
-		var view platform.Record
-		if json.Unmarshal(image.Value, &view) != nil || !reflect.DeepEqual(actual, view) {
-			return nil, fmt.Errorf("versioned record projection identity differs")
-		}
-	}
-	if selected := projectionFor(projection, release); selected != nil && shape == selected.Shape {
-		return selected.Value, nil
-	}
-	return value, nil
-}
-
-func (r *row) image() (json.RawMessage, error) {
-	if len(r.original) > 0 {
-		return slices.Clone(r.original), nil
-	}
-	return json.Marshal(r.value.Interface())
-}
-
-func (r *row) retainOriginal(raw json.RawMessage) {
-	decoded, err := json.Marshal(r.value.Interface())
-	before, beforeErr := acceptance.Digest(raw)
-	after, afterErr := acceptance.Digest(json.RawMessage(decoded))
-	if err == nil && beforeErr == nil && afterErr == nil && before != after {
-		r.original = slices.Clone(raw)
-	}
-}
-
-// RecordChange is one decision's change to a record: the fields it set.
-type RecordChange struct {
-	Change string        `json:"change"`
-	Schema string        `json:"schema"`
-	By     string        `json:"by"`
-	At     time.Time     `json:"at"`
-	Fields []FieldChange `json:"fields"`
-}
-
-type FieldChange struct {
-	Field  string          `json:"field"`
-	Before json.RawMessage `json:"before,omitempty"`
-	After  json.RawMessage `json:"after,omitempty"`
-}
+// Public response names remain stable; internal consumers use the records owner.
+type RecordChange = records.RecordChange
+type FieldChange = records.FieldChange
 
 func newRecordStore() *recordStore {
 	return &recordStore{types: map[string]*entityType{}, byGo: map[reflect.Type]*entityType{}}
@@ -341,18 +186,6 @@ func (s *recordStore) forkRecordsLocked() *recordStore {
 		draft.byGo[et.info.Go] = copied
 	}
 	return draft
-}
-
-func copyHistory(history []RecordChange) []RecordChange {
-	out := slices.Clone(history)
-	for i := range out {
-		out[i].Fields = slices.Clone(history[i].Fields)
-		for j := range out[i].Fields {
-			out[i].Fields[j].Before = slices.Clone(history[i].Fields[j].Before)
-			out[i].Fields[j].After = slices.Clone(history[i].Fields[j].After)
-		}
-	}
-	return out
 }
 
 // promoteRecords makes a staged view visible after its result is durable.
@@ -430,7 +263,7 @@ func (s *recordStore) declare(a platform.App) error {
 		if s.types[e.Type] != nil || s.byGo[info.Go] != nil {
 			return fmt.Errorf("entity %s is declared twice", e.Type)
 		}
-		et := &entityType{store: s, info: info, rows: records.Index[*row]{}, knowledge: knowledgeBearing(info)}
+		et := &entityType{store: s, info: info, rows: records.Index[*records.Row]{}, knowledge: knowledgeBearing(info)}
 		s.types[e.Type], s.byGo[info.Go] = et, et
 		s.generation++
 	}
@@ -518,10 +351,6 @@ func emptyLists(v reflect.Value) {
 	}
 }
 
-func recordOf(v reflect.Value) *platform.Record {
-	return v.Field(0).Addr().Interface().(*platform.Record)
-}
-
 func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -538,7 +367,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	v := copyOf(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
 	emptyLists(v)
-	rec := recordOf(v)
+	rec := records.Header(v)
 	if rec.ID == "" {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -547,7 +376,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	}
 	stamp := platform.Stamp{By: r.GetSubmission().GetPrincipalId(), At: r.GetRecordedTime().AsTime(), Change: r.GetChangeId()}
 	prev := et.rows.Get(rec.ID)
-	change := RecordChange{Change: r.GetChangeId(), Schema: r.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []FieldChange{}}
+	change := records.RecordChange{Change: r.GetChangeId(), Schema: r.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []records.FieldChange{}}
 	// The revision is the kernel's (K4 C12): the decisions naming the record as
 	// their target, which clients send back as the revision they saw.
 	rec.Changed, rec.Created, rec.Revision = stamp, stamp, 0
@@ -564,36 +393,36 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		}
 	}
 	if prev != nil {
-		old := recordOf(prev.value)
+		old := records.Header(prev.Value)
 		rec.Created, rec.Revision = old.Created, old.Revision
 		if old.Archived != rec.Archived {
-			change.Fields = append(change.Fields, FieldChange{Field: "archived", Before: jsonOf(old.Archived), After: jsonOf(rec.Archived)})
+			change.Fields = append(change.Fields, records.FieldChange{Field: "archived", Before: jsonOf(old.Archived), After: jsonOf(rec.Archived)})
 		}
 	}
 	for _, f := range et.info.Fields {
 		after := jsonOf(v.FieldByIndex(f.Index).Interface())
 		var before json.RawMessage
 		if prev != nil {
-			before = jsonOf(prev.value.FieldByIndex(f.Index).Interface())
+			before = jsonOf(prev.Value.FieldByIndex(f.Index).Interface())
 		}
 		if string(before) != string(after) && !(prev == nil && v.FieldByIndex(f.Index).IsZero()) {
-			change.Fields = append(change.Fields, FieldChange{Field: f.Name, Before: before, After: after})
+			change.Fields = append(change.Fields, records.FieldChange{Field: f.Name, Before: before, After: after})
 		}
 	}
 	if named {
 		rec.Revision = r.GetRevision()
 	}
-	var projection *recordProjection
-	var extraction *extractionOrigin
+	var projection *records.Projection
+	var extraction *records.Extraction
 	if prev != nil {
-		extraction = prev.extraction
-		projection = cloneRecordProjection(prev.projection)
-		if err := refreshRecordProjection(projection, v.Interface()); err != nil {
-			return err
+		extraction = prev.Extraction
+		projection = records.CloneProjection(prev.Projection)
+		if err := records.RefreshProjection(projection, v.Interface()); err != nil {
+			return migrationRefusal(err)
 		}
 	}
-	next := &row{value: v, format: et.info.RecordFormat, projection: projection, extraction: extraction}
-	if err := appendRowHistory(next, prev, []RecordChange{change}); err != nil {
+	next := &records.Row{Value: v, Format: et.info.RecordFormat, Projection: projection, Extraction: extraction}
+	if err := records.AppendRowHistory(next, prev, []records.RecordChange{change}); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	et.setRow(rec.ID, next)
@@ -621,7 +450,7 @@ func (s *recordStore) get(c platform.Caller, t reflect.Type, id string) (any, bo
 	if et == nil || et.rows.Get(id) == nil {
 		return nil, false
 	}
-	return copyOf(t, et.rows.Get(id).value.Interface()).Interface(), true
+	return copyOf(t, et.rows.Get(id).Value.Interface()).Interface(), true
 }
 
 // check validates an entity against its declaration (Caller.Check).
@@ -636,8 +465,8 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 	v := copyOf(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
 	previous := reflect.Value{}
-	if old := et.rows.Get(recordOf(v).ID); old != nil {
-		previous = old.value
+	if old := et.rows.Get(records.Header(v).ID); old != nil {
+		previous = old.Value
 	}
 	if err := checkEnterpriseReferences(c, et.info.Fields, v, previous, now); err != nil {
 		return err
@@ -845,53 +674,15 @@ func previousLine(record reflect.Value, field platform.FieldInfo, current reflec
 
 // find selects records of a type; visible, when set, is the caller's scope.
 func (s *recordStore) find(et *entityType, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, int, *kernel.Error) {
-	var sorts []sortKey
-	for _, name := range q.Sort {
-		desc := strings.HasPrefix(name, "-")
-		bare := strings.TrimPrefix(name, "-")
-		f, ok := et.info.Field(bare)
-		if !ok && bare != "id" && bare != "created" && bare != "changed" {
-			return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-		}
-		sorts = append(sorts, sortKey{field: f, stamp: map[bool]string{true: bare, false: ""}[!ok], desc: desc})
-	}
-	out, err := s.matchingQuery(et, q, visible)
+	order, err := records.CompileOrder(et.info, q.Sort)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	keys := make([][]any, len(out)) // sort keys read once, then compared
-	for i, v := range out {
-		for _, k := range sorts {
-			keys[i] = append(keys[i], k.of(v))
-		}
-		keys[i] = append(keys[i], recordOf(v).ID)
+	out, refusal := s.matchingQuery(et, q, visible)
+	if refusal != nil {
+		return nil, 0, refusal
 	}
-	index := make([]int, len(out))
-	for i := range index {
-		index[i] = i
-	}
-	slices.SortFunc(index, func(a, b int) int {
-		for j := range keys[a] {
-			c := compareValues(keys[a][j], keys[b][j])
-			if j < len(sorts) && sorts[j].desc {
-				c = -c
-			}
-			if c != 0 {
-				return c
-			}
-		}
-		return 0
-	})
-	total := len(out)
-	start := min(max(q.Offset, 0), total)
-	end := total
-	if q.Limit > 0 {
-		end = min(start+q.Limit, total)
-	}
-	page := make([]reflect.Value, 0, end-start)
-	for _, i := range index[start:end] {
-		page = append(page, out[i])
-	}
+	page, total := order.Window(out, q.Offset, q.Limit)
 	return page, total, nil
 }
 
@@ -899,7 +690,7 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 	if err := q.CheckSet(); err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	match, err := compileRecordSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set})
+	match, err := records.CompileSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set})
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -908,12 +699,12 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 		return nil, refusal
 	}
 	var out []reflect.Value
-	visit := func(r *row) {
+	visit := func(r *records.Row) {
 		if r == nil {
 			return
 		}
-		v := r.value
-		if !q.Archived && recordOf(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match(v) {
+		v := r.Value
+		if !q.Archived && records.Header(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match(v) {
 			return
 		}
 		out = append(out, v)
@@ -963,294 +754,6 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 	}
 
 	return out, nil
-}
-
-// One predicate evaluates all source sets against one authorized row. Every
-// branch is compiled using the member's field projection before any row runs.
-func compileRecordSet(info platform.EntityInfo, p platform.RecordSetPredicate) (func(reflect.Value) bool, error) {
-	domain, err := compileDomain(info, p.Domain)
-	if err != nil {
-		return nil, err
-	}
-	search := strings.ToLower(strings.TrimSpace(p.Search))
-	var searched []platform.FieldInfo
-	for _, f := range info.Fields {
-		if f.Search {
-			searched = append(searched, f)
-		}
-	}
-	base := func(v reflect.Value) bool {
-		return domain(v) && (search == "" || strings.Contains(strings.ToLower(recordOf(v).ID), search) || slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
-			return strings.Contains(strings.ToLower(searchable(f, v.FieldByIndex(f.Index).Interface())), search)
-		}))
-	}
-	if p.Set == nil {
-		return base, nil
-	}
-	// CheckSet bounds the shape before this compiler is called.
-	left, err := compileRecordSet(info, *p.Set.Inputs[0])
-	if err != nil {
-		return nil, err
-	}
-	right, err := compileRecordSet(info, *p.Set.Inputs[1])
-	if err != nil {
-		return nil, err
-	}
-	switch p.Set.Op {
-	case "union":
-		return func(v reflect.Value) bool { return base(v) && (left(v) || right(v)) }, nil
-	case "intersect":
-		return func(v reflect.Value) bool { return base(v) && left(v) && right(v) }, nil
-	case "subtract":
-		return func(v reflect.Value) bool { return base(v) && left(v) && !right(v) }, nil
-	}
-	return nil, fmt.Errorf("unsupported record set operation")
-}
-
-type sortKey struct {
-	field platform.FieldInfo
-	stamp string // id, created, changed: the record's own
-	desc  bool
-}
-
-func (k sortKey) of(v reflect.Value) any {
-	switch k.stamp {
-	case "id":
-		return recordOf(v).ID
-	case "created":
-		return recordOf(v).Created.At
-	case "changed":
-		return recordOf(v).Changed.At
-	}
-	return comparable(k.field, v.FieldByIndex(k.field.Index).Interface())
-}
-
-// comparable is a field value as it is compared and sorted: strings, numbers,
-// times; money by its amount.
-func comparable(f platform.FieldInfo, v any) any {
-	if v != nil {
-		rv := reflect.ValueOf(v)
-		for rv.Kind() == reflect.Pointer {
-			if rv.IsNil() {
-				return nil
-			}
-			rv = rv.Elem()
-		}
-		v = rv.Interface()
-	}
-	switch x := v.(type) {
-	case platform.Money:
-		return float64(x.Amount)
-	case time.Time:
-		return x
-	case bool:
-		if x {
-			return 1.0
-		}
-		return 0.0
-	}
-	if v == nil {
-		return nil
-	}
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return float64(rv.Int())
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return float64(rv.Uint())
-	case reflect.Float32, reflect.Float64:
-		return rv.Float()
-	case reflect.String:
-		return rv.String()
-	}
-	return fmt.Sprint(v)
-}
-
-func searchable(f platform.FieldInfo, v any) string {
-	x := comparable(f, v)
-	if x == nil {
-		return ""
-	}
-	return fmt.Sprint(x)
-}
-
-func compareValues(a, b any) int {
-	if a == nil {
-		if b == nil {
-			return 0
-		}
-		return -1
-	}
-	if b == nil {
-		return 1
-	}
-	switch x := a.(type) {
-	case float64:
-		y, _ := b.(float64)
-		switch {
-		case x < y:
-			return -1
-		case x > y:
-			return 1
-		}
-		return 0
-	case time.Time:
-		y, _ := b.(time.Time)
-		return x.Compare(y)
-	}
-	return strings.Compare(fmt.Sprint(a), fmt.Sprint(b))
-}
-
-// compileDomain turns a domain in Odoo's prefix form into a predicate (D7):
-// [["field", "op", value], "|", [...], [...], "!", [...]]; terms not joined
-// by an operator are joined by "&". Operators: = != < <= > >= in "not in" like.
-func compileDomain(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Value) bool, error) {
-	all := func(reflect.Value) bool { return true }
-	if len(raw) == 0 || string(raw) == "null" {
-		return all, nil
-	}
-	var terms []json.RawMessage
-	if err := json.Unmarshal(raw, &terms); err != nil {
-		return nil, err
-	}
-	type pred = func(reflect.Value) bool
-	var stack []pred
-	for i := len(terms) - 1; i >= 0; i-- {
-		var op string
-		if json.Unmarshal(terms[i], &op) == nil {
-			switch {
-			case op == "!" && len(stack) >= 1:
-				p := stack[len(stack)-1]
-				stack[len(stack)-1] = func(v reflect.Value) bool { return !p(v) }
-			case (op == "&" || op == "|") && len(stack) >= 2:
-				a, b := stack[len(stack)-1], stack[len(stack)-2]
-				stack = stack[:len(stack)-2]
-				if op == "&" {
-					stack = append(stack, func(v reflect.Value) bool { return a(v) && b(v) })
-				} else {
-					stack = append(stack, func(v reflect.Value) bool { return a(v) || b(v) })
-				}
-			default:
-				return nil, fmt.Errorf("operator %q without its terms", op)
-			}
-			continue
-		}
-		p, err := condition(info, terms[i])
-		if err != nil {
-			return nil, err
-		}
-		stack = append(stack, p)
-	}
-	return func(v reflect.Value) bool {
-		for _, p := range stack {
-			if !p(v) {
-				return false
-			}
-		}
-		return true
-	}, nil
-}
-
-func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Value) bool, error) {
-	var term []json.RawMessage
-	var name, op string
-	if json.Unmarshal(raw, &term) != nil || len(term) != 3 || json.Unmarshal(term[0], &name) != nil || json.Unmarshal(term[1], &op) != nil {
-		return nil, fmt.Errorf("a condition is [field, operator, value]")
-	}
-	f, ok := info.Field(name)
-	read := func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface() }
-	switch {
-	case name == "id":
-		f, read = platform.FieldInfo{Name: "id", Type: "text"}, func(v reflect.Value) any { return recordOf(v).ID }
-	case name == "created" || name == "changed": // the record's stamps, as datetimes
-		f, read = platform.FieldInfo{Name: name, Type: "datetime"}, func(v reflect.Value) any {
-			if name == "created" {
-				return recordOf(v).Created.At
-			}
-			return recordOf(v).Changed.At
-		}
-	case !ok:
-		return nil, fmt.Errorf("unknown field %s", name)
-	}
-	if value, ok := platform.DecimalLiteral(term[2]); ok {
-		return value.Condition(f, op, read)
-	}
-	var tagged map[string]json.RawMessage
-	if json.Unmarshal(term[2], &tagged) == nil && tagged != nil {
-		return nil, fmt.Errorf("invalid typed condition value")
-	}
-	var value any
-	if json.Unmarshal(term[2], &value) != nil {
-		return nil, fmt.Errorf("bad value")
-	}
-	if b, ok := value.(bool); ok { // compared as booleans are: 1 and 0
-		value = map[bool]float64{true: 1, false: 0}[b]
-	}
-	if f.Type == "datetime" {
-		if s, ok := value.(string); ok { // a time, or a day from its midnight (UTC)
-			t, err := time.Parse(time.RFC3339, s)
-			if err != nil {
-				if t, err = time.Parse(time.DateOnly, s); err != nil {
-					return nil, err
-				}
-			}
-			value = t
-		}
-	}
-	list := f.Type == "references" || f.Type == "tags"
-	items := func(v reflect.Value) []string {
-		var out []string
-		fv := v.FieldByIndex(f.Index)
-		for i := range fv.Len() {
-			out = append(out, fv.Index(i).String())
-		}
-		return out
-	}
-	values, _ := value.([]any)
-	in := func(x any) bool {
-		return slices.ContainsFunc(values, func(y any) bool { return compareValues(comparable(f, x), y) == 0 })
-	}
-	switch op {
-	case "=", "!=":
-		eq := func(v reflect.Value) bool {
-			if list {
-				return slices.Contains(items(v), fmt.Sprint(value))
-			}
-			return compareValues(comparable(f, read(v)), value) == 0
-		}
-		if op == "!=" {
-			return func(v reflect.Value) bool { return !eq(v) }, nil
-		}
-		return eq, nil
-	case "<", "<=", ">", ">=":
-		textual := f.Type != "integer" && f.Type != "decimal" && f.Type != "money" && f.Type != "boolean"
-		return func(v reflect.Value) bool {
-			x := comparable(f, read(v))
-			if x == nil || textual && reflect.ValueOf(x).IsZero() {
-				return false // an empty value is neither before nor after anything
-			}
-			c := compareValues(x, value)
-			return op == "<" && c < 0 || op == "<=" && c <= 0 || op == ">" && c > 0 || op == ">=" && c >= 0
-		}, nil
-	case "in", "not in":
-		if values == nil {
-			return nil, fmt.Errorf("%s needs a list", op)
-		}
-		has := func(v reflect.Value) bool {
-			if list {
-				return slices.ContainsFunc(items(v), func(x string) bool { return in(x) })
-			}
-			return in(read(v))
-		}
-		if op == "not in" {
-			return func(v reflect.Value) bool { return !has(v) }, nil
-		}
-		return has, nil
-	case "like":
-		s := strings.ToLower(fmt.Sprint(value))
-		return func(v reflect.Value) bool { return strings.Contains(strings.ToLower(searchable(f, read(v))), s) }, nil
-	}
-	return nil, fmt.Errorf("unknown operator %s", op)
 }
 
 // Runtime: apps put and read their own records.
@@ -1332,7 +835,7 @@ func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, n
 		return false
 	}
 	visible, err := t.visibleIn(store, m, et, now)
-	return err == nil && (visible == nil || visible(r.value))
+	return err == nil && (visible == nil || visible(r.Value))
 }
 
 // Readable reports whether m may read the record ref ("<type>/<id>").
@@ -1396,7 +899,7 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, roles []string, now t
 		return func(reflect.Value) bool { return false }, nil
 	case platform.ScopeOwn:
 		if scope.Owner == platform.OwnerCreated { // whoever's decision created it (ADR-0044)
-			return func(v reflect.Value) bool { return recordOf(v).Created.By == m.ID }, nil
+			return func(v reflect.Value) bool { return records.Header(v).Created.By == m.ID }, nil
 		}
 		owner := field(scope.Owner)
 		return func(v reflect.Value) bool { return owner(v) == m.ID }, nil
@@ -1507,7 +1010,7 @@ func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ stri
 			narrowed, _ := w.derive(et, reflect.ValueOf(out.Records[i]))
 			out.Records[i] = narrowed.Interface()
 		}
-		ids = append(ids, recordOf(v).ID)
+		ids = append(ids, records.Header(v).ID)
 	}
 	t.readPersonal(m, view, ids, now)
 	return out, nil
@@ -1577,16 +1080,16 @@ func (t *Tenant) EnterpriseReferences(m platform.Member, element string, offset,
 		s.mu.Lock()
 		rows := make([]reflect.Value, 0, et.rows.Len())
 		for _, r := range et.rows.All() {
-			if visible == nil || visible(r.value) { // nil: the member's roles read the whole type
-				rows = append(rows, r.value)
+			if visible == nil || visible(r.Value) { // nil: the member's roles read the whole type
+				rows = append(rows, r.Value)
 			}
 		}
 		s.mu.Unlock()
-		slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(recordOf(a).ID, recordOf(b).ID) })
+		slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(records.Header(a).ID, records.Header(b).ID) })
 		byPath := map[string]*EnterpriseReferenceGroup{}
 		var order []string
 		for _, r := range rows {
-			id := recordOf(r).ID
+			id := records.Header(r).ID
 			name := ""
 			readable := masked(et, r, hidden)
 			seen := map[string]bool{}
@@ -1741,20 +1244,20 @@ func recordLabel(et *entityType, value any, id string) string {
 // the app's other types that refer to it, and the processes about it the
 // member may read (ADR-0006 D4).
 type RecordView struct {
-	Effective   *bool             `json:"effective,omitempty"`
-	Values      map[string]any    `json:"values,omitempty"`
-	ValueErrors map[string]string `json:"valueErrors,omitempty"`
-	Record      any               `json:"record"`
-	History     []RecordChange    `json:"history"`
-	Related     []Related         `json:"related"`
-	Processes   []any             `json:"processes"`
-	Approvals   []any             `json:"approvals"` // requests to move it, newest first (F-38)
-	Tasks       []any             `json:"tasks"`     // open tasks about it the member may take, to answer from its page
-	Files       []any             `json:"files"`     // attached to it (ADR-0038)
-	Comments    []any             `json:"comments"`  // on it, oldest first (ADR-0038)
-	Following   bool              `json:"following"` // the member follows it
-	Linked      []Related         `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
-	Activity    []any             `json:"activity"`  // what apps told about it through protocols (platform.RelationNote), oldest first
+	Effective   *bool                  `json:"effective,omitempty"`
+	Values      map[string]any         `json:"values,omitempty"`
+	ValueErrors map[string]string      `json:"valueErrors,omitempty"`
+	Record      any                    `json:"record"`
+	History     []records.RecordChange `json:"history"`
+	Related     []Related              `json:"related"`
+	Processes   []any                  `json:"processes"`
+	Approvals   []any                  `json:"approvals"` // requests to move it, newest first (F-38)
+	Tasks       []any                  `json:"tasks"`     // open tasks about it the member may take, to answer from its page
+	Files       []any                  `json:"files"`     // attached to it (ADR-0038)
+	Comments    []any                  `json:"comments"`  // on it, oldest first (ADR-0038)
+	Following   bool                   `json:"following"` // the member follows it
+	Linked      []Related              `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
+	Activity    []any                  `json:"activity"`  // what apps told about it through protocols (platform.RelationNote), oldest first
 }
 
 type Related struct {
@@ -1786,23 +1289,23 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	s.mu.Lock()
 	r := et.rows.Get(id)
-	readable := r != nil && (visible == nil || visible(r.value))
+	readable := r != nil && (visible == nil || visible(r.Value))
 	s.mu.Unlock()
 	if !readable {
 		return RecordView{}, notFound
 	}
 	seen, hidden := viewOf(m, et)
-	record := masked(et, r.value, hidden)
+	record := masked(et, r.Value, hidden)
 	if et.info.HasReadSources() || len(et.info.VersionPins) > 0 {
 		narrowed, _ := t.narrower(m, now, false).derive(et, reflect.ValueOf(record))
 		record = narrowed.Interface()
 	}
 	values, valueErrors := propertyValues(seen.info, record)
-	view := RecordView{Values: values, ValueErrors: valueErrors, Record: record, History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
+	view := RecordView{Values: values, ValueErrors: valueErrors, Record: record, History: []records.RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
 	if versioning := et.info.Versioning; versioning != nil {
 		field, _ := et.info.Field(versioning.ValidFrom)
 		clock := businessQuery(et.info, platform.Query{}, m, now).BusinessTime.At
-		active, _ := platform.EffectiveAt(field.Type, businessField(et.info, r.value, versioning.ValidFrom), businessField(et.info, r.value, versioning.ValidUntil), clock)
+		active, _ := platform.EffectiveAt(field.Type, businessField(et.info, r.Value, versioning.ValidFrom), businessField(et.info, r.Value, versioning.ValidUntil), clock)
 		view.Effective = &active
 	}
 	if c := t.app(platform.RelationsApp); c != nil && typ != platform.CommentType && typ != platform.FollowType {
@@ -1840,7 +1343,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 			view.Approvals = page.Records
 		}
 	}
-	history := maskedHistory(copyHistory(r.recordHistory()), hidden)
+	history := maskedHistory(records.CopyHistory(r.RecordHistory()), hidden)
 	for i := len(history) - 1; i >= 0; i-- {
 		view.History = append(view.History, history[i])
 	}

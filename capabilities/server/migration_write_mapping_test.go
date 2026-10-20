@@ -4,6 +4,7 @@ import "platformserver/internal/construction"
 
 import (
 	"bytes"
+	"platformserver/internal/records"
 	"testing"
 	"time"
 
@@ -135,22 +136,22 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			point := pointExecution.(flowExecution)
 			pointCaller := pointExecution.Caller(pointParent, memberOf(t, tn, "user"), construction.ID)
 			current := pointDraft.records.types["build.sample"]
-			newValue := copyOf(current.info.Go, current.rows.Get("A").value.Interface())
-			recordOf(newValue).ID = "new-only"
-			current.setRow("new-only", &row{value: newValue})
+			newValue := copyOf(current.info.Go, current.rows.Get("A").Value.Interface())
+			records.Header(newValue).ID = "new-only"
+			current.setRow("new-only", &records.Row{Value: newValue})
 			shape := point.rt.shapes["build.sample"]
 			value, found := point.rt.Get(pointCaller, shape.Go, "A")
 			if !found || value == nil || pointDraft.failure != nil {
 				t.Fatal("single retained read visited an unrelated target-only row", pointDraft.failure)
 			}
-			beforeRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows.Get("A"))
+			beforeRejected, _ := records.FullImage("build.sample", "A", draft.records.types["build.sample"].rows.Get("A"))
 			_, invalid := platform.Attempt(caller, func() (*pb.ChangeRecord, *kernel.Error) {
 				return execution.Submit(caller, submission(tn, caller.Member, construction.ID, "build.sample.edit", "build.sample", "A", map[string]any{"value": "unmapped"}), at)
 			})
 			if invalid == nil {
 				t.Fatal("invalid retained conversion accepted")
 			}
-			afterRejected, _ := acceptedRowOf("build.sample", "A", draft.records.types["build.sample"].rows.Get("A"))
+			afterRejected, _ := records.FullImage("build.sample", "A", draft.records.types["build.sample"].rows.Get("A"))
 			if !bytes.Equal(jsonOf(beforeRejected), jsonOf(afterRejected)) {
 				t.Fatal("invalid conversion exposed a partial target or source image")
 			}
@@ -165,11 +166,11 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			if reference {
 				want = "b"
 			}
-			if businessField(et.info, et.rows.Get("A").value, "state") != "done" || businessField(et.info, et.rows.Get("A").value, "value") != want {
+			if businessField(et.info, et.rows.Get("A").Value, "state") != "done" || businessField(et.info, et.rows.Get("A").Value, "value") != want {
 				instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:A")
-				t.Fatalf("old conversion did not finish: %s; flow: %s", jsonOf(et.rows.Get("A").value.Interface()), jsonOf(instance))
+				t.Fatalf("old conversion did not finish: %s; flow: %s", jsonOf(et.rows.Get("A").Value.Interface()), jsonOf(instance))
 			}
-			source := projectionFor(et.rows.Get("A").projection, from)
+			source := records.ProjectionFor(et.rows.Get("A").Projection, from)
 			if source == nil || !bytes.Contains(source.Value, []byte(`"value":"`+nextValue+`"`)) {
 				t.Fatalf("old source write was lost: %+v", source)
 			}
@@ -177,8 +178,8 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			if err := recovered.Replay(entries); err != nil {
 				t.Fatal(err)
 			}
-			before, _ := acceptedRowOf(et.info.Type, "A", et.rows.Get("A"))
-			after, _ := acceptedRowOf(et.info.Type, "A", recovered.records.types[et.info.Type].rows.Get("A"))
+			before, _ := records.FullImage(et.info.Type, "A", et.rows.Get("A"))
+			after, _ := records.FullImage(et.info.Type, "A", recovered.records.types[et.info.Type].rows.Get("A"))
 			if !bytes.Equal(jsonOf(before), jsonOf(after)) {
 				t.Fatal("recovery reran the conversion")
 			}

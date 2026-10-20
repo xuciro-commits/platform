@@ -92,14 +92,14 @@ func (b *Build) checkObjectProtocols(object construction.Object) error {
 		for _, bindings := range []map[string]string{declaration.Actions, declaration.Events} {
 			for verb, action := range bindings {
 				_, exists := catalog.Action(entity.Type + "." + action)
-				if !named(verb) || !exists {
+				if !construction.Named(verb) || !exists {
 					return fmt.Errorf("Protocol %s maps %s to an undeclared object action", id, verb)
 				}
 			}
 		}
 		reads := map[string]bool{}
 		for _, read := range declaration.Reads {
-			if !named(read) || reads[read] {
+			if !construction.Named(read) || reads[read] {
 				return fmt.Errorf("Protocol reads must be unique named record projections")
 			}
 			reads[read] = true

@@ -30,7 +30,7 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	if et == nil || et.rows.Get(id) == nil {
 		return "", fmt.Errorf("release metadata needs its predecessor %s", record)
 	}
-	image, err := et.rows.Get(id).image()
+	image, err := et.rows.Get(id).Image()
 	if err != nil {
 		return "", err
 	}
@@ -82,8 +82,8 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 			return nil, err
 		}
 		installed := *et.rows.Get(id)
-		installed.value, installed.original = value, nil
-		installed.retainOriginal(plan.Image)
+		installed.Value, installed.Original = value, nil
+		installed.RetainOriginal(plan.Image)
 		et.setRow(id, &installed)
 		draft.records.writes[plan.Record] = true
 		if err := draft.registerInstalledAsset(plan); err != nil {
@@ -97,9 +97,9 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 	return draft, nil
 }
 
-func (t *Tenant) assetInstallationView(records *recordStore) (*Tenant, error) {
+func (t *Tenant) assetInstallationView(recordView *recordStore) (*Tenant, error) {
 	draft := (hostView{t: t}).installationDraft()
-	draft.records = records.forkRecords()
+	draft.records = recordView.forkRecords()
 	var control tenantState
 	t.console.snapshot(&control)
 	draft.console.restore(&control)

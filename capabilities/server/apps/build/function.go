@@ -25,7 +25,7 @@ func (b *Build) functionEntity() platform.Entity {
 }
 
 func (b *Build) checkFunction(f construction.Function) error {
-	if !named(f.Name) {
+	if !construction.Named(f.Name) {
 		return fmt.Errorf("The function name %s must be lower-case letters and digits", f.Name)
 	}
 	_, installed := b.installed[f.Object]
@@ -51,12 +51,12 @@ func (b *Build) checkFunction(f construction.Function) error {
 		return err
 	}
 	for _, other := range list {
-		installed, _ := wasPublished[construction.Function](other.Published)
+		installed, _ := construction.ReadPublication[construction.Function](other.Published)
 		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
 			return fmt.Errorf("Function %s is already declared", f.Name)
 		}
 	}
-	if old, ok := wasPublished[construction.Function](f.Published); ok && (old.Name != f.Name || old.Object != f.Object) {
+	if old, ok := construction.ReadPublication[construction.Function](f.Published); ok && (old.Name != f.Name || old.Object != f.Object) {
 		return fmt.Errorf("A published function keeps its name and source object")
 	}
 	return nil

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"sync"
@@ -154,8 +155,8 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 		}
 	}
 	put(tn.records, "c1", 1, 2)
-	untouched := &row{value: reflect.ValueOf(Item{Record: platform.Record{ID: "I2"}, Tags: []string{"steel"}}),
-		original: json.RawMessage(`{"id":"I2"}`), projection: &recordProjection{From: "old", Value: json.RawMessage(`{"id":"I2"}`)}}
+	untouched := &records.Row{Value: reflect.ValueOf(Item{Record: platform.Record{ID: "I2"}, Tags: []string{"steel"}}),
+		Original: json.RawMessage(`{"id":"I2"}`), Projection: &records.Projection{From: "old", Value: json.RawMessage(`{"id":"I2"}`)}}
 	et := tn.records.types["stock.item"]
 	et.setRow("I2", untouched)
 	var touched []string
@@ -168,9 +169,9 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	read.(Item).Tags[0] = "mutated"
 	held, _ := tn.Held("stock.item/I2")
 	held.(Item).Tags[0] = "mutated"
-	visible := masked(et, untouched.value, nil).(Item)
+	visible := masked(et, untouched.Value, nil).(Item)
 	visible.Tags[0] = "mutated"
-	if untouched.value.Interface().(Item).Tags[0] != "steel" {
+	if untouched.Value.Interface().(Item).Tags[0] != "steel" {
 		t.Fatal("read boundary exposed a mutable accepted value")
 	}
 	put(discarded, "discarded", 2, 99)
@@ -185,7 +186,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	}
 	child := draft.forkRecords()
 	put(child, "nested", 3, 7)
-	if draft.types["stock.item"].rows.Get("I1").value.Interface().(Item).Qty != 3 || child.types["stock.item"].rows.Get("I2") != untouched {
+	if draft.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Qty != 3 || child.types["stock.item"].rows.Get("I2") != untouched {
 		t.Fatal("discarded nested write changed its parent or unrelated rows")
 	}
 	if got := len(touched); got != 0 {
@@ -196,15 +197,15 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	if live.(Item).Qty != 2 || staged.(Item).Qty != 3 {
 		t.Fatalf("draft leaked into live records: live=%+v staged=%+v", live, staged)
 	}
-	if tn.records.types["stock.item"].rows.Get("I1").historyLength() != 1 {
+	if tn.records.types["stock.item"].rows.Get("I1").HistoryLength() != 1 {
 		t.Fatal("draft changed live history before promotion")
 	}
-	draft.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] ^= 1
-	if draft.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] ==
-		tn.records.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] {
+	draft.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] ^= 1
+	if draft.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] ==
+		tn.records.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] {
 		t.Fatal("draft shares history bytes with live store")
 	}
-	draft.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] ^= 1
+	draft.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] ^= 1
 	if err := tn.records.promoteRecords(draft); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +213,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 		t.Fatalf("projected rows after promotion: %v", touched)
 	}
 	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
-	if live.(Item).Qty != 3 || tn.records.types["stock.item"].rows.Get("I1").historyLength() != 2 {
+	if live.(Item).Qty != 3 || tn.records.types["stock.item"].rows.Get("I1").HistoryLength() != 2 {
 		t.Fatalf("accepted image or history missing: %+v", live)
 	}
 	if err := tn.records.promoteRecords(draft); err == nil {
@@ -240,7 +241,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 					t.Error("parent write changed a captured record")
 				}
 				for _, row := range captured.types["stock.item"].rows.All() {
-					_ = jsonOf(row.value.Interface())
+					_ = jsonOf(row.Value.Interface())
 				}
 			}
 		})

@@ -57,11 +57,11 @@ func (b *Build) FlowReleaseAsset(name string, version int) (platform.ReleaseAsse
 			continue
 		}
 		image, _ := json.Marshal(record)
-		if _, err := processImage(image); err != nil {
+		if _, err := construction.ReadProcessImage(image); err != nil {
 			return platform.ReleaseAsset{}, err
 		}
 		for _, raw := range record.Versions {
-			p, ok := wasPublished[construction.Process](raw)
+			p, ok := construction.ReadPublication[construction.Process](raw)
 			if ok && p.Name == name && p.Version == version {
 				return processReleaseAsset(p, b.Manifest().Version)
 			}
@@ -146,7 +146,7 @@ func (b *Build) PublishedPage(name string) (bool, error) {
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		saved, ok := wasPublished[Page](record.Published)
+		saved, ok := construction.ReadPublication[Page](record.Published)
 		if !ok {
 			return false, fmt.Errorf("invalid published page %s", record.ID)
 		}
@@ -160,7 +160,7 @@ func (b *Build) PublishedPage(name string) (bool, error) {
 func (b *Build) validateObjectInstallation(record construction.Object) error {
 	if processes := b.host.BuildProcesses(); processes != nil {
 		current, exists := platform.Get[construction.Object](b.host.Automation(platform.Caller{}, construction.ID), record.ID)
-		if previous, ok := wasPublished[construction.Object](current.Published); exists && ok {
+		if previous, ok := construction.ReadPublication[construction.Object](current.Published); exists && ok {
 			oldBody, err := definitionBody(previous, construction.TypeOf(previous.Name))
 			if err != nil {
 				return err
@@ -186,14 +186,14 @@ func (b *Build) validateObjectInstallation(record construction.Object) error {
 		return err
 	}
 	current, _ := platform.Get[construction.Object](b.host.Automation(platform.Caller{}, construction.ID), record.ID)
-	previous, _ := wasPublished[construction.Object](current.Published)
+	previous, _ := construction.ReadPublication[construction.Object](current.Published)
 	if !b.jointMode {
 		for _, process := range processes {
 			if process.Published == "" {
 				continue
 			}
 			raw, _ := json.Marshal(process)
-			installed, err := processImage(raw)
+			installed, err := construction.ReadProcessImage(raw)
 			if err != nil {
 				return err
 			}
@@ -225,7 +225,7 @@ func (b *Build) objectInstallationPages(record construction.Object) ([]platform.
 	if explicit {
 		return nil, "", nil
 	}
-	return []platform.Page{page(record)}, record.Name, nil
+	return []platform.Page{construction.CompileObjectPage(record)}, record.Name, nil
 }
 
 // releaseAssets uses the saved publication, never a later mutable draft. The
@@ -292,7 +292,7 @@ func releaseAssets(objects []construction.Object, pages []Page, apps []Applicati
 				return nil, err
 			}
 		}
-		pageAsset, err := platform.PageReleaseAsset(construction.ID, sourceVersion, page(saved))
+		pageAsset, err := platform.PageReleaseAsset(construction.ID, sourceVersion, construction.CompileObjectPage(saved))
 		if err != nil {
 			return nil, err
 		}
@@ -343,7 +343,7 @@ func releaseAssets(objects []construction.Object, pages []Page, apps []Applicati
 			continue
 		}
 		image, _ := json.Marshal(record)
-		saved, err := processImage(image)
+		saved, err := construction.ReadProcessImage(image)
 		if err != nil {
 			return nil, err
 		}

@@ -28,7 +28,7 @@ func (b *Build) captureObjectSchema(object *construction.Object) error {
 	}
 	var versions []platform.SchemaVersion
 	family := uint32(1)
-	if previous, exists := wasPublished[construction.Object](object.Published); exists {
+	if previous, exists := construction.ReadPublication[construction.Object](object.Published); exists {
 		versions = slices.Clone(previous.SchemaVersions)
 		if len(versions) == 0 {
 			portable, err := b.dispatchSchemaObject(previous)

@@ -43,7 +43,7 @@ func checkProcess(o construction.Object, lookup func(string) (platform.EntityInf
 	states := map[string]bool{}
 	for _, s := range o.States {
 		switch {
-		case !named(s.Name):
+		case !construction.Named(s.Name):
 			return fmt.Errorf("the state name %q is not lower-case letters and digits", s.Name)
 		case states[s.Name]:
 			return fmt.Errorf("the state %q is declared twice", s.Name)
@@ -66,7 +66,7 @@ func checkProcess(o construction.Object, lookup func(string) (platform.EntityInf
 		}
 		where := fmt.Sprintf("the action %q", a.Name)
 		switch {
-		case !named(a.Name):
+		case !construction.Named(a.Name):
 			return fmt.Errorf("the action name %q is not lower-case letters and digits", a.Name)
 		case seen[a.Name]:
 			return fmt.Errorf("%s is declared twice", where)
@@ -113,7 +113,7 @@ func checkProcess(o construction.Object, lookup func(string) (platform.EntityInf
 		inputs := map[string]construction.Input{}
 		for _, in := range a.Inputs {
 			switch {
-			case !named(in.Name):
+			case !construction.Named(in.Name):
 				return fmt.Errorf("%s: the input name %q is not lower-case letters and digits", where, in.Name)
 			case inputs[in.Name].Name != "":
 				return fmt.Errorf("%s: the input %q is declared twice", where, in.Name)
@@ -138,7 +138,7 @@ func checkProcess(o construction.Object, lookup func(string) (platform.EntityInf
 			} else if in.Ref != "" {
 				return fmt.Errorf("%s non-reference input cannot name a reference object", where)
 			}
-			if err := checkEnterpriseReference(in.Type, in.Ref, in.Stereotype, in.Stereotypes); err != nil {
+			if err := construction.CheckEnterpriseReference(in.Type, in.Ref, in.Stereotype, in.Stereotypes); err != nil {
 				return fmt.Errorf("%s: %w", where, err)
 			}
 			if in.MinLength != nil && (!slices.Contains([]string{"text", "longtext"}, in.Type) || *in.MinLength < 0 || *in.MinLength > 4096) {
@@ -503,7 +503,7 @@ func take(o construction.Object, a construction.Action, c platform.Caller, recor
 			return refusal
 		}
 
-		if err := assign(v.FieldByName(goName(set.Field)), x); err != nil {
+		if err := assign(v.FieldByName(construction.GoName(set.Field)), x); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} cannot set {field}: {why}", a.Title, set.Field, err.Error())
 		}
 	}
@@ -607,7 +607,7 @@ func checkAccess(o construction.Object) error {
 	roles := map[string]bool{construction.Builder: true}
 	for _, a := range o.Access {
 		switch {
-		case !named(a.Role):
+		case !construction.Named(a.Role):
 			return fmt.Errorf("the role %q is not lower-case letters and digits", a.Role)
 		case a.Role == construction.Builder:
 			return fmt.Errorf("the role %q always does everything with what it builds", construction.Builder)

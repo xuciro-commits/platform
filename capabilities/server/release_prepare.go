@@ -85,7 +85,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		}
 		for typ, shape := range shapes {
 			if old := view.records.types[typ]; old != nil && old.info.Go != shape.Go {
-				old.setRows(records.Index[*row]{})
+				old.setRows(records.Index[*records.Row]{})
 			}
 		}
 	}
@@ -157,7 +157,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		}
 		matches := 0
 		for _, row := range et.rows.All() {
-			if !row.value.FieldByName("Record").Interface().(platform.Record).Archived && row.value.FieldByIndex(nameField.Index).String() == draft.Name {
+			if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && row.Value.FieldByIndex(nameField.Index).String() == draft.Name {
 				matches++
 			}
 		}

@@ -50,11 +50,11 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 		publisher := ""
 		var scopes []string
 		if row != nil {
-			publisher = businessField(owner.info, row.value, "publisher")
+			publisher = businessField(owner.info, row.Value, "publisher")
 			var value struct {
 				Scopes string `json:"publisherScopes"`
 			}
-			if json.Unmarshal(platform.Raw(row.value.Interface()), &value) == nil {
+			if json.Unmarshal(platform.Raw(row.Value.Interface()), &value) == nil {
 				if value.Scopes != "" && json.Unmarshal([]byte(value.Scopes), &scopes) != nil {
 					publisher = ""
 				}

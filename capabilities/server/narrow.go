@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding"
 	"encoding/json"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -448,7 +449,7 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 		return true
 	}
 	copy := copyOf(et.info.Go, value.Interface())
-	id := recordOf(copy).ID
+	id := records.Header(copy).ID
 	if id == "" {
 		return true
 	} // an input shape carries no stored row identity
@@ -467,7 +468,7 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 // the declared withheld field says so.
 func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool) {
 	out := copyOf(et.info.Go, v.Interface())
-	self := et.info.Type + "/" + recordOf(out).ID
+	self := et.info.Type + "/" + records.Header(out).ID
 	readable := func(refs []string) bool {
 		for _, ref := range refs {
 			if ref != self && !w.may(ref) {
@@ -497,7 +498,7 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 			}
 		}
 	}
-	pins := recordOf(out).VersionPins
+	pins := records.Header(out).VersionPins
 	visiblePins := []platform.RecordVersionPin{}
 	for _, pin := range pins {
 		reference, visible := et.info.Field(pin.Reference)
@@ -519,7 +520,7 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 		}
 		visiblePins = append(visiblePins, pin)
 	}
-	recordOf(out).VersionPins = visiblePins
+	records.Header(out).VersionPins = visiblePins
 	for _, d := range et.info.Derived { // every source the type names, for "*"
 		if !d.All {
 			every = append(every, w.sources(out, d)...)

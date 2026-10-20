@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -16,7 +17,7 @@ import (
 type retainedExtractionWrite struct {
 	typ           string
 	before, after map[string]json.RawMessage
-	origin        extractionOrigin
+	origin        records.Extraction
 }
 
 func (r *flowExecutionRuntime) applyRetainedExtractions(c platform.Caller, receipt *pb.ChangeRecord, writes []retainedExtractionWrite) *kernel.Error {
@@ -34,11 +35,11 @@ func (r *flowExecutionRuntime) applyRetainedExtractions(c platform.Caller, recei
 		values := maps.Clone(write.after)
 		kind := "create"
 		if prior != nil {
-			if prior.extraction == nil || *prior.extraction != write.origin || recordOf(prior.value).Archived {
+			if prior.Extraction == nil || *prior.Extraction != write.origin || records.Header(prior.Value).Archived {
 				return migrationRefusal(fmt.Errorf("retained extraction identity belongs to another source"))
 			}
 			kind = "write"
-			raw, err := prior.image()
+			raw, err := prior.Image()
 			if err != nil {
 				return migrationRefusal(err)
 			}
@@ -87,42 +88,42 @@ func (r *flowExecutionRuntime) applyRetainedExtractions(c platform.Caller, recei
 		}
 		origin := write.origin
 		updated := *et.rows.Get(id)
-		updated.extraction = &origin
+		updated.Extraction = &origin
 		et.setRow(id, &updated)
 	}
 	return nil
 }
 
 // Origin is immutable host provenance, never a writable business field.
-func validateExtractionOrigins(records *recordStore) error {
-	for ref := range records.writes {
+func validateExtractionOrigins(recordView *recordStore) error {
+	for ref := range recordView.writes {
 		typ, id, _ := strings.Cut(ref, "/")
-		et := records.types[typ]
+		et := recordView.types[typ]
 		if et == nil || et.rows.Get(id) == nil {
 			return fmt.Errorf("extraction row is absent")
 		}
-		if err := validateExtractionOrigin(records, typ, et.rows.Get(id).extraction); err != nil {
+		if err := validateExtractionOrigin(recordView, typ, et.rows.Get(id).Extraction); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateExtractionOrigin(records *recordStore, typ string, origin *extractionOrigin) error {
+func validateExtractionOrigin(recordView *recordStore, typ string, origin *records.Extraction) error {
 	if origin == nil {
 		return nil
 	}
-	runs := records.types[platform.MigrationRunType]
+	runs := recordView.types[platform.MigrationRunType]
 	if runs == nil || runs.rows.Get(origin.Migration) == nil {
 		return fmt.Errorf("extraction has no saved declaration")
 	}
-	run := runs.rows.Get(origin.Migration).value.Interface().(platform.MigrationRun)
+	run := runs.rows.Get(origin.Migration).Value.Interface().(platform.MigrationRun)
 	if origin.Step < 0 || origin.Step >= len(run.Plan.Steps) {
 		return fmt.Errorf("extraction has no declared step")
 	}
 	step := run.Plan.Steps[origin.Step]
 	sourceType, sourceID, found := strings.Cut(origin.Source, "/")
-	source := records.types[sourceType]
+	source := recordView.types[sourceType]
 	if !found || sourceID == "" || step.Kind != "extract" || step.Target != typ || !slices.Contains(step.Types, sourceType) || source == nil || source.rows.Get(sourceID) == nil {
 		return fmt.Errorf("extraction origin differs from its declared scope")
 	}

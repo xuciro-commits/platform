@@ -16,9 +16,9 @@ func (et *entityType) referenceIndex(field platform.FieldInfo) records.Reference
 	}
 	entries := make([]records.Reference, 0, et.rows.Len())
 	for id, row := range et.rows.All() {
-		target := row.value.FieldByIndex(field.Index).String()
+		target := row.Value.FieldByIndex(field.Index).String()
 		if target != "" {
-			entries = append(entries, records.Reference{ID: id, Target: target, Active: !recordOf(row.value).Archived})
+			entries = append(entries, records.Reference{ID: id, Target: target, Active: !records.Header(row.Value).Archived})
 		}
 	}
 	index, err := records.ReferencesFrom(entries)
@@ -34,7 +34,7 @@ func (et *entityType) referenceIndex(field platform.FieldInfo) records.Reference
 
 // All replacements, including pure accepted-result application, use this
 // type owner. No decision rules run here; only derived lookup buckets change.
-func (et *entityType) setRows(rows records.Index[*row]) {
+func (et *entityType) setRows(rows records.Index[*records.Row]) {
 	et.rows, et.referenceIndexes, et.uniqueIndexes, et.fullImage = rows, nil, nil, true
 	if et.store != nil {
 		// A schema/full-image replacement may change every referenced scope.
@@ -45,16 +45,16 @@ func (et *entityType) setRows(rows records.Index[*row]) {
 	}
 }
 
-func (et *entityType) setRow(id string, value *row) {
+func (et *entityType) setRow(id string, value *records.Row) {
 	previous := et.rows.Get(id)
 	for name, index := range et.referenceIndexes {
 		field, _ := et.info.Field(name)
 		before := ""
 		if previous != nil {
-			before = previous.value.FieldByIndex(field.Index).String()
+			before = previous.Value.FieldByIndex(field.Index).String()
 		}
-		after := value.value.FieldByIndex(field.Index).String()
-		index.Replace(id, before, after, !recordOf(value.value).Archived)
+		after := value.Value.FieldByIndex(field.Index).String()
+		index.Replace(id, before, after, !records.Header(value.Value).Archived)
 		et.referenceIndexes[name] = index
 	}
 	et.rows.Set(id, value)

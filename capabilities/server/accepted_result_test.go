@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"testing"
 	"time"
@@ -218,7 +219,7 @@ func TestAcceptedGeneratedArchivePreservesReceiptAndHistory(t *testing.T) {
 		t.Fatalf("archive was not committed as a result: %+v", entries)
 	}
 	if row := live.records.types["stock.item"].rows.Get("I1"); row == nil ||
-		!row.value.Interface().(Item).Archived || row.historyLength() != 2 {
+		!row.Value.Interface().(Item).Archived || row.HistoryLength() != 2 {
 		t.Fatal("committed archive or its history was lost")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return stockTenant(t) })
@@ -443,7 +444,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	result.Version, result.Kind = 2, ""
 	result.Unique = nil
 	result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
-	result.Row.History = copyHistory(source.records.types["stock.bin"].rows.Get("B1").recordHistory())
+	result.Row.History = records.CopyHistory(source.records.types["stock.bin"].rows.Get("B1").RecordHistory())
 	previousDigest, previousDigestErr := digestAcceptedResult(result)
 	if previousDigestErr != nil {
 		t.Fatal(previousDigestErr)
@@ -518,7 +519,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	c := platform.NewCaller(runtime{restored}, member, "stock", false, false)
 	got, _ := restored.records.get(c, reflect.TypeFor[Item](), "I1")
-	if got.(Item).Qty != 2 || restored.records.types["stock.item"].rows.Get("I1").historyLength() != 1 ||
+	if got.(Item).Qty != 2 || restored.records.types["stock.item"].rows.Get("I1").HistoryLength() != 1 ||
 		len(ledger.RecordsFor(restored.ID)) != 1 || len(restored.events) != 0 {
 		t.Fatalf("saved create was not applied purely: %+v", got)
 	}
@@ -553,7 +554,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	got, _ = restored.records.get(c, reflect.TypeFor[Item](), "I1")
 	if got.(Item).Qty != 7 || len(ledger.RecordsFor(restored.ID)) != 2 ||
-		restored.records.types["stock.item"].rows.Get("I1").historyLength() != 2 {
+		restored.records.types["stock.item"].rows.Get("I1").HistoryLength() != 2 {
 		t.Fatalf("saved edit was not applied purely: %+v", got)
 	}
 	if applied, err := restored.applyAcceptedResult(ledger, savedEdit); err != nil || applied {

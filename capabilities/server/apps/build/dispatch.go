@@ -76,7 +76,7 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object construction.Objec
 	used := map[string]bool{}
 	scope := ruleSpec(object, action, action.Transaction.Reads)
 	for _, set := range spec.Payload {
-		if !named(set.Field) || used[set.Field] || set.Field == "id" || set.Field == "key" {
+		if !construction.Named(set.Field) || used[set.Field] || set.Field == "id" || set.Field == "key" {
 			return fmt.Errorf("Dispatch parameters must have distinct declared names")
 		}
 		used[set.Field] = true

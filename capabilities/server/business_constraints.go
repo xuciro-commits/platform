@@ -18,7 +18,7 @@ import (
 
 type constraintWrite struct {
 	caller platform.Caller
-	before *row
+	before *records.Row
 }
 
 // Refusal facts are durable, but their values are re-filtered at delivery.
@@ -52,14 +52,14 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 			continue
 		}
 		if current := et.rows.Get(id); current != nil && et.info.HasReadSources() {
-			narrowed, _ := t.narrowerIn(t.records, member, at, true).derive(et, current.value)
+			narrowed, _ := t.narrowerIn(t.records, member, at, true).derive(et, current.Value)
 			for _, derivation := range et.info.Derived {
 				paths := derivation.Fields
 				if len(derivation.List) > 0 {
 					paths = [][]int{derivation.List}
 				}
 				for _, indices := range paths {
-					if reflect.DeepEqual(current.value.FieldByIndex(indices).Interface(), narrowed.FieldByIndex(indices).Interface()) {
+					if reflect.DeepEqual(current.Value.FieldByIndex(indices).Interface(), narrowed.FieldByIndex(indices).Interface()) {
 						continue
 					}
 					delete(issues[i].Values, fieldName(et.info.Go, indices))
@@ -99,7 +99,7 @@ func (d *stagedDecision) constraintLookup(typ string) (platform.EntityInfo, bool
 }
 
 func constraintValues(info platform.EntityInfo, value reflect.Value) map[string]any {
-	values := map[string]any{"id": recordOf(value).ID, "archived": recordOf(value).Archived}
+	values := map[string]any{"id": records.Header(value).ID, "archived": records.Header(value).Archived}
 	for _, field := range info.Fields {
 		values[field.Name] = value.FieldByIndex(field.Index).Interface()
 	}
@@ -153,7 +153,7 @@ func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.C
 				panic(fmt.Errorf("record unique keys: %w", err))
 			}
 			for _, id := range ids {
-				if id == recordOf(value).ID {
+				if id == records.Header(value).ID {
 					continue
 				}
 				if _, replaced := changes[info.Type+"/"+id]; !replaced {
@@ -163,7 +163,7 @@ func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.C
 		}
 		for ref, keys := range changes {
 			typ, id, _ := strings.Cut(ref, "/")
-			if typ == info.Type && id != recordOf(value).ID && keys[rule.Name] == key {
+			if typ == info.Type && id != records.Header(value).ID && keys[rule.Name] == key {
 				return false, nil
 			}
 		}
@@ -171,19 +171,19 @@ func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.C
 	}
 	index := et.uniqueIndex(s, rule)
 	bucket := index.keys.Get(key)
-	return bucket.Len() == 0 || bucket.Len() == 1 && bucket.Has(recordOf(value).ID), nil
+	return bucket.Len() == 0 || bucket.Len() == 1 && bucket.Has(records.Header(value).ID), nil
 }
 
-func constraintLocked(info platform.EntityInfo, before *row) bool {
+func constraintLocked(info platform.EntityInfo, before *records.Row) bool {
 	if before == nil || info.Lifecycle == nil {
 		return false
 	}
 	life := info.Lifecycle
 	field, _ := info.Field(life.Field)
-	if before.value.FieldByIndex(field.Index).String() != life.Initial {
+	if before.Value.FieldByIndex(field.Index).String() != life.Initial {
 		return true
 	}
-	for _, change := range before.recordHistory() {
+	for _, change := range before.RecordHistory() {
 		for _, changed := range change.Fields {
 			if changed.Field != life.Field {
 				continue
@@ -199,20 +199,20 @@ func constraintLocked(info platform.EntityInfo, before *row) bool {
 	return false
 }
 
-func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *row, before *row) (refusal *kernel.Error) {
+func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *records.Row, before *records.Row) (refusal *kernel.Error) {
 	if d.TraceEnabled() {
 		defer func() {
-			event := platform.DecisionTrace{Kind: "constraint", Name: rule.Name, Type: info.Type, ID: recordOf(after.value).ID, Operation: rule.Kind}
+			event := platform.DecisionTrace{Kind: "constraint", Name: rule.Name, Type: info.Type, ID: records.Header(after.Value).ID, Operation: rule.Kind}
 			if refusal != nil {
 				event.Refusal = refusal.Message
 			}
 			d.RecordDecisionTrace(event)
 		}()
 	}
-	values := constraintValues(info, after.value)
+	values := constraintValues(info, after.Value)
 	fail := func(reason string) *kernel.Error {
 		visible := map[string]json.RawMessage{}
-		read, readErr := c.ReadRecord(info.Type, recordOf(after.value).ID, d.at)
+		read, readErr := c.ReadRecord(info.Type, records.Header(after.Value).ID, d.at)
 		var readable map[string]json.RawMessage
 		if readErr == nil {
 			_ = json.Unmarshal(read, &readable)
@@ -226,7 +226,7 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 				}
 			}
 		}
-		return c.RefuseConstraint(rule, info.Type+"/"+recordOf(after.value).ID, visible, reason)
+		return c.RefuseConstraint(rule, info.Type+"/"+records.Header(after.Value).ID, visible, reason)
 	}
 	switch rule.Kind {
 	case "required":
@@ -244,11 +244,11 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 			if err != nil {
 				return fail("scope_unavailable")
 			}
-			if _, _, err := c.ReadRecordPath(info.Type, recordOf(after.value).ID, path, d.at); err != nil {
+			if _, _, err := c.ReadRecordPath(info.Type, records.Header(after.Value).ID, path, d.at); err != nil {
 				return fail("scope_unavailable")
 			}
 		}
-		ok, err := d.records.uniqueConstraint(info, rule, after.value)
+		ok, err := d.records.uniqueConstraint(info, rule, after.Value)
 		if err != nil {
 			return fail("scope_unavailable")
 		}
@@ -257,7 +257,7 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 		}
 	case "immutable":
 		if constraintLocked(info, before) {
-			old := constraintValues(info, before.value)
+			old := constraintValues(info, before.Value)
 			for _, field := range rule.Fields {
 				if string(platform.Raw(old[field])) != string(platform.Raw(values[field])) {
 					return fail("immutable")
@@ -302,7 +302,7 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 // Every staged Put reaches this gate. Record rules see the prospective row and
 // earlier private writes. A refusal poisons the whole decision, even if an app
 // ignores Put's return value; nothing has yet reached the authoritative store.
-func (d *stagedDecision) checkRecordConstraints(c platform.Caller, info platform.EntityInfo, after, before *row) *kernel.Error {
+func (d *stagedDecision) checkRecordConstraints(c platform.Caller, info platform.EntityInfo, after, before *records.Row) *kernel.Error {
 	for _, rule := range info.Constraints {
 		if rule.Level == "txn" {
 			continue
@@ -397,9 +397,9 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 	return nil
 }
 
-func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platform.Constraint, plan constraintReadPlan, root *row, changed string, old *row) bool {
+func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platform.Constraint, plan constraintReadPlan, root *records.Row, changed string, old *records.Row) bool {
 	typ, id, _ := strings.Cut(changed, "/")
-	rootID := recordOf(root.value).ID
+	rootID := records.Header(root.Value).ID
 	if rule.Reads != nil {
 		for _, set := range rule.Reads.Collections {
 			if set.Set != "" {
@@ -431,8 +431,8 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			if !ok {
 				return true
 			}
-			for _, candidate := range []*row{et.rows.Get(id), old} {
-				if candidate != nil && candidate.value.FieldByIndex(field.Index).String() == rootID {
+			for _, candidate := range []*records.Row{et.rows.Get(id), old} {
+				if candidate != nil && candidate.Value.FieldByIndex(field.Index).String() == rootID {
 					return true
 				}
 			}
@@ -442,14 +442,14 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 		return true
 	}
 	paths := plan.paths
-	follows := func(root *row, info platform.EntityInfo, path []string) bool {
+	follows := func(root *records.Row, info platform.EntityInfo, path []string) bool {
 		current, currentInfo := root, info
 		for _, name := range path {
 			field, ok := currentInfo.Field(name)
 			if !ok || field.Type != "reference" {
 				break
 			}
-			targetID := current.value.FieldByIndex(field.Index).String()
+			targetID := current.Value.FieldByIndex(field.Index).String()
 			if field.Ref == typ && targetID == id {
 				return true
 			}
@@ -511,7 +511,7 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 				}
 			}
 			for _, path := range itemPaths {
-				if follows(&row{value: value}, et.info, path) {
+				if follows(&records.Row{Value: value}, et.info, path) {
 					return true
 				}
 			}
@@ -602,19 +602,19 @@ func (d *stagedDecision) constraintReadPlan(info platform.EntityInfo, rule platf
 // This is dependency discovery, not a second rule evaluation. It considers
 // both sides of a moved reference and archived edges before the original
 // caller's constraint is evaluated through the normal scoped reader.
-func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row, set platform.RecordSet, typ, id string, old *row) bool {
+func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *records.Row, set platform.RecordSet, typ, id string, old *records.Row) bool {
 	if typ != set.Object && (set.Binding == nil || set.Binding.Ref.Kind != platform.AssetLinkType) {
 		return false
 	}
-	rootID := recordOf(root.value).ID
+	rootID := records.Header(root.Value).ID
 	rootRef := info.Type + "/" + rootID
 	matchField := func(field platform.FieldInfo) bool {
 		et := d.records.types[typ]
 		if et == nil {
 			return true
 		}
-		for _, candidate := range []*row{et.rows.Get(id), old} {
-			if candidate != nil && candidate.value.FieldByIndex(field.Index).String() == rootID {
+		for _, candidate := range []*records.Row{et.rows.Get(id), old} {
+			if candidate != nil && candidate.Value.FieldByIndex(field.Index).String() == rootID {
 				return true
 			}
 		}
@@ -648,7 +648,7 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row,
 			if et == nil {
 				return true
 			}
-			candidates := []*row{}
+			candidates := []*records.Row{}
 			if typ == et.info.Type {
 				candidates = append(candidates, et.rows.Get(id), old)
 			} else {
@@ -666,7 +666,7 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row,
 					continue
 				}
 				var value struct{ Binding, Parent, Child string }
-				_ = json.Unmarshal(platform.Raw(edge.value.Interface()), &value)
+				_ = json.Unmarshal(platform.Raw(edge.Value.Interface()), &value)
 				if value.Binding != link.Name {
 					continue
 				}
@@ -685,7 +685,7 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row,
 		}
 		if set.Direction == "reverse" {
 			field, ok := info.Field(link.Via)
-			return !ok || root.value.FieldByIndex(field.Index).String() == id
+			return !ok || root.Value.FieldByIndex(field.Index).String() == id
 		}
 		et := d.records.types[typ]
 		if et == nil {
@@ -696,7 +696,7 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *row,
 	}
 	if set.Direction == "reference" {
 		field, ok := info.Field(set.From)
-		return !ok || root.value.FieldByIndex(field.Index).String() == id
+		return !ok || root.Value.FieldByIndex(field.Index).String() == id
 	}
 	et := d.records.types[typ]
 	if et == nil {

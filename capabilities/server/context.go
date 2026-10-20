@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/records"
 	"reflect"
 	"strings"
 	"time"
@@ -20,14 +21,14 @@ import (
 // read as the host did before the review (AI-01).
 
 type ContextView struct {
-	Type       string         `json:"type"`
-	Record     any            `json:"record"`
-	History    []RecordChange `json:"history"`
-	References []string       `json:"references"` // "<field>: <type>/<id>"
-	Related    []Related      `json:"related"`
-	Links      []string       `json:"links"`
-	Flows      []FlowSummary  `json:"flows"`
-	Tasks      []TaskSummary  `json:"tasks"`
+	Type       string                 `json:"type"`
+	Record     any                    `json:"record"`
+	History    []records.RecordChange `json:"history"`
+	References []string               `json:"references"` // "<field>: <type>/<id>"
+	Related    []Related              `json:"related"`
+	Links      []string               `json:"links"`
+	Flows      []FlowSummary          `json:"flows"`
+	Tasks      []TaskSummary          `json:"tasks"`
 }
 
 type FlowSummary struct {

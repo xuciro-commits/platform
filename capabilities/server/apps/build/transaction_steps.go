@@ -31,7 +31,7 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 	parameters := func(sets []platform.TxnSet) error {
 		seen := map[string]bool{}
 		for _, set := range sets {
-			if !named(set.Field) || seen[set.Field] {
+			if !construction.Named(set.Field) || seen[set.Field] {
 				return fmt.Errorf("Transaction parameters need distinct names")
 			}
 			seen[set.Field] = true
@@ -82,7 +82,7 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 	case "journal":
 		j := step.Journal
 		if j != nil && j.Reverses != "" {
-			if !named(j.Reverses) || len(j.Lines) > 0 {
+			if !construction.Named(j.Reverses) || len(j.Lines) > 0 {
 				return fmt.Errorf("A journal reversal names one original action and declares no new lines")
 			}
 			return check(j.Date, "date", "text")

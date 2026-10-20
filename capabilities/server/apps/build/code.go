@@ -188,19 +188,19 @@ func (b *Build) checkCode(code Code) error {
 		return err
 	}
 	for _, other := range list {
-		previous, _ := wasPublished[Code](other.Published)
+		previous, _ := construction.ReadPublication[Code](other.Published)
 		if other.ID != code.ID && (other.Name == code.Name || previous.Name == code.Name) {
 			return fmt.Errorf("compute %s is already declared", code.Name)
 		}
 	}
-	if old, ok := wasPublished[Code](code.Published); ok && old.Name != code.Name {
+	if old, ok := construction.ReadPublication[Code](code.Published); ok && old.Name != code.Name {
 		return fmt.Errorf("a published compute keeps its name")
 	}
 	return nil
 }
 func (b *Build) installCode(c platform.Caller, code Code) error {
 	if code.Published != "" {
-		published, ok := wasPublished[Code](code.Published)
+		published, ok := construction.ReadPublication[Code](code.Published)
 		if !ok {
 			return fmt.Errorf("compute has no valid publication")
 		}
@@ -221,7 +221,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 	}
 	for _, tb := range b.tables {
 		for _, raw := range tb.Versions {
-			prior, ok := wasPublished[construction.Table](raw)
+			prior, ok := construction.ReadPublication[construction.Table](raw)
 			if ok && prior.Name == name && prior.Version == version {
 				return prior.Definition(), version, true
 			}
@@ -235,7 +235,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 		if version < 1 || version > len(record.Versions) {
 			continue
 		}
-		prior, ok := wasPublished[Code](record.Versions[version-1])
+		prior, ok := construction.ReadPublication[Code](record.Versions[version-1])
 		if ok && prior.Name == name && prior.Version == version {
 			return prior.Definition(), version, true
 		}
@@ -252,7 +252,7 @@ func codeImage(image []byte) (Code, error) {
 	}
 	var selected Code
 	for i, raw := range code.Versions {
-		prior, ok := wasPublished[Code](raw)
+		prior, ok := construction.ReadPublication[Code](raw)
 		if !ok || prior.ID != code.ID || prior.Name != code.Name || prior.Version != i+1 || prior.Definition().Check() != nil || prior.SourceHash != prior.sourceHash() || prior.Published != "" || len(prior.Versions) > 0 {
 			return code, fmt.Errorf("invalid retained compute version")
 		}
@@ -335,7 +335,7 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 		return
 	}
 	code := list[i]
-	if old, ok := wasPublished[Code](code.Published); ok {
+	if old, ok := construction.ReadPublication[Code](code.Published); ok {
 		prior = platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: old.Name}
 		hadPrior = true
 	}

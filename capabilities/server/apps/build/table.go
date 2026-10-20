@@ -105,7 +105,7 @@ func (b *Build) installTables() error {
 		if record.Published == "" || record.Archived {
 			continue
 		}
-		tb, ok := wasPublished[construction.Table](record.Published)
+		tb, ok := construction.ReadPublication[construction.Table](record.Published)
 		if !ok || tb.Name != record.Name {
 			return fmt.Errorf("decision table %s has a malformed publication", record.Name)
 		}
@@ -203,7 +203,7 @@ func tableImage(image []byte) (construction.Table, error) {
 	if err := json.Unmarshal(image, &record); err != nil {
 		return record, err
 	}
-	frozen, ok := wasPublished[construction.Table](record.Published)
+	frozen, ok := construction.ReadPublication[construction.Table](record.Published)
 	if !ok || record.State != "published" || frozen.ID != record.ID || frozen.Name != record.Name || frozen.Version < 1 || frozen.Version > record.Version || record.Version > 64 {
 		return frozen, fmt.Errorf("accepted table has no matching immutable publication")
 	}

@@ -50,7 +50,7 @@ func (b *Build) checkRefusalDeclarations(object construction.Object, action cons
 				return fmt.Errorf("routed refusals must declare their target transaction")
 			}
 			target := *declaration.Route
-			if target.Type != scope.Object || target.ID != "$subject" || target.Via != "" || !named(target.Action) || target.Action == action.Name {
+			if target.Type != scope.Object || target.ID != "$subject" || target.Via != "" || !construction.Named(target.Action) || target.Action == action.Name {
 				return fmt.Errorf("refusal route needs another declared transaction on its subject")
 			}
 			index := slices.IndexFunc(object.Actions, func(candidate construction.Action) bool { return candidate.Name == target.Action })
@@ -94,7 +94,7 @@ func (b *Build) checkRefusalDeclarations(object construction.Object, action cons
 			return fmt.Errorf("refusal level must be block, flag or route")
 		}
 		if record := declaration.Record; record != nil {
-			if record.Kind != "create" || !named(record.Name) || record.Target.ID != "" || record.Target.Via != "" || record.Target.Action != "" || record.Target.Type == scope.Object || record.When != nil || record.Link != nil || record.ForEach != nil || record.Sequence != nil || len(record.Refusals) != 0 || len(record.Changes) == 0 {
+			if record.Kind != "create" || !construction.Named(record.Name) || record.Target.ID != "" || record.Target.Via != "" || record.Target.Action != "" || record.Target.Type == scope.Object || record.When != nil || record.Link != nil || record.ForEach != nil || record.Sequence != nil || len(record.Refusals) != 0 || len(record.Changes) == 0 {
 				return fmt.Errorf("refusal records must be an unconditional create on a distinct object")
 			}
 			info, ok := lookup(record.Target.Type)

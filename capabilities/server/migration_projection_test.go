@@ -5,6 +5,7 @@ import "platformserver/internal/construction"
 import (
 	"bytes"
 	"encoding/json"
+	"platformserver/internal/records"
 	"testing"
 
 	"platformserver/platform"
@@ -48,7 +49,7 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 	check := func(release string, want string) {
 		t.Helper()
 		row := tn.records.types["build.asset"].rows.Get("A")
-		source := projectionFor(row.projection, release)
+		source := records.ProjectionFor(row.Projection, release)
 		if source == nil {
 			t.Fatalf("lost source release %s", release)
 		}
@@ -56,8 +57,8 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 		if json.Unmarshal(source.Value, &values) != nil || string(values["name"]) != want {
 			t.Fatalf("source value changed: %s", source.Value)
 		}
-		actual, _ := row.image()
-		if _, err := rowDecodeImage(tn.records.types["build.asset"].info, actual, row.projection, tn.releases.active); err != nil {
+		actual, _ := row.Image()
+		if _, err := records.DecodeImage(tn.records.types["build.asset"].info, actual, row.Projection, tn.releases.active); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -71,7 +72,7 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 	check(second, `21`)
 	decide(t, tn, "builder", construction.ID, "build.migration.cancel", platform.MigrationRunType, "M2", map[string]any{}, txnAt)
 	check(initial.From, `"12"`)
-	if projectionFor(tn.records.types["build.asset"].rows.Get("A").projection, second) != nil {
+	if records.ProjectionFor(tn.records.types["build.asset"].rows.Get("A").Projection, second) != nil {
 		t.Fatal("cancel kept the cancelled migration's source layer")
 	}
 	start(plan, "M3")
@@ -81,19 +82,19 @@ func TestMigrationRetainsEarlierTypeImagesThroughWritesAndCancellation(t *testin
 	decide(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": 34}, txnAt)
 	check(initial.From, `"12"`)
 	check(second, `21`)
-	before, _ := acceptedRowOf("build.asset", "A", tn.records.types["build.asset"].rows.Get("A"))
+	before, _ := records.FullImage("build.asset", "A", tn.records.types["build.asset"].rows.Get("A"))
 	recovered := builderTenant(t, tn.ID)
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := acceptedRowOf("build.asset", "A", recovered.records.types["build.asset"].rows.Get("A"))
+	after, _ := records.FullImage("build.asset", "A", recovered.records.types["build.asset"].rows.Get("A"))
 	if !bytes.Equal(jsonOf(before), jsonOf(after)) {
 		t.Fatal("recovery changed the versioned row's saved images or history")
 	}
-	corrupt := cloneRecordProjection(tn.records.types["build.asset"].rows.Get("A").projection)
+	corrupt := records.CloneProjection(tn.records.types["build.asset"].rows.Get("A").Projection)
 	corrupt.Prior = append(corrupt.Prior, corrupt.Prior[0])
-	actual, _ := tn.records.types["build.asset"].rows.Get("A").image()
-	if _, err := rowDecodeImage(tn.records.types["build.asset"].info, actual, corrupt, third); err == nil {
+	actual, _ := tn.records.types["build.asset"].rows.Get("A").Image()
+	if _, err := records.DecodeImage(tn.records.types["build.asset"].info, actual, corrupt, third); err == nil {
 		t.Fatal("recovery accepted duplicate source projections")
 	}
 }

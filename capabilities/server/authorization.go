@@ -264,7 +264,7 @@ func (t *Tenant) draftName(s *pb.Submission) string {
 	if row == nil || !ok || field.Index == nil {
 		return ""
 	}
-	return row.value.FieldByIndex(field.Index).String()
+	return row.Value.FieldByIndex(field.Index).String()
 }
 
 // delegatedAsset maps a draft-edit submission to the asset it edits. Only the

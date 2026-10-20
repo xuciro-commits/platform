@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 	"testing"
 )
@@ -36,7 +37,7 @@ func TestPagePublicationHistoryIsBoundedDistinctAndNonrecursive(t *testing.T) {
 		t.Fatal("missing distinct contents")
 	}
 	for _, raw := range p.Versions {
-		saved, ok := wasPublished[Page](raw)
+		saved, ok := construction.ReadPublication[Page](raw)
 		if !ok || saved.Published != "" || len(saved.Versions) != 0 {
 			t.Fatal("recursive publication snapshot")
 		}

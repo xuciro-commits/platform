@@ -53,7 +53,7 @@ func (b *Build) checkExtensionDependents(object construction.Object) error {
 	}
 	var base platform.EntityInfo
 	for _, record := range objects {
-		published, exists := wasPublished[construction.Object](record.Published)
+		published, exists := construction.ReadPublication[construction.Object](record.Published)
 		if !exists || published.Extends != construction.ID+"."+object.Name {
 			continue
 		}

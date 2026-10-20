@@ -161,7 +161,7 @@ func TestBusinessRefusalOwnerAtomicBranches(t *testing.T) {
 				found := false
 				for _, row := range tenant.records.types["build.disposition"].rows.All() {
 					var disposition map[string]any
-					_ = json.Unmarshal(platform.Raw(row.value.Interface()), &disposition)
+					_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &disposition)
 					found = found || disposition["reason"] == "Original request"
 				}
 				if !found {

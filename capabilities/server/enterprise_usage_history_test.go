@@ -4,6 +4,7 @@ import "platformserver/internal/construction"
 
 import (
 	"encoding/json"
+	"platformserver/internal/records"
 	"slices"
 	"strings"
 	"testing"
@@ -48,7 +49,7 @@ func TestEnterpriseHistoryUsesRetainedNestedPathsWithoutCurrentGoShape(t *testin
 	// has no current native.receipt Go type to decode the old row into.
 	tn.releases.candidates = map[string]json.RawMessage{"retained": raw}
 	paths := tn.enterpriseHistoricalReferencePaths(tn.records)
-	history := []RecordChange{{Fields: []FieldChange{{Field: "lines", Before: json.RawMessage(`[{"allocations":[{"unit":"old-unit"}]}]`), After: json.RawMessage(`[]`)}}}}
+	history := []records.RecordChange{{Fields: []records.FieldChange{{Field: "lines", Before: json.RawMessage(`[{"allocations":[{"unit":"old-unit"}]}]`), After: json.RawMessage(`[]`)}}}}
 	if !historyNamesEnterprisePaths(paths["native.receipt"], history, "old-unit") {
 		t.Fatal("nested historical enterprise reference was decoded using today's shape")
 	}

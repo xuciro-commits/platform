@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -31,7 +32,7 @@ type EnterpriseUsage struct {
 // Current-use rules are pure owner declarations over this record, evaluated by
 // the existing expression engine. No record-name or state-name inference lives here.
 func enterpriseRecordCurrent(info platform.EntityInfo, value reflect.Value, now time.Time) bool {
-	if recordOf(value).Archived {
+	if records.Header(value).Archived {
 		return false
 	}
 	if info.EnterpriseUse == nil {
@@ -42,7 +43,7 @@ func enterpriseRecordCurrent(info platform.EntityInfo, value reflect.Value, now 
 		return true
 	}
 	context := platform.ExprContext{Refs: map[string]platform.ExprValue{}, Now: now, Today: now.UTC().Format(time.DateOnly)}
-	context.Refs["archived"] = platform.ExprPresent("boolean", recordOf(value).Archived)
+	context.Refs["archived"] = platform.ExprPresent("boolean", records.Header(value).Archived)
 	for _, field := range info.Fields {
 		context.Refs[field.Name] = platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "value", Data: jsonOf(value.FieldByIndex(field.Index).Interface())}
 	}
@@ -66,7 +67,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 	}
 	store.mu.Lock()
 	types := make([]*entityType, 0, len(store.types))
-	rows := map[string][]*row{}
+	rows := map[string][]*records.Row{}
 	for _, et := range store.types {
 		if len(historicalPaths[et.info.Type]) == 0 {
 			continue
@@ -79,16 +80,16 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 	store.mu.Unlock()
 	for _, et := range types {
 		for _, r := range rows[et.info.Type] {
-			paths := matchingRefsWithAccess(et.info.Fields, "", r.value, id, nil, true)
-			historical := historyNamesEnterprisePaths(historicalPaths[et.info.Type], r.recordHistory(), id)
+			paths := matchingRefsWithAccess(et.info.Fields, "", r.Value, id, nil, true)
+			historical := historyNamesEnterprisePaths(historicalPaths[et.info.Type], r.RecordHistory(), id)
 			if len(paths) == 0 && !historical {
 				continue
 			}
-			current := len(paths) > 0 && enterpriseRecordCurrent(et.info, r.value, now)
+			current := len(paths) > 0 && enterpriseRecordCurrent(et.info, r.Value, now)
 			visible := false
 			title, field := "", ""
 			if details {
-				if view, err := t.RecordOf(c.Member, et.info.Type, recordOf(r.value).ID, now); err == nil {
+				if view, err := t.RecordOf(c.Member, et.info.Type, records.Header(r.Value).ID, now); err == nil {
 					value := reflect.ValueOf(view.Record)
 					if value.Kind() == reflect.Pointer {
 						value = value.Elem()
@@ -96,12 +97,12 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 					allowed := matchingRefs(et.info.Fields, "", value, id, c.RolesIn(et.info.App))
 					if len(allowed) > 0 {
 						visible = true
-						title = recordLabel(et, view.Record, recordOf(r.value).ID)
+						title = recordLabel(et, view.Record, records.Header(r.Value).ID)
 						field = allowed[0].Path
 					}
 				}
 			}
-			add(EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.info.Type + "/" + recordOf(r.value).ID, Field: field, Current: current}, visible)
+			add(EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.info.Type + "/" + records.Header(r.Value).ID, Field: field, Current: current}, visible)
 		}
 	}
 	if directory, ok := t.app(PlatformApp).(host.IdentityDirectory); ok {

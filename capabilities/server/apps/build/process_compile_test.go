@@ -34,11 +34,11 @@ func (h processStartHost) Automation(platform.Caller, string) platform.Caller { 
 
 func TestCompilerRejectsBranchOnlyAndEscapedIterationBindings(t *testing.T) {
 	branchOnly := construction.Process{Steps: []construction.ProcessStep{{Name: "branch", Kind: "branch", Cases: map[string]string{"true": "yes", "false": "no"}}, {Name: "yes", Kind: "transform", Next: "merge"}, {Name: "no", Kind: "transform", Next: "merge"}, {Name: "merge", Kind: "end", Value: &platform.Binding{Source: "step", Step: "yes"}}}}
-	if err := checkProcessScopes(branchOnly); err == nil || !strings.Contains(err.Error(), "not guaranteed") {
+	if err := construction.CheckProcessScopes(branchOnly); err == nil || !strings.Contains(err.Error(), "not guaranteed") {
 		t.Fatalf("optional branch output became a required downstream value: %v", err)
 	}
 	escaped := construction.Process{Steps: []construction.ProcessStep{{Name: "loop", Kind: "foreach", Body: "body", Next: "outside"}, {Name: "body", Kind: "transform", Next: "finish"}, {Name: "finish", Kind: "end"}, {Name: "outside", Kind: "end", Value: &platform.Binding{Source: "step", Step: "body"}}}}
-	if err := checkProcessScopes(escaped); err == nil {
+	if err := construction.CheckProcessScopes(escaped); err == nil {
 		t.Fatal("iteration-local output escaped without the loop's ordered result")
 	}
 }
@@ -63,12 +63,12 @@ func TestAutomationShape(t *testing.T) {
 	base := construction.Process{Name: "notify", Kind: "automation", Object: "build.item", When: "open"}
 	ok := base
 	ok.Steps = []construction.ProcessStep{act("first", "second"), act("second", "")}
-	if err := checkAutomation(ok); err != nil {
+	if err := construction.CheckAutomation(ok); err != nil {
 		t.Fatalf("a linear automation is accepted: %v", err)
 	}
 	withCondition := base
 	withCondition.Steps = []construction.ProcessStep{{Name: "when", Kind: "branch", Cases: map[string]string{"true": "first", "false": "stop"}}, act("first", ""), {Name: "stop", Kind: "end"}}
-	if err := checkAutomation(withCondition); err != nil {
+	if err := construction.CheckAutomation(withCondition); err != nil {
 		t.Fatalf("a condition first, ending when false, is accepted: %v", err)
 	}
 	for name, bad := range map[string]func(p *construction.Process){
@@ -86,7 +86,7 @@ func TestAutomationShape(t *testing.T) {
 	} {
 		p := base
 		bad(&p)
-		if checkAutomation(p) == nil {
+		if construction.CheckAutomation(p) == nil {
 			t.Fatalf("%s: refused", name)
 		}
 	}

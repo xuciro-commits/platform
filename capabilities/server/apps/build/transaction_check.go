@@ -395,7 +395,7 @@ func (b *Build) checkTransactions(object construction.Object) error {
 				if total > platform.TxnMaxSteps {
 					return fmt.Errorf("%s has %d steps; limit is %d", where, total, platform.TxnMaxSteps)
 				}
-				if !named(step.Name) || names[step.Name] {
+				if !construction.Named(step.Name) || names[step.Name] {
 					return fmt.Errorf("%s needs a unique name", where)
 				}
 				names[step.Name] = true

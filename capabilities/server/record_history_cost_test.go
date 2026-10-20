@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/records"
 	"testing"
 	"time"
 )
@@ -15,23 +16,23 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 			decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 1, "line": "L1"}, at)
 			et := live.records.types["stock.item"]
 			prior := et.rows.Get("I1")
-			history := make([]RecordChange, count)
+			history := make([]records.RecordChange, count)
 			for i := range history {
-				history[i] = prior.recordHistory()[0]
+				history[i] = prior.RecordHistory()[0]
 			}
 			retained := *prior
-			retained.history = history
-			retained.historyParent = nil
-			retained.historyCount = count
-			retained.historyHead = ""
-			head, err := retained.historyDigest()
+			retained.History = history
+			retained.HistoryParent = nil
+			retained.HistoryCount = count
+			retained.HistoryHead = ""
+			head, err := retained.HistoryDigest()
 			if err != nil {
 				t.Fatal(err)
 			}
 			reads := 0
-			retained.history = nil
-			retained.historyHead = head
-			retained.loadHistory = func(start int) []RecordChange { reads++; return history[start:] }
+			retained.History = nil
+			retained.HistoryHead = head
+			retained.LoadHistory = func(start int) []records.RecordChange { reads++; return history[start:] }
 			et.setRow("I1", &retained)
 			var saved Entry
 			live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { saved = e; return e.Body, nil }
@@ -49,10 +50,10 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 			current := et.rows.Get("I1")
 			_ = current // promotion replaces the type image
 			current = live.records.types["stock.item"].rows.Get("I1")
-			if current.historyLength() != count+1 {
+			if current.HistoryLength() != count+1 {
 				t.Fatal("history length lost")
 			}
-			all := current.recordHistory()
+			all := current.RecordHistory()
 			if reads != 1 || len(all) != count+1 || all[count].Schema != "stock.item.edit" {
 				t.Fatal("explicit historical read lost its original prefix")
 			}
@@ -71,15 +72,15 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 
 func TestSegmentedHistoryReadPreservesOrderAndPrefix(t *testing.T) {
 	const count = 3000
-	var current *row
+	var current *records.Row
 	for n := 0; n < count; n++ {
-		next := &row{}
-		if err := appendRowHistory(next, current, []RecordChange{{Change: fmt.Sprint(n)}}); err != nil {
+		next := &records.Row{}
+		if err := records.AppendRowHistory(next, current, []records.RecordChange{{Change: fmt.Sprint(n)}}); err != nil {
 			t.Fatal(err)
 		}
 		current = next
 	}
-	full := current.recordHistory()
+	full := current.RecordHistory()
 	if len(full) != count {
 		t.Fatal("segmented history lost entries", len(full))
 	}
@@ -89,7 +90,7 @@ func TestSegmentedHistoryReadPreservesOrderAndPrefix(t *testing.T) {
 		}
 	}
 	for _, start := range []int{0, 1, 1500, count - 1, count} {
-		suffix := current.historyAfter(start)
+		suffix := current.HistoryAfter(start)
 		if len(suffix) != count-start {
 			t.Fatal("wrong history suffix", start, len(suffix))
 		}

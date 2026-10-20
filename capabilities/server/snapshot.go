@@ -170,12 +170,12 @@ func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
 }
 
 type recordState struct {
-	HistoryHead string            `json:"historyHead,omitempty"`
-	Value       json.RawMessage   `json:"value"`
-	Format      string            `json:"format,omitempty"`
-	History     []RecordChange    `json:"history"`
-	Projection  *recordProjection `json:"projection,omitempty"`
-	Extraction  *extractionOrigin `json:"extraction,omitempty"`
+	HistoryHead string                 `json:"historyHead,omitempty"`
+	Value       json.RawMessage        `json:"value"`
+	Format      string                 `json:"format,omitempty"`
+	History     []records.RecordChange `json:"history"`
+	Projection  *records.Projection    `json:"projection,omitempty"`
+	Extraction  *records.Extraction    `json:"extraction,omitempty"`
 }
 
 type taskState struct {
@@ -212,15 +212,15 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 	for typ, list := range rows {
 		saved := make([]recordState, len(list))
 		for i, r := range list {
-			raw, err := r.image()
+			raw, err := r.Image()
 			if err != nil {
 				return nil, 0, err
 			}
-			head, err := r.historyDigest()
+			head, err := r.HistoryDigest()
 			if err != nil {
 				return nil, 0, err
 			}
-			saved[i] = recordState{HistoryHead: head, Value: raw, Format: r.format, History: r.recordHistory(), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}
+			saved[i] = recordState{HistoryHead: head, Value: raw, Format: r.Format, History: r.RecordHistory(), Projection: records.CloneProjection(r.Projection), Extraction: r.Extraction}
 		}
 		slices.SortFunc(saved, func(a, b recordState) int { return strings.Compare(string(a.Value), string(b.Value)) })
 		s.Records[typ] = saved
@@ -230,7 +230,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 }
 
 // capture takes everything but the records' encoding under the tenant's locks.
-func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row, int64, error) {
+func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*records.Row, int64, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
@@ -251,10 +251,10 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 		}
 		s.Apps[a.Manifest().ID] = raw
 	}
-	rows := map[string][]*row{}
+	rows := map[string][]*records.Row{}
 	t.records.mu.Lock()
 	for typ, et := range t.records.types {
-		rows[typ] = make([]*row, 0, et.rows.Len())
+		rows[typ] = make([]*records.Row, 0, et.rows.Len())
 		for _, value := range et.rows.All() {
 			rows[typ] = append(rows[typ], value)
 		}
@@ -311,10 +311,10 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			held[typ] = rows
 			continue
 		}
-		entries := make([]records.Entry[*row], 0, len(rows))
+		entries := make([]records.Entry[*records.Row], 0, len(rows))
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
-			decode, err := rowDecodeFormattedImage(et.info, r.Value, r.Projection, t.records.readRelease, r.Format)
+			decode, err := records.DecodeFormattedImage(et.info, r.Value, r.Projection, t.records.readRelease, r.Format)
 			if err != nil {
 				return nil, err
 			}
@@ -325,17 +325,17 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 				return nil, err
 			}
 			emptyLists(v) // a snapshot of older code may hold null lists
-			recovered := &row{value: v, format: r.Format, history: r.History, projection: cloneRecordProjection(r.Projection), extraction: r.Extraction}
-			head, err := recovered.historyDigest()
+			recovered := &records.Row{Value: v, Format: r.Format, History: r.History, Projection: records.CloneProjection(r.Projection), Extraction: r.Extraction}
+			head, err := recovered.HistoryDigest()
 			if err != nil {
 				return nil, err
 			}
 			if r.HistoryHead != "" && r.HistoryHead != head {
 				return nil, fmt.Errorf("snapshot history chain differs")
 			}
-			recovered.historyHead = head
-			recovered.retainOriginal(r.Value)
-			entries = append(entries, records.Entry[*row]{Key: recordOf(v).ID, Value: recovered})
+			recovered.HistoryHead = head
+			recovered.RetainOriginal(r.Value)
+			entries = append(entries, records.Entry[*records.Row]{Key: records.Header(v).ID, Value: recovered})
 		}
 		index, err := records.From(entries)
 		if err != nil {
@@ -466,7 +466,7 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 	}
 	for typ, et := range t.records.types {
 		for _, row := range et.rows.All() {
-			if err := validateExtractionOrigin(t.records, typ, row.extraction); err != nil {
+			if err := validateExtractionOrigin(t.records, typ, row.Extraction); err != nil {
 				return err
 			}
 		}

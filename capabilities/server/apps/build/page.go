@@ -260,7 +260,7 @@ func descriptor(p Page) platform.Page {
 // checkPage refuses a page the workspace could not open, with the reason: an
 // object this tenant has not, a field it has not, an action of something else.
 func (b *Build) checkPage(p Page) error {
-	if !named(p.Name) {
+	if !construction.Named(p.Name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", p.Name)
 	}
 	if p.Document != nil && len(p.Sections) == 0 {

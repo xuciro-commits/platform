@@ -86,7 +86,7 @@ func (b *Build) create(c platform.Caller, cr construction.Create, inputs map[str
 	}
 	v := reflect.New(reflect.TypeOf(related.Model)).Elem()
 	v.Field(0).Set(reflect.ValueOf(platform.Record{ID: id}))
-	if err := assign(v.FieldByName(goName(cr.Via)), parent); err != nil {
+	if err := assign(v.FieldByName(construction.GoName(cr.Via)), parent); err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	for _, set := range cr.Sets {
@@ -108,7 +108,7 @@ func (b *Build) create(c platform.Caller, cr construction.Create, inputs map[str
 			}
 			x = given
 		}
-		if err := assign(v.FieldByName(goName(set.Field)), x); err != nil {
+		if err := assign(v.FieldByName(construction.GoName(set.Field)), x); err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{object} cannot set {field}: {why}", cr.Object, set.Field, err.Error())
 		}
 	}

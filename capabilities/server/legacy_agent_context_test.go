@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,24 +17,24 @@ func TestLegacyFlowAgentContextPreservesExactAcceptedPredecessor(t *testing.T) {
 	oldSeen, _ := json.Marshal(historical)
 	run := AgentRunRecord{Flow: "F1", Seen: current, State: "done"}
 	run.ID = "R1"
-	history := []RecordChange{{Change: "chg-1", Schema: "flow.instance.start", Fields: []FieldChange{{Field: "seen", After: seen}}}}
-	prior := &row{value: reflect.ValueOf(run), history: history}
+	history := []records.RecordChange{{Change: "chg-1", Schema: "flow.instance.start", Fields: []records.FieldChange{{Field: "seen", After: seen}}}}
+	prior := &records.Row{Value: reflect.ValueOf(run), History: history}
 	oldRun := run
 	oldRun.Seen = historical
-	oldHistory := copyHistory(history)
+	oldHistory := records.CopyHistory(history)
 	oldHistory[0].Fields[0].After = oldSeen
-	wanted := &row{value: reflect.ValueOf(oldRun), history: oldHistory}
-	original, _ := acceptedRowOf(RunType, run.ID, wanted)
+	wanted := &records.Row{Value: reflect.ValueOf(oldRun), History: oldHistory}
+	original, _ := records.FullImage(RunType, run.ID, wanted)
 	before, _ := acceptance.Digest(original)
-	image := acceptedBatchRow{App: AgentApp, Before: before, acceptedRow: original}
-	image.History = append(copyHistory(oldHistory), RecordChange{Change: "chg-2", Schema: "flow.instance.step"})
-	if restored := legacyAgentContextPredecessor(prior, image); restored == nil || restored.value.Interface().(AgentRunRecord).Seen != historical {
+	image := acceptedBatchRow{App: AgentApp, Before: before, Image: original}
+	image.History = append(records.CopyHistory(oldHistory), records.RecordChange{Change: "chg-2", Schema: "flow.instance.step"})
+	if restored := legacyAgentContextPredecessor(prior, image); restored == nil || restored.Value.Interface().(AgentRunRecord).Seen != historical {
 		t.Fatal("the original sealed context was not restored")
 	}
-	if restored := legacyAgentContextPredecessor(prior, image); !restored.value.CanAddr() {
+	if restored := legacyAgentContextPredecessor(prior, image); !restored.Value.CanAddr() {
 		t.Fatal("the recovered row cannot be decoded by recordOf")
 	}
-	if prior.value.Interface().(AgentRunRecord).Seen != current || string(prior.history[0].Fields[0].After) != string(seen) {
+	if prior.Value.Interface().(AgentRunRecord).Seen != current || string(prior.History[0].Fields[0].After) != string(seen) {
 		t.Fatal("validation mutated the original predecessor")
 	}
 	bad := image
@@ -43,11 +44,11 @@ func TestLegacyFlowAgentContextPreservesExactAcceptedPredecessor(t *testing.T) {
 	}
 	changed := run
 	changed.State = "running"
-	if legacyAgentContextPredecessor(&row{value: reflect.ValueOf(changed), history: history}, image) != nil {
+	if legacyAgentContextPredecessor(&records.Row{Value: reflect.ValueOf(changed), History: history}, image) != nil {
 		t.Fatal("a business state difference was accepted")
 	}
 	foreign := image
-	foreign.History = copyHistory(image.History)
+	foreign.History = records.CopyHistory(image.History)
 	foreign.History[0].Fields[0].After = json.RawMessage(`"{\"type\":\"mes.order\",\"record\":{\"id\":\"SO-1\"},\"flows\":[{\"id\":\"another-flow\"}],\"tasks\":[]}"`)
 	if legacyAgentContextPredecessor(prior, foreign) != nil {
 		t.Fatal("foreign flow context was accepted")
@@ -70,26 +71,26 @@ func TestRecoveredContextDoesNotGrantANewModelRead(t *testing.T) {
 func TestLegacyAgentBindingRecoversOnlyExactCommittedStartupMetadata(t *testing.T) {
 	run := AgentRunRecord{State: "running"}
 	run.ID = "run"
-	history := []RecordChange{{Change: "start", Schema: SchemaRunStart, Fields: []FieldChange{{Field: "state", After: json.RawMessage(`"running"`)}}}}
-	prior := &row{value: reflect.ValueOf(run), history: history}
+	history := []records.RecordChange{{Change: "start", Schema: SchemaRunStart, Fields: []records.FieldChange{{Field: "state", After: json.RawMessage(`"running"`)}}}}
+	prior := &records.Row{Value: reflect.ValueOf(run), History: history}
 	saved := run
 	saved.Release = "release:original"
 	saved.DefinitionVersion = "agent.sha256.original"
-	expectedHistory := copyHistory(history)
-	expectedHistory[0].Fields = append([]FieldChange{{Field: "release", After: json.RawMessage(`"release:original"`)}, {Field: "definitionVersion", After: json.RawMessage(`"agent.sha256.original"`)}}, expectedHistory[0].Fields...)
-	expected := &row{value: reflect.ValueOf(saved), history: expectedHistory}
-	body, _ := acceptedRowOf(RunType, run.ID, expected)
+	expectedHistory := records.CopyHistory(history)
+	expectedHistory[0].Fields = append([]records.FieldChange{{Field: "release", After: json.RawMessage(`"release:original"`)}, {Field: "definitionVersion", After: json.RawMessage(`"agent.sha256.original"`)}}, expectedHistory[0].Fields...)
+	expected := &records.Row{Value: reflect.ValueOf(saved), History: expectedHistory}
+	body, _ := records.FullImage(RunType, run.ID, expected)
 	digest, _ := acceptance.Digest(body)
-	image := acceptedBatchRow{App: AgentApp, Before: digest, acceptedRow: body}
-	image.History = append(copyHistory(expectedHistory), RecordChange{Change: "step", Schema: SchemaRunStep})
-	if recovered := legacyAgentContextPredecessor(prior, image); recovered == nil || recovered.value.Interface().(AgentRunRecord).DefinitionVersion != saved.DefinitionVersion {
+	image := acceptedBatchRow{App: AgentApp, Before: digest, Image: body}
+	image.History = append(records.CopyHistory(expectedHistory), records.RecordChange{Change: "step", Schema: SchemaRunStep})
+	if recovered := legacyAgentContextPredecessor(prior, image); recovered == nil || recovered.Value.Interface().(AgentRunRecord).DefinitionVersion != saved.DefinitionVersion {
 		t.Fatal("exact startup metadata was not restored")
 	}
 	image.Before = "different"
 	if legacyAgentContextPredecessor(prior, image) != nil {
 		t.Fatal("nonmatching predecessor accepted")
 	}
-	if prior.value.Interface().(AgentRunRecord).Release != "" {
+	if prior.Value.Interface().(AgentRunRecord).Release != "" {
 		t.Fatal("failed probe mutated live data")
 	}
 }

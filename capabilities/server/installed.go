@@ -87,7 +87,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if err := s.migrationDefinitionLocked(info); err != nil {
 		return err
 	}
-	et := &entityType{store: s, info: info, rows: records.Index[*row]{}, knowledge: knowledgeBearing(info)}
+	et := &entityType{store: s, info: info, rows: records.Index[*records.Row]{}, knowledge: knowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
@@ -95,14 +95,14 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		if before.info.Versioning != nil && !reflect.DeepEqual(before.info.Versioning, info.Versioning) || len(before.info.VersionPins) > 0 && !reflect.DeepEqual(before.info.VersionPins, info.VersionPins) {
 			return fmt.Errorf("published business versioning and pin bindings are retained")
 		}
-		entries := make([]records.Entry[*row], 0, before.rows.Len())
+		entries := make([]records.Entry[*records.Row], 0, before.rows.Len())
 		for id, r := range before.rows.All() {
-			raw, err := r.image()
+			raw, err := r.Image()
 			if err != nil {
 				return err
 			}
 			v := reflect.New(info.Go).Elem()
-			decode, err := rowDecodeFormattedImage(info, raw, r.projection, s.readRelease, r.format)
+			decode, err := records.DecodeFormattedImage(info, raw, r.Projection, s.readRelease, r.Format)
 			if err != nil {
 				return err
 			}
@@ -111,9 +111,9 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			}
 			platform.ApplyFieldAliases(info, v)
 			emptyLists(v)
-			installed := &row{value: v, format: r.format, historyParent: r.historyParent, historyHead: r.historyHead, history: r.history, loadHistory: r.loadHistory, historyCount: r.historyCount, projection: r.projection, extraction: r.extraction}
-			installed.retainOriginal(raw)
-			entries = append(entries, records.Entry[*row]{Key: id, Value: installed})
+			installed := &records.Row{Value: v, Format: r.Format, HistoryParent: r.HistoryParent, HistoryHead: r.HistoryHead, History: r.History, LoadHistory: r.LoadHistory, HistoryCount: r.HistoryCount, Projection: r.Projection, Extraction: r.Extraction}
+			installed.RetainOriginal(raw)
+			entries = append(entries, records.Entry[*records.Row]{Key: id, Value: installed})
 		}
 		index, err := records.From(entries)
 		if err != nil {
