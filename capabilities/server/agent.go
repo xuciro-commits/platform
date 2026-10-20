@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"sync"
@@ -677,7 +678,7 @@ func (a *Agents) definitionVersion(d *agentDef) string {
 	if len(d.Checkpoints) > 0 {
 		parts = append(parts, d.Checkpoints)
 	}
-	digest, _ := canonicalDigest(parts)
+	digest, _ := acceptance.Digest(parts)
 	return "agent.sha256." + digest
 }
 func (a *Agents) changedDefinition(run AgentRunRecord, d *agentDef) bool {

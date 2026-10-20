@@ -93,17 +93,10 @@ func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 		sub.Schema.Name = platform.JournalType + ".reverse"
 		sub.Payload, _ = json.Marshal(map[string]any{"date": entry.Date})
 	}
-	err := t.submitBooks(app, sub, now)
+	out, err := t.submitBooks(app, sub, now)
+	out.Effect = x.ID
 	if err != nil {
 		out.Detail = err.Code.String() + ": " + err.Message
-	}
-	switch {
-	case err == nil:
-		out.Result = "delivered"
-	case strings.Contains(err.Message, "closed") || strings.Contains(err.Message, "No fiscal period"):
-		out.Result = "retry"
-	default:
-		out.Result = "rejected"
 	}
 	return out
 }
@@ -112,15 +105,15 @@ func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 func booksEndpoint() *Endpoint { return &Endpoint{ID: construction.BooksEndpoint, Kind: "books"} }
 
 // submitBooks uses the same accepted-result boundary as other host-owned decisions.
-func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time) *kernel.Error {
+func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time) (platform.Outcome, *kernel.Error) {
 	checks, ok := app.(host.BooksChecks)
 	if !ok {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Books owner does not provide posting checks")
+		return platform.Outcome{Result: "rejected"}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Books owner does not provide posting checks")
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return platform.Outcome{Result: "rejected"}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	caller := t.automation(platform.BooksApp, false)
 	sub.PrincipalId = caller.ID
@@ -128,8 +121,8 @@ func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time
 		if _, exists := platform.Get[platform.Journal](caller, sub.GetTarget().GetId()); !exists {
 			var entry platform.Journal
 			json.Unmarshal(sub.GetPayload(), &entry)
-			if err := checks.CheckPosting(caller, entry); err != nil {
-				return err
+			if outcome, err := checks.CheckPosting(caller, entry); err != nil {
+				return outcome, err
 			}
 		}
 	} else {
@@ -137,12 +130,15 @@ func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time
 		// Its original receipt owns idempotency; only a fresh reversal needs preflight.
 		original, exists := platform.Get[platform.Journal](caller, sub.GetTarget().GetId())
 		if !exists || original.State != "reversed" {
-			if err := checks.CheckReversal(caller, sub.GetTarget().GetId(), sub.GetPayload(), now); err != nil {
-				return err
+			if outcome, err := checks.CheckReversal(caller, sub.GetTarget().GetId(), sub.GetPayload(), now); err != nil {
+				return outcome, err
 			}
 		}
 	}
-	return t.submitAutomated(app, caller, sub, now)
+	if err := t.submitAutomated(app, caller, sub, now); err != nil {
+		return platform.Outcome{Result: "rejected"}, err
+	}
+	return platform.Outcome{Result: "delivered"}, nil
 }
 
 // submitAutomated records sub as the platform's own decision, by caller (an
@@ -160,7 +156,7 @@ func (t *Tenant) bookBody(entry map[string]any, typ, id, reverses string) string
 	change := ""
 	t.records.mu.Lock()
 	if et := t.records.types[typ]; et != nil {
-		if row := et.rows.get(id); row != nil {
+		if row := et.rows.Get(id); row != nil {
 			history := row.recordHistory()
 			for i := len(history) - 1; i >= 0; i-- {
 				h := history[i]

@@ -2,11 +2,10 @@ package platformserver
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -24,7 +23,6 @@ import (
 // or builder publication decision. Its version and size are checked before
 // persistence and recovery.
 const acceptedResultVersion = 5
-const maxAcceptedResultBytes = 1 << 20
 
 type acceptedResult struct {
 	Unique         []journal.StateUnique   `json:"unique,omitempty"`
@@ -114,19 +112,19 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	}
 	d.records.mu.Lock()
 	et := d.records.types[typ]
-	if et == nil || et.info.App != app || et.rows.get(id) == nil {
+	if et == nil || et.info.App != app || et.rows.Get(id) == nil {
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("decision has no declared record image")
 	}
-	if et.rows.get(id).projection != nil {
+	if et.rows.Get(id).projection != nil {
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("versioned migration row requires the complete record batch")
 	}
 	var prior *row
 	if old := d.records.parent.types[typ]; old != nil {
-		prior = old.rows.get(id)
+		prior = old.rows.Get(id)
 	}
-	image, err := acceptedRowChange(typ, id, et.rows.get(id), prior)
+	image, err := acceptedRowChange(typ, id, et.rows.Get(id), prior)
 	if err == nil {
 		image.Predecessor, err = recordPredecessor(typ, id, prior)
 	}
@@ -170,24 +168,10 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	return encoded, nil
 }
 
-// decodeAcceptedJSON reads exactly one typed value; each result family keeps
-// its own size, version, identity and predecessor checks.
-func decodeAcceptedJSON(raw []byte, target any, name string) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return fmt.Errorf("%s has trailing data", name)
-	}
-	return nil
-}
-
 func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) {
 	var result acceptedResult
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
-		return result, nil, fmt.Errorf("accepted result is empty or exceeds %d bytes", maxAcceptedResultBytes)
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
+		return result, nil, fmt.Errorf("accepted result is empty or exceeds %d bytes", acceptance.MaxResultBytes)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -284,22 +268,7 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 // authentication tag against an actor who can rewrite the database.
 func digestAcceptedResult(result acceptedResult) (string, error) {
 	result.Digest = ""
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return "", err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var normalized any
-	if err := decoder.Decode(&normalized); err != nil {
-		return "", err
-	}
-	canonical, err := json.Marshal(normalized)
-	if err != nil {
-		return "", err
-	}
-	hash := sha256.Sum256(canonical)
-	return hex.EncodeToString(hash[:]), nil
+	return acceptance.Digest(result)
 }
 
 // applyAcceptedResult reconstructs one record and its kernel receipt without
@@ -365,7 +334,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 			return false, fmt.Errorf("accepted publication is invalid: %w", err)
 		}
 	}
-	prior := et.rows.get(rec.ID)
+	prior := et.rows.Get(rec.ID)
 	if prior != nil && reflect.DeepEqual(prior.value.Interface(), value.Interface()) &&
 		acceptedRowAlreadyApplied(prior, result.Row) {
 		draft.mu.Unlock()
@@ -410,7 +379,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	draft.writes[result.Row.Type+"/"+rec.ID] = true
 	draft.remember(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
 	if et.knowledge {
-		draft.dirty.set(result.Row.Type+"/"+rec.ID, true)
+		draft.dirty.Set(result.Row.Type+"/"+rec.ID, true)
 	}
 	draft.mu.Unlock()
 	if result.Version == 5 {

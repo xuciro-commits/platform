@@ -1,4 +1,4 @@
-package enterpriseapi
+package enterprise
 
 import "encoding/json"
 

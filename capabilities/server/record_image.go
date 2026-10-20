@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/acceptance"
 
 	"platformserver/platform"
 )
@@ -15,7 +16,7 @@ func rowDecodeFormattedImage(info platform.EntityInfo, value json.RawMessage, pr
 		return nil, err
 	}
 	if selected := projectionFor(projection, release); selected != nil {
-		shape, err := canonicalDigest(info.Fields)
+		shape, err := acceptance.Digest(info.Fields)
 		if err != nil {
 			return nil, err
 		}

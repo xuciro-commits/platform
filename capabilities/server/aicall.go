@@ -12,6 +12,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strconv"
 	"strings"
@@ -754,7 +755,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 			out.Result, out.Detail = "rejected", "the evaluation function binding changed"
 			return out, nil
 		}
-		config, digestErr := canonicalDigest([]any{enabled, pv})
+		config, digestErr := acceptance.Digest([]any{enabled, pv})
 		if digestErr != nil || ask.EvaluationConfig == "" || ask.EvaluationConfig != config {
 			out.Result, out.Detail = "rejected", "the evaluation model configuration changed"
 			return out, nil

@@ -14,12 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// Scheduling is disposable; accepted differences remain the evidence owner.
-type statusReadAttempt struct {
-	Due  time.Time
-	Busy bool
-}
-
 // Reconciliation uses the original bounded source readers on their outside
 // lane, then revalidates the captured progress and the applicant's access.
 func (t *Tenant) ReconcileConfirmations(at time.Time) {
@@ -42,21 +36,14 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			}
 		}
 	}
-	for slot, attempt := range t.confirmationReads {
-		if !active[slot] && !attempt.Busy {
-			delete(t.confirmationReads, slot)
-		}
-	}
+	t.confirmationReads.retain(active)
 	// Poll the oldest due evidence first, including runs beyond the first page.
 	due := func(r platform.ConfirmationRun) time.Time {
 		var earliest time.Time
 		found := false
 		for i, p := range r.Parties {
 			if (p.State == "pending" || p.State == "unknown") && i < len(r.Definition.Parties) && r.Definition.Parties[i].Reconcile != nil {
-				next := p.ReconcileDue
-				if cached := t.confirmationReads[r.ID+":"+p.Name].Due; cached.After(next) {
-					next = cached
-				}
+				next := t.confirmationReads.next(r.ID+":"+p.Name, p.ReconcileDue)
 				if !found || next.Before(earliest) {
 					earliest, found = next, true
 				}
@@ -79,28 +66,30 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			if valid {
 				valid = (hostView{t: t}).CheckConfirmationRead(run, i, at) == nil
 			}
+			var stamp string
 			var source construction.Source
 			var connection construction.Connection
 			if valid {
 				party, policy := run.Parties[i], run.Definition.Parties[i].Reconcile
-				attempt := t.confirmationReads[slot]
-				valid = policy != nil && (party.State == "pending" || party.State == "unknown") && !party.ReconcileDue.After(at) && !attempt.Busy && !attempt.Due.After(at)
+				valid = policy != nil && (party.State == "pending" || party.State == "unknown")
 				valid = valid && json.Unmarshal(party.Source, &source) == nil && json.Unmarshal(party.Connection, &connection) == nil
+				if valid {
+					stamp, valid = t.statusReadStamp(run.Revision, run.Member, party.Source, party.Connection, false)
+				}
 			}
 			if !valid {
 				t.mu.Unlock()
 				continue
 			}
-			if reads >= 64 {
+			if reads >= statusReadLimit {
 				t.mu.Unlock()
 				return
 			}
-			if t.confirmationReads == nil {
-				t.confirmationReads = map[string]statusReadAttempt{}
+			if !t.confirmationReads.start(slot, run.Parties[i].ReconcileDue, at, &reads) {
+				t.mu.Unlock()
+				continue
 			}
-			t.confirmationReads[slot] = statusReadAttempt{Busy: true}
 			t.mu.Unlock()
-			reads++
 			p := run.Parties[i]
 			policy := run.Definition.Parties[i].Reconcile
 			diff := platform.ConfirmationDifference{At: at}
@@ -160,11 +149,15 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				outcome = "accepted"
 			}
 			t.mu.Lock()
-			t.confirmationReads[slot] = statusReadAttempt{Due: at.Add(time.Duration(policy.EverySeconds) * time.Second)}
+			t.confirmationReads.finished(slot, at.Add(time.Duration(policy.EverySeconds)*time.Second))
 			current, exists := platform.Get[platform.ConfirmationRun](t.automation(construction.ID, false), run.ID)
 			valid = exists && current.Revision == run.Revision && i < len(current.Parties) && current.Completion == "" && slices.Contains([]string{"pending", "partial", "expired"}, current.State)
 			if valid {
 				valid = (current.Parties[i].State == "pending" || current.Parties[i].State == "unknown") && (hostView{t: t}).CheckConfirmationRead(current, i, at) == nil
+				if valid {
+					currentStamp, stable := t.statusReadStamp(current.Revision, current.Member, current.Parties[i].Source, current.Parties[i].Connection, false)
+					valid = stable && currentStamp == stamp
+				}
 			}
 			if !valid {
 				t.mu.Unlock()

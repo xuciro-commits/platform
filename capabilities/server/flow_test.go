@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"testing"
@@ -464,7 +465,7 @@ func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 		t.Fatalf("the operation input could not be resolved: %v", err)
 	}
 	for _, entry := range entries {
-		if len(entry.Body) > maxAcceptedResultBytes {
+		if len(entry.Body) > acceptance.MaxResultBytes {
 			t.Fatal("the large window input was copied into the accepted journal result")
 		}
 	}
@@ -624,7 +625,7 @@ func TestContinuousComputeRemainsWithinAcceptedResultBudget(t *testing.T) {
 	var entries []Entry
 	tn.Record = func(e Entry) { entries = append(entries, e) }
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-		if len(e.Body) > maxAcceptedResultBytes {
+		if len(e.Body) > acceptance.MaxResultBytes {
 			t.Fatalf("accepted result exceeded its original budget: %d", len(e.Body))
 		}
 		entries = append(entries, e)
@@ -657,7 +658,7 @@ func TestContinuousComputeRemainsWithinAcceptedResultBudget(t *testing.T) {
 		}
 		cursor = batch.ID
 	}
-	if tn.records.types[flow.InstanceType].rows.get(id).historyLength() <= 128 {
+	if tn.records.types[flow.InstanceType].rows.Get(id).historyLength() <= 128 {
 		t.Fatal("bounding the current trace discarded accepted history")
 	}
 	CheckReplay(t, tn, entries, compose)

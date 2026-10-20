@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/acceptance"
 	"testing"
 	"time"
 
@@ -63,8 +64,8 @@ func TestAcceptedConsoleCoreSeedReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	after, _ := restored.app(PlatformApp).(*Console).AcceptedState()
-	a, _ := canonicalDigest(after)
-	b, _ := canonicalDigest(batch.States[0].Image)
+	a, _ := acceptance.Digest(after)
+	b, _ := acceptance.Digest(batch.States[0].Image)
 	if a != b {
 		t.Fatal("replay changed the authoritative historical image")
 	}

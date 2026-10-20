@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"time"
@@ -11,6 +12,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/host"
+	"platformserver/internal/records"
 	"platformserver/platform"
 )
 
@@ -34,7 +36,7 @@ type flowExecutionRuntime struct {
 
 type retainedReadOrigin struct {
 	typ  *entityType
-	root *recordNode[*row]
+	rows records.Index[*row]
 }
 
 func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding host.FlowBinding) (host.FlowHost, error) {
@@ -77,7 +79,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 			}
 			for _, asset := range selected {
 				a := slices.IndexFunc(current, func(x platform.ReleaseAsset) bool { return x.Ref == asset.Ref })
-				before, _ := canonicalDigest(asset)
+				before, _ := acceptance.Digest(asset)
 				var after string
 				if a >= 0 {
 					selected := current[a]
@@ -90,7 +92,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 							}
 						}
 					}
-					after, _ = canonicalDigest(selected)
+					after, _ = acceptance.Digest(selected)
 				}
 				if before != after {
 					return nil, fmt.Errorf("retained dependency %s has no compatible execution owner", asset.Ref)
@@ -228,7 +230,7 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 		} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && projectionFor(value.projection, r.release) != nil {
 			if prior == nil {
 				source := projectionFor(value.projection, r.release)
-				shape, _ := canonicalDigest(info.Fields)
+				shape, _ := acceptance.Digest(info.Fields)
 				if source == nil || source.Shape != shape || json.Unmarshal(source.Value, &prior) != nil {
 					return nil, migrationRefusal(fmt.Errorf("retained field %s.%s has no saved source image", info.Type, old.Name))
 				}
@@ -249,7 +251,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 	valid := r.readSource == r.records && r.readStore != nil
 	for typ, et := range r.records.types {
 		origin, exists := r.readOrigins[typ]
-		if !exists || origin.typ != et || origin.root != et.rows.root {
+		if !exists || origin.typ != et || origin.rows != et.rows {
 			valid = false
 			break
 		}
@@ -261,7 +263,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 		store = r.records.forkRecordsLocked()
 		origins = map[string]retainedReadOrigin{}
 		for typ, et := range r.records.types {
-			origins[typ] = retainedReadOrigin{typ: et, root: et.rows.root}
+			origins[typ] = retainedReadOrigin{typ: et, rows: et.rows}
 		}
 	}
 	r.records.mu.Unlock()
@@ -271,15 +273,15 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 			if current == nil {
 				return nil, migrationRefusal(fmt.Errorf("retained object %s has no current storage", typ))
 			}
-			entries := make([]recordEntry[*row], 0, current.rows.len())
-			for id, value := range current.rows.all() {
+			entries := make([]records.Entry[*row], 0, current.rows.Len())
+			for id, value := range current.rows.All() {
 				decoded, refusal := r.retainedRow(current.info, info, value)
 				if refusal != nil {
 					return nil, refusal
 				}
-				entries = append(entries, recordEntry[*row]{id, decoded})
+				entries = append(entries, records.Entry[*row]{Key: id, Value: decoded})
 			}
-			rows, err := recordIndexFrom(entries)
+			rows, err := records.From(entries)
 			if err != nil {
 				return nil, migrationRefusal(err)
 			}
@@ -302,7 +304,7 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 		var value *row
 		var stored platform.EntityInfo
 		if current != nil {
-			value, stored = current.rows.get(id), current.info
+			value, stored = current.rows.Get(id), current.info
 		}
 		r.records.mu.Unlock()
 		if value == nil {
@@ -441,7 +443,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
 		return migrationRefusal(fmt.Errorf("retained action wrote an invalid record"))
 	}
-	if prior := old.rows.get(id); prior != nil {
+	if prior := old.rows.Get(id); prior != nil {
 		_ = json.Unmarshal(jsonOf(prior.value.Interface()), &before)
 	}
 	mappedBefore, mappedInput, extractions, mappingErr := r.mapRetainedWrite(c.ID, old.info.Type, before, input)
@@ -451,7 +453,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if err := r.applyRetainedExtractions(c, receipt, extractions); err != nil {
 		return err
 	}
-	if prior := current.rows.get(id); prior != nil {
+	if prior := current.rows.Get(id); prior != nil {
 		raw, _ := prior.image()
 		_ = json.Unmarshal(raw, &result)
 	} else {
@@ -477,7 +479,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		fields = append(fields, target.Name)
 	}
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: current.info.Type, Record: id, Fields: fields}
-	if current.rows.get(id) == nil {
+	if current.rows.Get(id) == nil {
 		question.Kind = "create"
 	}
 	grant := r.tenant.authorizeFrom(r.records, c, question, r.at, false)
@@ -498,7 +500,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		return refusal
 	}
 	// Keep the newly accepted source values for another old-version step.
-	updated := *current.rows.get(id)
+	updated := *current.rows.Get(id)
 	updated.projection = cloneRecordProjection(updated.projection)
 	if source := projectionFor(updated.projection, r.release); source != nil {
 		source.Value = jsonOf(input)

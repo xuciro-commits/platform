@@ -88,13 +88,13 @@ func TestBusinessRefusalOwnerApproval(t *testing.T) {
 			if err != nil || receipt == nil {
 				t.Fatalf("approval request failed: %v", err)
 			}
-			if len(tenant.sequences.last) != 0 || tenant.records.types["build.disposition"].rows.len() != 0 {
+			if len(tenant.sequences.last) != 0 || tenant.records.types["build.disposition"].rows.Len() != 0 {
 				t.Fatal("approval preflight committed a business flag or route")
 			}
 			id := construction.ID + "." + request.IdempotencyKey
 			position := len(entries)
 			decide(t, tenant, "manager", work.ID, work.ApprovalType+".approve", work.ApprovalType, id, map[string]any{}, txnAt.Add(time.Minute))
-			if len(entries) != position+1 || tenant.records.types["build.disposition"].rows.len() != 2 {
+			if len(entries) != position+1 || tenant.records.types["build.disposition"].rows.Len() != 2 {
 				t.Fatal("approved business branch did not commit with its original work decision")
 			}
 			requestView, readErr := tenant.RecordOf(memberOf(t, tenant, "manager"), work.ApprovalType, id, txnAt.Add(time.Minute))
@@ -140,7 +140,7 @@ func TestBusinessRefusalOwnerAtomicBranches(t *testing.T) {
 			}
 			count := 0
 			if rows := tenant.records.types["build.disposition"]; rows != nil {
-				count = rows.rows.len()
+				count = rows.rows.Len()
 			}
 			if level == "block" && count != 0 || level == "flag" && count != 2 || level == "route" && count != 2 {
 				t.Fatalf("%s left the wrong business records: %d", level, count)
@@ -159,7 +159,7 @@ func TestBusinessRefusalOwnerAtomicBranches(t *testing.T) {
 			}
 			if level == "route" {
 				found := false
-				for _, row := range tenant.records.types["build.disposition"].rows.all() {
+				for _, row := range tenant.records.types["build.disposition"].rows.All() {
 					var disposition map[string]any
 					_ = json.Unmarshal(platform.Raw(row.value.Interface()), &disposition)
 					found = found || disposition["reason"] == "Original request"

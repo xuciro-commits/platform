@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"time"
 
 	"platformserver/platform"
@@ -25,16 +26,16 @@ type acceptedAgent struct {
 	Changes     json.RawMessage `json:"changes"`
 }
 
-func digestAgent(r acceptedAgent) (string, error) { r.Digest = ""; return canonicalDigest(r) }
+func digestAgent(r acceptedAgent) (string, error) { r.Digest = ""; return acceptance.Digest(r) }
 func agentHash(r acceptedAgent) (string, error) {
-	return canonicalDigest([]any{r.Tenant, r.Member, r.Step, r.UsageBefore})
+	return acceptance.Digest([]any{r.Tenant, r.Member, r.Step, r.UsageBefore})
 }
 func decodeAcceptedAgent(raw []byte) (acceptedAgent, error) {
 	var r acceptedAgent
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
 		return r, fmt.Errorf("agent result is empty or too large")
 	}
-	if err := decodeAcceptedJSON(raw, &r, "agent result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &r, "agent result"); err != nil {
 		return r, err
 	}
 	hash, err := agentHash(r)

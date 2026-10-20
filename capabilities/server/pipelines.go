@@ -10,7 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/construction"
-	enterprise "platformserver/internal/host/enterpriseapi"
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/platform"
 )
 
@@ -169,10 +169,10 @@ func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 		} else if plan.Enterprise != nil {
 			elements, rels, skipped := plan.Enterprise.Slice(plan.Data)
 			key := "pipeline:" + run.Execution.ID + ":enterprise"
-			_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: enterprise.ID, IdempotencyKey: key,
-				Target: &pb.EntityRef{Type: enterprise.ModelType, Id: "model"}, Schema: &pb.SchemaRef{Name: enterprise.SchemaSliceSync, Version: 1}, Payload: platform.Raw(map[string]any{"source": plan.Enterprise.Source, "elements": elements, "relationships": rels})}, run.At)
+			_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: enterprisemodel.ID, IdempotencyKey: key,
+				Target: &pb.EntityRef{Type: enterprisemodel.ModelType, Id: "model"}, Schema: &pb.SchemaRef{Name: enterprisemodel.SchemaSliceSync, Version: 1}, Payload: platform.Raw(map[string]any{"source": plan.Enterprise.Source, "elements": elements, "relationships": rels})}, run.At)
 			if err != nil {
-				if !t.integrationRefused(enterprise.ID, key) {
+				if !t.integrationRefused(enterprisemodel.ID, key) {
 					return
 				}
 				if err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {

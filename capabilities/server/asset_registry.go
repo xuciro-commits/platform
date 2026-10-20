@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 
@@ -119,11 +120,11 @@ func immutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, e
 		return false, nil
 	}
 	if retained.Provides != nil {
-		before, err := canonicalDigest(current)
+		before, err := acceptance.Digest(current)
 		if err != nil {
 			return false, err
 		}
-		after, err := canonicalDigest(retained)
+		after, err := acceptance.Digest(retained)
 		return err == nil && before == after, err
 	}
 	if err := platform.CheckAssetDependencies(retained); err != nil {
@@ -176,11 +177,11 @@ func immutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, e
 			}
 		}
 	}
-	before, err := canonicalDigest(original)
+	before, err := acceptance.Digest(original)
 	if err != nil {
 		return false, err
 	}
-	after, err := canonicalDigest(selected)
+	after, err := acceptance.Digest(selected)
 	return err == nil && before == after, err
 }
 

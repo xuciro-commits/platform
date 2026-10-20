@@ -109,7 +109,7 @@ func TestPostgresLegacySnapshotMissingHistoryRetriesOriginalJournal(t *testing.T
 		t.Fatalf("retained full journal did not repair the tenant: %v", err)
 	}
 	recovered := registry.current(id)
-	if recovered == old || recovered.quarantined() || !old.quarantined() || recovered.records.types["stock.item"].rows.get("I1").historyLength() != 2 {
+	if recovered == old || recovered.quarantined() || !old.quarantined() || recovered.records.types["stock.item"].rows.Get("I1").historyLength() != 2 {
 		t.Fatal("recovery exposed the incomplete generation or lost original history")
 	}
 	if again, err := recovered.Submit(memberOf(t, recovered, "ana"), first.GetSubmission(), at.Add(time.Hour)); err != nil || again.GetChangeId() != first.GetChangeId() {
@@ -119,7 +119,7 @@ func TestPostgresLegacySnapshotMissingHistoryRetriesOriginalJournal(t *testing.T
 	// retryTenant repairs the snapshot through the existing path. A subsequent
 	// ordinary startup must now pass the same strict comparison with SQL.
 	restarted := compose()
-	if err := deployment.restoreTenants(ctx, j, code, []*Tenant{restarted}, map[string]int64{}, map[string]bool{}); err != nil || restarted.quarantined() || restarted.records.types["stock.item"].rows.get("I1").historyLength() != 2 {
+	if err := deployment.restoreTenants(ctx, j, code, []*Tenant{restarted}, map[string]int64{}, map[string]bool{}); err != nil || restarted.quarantined() || restarted.records.types["stock.item"].rows.Get("I1").historyLength() != 2 {
 		t.Fatalf("repaired snapshot did not survive another startup: %v, fault=%+v", err, restarted.fault.Load())
 	}
 	assertOriginal()

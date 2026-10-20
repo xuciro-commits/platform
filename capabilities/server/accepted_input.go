@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
@@ -49,7 +50,7 @@ type acceptedInputRow struct {
 }
 
 func acceptedInputHash(tenant, app, name, member string, body []byte) (string, error) {
-	return canonicalDigest(struct {
+	return acceptance.Digest(struct {
 		Tenant, App, Name, Member string
 		Body                      []byte
 	}{tenant, app, name, member, body})
@@ -135,7 +136,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 
 func digestAcceptedInput(result acceptedInput) (string, error) {
 	result.Digest = ""
-	return canonicalDigest(result)
+	return acceptance.Digest(result)
 }
 
 func encodeAcceptedInputRefusal(tenant, app, name string, m platform.Member, body []byte, at time.Time, refusal *kernel.Error) ([]byte, error) {
@@ -267,10 +268,10 @@ func (t *Tenant) answerAcceptedInput(a platform.AcceptedInputApp, raw []byte) (a
 
 func decodeAcceptedInput(raw []byte) (acceptedInput, error) {
 	var result acceptedInput
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
 		return result, fmt.Errorf("connector result is empty or oversized")
 	}
-	if err := decodeAcceptedJSON(raw, &result, "connector result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &result, "connector result"); err != nil {
 		return result, err
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {

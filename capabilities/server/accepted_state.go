@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"slices"
 
 	"platformserver/internal/host"
@@ -83,11 +84,11 @@ func (d *stagedDecision) savedStates() ([]acceptedState, error) {
 		if err := owner.ValidateAcceptedState(image); err != nil {
 			return nil, err
 		}
-		before, err := canonicalDigest(d.stateBases[id])
+		before, err := acceptance.Digest(d.stateBases[id])
 		if err != nil {
 			return nil, err
 		}
-		after, err := canonicalDigest(image)
+		after, err := acceptance.Digest(image)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +114,7 @@ func (t *Tenant) validateAcceptedStates(states []acceptedState) error {
 		if err != nil {
 			return err
 		}
-		hash, err := canonicalDigest(prior)
+		hash, err := acceptance.Digest(prior)
 		if err != nil || hash != state.Before && !t.legacyConsolePredecessor(state, prior) && !t.legacyCoreSeedPredecessor(state, prior) {
 			return fmt.Errorf("accepted state predecessor differs for %s", state.App)
 		}

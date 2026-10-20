@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/platform"
 )
 
@@ -32,7 +33,7 @@ func (e *Enterprise) AcceptedState() (json.RawMessage, error) {
 }
 
 func (*Enterprise) ValidateAcceptedState(raw json.RawMessage) error {
-	var model Model
+	var model enterprisemodel.Model
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&model); err != nil {
@@ -71,7 +72,7 @@ func (e *Enterprise) ApplyAcceptedState(raw json.RawMessage) error {
 	if err := e.ValidateAcceptedState(raw); err != nil {
 		return err
 	}
-	var model Model
+	var model enterprisemodel.Model
 	if err := json.Unmarshal(raw, &model); err != nil {
 		return err
 	}

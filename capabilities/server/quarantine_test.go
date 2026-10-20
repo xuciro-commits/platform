@@ -42,7 +42,7 @@ func TestCommittedResultCorruptionQuarantinesOnlyItsTenant(t *testing.T) {
 	if receipt, err := bad.Submit(member, acceptedBin(t, bad, "bad"), at); receipt != nil || err == nil {
 		t.Fatalf("corrupt commit answered: %+v %v", receipt, err)
 	}
-	if !bad.quarantined() || bad.records.types["stock.bin"].rows.get("B1") != nil {
+	if !bad.quarantined() || bad.records.types["stock.bin"].rows.Get("B1") != nil {
 		t.Fatal("partial tenant remained writable")
 	}
 	if bad.Health(at).Status != "quarantined" || bad.Health(at).RecoveryError == "" {
@@ -111,7 +111,7 @@ func TestReplayCorruptionQuarantinesWithoutSideEffects(t *testing.T) {
 	if err := bad.recoverEntries([]Entry{durable}); err == nil || !bad.quarantined() {
 		t.Fatalf("corrupt accepted history did not isolate its tenant: %v", err)
 	}
-	if bad.records.types["stock.bin"].rows.get("B1") != nil || bad.Round(at, 1) {
+	if bad.records.types["stock.bin"].rows.Get("B1") != nil || bad.Round(at, 1) {
 		t.Fatal("corrupt result was applied or work continued")
 	}
 	healthy := isolatedStock(t, "t-2")

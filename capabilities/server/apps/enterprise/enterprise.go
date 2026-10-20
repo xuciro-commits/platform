@@ -9,7 +9,7 @@ package enterprise
 
 import (
 	"encoding/json"
-	"platformserver/internal/host/enterpriseapi"
+	enterprisemodel "platformserver/internal/enterprise"
 	"slices"
 	"strings"
 	"sync"
@@ -17,16 +17,16 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host/enterpriseapi/uaf"
+	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
 )
 
 const (
-	ID               = enterpriseapi.ID
+	ID               = enterprisemodel.ID
 	ElementType      = "enterprise.element"
 	RelationshipType = "enterprise.relationship"
 	ViewType         = "enterprise.view"
-	ModelType        = enterpriseapi.ModelType
+	ModelType        = enterprisemodel.ModelType
 
 	SchemaElementAdd         = "enterprise.element.add"
 	SchemaElementEdit        = "enterprise.element.edit"
@@ -53,7 +53,7 @@ const (
 	ReadPatterns       = "enterprise-patterns"  // the pattern catalogue with previews
 	SchemaPatternApply = "enterprise.pattern.apply"
 	SchemaSliceImport  = "enterprise.slice.import"
-	SchemaSliceSync    = enterpriseapi.SchemaSliceSync // ADR-0022: a pipeline lands an external system's slice, diffed
+	SchemaSliceSync    = enterprisemodel.SchemaSliceSync // ADR-0022: a pipeline lands an external system's slice, diffed
 
 	// Admin stewards the model (the org app's role, kept so seats carry over).
 	Admin = "admin"
@@ -63,7 +63,7 @@ const (
 type Enterprise struct {
 	mu     sync.Mutex
 	tenant string
-	model  Model
+	model  enterprisemodel.Model
 	ledger *platform.Ledger
 }
 
@@ -151,7 +151,7 @@ func declarations() []platform.Action {
 // contract the generated SDK also reads (ADR-0034).
 func New(tenant string, seed platform.OrgSeed) *Enterprise {
 	catalog := platform.NewCatalog(declarations()...)
-	return &Enterprise{tenant: tenant, model: enterpriseapi.FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
+	return &Enterprise{tenant: tenant, model: enterprisemodel.FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
 }
 
 // Snapshot and Restore: the model as decisions left it (ADR-0024).
@@ -166,7 +166,7 @@ func (e *Enterprise) Snapshot() (json.RawMessage, error) {
 func (e *Enterprise) Restore(raw json.RawMessage) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.model = Model{}
+	e.model = enterprisemodel.Model{}
 	return e.ledger.RestoreWith(raw, &e.model)
 }
 
@@ -216,15 +216,15 @@ func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ 
 func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
 
 // Model is a copy of the model, for seeds and tests.
-func (e *Enterprise) Model() Model {
+func (e *Enterprise) Model() enterprisemodel.Model {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return copyModel(e.model)
 }
 
-func copyModel(m Model) Model {
+func copyModel(m enterprisemodel.Model) enterprisemodel.Model {
 	raw, _ := json.Marshal(m)
-	out := Model{Kinds: []Kind{}, Elements: []Element{}, Relationships: []Relationship{}, Views: []View{}}
+	out := enterprisemodel.Model{Kinds: []enterprisemodel.Kind{}, Elements: []enterprisemodel.Element{}, Relationships: []enterprisemodel.Relationship{}, Views: []enterprisemodel.View{}}
 	json.Unmarshal(raw, &out)
 	return out
 }
@@ -234,18 +234,18 @@ type payload struct {
 	Legal, External, Matrix, Primary                                                                      bool
 	Share                                                                                                 float64
 	Headcount, Sites, LegalEntities                                                                       int
-	From, Until, AsOf                                                                                     Date
+	From, Until, AsOf                                                                                     platform.Date
 	Properties                                                                                            map[string]any
 	Elements                                                                                              []string
 	Layout                                                                                                map[string][2]float64
-	Pins                                                                                                  []Pin
+	Pins                                                                                                  []enterprisemodel.Pin
 	Calendar                                                                                              string
 	Published                                                                                             *bool
-	Slice                                                                                                 *Slice
+	Slice                                                                                                 *enterprisemodel.Slice
 	Pattern, Under                                                                                        string
 	Replacement                                                                                           string
 	Context                                                                                               []string
-	Params                                                                                                Params
+	Params                                                                                                enterprisemodel.Params
 	Link, Content, Base, Organization, Tenant, Root, Connection                                           string
 	ConnectionRevision                                                                                    uint32
 }
@@ -309,7 +309,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		if c.Replaying && s.GetSchema().GetName() == SchemaViewSave && p.Viewpoint == "" {
 			var historical struct{ Grid string }
 			json.Unmarshal(s.GetPayload(), &historical)
-			p.Viewpoint = enterpriseapi.LegacyViewpoint(historical.Grid)
+			p.Viewpoint = enterprisemodel.LegacyViewpoint(historical.Grid)
 		}
 		today := now.UTC().Format(time.DateOnly)
 		if p.From == "" {
@@ -341,7 +341,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, err
 			}
 			return func(*pb.ChangeRecord) {
-				m.Elements = append(m.Elements, Element{ID: id, Stereotype: p.Stereotype, Name: p.Name, ShortName: p.ShortName, Kind: p.Kind, Legal: p.Legal, External: p.External, From: p.From, Until: p.Until, Properties: p.Properties})
+				m.Elements = append(m.Elements, enterprisemodel.Element{ID: id, Stereotype: p.Stereotype, Name: p.Name, ShortName: p.ShortName, Kind: p.Kind, Legal: p.Legal, External: p.External, From: p.From, Until: p.Until, Properties: p.Properties})
 			}, nil
 		case SchemaKindAdd:
 			if p.Name == "" || p.Kind == "" {
@@ -351,7 +351,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, conflict
 			}
 			return func(*pb.ChangeRecord) {
-				m.Kinds = append(m.Kinds, Kind{ID: id, Name: p.Name, Kind: p.Kind, Matrix: p.Matrix})
+				m.Kinds = append(m.Kinds, enterprisemodel.Kind{ID: id, Name: p.Name, Kind: p.Kind, Matrix: p.Matrix})
 			}, nil
 		case SchemaKindEdit:
 			kind := m.KindOf(id)
@@ -373,7 +373,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if p.Tenant == "" || p.Tenant == e.tenant || p.Root == "" || p.Connection == "" {
 				return nil, invalid("A tenant link needs a source tenant, shared root and connection")
 			}
-			link := TenantLink{ID: id, Organization: p.Organization, Tenant: p.Tenant, Root: p.Root, Connection: p.Connection}
+			link := enterprisemodel.TenantLink{ID: id, Organization: p.Organization, Tenant: p.Tenant, Root: p.Root, Connection: p.Connection}
 			if old := m.TenantLinkOf(id); old != nil {
 				if old.Tenant == p.Tenant && old.Root == p.Root && old.Connection == p.Connection {
 					link.UpdatedAt, link.Content = old.UpdatedAt, old.Content
@@ -386,7 +386,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, notFound
 			}
 			return func(*pb.ChangeRecord) {
-				m.TenantLinks = slices.DeleteFunc(m.TenantLinks, func(link TenantLink) bool { return link.ID == id })
+				m.TenantLinks = slices.DeleteFunc(m.TenantLinks, func(link enterprisemodel.TenantLink) bool { return link.ID == id })
 			}, nil
 		case SchemaSeed:
 			if len(m.Elements) > 0 {
@@ -395,7 +395,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if p.Name == "" {
 				return nil, invalid("the enterprise needs a name")
 			}
-			seeded, err := enterpriseapi.Template(SeedParams{Scale: p.Scale, Name: p.Name, Headcount: p.Headcount, Sites: p.Sites, LegalEntities: p.LegalEntities, Industry: p.Industry, Day: today})
+			seeded, err := enterprisemodel.Template(enterprisemodel.SeedParams{Scale: p.Scale, Name: p.Name, Headcount: p.Headcount, Sites: p.Sites, LegalEntities: p.LegalEntities, Industry: p.Industry, Day: today})
 			if err != nil {
 				return nil, invalid(err.Error())
 			}
@@ -414,8 +414,8 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("a sync names its source system")
 			}
 			var sync struct {
-				Elements      []Element      `json:"elements"`
-				Relationships []Relationship `json:"relationships"`
+				Elements      []enterprisemodel.Element      `json:"elements"`
+				Relationships []enterprisemodel.Relationship `json:"relationships"`
 			}
 			if json.Unmarshal(s.GetPayload(), &sync) != nil || sync.Elements == nil {
 				return nil, invalid("a sync carries elements")
@@ -442,7 +442,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 					if own := m.ElementOf(el.ID); own != nil && (own.Deleted || own.Stereotype != el.Stereotype) {
 						return nil, invalid("A source element keeps its identity and type")
 					}
-					if err := enterpriseapi.CheckPeriods(el.PeriodsFromLegacy()); err != nil {
+					if err := enterprisemodel.CheckPeriods(el.PeriodsFromLegacy()); err != nil {
 						return nil, invalid(err.Error())
 					}
 				}
@@ -468,7 +468,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 					if old := m.RelationshipOf(relID); old != nil && (old.Source != r.Source || old.Target != r.Target || old.Stereotype != r.Stereotype) {
 						return nil, invalid("A source relationship keeps its endpoints; use a new relationship ID")
 					}
-					if err := enterpriseapi.CheckPeriods(r.PeriodsFromLegacy()); err != nil {
+					if err := enterprisemodel.CheckPeriods(r.PeriodsFromLegacy()); err != nil {
 						return nil, invalid(err.Error())
 					}
 				}
@@ -488,13 +488,13 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				// cannot write a pair the profile refuses.
 				src, dst := m.ElementOf(r.Source), m.ElementOf(r.Target)
 				if st, ok := stereotypes[r.Source]; ok {
-					src = &Element{Stereotype: st}
+					src = &enterprisemodel.Element{Stereotype: st}
 				}
 				if st, ok := stereotypes[r.Target]; ok {
-					dst = &Element{Stereotype: st}
+					dst = &enterprisemodel.Element{Stereotype: st}
 				}
 				if src != nil && dst != nil {
-					if ok, why := enterpriseapi.Allowed(enterpriseapi.Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
+					if ok, why := enterprisemodel.Allowed(enterprisemodel.Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
 						return nil, invalid(why)
 					}
 				}
@@ -553,15 +553,15 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			for _, r := range p.Slice.Relationships {
 				src, dst := m.ElementOf(r.Source), m.ElementOf(r.Target)
 				if st, ok := stereotypes[r.Source]; ok {
-					src = &Element{Stereotype: st}
+					src = &enterprisemodel.Element{Stereotype: st}
 				}
 				if st, ok := stereotypes[r.Target]; ok {
-					dst = &Element{Stereotype: st}
+					dst = &enterprisemodel.Element{Stereotype: st}
 				}
 				if src == nil || dst == nil {
 					return nil, invalid("{element} is not in the model nor in the slice", r.Source)
 				}
-				if ok, why := enterpriseapi.Allowed(enterpriseapi.Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
+				if ok, why := enterprisemodel.Allowed(enterprisemodel.Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
 					return nil, invalid(why)
 				}
 			}
@@ -579,7 +579,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if p.Name == "" || p.Viewpoint == "" {
 				return nil, invalid("a view needs a name and a viewpoint")
 			}
-			if !slices.ContainsFunc(enterpriseapi.Views(mm), func(v Viewpoint) bool { return v.ID == p.Viewpoint }) {
+			if !slices.ContainsFunc(enterprisemodel.Views(mm), func(v enterprisemodel.Viewpoint) bool { return v.ID == p.Viewpoint }) {
 				return nil, invalid("{viewpoint} is not a view of this model", p.Viewpoint)
 			}
 			for _, el := range p.Elements {
@@ -591,7 +591,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				if m.ElementOf(pin.Anchor) == nil || !c.Replaying && m.ElementOf(pin.Anchor).Deleted {
 					return nil, invalid("a pinned record sits beside {element}, which is not in the model", pin.Anchor)
 				}
-				if !strings.HasPrefix(pin.Ref, "record:") || enterpriseapi.RefType(pin.Ref) == "" || enterpriseapi.RefID(pin.Ref) == "" {
+				if !strings.HasPrefix(pin.Ref, "record:") || enterprisemodel.RefType(pin.Ref) == "" || enterprisemodel.RefID(pin.Ref) == "" {
 					return nil, invalid("a pin is a record reference: record:<entity type>/<id>, not {pin}", pin.Ref)
 				}
 			}
@@ -615,11 +615,11 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				}
 			}
 			return func(*pb.ChangeRecord) {
-				v := View{ID: id, Name: p.Name, Viewpoint: p.Viewpoint, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
+				v := enterprisemodel.View{ID: id, Name: p.Name, Viewpoint: p.Viewpoint, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
 				if v.Elements == nil {
 					v.Elements = []string{}
 				}
-				if i := slices.IndexFunc(m.Views, func(x View) bool { return x.ID == id }); i >= 0 {
+				if i := slices.IndexFunc(m.Views, func(x enterprisemodel.View) bool { return x.ID == id }); i >= 0 {
 					m.Views[i] = v
 				} else {
 					m.Views = append(m.Views, v)
@@ -630,7 +630,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, notFound
 			}
 			return func(*pb.ChangeRecord) {
-				m.Views = slices.DeleteFunc(m.Views, func(x View) bool { return x.ID == id })
+				m.Views = slices.DeleteFunc(m.Views, func(x enterprisemodel.View) bool { return x.ID == id })
 			}, nil
 		case SchemaRelationshipAdd:
 			return decideRelationship(m, mm, id, p, !c.Replaying, false)
@@ -814,14 +814,14 @@ func checkProperties(mm *uaf.Metamodel, stereotype string, values map[string]any
 
 // Units are the organisations party belongs to on day and those below them
 // in kind ("" for the organisations themselves).
-func (e *Enterprise) Units(party, kind string, day Date) []string {
+func (e *Enterprise) Units(party, kind string, day platform.Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.model.UnitsIn(party, kind, day)
 }
 
 // Below expands units through active placements in one structure.
-func (e *Enterprise) Below(units []string, kind string, day Date) []string {
+func (e *Enterprise) Below(units []string, kind string, day platform.Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.model.Descendants(units, kind, day)
@@ -829,7 +829,7 @@ func (e *Enterprise) Below(units []string, kind string, day Date) []string {
 
 // Holders are the members holding a membership (with role, when given) in
 // unit or in an organisation above it in kind on day.
-func (e *Enterprise) Holders(kind, unit, role string, day Date) []string {
+func (e *Enterprise) Holders(kind, unit, role string, day platform.Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	var out []string
@@ -851,7 +851,7 @@ func (e *Enterprise) Holders(kind, unit, role string, day Date) []string {
 // Calendar is the working calendar of party on day: that of its primary
 // organisation, else of any of its organisations, found up any kind; else the
 // tenant's first; else Monday to Friday (ADR-0038).
-func (e *Enterprise) Calendar(party string, day Date) platform.Calendar {
+func (e *Enterprise) Calendar(party string, day platform.Date) platform.Calendar {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	m := &e.model
@@ -899,14 +899,14 @@ func (e *Enterprise) Calendar(party string, day Date) platform.Calendar {
 // --- reads ---
 
 // Metamodel is what the client draws palettes from: the current release's
-// stereotypes in the Enterprise Core enterpriseapi.Profile, with the whole registry behind.
+// stereotypes in the Enterprise Core enterprisemodel.Profile, with the whole registry behind.
 // PatternInfo is a pattern with what it adds by default.
-type PatternInfo = enterpriseapi.PatternInfo
+type PatternInfo = enterprisemodel.PatternInfo
 
-type Metamodel = enterpriseapi.Metamodel
+type Metamodel = enterprisemodel.Metamodel
 
 // Element and Related serve host.Directory for the apps (ADR-0022 D3).
-func (e *Enterprise) Element(id string, day Date) (platform.ElementInfo, bool) {
+func (e *Enterprise) Element(id string, day platform.Date) (platform.ElementInfo, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	el := e.model.ElementOf(id)
@@ -916,7 +916,7 @@ func (e *Enterprise) Element(id string, day Date) (platform.ElementInfo, bool) {
 	return platform.ElementInfo{ID: el.ID, Stereotype: el.Stereotype, Name: el.Name, Kind: el.Kind, Owner: el.Owner}, true
 }
 
-func (e *Enterprise) Related(element, stereotype string, outgoing bool, day Date) []string {
+func (e *Enterprise) Related(element, stereotype string, outgoing bool, day platform.Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.model.Of(element, stereotype, outgoing, day)
@@ -934,16 +934,16 @@ func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	case ReadPublished:
 		return e.model.Published(e.tenant), nil
 	case ReadPatterns:
-		out := []PatternInfo{}
-		for _, p := range enterpriseapi.Patterns() {
-			pv, _ := enterpriseapi.PatternPreview(p.ID, "", nil)
-			out = append(out, PatternInfo{Pattern: p, Preview: pv, LevelName: enterpriseapi.LevelNames[p.Level]})
+		out := []enterprisemodel.PatternInfo{}
+		for _, p := range enterprisemodel.Patterns() {
+			pv, _ := enterprisemodel.PatternPreview(p.ID, "", nil)
+			out = append(out, enterprisemodel.PatternInfo{Pattern: p, Preview: pv, LevelName: enterprisemodel.LevelNames[p.Level]})
 		}
 		return out, nil
 	case ReadMetamodel:
 		mm := uaf.Current()
-		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: enterpriseapi.Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
-			Views: enterpriseapi.Views(mm), Contracts: enterpriseapi.Contracts(mm)}, nil
+		return enterprisemodel.Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: enterprisemodel.Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
+			Views: enterprisemodel.Views(mm), Contracts: enterprisemodel.Contracts(mm)}, nil
 	}
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }

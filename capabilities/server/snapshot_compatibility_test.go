@@ -66,14 +66,14 @@ func TestSnapshotRestoreFormatsAndLegacyEligibility(t *testing.T) {
 			}
 			decide(t, live, "clerk", "stock", "stock.bin.create", "stock.bin", "B2", map[string]any{"code": "two"}, at.Add(time.Second))
 			restored := compose("stock.ledger.v1", "1")
-			if after := start(restored, "build-b"); after != seq || restored.records.types["stock.bin"].rows.len() != 2 {
+			if after := start(restored, "build-b"); after != seq || restored.records.types["stock.bin"].rows.Len() != 2 {
 				t.Fatalf("compatible build did not restore checkpoint plus suffix: %d", after)
 			}
 			for _, incompatible := range []*Tenant{compose("stock.ledger.v2", "1"), compose("stock.ledger.v1", "2")} {
-				if err := incompatible.Restore(state); err == nil || incompatible.records.types["stock.bin"].rows.len() != 0 {
+				if err := incompatible.Restore(state); err == nil || incompatible.records.types["stock.bin"].rows.Len() != 0 {
 					t.Fatal("incompatible owner or composition changed the fresh state")
 				}
-				if after := start(incompatible, "build-b"); after != 0 || incompatible.records.types["stock.bin"].rows.len() != 2 {
+				if after := start(incompatible, "build-b"); after != 0 || incompatible.records.types["stock.bin"].rows.Len() != 2 {
 					t.Fatalf("incompatible format did not replay the retained journal: %d", after)
 				}
 			}

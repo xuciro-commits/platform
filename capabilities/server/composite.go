@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"io"
+	"platformserver/internal/acceptance"
 	"platformserver/internal/host"
 	"strconv"
 	"strings"
@@ -60,7 +61,7 @@ type acceptedComposite struct {
 }
 
 func compositeRequestHash(tenant, member, key string, edits []CompositeEdit) (string, error) {
-	return canonicalDigest(struct {
+	return acceptance.Digest(struct {
 		Tenant, Member, Key string
 		Edits               []CompositeEdit
 	}{tenant, member, key, edits})
@@ -81,7 +82,7 @@ func encodeAcceptedComposite(saved acceptedComposite) ([]byte, error) {
 
 func compositeDigest(saved acceptedComposite) (string, error) {
 	saved.Digest = ""
-	return canonicalDigest(saved)
+	return acceptance.Digest(saved)
 }
 
 // PostgreSQL JSONB can reorder an edit's object keys while the sealed
@@ -91,11 +92,11 @@ func sameCompositePayload(a, b []byte) bool {
 	if len(a) == 0 || len(b) == 0 {
 		return len(a) == len(b)
 	}
-	left, err := canonicalDigest(json.RawMessage(a))
+	left, err := acceptance.Digest(json.RawMessage(a))
 	if err != nil {
 		return false
 	}
-	right, err := canonicalDigest(json.RawMessage(b))
+	right, err := acceptance.Digest(json.RawMessage(b))
 	return err == nil && left == right
 }
 

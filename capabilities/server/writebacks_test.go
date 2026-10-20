@@ -16,12 +16,13 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
+	"platformserver/apps/core"
 	"platformserver/platform"
 )
 
 func TestIntegratorSeesOnlyIntegrationDeliveryMetadata(t *testing.T) {
 	now := time.Now()
-	tn := &Tenant{ID: "metadata", outbound: []*effect{
+	tn := &Tenant{ID: "metadata", apps: []platform.App{core.New("metadata")}, outbound: []*effect{
 		{Effect: platform.Effect{ID: "own", App: construction.ID, Endpoint: "connection:c", Event: "writeback:wrong", Body: "private"}},
 		{Effect: platform.Effect{ID: "allowed", App: construction.ID, Endpoint: "connection:c", Event: "writeback/orders", Body: "private-request", Error: "private-answer", State: "retrying"}},
 		{Effect: platform.Effect{ID: "book", App: construction.ID, Endpoint: construction.BooksEndpoint, Event: "journal/receipt.post", Body: "private-journal", Target: "private-record", Error: "No fiscal period is open private-period", State: "retrying"}},
@@ -35,6 +36,21 @@ func TestIntegratorSeesOnlyIntegrationDeliveryMetadata(t *testing.T) {
 	body, _ := json.Marshal(rows)
 	if strings.Contains(string(body), "private") || strings.Contains(string(body), "body") || strings.Contains(string(body), "target") {
 		t.Fatalf("delivery metadata leaked a payload: %s", body)
+	}
+	// Current outcomes carry the owner's approved text, independently of the
+	// restricted error wording. A current account error containing "closed"
+	// must never be mistaken for an unavailable fiscal period.
+	tn.outbound[2].PublicMessage = "The last delivery attempt failed"
+	tn.outbound[2].Error = "Line 1: account closed-private-account does not exist"
+	rows, err = tn.integrationEffects(member, now)
+	if err != nil || rows[0].Error != "The last delivery attempt failed" {
+		t.Fatalf("current delivery text was reclassified from an error: %+v %v", rows, err)
+	}
+	tn.outbound[2].PublicMessage = "Waiting for an open fiscal period"
+	tn.outbound[2].Error = "A future translated diagnostic with private accounting details"
+	rows, err = tn.integrationEffects(member, now)
+	if err != nil || rows[0].Error != "Waiting for an open fiscal period" {
+		t.Fatalf("public delivery text depended on the diagnostic language: %+v %v", rows, err)
 	}
 	member.Roles[construction.ID] = construction.User
 	if _, err := tn.integrationEffects(member, now); err == nil {

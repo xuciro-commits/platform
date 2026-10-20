@@ -1,6 +1,6 @@
-package enterpriseapi
+package enterprise
 
-import "platformserver/internal/host/enterpriseapi/uaf"
+import "platformserver/internal/enterprise/uaf"
 
 // The Enterprise Core Profile (ADR-0022 D1): the UAF stereotypes a tenant
 // meets first, with the words people use for them and the description views

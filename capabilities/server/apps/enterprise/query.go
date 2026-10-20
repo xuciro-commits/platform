@@ -1,7 +1,7 @@
 package enterprise
 
 import (
-	"platformserver/internal/host/enterpriseapi"
+	enterprisemodel "platformserver/internal/enterprise"
 	"slices"
 	"strings"
 	"time"
@@ -17,13 +17,13 @@ import (
 // /v1/enterprise-resolve; the generated SDK (SDK()) wraps both.
 
 // EnterpriseQueryElement is one element as the query contract projects it.
-type EnterpriseQueryElement = enterpriseapi.EnterpriseQueryElement
+type EnterpriseQueryElement = enterprisemodel.EnterpriseQueryElement
 
 // EnterpriseQueryResult is the answer both reads share.
-type EnterpriseQueryResult = enterpriseapi.EnterpriseQueryResult
+type EnterpriseQueryResult = enterprisemodel.EnterpriseQueryResult
 
-func project(e Element, today Date) EnterpriseQueryElement {
-	return EnterpriseQueryElement{ID: e.ID, Stereotype: e.Stereotype, Name: e.Name, Kind: e.Kind, ShortName: e.ShortName,
+func project(e enterprisemodel.Element, today platform.Date) enterprisemodel.EnterpriseQueryElement {
+	return enterprisemodel.EnterpriseQueryElement{ID: e.ID, Stereotype: e.Stereotype, Name: e.Name, Kind: e.Kind, ShortName: e.ShortName,
 		Legal: e.Legal, From: e.From, Until: e.Until, Periods: slices.Clone(e.Periods), Closed: !e.ActiveOn(today)}
 }
 
@@ -33,13 +33,13 @@ func project(e Element, today Date) EnterpriseQueryElement {
 // ("all": no window, closed and future included), limit a bounded page (the
 // host caps it before calling). Results sort by id: a picker's order must not
 // depend on map iteration.
-func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit int, now time.Time) (EnterpriseQueryResult, *kernel.Error) {
-	today := Date(now.UTC().Format(time.DateOnly))
+func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit int, now time.Time) (enterprisemodel.EnterpriseQueryResult, *kernel.Error) {
+	today := platform.Date(now.UTC().Format(time.DateOnly))
 	if alive != "" && alive != "all" {
 		if len(alive) != len("2006-01-02") {
-			return EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "alive is \"all\" or a YYYY-MM-DD day")
+			return enterprisemodel.EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "alive is \"all\" or a YYYY-MM-DD day")
 		}
-		today = Date(alive)
+		today = platform.Date(alive)
 	}
 	keep := map[string]bool{}
 	for _, s := range stereotypes {
@@ -50,7 +50,7 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 	needle := strings.ToLower(strings.TrimSpace(q))
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	matches := []Element{}
+	matches := []enterprisemodel.Element{}
 	for _, el := range e.model.Elements {
 		if el.Deleted {
 			continue
@@ -66,11 +66,11 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 		}
 		matches = append(matches, el)
 	}
-	slices.SortFunc(matches, func(a, b Element) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(matches, func(a, b enterprisemodel.Element) int { return strings.Compare(a.ID, b.ID) })
 	if limit > 0 && len(matches) > limit {
 		matches = matches[:limit]
 	}
-	out := EnterpriseQueryResult{Elements: make([]EnterpriseQueryElement, len(matches))}
+	out := enterprisemodel.EnterpriseQueryResult{Elements: make([]enterprisemodel.EnterpriseQueryElement, len(matches))}
 	for i, el := range matches {
 		out.Elements[i] = project(el, today)
 	}
@@ -81,14 +81,14 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 // of each named id, closed elements included and marked, unknown ids skipped —
 // a stored reference always reads. At most 100 ids per call keep the answer
 // bounded; empty resolves to nothing.
-func (e *Enterprise) Resolve(ids []string, now time.Time) (EnterpriseQueryResult, *kernel.Error) {
+func (e *Enterprise) Resolve(ids []string, now time.Time) (enterprisemodel.EnterpriseQueryResult, *kernel.Error) {
 	if len(ids) > 100 {
-		return EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "resolve takes at most 100 ids")
+		return enterprisemodel.EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "resolve takes at most 100 ids")
 	}
-	today := Date(now.UTC().Format(time.DateOnly))
+	today := platform.Date(now.UTC().Format(time.DateOnly))
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	out := EnterpriseQueryResult{Elements: []EnterpriseQueryElement{}}
+	out := enterprisemodel.EnterpriseQueryResult{Elements: []enterprisemodel.EnterpriseQueryElement{}}
 	for _, id := range ids {
 		if id == "" {
 			continue

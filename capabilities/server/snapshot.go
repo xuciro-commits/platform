@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"maps"
+	"platformserver/internal/acceptance"
 	"platformserver/internal/host"
+	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -130,7 +132,7 @@ func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 		composition = append(composition, item)
 	}
 	slices.SortFunc(composition, func(a, b compositionApp) int { return strings.Compare(a.ID, b.ID) })
-	digest, err := canonicalDigest(composition)
+	digest, err := acceptance.Digest(composition)
 	compatibility.Composition = digest
 	return compatibility, err
 }
@@ -143,7 +145,7 @@ func (t *Tenant) snapshotKey(code string) (string, error) {
 	if err != nil || compatibility.Host == "" {
 		return code, err
 	}
-	return canonicalDigest(compatibility)
+	return acceptance.Digest(compatibility)
 }
 
 func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
@@ -252,8 +254,8 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	rows := map[string][]*row{}
 	t.records.mu.Lock()
 	for typ, et := range t.records.types {
-		rows[typ] = make([]*row, 0, et.rows.len())
-		for _, value := range et.rows.all() {
+		rows[typ] = make([]*row, 0, et.rows.Len())
+		for _, value := range et.rows.All() {
 			rows[typ] = append(rows[typ], value)
 		}
 	}
@@ -309,7 +311,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			held[typ] = rows
 			continue
 		}
-		entries := make([]recordEntry[*row], 0, len(rows))
+		entries := make([]records.Entry[*row], 0, len(rows))
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
 			decode, err := rowDecodeFormattedImage(et.info, r.Value, r.Projection, t.records.readRelease, r.Format)
@@ -333,9 +335,9 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			}
 			recovered.historyHead = head
 			recovered.retainOriginal(r.Value)
-			entries = append(entries, recordEntry[*row]{recordOf(v).ID, recovered})
+			entries = append(entries, records.Entry[*row]{Key: recordOf(v).ID, Value: recovered})
 		}
-		index, err := recordIndexFrom(entries)
+		index, err := records.From(entries)
 		if err != nil {
 			return nil, err
 		}
@@ -463,7 +465,7 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 		}
 	}
 	for typ, et := range t.records.types {
-		for _, row := range et.rows.all() {
+		for _, row := range et.rows.All() {
 			if err := validateExtractionOrigin(t.records, typ, row.extraction); err != nil {
 				return err
 			}

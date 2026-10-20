@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -100,7 +101,7 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 	var policies []authz.Policy
 	if owner != nil {
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
-		context.Definition, _ = canonicalDigest([]any{c.App, owner.Manifest().Version, permission, allowed})
+		context.Definition, _ = acceptance.Digest([]any{c.App, owner.Manifest().Version, permission, allowed})
 	}
 	if len(details) > 0 {
 		detail := details[0]
@@ -182,7 +183,7 @@ func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string,
 			allowed = []string{authz.AnyMember}
 		}
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
-		context.Definition, _ = canonicalDigest([]any{app, owner.Manifest().Version, permission, kind, allowed})
+		context.Definition, _ = acceptance.Digest([]any{app, owner.Manifest().Version, permission, kind, allowed})
 		if name, input := strings.CutPrefix(permission, "input:"); input {
 			t.opsMu.Lock()
 			connector := t.connectors.byID[m.ID]
@@ -286,7 +287,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 	et := store.types[q.Type]
 	var current *row
 	if et != nil {
-		current = et.rows.get(q.Record)
+		current = et.rows.Get(q.Record)
 	}
 	if !held {
 		store.mu.Unlock()
@@ -316,7 +317,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 	}
 	if et != nil {
 		context.Definition = et.info.Type
-		if digest, err := canonicalDigest(struct {
+		if digest, err := acceptance.Digest(struct {
 			Fields                          []platform.FieldInfo
 			Derived                         []platform.DerivationInfo
 			Withheld                        []int

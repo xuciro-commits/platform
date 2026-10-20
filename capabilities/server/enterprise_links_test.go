@@ -15,7 +15,7 @@ import (
 
 	"platformserver/apps/build"
 	"platformserver/apps/enterprise"
-	enterpriseapi "platformserver/internal/host/enterpriseapi"
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/platform"
 )
 
@@ -89,7 +89,7 @@ func TestEnterpriseLinkPreviewUsesOriginalConnectionWithoutWriting(t *testing.T)
 	}
 	payload := map[string]any{"link": preview.Link, "base": preview.Base, "content": preview.Content, "connectionRevision": preview.ConnectionRevision, "slice": preview.Slice}
 	altered := preview.Slice
-	altered.Elements = append([]enterpriseapi.Element(nil), altered.Elements...)
+	altered.Elements = append([]enterprisemodel.Element(nil), altered.Elements...)
 	altered.Elements[0].Name = "Not the reviewed name"
 	payload["slice"] = altered
 	if got := refuse(t, tn, "owner", enterprise.ID, enterprise.SchemaSliceImport, enterprise.ModelType, "altered-import", payload, txnAt); !strings.Contains(got, "differs from its preview") {
@@ -98,7 +98,7 @@ func TestEnterpriseLinkPreviewUsesOriginalConnectionWithoutWriting(t *testing.T)
 	payload["slice"] = preview.Slice
 	decide(t, tn, "owner", enterprise.ID, enterprise.SchemaSliceImport, enterprise.ModelType, "source-import", payload, txnAt)
 	imported := model.Model()
-	element := imported.ElementOf(enterpriseapi.ImportedElementID("source", "remote"))
+	element := imported.ElementOf(enterprisemodel.ImportedElementID("source", "remote"))
 	if element == nil || element.Owner != "tenant:source" || calls.Load() != 1 {
 		t.Fatal("confirmation did not import the reviewed content through its original owner")
 	}
@@ -136,7 +136,7 @@ func TestEnterpriseLinkPreviewRejectsChangedConnectionAndModel(t *testing.T) {
 					decide(t, tn, "owner", enterprise.ID, enterprise.SchemaElementEdit, enterprise.ElementType, "group", map[string]any{"name": "Changed group"}, txnAt)
 				}
 				if change == "tenant" || change == "uaf" {
-					slice := enterpriseapi.Slice{Tenant: "source", UAF: model.Model().UAF, Elements: []enterpriseapi.Element{{ID: "remote", Name: "Remote", Stereotype: enterpriseapi.Organization}}, Relationships: []enterpriseapi.Relationship{}}
+					slice := enterprisemodel.Slice{Tenant: "source", UAF: model.Model().UAF, Elements: []enterprisemodel.Element{{ID: "remote", Name: "Remote", Stereotype: enterprisemodel.Organization}}, Relationships: []enterprisemodel.Relationship{}}
 					if change == "tenant" {
 						slice.Tenant = "another-wrong-source"
 					} else {

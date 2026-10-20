@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 
@@ -303,7 +304,7 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	// a second authority. Definitions have already installed their original types.
 	t.records.mu.Lock()
 	for typ, et := range t.records.types {
-		for id, r := range et.rows.all() {
+		for id, r := range et.rows.All() {
 			raw, err := store.StateRecord(ctx, t.ID, typ, id)
 			if err != nil {
 				t.records.mu.Unlock()
@@ -366,7 +367,7 @@ func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 	d := journal.StateDelta{}
 	t.records.mu.Lock()
 	for typ, et := range t.records.types {
-		for id, r := range et.rows.all() {
+		for id, r := range et.rows.All() {
 			image, err := r.image()
 			if err != nil {
 				t.records.mu.Unlock()
@@ -413,8 +414,8 @@ func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 }
 
 func sameStoredJSON(a, b json.RawMessage) bool {
-	x, e := canonicalDigest(a)
-	y, f := canonicalDigest(b)
+	x, e := acceptance.Digest(a)
+	y, f := acceptance.Digest(b)
 	return e == nil && f == nil && x == y
 }
 

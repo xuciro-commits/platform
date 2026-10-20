@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strconv"
 	"strings"
@@ -62,7 +63,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 				}
 			}
 			if t.agents != nil && (m.Holds(construction.ID, construction.Builder) || m.Holds(construction.ID, construction.Publisher)) {
-				digest, _ := canonicalDigest(asset)
+				digest, _ := acceptance.Digest(asset)
 				reports, _, problem := platform.Find[Evaluation](t.automation(AgentApp, false), platform.Query{Domain: platform.Raw([]any{[]any{"agent", "=", asset.Ref.App + "." + asset.Ref.Name}, []any{"definitionDigest", "=", digest}})})
 				if problem != nil {
 					return nil, problem

@@ -44,7 +44,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	for n := 2; n <= 5; n++ {
 		decide(t, live, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": n}, at.Add(time.Duration(n)*time.Second))
 	}
-	row := live.records.types["stock.item"].rows.get("I1")
+	row := live.records.types["stock.item"].rows.Get("I1")
 	if row.history != nil || row.loadHistory == nil || len(row.recordHistory()) != 5 {
 		t.Fatal("complete record history remained resident or was lost")
 	}
@@ -111,7 +111,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if got, refusal := live.Submit(memberOf(t, live, "ana"), next.GetSubmission(), at.Add(time.Minute)); refusal != nil || !proto.Equal(got, next) {
 		t.Fatalf("unknown-outcome retry did not apply its original result: %v", refusal)
 	}
-	if qty := live.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Qty; qty != 6 || j.Position(id) != position+1 {
+	if qty := live.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Qty; qty != 6 || j.Position(id) != position+1 {
 		t.Fatalf("unknown-outcome retry returned without applying or appended twice: %d", qty)
 	}
 	restored := compose()
@@ -119,7 +119,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if err = deployment.restoreTenants(ctx, j, "build-b", []*Tenant{restored}, map[string]int64{}, map[string]bool{}); err != nil || restored.quarantined() {
 		t.Fatalf("restore failed: %v %v", err, restored.fault.Load())
 	}
-	current := restored.records.types["stock.item"].rows.get("I1")
+	current := restored.records.types["stock.item"].rows.Get("I1")
 	if current.history != nil || len(current.recordHistory()) != 6 || current.value.Interface().(Item).Qty != 6 {
 		t.Fatal("restart did not load committed current/history")
 	}

@@ -108,9 +108,16 @@ code-size: ## 分开统计手写生产代码、测试和生成物；REVISION 可
 	python3 scripts/code-size.py $(if $(REVISION),--revision "$(REVISION)") --output .build/code-size$(if $(REVISION),-$(REVISION)).json
 
 .PHONY: check-go
-check-go: ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
+check-go: check-uaf ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./...
 	scripts/verify.sh format composition-static
+
+.PHONY: generate-uaf check-uaf
+generate-uaf: ## 从完整 OMG XMI 原件生成 UAF 运行元模型
+	cd capabilities/server && $(GO) run ./cmd/uaf-gen
+
+check-uaf: ## 只读检查 UAF 运行元模型与标准原件一致
+	cd capabilities/server && $(GO) run ./cmd/uaf-gen -check
 
 .PHONY: check-web
 check-web: ## 检查生成代码类型一致性、Catalog 资产库及全部 Web 包类型检查

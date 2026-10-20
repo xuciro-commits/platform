@@ -43,7 +43,7 @@ func (t *Tenant) functionConversation(store *recordStore, member platform.Member
 		if !decision.Allow || len(decision.Withheld) > 0 {
 			return nil, nil, fmt.Errorf("conversation history is not readable")
 		}
-		row := et.rows.get(id)
+		row := et.rows.Get(id)
 		if row == nil {
 			return nil, nil, fmt.Errorf("conversation history is unavailable")
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"platformserver/internal/acceptance"
 	"strings"
 	"time"
 
@@ -108,11 +109,11 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture constructio
 		return false, nil
 	}
 	if fixture.ExpectOutput != "" {
-		actual, err := canonicalDigest(json.RawMessage(run.Output))
+		actual, err := acceptance.Digest(json.RawMessage(run.Output))
 		if err != nil {
 			return false, nil
 		}
-		expected, err := canonicalDigest(json.RawMessage(fixture.ExpectOutput))
+		expected, err := acceptance.Digest(json.RawMessage(fixture.ExpectOutput))
 		return err == nil && actual == expected, nil
 	}
 	return true, nil

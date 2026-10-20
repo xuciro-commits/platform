@@ -125,7 +125,7 @@ func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.
 		if err := json.Unmarshal(definition.Image, value.Addr().Interface()); err != nil {
 			return nil, err
 		}
-		installed := *et.rows.get(id)
+		installed := *et.rows.Get(id)
 		installed.value, installed.original = value, nil
 		et.setRow(id, &installed)
 	}

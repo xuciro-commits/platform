@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
 	"platformserver/internal/construction"
+	"platformserver/internal/records"
 	"platformserver/platform"
 )
 
@@ -77,16 +79,16 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 		for _, field := range source.Fields {
 			fields = append(fields, field.Name)
 		}
-		for id := range et.rows.all() {
+		for id := range et.rows.All() {
 			decision := t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "read", Type: typ, Record: id, Fields: fields}, at, false)
 			if err := authorizationRefusal(decision); err != nil {
 				return MigrationReview{}, err
 			}
-			image, err := et.rows.get(id).image()
+			image, err := et.rows.Get(id).image()
 			if err != nil {
 				return MigrationReview{}, err
 			}
-			witness, err := canonicalDigest(image)
+			witness, err := acceptance.Digest(image)
 			if err != nil {
 				return MigrationReview{}, err
 			}
@@ -105,7 +107,7 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 					_ = json.Unmarshal(result.Extracted["id"], &id)
 					key := step.Target + "/" + id
 					existing := t.records.types[step.Target]
-					if extractions[key] || existing != nil && existing.rows.get(id) != nil {
+					if extractions[key] || existing != nil && existing.rows.Get(id) != nil {
 						review.Issues = append(review.Issues, MigrationReviewIssue{Type: typ, Record: id, Step: index + 1, Reason: "extraction identity is already used"})
 					}
 					extractions[key] = true
@@ -116,15 +118,15 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 				}
 			}
 		}
-		sourceHash, err := canonicalDigest(source.Fields)
+		sourceHash, err := acceptance.Digest(source.Fields)
 		if err != nil {
 			return MigrationReview{}, err
 		}
-		targetHash, err := canonicalDigest(targets[typ].Fields)
+		targetHash, err := acceptance.Digest(targets[typ].Fields)
 		if err != nil {
 			return MigrationReview{}, err
 		}
-		review.Types = append(review.Types, MigrationReviewType{Type: typ, Records: et.rows.len(), SourceShape: sourceHash, TargetShape: targetHash})
+		review.Types = append(review.Types, MigrationReviewType{Type: typ, Records: et.rows.Len(), SourceShape: sourceHash, TargetShape: targetHash})
 	}
 	slices.SortFunc(review.Issues, func(a, b MigrationReviewIssue) int {
 		if a.Type < b.Type || a.Type == b.Type && a.Record < b.Record {
@@ -135,7 +137,7 @@ func (t *Tenant) reviewMigrationPlanLocked(m platform.Member, plan platform.Migr
 		}
 		return a.Step - b.Step
 	})
-	review.ID, err = canonicalDigest(struct {
+	review.ID, err = acceptance.Digest(struct {
 		Plan    platform.MigrationPlan
 		Shapes  []MigrationReviewType
 		Records map[string]string
@@ -175,14 +177,14 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 	}
 	slices.Sort(types)
 	types = slices.Compact(types)
-	records := store.forkRecords()
-	records.readRelease = plan.To // This is the private target decoder context.
+	draftRecords := store.forkRecords()
+	draftRecords.readRelease = plan.To // This is the private target decoder context.
 	sources := map[string]platform.EntityInfo{}
 	for _, typ := range types {
 		if !slices.ContainsFunc(plan.Steps, func(step platform.MigrateStep) bool { return slices.Contains(step.Types, typ) }) {
 			continue
 		}
-		old := records.types[typ]
+		old := draftRecords.types[typ]
 		if old == nil {
 			continue
 		}
@@ -191,9 +193,9 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 			return nil, fmt.Errorf("migration source type is outside the sealed release")
 		}
 		sources[typ] = old.info
-		old.setRows(recordIndex[*row]{})
+		old.setRows(records.Index[*row]{})
 	}
-	view, err := t.assetInstallationView(records)
+	view, err := t.assetInstallationView(draftRecords)
 	if err != nil {
 		return nil, err
 	}

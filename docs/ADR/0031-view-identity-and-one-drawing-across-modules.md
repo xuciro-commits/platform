@@ -33,7 +33,7 @@
 ### D3 关系由元模型说了算：契约、拒绝、以及每个偏离都说清楚
 
 - `uaf.go` 解析时把普通端点规则读成结构化数据（`Stereotype.Client/Supplier`）；`mm.Relationship` 也据此判断——UAF 把 `MapsToGoal` 这类关系建在 `Element` 上，光看 metaclass 会漏（45 个带端点规则的关系里，`MapsToGoal` 就是被 metaclass 判据漏掉的那个）。
-- 新增 `internal/host/enterpriseapi/relations.go`：`Contracts(mm)` 给出本 profile 的关系契约（标准规则 + 平台扩展 + 平台自造，各自带规则原文或理由），`Allowed(...)` 是唯一裁决者，`EndsFor(...)` 给界面列出可选项。**所有写入口径一致**：`relationship.add`、`sync`（联邦同步）、`slice.import` 都过 `Allowed`，拒绝文案点名两端与允许的 stereotype（"«OwnsProcess» joins ActualOrganizationalResource (client) to OperationalActivity (supplier) in UAF 1.3 — not ActualOrganization to Capability"）。租户账号 `member:<id>` 在契约里按 `ActualPerson` 判定（账号不是元素，但站在人的位置上）。
+- 新增 `internal/enterprise/relations.go`：`Contracts(mm)` 给出本 profile 的关系契约（标准规则 + 平台扩展 + 平台自造，各自带规则原文或理由），`Allowed(...)` 是唯一裁决者，`EndsFor(...)` 给界面列出可选项。**所有写入口径一致**：`relationship.add`、`sync`（联邦同步）、`slice.import` 都过 `Allowed`，拒绝文案点名两端与允许的 stereotype（"«OwnsProcess» joins ActualOrganizationalResource (client) to OperationalActivity (supplier) in UAF 1.3 — not ActualOrganization to Capability"）。租户账号 `member:<id>` 在契约里按 `ActualPerson` 判定（账号不是元素，但站在人的位置上）。
 - 三处分寸，每条都在契约里写明出处：
   - **照标准执行**：`FillsPost`、`MapsToGoal`、`OwnsProcess`、`MilestoneDependency`、`Enables`、`MotivatedBy`、`ProjectSequence` 等。
   - **标准 + 平台扩展**：`ResponsibleFor` 的标准 supplier 是项目/职责/里程碑，平台让组织也对岗位、场所、系统、目标负责（扩展逐条列出）；`IsCapableToPerform` 保留兼容（老模型里的组织→能力），但契约写明 UAF 的原义是执行者→活动，并且**提供 UAF 自己的 `Exhibits`**；种子数据改用 `Exhibits`，`platform.Enterprise.Capable` 同时读两者，旧模型不破。

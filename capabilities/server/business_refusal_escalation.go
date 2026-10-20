@@ -3,6 +3,7 @@ package platformserver
 import (
 	"cmp"
 	"encoding/json"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"time"
@@ -75,7 +76,7 @@ func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Ti
 			if index-start+1 != g.policy.Count {
 				continue
 			}
-			key, err := canonicalDigest([]any{g.app, g.subject, g.action, g.code, g.policy, events[start].key})
+			key, err := acceptance.Digest([]any{g.app, g.subject, g.action, g.code, g.policy, events[start].key})
 			if err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The refusal escalation identity cannot be frozen")
 			}

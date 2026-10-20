@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strconv"
 	"strings"
@@ -81,7 +82,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an AI function source record")
 	}
 	sourceRef := f.Object + "/" + source
-	definition, err := canonicalDigest([]any{owner, f})
+	definition, err := acceptance.Digest([]any{owner, f})
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function definition cannot be bound")
 	}
@@ -102,7 +103,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		store.mu.Unlock()
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
 	}
-	row := et.rows.get(source)
+	row := et.rows.Get(source)
 	if row == nil || recordOf(row.value).Archived || !t.readableIn(store, member, sourceRef, at) {
 		store.mu.Unlock()
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
@@ -140,7 +141,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function dependencies cannot be bound")
 	}
-	hash, _ := canonicalDigest(string(raw))
+	hash, _ := acceptance.Digest(string(raw))
 	q := platform.Request{Model: f.Model, Target: target.GetId(), Reply: request.Reply,
 		Payload: platform.Prompt{System: f.SystemPrompt(), User: string(raw), MaxTokens: f.MaxTokens}}
 	x := t.planModelRequest(c, r, q, pending)
@@ -170,8 +171,8 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	if owner == "" {
 		owner = app
 	}
-	definition, err := canonicalDigest([]any{owner, f})
-	hash, hashErr := canonicalDigest(ask.Prompt.User)
+	definition, err := acceptance.Digest([]any{owner, f})
+	hash, hashErr := acceptance.Digest(ask.Prompt.User)
 	member, ok := t.Member(binding.Member)
 	sourceType, sourceID, sourceOK := strings.Cut(binding.Call.Source, "/")
 	replyType, replyID, replyOK := strings.Cut(ask.Record, "/")
@@ -190,7 +191,7 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	sourceTypeInfo := t.records.types[sourceType]
 	var sourcePresent bool
 	if sourceTypeInfo != nil {
-		row := sourceTypeInfo.rows.get(sourceID)
+		row := sourceTypeInfo.rows.Get(sourceID)
 		sourcePresent = row != nil && !recordOf(row.value).Archived
 	}
 	t.records.mu.Unlock()

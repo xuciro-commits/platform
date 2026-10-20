@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host/enterpriseapi"
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -25,15 +25,15 @@ func pinRecord(c platform.Caller, ref string, now time.Time) (map[string]any, *k
 
 // Pins are projected through their original record scopes; cached labels never
 // grant a reader more access or leave stale names after a business rename.
-func readableModel(c platform.Caller, m Model, now time.Time) Model {
+func readableModel(c platform.Caller, m enterprisemodel.Model, now time.Time) enterprisemodel.Model {
 	for i := range m.Views {
-		pins := []Pin{}
+		pins := []enterprisemodel.Pin{}
 		for _, pin := range m.Views[i].Pins {
 			row, err := pinRecord(c, pin.Ref, now)
 			if err != nil {
 				continue
 			}
-			pin.Label = enterpriseapi.RefID(pin.Ref)
+			pin.Label = enterprisemodel.RefID(pin.Ref)
 			for _, key := range []string{"name", "title", "number", "code"} {
 				if label, ok := row[key].(string); ok && label != "" {
 					pin.Label = label

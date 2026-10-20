@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"strings"
 	"time"
 
@@ -68,7 +69,7 @@ func observationRequestIdentity(ref platform.AssetRef, q ObservationEvaluate) (s
 	if q.Key == "" || len(q.Key) > 160 || strings.ContainsAny(q.Key, "/\x00\r\n") || q.Until.IsZero() {
 		return "", "", fmt.Errorf("choose a stable observation decision key and window end")
 	}
-	hash, err := canonicalDigest([]any{ref, q.Record, q.Until.UTC()})
+	hash, err := acceptance.Digest([]any{ref, q.Record, q.Until.UTC()})
 	return "observation:" + q.Key, "observation:" + hash, err
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"time"
@@ -226,7 +227,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 		}
 		actionVersion = &version
 	}
-	plan.stamp, err = canonicalDigest([]any{plan.info, plan.entity, plan.record, plan.connection, m, plan.header, actionVersion})
+	plan.stamp, err = acceptance.Digest([]any{plan.info, plan.entity, plan.record, plan.connection, m, plan.header, actionVersion})
 	if err != nil {
 		return plan, observationUnavailable(err)
 	}
@@ -244,7 +245,7 @@ func (t *Tenant) observationSourceActive(record string) bool {
 	if owner == nil {
 		return false
 	}
-	row := owner.rows.get(id)
+	row := owner.rows.Get(id)
 	return row != nil && !recordOf(row.value).Archived && businessField(owner.info, row.value, "state") == "published"
 }
 

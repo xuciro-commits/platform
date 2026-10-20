@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strconv"
@@ -112,7 +113,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if refusal != nil {
 		return "", fmt.Errorf("the plan model is not enabled")
 	}
-	config, err := canonicalDigest([]any{model, provider})
+	config, err := acceptance.Digest([]any{model, provider})
 	if err != nil {
 		return "", err
 	}
@@ -122,15 +123,15 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		}
 	}
 
-	definitionDigest, err := canonicalDigest(json.RawMessage(asset.Body))
+	definitionDigest, err := acceptance.Digest(json.RawMessage(asset.Body))
 	if err != nil {
 		return "", err
 	}
-	planDigest, err := canonicalDigest(plan)
+	planDigest, err := acceptance.Digest(plan)
 	if err != nil {
 		return "", err
 	}
-	identity, err := canonicalDigest([]string{t.ID, request.CandidateID, request.PlanID, request.Key})
+	identity, err := acceptance.Digest([]string{t.ID, request.CandidateID, request.PlanID, request.Key})
 	if err != nil {
 		return "", err
 	}
@@ -191,7 +192,7 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 		if !found || parseErr != nil || json.Unmarshal(asset.Body, &definition) != nil || definition.Check() != nil {
 			return fmt.Errorf("the saved function %s is invalid", asset.Ref.Name)
 		}
-		digest, err := canonicalDigest(json.RawMessage(asset.Body))
+		digest, err := acceptance.Digest(json.RawMessage(asset.Body))
 		if err != nil {
 			return err
 		}
@@ -240,7 +241,7 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 				if !ok || function.Archived || function.Name != asset.Ref.Name {
 					continue
 				}
-				planDigest, err := canonicalDigest(plan)
+				planDigest, err := acceptance.Digest(plan)
 				if err != nil || planDigest != report.PlanDigest {
 					continue
 				}
@@ -256,7 +257,7 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 			if refusal != nil {
 				continue
 			}
-			config, err := canonicalDigest([]any{model, provider})
+			config, err := acceptance.Digest([]any{model, provider})
 			if err != nil || config != report.ModelConfig || !report.CostComplete ||
 				report.Quality < report.Policy[0].MinQuality || report.CostUSD > report.Policy[0].MaxCostUSD ||
 				report.PeakLatency > report.Policy[0].MaxLatencyMillis ||

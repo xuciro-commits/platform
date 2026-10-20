@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 
@@ -106,8 +107,8 @@ func (t *Tenant) validateOperationCancellations(saved []acceptedOperationCancell
 		if err != nil {
 			return err
 		}
-		actualHash, _ := canonicalDigest(r)
-		expectedHash, _ := canonicalDigest(expected)
+		actualHash, _ := acceptance.Digest(r)
+		expectedHash, _ := acceptance.Digest(expected)
 		if actualHash != expectedHash {
 			return fmt.Errorf("operation cancellation predecessor differs")
 		}

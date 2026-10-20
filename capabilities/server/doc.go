@@ -25,8 +25,11 @@
 // W3 consumer boundaries (ADR-0037): internal/host names the role each
 // compiled owner receives; Host is only the composition aggregate. Console
 // and Agents own their state and receive ConsoleHost/AgentHost, never Tenant.
-// Construction and enterprise value contracts live in internal/construction
-// and enterpriseapi; runtime code imports no compiled apps. Public DTOs retain
+// Pure construction and enterprise declarations live in internal/construction
+// and internal/enterprise; UAF runtime data is generated before the build.
+// Immutable indexes and reference buckets live in internal/records; accepted
+// canonical encoding and strict decoding live in internal/acceptance.
+// Runtime code imports no compiled apps. Public DTOs retain
 // the original host API schema names and journal encodings.
 //
 // Lock obligations: mu owns the tenant decision lane, installed definitions,
@@ -42,7 +45,9 @@
 // decision lane, runs outside it, then revalidates authority and predecessor
 // before acceptance. File handles keep digest/ticket/version bounds. Each
 // owner keeps its original execution/recovery rules; there is no common I/O
-// executor. Race tests do not prove freedom from deadlock.
+// executor. Confirmation/Dispatch share disposable status-read scheduling and
+// captured-access checks; their evidence and resend policies stay distinct.
+// Race tests do not prove freedom from deadlock.
 //
 // The pipeline is Tenant.Submit (host.go) → accepted_*.go (one file per result kind) →
 // replay.go; snapshot.go carries every component's state. Routes live in

@@ -57,7 +57,7 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		refused.Code != pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT || len(entries) != 1 {
 		t.Fatalf("reused refusal key accepted another input: %v", refused)
 	}
-	if live.records.types["stock.item"].rows.get("I1") != nil {
+	if live.records.types["stock.item"].rows.Get("I1") != nil {
 		t.Fatal("refusal modified the record store")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return stockTenant(t) })

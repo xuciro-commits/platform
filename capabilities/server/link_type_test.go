@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
+	"platformserver/internal/records"
 	"platformserver/platform"
 	"reflect"
 	"strings"
@@ -89,27 +90,27 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		}
 		et := tn.records.types[child]
 		field, _ := et.info.Field("parent")
-		initial := et.referenceIndex(field).targets.root
+		initial := et.referenceIndex(field)
 		decide(t, tn, "user", construction.ID, parent+".edit", parent, "P4", map[string]any{"note": "Unrelated update"}, txnAt)
 		et = tn.records.types[child]
-		if et.referenceIndex(field).targets.root != initial {
+		if et.referenceIndex(field) != initial {
 			t.Fatal("unrelated write invalidated the reference index")
 		}
 		draft := tn.records.forkRecords()
 		private := draft.types[child]
-		changed := *private.rows.get("C2")
+		changed := *private.rows.Get("C2")
 		changed.value = copyOf(private.info.Go, changed.value.Interface())
 		changed.value.FieldByIndex(field.Index).SetString("P1")
 		private.setRow("C2", &changed)
 		draft.writes[child+"/C2"] = true
-		if private.referenceIndex(field).targets.get("P1").ids.len() != 2 || et.referenceIndex(field).targets.get("P1").ids.len() != 1 {
+		if private.referenceIndex(field).Get("P1").IDs.Len() != 2 || et.referenceIndex(field).Get("P1").IDs.Len() != 1 {
 			t.Fatal("private reverse-index updates leaked into live records")
 		}
-		if err := tn.records.promoteRecords(draft); err == nil || et.referenceIndex(field).targets.root != initial {
+		if err := tn.records.promoteRecords(draft); err == nil || et.referenceIndex(field) != initial {
 			t.Fatal("final image admitted conflicting references or changed its predecessor")
 		}
 		bulk := tn.records.forkRecords()
-		image, err := recordIndexFrom([]recordEntry[*row]{{"C1", et.rows.get("C1")}, {"C2", &changed}})
+		image, err := records.From([]records.Entry[*row]{{Key: "C1", Value: et.rows.Get("C1")}, {Key: "C2", Value: &changed}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -134,7 +135,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		}
 		decide(t, tn, "user", construction.ID, child+".edit", child, "C1", map[string]any{"parent": "P4"}, txnAt)
 		et = tn.records.types[child]
-		if et.referenceIndex(field).targets.get("P1").ids.len() != 0 || et.referenceIndex(field).targets.get("P4").ids.len() != 1 {
+		if et.referenceIndex(field).Get("P1").IDs.Len() != 0 || et.referenceIndex(field).Get("P4").IDs.Len() != 1 {
 			t.Fatal("changing a reference left the old key behind")
 		}
 		decide(t, tn, "user", construction.ID, child+".edit", child, "C1", map[string]any{"parent": ""}, txnAt)
@@ -147,7 +148,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		if err := tn.records.install(before.info); err != nil {
 			t.Fatal(err)
 		}
-		if next := tn.records.types[child]; next == before || next.referenceIndexes != nil || !reflect.DeepEqual(next.rows.get("C1").value.Interface(), before.rows.get("C1").value.Interface()) {
+		if next := tn.records.types[child]; next == before || next.referenceIndexes != nil || !reflect.DeepEqual(next.rows.Get("C1").value.Interface(), before.rows.Get("C1").value.Interface()) {
 			t.Fatal("schema replacement retained a stale index or changed record facts")
 		}
 	})

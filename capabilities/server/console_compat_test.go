@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
+	"platformserver/internal/acceptance"
 	"testing"
 	"time"
 
@@ -70,8 +71,8 @@ func TestAcceptedConsoleEnterpriseRenameReplay(t *testing.T) {
 	}
 	d := restored.app(PlatformApp).(*Console)
 	raw, _ := d.AcceptedState()
-	savedHash, _ := canonicalDigest(batch.States[0].Image)
-	if digest, _ := canonicalDigest(raw); digest != savedHash {
+	savedHash, _ := acceptance.Digest(batch.States[0].Image)
+	if digest, _ := acceptance.Digest(raw); digest != savedHash {
 		t.Fatal("recovery rewrote the historical directory image")
 	}
 	byID, _ := restored.Member("admin")

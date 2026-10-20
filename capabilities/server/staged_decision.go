@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -112,7 +113,7 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	}
 	connectors := kernel.NewConnectors()
 	connectors.Restore(descriptors, marks)
-	before, _ := canonicalDigest(notices)
+	before, _ := acceptance.Digest(notices)
 	return &stagedDecision{simulation: t.simulation, tenant: t, records: t.records.forkRecords(),
 		logs: map[*platform.Ledger]*kernel.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
@@ -210,7 +211,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 	if et != nil {
 		info = et.info
 		id := recordOf(copyOf(et.info.Go, entity)).ID
-		before, ref = et.rows.get(id), et.info.Type+"/"+id
+		before, ref = et.rows.Get(id), et.info.Type+"/"+id
 	}
 	d.records.mu.Unlock()
 	prepared, err := d.prepareBusinessRecord(c, entity, d.at)
@@ -224,7 +225,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		if _, exists := d.constraintWrites[ref]; !exists {
 			d.constraintWrites[ref] = constraintWrite{caller: c, before: before}
 		}
-		err = d.checkRecordConstraints(c, info, d.records.types[info.Type].rows.get(strings.TrimPrefix(ref, info.Type+"/")), before)
+		err = d.checkRecordConstraints(c, info, d.records.types[info.Type].rows.Get(strings.TrimPrefix(ref, info.Type+"/")), before)
 	}
 	if err != nil && d.failure == nil {
 		d.failure = err
@@ -234,7 +235,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		et := d.records.of(c, reflect.TypeOf(entity))
 		id := recordOf(copyOf(et.info.Go, entity)).ID
 		ref := et.info.Type + "/" + id
-		history := et.rows.get(id).historyLength()
+		history := et.rows.Get(id).historyLength()
 		d.records.mu.Unlock()
 		if origin := d.callbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
 			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&
@@ -277,8 +278,8 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 		et := d.records.types[ref.GetType()]
 		var raw []byte
 		var err error
-		if et != nil && et.rows.get(ref.GetId()) != nil {
-			raw, err = json.Marshal(et.rows.get(ref.GetId()).value.Interface())
+		if et != nil && et.rows.Get(ref.GetId()) != nil {
+			raw, err = json.Marshal(et.rows.Get(ref.GetId()).value.Interface())
 		}
 		d.records.mu.Unlock()
 		if len(raw) == 0 || err != nil || publisher.ValidateAcceptedPublication(schema, raw) != nil {
@@ -423,7 +424,7 @@ func (d *stagedDecision) Deliver(c platform.Caller, dataClass, from, to string, 
 			break
 		}
 	}
-	before, err := canonicalDigest(prior)
+	before, err := acceptance.Digest(prior)
 	if err != nil {
 		unsupportedStagedEffect()
 	}

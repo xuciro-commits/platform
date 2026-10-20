@@ -231,3 +231,56 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 		}
 	}
 }
+
+// Delivery classification is supplied by Core's rule, never inferred from the
+// wording of a rejected account, and its safe message survives pure recovery.
+func TestBooksDeliveryClassificationAndPublicMessage(t *testing.T) {
+	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	for _, tc := range []struct{ name, date, account, result, message, detail string }{
+		{"invalid-account", "2026-10-06", "closed-private-account", "rejected", "The last delivery attempt failed", "Line 1: account closed-private-account does not exist"},
+		{"missing-period", "2027-01-05", "1001", "retry", "Waiting for an open fiscal period", "No fiscal period covers 2027-01-05"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id := "classified-books-" + tc.name
+			pending := platform.Effect{ID: "posting", App: construction.ID, Key: "posting", Endpoint: construction.BooksEndpoint, Event: "journal/check", State: "pending", At: at, Due: at}
+			pending.Body = string(platform.Raw(platform.Journal{Record: platform.Record{ID: "journal"}, Date: tc.date, Lines: []platform.JournalLine{{Account: tc.account, Debit: 10}, {Account: "2202", Credit: 10}}}))
+			compose := func() *Tenant {
+				tn := composeTenant(t, id, []Seat{seatOf("dana", "build:builder", "core:accountant")}, core.New(id), build.New(id))
+				tn.outbound = append(tn.outbound, &effect{Effect: pending})
+				return tn
+			}
+			live := compose()
+			var entries []Entry
+			live.Record = func(e Entry) { entries = append(entries, e) }
+			out := live.sendBooks(pending, at)
+			if out.Result != tc.result || out.Detail != "ERROR_CODE_INVALID_ARGUMENT: "+tc.detail {
+				t.Fatalf("classification changed original accounting refusal: %+v", out)
+			}
+			live.settle(pending.ID, out, at)
+			if live.quarantined() || len(entries) != 1 {
+				t.Fatalf("classified result was not accepted once: entries=%d fault=%v", len(entries), live.fault.Load())
+			}
+			accepted, err := decodeAcceptedEffect(entries[0].Body)
+			if err != nil || accepted.Version != 5 || accepted.Outcome.PublicMessage != tc.message || accepted.After.PublicMessage != tc.message {
+				t.Fatalf("safe delivery text was not saved with its outcome: %+v %v", accepted, err)
+			}
+			check := func(tn *Tenant) {
+				t.Helper()
+				rows, refusal := tn.integrationEffects(memberOf(t, tn, "dana"), at)
+				if refusal != nil || len(rows) != 1 || rows[0].Error != tc.message {
+					t.Fatalf("integration metadata lost safe owner text: %+v %v", rows, refusal)
+				}
+				raw, _ := json.Marshal(rows)
+				if strings.Contains(string(raw), tc.detail) || strings.Contains(string(raw), "private") {
+					t.Fatal("integration metadata disclosed the accounting diagnostic", string(raw))
+				}
+			}
+			check(live)
+			restored := compose()
+			if err = restored.Replay(entries); err != nil {
+				t.Fatal("classified result failed pure recovery", err)
+			}
+			check(restored)
+		})
+	}
+}

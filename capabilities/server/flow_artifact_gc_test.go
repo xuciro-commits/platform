@@ -136,7 +136,7 @@ func TestContinuousOrphanCollectionPreservesHistoryAndRecoveryBoundary(t *testin
 	}
 	live.Files = files
 	live.records.mu.Lock()
-	row := live.records.types[platform.FlowInstanceType].rows.get(id)
+	row := live.records.types[platform.FlowInstanceType].rows.Get(id)
 	row.history = append(row.history, RecordChange{Fields: []FieldChange{{Field: "batch", Before: []byte("{")}}})
 	live.records.mu.Unlock()
 	if err := live.collectUnacceptedFlowArtifacts(context.Background(), now); err == nil {

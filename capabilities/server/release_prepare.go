@@ -11,6 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/internal/construction"
 	"platformserver/internal/host"
+	"platformserver/internal/records"
 	"platformserver/platform"
 )
 
@@ -84,7 +85,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		}
 		for typ, shape := range shapes {
 			if old := view.records.types[typ]; old != nil && old.info.Go != shape.Go {
-				old.setRows(recordIndex[*row]{})
+				old.setRows(records.Index[*row]{})
 			}
 		}
 	}
@@ -155,7 +156,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 			return nil, nil, fmt.Errorf("asset draft %s has no owner identity", draft.Type)
 		}
 		matches := 0
-		for _, row := range et.rows.all() {
+		for _, row := range et.rows.All() {
 			if !row.value.FieldByName("Record").Interface().(platform.Record).Archived && row.value.FieldByIndex(nameField.Index).String() == draft.Name {
 				matches++
 			}
@@ -163,7 +164,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		if matches > 1 {
 			return nil, nil, fmt.Errorf("asset draft %s/%s is ambiguous", draft.Type, draft.Name)
 		}
-		if request != nil && (matches > 0 || et.rows.get(draft.Name) != nil) {
+		if request != nil && (matches > 0 || et.rows.Get(draft.Name) != nil) {
 			return nil, nil, fmt.Errorf("asset %s already has a draft; open that draft instead", draft.Ref)
 		}
 		app := view.app(et.info.App)

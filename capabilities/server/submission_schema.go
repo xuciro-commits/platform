@@ -123,7 +123,7 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 		return binding, nil
 	}
 	if et := t.records.types["build.object"]; et != nil {
-		for _, row := range et.rows.all() {
+		for _, row := range et.rows.All() {
 			var metadata struct {
 				Published string `json:"published"`
 			}

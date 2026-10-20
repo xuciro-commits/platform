@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"time"
@@ -45,7 +46,7 @@ func releaseRequestHash(tenant, member, key, id string, active bool, upgrade ...
 	if len(upgrade) > 0 {
 		upgradeID = upgrade[0]
 	}
-	return canonicalDigest(struct {
+	return acceptance.Digest(struct {
 		Tenant, Member, Key, CandidateID string
 		Active                           bool
 		UpgradeID                        string `json:"UpgradeID,omitempty"`
@@ -68,7 +69,7 @@ func encodeAcceptedRelease(saved acceptedRelease) ([]byte, error) {
 
 func releaseDigest(saved acceptedRelease) (string, error) {
 	saved.Digest = ""
-	return canonicalDigest(saved)
+	return acceptance.Digest(saved)
 }
 
 func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
@@ -76,7 +77,7 @@ func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if len(raw) == 0 || len(raw) > 24<<20 {
 		return saved, fmt.Errorf("release result is empty or too large")
 	}
-	if err := decodeAcceptedJSON(raw, &saved, "release result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &saved, "release result"); err != nil {
 		return saved, err
 	}
 	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active, saved.UpgradeID)

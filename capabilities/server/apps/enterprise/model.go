@@ -1,42 +1,47 @@
 package enterprise
 
-import "platformserver/internal/host/enterpriseapi"
+import (
+	enterprisemodel "platformserver/internal/enterprise"
+	"platformserver/platform"
+)
 
-type Contract = enterpriseapi.Contract
-type Date = enterpriseapi.Date
-type Element = enterpriseapi.Element
-type Kind = enterpriseapi.Kind
-type Model = enterpriseapi.Model
-type Pair = enterpriseapi.Pair
-type Params = enterpriseapi.Params
-type Pattern = enterpriseapi.Pattern
-type Pin = enterpriseapi.Pin
-type Preview = enterpriseapi.Preview
-type ProfileEntry = enterpriseapi.ProfileEntry
-type Relationship = enterpriseapi.Relationship
-type SeedParams = enterpriseapi.SeedParams
-type Slice = enterpriseapi.Slice
-type SyncResult = enterpriseapi.SyncResult
-type View = enterpriseapi.View
-type Viewpoint = enterpriseapi.Viewpoint
-type Period = enterpriseapi.Period
-type TenantLink = enterpriseapi.TenantLink
+// These names preserve the application package's public source API. Internal
+// consumers use the enterprise model owner directly rather than these aliases.
+type Contract = enterprisemodel.Contract
+type Date = platform.Date
+type Element = enterprisemodel.Element
+type Kind = enterprisemodel.Kind
+type Model = enterprisemodel.Model
+type Pair = enterprisemodel.Pair
+type Params = enterprisemodel.Params
+type Pattern = enterprisemodel.Pattern
+type Pin = enterprisemodel.Pin
+type Preview = enterprisemodel.Preview
+type ProfileEntry = enterprisemodel.ProfileEntry
+type Relationship = enterprisemodel.Relationship
+type SeedParams = enterprisemodel.SeedParams
+type Slice = enterprisemodel.Slice
+type SyncResult = enterprisemodel.SyncResult
+type View = enterprisemodel.View
+type Viewpoint = enterprisemodel.Viewpoint
+type Period = platform.Period
+type TenantLink = enterprisemodel.TenantLink
 
 const (
-	Capability   = enterpriseapi.Capability
-	Exhibits     = enterpriseapi.Exhibits
-	FillsPost    = enterpriseapi.FillsPost
-	Goal         = enterpriseapi.Goal
-	Location     = enterpriseapi.Location
-	Membership   = enterpriseapi.Membership
-	Organization = enterpriseapi.Organization
-	Owns         = enterpriseapi.Owns
-	Performs     = enterpriseapi.Performs
-	Person       = enterpriseapi.Person
-	Placement    = enterpriseapi.Placement
-	Post         = enterpriseapi.Post
-	Project      = enterpriseapi.Project
-	Resource     = enterpriseapi.Resource
-	System       = enterpriseapi.System
-	Typed        = enterpriseapi.Typed
+	Capability   = enterprisemodel.Capability
+	Exhibits     = enterprisemodel.Exhibits
+	FillsPost    = enterprisemodel.FillsPost
+	Goal         = enterprisemodel.Goal
+	Location     = enterprisemodel.Location
+	Membership   = enterprisemodel.Membership
+	Organization = enterprisemodel.Organization
+	Owns         = enterprisemodel.Owns
+	Performs     = enterprisemodel.Performs
+	Person       = enterprisemodel.Person
+	Placement    = enterprisemodel.Placement
+	Post         = enterprisemodel.Post
+	Project      = enterprisemodel.Project
+	Resource     = enterprisemodel.Resource
+	System       = enterprisemodel.System
+	Typed        = enterprisemodel.Typed
 )

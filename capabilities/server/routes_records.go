@@ -12,15 +12,15 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/construction"
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/internal/host"
-	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
 
 // enterpriseApp is the tenant's enterprise modeling app, when one is mounted:
 // the typed query and resolve reads (ADR-0034) dispatch into it.
 func enterpriseApp(t *Tenant) host.EnterpriseQueries {
-	d, _ := t.app(enterprise.ID).(host.EnterpriseQueries)
+	d, _ := t.app(enterprisemodel.ID).(host.EnterpriseQueries)
 	return d
 }
 
@@ -276,7 +276,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, groups)
 	})
-	rt.handle(Route{Pattern: "GET /v1/enterprise-query", Summary: "Elements of the enterprise model by stereotype, kind, words and day: the typed read (ADR-0034 D1)", Answer: enterprise.EnterpriseQueryResult{}, Query: []Param{{"stereotype", "UAF stereotypes, comma-separated; empty: all"}, {"kind", "Exact kind within the stereotype, e.g. line, workshop"}, {"q", "Words to find in id, name, short name or kind"}, {"alive", "\"all\" takes closed and future elements too; a YYYY-MM-DD day reads that day; empty: today"}, {"limit", "Elements to return (default 200, at most 1000)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "GET /v1/enterprise-query", Summary: "Elements of the enterprise model by stereotype, kind, words and day: the typed read (ADR-0034 D1)", Answer: enterprisemodel.EnterpriseQueryResult{}, Query: []Param{{"stereotype", "UAF stereotypes, comma-separated; empty: all"}, {"kind", "Exact kind within the stereotype, e.g. line, workshop"}, {"q", "Words to find in id, name, short name or kind"}, {"alive", "\"all\" takes closed and future elements too; a YYYY-MM-DD day reads that day; empty: today"}, {"limit", "Elements to return (default 200, at most 1000)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if err := t.admits(m); err != nil {
 			Reply(w, nil, err)
 			return
@@ -303,7 +303,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.handle(Route{Pattern: "GET /v1/enterprise-resolve", Summary: "Named elements by id: stored references read back, closed elements included and marked (ADR-0034 D2)", Answer: enterprise.EnterpriseQueryResult{}, Query: []Param{{"ids", "Element ids, comma-separated (at most 100)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "GET /v1/enterprise-resolve", Summary: "Named elements by id: stored references read back, closed elements included and marked (ADR-0034 D2)", Answer: enterprisemodel.EnterpriseQueryResult{}, Query: []Param{{"ids", "Element ids, comma-separated (at most 100)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if err := t.admits(m); err != nil {
 			Reply(w, nil, err)
 			return

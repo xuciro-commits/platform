@@ -14,15 +14,16 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/acceptance"
+	"platformserver/internal/records"
 	"platformserver/journal"
 	"platformserver/platform"
 )
 
-// The record store (ADR-0046): the records of every app's entity types,
-// kept by the host in memory and rebuilt by replay, since every record is put
-// by a decision inside its input. Apps read their own records unscoped;
-// members read through one contract, scoped by each type's declaration.
-// A projection into PostgreSQL (stage 3) will serve the same reads.
+// recordStore coordinates typed current rows, private decisions and the original
+// access policies (ADR-0046/0063). SQL deployments read historical facts and
+// accepted answers on demand; current rows remain resident until ADR-0064 E.
+// Immutable index state and maintenance belong to internal/records.
 
 type recordStore struct {
 	historyStore    journal.RuntimeState
@@ -48,25 +49,25 @@ type recordStore struct {
 	// dirty are the records of knowledge-bearing types put since the index last
 	// read it, under mu: knowledge is cut again for those records alone, not by
 	// walking the tenant at every search (ADR-0009 14b, #130).
-	dirty recordIndex[bool]
+	dirty records.Index[bool]
 	// changed are the records each recent decision put ("<app>/<change>" →
 	// "<type>/<id>"), for flows started by a record's state (ADR-0038).
-	changed recordIndex[[]string]
+	changed records.Index[[]string]
 	order   []string
 }
 
 const changesKept = 10000
 
 func (s *recordStore) remember(change, ref string) {
-	if s.changed.get(change) == nil {
+	if s.changed.Get(change) == nil {
 		s.order = append(s.order, change)
 		if len(s.order) > changesKept {
-			s.changed.remove(s.order[0])
+			s.changed.Remove(s.order[0])
 			s.order = s.order[1:]
 		}
 	}
-	if refs := s.changed.get(change); !slices.Contains(refs, ref) {
-		s.changed.set(change, append(slices.Clone(refs), ref))
+	if refs := s.changed.Get(change); !slices.Contains(refs, ref) {
+		s.changed.Set(change, append(slices.Clone(refs), ref))
 	}
 }
 
@@ -74,7 +75,7 @@ func (s *recordStore) remember(change, ref string) {
 func (t *Tenant) Changed(e platform.Event) []string {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
-	return slices.Clone(t.records.changed.get(e.App + "/" + e.Record.GetChangeId()))
+	return slices.Clone(t.records.changed.Get(e.App + "/" + e.Record.GetChangeId()))
 }
 
 // Held is a record by "<type>/<id>", as its app holds it, for the platform's own apps.
@@ -83,20 +84,20 @@ func (t *Tenant) Held(ref string) (any, bool) {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	et := t.records.types[typ]
-	if et == nil || et.rows.get(id) == nil {
+	if et == nil || et.rows.Get(id) == nil {
 		return nil, false
 	}
-	return copyOf(et.info.Go, et.rows.get(id).value.Interface()).Interface(), true
+	return copyOf(et.info.Go, et.rows.Get(id).value.Interface()).Interface(), true
 }
 
 type entityType struct {
 	store         *recordStore
 	uniqueIndexes map[string]uniqueIndex
 	info          platform.EntityInfo
-	rows          recordIndex[*row]
+	rows          records.Index[*row]
 	// Derived indexes share the same immutable rows. Writes update only built
 	// reference buckets; schema replacement discards them with its type image.
-	referenceIndexes map[string]referenceIndex
+	referenceIndexes map[string]records.References
 	fullImage        bool // private schema/bulk replacement needs full admission once
 	// knowledge says a record of this type may become knowledge: it declares a
 	// knowledge field, it is a knowledge document, or it is a file that may be
@@ -257,7 +258,7 @@ func rowDecodeImage(info platform.EntityInfo, value json.RawMessage, projection 
 	if projection == nil {
 		return value, nil
 	}
-	shape, err := canonicalDigest(info.Fields)
+	shape, err := acceptance.Digest(info.Fields)
 	if err != nil {
 		return nil, err
 	}
@@ -292,8 +293,8 @@ func (r *row) image() (json.RawMessage, error) {
 
 func (r *row) retainOriginal(raw json.RawMessage) {
 	decoded, err := json.Marshal(r.value.Interface())
-	before, beforeErr := canonicalDigest(raw)
-	after, afterErr := canonicalDigest(json.RawMessage(decoded))
+	before, beforeErr := acceptance.Digest(raw)
+	after, afterErr := acceptance.Digest(json.RawMessage(decoded))
 	if err == nil && beforeErr == nil && afterErr == nil && before != after {
 		r.original = slices.Clone(raw)
 	}
@@ -397,7 +398,7 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 		if s.parent == nil && s.historyStore != nil {
 			_, id, _ := strings.Cut(ref, "/")
 			et := s.types[typ]
-			s.attachHistory(et, id, et.rows.get(id), s.historyStore, s.tenant)
+			s.attachHistory(et, id, et.rows.Get(id), s.historyStore, s.tenant)
 		}
 		if s.touched != nil {
 			typ, id, _ := strings.Cut(ref, "/")
@@ -429,7 +430,7 @@ func (s *recordStore) declare(a platform.App) error {
 		if s.types[e.Type] != nil || s.byGo[info.Go] != nil {
 			return fmt.Errorf("entity %s is declared twice", e.Type)
 		}
-		et := &entityType{store: s, info: info, rows: recordIndex[*row]{}, knowledge: knowledgeBearing(info)}
+		et := &entityType{store: s, info: info, rows: records.Index[*row]{}, knowledge: knowledgeBearing(info)}
 		s.types[e.Type], s.byGo[info.Go] = et, et
 		s.generation++
 	}
@@ -545,7 +546,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		return err
 	}
 	stamp := platform.Stamp{By: r.GetSubmission().GetPrincipalId(), At: r.GetRecordedTime().AsTime(), Change: r.GetChangeId()}
-	prev := et.rows.get(rec.ID)
+	prev := et.rows.Get(rec.ID)
 	change := RecordChange{Change: r.GetChangeId(), Schema: r.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []FieldChange{}}
 	// The revision is the kernel's (K4 C12): the decisions naming the record as
 	// their target, which clients send back as the revision they saw.
@@ -603,7 +604,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	}
 	s.remember(c.App+"/"+r.GetChangeId(), et.info.Type+"/"+rec.ID)
 	if et.knowledge {
-		s.dirty.set(et.info.Type+"/"+rec.ID, true)
+		s.dirty.Set(et.info.Type+"/"+rec.ID, true)
 	}
 	if s.touched != nil {
 		s.touched(et.info.Type, rec.ID)
@@ -617,10 +618,10 @@ func (s *recordStore) get(c platform.Caller, t reflect.Type, id string) (any, bo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	et := s.of(c, t)
-	if et == nil || et.rows.get(id) == nil {
+	if et == nil || et.rows.Get(id) == nil {
 		return nil, false
 	}
-	return copyOf(t, et.rows.get(id).value.Interface()).Interface(), true
+	return copyOf(t, et.rows.Get(id).value.Interface()).Interface(), true
 }
 
 // check validates an entity against its declaration (Caller.Check).
@@ -635,7 +636,7 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 	v := copyOf(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
 	previous := reflect.Value{}
-	if old := et.rows.get(recordOf(v).ID); old != nil {
+	if old := et.rows.Get(recordOf(v).ID); old != nil {
 		previous = old.value
 	}
 	if err := checkEnterpriseReferences(c, et.info.Fields, v, previous, now); err != nil {
@@ -761,7 +762,7 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 				}
 			}
 			for _, id := range ids {
-				if id != "" && (s.types[f.Ref] == nil || s.types[f.Ref].rows.get(id) == nil) {
+				if id != "" && (s.types[f.Ref] == nil || s.types[f.Ref].rows.Get(id) == nil) {
 					return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
 				}
 			}
@@ -933,7 +934,7 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 			}
 			for _, id := range ids {
 				seen[id] = true
-				visit(et.rows.get(id))
+				visit(et.rows.Get(id))
 			}
 			if len(ids) < 256 {
 				break
@@ -947,16 +948,16 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 				typ, id, ok := strings.Cut(ref, "/")
 				if ok && typ == et.info.Type && !seen[id] {
 					seen[id] = true
-					visit(et.rows.get(id))
+					visit(et.rows.Get(id))
 				}
 			}
 		}
 	} else if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
 		for _, id := range ids {
-			visit(et.rows.get(id))
+			visit(et.rows.Get(id))
 		}
 	} else {
-		for _, r := range et.rows.all() {
+		for _, r := range et.rows.All() {
 			visit(r)
 		}
 	}
@@ -1326,7 +1327,7 @@ func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, n
 	if et == nil {
 		return false
 	}
-	r := et.rows.get(id)
+	r := et.rows.Get(id)
 	if r == nil {
 		return false
 	}
@@ -1574,8 +1575,8 @@ func (t *Tenant) EnterpriseReferences(m platform.Member, element string, offset,
 		}
 		_, hidden := viewOf(m, et)
 		s.mu.Lock()
-		rows := make([]reflect.Value, 0, et.rows.len())
-		for _, r := range et.rows.all() {
+		rows := make([]reflect.Value, 0, et.rows.Len())
+		for _, r := range et.rows.All() {
 			if visible == nil || visible(r.value) { // nil: the member's roles read the whole type
 				rows = append(rows, r.value)
 			}
@@ -1784,7 +1785,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		return RecordView{}, err
 	}
 	s.mu.Lock()
-	r := et.rows.get(id)
+	r := et.rows.Get(id)
 	readable := r != nil && (visible == nil || visible(r.value))
 	s.mu.Unlock()
 	if !readable {

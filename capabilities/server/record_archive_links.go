@@ -18,11 +18,11 @@ func (s *recordStore) validateArchiveLinkLocked(l platform.LinkType) error {
 	if !ok || f.Type != "reference" || f.Ref != parent.info.Type {
 		return fmt.Errorf("link reference is unavailable")
 	}
-	for id, bucket := range child.referenceIndex(f).targets.all() {
-		if bucket.active == 0 {
+	for id, bucket := range child.referenceIndex(f).All() {
+		if bucket.Active == 0 {
 			continue
 		}
-		target := parent.rows.get(id)
+		target := parent.rows.Get(id)
 		if target == nil || target.value.Field(0).Interface().(platform.Record).Archived {
 			return fmt.Errorf("%s", linkArchiveFailure)
 		}
@@ -43,12 +43,12 @@ func (s *recordStore) checkArchiveWriteLocked(et *entityType, value reflect.Valu
 			return fail()
 		}
 		if et.info.Type == l.Parent.Name && rec.Archived {
-			bucket := child.referenceIndex(f).targets.get(rec.ID)
+			bucket := child.referenceIndex(f).Get(rec.ID)
 			allowed := 0
-			if et.info.Type == child.info.Type && bucket.ids.get(rec.ID) {
+			if et.info.Type == child.info.Type && bucket.IDs.Get(rec.ID) {
 				allowed = 1 // prospective self is archived
 			}
-			if bucket.active > allowed {
+			if bucket.Active > allowed {
 				return fail()
 			}
 		}
@@ -60,7 +60,7 @@ func (s *recordStore) checkArchiveWriteLocked(et *entityType, value reflect.Valu
 			if et.info.Type == l.Parent.Name && id == rec.ID {
 				continue
 			} // prospective self is active
-			target := parent.rows.get(id)
+			target := parent.rows.Get(id)
 			if target == nil || target.value.Field(0).Interface().(platform.Record).Archived {
 				return fail()
 			}

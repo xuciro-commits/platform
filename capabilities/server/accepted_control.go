@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
@@ -79,10 +80,10 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 }
 
 func decodeControl(raw []byte, v any) error {
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
 		return fmt.Errorf("control image is empty or too large")
 	}
-	if err := decodeAcceptedJSON(raw, v, "control image"); err != nil {
+	if err := acceptance.DecodeJSON(raw, v, "control image"); err != nil {
 		return err
 	}
 	return nil
@@ -334,8 +335,8 @@ func (d *stagedDecision) savedControl() (*acceptedControl, error) {
 				if !known {
 					return nil, fmt.Errorf("control may not create effect intents")
 				}
-				oldHash, _ := canonicalDigest(old)
-				newHash, _ := canonicalDigest(x)
+				oldHash, _ := acceptance.Digest(old)
+				newHash, _ := acceptance.Digest(x)
 				if oldHash != newHash && !d.operationCancels[x.ID] {
 					beforeChanges = append(beforeChanges, old)
 					afterChanges = append(afterChanges, x)
@@ -347,11 +348,11 @@ func (d *stagedDecision) savedControl() (*acceptedControl, error) {
 			base, _ = json.Marshal(beforeChanges)
 			image, _ = json.Marshal(afterChanges)
 		}
-		before, err := canonicalDigest(base)
+		before, err := acceptance.Digest(base)
 		if err != nil {
 			return nil, err
 		}
-		after, err := canonicalDigest(image)
+		after, err := acceptance.Digest(image)
 		if err != nil {
 			return nil, err
 		}
@@ -396,8 +397,8 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedControl) error {
 				fixed := next
 				fixed.State, fixed.Due, fixed.Since = old.State, old.Due, old.Since
 				fixed.Last, fixed.Error, fixed.CallbackError = old.Last, old.Error, old.CallbackError
-				oldHash, _ := canonicalDigest(old)
-				fixedHash, _ := canonicalDigest(fixed)
+				oldHash, _ := acceptance.Digest(old)
+				fixedHash, _ := acceptance.Digest(fixed)
 				if oldHash != fixedHash {
 					return fmt.Errorf("control effect rewrites immutable intent")
 				}
@@ -407,7 +408,7 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedControl) error {
 			prior, _ = json.Marshal(selected)
 			current[change.Kind], _ = json.Marshal(all)
 		}
-		before, err := canonicalDigest(prior)
+		before, err := acceptance.Digest(prior)
 		if err != nil || seen[change.Kind] || current[change.Kind] == nil || change.Before != before {
 			return fmt.Errorf("control %s predecessor differs", change.Kind)
 		}

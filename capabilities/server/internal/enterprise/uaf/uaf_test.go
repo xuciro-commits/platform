@@ -1,6 +1,9 @@
 package uaf
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestProfile(t *testing.T) {
 	m := Current()
@@ -39,5 +42,31 @@ func TestLineage(t *testing.T) {
 	}
 	if !m.Relationship("ActualResourceRelationship") || !m.Relationship("FillsPost") || m.Relationship("ActualOrganization") || m.Relationship("ActualOrganizationRole") {
 		t.Fatal("Relationship does not read the UML base")
+	}
+}
+
+func TestGeneratedReleaseRejectsUnsupportedOrIncompleteData(t *testing.T) {
+	raw, err := generated.ReadFile("gen/uaf-1.3.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, corrupt := range []func(*GeneratedRelease){
+		func(data *GeneratedRelease) { data.FormatVersion++ },
+		func(data *GeneratedRelease) { data.StandardVersion = "different" },
+		func(data *GeneratedRelease) { data.Sources = nil },
+		func(data *GeneratedRelease) { data.Metamodel.Stereotypes = nil },
+	} {
+		var data GeneratedRelease
+		if err := json.Unmarshal(raw, &data); err != nil {
+			t.Fatal(err)
+		}
+		corrupt(&data)
+		changed, _ := json.Marshal(data)
+		if _, err := decodeGenerated(changed); err == nil {
+			t.Fatal("unsupported or incomplete generated data was accepted")
+		}
+	}
+	if _, err := decodeGenerated(append(raw, []byte(" {}")...)); err == nil {
+		t.Fatal("trailing generated data was accepted")
 	}
 }

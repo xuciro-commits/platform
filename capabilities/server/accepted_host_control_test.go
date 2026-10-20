@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
+	"platformserver/internal/acceptance"
 	"testing"
 	"time"
 )
@@ -18,7 +19,7 @@ func TestHostControlAcceptsBeforeExposureAndRestoresHistory(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		hash, err := canonicalDigest([]any{image, tn.Audit()})
+		hash, err := acceptance.Digest([]any{image, tn.Audit()})
 		if err != nil {
 			t.Fatal(err)
 		}

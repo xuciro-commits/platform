@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/internal/acceptance"
 	"platformserver/internal/host"
 	"slices"
 	"strings"
@@ -42,7 +43,7 @@ func pendingOperationInputs(inputs map[string][]*preparedOperationInput) int {
 
 func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
 	var input *operationInputArtifact
-	hash, _ := canonicalDigest(q)
+	hash, _ := acceptance.Digest(q)
 	if pending := d.operationInputs[hash]; len(pending) > 0 {
 		prepared := pending[0]
 		platformOwner := c.App == PlatformApp && c.ID == prepared.ref.Member
@@ -97,7 +98,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if !ok {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation is not declared")
 	}
-	definition, err := canonicalDigest([]any{owner, op, version})
+	definition, err := acceptance.Digest([]any{owner, op, version})
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation definition cannot be bound")
 	}
@@ -119,7 +120,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation dependencies cannot be bound")
 	}
-	hash, _ := canonicalDigest(q.Inputs)
+	hash, _ := acceptance.Digest(q.Inputs)
 	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, operationEndpoint)
 	if input != nil {
 		if input.Tenant != t.ID || input.Member != member.ID || input.Call != id || input.Definition != definition || op.Binding.ABI != platform.WasmDataABI || input.Size > op.Limits.DataInputBytes {
@@ -336,7 +337,7 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	if queued >= 256 {
 		return refuse("Operation queue is at capacity")
 	}
-	hash, _ := canonicalDigest(q)
+	hash, _ := acceptance.Digest(q)
 	id := fmt.Sprintf("%s:build:operation:%s:%s", d.tenant.ID, key, operationEndpoint)
 	call := platform.OperationCall{ID: id, InputHash: hash, Definition: hash}
 	body, _ := json.Marshal(operationBinding{Build: &q, Call: call, Member: c.ID})
@@ -422,11 +423,11 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		out.Result = "delivered"
 	} else {
 		op := b.Definition
-		hash, _ := canonicalDigest(b.Inputs)
+		hash, _ := acceptance.Digest(b.Inputs)
 		if b.SealedInput != nil {
 			hash = b.SealedInput.InputHash
 		}
-		definition, _ := canonicalDigest([]any{x.App, op, b.Call.Version})
+		definition, _ := acceptance.Digest([]any{x.App, op, b.Call.Version})
 		if op.Check() != nil || hash != b.Call.InputHash || definition != b.Call.Definition {
 			out.Detail = "Operation definition or permission differs"
 			return out
@@ -446,7 +447,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				err = op.Input.Validate(inputs, op.Limits.DataInputBytes)
 			}
 			if err == nil {
-				actual, digestErr := canonicalDigest(json.RawMessage(inputs))
+				actual, digestErr := acceptance.Digest(json.RawMessage(inputs))
 				if digestErr != nil || actual != b.Call.InputHash {
 					err = fmt.Errorf("the sealed input differs from its accepted input hash")
 				}

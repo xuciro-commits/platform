@@ -149,81 +149,100 @@ func computeJournal(record any) {
 	}
 }
 
-// CheckPosting validates a pending posting before a durable key is reserved.
-func (*Core) CheckPosting(c platform.Caller, j Journal) *kernel.Error {
+const waitingForFiscalPeriod = "Waiting for an open fiscal period"
+
+// CheckPosting classifies delivery while using the same rule as manual entry.
+// The original kernel refusal remains available to accountants unchanged.
+func (*Core) CheckPosting(c platform.Caller, j Journal) (platform.Outcome, *kernel.Error) {
 	computeJournal(&j)
-	return validateJournal(c, &j)
+	return checkJournal(c, &j)
 }
 
-func (*Core) CheckReversal(c platform.Caller, id string, payload json.RawMessage, now time.Time) *kernel.Error {
+func (*Core) CheckReversal(c platform.Caller, id string, payload json.RawMessage, now time.Time) (platform.Outcome, *kernel.Error) {
 	j, ok := platform.Get[Journal](c, id)
 	if !ok {
-		return refuse("The journal entry does not exist")
+		return platform.Outcome{Result: "rejected"}, refuse("The journal entry does not exist")
 	}
 	if j.State != "posted" {
-		return nil
+		return platform.Outcome{Result: "delivered"}, nil
 	}
-	_, err := reversal(c, &j, payload, now)
-	return err
+	_, outcome, err := reversal(c, &j, payload, now)
+	return outcome, err
+}
+
+// HistoricalPostingMessage adapts outcomes written before public delivery
+// messages existed. New delivery checks never classify an error's wording.
+func (*Core) HistoricalPostingMessage(detail string) string {
+	if strings.Contains(detail, "closed") || strings.Contains(detail, "fiscal period") {
+		return waitingForFiscalPeriod
+	}
+	return ""
 }
 
 // validateJournal is the whole discipline of the books: balanced lines on
 // postable accounts, dated into an open period - or the next one, visibly.
 func validateJournal(c platform.Caller, record any) *kernel.Error {
-	j := record.(*Journal)
+	_, err := checkJournal(c, record.(*Journal))
+	return err
+}
+
+func checkJournal(c platform.Caller, j *Journal) (platform.Outcome, *kernel.Error) {
+	outcome := platform.Outcome{Result: "rejected"}
 	if len(j.Lines) < 2 {
-		return refuse("An entry has at least two lines")
+		return outcome, refuse("An entry has at least two lines")
 	}
 	accounts, _, _ := platform.Find[Account](c, platform.Query{Limit: 2000})
 	debit, credit := 0.0, 0.0
 	for i, l := range j.Lines {
 		if l.Debit < 0 || l.Credit < 0 || (l.Debit == 0) == (l.Credit == 0) {
-			return refuse("Line {n} has either a debit or a credit, above zero", i+1)
+			return outcome, refuse("Line {n} has either a debit or a credit, above zero", i+1)
 		}
 		k := slices.IndexFunc(accounts, func(a Account) bool { return a.Code == l.Account && !a.Archived })
 		if k < 0 {
-			return refuse("Line {n}: account {code} does not exist", i+1, l.Account)
+			return outcome, refuse("Line {n}: account {code} does not exist", i+1, l.Account)
 		}
 		if !accounts[k].Posting || !accounts[k].Active {
-			return refuse("Line {n}: account {code} is not postable", i+1, l.Account)
+			return outcome, refuse("Line {n}: account {code} is not postable", i+1, l.Account)
 		}
 		debit, credit = debit+l.Debit, credit+l.Credit
 	}
 	if round2(debit) != round2(credit) {
-		return refuse("Debits {debit} and credits {credit} do not balance", fmt.Sprint(round2(debit)), fmt.Sprint(round2(credit)))
+		return outcome, refuse("Debits {debit} and credits {credit} do not balance", fmt.Sprint(round2(debit)), fmt.Sprint(round2(credit)))
 	}
 	date, ok := day(j.Date)
 	if !ok {
-		return refuse("The posting date is YYYY-MM-DD")
+		return outcome, refuse("The posting date is YYYY-MM-DD")
 	}
 	if j.Period != "" && j.Revision > 0 {
-		return nil // an existing entry keeps its period
+		return platform.Outcome{Result: "delivered"}, nil // an existing entry keeps its period
 	}
 	periods, _, _ := platform.Find[Period](c, platform.Query{Limit: 500})
 	periods = slices.DeleteFunc(periods, func(p Period) bool { return p.Archived })
 	sort.Slice(periods, func(a, b int) bool { return periods[a].From < periods[b].From })
 	own := slices.IndexFunc(periods, func(p Period) bool { return !date.Before(mustDay(p.From)) && !date.After(mustDay(p.To)) })
 	if own < 0 {
-		return refuse("No fiscal period covers {date}", j.Date)
+		outcome.Result, outcome.PublicMessage = "retry", waitingForFiscalPeriod
+		return outcome, refuse("No fiscal period covers {date}", j.Date)
 	}
 	if periods[own].State == "open" {
 		j.Period, j.Shifted = periods[own].Code, false
 		j.Number = nextNumber(c, j.Period)
-		return nil
+		return platform.Outcome{Result: "delivered"}, nil
 	}
 	for _, p := range periods[own+1:] {
 		if p.State == "open" {
 			j.Period, j.Shifted = p.Code, true
 			j.Number = nextNumber(c, j.Period)
-			return nil
+			return platform.Outcome{Result: "delivered"}, nil
 		}
 	}
-	return refuse("Period {period} is closed and no later period is open", periods[own].Code)
+	outcome.Result, outcome.PublicMessage = "retry", waitingForFiscalPeriod
+	return outcome, refuse("Period {period} is closed and no later period is open", periods[own].Code)
 }
 
 func reverseJournal(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
 	j := record.(*Journal)
-	rev, err := reversal(c, j, payload, now)
+	rev, _, err := reversal(c, j, payload, now)
 	if err != nil {
 		return err
 	}
@@ -232,13 +251,13 @@ func reverseJournal(c platform.Caller, record any, payload json.RawMessage, now 
 }
 
 func storeReversal(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
-	rev, err := reversal(c, record.(*Journal), r.GetSubmission().GetPayload(), now)
+	rev, _, err := reversal(c, record.(*Journal), r.GetSubmission().GetPayload(), now)
 	if err == nil {
 		c.Put(r, rev)
 	}
 }
 
-func reversal(c platform.Caller, j *Journal, payload json.RawMessage, now time.Time) (Journal, *kernel.Error) {
+func reversal(c platform.Caller, j *Journal, payload json.RawMessage, now time.Time) (Journal, platform.Outcome, *kernel.Error) {
 	var p struct {
 		Date string `json:"date"`
 	}
@@ -251,10 +270,11 @@ func reversal(c platform.Caller, j *Journal, payload json.RawMessage, now time.T
 		rev.Lines = append(rev.Lines, JournalLine{Account: l.Account, Debit: l.Credit, Credit: l.Debit, Text: l.Text, Object: l.Object, Partner: l.Partner})
 	}
 	computeJournal(&rev)
-	if err := validateJournal(c, &rev); err != nil {
-		return Journal{}, err
+	outcome, err := checkJournal(c, &rev)
+	if err != nil {
+		return Journal{}, outcome, err
 	}
-	return rev, nil
+	return rev, outcome, nil
 }
 
 func firstNonEmpty(a, b string) string {

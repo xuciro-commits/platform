@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"time"
@@ -100,18 +101,18 @@ func validateHostImage(tenant string, image hostControlImage) error {
 	return nil
 }
 func hostRequestHash(r acceptedHostControl) (string, error) {
-	return canonicalDigest([]any{r.Tenant, r.Member, r.Action, r.Request, r.At})
+	return acceptance.Digest([]any{r.Tenant, r.Member, r.Action, r.Request, r.At})
 }
 func hostResultDigest(r acceptedHostControl) (string, error) {
 	r.Digest = ""
-	return canonicalDigest(r)
+	return acceptance.Digest(r)
 }
 func decodeAcceptedHostControl(raw []byte) (acceptedHostControl, error) {
 	var r acceptedHostControl
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
 		return r, fmt.Errorf("host result is empty or too large")
 	}
-	if err := decodeAcceptedJSON(raw, &r, "host result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &r, "host result"); err != nil {
 		return r, err
 	}
 	if err := validateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {
@@ -156,11 +157,11 @@ func (t *Tenant) acceptHostControl(action, member string, request any, now time.
 		}
 		return prior.Answer, nil
 	}
-	r.Before, err = canonicalDigest(image)
+	r.Before, err = acceptance.Digest(image)
 	if err != nil {
 		return SupportGrant{}, err
 	}
-	r.AuditBefore, err = canonicalDigest(t.audit.all())
+	r.AuditBefore, err = acceptance.Digest(t.audit.all())
 	if err != nil {
 		return SupportGrant{}, err
 	}
@@ -222,8 +223,8 @@ func (t *Tenant) applyAcceptedHostControl(raw []byte) (acceptedHostControl, erro
 		}
 		return r, nil
 	}
-	before, err := canonicalDigest(current)
-	auditBefore, auditErr := canonicalDigest(t.audit.all())
+	before, err := acceptance.Digest(current)
+	auditBefore, auditErr := acceptance.Digest(t.audit.all())
 	if err != nil || auditErr != nil || before != r.Before || auditBefore != r.AuditBefore {
 		return r, fmt.Errorf("host result predecessor differs")
 	}
@@ -306,10 +307,10 @@ func validateHostTransition(current hostControlImage, r acceptedHostControl) err
 		expected.Requests = map[string]hostControlReceipt{}
 	}
 	expected.Requests[r.Key] = hostControlReceipt{r.RequestHash, answer}
-	want, err := canonicalDigest(expected)
-	got, gotErr := canonicalDigest(r.Image)
-	wantAudit, auditErr := canonicalDigest(audit)
-	gotAudit, gotAuditErr := canonicalDigest(r.Audit)
+	want, err := acceptance.Digest(expected)
+	got, gotErr := acceptance.Digest(r.Image)
+	wantAudit, auditErr := acceptance.Digest(audit)
+	gotAudit, gotAuditErr := acceptance.Digest(r.Audit)
 	if err != nil || gotErr != nil || auditErr != nil || gotAuditErr != nil || want != got || answer != r.Answer || wantAudit != gotAudit {
 		return fmt.Errorf("host result changes unrelated state or audit")
 	}

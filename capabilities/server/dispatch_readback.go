@@ -30,16 +30,9 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 	for _, run := range runs {
 		active[run.Intent] = true
 	}
-	for intent, attempt := range t.dispatchReads {
-		if !active[intent] && !attempt.Busy {
-			delete(t.dispatchReads, intent)
-		}
-	}
+	t.dispatchReads.retain(active)
 	due := func(run platform.DispatchRun) time.Time {
-		if cached := t.dispatchReads[run.Intent].Due; cached.After(run.ReadDue) {
-			return cached
-		}
-		return run.ReadDue
+		return t.dispatchReads.next(run.Intent, run.ReadDue)
 	}
 	slices.SortStableFunc(runs, func(a, b platform.DispatchRun) int { return due(a).Compare(due(b)) })
 	t.mu.Unlock()
@@ -50,33 +43,31 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		}
 		t.mu.Lock()
 		run, exists := platform.Get[platform.DispatchRun](t.automation(construction.ID, false), saved.ID)
-		attempt := t.dispatchReads[run.Intent]
-		valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State) && !run.ReadDue.After(at) && !attempt.Busy && !attempt.Due.After(at)
+		valid := exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State)
 		var stamp string
 		if valid {
 			valid = (hostView{t: t}).CheckDispatchRead(run, at) == nil
 			if valid {
-				stamp, valid = t.dispatchReadStamp(run)
+				stamp, valid = t.statusReadStamp(run.Revision, run.Member, run.Source, run.Connection, run.Definition.Readback.Record != "")
 			}
 		}
-		if !valid || reads >= 64 {
+		if !valid || reads >= statusReadLimit {
 			t.mu.Unlock()
-			if reads >= 64 {
+			if reads >= statusReadLimit {
 				return
 			}
 			continue
 		}
-		if t.dispatchReads == nil {
-			t.dispatchReads = map[string]statusReadAttempt{}
+		if !t.dispatchReads.start(run.Intent, run.ReadDue, at, &reads) {
+			t.mu.Unlock()
+			continue
 		}
-		t.dispatchReads[run.Intent] = statusReadAttempt{Busy: true}
 		t.mu.Unlock()
-		reads++
 		reading := t.readDispatchStatus(run, at)
 		t.mu.Lock()
-		t.dispatchReads[run.Intent] = statusReadAttempt{Due: at.Add(time.Duration(run.Definition.Readback.EverySeconds) * time.Second)}
+		t.dispatchReads.finished(run.Intent, at.Add(time.Duration(run.Definition.Readback.EverySeconds)*time.Second))
 		current, found := platform.Get[platform.DispatchRun](t.automation(construction.ID, false), run.ID)
-		currentStamp, valid := t.dispatchReadStamp(current)
+		currentStamp, valid := t.statusReadStamp(current.Revision, current.Member, current.Source, current.Connection, current.Definition.Readback.Record != "")
 		if !found || current.Revision != run.Revision || !valid || currentStamp != stamp || (hostView{t: t}).CheckDispatchRead(current, at) != nil {
 			t.mu.Unlock()
 			continue
@@ -108,36 +99,6 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		_, _ = t.submitAccepted(t.app(construction.ID), caller, submission, at, true)
 		t.mu.Unlock()
 	}
-}
-
-// The stamp is disposable. Credentials only contribute to this in-memory
-// comparison and never enter the run or the accepted read result.
-func (t *Tenant) dispatchReadStamp(run platform.DispatchRun) (string, bool) {
-	member, found := t.Member(run.Member)
-	if !found {
-		return "", false
-	}
-	var connection construction.Connection
-	_ = json.Unmarshal(run.Connection, &connection)
-	var credential []byte
-	if connection.Secret != "" {
-		credential, _ = t.secret(connection.Secret)
-	}
-	var source construction.Source
-	_ = json.Unmarshal(run.Source, &source)
-	publisher, _ := t.Member(source.Puller)
-	marking := ""
-	if connection.ID != "" {
-		marking = t.connectionMarking(connection.ID)
-	}
-	var generation uint64
-	if run.Definition.Readback.Record != "" {
-		t.records.mu.Lock()
-		generation = t.records.generation
-		t.records.mu.Unlock()
-	}
-	stamp, err := canonicalDigest([]any{run.Revision, member, publisher, marking, credential, generation})
-	return stamp, err == nil
 }
 
 func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) platform.DispatchReading {

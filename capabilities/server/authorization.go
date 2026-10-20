@@ -259,7 +259,7 @@ func (t *Tenant) draftName(s *pb.Submission) string {
 	if et == nil {
 		return ""
 	}
-	row := et.rows.get(s.GetTarget().GetId())
+	row := et.rows.Get(s.GetTarget().GetId())
 	field, ok := et.info.Field("name")
 	if row == nil || !ok || field.Index == nil {
 		return ""

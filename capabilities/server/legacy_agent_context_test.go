@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ func TestLegacyFlowAgentContextPreservesExactAcceptedPredecessor(t *testing.T) {
 	oldHistory[0].Fields[0].After = oldSeen
 	wanted := &row{value: reflect.ValueOf(oldRun), history: oldHistory}
 	original, _ := acceptedRowOf(RunType, run.ID, wanted)
-	before, _ := canonicalDigest(original)
+	before, _ := acceptance.Digest(original)
 	image := acceptedBatchRow{App: AgentApp, Before: before, acceptedRow: original}
 	image.History = append(copyHistory(oldHistory), RecordChange{Change: "chg-2", Schema: "flow.instance.step"})
 	if restored := legacyAgentContextPredecessor(prior, image); restored == nil || restored.value.Interface().(AgentRunRecord).Seen != historical {
@@ -78,7 +79,7 @@ func TestLegacyAgentBindingRecoversOnlyExactCommittedStartupMetadata(t *testing.
 	expectedHistory[0].Fields = append([]FieldChange{{Field: "release", After: json.RawMessage(`"release:original"`)}, {Field: "definitionVersion", After: json.RawMessage(`"agent.sha256.original"`)}}, expectedHistory[0].Fields...)
 	expected := &row{value: reflect.ValueOf(saved), history: expectedHistory}
 	body, _ := acceptedRowOf(RunType, run.ID, expected)
-	digest, _ := canonicalDigest(body)
+	digest, _ := acceptance.Digest(body)
 	image := acceptedBatchRow{App: AgentApp, Before: digest, acceptedRow: body}
 	image.History = append(copyHistory(expectedHistory), RecordChange{Change: "step", Schema: SchemaRunStep})
 	if recovered := legacyAgentContextPredecessor(prior, image); recovered == nil || recovered.value.Interface().(AgentRunRecord).DefinitionVersion != saved.DefinitionVersion {

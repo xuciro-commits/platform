@@ -15,6 +15,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
+	"platformserver/internal/records"
 	"platformserver/platform"
 )
 
@@ -133,13 +134,13 @@ func BenchmarkFinalConstraintScan(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				entries := make([]recordEntry[*row], count)
+				entries := make([]records.Entry[*row], count)
 				for i := range entries {
 					id := fmt.Sprintf("ROW-%06d", i)
 					value := constraintEntry{Record: platform.Record{ID: id, Revision: 1}, Qty: 2, Start: "2026-10-12", End: "2026-10-13", State: "draft"}
-					entries[i] = recordEntry[*row]{key: id, value: &row{value: reflect.ValueOf(&value).Elem()}}
+					entries[i] = records.Entry[*row]{Key: id, Value: &row{value: reflect.ValueOf(&value).Elem()}}
 				}
-				index, err := recordIndexFrom(entries)
+				index, err := records.From(entries)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -154,12 +155,12 @@ func BenchmarkFinalConstraintScan(b *testing.B) {
 				after := &row{value: reflect.ValueOf(&note{Record: platform.Record{ID: id, Revision: 2}, Text: "after"}).Elem()}
 				if affected {
 					typ, id = info.Type, "ROW-000000"
-					value := store.types[typ].rows.get(id).value.Interface().(constraintEntry)
+					value := store.types[typ].rows.Get(id).value.Interface().(constraintEntry)
 					value.Qty = 3
 					value.Revision++
 					after = &row{value: reflect.ValueOf(&value).Elem()}
 				}
-				draft.constraintWrites[typ+"/"+id] = constraintWrite{caller: caller, before: store.types[typ].rows.get(id)}
+				draft.constraintWrites[typ+"/"+id] = constraintWrite{caller: caller, before: store.types[typ].rows.Get(id)}
 				draft.records.types[typ].setRow(id, after)
 				checks := 0
 				tenant.simulationTrace = func(event platform.DecisionTrace) {
@@ -217,7 +218,7 @@ func TestFinalLocalConstraintsKeepOrderingAndIgnoreUntouchedHistory(t *testing.T
 	draft.constraintWrites = map[string]constraintWrite{}
 	for _, ref := range []string{second.info.Type + "/A", first.info.Type + "/Z", first.info.Type + "/A"} {
 		typ, id, _ := strings.Cut(ref, "/")
-		draft.constraintWrites[ref] = constraintWrite{caller: caller, before: tenant.records.types[typ].rows.get(id)}
+		draft.constraintWrites[ref] = constraintWrite{caller: caller, before: tenant.records.types[typ].rows.Get(id)}
 	}
 	value := constraintEntry{Record: platform.Record{ID: "A", Revision: 2}, Qty: 2, Start: "2026-10-12", End: "2026-10-11", State: "draft"}
 	draft.records.types[first.info.Type].setRow("A", &row{value: reflect.ValueOf(&value).Elem()})
@@ -233,7 +234,7 @@ func TestFinalLocalConstraintsKeepOrderingAndIgnoreUntouchedHistory(t *testing.T
 	draft = tenant.newStagedDecision()
 	draft.at = txnAt
 	caller = platform.NewCaller(draft, memberOf(t, tenant, "builder"), "invariants", false, false)
-	draft.constraintWrites = map[string]constraintWrite{first.info.Type + "/A": {caller: caller, before: first.rows.get("A")}}
+	draft.constraintWrites = map[string]constraintWrite{first.info.Type + "/A": {caller: caller, before: first.rows.Get("A")}}
 	value.End = "2026-10-13"
 	draft.records.types[first.info.Type].setRow("A", &row{value: reflect.ValueOf(&value).Elem()})
 	if err := draft.checkFinalConstraints(); err != nil {
@@ -431,7 +432,7 @@ func TestBusinessConstraintsNoLiveRuntimeWriteBypass(t *testing.T) {
 	if err := c.PutAt(txnAt, "read-callback", entry); err == nil {
 		t.Fatal("a live read or callback bypassed the private write gate")
 	}
-	if tenant.records.types["invariants.entry"].rows.get("BYPASS") != nil {
+	if tenant.records.types["invariants.entry"].rows.Get("BYPASS") != nil {
 		t.Fatal("direct live write left a record")
 	}
 }
@@ -591,7 +592,7 @@ func TestBusinessConstraintsAffectedReferencesAndWithheldFacts(t *testing.T) {
 	d.at = txnAt
 	c := platform.NewCaller(d, user, construction.ID, false, false)
 	info := d.records.types[child].info
-	after := d.records.types[child].rows.get("C1")
+	after := d.records.types[child].rows.Get("C1")
 	if err := d.checkConstraint(c, info, rule, after, after); err == nil {
 		t.Fatal("withheld rule input silently passed")
 	} else {

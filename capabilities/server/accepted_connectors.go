@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	"platformserver/internal/acceptance"
 	"time"
 
 	"platformkernel/kernel"
@@ -42,7 +43,7 @@ func (t *Tenant) validateAcceptedDeliveries(deliveries []acceptedConnectorDelive
 			return fmt.Errorf("accepted connector delivery is incomplete")
 		}
 		_, current := private.State()
-		before, err := canonicalDigest(markFor(current, t.ID, delivery.Connector))
+		before, err := acceptance.Digest(markFor(current, t.ID, delivery.Connector))
 		if err != nil || before != delivery.Before {
 			return fmt.Errorf("accepted connector %s predecessor differs", delivery.Connector)
 		}
@@ -62,7 +63,7 @@ func (t *Tenant) applyAcceptedDeliveries(deliveries []acceptedConnectorDelivery)
 	defer t.opsMu.Unlock()
 	for _, delivery := range deliveries {
 		_, marks := t.connectors.kernel.State()
-		before, err := canonicalDigest(markFor(marks, t.ID, delivery.Connector))
+		before, err := acceptance.Digest(markFor(marks, t.ID, delivery.Connector))
 		if err != nil || before != delivery.Before {
 			return fmt.Errorf("accepted connector %s predecessor changed during application", delivery.Connector)
 		}

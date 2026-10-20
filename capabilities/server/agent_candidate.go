@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"time"
@@ -45,7 +46,7 @@ func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.App, str
 	if err != nil {
 		return nil, "", err
 	}
-	digest, err := canonicalDigest(saved.Assets[i])
+	digest, err := acceptance.Digest(saved.Assets[i])
 	return agentEvaluationApp{App: bound, agent: name}, digest, err
 }
 
@@ -76,7 +77,7 @@ func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEv
 	if t.agents == nil {
 		return "", fmt.Errorf("the agent capability is unavailable")
 	}
-	identity, err := canonicalDigest([]string{t.ID, m.ID, request.CandidateID, request.Agent, request.Key})
+	identity, err := acceptance.Digest([]string{t.ID, m.ID, request.CandidateID, request.Agent, request.Key})
 	if err != nil {
 		return "", err
 	}
@@ -111,7 +112,7 @@ func (t *Tenant) agentEvaluationsReadyLocked(candidate platform.ReleaseCandidate
 			return fmt.Errorf("agent %s requires the agent and model capabilities", asset.Ref.Name)
 		}
 		name := asset.Ref.App + "." + asset.Ref.Name
-		digest, err := canonicalDigest(asset)
+		digest, err := acceptance.Digest(asset)
 		if err != nil {
 			return err
 		}
@@ -120,7 +121,7 @@ func (t *Tenant) agentEvaluationsReadyLocked(candidate platform.ReleaseCandidate
 		if refusal != nil {
 			return fmt.Errorf("agent %s requires an enabled model", name)
 		}
-		config, err := canonicalDigest([]any{model, provider})
+		config, err := acceptance.Digest([]any{model, provider})
 		if err != nil {
 			return err
 		}

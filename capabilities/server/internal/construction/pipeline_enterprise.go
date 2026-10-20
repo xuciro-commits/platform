@@ -2,10 +2,9 @@ package construction
 
 import (
 	"fmt"
+	enterprisemodel "platformserver/internal/enterprise"
 	"regexp"
 	"strings"
-
-	enterprise "platformserver/internal/host/enterpriseapi"
 )
 
 // EnterpriseTarget (ADR-0022) lands a pipeline's rows in the enterprise model
@@ -67,9 +66,9 @@ func (e EnterpriseTarget) ElementID(raw string) string {
 
 // Slice turns the rows into the elements and relationships one sync lands.
 // Rows without an id or a name are skipped; the counts tell.
-func (e EnterpriseTarget) Slice(rows []map[string]any) ([]enterprise.Element, []enterprise.Relationship, int) {
-	var elements []enterprise.Element
-	var rels []enterprise.Relationship
+func (e EnterpriseTarget) Slice(rows []map[string]any) ([]enterprisemodel.Element, []enterprisemodel.Relationship, int) {
+	var elements []enterprisemodel.Element
+	var rels []enterprisemodel.Relationship
 	skipped := 0
 	ids := map[string]bool{}
 	for _, row := range rows {
@@ -79,7 +78,7 @@ func (e EnterpriseTarget) Slice(rows []map[string]any) ([]enterprise.Element, []
 			continue
 		}
 		ids[raw] = true
-		el := enterprise.Element{ID: e.ElementID(raw), Stereotype: e.Stereotype, Name: name, ShortName: e.Value(row, e.ShortName), Kind: e.Value(row, e.Kind), From: e.Value(row, e.From), Until: e.Value(row, e.Until)}
+		el := enterprisemodel.Element{ID: e.ElementID(raw), Stereotype: e.Stereotype, Name: name, ShortName: e.Value(row, e.ShortName), Kind: e.Value(row, e.Kind), From: e.Value(row, e.From), Until: e.Value(row, e.Until)}
 		bag := map[string]any{}
 		for _, c := range e.Properties {
 			if v, ok := row[c]; ok && v != nil {
@@ -91,20 +90,20 @@ func (e EnterpriseTarget) Slice(rows []map[string]any) ([]enterprise.Element, []
 		}
 		elements = append(elements, el)
 		if parent := e.Value(row, e.Parent); e.Parent != "" && parent != "" && parent != raw {
-			rels = append(rels, enterprise.Relationship{ID: "pl:" + raw, Stereotype: enterprise.Placement, Kind: e.In, Source: el.ID, Target: e.ElementID(parent), Relation: e.Relation, From: el.From, Until: el.Until})
+			rels = append(rels, enterprisemodel.Relationship{ID: "pl:" + raw, Stereotype: enterprisemodel.Placement, Kind: e.In, Source: el.ID, Target: e.ElementID(parent), Relation: e.Relation, From: el.From, Until: el.Until})
 		} else if e.Root != "" && e.In != "" {
-			rels = append(rels, enterprise.Relationship{ID: "pl:" + raw, Stereotype: enterprise.Placement, Kind: e.In, Source: el.ID, Target: e.Root, Relation: e.Relation, From: el.From, Until: el.Until})
+			rels = append(rels, enterprisemodel.Relationship{ID: "pl:" + raw, Stereotype: enterprisemodel.Placement, Kind: e.In, Source: el.ID, Target: e.Root, Relation: e.Relation, From: el.From, Until: el.Until})
 		}
 		if at := e.Value(row, e.At); e.At != "" && at != "" {
 			kind := e.AtKind
 			if kind == "" {
-				kind = enterprise.Owns
+				kind = enterprisemodel.Owns
 			}
 			src, dst := e.ElementID(at), el.ID
-			if kind == enterprise.FillsPost || kind == enterprise.Membership || kind == enterprise.Performs {
+			if kind == enterprisemodel.FillsPost || kind == enterprisemodel.Membership || kind == enterprisemodel.Performs {
 				src, dst = el.ID, e.ElementID(at) // the row's element is the one that fills, belongs or performs
 			}
-			rels = append(rels, enterprise.Relationship{ID: "at:" + raw, Stereotype: kind, Source: src, Target: dst, From: el.From, Until: el.Until})
+			rels = append(rels, enterprisemodel.Relationship{ID: "at:" + raw, Stereotype: kind, Source: src, Target: dst, From: el.From, Until: el.Until})
 		}
 	}
 	return elements, rels, skipped

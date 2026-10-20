@@ -4,57 +4,29 @@ import (
 	"encoding/json"
 	"slices"
 
+	"platformserver/internal/records"
 	"platformserver/platform"
 )
 
-// Reference buckets are derived, immutable indexes of the original type's
-// complete rows, including rows the current reader cannot see. Read filters
-// still run after candidate selection; constraints never use member filters.
-type referenceBucket struct {
-	ids    recordIndex[bool]
-	active int // ids' values say which references are active
-}
-type referenceIndex struct {
-	field   platform.FieldInfo
-	targets recordIndex[referenceBucket]
-}
-
-func (et *entityType) referenceIndex(field platform.FieldInfo) referenceIndex {
+// The schema owner extracts primitive references; the records component owns
+// their immutable buckets, archive counts and incremental replacement rules.
+func (et *entityType) referenceIndex(field platform.FieldInfo) records.References {
 	if index, exists := et.referenceIndexes[field.Name]; exists {
 		return index
 	}
-	buckets := map[string]*struct {
-		ids    []recordEntry[bool]
-		active int
-	}{}
-	for id, row := range et.rows.all() {
+	entries := make([]records.Reference, 0, et.rows.Len())
+	for id, row := range et.rows.All() {
 		target := row.value.FieldByIndex(field.Index).String()
-		if target == "" {
-			continue
-		}
-		bucket := buckets[target]
-		if bucket == nil {
-			bucket = &struct {
-				ids    []recordEntry[bool]
-				active int
-			}{}
-			buckets[target] = bucket
-		}
-		active := !row.value.Field(0).Interface().(platform.Record).Archived
-		bucket.ids = append(bucket.ids, recordEntry[bool]{id, active})
-		if active {
-			bucket.active++
+		if target != "" {
+			entries = append(entries, records.Reference{ID: id, Target: target, Active: !recordOf(row.value).Archived})
 		}
 	}
-	entries := make([]recordEntry[referenceBucket], 0, len(buckets))
-	for target, rows := range buckets {
-		ids, _ := recordIndexFrom(rows.ids)
-		entries = append(entries, recordEntry[referenceBucket]{target, referenceBucket{ids, rows.active}})
+	index, err := records.ReferencesFrom(entries)
+	if err != nil {
+		panic(err) // The installed record index already guarantees unique IDs.
 	}
-	targets, _ := recordIndexFrom(entries)
-	index := referenceIndex{field: field, targets: targets}
 	if et.referenceIndexes == nil {
-		et.referenceIndexes = map[string]referenceIndex{}
+		et.referenceIndexes = map[string]records.References{}
 	}
 	et.referenceIndexes[field.Name] = index
 	return index
@@ -62,7 +34,7 @@ func (et *entityType) referenceIndex(field platform.FieldInfo) referenceIndex {
 
 // All replacements, including pure accepted-result application, use this
 // type owner. No decision rules run here; only derived lookup buckets change.
-func (et *entityType) setRows(rows recordIndex[*row]) {
+func (et *entityType) setRows(rows records.Index[*row]) {
 	et.rows, et.referenceIndexes, et.uniqueIndexes, et.fullImage = rows, nil, nil, true
 	if et.store != nil {
 		// A schema/full-image replacement may change every referenced scope.
@@ -74,42 +46,18 @@ func (et *entityType) setRows(rows recordIndex[*row]) {
 }
 
 func (et *entityType) setRow(id string, value *row) {
-	previous := et.rows.get(id)
+	previous := et.rows.Get(id)
 	for name, index := range et.referenceIndexes {
+		field, _ := et.info.Field(name)
 		before := ""
-		beforeActive := false
 		if previous != nil {
-			before = previous.value.FieldByIndex(index.field.Index).String()
-			beforeActive = !previous.value.Field(0).Interface().(platform.Record).Archived
+			before = previous.value.FieldByIndex(field.Index).String()
 		}
-		after := value.value.FieldByIndex(index.field.Index).String()
-		afterActive := !value.value.Field(0).Interface().(platform.Record).Archived
-		if before == after && (before == "" || beforeActive == afterActive) {
-			continue
-		}
-		if before != "" {
-			bucket := index.targets.get(before)
-			if bucket.ids.get(id) {
-				bucket.active--
-			}
-			bucket.ids.remove(id)
-			if bucket.ids.len() == 0 {
-				index.targets.remove(before)
-			} else {
-				index.targets.set(before, bucket)
-			}
-		}
-		if after != "" {
-			bucket := index.targets.get(after)
-			bucket.ids.set(id, afterActive)
-			if afterActive {
-				bucket.active++
-			}
-			index.targets.set(after, bucket)
-		}
+		after := value.value.FieldByIndex(field.Index).String()
+		index.Replace(id, before, after, !recordOf(value.value).Archived)
 		et.referenceIndexes[name] = index
 	}
-	et.rows.set(id, value)
+	et.rows.Set(id, value)
 	if et.store != nil {
 		et.store.refreshUniqueIndexes(et.info.Type, id)
 	}
@@ -161,9 +109,9 @@ func (s *recordStore) indexedRecordCandidates(et *entityType, q platform.Query) 
 		if source == nil {
 			continue
 		}
-		bucket := source.referenceIndex(info).targets.get(target)
-		ids := make([]string, 0, bucket.ids.len())
-		for id := range bucket.ids.all() {
+		bucket := source.referenceIndex(info).Get(target)
+		ids := make([]string, 0, bucket.IDs.Len())
+		for id := range bucket.IDs.All() {
 			ids = append(ids, id)
 		}
 		return ids, true

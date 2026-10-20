@@ -74,7 +74,7 @@ func TestOwnedAssetDiscoveryUsesMetadataReadAuthority(t *testing.T) {
 	}
 	// A damaged accepted image is an explicit discovery error, rather than an
 	// invented legacy configuration or a stale cached definition.
-	row := tn.records.types[construction.DatasetType].rows.get("private-dataset-id")
+	row := tn.records.types[construction.DatasetType].rows.Get("private-dataset-id")
 	row.value.FieldByName("Published").SetString("{damaged")
 	row.original = nil
 	if _, err := tn.definitionsFor(builder); err == nil || len(tn.Definitions(builder)) != 0 {

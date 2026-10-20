@@ -16,7 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/internal/construction"
-	enterprise "platformserver/internal/host/enterpriseapi"
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/platform"
 )
 
@@ -73,9 +73,9 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []platform.AIModel{}},
 	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: platform.AIUsageReport{}},
 	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships (a projection of the enterprise model)", Answer: platform.OrgSeed{}},
-	{Pattern: "GET /v1/enterprise-patterns", Summary: "Reusable pieces of enterprise on the four-level backbone, with previews", Answer: []enterprise.PatternInfo{}},
-	{Pattern: "GET /v1/enterprise", Summary: "The tenant's enterprise model: kinds, elements, relationships and views", Answer: enterprise.Model{}},
-	{Pattern: "GET /v1/enterprise-metamodel", Summary: "The UAF metamodel, Enterprise Core profile and grid cells the modeler draws from", Answer: enterprise.Metamodel{}},
+	{Pattern: "GET /v1/enterprise-patterns", Summary: "Reusable pieces of enterprise on the four-level backbone, with previews", Answer: []enterprisemodel.PatternInfo{}},
+	{Pattern: "GET /v1/enterprise", Summary: "The tenant's enterprise model: kinds, elements, relationships and views", Answer: enterprisemodel.Model{}},
+	{Pattern: "GET /v1/enterprise-metamodel", Summary: "The UAF metamodel, Enterprise Core profile and grid cells the modeler draws from", Answer: enterprisemodel.Metamodel{}},
 	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []platform.FlowDefinition{}},
 	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []platform.RelationLink{}},
 	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []platform.RelationNote{}},
@@ -290,7 +290,7 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 			}[name]; public != "" {
 				name = public
 			}
-		case "platformserver/internal/host/enterpriseapi":
+		case "platformserver/internal/enterprise":
 			if name == "Model" {
 				name = "EnterpriseModel"
 			}

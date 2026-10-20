@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"time"
 
 	"platformserver/internal/construction"
@@ -59,11 +60,11 @@ func settleComputeFixture(t *Tenant, actor platform.Member, fixture construction
 		return false, nil
 	}
 	if fixture.ExpectOutput != "" {
-		actual, err := canonicalDigest(result.Output)
+		actual, err := acceptance.Digest(result.Output)
 		if err != nil {
 			return false, err
 		}
-		expected, err := canonicalDigest(json.RawMessage(fixture.ExpectOutput))
+		expected, err := acceptance.Digest(json.RawMessage(fixture.ExpectOutput))
 		return err == nil && actual == expected, err
 	}
 	return true, nil

@@ -152,7 +152,7 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 		tn.Work(at)
 	}
 	info := tn.records.types["build.visit"].info
-	row := tn.records.types["build.visit"].rows.get("A")
+	row := tn.records.types["build.visit"].rows.Get("A")
 	if businessField(info, row.value, "state") != "done" || businessField(info, row.value, "name") != "Flow updated" || businessField(info, row.value, "enabled") != "true" {
 		t.Fatalf("old action used new semantics or lost migrated facts: %s", jsonOf(row.value.Interface()))
 	}
@@ -171,7 +171,7 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	}
 	at = at.Add(2 * time.Second)
 	tn.Work(at)
-	if businessField(info, tn.records.types["build.visit"].rows.get("B").value, "state") != "rejected" {
+	if businessField(info, tn.records.types["build.visit"].rows.Get("B").value, "state") != "rejected" {
 		t.Fatal("new instance ignored its current action")
 	}
 	if !bytes.Equal(sourceBytes, tn.releases.raw(from)) {
@@ -181,8 +181,8 @@ func testWaitingFlowMigration(t *testing.T, retired, approval bool) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := tn.records.types["build.visit"].rows.get("A").image()
-	after, _ := recovered.records.types["build.visit"].rows.get("A").image()
+	before, _ := tn.records.types["build.visit"].rows.Get("A").image()
+	after, _ := recovered.records.types["build.visit"].rows.Get("A").image()
 	if !bytes.Equal(before, after) {
 		t.Fatal("recovery reran an old action")
 	}

@@ -44,7 +44,7 @@ func TestBusinessRefusalHoldDeadlineAndDecisionReturnToSubject(t *testing.T) {
 	decide(t, tn, "operator", construction.ID, "build.case.hold", "build.case", "C1", map[string]any{}, txnAt)
 	tn.Work(txnAt)
 	tn.Work(txnAt.Add(59 * time.Second))
-	if tn.records.types[work.TaskType].rows.len() != 0 {
+	if tn.records.types[work.TaskType].rows.Len() != 0 {
 		t.Fatal("a hold escalated before its declared deadline")
 	}
 	tn.Work(txnAt.Add(61 * time.Second))

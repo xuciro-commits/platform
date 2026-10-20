@@ -127,7 +127,7 @@ func saveExtensionDraft(t *testing.T, live *Tenant, draft, key string) string {
 func extensionImages(t *testing.T, live *Tenant) map[string][]byte {
 	t.Helper()
 	out := map[string][]byte{}
-	for id, row := range live.records.types["build.materialextra"].rows.all() {
+	for id, row := range live.records.types["build.materialextra"].rows.All() {
 		raw, err := row.image()
 		if err != nil {
 			t.Fatal(err)
@@ -154,7 +154,7 @@ func TestCustomerExtensionsSurviveNativePackageUpgradeAndRecovery(t *testing.T) 
 			from := extensionFixture(t, live)
 			before := extensionImages(t, live)
 			original := slices.Clone(live.releases.raw(from))
-			metadata := live.records.types[construction.ObjectType].rows.get("extension").value.Interface().(construction.Object)
+			metadata := live.records.types[construction.ObjectType].rows.Get("extension").value.Interface().(construction.Object)
 			if metadata.ExtensionSource == nil || metadata.ExtensionSource.Base.SourceVersion != "1" {
 				t.Fatal("publication did not capture the original Core package")
 			}
@@ -228,7 +228,7 @@ func TestCustomerExtensionsSurviveNativePackageUpgradeAndRecovery(t *testing.T) 
 					t.Fatal("recovery changed extension facts or actions")
 				}
 			}
-			if final.records.types[construction.ObjectType].rows.get("extension").value.Interface().(construction.Object).ExtensionSource.Base.SourceVersion != "1" {
+			if final.records.types[construction.ObjectType].rows.Get("extension").value.Interface().(construction.Object).ExtensionSource.Base.SourceVersion != "1" {
 				t.Fatal("base upgrade silently rebound the published extension")
 			}
 		})
@@ -292,7 +292,7 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 	for rowID, old := range before {
 		var original, current map[string]any
 		_ = json.Unmarshal(old, &original)
-		raw, _ := recovered.records.types["build.materialextra"].rows.get(rowID).image()
+		raw, _ := recovered.records.types["build.materialextra"].rows.Get(rowID).image()
 		_ = json.Unmarshal(raw, &current)
 		if current["localgrade"] != original["customergrade"] || current["inspectiondue"] != original["inspectiondue"] {
 			t.Fatal("conflict resolution lost a customer field")

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"time"
@@ -74,8 +75,8 @@ func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedCallbac
 			}
 		}
 		t.opsMu.Unlock()
-		actual, err := canonicalDigest(current)
-		expected, expectedErr := canonicalDigest(source)
+		actual, err := acceptance.Digest(current)
+		expected, expectedErr := acceptance.Digest(source)
 		if current.ID == "" || err != nil || expectedErr != nil || actual != expected {
 			return fmt.Errorf("callback row source effect predecessor differs")
 		}
@@ -85,13 +86,13 @@ func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedCallbac
 		}
 		typ, id, _ := strings.Cut(ref, "/")
 		private.mu.Lock()
-		image := private.types[typ].rows.get(id)
+		image := private.types[typ].rows.Get(id)
 		private.mu.Unlock()
 		target.mu.Lock()
 		target.types[typ].setRow(id, image)
 		target.writes[ref] = true
 		if target.types[typ].knowledge {
-			target.dirty.set(ref, true)
+			target.dirty.Set(ref, true)
 		}
 		target.mu.Unlock()
 	}

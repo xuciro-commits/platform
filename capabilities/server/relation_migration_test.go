@@ -56,7 +56,7 @@ func TestOwnedRelationMigrationPreservesHistoryAndOneActiveTruth(t *testing.T) {
 	if got := refuse(t, tn, "builder", construction.ID, "build.linktype.migrate", construction.LinkTypeType, "LINK", nil, txnAt); got == "ok" {
 		t.Fatal("failed append accepted migration")
 	}
-	if tn.records.types[platform.OwnedRelationType(construction.ID)].rows.len() != 0 {
+	if tn.records.types[platform.OwnedRelationType(construction.ID)].rows.Len() != 0 {
 		t.Fatal("failed append left migration rows")
 	}
 	fail = false

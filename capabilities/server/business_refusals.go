@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -83,8 +84,8 @@ func changedBusinessInputs(before, after []byte) []BusinessInputChange {
 	}
 	var out []BusinessInputChange
 	for k := range names {
-		ah, _ := canonicalDigest(a[k])
-		bh, _ := canonicalDigest(b[k])
+		ah, _ := acceptance.Digest(a[k])
+		bh, _ := acceptance.Digest(b[k])
 		_, aExists := a[k]
 		_, bExists := b[k]
 		if ah != bh || aExists != bExists {
@@ -135,7 +136,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		exists := false
 		t.records.mu.Lock()
 		if et := t.records.types[typ]; et != nil {
-			exists = et.rows.get(id) != nil
+			exists = et.rows.Get(id) != nil
 		}
 		t.records.mu.Unlock()
 		if exists && !readable || !exists && !own {
@@ -241,7 +242,7 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 	typ, id, _ := strings.Cut(f.Subject, "/")
 	t.records.mu.Lock()
 	et := t.records.types[typ]
-	readable := et != nil && et.rows.get(id) != nil && t.readableIn(t.records, m, f.Subject, at)
+	readable := et != nil && et.rows.Get(id) != nil && t.readableIn(t.records, m, f.Subject, at)
 	t.records.mu.Unlock()
 	if !readable {
 		f.Original = nil
@@ -267,8 +268,8 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 		_ = json.Unmarshal(platform.Raw(historical.Interface()), &rawBefore)
 		_ = json.Unmarshal(platform.Raw(narrowed.Interface()), &rawAfter)
 		for name := range original {
-			beforeHash, _ := canonicalDigest(rawBefore[name])
-			afterHash, _ := canonicalDigest(rawAfter[name])
+			beforeHash, _ := acceptance.Digest(rawBefore[name])
+			afterHash, _ := acceptance.Digest(rawAfter[name])
 			if beforeHash != afterHash {
 				delete(original, name)
 			}

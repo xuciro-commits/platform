@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/acceptance"
 	"reflect"
 )
 
@@ -17,7 +18,7 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 	prior = legacyAgentBindingImage(prior, image)
 	if prior != nil {
 		if before, err := acceptedRowOf(image.Type, image.ID, prior); err == nil {
-			if digest, err := canonicalDigest(before); err == nil && digest == image.Before {
+			if digest, err := acceptance.Digest(before); err == nil && digest == image.Before {
 				return prior
 			}
 		}
@@ -49,8 +50,8 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 		return nil
 	}
 	oldContext["flows"] = json.RawMessage("[]")
-	oldDigest, err := canonicalDigest(oldContext)
-	currentDigest, currentErr := canonicalDigest(currentContext)
+	oldDigest, err := acceptance.Digest(oldContext)
+	currentDigest, currentErr := acceptance.Digest(currentContext)
 	if err != nil || currentErr != nil || oldDigest != currentDigest {
 		return nil
 	}
@@ -70,9 +71,9 @@ func legacyAgentContextPredecessor(prior *row, image acceptedBatchRow) *row {
 	if err != nil {
 		return nil
 	}
-	digest, err := canonicalDigest(before)
-	prefix, prefixErr := canonicalDigest(history)
-	expectedPrefix, expectedErr := canonicalDigest(image.History[:len(history)])
+	digest, err := acceptance.Digest(before)
+	prefix, prefixErr := acceptance.Digest(history)
+	expectedPrefix, expectedErr := acceptance.Digest(image.History[:len(history)])
 	if err != nil || digest != image.Before || prefixErr != nil || expectedErr != nil || prefix != expectedPrefix {
 		return nil
 	}

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"platformserver/internal/construction"
 	"platformserver/internal/host"
 	"platformserver/platform"
@@ -26,14 +27,14 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	et := t.records.types[typ]
-	if et == nil || et.rows.get(id) == nil {
+	if et == nil || et.rows.Get(id) == nil {
 		return "", fmt.Errorf("release metadata needs its predecessor %s", record)
 	}
-	image, err := et.rows.get(id).image()
+	image, err := et.rows.Get(id).image()
 	if err != nil {
 		return "", err
 	}
-	return canonicalDigest(image)
+	return acceptance.Digest(image)
 }
 
 func (t *Tenant) installationPlan(registry *platform.AssetRegistry, installation releaseInstallation) (platform.AssetInstallation, error) {
@@ -80,7 +81,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 		if err := json.Unmarshal(plan.Image, value.Addr().Interface()); err != nil {
 			return nil, err
 		}
-		installed := *et.rows.get(id)
+		installed := *et.rows.Get(id)
 		installed.value, installed.original = value, nil
 		installed.retainOriginal(plan.Image)
 		et.setRow(id, &installed)
@@ -151,7 +152,7 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool, reviewed ...p
 	}
 	for typ, old := range t.records.types {
 		next := draft.records.types[typ]
-		if next == nil || old.rows.len() == 0 {
+		if next == nil || old.rows.Len() == 0 {
 			continue
 		}
 		if !sameStoredFields(old.info, next.info) && !declared(typ, "") && (!upgrade || optionalStoredAddition(old.info, next.info) == nil && !t.migratedStorageLocked(old.info, next.info)) {

@@ -217,7 +217,7 @@ func (t *Tenant) pageModelRuleRecord(typ, id string, fallback any) any {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	if entity := t.records.types[typ]; entity != nil {
-		if original := entity.rows.get(id); original != nil {
+		if original := entity.rows.Get(id); original != nil {
 			return original.value.Interface()
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"platformserver/internal/records"
 	"platformserver/platform"
 )
 
@@ -14,8 +15,8 @@ import (
 // derived index must not silently repair historical business data.
 type uniqueIndex struct {
 	rule platform.Constraint
-	keys recordIndex[recordIndex[bool]]
-	rows recordIndex[string]
+	keys records.Index[records.Index[bool]]
+	rows records.Index[string]
 }
 
 func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (string, error) {
@@ -55,10 +56,10 @@ func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constrai
 				break
 			}
 			parent := s.types[field.Ref]
-			if parent == nil || parent.info.App != info.App || parent.rows.get(x.String()) == nil {
+			if parent == nil || parent.info.App != info.App || parent.rows.Get(x.String()) == nil {
 				return "", fmt.Errorf("unique scope reference is unavailable")
 			}
-			current, currentType = parent.rows.get(x.String()).value, parent.info
+			current, currentType = parent.rows.Get(x.String()).value, parent.info
 		}
 	}
 	raw, err := json.Marshal(values)
@@ -66,25 +67,25 @@ func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constrai
 }
 
 func (index *uniqueIndex) replace(id, key string) {
-	before := index.rows.get(id)
+	before := index.rows.Get(id)
 	if before == key {
 		return
 	}
 	if before != "" {
-		bucket := index.keys.get(before)
-		bucket.remove(id)
-		if bucket.len() == 0 {
-			index.keys.remove(before)
+		bucket := index.keys.Get(before)
+		bucket.Remove(id)
+		if bucket.Len() == 0 {
+			index.keys.Remove(before)
 		} else {
-			index.keys.set(before, bucket)
+			index.keys.Set(before, bucket)
 		}
-		index.rows.remove(id)
+		index.rows.Remove(id)
 	}
 	if key != "" {
-		bucket := index.keys.get(key)
-		bucket.set(id, true)
-		index.keys.set(key, bucket)
-		index.rows.set(id, key)
+		bucket := index.keys.Get(key)
+		bucket.Set(id, true)
+		index.keys.Set(key, bucket)
+		index.rows.Set(id, key)
 	}
 }
 
@@ -94,7 +95,7 @@ func (et *entityType) uniqueIndex(s *recordStore, rule platform.Constraint) uniq
 	}
 	index := uniqueIndex{rule: rule}
 	s.prepareUniqueScopeReferences(et.info, rule)
-	for id, r := range et.rows.all() {
+	for id, r := range et.rows.All() {
 		key, err := s.uniqueKey(et.info, rule, r.value)
 		if err == nil {
 			index.replace(id, key)
@@ -134,8 +135,8 @@ func (s *recordStore) prepareUniqueScopeReferences(info platform.EntityInfo, rul
 // scopeDependents traverses only reference buckets whose declaration is part
 // of this rule's scope. A change to an intermediate parent never scans the
 // child table, including when multiple scope segments use the same type.
-func (s *recordStore) scopeDependents(info platform.EntityInfo, rule platform.Constraint, changedType, changedID string) recordIndex[bool] {
-	var out recordIndex[bool]
+func (s *recordStore) scopeDependents(info platform.EntityInfo, rule platform.Constraint, changedType, changedID string) records.Index[bool] {
+	var out records.Index[bool]
 	if rule.Scope == "" || rule.Scope == "tenant" {
 		return out
 	}
@@ -161,20 +162,20 @@ func (s *recordStore) scopeDependents(info platform.EntityInfo, rule platform.Co
 		// The final reference contributes its identity, not its contents. Editing
 		// its target therefore cannot change this scope's derived key.
 		if i < len(path)-1 && field.Ref == changedType {
-			var ids recordIndex[bool]
-			ids.set(changedID, true)
+			var ids records.Index[bool]
+			ids.Set(changedID, true)
 			for j := len(edges) - 1; j >= 0; j-- {
-				var parents recordIndex[bool]
+				var parents records.Index[bool]
 				index := edges[j].source.referenceIndex(edges[j].field)
-				for target := range ids.all() {
-					for id := range index.targets.get(target).ids.all() {
-						parents.set(id, true)
+				for target := range ids.All() {
+					for id := range index.Get(target).IDs.All() {
+						parents.Set(id, true)
 					}
 				}
 				ids = parents
 			}
-			for id := range ids.all() {
-				out.set(id, true)
+			for id := range ids.All() {
+				out.Set(id, true)
 			}
 		}
 		current = s.types[field.Ref]
@@ -187,11 +188,11 @@ func (s *recordStore) refreshUniqueIndexes(changedType, changedID string) {
 		for name, index := range et.uniqueIndexes {
 			ids := s.scopeDependents(et.info, index.rule, changedType, changedID)
 			if et.info.Type == changedType {
-				ids.set(changedID, true)
+				ids.Set(changedID, true)
 			}
-			for id := range ids.all() {
+			for id := range ids.All() {
 				key := ""
-				if current := et.rows.get(id); current != nil {
+				if current := et.rows.Get(id); current != nil {
 					key, _ = s.uniqueKey(et.info, index.rule, current.value)
 				}
 				index.replace(id, key)
@@ -210,7 +211,7 @@ func (s *recordStore) uniqueKeys(typ, id string) map[string]string {
 	if et == nil {
 		return keys
 	}
-	r := et.rows.get(id)
+	r := et.rows.Get(id)
 	if r == nil {
 		return keys
 	}
@@ -231,17 +232,17 @@ func (s *recordStore) uniqueKeys(typ, id string) map[string]string {
 // caller applies an empty key set by deleting that row's former derived keys.
 // The store lock belongs to the caller, as with accepted record collection.
 func (s *recordStore) uniqueChanges() map[string]map[string]string {
-	var affected recordIndex[bool]
+	var affected records.Index[bool]
 	for ref := range s.writes {
-		affected.set(ref, true)
+		affected.Set(ref, true)
 		typ, id, _ := strings.Cut(ref, "/")
 		for _, et := range s.types {
 			for _, rule := range et.info.Constraints {
 				if rule.Kind != "unique" {
 					continue
 				}
-				for child := range s.scopeDependents(et.info, rule, typ, id).all() {
-					affected.set(et.info.Type+"/"+child, true)
+				for child := range s.scopeDependents(et.info, rule, typ, id).All() {
+					affected.Set(et.info.Type+"/"+child, true)
 				}
 			}
 		}
@@ -250,12 +251,12 @@ func (s *recordStore) uniqueChanges() map[string]map[string]string {
 		if !et.fullImage {
 			continue
 		}
-		for id := range et.rows.all() {
-			affected.set(typ+"/"+id, true)
+		for id := range et.rows.All() {
+			affected.Set(typ+"/"+id, true)
 		}
 	}
 	changes := map[string]map[string]string{}
-	for ref := range affected.all() {
+	for ref := range affected.All() {
 		typ, id, _ := strings.Cut(ref, "/")
 		changes[ref] = s.uniqueKeys(typ, id)
 	}

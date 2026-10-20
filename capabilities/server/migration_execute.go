@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -30,7 +31,7 @@ func (s *recordStore) migrationWriteLocked(info platform.EntityInfo, r *pb.Chang
 	if progress == nil || info.Type == platform.MigrationRunType {
 		return nil
 	}
-	for _, value := range progress.rows.all() {
+	for _, value := range progress.rows.All() {
 		run := value.value.Interface().(platform.MigrationRun)
 		if run.State == "cancelled" || run.Plan.From != s.readRelease {
 			continue
@@ -42,7 +43,7 @@ func (s *recordStore) migrationWriteLocked(info platform.EntityInfo, r *pb.Chang
 		if !affected {
 			continue
 		}
-		shape, err := canonicalDigest(info.Fields)
+		shape, err := acceptance.Digest(info.Fields)
 		if err != nil || shape != source {
 			continue // The target definition has been installed.
 		}
@@ -63,12 +64,12 @@ func (s *recordStore) migrationDefinitionLocked(info platform.EntityInfo) error 
 	if progress == nil {
 		return nil
 	}
-	for _, value := range progress.rows.all() {
+	for _, value := range progress.rows.All() {
 		run := value.value.Interface().(platform.MigrationRun)
 		if run.State == "cancelled" || run.Plan.From != s.readRelease || run.SourceShapes[info.Type] == "" && run.TargetShapes[info.Type] == "" {
 			continue
 		}
-		shape, err := canonicalDigest(info.Fields)
+		shape, err := acceptance.Digest(info.Fields)
 		want := run.SourceShapes[info.Type]
 		if want == "" {
 			want = run.TargetShapes[info.Type]
@@ -95,7 +96,7 @@ func (d *stagedDecision) BeginMigration(c platform.Caller, r *pb.ChangeRecord, p
 	if err != nil {
 		return platform.MigrationRun{}, migrationRefusal(err)
 	}
-	for _, value := range d.records.types[platform.MigrationRunType].rows.all() {
+	for _, value := range d.records.types[platform.MigrationRunType].rows.All() {
 		prior := value.value.Interface().(platform.MigrationRun)
 		if prior.State == "cancelled" {
 			continue
@@ -108,7 +109,7 @@ func (d *stagedDecision) BeginMigration(c platform.Caller, r *pb.ChangeRecord, p
 	}
 	run := platform.MigrationRun{Record: platform.Record{ID: r.GetSubmission().GetTarget().GetId()}, Plan: plan, Review: reviewID, State: "pending", StartedBy: c.ID, EvaluationAt: reviewedAt.UTC(), SourceShapes: map[string]string{}, TargetShapes: map[string]string{}, Targets: []string{}, Failures: []platform.MigrationFailure{}}
 	for typ, target := range prepared.targets {
-		shape, err := canonicalDigest(target.Fields)
+		shape, err := acceptance.Digest(target.Fields)
 		if err != nil {
 			return run, migrationRefusal(err)
 		}
@@ -122,17 +123,17 @@ func (d *stagedDecision) BeginMigration(c platform.Caller, r *pb.ChangeRecord, p
 		if source.App != c.App {
 			return platform.MigrationRun{}, migrationRefusal(fmt.Errorf("migration batches must belong to the builder's authority"))
 		}
-		shape, err := canonicalDigest(source.Fields)
+		shape, err := acceptance.Digest(source.Fields)
 		if err != nil {
 			return platform.MigrationRun{}, migrationRefusal(err)
 		}
 		run.SourceShapes[typ] = shape
-		target, err := canonicalDigest(prepared.targets[typ].Fields)
+		target, err := acceptance.Digest(prepared.targets[typ].Fields)
 		if err != nil {
 			return platform.MigrationRun{}, migrationRefusal(err)
 		}
 		run.TargetShapes[typ] = target
-		for id, row := range d.records.types[typ].rows.all() {
+		for id, row := range d.records.types[typ].rows.All() {
 			if !recordOf(row.value).Archived {
 				run.Targets = append(run.Targets, typ+"/"+id)
 			}
@@ -169,17 +170,17 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 		return run, migrationRefusal(err)
 	}
 	for typ, shape := range run.SourceShapes {
-		current, err := canonicalDigest(prepared.sources[typ].Fields)
+		current, err := acceptance.Digest(prepared.sources[typ].Fields)
 		if err != nil || current != shape {
 			return run, migrationRefusal(fmt.Errorf("migration source shape changed"))
 		}
-		target, err := canonicalDigest(prepared.targets[typ].Fields)
+		target, err := acceptance.Digest(prepared.targets[typ].Fields)
 		if err != nil || target != run.TargetShapes[typ] {
 			return run, migrationRefusal(fmt.Errorf("migration target shape changed"))
 		}
 	}
 	for typ, shape := range run.TargetShapes {
-		actual, err := canonicalDigest(prepared.targets[typ].Fields)
+		actual, err := acceptance.Digest(prepared.targets[typ].Fields)
 		if err != nil || actual != shape {
 			return run, migrationRefusal(fmt.Errorf("migration target shape changed"))
 		}
@@ -215,7 +216,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			continue
 		}
 		et := d.records.types[typ]
-		if et == nil || et.rows.get(id) == nil {
+		if et == nil || et.rows.Get(id) == nil {
 			return run, migrationRefusal(fmt.Errorf("migration source record disappeared"))
 		}
 		fields := []string{}
@@ -228,7 +229,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			return run, err
 		}
 		d.RecordAuthorization(c, read, decision)
-		image, err := et.rows.get(id).image()
+		image, err := et.rows.Get(id).image()
 		if err != nil {
 			return run, migrationRefusal(err)
 		}
@@ -241,7 +242,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			if target == nil {
 				return run, migrationRefusal(fmt.Errorf("extraction target is not declared"))
 			}
-			if target.rows.get(targetID) != nil || slices.ContainsFunc(writes, func(w migrationWrite) bool { return w.typ == step.Target && w.id == targetID }) {
+			if target.rows.Get(targetID) != nil || slices.ContainsFunc(writes, func(w migrationWrite) bool { return w.typ == step.Target && w.id == targetID }) {
 				err = fmt.Errorf("extraction identity %s/%s already exists", step.Target, targetID)
 			} else {
 				extraction = &migrationWrite{typ: step.Target, id: targetID, values: result.Extracted, extract: true, source: ref, sourceValues: result.Values}
@@ -288,7 +289,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 			if err != nil || json.Unmarshal(raw, v.Addr().Interface()) != nil {
 				return run, migrationRefusal(fmt.Errorf("migration value does not match its target shape"))
 			}
-			trialType.setRow(id, &row{value: v, history: copyHistory(et.rows.get(id).recordHistory())})
+			trialType.setRow(id, &row{value: v, history: copyHistory(et.rows.Get(id).recordHistory())})
 			decision := d.tenant.authorizeFrom(prepared.trial.records, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: typ, Record: id, Fields: writeFields}, at, false)
 			if err := authorizationRefusal(decision); err != nil {
 				return run, err
@@ -332,7 +333,7 @@ func (d *stagedDecision) AdvanceMigration(c platform.Caller, r *pb.ChangeRecord,
 				return run, err
 			}
 			written := d.records.types[write.typ]
-			updated := *written.rows.get(write.id)
+			updated := *written.rows.Get(write.id)
 			updated.extraction = &extractionOrigin{Migration: run.ID, Source: write.source, Step: before.Step}
 			written.setRow(write.id, &updated)
 			sourceType, sourceID, _ := strings.Cut(write.source, "/")
@@ -361,7 +362,7 @@ func (t *Tenant) migrationActivationLocked(candidate string) (bool, error) {
 		return false, nil
 	}
 	migrated := false
-	for _, value := range progress.rows.all() {
+	for _, value := range progress.rows.All() {
 		run := value.value.Interface().(platform.MigrationRun)
 		if run.State == "cancelled" || run.Plan.From != t.releases.active {
 			continue
@@ -379,7 +380,7 @@ func (t *Tenant) completedActionRetirement(action string) bool {
 	if progress == nil {
 		return false
 	}
-	for _, value := range progress.rows.all() {
+	for _, value := range progress.rows.All() {
 		run := value.value.Interface().(platform.MigrationRun)
 		if run.Plan.From == t.releases.active && run.State == "complete" && len(run.Failures) == 0 && slices.ContainsFunc(run.Plan.Steps, func(step platform.MigrateStep) bool { return step.Kind == "retire-action" && step.Action == action }) {
 			return true
@@ -408,10 +409,10 @@ func (d *stagedDecision) cancelMigrationBatch(c platform.Caller, r *pb.ChangeRec
 		}
 		typ, id, _ := strings.Cut(ref, "/")
 		et := d.records.types[typ]
-		if et == nil || et.rows.get(id) == nil {
+		if et == nil || et.rows.Get(id) == nil {
 			return run, migrationRefusal(fmt.Errorf("migration source record disappeared"))
 		}
-		current := et.rows.get(id)
+		current := et.rows.Get(id)
 		fields := []string{}
 		for _, field := range et.info.Fields {
 			fields = append(fields, field.Name)
@@ -447,7 +448,7 @@ func (d *stagedDecision) cancelMigrationBatch(c platform.Caller, r *pb.ChangeRec
 			if err := d.putMigrationImage(c, r, et, id, values, run.SourceShapes[typ]); err != nil {
 				return run, err
 			}
-			updated := *et.rows.get(id)
+			updated := *et.rows.Get(id)
 			remaining := updated.projection.Prior
 			updated.projection = nil
 			if len(remaining) > 0 {
@@ -476,12 +477,12 @@ func (t *Tenant) migratedStorageLocked(old, next platform.EntityInfo) bool {
 	if progress == nil {
 		return false
 	}
-	source, sourceErr := canonicalDigest(old.Fields)
-	target, targetErr := canonicalDigest(next.Fields)
+	source, sourceErr := acceptance.Digest(old.Fields)
+	target, targetErr := acceptance.Digest(next.Fields)
 	if sourceErr != nil || targetErr != nil {
 		return false
 	}
-	for _, value := range progress.rows.all() {
+	for _, value := range progress.rows.All() {
 		run := value.value.Interface().(platform.MigrationRun)
 		if run.Plan.From == t.releases.active && run.State == "complete" && len(run.Failures) == 0 && run.SourceShapes[old.Type] == source && run.TargetShapes[old.Type] == target {
 			return true
@@ -505,7 +506,7 @@ func (t *Tenant) validateMigratedRecordsLocked(trial *Tenant, member platform.Me
 		for _, field := range et.info.Fields {
 			fields = append(fields, field.Name)
 		}
-		for id, current := range et.rows.all() {
+		for id, current := range et.rows.All() {
 			if recordOf(current.value).Archived {
 				continue
 			}
@@ -526,7 +527,7 @@ func (t *Tenant) validateMigratedRecordsLocked(trial *Tenant, member platform.Me
 }
 
 func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord, et *entityType, id string, values map[string]json.RawMessage, shape string) *kernel.Error {
-	prior := et.rows.get(id)
+	prior := et.rows.Get(id)
 	before, err := prior.image()
 	if err != nil {
 		return migrationRefusal(err)
@@ -535,7 +536,7 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 	if err := d.Put(c, r, source.Interface()); err != nil {
 		return err
 	}
-	updated := *et.rows.get(id)
+	updated := *et.rows.Get(id)
 	updated.history = copyHistory(updated.history)
 	updated.loadHistory = nil
 	current := &updated

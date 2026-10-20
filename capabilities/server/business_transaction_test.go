@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"strings"
 	"testing"
@@ -370,7 +371,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	if entries, _, _ := platform.Find[platform.Journal](tn.automation(core.ID, false), platform.Query{}); len(entries) != 0 {
 		t.Fatal("the business transaction wrote into the books' independent authority")
 	}
-	t.Logf("complete document: header, two lines, subject state, exact balance, sequence, pure reads, effect, work and journal intent; %d / %d bytes", len(entries[0].Body), maxAcceptedResultBytes)
+	t.Logf("complete document: header, two lines, subject state, exact balance, sequence, pure reads, effect, work and journal intent; %d / %d bytes", len(entries[0].Body), acceptance.MaxResultBytes)
 	retry, retryErr := tn.Submit(memberOf(t, tn, "operator"), success, txnAt.Add(time.Hour))
 	if retryErr != nil || !proto.Equal(retry, receipt) || j.Position(tn.ID) != position+1 {
 		t.Fatal("same input did not return original receipt")
@@ -482,7 +483,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		t.Fatal("recovery reran current authorization")
 	}
 	for _, row := range saved.Rows {
-		r := restarted.records.types[row.Type].rows.get(row.ID)
+		r := restarted.records.types[row.Type].rows.Get(row.ID)
 		image, err := r.image()
 		if err != nil || !bytes.Equal(image, row.Value) {
 			t.Fatalf("recovered image differs for %s: %v", row.Type, err)

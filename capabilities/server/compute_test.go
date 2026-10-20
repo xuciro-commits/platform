@@ -13,6 +13,7 @@ import (
 	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"testing"
@@ -122,7 +123,7 @@ func TestApplicationPreviewRetainsPublishedCompute(t *testing.T) {
 
 func (fixtureCodeCompiler) Compile(_ context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, []byte, error) {
 	hash := sha256.Sum256([]byte(q.Source))
-	buildHash, _ := canonicalDigest(q)
+	buildHash, _ := acceptance.Digest(q)
 	module := []byte{0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 7, 10, 1, 6, 95, 115, 116, 97, 114, 116, 0, 0, 10, 4, 1, 2, 0, 11}
 	return platform.CodeBuildResult{SourceHash: hex.EncodeToString(hash[:]), BuildHash: buildHash, Toolchain: "fixture@sha256:123"}, module, nil
 }
@@ -497,7 +498,7 @@ func TestWasmDataABIChannels(t *testing.T) {
 				t.Fatalf("sealed retry changed its original intent or retained another file: %v", refusal)
 			}
 			for _, entry := range entries {
-				if len(entry.Body) > maxAcceptedResultBytes {
+				if len(entry.Body) > acceptance.MaxResultBytes {
 					t.Fatal("large input was copied into the accepted result")
 				}
 			}

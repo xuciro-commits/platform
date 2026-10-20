@@ -82,7 +82,7 @@ func TestAcceptedProtocolRequestAndReplyShareCommit(t *testing.T) {
 	var entries []Entry
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		// All three decisions, including the reply, must still be invisible.
-		if tn.records.types["cart.line"].rows.len() != 0 || tn.records.types["stock.hold"].rows.len() != 0 ||
+		if tn.records.types["cart.line"].rows.Len() != 0 || tn.records.types["stock.hold"].rows.Len() != 0 ||
 			len(tn.app("cart").(*resultCart).ledger.RecordsFor(tn.ID)) != 0 ||
 			len(tn.app("stock").(*resultDepot).ledger.RecordsFor(tn.ID)) != 0 {
 			t.Fatal("protocol transaction changed live records before append")
@@ -145,7 +145,7 @@ func TestAcceptedProtocolRefusalKeepsRequestAndReplyOnly(t *testing.T) {
 			}
 			saved, _, err := decodeAcceptedBatch(entries[0].Body)
 			if err != nil || len(saved.Decisions) != 2 || len(saved.Rows) != 1 ||
-				tn.records.types["stock.hold"].rows.len() != 0 {
+				tn.records.types["stock.hold"].rows.Len() != 0 {
 				t.Fatalf("refused provider left a decision or record: %+v, %v", saved, err)
 			}
 			line, refusal := tn.RecordOf(member, "cart.line", "L1", at)
@@ -206,7 +206,7 @@ func TestJournalAcceptedProtocolCrashBeforeApplication(t *testing.T) {
 			t.Fatalf("submit before crash: %v", err)
 		}
 	}()
-	if tn.records.types["cart.line"].rows.len() != 0 || tn.records.types["stock.hold"].rows.len() != 0 {
+	if tn.records.types["cart.line"].rows.Len() != 0 || tn.records.types["stock.hold"].rows.Len() != 0 {
 		t.Fatal("crashed process applied the transaction")
 	}
 	other, err := OpenJournal(ctx, dsn)
@@ -250,7 +250,7 @@ func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
 	fail := true
 	var entries []Entry
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-		if len(tn.outbound) != 0 || tn.records.types["cart.line"].rows.len() != 0 {
+		if len(tn.outbound) != 0 || tn.records.types["cart.line"].rows.Len() != 0 {
 			t.Fatal("model request escaped before append")
 		}
 		if fail {

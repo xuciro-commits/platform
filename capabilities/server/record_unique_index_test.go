@@ -72,29 +72,29 @@ func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	putUniqueTest(draft, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "2"}, Group: "1"})
 	draft.writes["unique.parent/2"] = true
 	updated := draft.types["unique.child"].uniqueIndexes[rule.Name]
-	key, _ := draft.uniqueKey(et.info, rule, draft.types["unique.child"].rows.get("1").value)
-	if updated.keys.get(key).len() != 2 {
+	key, _ := draft.uniqueKey(et.info, rule, draft.types["unique.child"].rows.Get("1").value)
+	if updated.keys.Get(key).Len() != 2 {
 		t.Fatal("parent scope change missed dependent key")
 	}
-	if original.keys.get(key).len() != 1 || store.types["unique.child"].uniqueIndexes[rule.Name].keys.root != original.keys.root {
+	if original.keys.Get(key).Len() != 1 || store.types["unique.child"].uniqueIndexes[rule.Name].keys != original.keys {
 		t.Fatal("private index leaked")
 	}
-	if updated.rows.get("3") != original.rows.get("3") {
+	if updated.rows.Get("3") != original.rows.Get("3") {
 		t.Fatal("unrelated key changed")
 	}
 	changes := draft.uniqueChanges()
 	if len(changes) != 2 || changes["unique.child/2"][rule.Name] != key {
 		t.Fatal("derived changes missed unchanged child", changes)
 	}
-	if store.types["unique.parent"].rows.get("2").value.Interface().(indexedUniqueParent).Group != "2" {
+	if store.types["unique.parent"].rows.Get("2").value.Interface().(indexedUniqueParent).Group != "2" {
 		t.Fatal("discarded change reached live state")
 	}
 	draft = store.forkRecords()
 	putUniqueTest(draft, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "1"}, Parent: "1", Code: "different"})
-	if draft.types["unique.child"].uniqueIndexes[rule.Name].keys.has(key) {
+	if draft.types["unique.child"].uniqueIndexes[rule.Name].keys.Has(key) {
 		t.Fatal("replacement retained old key")
 	}
-	if original.keys.get(key).len() != 1 {
+	if original.keys.Get(key).Len() != 1 {
 		t.Fatal("replacement mutated predecessor")
 	}
 }
@@ -107,7 +107,7 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 	putUniqueTest(store, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "incomplete"}, Parent: "missing", Code: "same"})
 	et := store.types["unique.child"]
 	store.prepareUniqueIndexes()
-	existing := et.rows.get("a").value
+	existing := et.rows.Get("a").value
 	if ok, err := store.uniqueConstraint(et.info, rule, existing); ok || err != nil {
 		t.Fatal("historical duplicate lost", ok, err)
 	}
@@ -116,7 +116,7 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 	}
 	putUniqueTest(store, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "missing"}, Group: "g"})
 	key, _ := store.uniqueKey(et.info, rule, existing)
-	if et.uniqueIndexes[rule.Name].keys.get(key).len() != 3 {
+	if et.uniqueIndexes[rule.Name].keys.Get(key).Len() != 3 {
 		t.Fatal("new parent missed old child")
 	}
 	et.setRows(et.rows)
@@ -124,7 +124,7 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 		t.Fatal("bulk retained obsolete roots")
 	}
 	store.prepareUniqueIndexes()
-	if et.uniqueIndexes[rule.Name].keys.get(key).len() != 3 {
+	if et.uniqueIndexes[rule.Name].keys.Get(key).Len() != 3 {
 		t.Fatal("bulk changed occupants")
 	}
 }
@@ -169,11 +169,11 @@ func TestScopedUniqueParentEditChecksOnlyDependentChildren(t *testing.T) {
 		decide(t, tn, "builder", "build", parent+".create", parent, id, map[string]any{"group": fmt.Sprintf("G%d", i+1)}, txnAt)
 		decide(t, tn, "builder", "build", child+".create", child, fmt.Sprintf("C%d", i+1), map[string]any{"parent": id, "code": "same"}, txnAt)
 	}
-	original := tn.records.types[child].uniqueIndexes[rule.Name].keys.root
+	original := tn.records.types[child].uniqueIndexes[rule.Name].keys
 	if result := refuse(t, tn, "builder", "build", parent+".edit", parent, "P2", map[string]any{"group": "G1"}, txnAt); !strings.Contains(result, rule.Message) {
 		t.Fatal("parent scope edit escaped unchanged child rule", result)
 	}
-	if tn.records.types[child].uniqueIndexes[rule.Name].keys.root != original {
+	if tn.records.types[child].uniqueIndexes[rule.Name].keys != original {
 		t.Fatal("refused parent edit published private keys")
 	}
 	record, err := tn.RecordOf(memberOf(t, tn, "builder"), parent, "P2", txnAt)
@@ -207,7 +207,7 @@ func TestUniqueSQLReadsPrivateKeyChangesWithoutResidentIndex(t *testing.T) {
 		putUniqueTest(store, "unique.child", indexedUniqueChild{Record: platform.Record{ID: fmt.Sprint(i)}, Parent: fmt.Sprint(i), Code: "same"})
 	}
 	backend := &indexedUniqueState{byKey: map[string][]string{}, applied: 7}
-	for id := range store.types["unique.child"].rows.all() {
+	for id := range store.types["unique.child"].rows.All() {
 		key := store.uniqueKeys("unique.child", id)[rule.Name]
 		backend.byKey[key] = append(backend.byKey[key], id)
 	}

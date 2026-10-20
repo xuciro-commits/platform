@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
@@ -32,20 +33,20 @@ type acceptedOperationClaim struct {
 
 func operationClaimDigest(r acceptedOperationClaim) (string, error) {
 	r.Digest = ""
-	return canonicalDigest(r)
+	return acceptance.Digest(r)
 }
 
 // Decode before journal admission without applying the K9 transition.
 func decodeOperationClaim(raw []byte) (acceptedOperationClaim, error) {
 	var saved acceptedOperationClaim
-	if _, err := platform.DecodeValue(raw, maxAcceptedResultBytes); err != nil {
+	if _, err := platform.DecodeValue(raw, acceptance.MaxResultBytes); err != nil {
 		return saved, err
 	}
 	if err := json.Unmarshal(raw, &saved); err != nil {
 		return saved, err
 	}
 	digest, err := operationClaimDigest(saved)
-	hash, _ := canonicalDigest([]any{saved.Before, saved.PriorWork})
+	hash, _ := acceptance.Digest([]any{saved.Before, saved.PriorWork})
 	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != operationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
 		return saved, fmt.Errorf("invalid operation ownership result")
 	}
@@ -70,8 +71,8 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 		return saved, fmt.Errorf("operation claim has no accepted intent")
 	}
 	current := t.outbound[i]
-	same, _ := canonicalDigest(current.Effect)
-	expected, _ := canonicalDigest(saved.Before)
+	same, _ := acceptance.Digest(current.Effect)
+	expected, _ := acceptance.Digest(saved.Before)
 	t.opsMu.Unlock()
 	if same != expected {
 		return saved, fmt.Errorf("operation claim predecessor differs")
@@ -81,8 +82,8 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 	if old, err := works.Get(saved.Before.ID); err == nil {
 		prior, _ = protojson.Marshal(old)
 	}
-	priorHash, _ := canonicalDigest(prior)
-	savedHash, _ := canonicalDigest(saved.PriorWork)
+	priorHash, _ := acceptance.Digest(prior)
+	savedHash, _ := acceptance.Digest(saved.PriorWork)
 	if priorHash != savedHash {
 		return saved, fmt.Errorf("operation K9 predecessor differs")
 	}
@@ -97,8 +98,8 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 	}
 	after := saved.Before
 	after.Generation = generation
-	actual, _ := canonicalDigest(after)
-	frozen, _ := canonicalDigest(saved.After)
+	actual, _ := acceptance.Digest(after)
+	frozen, _ := acceptance.Digest(saved.After)
 	var work pb.Work
 	if actual != frozen || protojson.Unmarshal(saved.Work, &work) != nil {
 		return saved, fmt.Errorf("invalid operation claim transition")
@@ -150,7 +151,7 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 	after := before
 	after.Generation = generation
 	r := acceptedOperationClaim{Version: 1, Kind: "operation-claim", Tenant: t.ID, App: PlatformApp, At: now.UTC(), Key: fmt.Sprintf("operation-claim:%s:%d", id, generation), Before: before, After: after, PriorWork: prior, Work: rawWork}
-	r.RequestHash, _ = canonicalDigest([]any{before, prior})
+	r.RequestHash, _ = acceptance.Digest([]any{before, prior})
 	r.Digest, _ = operationClaimDigest(r)
 	raw, _ := json.Marshal(r)
 	principal, _ := json.Marshal(t.automation(PlatformApp, false).Member)

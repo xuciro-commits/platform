@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strconv"
@@ -53,26 +54,32 @@ func effectResultKey(before effectState) string {
 }
 
 func effectResultHash(before effectState, out platform.Outcome, at time.Time) (string, error) {
-	return canonicalDigest([]any{before, out, at})
+	return acceptance.Digest([]any{before, out, at})
 }
 
 func digestAcceptedEffect(result acceptedEffect) (string, error) {
 	result.Digest = ""
-	return canonicalDigest(result)
+	return acceptance.Digest(result)
 }
 
 func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	var result acceptedEffect
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
 		return result, fmt.Errorf("effect result is empty or too large")
 	}
-	if err := decodeAcceptedJSON(raw, &result, "effect result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &result, "effect result"); err != nil {
 		return result, err
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
 		return result, err
 	}
 
+	if result.Version < 5 && (result.Outcome.PublicMessage != "" || result.Before.PublicMessage != "" || result.After.PublicMessage != "") {
+		return result, fmt.Errorf("legacy effect result carries public delivery text")
+	}
+	if result.Version >= 5 && result.Outcome.Detail != "" && result.Outcome.PublicMessage == "" {
+		return result, fmt.Errorf("effect result omits its public delivery text")
+	}
 	if result.Version < 4 && len(result.Unique) > 0 {
 		return result, fmt.Errorf("legacy effect result carries derived unique keys")
 	}
@@ -84,7 +91,7 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 		expected.CallbackError = result.CallbackError
 	}
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash ||
-		(result.Version != 1 && result.Version != 2 && result.Version != 3 && result.Version != 4) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
+		(result.Version != 1 && result.Version != 2 && result.Version != 3 && result.Version != 4 && result.Version != 5) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
 		result.App != PlatformApp || result.At.IsZero() || result.Before.ID == "" ||
 		!slices.Contains([]string{"delivered", "rejected", "retry", "unknown"}, result.Outcome.Result) ||
 		len(result.Outcome.Answer) > 64<<10 ||
@@ -159,8 +166,8 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 		before = effectState{Effect: current.Effect, Since: current.since}
 	}
 	t.opsMu.Unlock()
-	beforeHash, err := canonicalDigest(before)
-	savedHash, savedErr := canonicalDigest(result.Before)
+	beforeHash, err := acceptance.Digest(before)
+	savedHash, savedErr := acceptance.Digest(result.Before)
 	if current == nil || err != nil || savedErr != nil || beforeHash != savedHash {
 		return result, false, fmt.Errorf("effect result predecessor differs")
 	}
@@ -169,10 +176,10 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 		return result, false, err
 	}
 	if works != nil {
-		priorHash, _ := canonicalDigest(priorWork)
-		expectedPrior, _ := canonicalDigest(result.WorkBefore)
-		workHash, _ := canonicalDigest(savedWork)
-		expectedWork, _ := canonicalDigest(result.Work)
+		priorHash, _ := acceptance.Digest(priorWork)
+		expectedPrior, _ := acceptance.Digest(result.WorkBefore)
+		workHash, _ := acceptance.Digest(savedWork)
+		expectedWork, _ := acceptance.Digest(result.Work)
 		if priorHash != expectedPrior || workHash != expectedWork {
 			return result, false, fmt.Errorf("operation result ownership differs")
 		}
@@ -182,7 +189,7 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 			return result, false, fmt.Errorf("effect result needs the AI meter")
 		}
 		state, err := t.ai.Snapshot()
-		currentHash, hashErr := canonicalDigest(state)
+		currentHash, hashErr := acceptance.Digest(state)
 		if err != nil || hashErr != nil || currentHash != result.UsageBefore {
 			return result, false, fmt.Errorf("effect result model usage predecessor differs")
 		}
@@ -251,9 +258,14 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		}
 		usage = &copy
 	}
+	// New attempts always retain a safe public message when they retain an
+	// error. An empty message on an old effect remains an explicit legacy case.
+	if out.Detail != "" && out.PublicMessage == "" {
+		out.PublicMessage = "The last delivery attempt failed"
+	}
 	after := &effect{Effect: before.Effect, since: before.Since}
 	markEffect(after, out, at)
-	result := acceptedEffect{Version: 4, Kind: "effect-result", Tenant: t.ID, App: PlatformApp,
+	result := acceptedEffect{Version: 5, Kind: "effect-result", Tenant: t.ID, App: PlatformApp,
 		Key: effectResultKey(before), At: at.UTC(), Before: before,
 		After: effectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
 	var err error
@@ -268,7 +280,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		}
 		state, snapshotErr := t.ai.Snapshot()
 		if snapshotErr == nil {
-			result.UsageBefore, snapshotErr = canonicalDigest(state)
+			result.UsageBefore, snapshotErr = acceptance.Digest(state)
 		}
 		if snapshotErr != nil {
 			t.quarantine(fmt.Errorf("effect %s usage checkpoint: %w", id, snapshotErr))

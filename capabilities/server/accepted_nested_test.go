@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"platformserver/internal/acceptance"
 	"slices"
 	"testing"
 	"time"
@@ -52,14 +53,14 @@ func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 			if !ok {
 				t.Fatal("Compute definition is missing")
 			}
-			definition, _ := canonicalDigest([]any{q.App, op, version})
-			inputHash, _ := canonicalDigest(q.Inputs)
+			definition, _ := acceptance.Digest([]any{q.App, op, version})
+			inputHash, _ := acceptance.Digest(q.Inputs)
 			ref, sealErr := tn.staged.sealInput(id+":frames:operation:"+q.Key+":"+operationEndpoint, member.ID, definition, inputHash, q.Inputs, op.Limits.DataInputBytes)
 			if sealErr != nil {
 				t.Fatal(sealErr)
 			}
 			t.Cleanup(func() { tn.staged.discardInput(ref) })
-			requestHash, _ := canonicalDigest(q)
+			requestHash, _ := acceptance.Digest(q)
 			draft.operationInputs = map[string][]*preparedOperationInput{requestHash: {{ref: ref, requestHash: requestHash}}}
 			draft.operationAnswers = map[string]platform.OperationResult{"prior": {ID: "prior", Output: []byte(`[1]`), Ref: &platform.AssetRef{App: "frames", Kind: platform.AssetCompute, Name: "aggregate"}}}
 			parentRefusal := platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Parent issue")
@@ -299,7 +300,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 		// Neither the parent nor either nested decision may be public yet.
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
 			len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(live.ID)) != 0 ||
-			live.records.types["stock.item"].rows.get("D1-child") != nil ||
+			live.records.types["stock.item"].rows.Get("D1-child") != nil ||
 			live.sequences.last["nested/document/0"] != 0 {
 			t.Fatal("a nested decision escaped before the one journal append")
 		}
@@ -325,7 +326,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 	if live.sequences.last["nested/document/0"] != 1 || result.SequenceBases["nested/document/0"] != 0 {
 		t.Fatal("the number was not committed with its predecessor")
 	}
-	item := live.records.types["stock.item"].rows.get("D1-child")
+	item := live.records.types["stock.item"].rows.Get("D1-child")
 	if item == nil || item.value.Interface().(Item).Qty != 7 || item.historyLength() != 2 {
 		t.Fatal("the committed nested create/edit result is incomplete")
 	}
@@ -361,7 +362,7 @@ func TestAcceptedNestedRefusalDiscardsEveryChild(t *testing.T) {
 		}
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
 			len(parent.ledger.RecordsFor(live.ID)) != 0 ||
-			live.records.types["stock.item"].rows.len() != 0 || len(live.events) != 0 {
+			live.records.types["stock.item"].rows.Len() != 0 || len(live.events) != 0 {
 			t.Fatal("a refused parent exposed a child receipt, record or event")
 		}
 	}
@@ -408,7 +409,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 	}
 	if len(recovered.app("stock").(*stock).ledger.RecordsFor(recovered.ID)) != 0 ||
 		len(recovered.app("nested").(*nestedIssuer).ledger.RecordsFor(recovered.ID)) != 0 ||
-		recovered.records.types["stock.item"].rows.len() != 0 || recovered.sequences.last["nested/document/0"] != 0 {
+		recovered.records.types["stock.item"].rows.Len() != 0 || recovered.sequences.last["nested/document/0"] != 0 {
 		t.Fatal("a late invalid receipt exposed an earlier child's state")
 	}
 }
@@ -450,7 +451,7 @@ func TestJournalAcceptedNestedBatchCrashBeforeApplication(t *testing.T) {
 	}()
 	if len(live.app("stock").(*stock).ledger.RecordsFor(id)) != 0 ||
 		len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(id)) != 0 ||
-		live.records.types["stock.item"].rows.len() != 0 || live.sequences.last["nested/document/0"] != 0 {
+		live.records.types["stock.item"].rows.Len() != 0 || live.sequences.last["nested/document/0"] != 0 {
 		t.Fatal("unapplied nested result leaked a record, receipt or number")
 	}
 	reopened, err := OpenJournal(ctx, url)

@@ -25,8 +25,8 @@ func (s *recordStore) validateUniqueLinkLocked(l platform.LinkType) error {
 	if !ok || f.Type != "reference" || f.Ref != l.Parent.Name {
 		return fmt.Errorf("link reference is unavailable")
 	}
-	for _, bucket := range et.referenceIndex(f).targets.all() {
-		if bucket.ids.len() > 1 {
+	for _, bucket := range et.referenceIndex(f).All() {
+		if bucket.IDs.Len() > 1 {
 			return fmt.Errorf("%s", linkCardinalityFailure)
 		}
 	}
@@ -59,9 +59,9 @@ func (s *recordStore) validateChangedLinkConstraintsLocked() error {
 			return fmt.Errorf("link reference is unavailable")
 		}
 		for _, id := range changed[link.Child.Name] {
-			if value := et.rows.get(id); value != nil {
+			if value := et.rows.Get(id); value != nil {
 				target := value.value.FieldByIndex(field.Index).String()
-				if target != "" && et.referenceIndex(field).targets.get(target).ids.len() > 1 {
+				if target != "" && et.referenceIndex(field).Get(target).IDs.Len() > 1 {
 					return fmt.Errorf("%s", linkCardinalityFailure)
 				}
 			}
@@ -80,21 +80,21 @@ func (s *recordStore) validateChangedLinkConstraintsLocked() error {
 			return fmt.Errorf("link reference is unavailable")
 		}
 		for _, id := range changed[link.Child.Name] {
-			row := child.rows.get(id)
+			row := child.rows.Get(id)
 			if row == nil || row.value.Field(0).Interface().(platform.Record).Archived {
 				continue
 			}
 			target := row.value.FieldByIndex(field.Index).String()
 			if target != "" {
-				value := parent.rows.get(target)
+				value := parent.rows.Get(target)
 				if value == nil || value.value.Field(0).Interface().(platform.Record).Archived {
 					return fmt.Errorf("%s", linkArchiveFailure)
 				}
 			}
 		}
 		for _, id := range changed[link.Parent.Name] {
-			row := parent.rows.get(id)
-			if (row == nil || row.value.Field(0).Interface().(platform.Record).Archived) && child.referenceIndex(field).targets.get(id).active > 0 {
+			row := parent.rows.Get(id)
+			if (row == nil || row.value.Field(0).Interface().(platform.Record).Archived) && child.referenceIndex(field).Get(id).Active > 0 {
 				return fmt.Errorf("%s", linkArchiveFailure)
 			}
 		}
@@ -182,12 +182,12 @@ func (s *recordStore) checkLinkWriteLocked(et *entityType, value reflect.Value) 
 		if parent == "" {
 			continue
 		}
-		bucket := et.referenceIndex(f).targets.get(parent).ids
+		bucket := et.referenceIndex(f).Get(parent).IDs
 		allowed := 0
-		if bucket.has(id) {
+		if bucket.Has(id) {
 			allowed = 1
 		}
-		if bucket.len() > allowed {
+		if bucket.Len() > allowed {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkCardinalityFailure)
 		}
 	}

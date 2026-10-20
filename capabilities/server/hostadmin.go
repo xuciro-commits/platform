@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strconv"
 	"strings"
@@ -101,7 +102,7 @@ func (h *Host) hostAuthorization(subject string, authenticated bool, permission,
 	if h.HostAdmins[subject] {
 		roles = []string{"host-admin"}
 	}
-	definition, _ := canonicalDigest([]any{permission, tenant, "host-admin"})
+	definition, _ := acceptance.Digest([]any{permission, tenant, "host-admin"})
 	return authz.Decide(authz.Request{Kind: "action", Subject: authz.Subject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &authz.Context{Tenant: pass, Principal: authz.Gate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
 }
 
@@ -478,7 +479,7 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 		Member, Reason string
 		Minutes        int
 	}{member, reason, minutes}
-	hash, err := canonicalDigest([]any{t.ID, subject, request, now.UTC()})
+	hash, err := acceptance.Digest([]any{t.ID, subject, request, now.UTC()})
 	if err != nil {
 		return SupportGrant{}, err
 	}

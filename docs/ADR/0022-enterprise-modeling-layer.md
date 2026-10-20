@@ -8,7 +8,7 @@
 
 企业模型由平台应用 `enterprise` 拥有，位于语言中立的内核之上；组织、场所、人员、岗位、能力、资源、项目和目标使用同一张模型图。租户仍是身份、日志和运维隔离单位。业务应用保存企业元素引用，不另建组织模型，也不借模型跨租户写入。
 
-宿主通过 `go:embed` 读取仓库 `docs/standards/uaf/1.3/` 的 UAF Profile 与 Measurements XMI。元模型提供构造型、属性、枚举、泛化和约束文本；可解析完整词汇不等于执行完整 UAF 约束。当前关系端点校验、扩展理由与特化规则归 ADR-0031。Profile 由 `profile.go` 声明，不维护第二份 JSON 启用表；规模只影响初始化模板，不限制用户可用元素。
+企业声明、关系与生命周期纯检查归 `capabilities/server/internal/enterprise`，宿主角色目录不再承载这些模型。完整 UAF Profile 与 Measurements XMI 原件保存在 `internal/enterprise/uaf/spec/`，来源说明归 `docs/standards/uaf/1.3/SOURCE.md`。`make generate-uaf` 在生成阶段解析标准，生成包含格式版本、标准版本、两份原件摘要和完整元模型的 JSON；业务运行仅嵌入 `internal/enterprise/uaf/gen/`，不解析 XML，也没有运行时 XML 备用路径。元模型提供构造型、属性、枚举、泛化和约束文本；完整读取词汇不等于执行完整 UAF 约束。当前关系端点校验、扩展理由与特化规则归 ADR-0031。Profile 由 `profile.go` 声明，不维护第二份 JSON 启用表；规模只影响初始化模板，不限制用户可用元素。
 
 ## 2. 模型与组织的历史责任
 
@@ -50,6 +50,6 @@ Pipeline 的 `outputEnterprise` 按声明列和 `=常量` 将整批输入折为�
 
 ### As built
 
-实现由 `apps/enterprise`、原宿主引用/使用检查和平台 Web Enterprise 工作区共同提供。Go 定向检查覆盖关闭/纠正/重开区间、未用元素删除与身份保留、来源只读/撤回/重现、父级冲突、现有记录与隐藏使用、字段移除后的历史引用，以及 Build 字段/输入和纯当前使用规则。`enterprise_links_test.go` 使用真实 HTTP 源宿主检查获权预览、无写、同凭据、确认不二次读取与陈旧/改动内容拒绝；不是用浏览器截图代替网络证明。`pipelines_enterprise_test.go` 保留原同步检查。
+`internal/enterprise` 持有唯一企业声明与纯关系规则，应用公共名称保留单层兼容声明；内部日期/期间直接使用 `platform.Date/Period`，不另传内部别名。UAF 的 272 个构造型、21 个枚举及当前发现、校验和 SDK 所用的全部属性、继承、约束和关系端点保持原值。生成完整性/确定性、两份 XMI 原文不变及运行依赖不含 XML 解析分别检查；`make check-uaf` 只比较生成结果，不修改文件。实现由 `apps/enterprise`、原宿主引用/使用检查和平台 Web Enterprise 工作区共同提供。Go 定向检查覆盖关闭/纠正/重开区间、未用元素删除与身份保留、来源只读/撤回/重现、父级冲突、现有记录与隐藏使用、字段移除后的历史引用，以及 Build 字段/输入和纯当前使用规则。`enterprise_links_test.go` 使用真实 HTTP 源宿主检查获权预览、无写、同凭据、确认不二次读取与陈旧/改动内容拒绝；不是用浏览器截图代替网络证明。`pipelines_enterprise_test.go` 保留原同步检查。
 
 历史浏览器观察覆盖酒店模式、预览和视图操作；本轮 Enterprise 浏览器路线的实际结果由 Testing 记录，本节不把尚未完成的走查报为通过。这些检查不能代表真实集团交付、完整 UAF 支持或客户规模已经验证。

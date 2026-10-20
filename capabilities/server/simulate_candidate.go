@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"platformserver/internal/host"
 	"slices"
 	"strings"
@@ -297,12 +298,12 @@ func runCandidateSimulation(request CandidateSimulationRequest, candidate platfo
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
 	out := CandidateSimulation{CandidateID: candidate.ID, Steps: []Simulation{}}
-	out.TestID, err = canonicalDigest([]any{candidate.ID, request, members, m.ID})
+	out.TestID, err = acceptance.Digest([]any{candidate.ID, request, members, m.ID})
 	if err != nil {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
 	if sandbox.ai != nil {
-		out.TestID, err = canonicalDigest([]any{candidate.ID, request, members, m.ID})
+		out.TestID, err = acceptance.Digest([]any{candidate.ID, request, members, m.ID})
 		if err != nil {
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 		}

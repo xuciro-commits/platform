@@ -62,7 +62,7 @@ func TestBusinessRefusalEscalationUsesDistinctDurableDecisions(t *testing.T) {
 				t.Fatal("a retry contributed another escalation input")
 			}
 			runJob(t, tn, work.ID, "refusals", txnAt.Add(time.Second))
-			if tn.records.types[work.TaskType].rows.len() != 0 {
+			if tn.records.types[work.TaskType].rows.Len() != 0 {
 				t.Fatal("the first refused intent opened a repeated-refusal task")
 			}
 			if level == "block" {
@@ -85,7 +85,7 @@ func TestBusinessRefusalEscalationUsesDistinctDurableDecisions(t *testing.T) {
 			}
 			decide(t, tn, "manager", work.ID, work.TaskType+".complete", work.TaskType, tasks[0].ID, map[string]any{}, txnAt.Add(4*time.Second))
 			runJob(t, tn, work.ID, "refusals", txnAt.Add(5*time.Second))
-			if tn.records.types[work.TaskType].rows.len() != 1 || len(tn.notificationsFor("manager")) != 1 {
+			if tn.records.types[work.TaskType].rows.Len() != 1 || len(tn.notificationsFor("manager")) != 1 {
 				t.Fatal("completed escalation was reopened or notified twice")
 			}
 			CheckReplay(t, tn, entries, func() *Tenant { return businessRefusalEscalationTenant(t) })

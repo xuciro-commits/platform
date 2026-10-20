@@ -51,8 +51,16 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 		item := IntegrationEffect{ID: effect.ID, Endpoint: effect.Endpoint, Event: effect.Event, State: effect.State, Due: effect.Due, Last: effect.Last}
 		if effect.Error != "" {
 			item.Error = "The last delivery attempt failed"
-			if books && (strings.Contains(effect.Error, "closed") || strings.Contains(effect.Error, "fiscal period")) {
-				item.Error = "Waiting for an open fiscal period"
+			if effect.PublicMessage != "" {
+				item.Error = effect.PublicMessage
+			} else if books {
+				// Results predating public delivery text retain their original
+				// metadata through the business owner's historical adapter.
+				if owner, ok := t.app(platform.BooksApp).(host.BooksChecks); ok {
+					if message := owner.HistoricalPostingMessage(effect.Error); message != "" {
+						item.Error = message
+					}
+				}
 			}
 		}
 		out = append(out, item)

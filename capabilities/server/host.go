@@ -43,8 +43,8 @@ type Tenant struct {
 	runtimePosition    func() int64
 	snapshotPosition   int64 // last captured/restored checkpoint; zero-position diagnostics preserve it
 	observationWindows map[string]observationWindowAttempt
-	confirmationReads  map[string]statusReadAttempt
-	dispatchReads      map[string]statusReadAttempt
+	confirmationReads  statusReadSchedule
+	dispatchReads      statusReadSchedule
 	simulation         bool                         // isolated builder execution, never authoritative state
 	simulationTrace    func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
 	// Private control views route callbacks back into their owning decision.

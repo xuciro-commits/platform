@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
@@ -57,7 +58,7 @@ func stateOfTask(task *Task) (taskState, error) {
 }
 
 func workInputHash(input taskState, prior json.RawMessage) (string, error) {
-	return canonicalDigest([]any{input, prior})
+	return acceptance.Digest([]any{input, prior})
 }
 
 func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
@@ -253,15 +254,15 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *Task, now
 
 func digestAcceptedWork(result acceptedWork) (string, error) {
 	result.Digest = ""
-	return canonicalDigest(result)
+	return acceptance.Digest(result)
 }
 
 func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 	var result acceptedWork
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
 		return result, fmt.Errorf("work result is empty or too large")
 	}
-	if err := decodeAcceptedJSON(raw, &result, "work result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &result, "work result"); err != nil {
 		return result, err
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {

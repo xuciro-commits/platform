@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -65,8 +66,8 @@ func TestAcceptedEffectKeepsDirectObservationAndChildDecisionTogether(t *testing
 	live.settle("mixed-1", platform.Outcome{Effect: "mixed-1", Result: "delivered", Detail: "accepted"}, at.Add(time.Second))
 	result, err := decodeAcceptedEffect(saved.Body)
 	if err != nil || live.quarantined() || len(result.Rows) != 1 || len(result.Changes) == 0 ||
-		live.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "accepted" ||
-		live.records.types["stock.bin"].rows.get("B2") == nil {
+		live.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "accepted" ||
+		live.records.types["stock.bin"].rows.Get("B2") == nil {
 		t.Fatalf("mixed callback did not commit as one result: %v fault=%+v result=%+v", err, live.fault.Load(), result)
 	}
 	delta, err := acceptedStorageDelta(saved.Body)
@@ -74,7 +75,7 @@ func TestAcceptedEffectKeepsDirectObservationAndChildDecisionTogether(t *testing
 		t.Fatalf("storage did not receive the same direct and child changes: %+v, %v", delta, err)
 	}
 	for _, row := range delta.Records {
-		current := live.records.types[row.Type].rows.get(row.ID)
+		current := live.records.types[row.Type].rows.Get(row.ID)
 		head, _ := current.historyDigest()
 		if row.HistoryBase != current.historyLength()-len(row.History) || row.HistoryHead != head {
 			t.Fatalf("storage history differs from the applied record: %+v", row)
@@ -91,8 +92,8 @@ func TestAcceptedEffectKeepsDirectObservationAndChildDecisionTogether(t *testing
 	}
 	recovered := build()
 	if err := recovered.Replay([]Entry{saved}); err != nil ||
-		recovered.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "accepted" ||
-		recovered.records.types["stock.bin"].rows.get("B2") == nil {
+		recovered.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "accepted" ||
+		recovered.records.types["stock.bin"].rows.Get("B2") == nil {
 		t.Fatalf("mixed callback recovery lost a change: %v", err)
 	}
 	// A callback row inside the child also counts as a child write. Reject
@@ -112,8 +113,8 @@ func TestAcceptedEffectKeepsDirectObservationAndChildDecisionTogether(t *testing
 	conflictBytes, _ := json.Marshal(conflicting)
 	conflicted := build()
 	if _, applied, err := conflicted.applyAcceptedEffect(conflictBytes); err == nil || applied ||
-		conflicted.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "" ||
-		conflicted.records.types["stock.bin"].rows.get("B2") != nil || conflicted.outbound[0].State != "pending" {
+		conflicted.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "" ||
+		conflicted.records.types["stock.bin"].rows.Get("B2") != nil || conflicted.outbound[0].State != "pending" {
 		t.Fatalf("overlapping child exposed an observation or advanced its outcome: %v (applied=%t)", err, applied)
 	}
 	// A sound outer digest must not let a damaged child decision expose the
@@ -131,8 +132,8 @@ func TestAcceptedEffectKeepsDirectObservationAndChildDecisionTogether(t *testing
 	damaged, _ := json.Marshal(result)
 	isolated := build()
 	if _, applied, err := isolated.applyAcceptedEffect(damaged); err == nil || applied ||
-		isolated.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "" ||
-		isolated.records.types["stock.bin"].rows.get("B2") != nil {
+		isolated.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "" ||
+		isolated.records.types["stock.bin"].rows.Get("B2") != nil {
 		t.Fatalf("invalid child exposed an observation or a decision: %v (applied=%t)", err, applied)
 	}
 }
@@ -190,7 +191,7 @@ func TestJournalAcceptedEffectCrashBeforeApplication(t *testing.T) {
 		live.settle("effect-1", platform.Outcome{Effect: "effect-1", Result: "delivered", Detail: "accepted"}, at.Add(time.Second))
 	}()
 	if live.outbound[0].State != "pending" ||
-		live.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "" {
+		live.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "" {
 		t.Fatal("outcome or callback escaped before application")
 	}
 	reopened, err := OpenJournal(ctx, dsn)
@@ -204,7 +205,7 @@ func TestJournalAcceptedEffectCrashBeforeApplication(t *testing.T) {
 	}
 	restored := build()
 	if err := restored.Replay(entries); err != nil || restored.outbound[0].State != "delivered" ||
-		restored.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "accepted" {
+		restored.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "accepted" {
 		t.Fatalf("recovery did not apply the saved outcome and callback: %v", err)
 	}
 	result, err := decodeAcceptedEffect(entries[0].Body)
@@ -247,7 +248,7 @@ func TestAcceptedEffectCommitsOutcomeAndCallbackTogether(t *testing.T) {
 	outcome := platform.Outcome{Effect: "effect-1", Result: "delivered", Detail: "accepted"}
 	live.settle(outcome.Effect, outcome, at.Add(time.Second))
 	if live.quarantined() || live.outbound[0].State != "pending" ||
-		live.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "" {
+		live.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "" {
 		t.Fatal("failed append leaked the callback or effect outcome")
 	}
 	var saved Entry
@@ -257,7 +258,7 @@ func TestAcceptedEffectCommitsOutcomeAndCallbackTogether(t *testing.T) {
 	}
 	live.settle(outcome.Effect, outcome, at.Add(time.Second))
 	if live.quarantined() || live.outbound[0].State != "delivered" ||
-		live.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "accepted" {
+		live.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "accepted" {
 		t.Fatalf("committed callback missing: fault=%+v effect=%+v", live.fault.Load(), live.outbound[0])
 	}
 	result, err := decodeAcceptedEffect(saved.Body)
@@ -269,7 +270,7 @@ func TestAcceptedEffectCommitsOutcomeAndCallbackTogether(t *testing.T) {
 		t.Fatalf("pure replay re-ran or lost the callback: %v", err)
 	}
 	if recovered.outbound[0].State != "delivered" ||
-		recovered.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "accepted" {
+		recovered.records.types["stock.item"].rows.Get("I1").value.Interface().(Item).Note != "accepted" {
 		t.Fatal("replay did not restore the same outcome and record")
 	}
 	var tampered map[string]any
@@ -322,8 +323,8 @@ func TestAcceptedModelEffectKeepsAnswerInSameResult(t *testing.T) {
 		t.Fatalf("recovery could not apply the model answer: %v", err)
 	}
 	if restored.outbound[0].State != "delivered" ||
-		restored.records.types["cart.line"].rows.get("L1").value.Interface().(Cart).Status !=
-			live.records.types["cart.line"].rows.get("L1").value.Interface().(Cart).Status {
+		restored.records.types["cart.line"].rows.Get("L1").value.Interface().(Cart).Status !=
+			live.records.types["cart.line"].rows.Get("L1").value.Interface().(Cart).Status {
 		t.Fatal("model answer and effect state diverged after recovery")
 	}
 }
@@ -453,5 +454,45 @@ func TestAcceptedEffectRetainsHistoricalCallbackFailureFormat(t *testing.T) {
 	raw, _ = json.Marshal(old)
 	if _, err := decodeAcceptedEffect(raw); err != nil {
 		t.Fatalf("current receipt failure metadata is unreadable: %v", err)
+	}
+}
+
+func TestAcceptedEffectPublicMessageRequiresNewFormat(t *testing.T) {
+	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	before := effectState{Effect: platform.Effect{ID: "legacy-delivery", State: "pending", Endpoint: "sink", At: at, Due: at}}
+	outcome := platform.Outcome{Effect: before.ID, Result: "retry", Detail: "No fiscal period covers private-date"}
+	after := &effect{Effect: before.Effect}
+	markEffect(after, outcome, at)
+	saved := acceptedEffect{Version: 4, Kind: "effect-result", Tenant: "legacy", App: PlatformApp, Key: effectResultKey(before), At: at, Before: before, After: effectState{Effect: after.Effect}, Outcome: outcome}
+	saved.RequestHash, _ = effectResultHash(before, outcome, at)
+	saved.Digest, _ = digestAcceptedEffect(saved)
+	raw, _ := json.Marshal(saved)
+	if bytes.Contains(raw, []byte("publicMessage")) {
+		t.Fatal("new optional text changed the old result representation")
+	}
+	if _, err := decodeAcceptedEffect(raw); err != nil {
+		t.Fatal("old result without public text no longer verifies", err)
+	}
+	saved.Outcome.PublicMessage = "Waiting for an open fiscal period"
+	saved.After.PublicMessage = saved.Outcome.PublicMessage
+	saved.RequestHash, _ = effectResultHash(before, saved.Outcome, at)
+	saved.Digest, _ = digestAcceptedEffect(saved)
+	raw, _ = json.Marshal(saved)
+	if _, err := decodeAcceptedEffect(raw); err == nil {
+		t.Fatal("new public delivery text was accepted as an old format")
+	}
+	saved.Version = 5
+	saved.Digest, _ = digestAcceptedEffect(saved)
+	raw, _ = json.Marshal(saved)
+	if _, err := decodeAcceptedEffect(raw); err != nil {
+		t.Fatal("new public delivery text failed its own format", err)
+	}
+	saved.Outcome.PublicMessage = ""
+	saved.After.PublicMessage = ""
+	saved.RequestHash, _ = effectResultHash(before, saved.Outcome, at)
+	saved.Digest, _ = digestAcceptedEffect(saved)
+	raw, _ = json.Marshal(saved)
+	if _, err := decodeAcceptedEffect(raw); err == nil {
+		t.Fatal("new failed attempt omitted its safe delivery text")
 	}
 }

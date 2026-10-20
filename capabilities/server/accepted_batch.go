@@ -2,12 +2,11 @@ package platformserver
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -79,25 +78,6 @@ type acceptedPublication struct {
 	Format string          `json:"format,omitempty"`
 	Schema string          `json:"schema"`
 	Image  json.RawMessage `json:"image"`
-}
-
-func canonicalDigest(v any) (string, error) {
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return "", err
-	}
-	var normalized any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(&normalized); err != nil {
-		return "", err
-	}
-	canonical, err := json.Marshal(normalized)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(canonical)
-	return hex.EncodeToString(digest[:]), nil
 }
 
 func acceptedRowOf(typ, id string, r *row) (acceptedRow, error) {
@@ -226,14 +206,14 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 		typ, id, ok := strings.Cut(ref, "/")
 		et := d.records.types[typ]
-		if !ok || et == nil || et.rows.get(id) == nil {
+		if !ok || et == nil || et.rows.Get(id) == nil {
 			return nil, fmt.Errorf("batch includes an undeclared record")
 		}
 		var prior *row
 		if old := d.records.parent.types[typ]; old != nil {
-			prior = old.rows.get(id)
+			prior = old.rows.Get(id)
 		}
-		image, err := acceptedRowChange(typ, id, et.rows.get(id), prior)
+		image, err := acceptedRowChange(typ, id, et.rows.Get(id), prior)
 		if err != nil {
 			return nil, err
 		}
@@ -260,13 +240,13 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 
 func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	var result acceptedBatch
-	if len(raw) > maxAcceptedResultBytes {
-		return result, nil, &acceptedResultBudgetError{len(raw), maxAcceptedResultBytes}
+	if len(raw) > acceptance.MaxResultBytes {
+		return result, nil, &acceptedResultBudgetError{len(raw), acceptance.MaxResultBytes}
 	}
 	if len(raw) == 0 {
 		return result, nil, fmt.Errorf("record batch is empty")
 	}
-	if err := decodeAcceptedJSON(raw, &result, "record batch"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &result, "record batch"); err != nil {
 		return result, nil, err
 	}
 	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
@@ -473,7 +453,7 @@ func batchSubmission(result acceptedBatch, receipt *pb.ChangeRecord) (*pb.Submis
 
 func digestAcceptedBatch(result acceptedBatch) (string, error) {
 	result.Digest = ""
-	return canonicalDigest(result)
+	return acceptance.Digest(result)
 }
 
 // Validate every row, counter and ledger on private forks before promotion.
@@ -719,7 +699,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		if et == nil || et.info.App != image.App {
 			return fmt.Errorf("record batch needs installed entity %s", image.Type)
 		}
-		prior := et.rows.get(image.ID)
+		prior := et.rows.Get(image.ID)
 		if prior != nil && !reflect.DeepEqual(prior.extraction, image.Extraction) {
 			return fmt.Errorf("record extraction origin changed")
 		}
@@ -751,7 +731,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 				if err != nil {
 					return err
 				}
-				before, err = canonicalDigest(row)
+				before, err = acceptance.Digest(row)
 				if err != nil {
 					return err
 				}
@@ -767,8 +747,8 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			}
 			prefixEqual := true
 			if result.Version == 1 && prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
-				oldDigest, oldErr := canonicalDigest(prior.recordHistory())
-				savedDigest, savedErr := canonicalDigest(image.History[:baseHistory])
+				oldDigest, oldErr := acceptance.Digest(prior.recordHistory())
+				savedDigest, savedErr := acceptance.Digest(image.History[:baseHistory])
 				prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
 			}
 			// PostgreSQL JSONB normalizes JSON field-change bytes (object key
@@ -837,7 +817,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 			draft.remember(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
 		}
 		if et.knowledge {
-			draft.dirty.set(image.Type+"/"+rec.ID, true)
+			draft.dirty.Set(image.Type+"/"+rec.ID, true)
 		}
 	}
 	return nil

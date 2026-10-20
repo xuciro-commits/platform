@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
@@ -36,7 +37,7 @@ func (t *Tenant) usagePredecessor() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return canonicalDigest(raw)
+	return acceptance.Digest(raw)
 }
 
 func validUsage(u platform.AIUsage) bool {
@@ -53,15 +54,15 @@ func validUsage(u platform.AIUsage) bool {
 }
 
 func usageHash(before string, u platform.AIUsage) (string, error) {
-	return canonicalDigest([]any{before, u})
+	return acceptance.Digest([]any{before, u})
 }
-func digestUsage(r acceptedUsage) (string, error) { r.Digest = ""; return canonicalDigest(r) }
+func digestUsage(r acceptedUsage) (string, error) { r.Digest = ""; return acceptance.Digest(r) }
 func decodeAcceptedUsage(raw []byte) (acceptedUsage, error) {
 	var r acceptedUsage
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
 		return r, fmt.Errorf("usage result is empty or too large")
 	}
-	if err := decodeAcceptedJSON(raw, &r, "usage result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &r, "usage result"); err != nil {
 		return r, err
 	}
 	if err := validateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {

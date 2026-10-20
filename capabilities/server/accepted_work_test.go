@@ -285,7 +285,7 @@ func TestAcceptedWorkRefusalDiscardsBusinessChangesAndCommitsRetry(t *testing.T)
 		live.mu.Lock()
 		out := live.attempt(task, when, false)
 		live.mu.Unlock()
-		if out == "ok" || live.records.types["worker.document"].rows.len() != 0 ||
+		if out == "ok" || live.records.types["worker.document"].rows.Len() != 0 ||
 			live.sequences.last["worker/document/0"] != 0 || len(live.notices.all) != 0 {
 			t.Fatalf("refused work exposed partial business changes: %s", out)
 		}

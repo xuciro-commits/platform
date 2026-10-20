@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"time"
@@ -28,7 +29,7 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 		seen[release] = true
 		var selected *platform.MigrationRun
 		if runs := r.records.types[platform.MigrationRunType]; runs != nil {
-			for _, value := range runs.rows.all() {
+			for _, value := range runs.rows.All() {
 				run := value.value.Interface().(platform.MigrationRun)
 				if run.State != "complete" || len(run.Failures) != 0 || run.Plan.From != release || run.SourceShapes[typ] == "" {
 					continue
@@ -75,13 +76,13 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 			return nil, nil, nil, err
 		}
 		for name, want := range selected.SourceShapes {
-			shape, err := canonicalDigest(sources[name].Fields)
+			shape, err := acceptance.Digest(sources[name].Fields)
 			if err != nil || shape != want {
 				return nil, nil, nil, fmt.Errorf("retained write source shape differs from its accepted migration")
 			}
 		}
 		for name, want := range selected.TargetShapes {
-			shape, err := canonicalDigest(targets[name].Fields)
+			shape, err := acceptance.Digest(targets[name].Fields)
 			if err != nil || shape != want {
 				return nil, nil, nil, fmt.Errorf("retained write target shape differs from its accepted migration")
 			}

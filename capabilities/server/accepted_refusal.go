@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
@@ -101,10 +102,10 @@ func encodeBusinessRefusedResult(s *pb.Submission, at time.Time, refusal *kernel
 
 func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 	var result refusedResult
-	if len(raw) == 0 || len(raw) > maxAcceptedResultBytes {
-		return result, nil, fmt.Errorf("refused result is empty or exceeds %d bytes", maxAcceptedResultBytes)
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
+		return result, nil, fmt.Errorf("refused result is empty or exceeds %d bytes", acceptance.MaxResultBytes)
 	}
-	if err := decodeAcceptedJSON(raw, &result, "refused result"); err != nil {
+	if err := acceptance.DecodeJSON(raw, &result, "refused result"); err != nil {
 		return result, nil, err
 	}
 	digest, err := digestRefusedResult(result)
@@ -176,7 +177,7 @@ func decodeRefusedResult(raw []byte) (refusedResult, *pb.Submission, error) {
 
 func digestRefusedResult(result refusedResult) (string, error) {
 	result.Digest = ""
-	return canonicalDigest(result)
+	return acceptance.Digest(result)
 }
 
 func resultRequestHash(raw []byte) (string, error) {

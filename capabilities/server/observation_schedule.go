@@ -3,6 +3,7 @@ package platformserver
 import (
 	"context"
 	"encoding/json"
+	"platformserver/internal/acceptance"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 		}
 		t.records.mu.Lock()
 		owner := t.records.types[typ]
-		row := owner.rows.get(id)
+		row := owner.rows.Get(id)
 		publisher := ""
 		var scopes []string
 		if row != nil {
@@ -85,7 +86,7 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 				if json.Unmarshal(platform.Raw(record), &row) != nil || row.ID == "" {
 					continue
 				}
-				identity, err := canonicalDigest([]any{source.ref, source.version, row.ID, until})
+				identity, err := acceptance.Digest([]any{source.ref, source.version, row.ID, until})
 				if err != nil {
 					continue
 				}

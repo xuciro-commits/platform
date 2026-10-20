@@ -118,8 +118,8 @@ func TestMigrationReopensItsDurableJournal(t *testing.T) {
 				t.Fatal("persistent recovery lost target activation or migration progress")
 			}
 			for _, rowID := range []string{"A", "B", "C"} {
-				before, _ := recovered.records.types["build.asset"].rows.get(rowID).image()
-				after, _ := final.records.types["build.asset"].rows.get(rowID).image()
+				before, _ := recovered.records.types["build.asset"].rows.Get(rowID).image()
+				after, _ := final.records.types["build.asset"].rows.Get(rowID).image()
 				if !bytes.Equal(before, after) {
 					t.Fatal("persistent recovery changed saved target facts")
 				}
@@ -190,7 +190,7 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 		t.Fatal("same-key retry changed or repeated a migration batch")
 	}
 	for _, id := range []string{"A", "B"} {
-		row := tn.records.types["build.asset"].rows.get(id)
+		row := tn.records.types["build.asset"].rows.Get(id)
 		image, err := row.image()
 		var values map[string]json.RawMessage
 		if err != nil || json.Unmarshal(image, &values) != nil || string(values["enabled"]) != "true" || row.projection == nil {
@@ -218,8 +218,8 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 		t.Fatalf("snapshot lost pending progress: %+v", run)
 	}
 	for _, id := range []string{"A", "B"} {
-		live, _ := tn.records.types["build.asset"].rows.get(id).image()
-		held, _ := fromSnapshot.records.types["build.asset"].rows.get(id).image()
+		live, _ := tn.records.types["build.asset"].rows.Get(id).image()
+		held, _ := fromSnapshot.records.types["build.asset"].rows.Get(id).image()
 		if !bytes.Equal(live, held) {
 			t.Fatal("snapshot changed accepted target facts")
 		}
@@ -242,7 +242,7 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 		t.Fatal("migration did not use the original release activation")
 	}
 	decide(t, restored, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "After migration"}, txnAt.Add(2*time.Hour))
-	image, _ := restored.records.types["build.asset"].rows.get("A").image()
+	image, _ := restored.records.types["build.asset"].rows.Get("A").image()
 	var values map[string]json.RawMessage
 	if json.Unmarshal(image, &values) != nil || string(values["enabled"]) != "true" {
 		t.Fatal("ordinary target-definition edit lost the migrated fact")
@@ -270,13 +270,13 @@ func TestMigrationDecoderSelectsTheReleaseEvenWithUnchangedFields(t *testing.T) 
 	}
 	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt.Add(time.Hour))
 	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(2*time.Hour))
-	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.get("A").value, "name"); got != "Source value" {
+	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.Get("A").value, "name"); got != "Source value" {
 		t.Fatal("source reader saw unactivated target facts")
 	}
 	if _, err := tn.ActivateRelease(builder, plan.To, "same-shape-activate", txnAt.Add(3*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.get("A").value, "name"); got != "Migrated value" {
+	if got := businessField(tn.records.types["build.asset"].info, tn.records.types["build.asset"].rows.Get("A").value, "name"); got != "Migrated value" {
 		t.Fatal("target activation selected the source projection by shape alone")
 	}
 	snapshot, _, err := tn.Snapshot(func() int64 { return 0 })
@@ -287,7 +287,7 @@ func TestMigrationDecoderSelectsTheReleaseEvenWithUnchangedFields(t *testing.T) 
 	if err := recovered.Restore(snapshot); err != nil {
 		t.Fatal(err)
 	}
-	if got := businessField(recovered.records.types["build.asset"].info, recovered.records.types["build.asset"].rows.get("A").value, "name"); got != "Migrated value" {
+	if got := businessField(recovered.records.types["build.asset"].info, recovered.records.types["build.asset"].rows.Get("A").value, "name"); got != "Migrated value" {
 		t.Fatal("snapshot restored the wrong release's facts")
 	}
 	decide(t, recovered, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "New write"}, txnAt.Add(4*time.Hour))
@@ -310,14 +310,14 @@ func TestMigrationFailedBatchDoesNotAcceptEarlierRows(t *testing.T) {
 			if err != nil || len(review.Issues) != 1 {
 				t.Fatalf("failure review: %+v %v", review, err)
 			}
-			before, _ := tn.records.types["build.asset"].rows.get("A").image()
+			before, _ := tn.records.types["build.asset"].rows.Get("A").image()
 			decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
 			decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
 			run := migrationRun(t, tn, "M")
 			if run.State != "blocked" || len(run.Failures) != 1 || run.Failures[0].Record != "B" {
 				t.Fatalf("failure/progress not recorded: %+v", run)
 			}
-			after, _ := tn.records.types["build.asset"].rows.get("A").image()
+			after, _ := tn.records.types["build.asset"].rows.Get("A").image()
 			if strategy == "reject" && (!bytes.Equal(before, after) || run.Migrated != 0 || run.Processed != 0) {
 				t.Fatal("reject accepted a partial batch")
 			}
@@ -338,7 +338,7 @@ func TestMigrationFailedBatchDoesNotAcceptEarlierRows(t *testing.T) {
 			if run := migrationRun(t, recovered, "M"); run.State != "cancelled" {
 				t.Fatalf("failed migration could not release its source: %+v", run)
 			}
-			row := recovered.records.types["build.asset"].rows.get("A")
+			row := recovered.records.types["build.asset"].rows.Get("A")
 			image, _ := row.image()
 			var fields map[string]json.RawMessage
 			if json.Unmarshal(image, &fields) != nil || fields["enabled"] != nil || string(fields["name"]) != `"1"` || row.projection != nil {

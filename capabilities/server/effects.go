@@ -528,7 +528,7 @@ func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) 
 }
 
 func markEffect(x *effect, o platform.Outcome, at time.Time) {
-	x.sending, x.Last, x.Digest, x.Error = false, at, o.Digest, o.Detail
+	x.sending, x.Last, x.Digest, x.Error, x.PublicMessage = false, at, o.Digest, o.Detail, o.PublicMessage
 	if x.State == "discarded" {
 		return // discarded while its attempt was on the way
 	}

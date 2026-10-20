@@ -3,6 +3,7 @@ package platformserver
 import (
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -28,14 +29,14 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 		}
 		typ, id, ok := strings.Cut(ref, "/")
 		et := d.records.types[typ]
-		if !ok || et == nil || et.info.App != owner || et.rows.get(id) == nil {
+		if !ok || et == nil || et.info.App != owner || et.rows.Get(id) == nil {
 			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
 		}
 		var prior *row
 		if old := d.records.parent.types[typ]; old != nil {
-			prior = old.rows.get(id)
+			prior = old.rows.Get(id)
 		}
-		image, err := acceptedRowChange(typ, id, et.rows.get(id), prior)
+		image, err := acceptedRowChange(typ, id, et.rows.Get(id), prior)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +67,7 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 		if et == nil || et.info.App != image.App {
 			return nil, fmt.Errorf("direct result needs missing record type %s", image.Type)
 		}
-		prior := et.rows.get(image.ID)
+		prior := et.rows.Get(image.ID)
 		before, previousHistory, revision := "", 0, uint32(0)
 		if image.HistoryRef != nil {
 			if err := checkHistoryPredecessor(image.acceptedRow, prior); err != nil {
@@ -89,7 +90,7 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 				if err != nil {
 					return nil, err
 				}
-				before, err = canonicalDigest(row)
+				before, err = acceptance.Digest(row)
 				if err != nil {
 					return nil, err
 				}
@@ -99,8 +100,8 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 				return nil, fmt.Errorf("direct record predecessor differs")
 			}
 			if prior != nil {
-				old, err := canonicalDigest(image.History[:previousHistory])
-				actual, actualErr := canonicalDigest(prior.recordHistory())
+				old, err := acceptance.Digest(image.History[:previousHistory])
+				actual, actualErr := acceptance.Digest(prior.recordHistory())
 				if err != nil || actualErr != nil || old != actual {
 					return nil, fmt.Errorf("direct record history predecessor differs")
 				}
@@ -116,7 +117,7 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 		if err != nil {
 			return nil, err
 		}
-		if err := decodeAcceptedJSON(decode, value.Addr().Interface(), "direct record"); err != nil {
+		if err := acceptance.DecodeJSON(decode, value.Addr().Interface(), "direct record"); err != nil {
 			return nil, err
 		}
 		if err := checkRunApplicationBindings(value.Interface()); err != nil {
@@ -142,7 +143,7 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedI
 		et.setRow(image.ID, recovered)
 		draft.writes[image.Type+"/"+image.ID] = true
 		if et.knowledge {
-			draft.dirty.set(image.Type+"/"+image.ID, true)
+			draft.dirty.Set(image.Type+"/"+image.ID, true)
 		}
 	}
 	return draft, nil

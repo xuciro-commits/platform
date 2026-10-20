@@ -242,7 +242,7 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 		row := &rows[i]
 		row.Key = fmt.Sprintf("row:%d", i)
 		row.Verb = ".create"
-		if seen[row.ID] || et != nil && et.rows.get(row.ID) != nil {
+		if seen[row.ID] || et != nil && et.rows.Get(row.ID) != nil {
 			row.Verb = ".edit"
 		}
 		if row.Error == "" {

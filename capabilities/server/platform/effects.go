@@ -37,6 +37,7 @@ type Effect struct {
 	Last          time.Time       `json:"last,omitzero"`
 	Due           time.Time       `json:"due,omitzero"`
 	Error         string          `json:"error,omitempty"`
+	PublicMessage string          `json:"publicMessage,omitempty"` // owner-approved delivery text, safe without the request or answer
 	CallbackError string          `json:"callbackError,omitempty"`
 	Digest        string          `json:"digest,omitempty" source:"record"` // sha256 of the body last sent
 	Body          string          `json:"body,omitempty"`                   // kept 30 days for support (D8)
@@ -48,11 +49,12 @@ type Effect struct {
 
 // Outcome is what an attempt learned; it is the journal entry of the attempt.
 type Outcome struct {
-	Effect string          `json:"effect"`
-	Result string          `json:"result"` // delivered, rejected, retry, unknown
-	Detail string          `json:"detail,omitempty"`
-	Digest string          `json:"digest,omitempty"`
-	Answer json.RawMessage `json:"answer,omitempty"` // the receiver's body, for app effects (up to 64 KiB of JSON)
+	Effect        string          `json:"effect"`
+	Result        string          `json:"result"` // delivered, rejected, retry, unknown
+	Detail        string          `json:"detail,omitempty"`
+	PublicMessage string          `json:"publicMessage,omitempty"` // safe delivery text supplied by the owner; Detail remains restricted
+	Digest        string          `json:"digest,omitempty"`
+	Answer        json.RawMessage `json:"answer,omitempty"` // the receiver's body, for app effects (up to 64 KiB of JSON)
 	// Staged references the sealed per-call result channel when an operation's
 	// result exceeds its inline budget (ADR-0016 §13.3): Answer then carries
 	// the handle, and the bytes live in the host's sealed artifact.

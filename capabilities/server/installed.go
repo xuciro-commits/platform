@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/internal/records"
 	"platformserver/platform"
 )
 
@@ -86,7 +87,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if err := s.migrationDefinitionLocked(info); err != nil {
 		return err
 	}
-	et := &entityType{store: s, info: info, rows: recordIndex[*row]{}, knowledge: knowledgeBearing(info)}
+	et := &entityType{store: s, info: info, rows: records.Index[*row]{}, knowledge: knowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
@@ -94,8 +95,8 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		if before.info.Versioning != nil && !reflect.DeepEqual(before.info.Versioning, info.Versioning) || len(before.info.VersionPins) > 0 && !reflect.DeepEqual(before.info.VersionPins, info.VersionPins) {
 			return fmt.Errorf("published business versioning and pin bindings are retained")
 		}
-		entries := make([]recordEntry[*row], 0, before.rows.len())
-		for id, r := range before.rows.all() {
+		entries := make([]records.Entry[*row], 0, before.rows.Len())
+		for id, r := range before.rows.All() {
 			raw, err := r.image()
 			if err != nil {
 				return err
@@ -112,9 +113,9 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			emptyLists(v)
 			installed := &row{value: v, format: r.format, historyParent: r.historyParent, historyHead: r.historyHead, history: r.history, loadHistory: r.loadHistory, historyCount: r.historyCount, projection: r.projection, extraction: r.extraction}
 			installed.retainOriginal(raw)
-			entries = append(entries, recordEntry[*row]{id, installed})
+			entries = append(entries, records.Entry[*row]{Key: id, Value: installed})
 		}
-		index, err := recordIndexFrom(entries)
+		index, err := records.From(entries)
 		if err != nil {
 			return err
 		}

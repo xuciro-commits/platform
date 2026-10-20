@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"strings"
@@ -83,7 +84,7 @@ func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, n
 	if json.Unmarshal(raw, value.Addr().Interface()) != nil || recordOf(value).ID != id {
 		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Collection candidate is invalid")
 	}
-	if before := et.rows.get(id); before != nil {
+	if before := et.rows.Get(id); before != nil {
 		recordOf(value).Created = recordOf(before.value).Created
 	} else {
 		recordOf(value).Created.By = c.ID
@@ -109,7 +110,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	}
 	set := info.Sets[slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == name })]
 	result.Object = set.Object
-	result.Definition, _ = canonicalDigest(set)
+	result.Definition, _ = acceptance.Digest(set)
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: object, Record: id}
 	outer := t.authorizeFrom(store, c, question, at, false)
 	result.Authorization = &platform.AuthzCollection{Decision: outer, Elements: []platform.AuthzElement{}}

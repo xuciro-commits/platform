@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/acceptance"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -42,7 +43,7 @@ func (d *Console) LegacyCoreSeedPredecessor(saved acceptedState, prior json.RawM
 			changed = true
 		}
 	}
-	hash, err := canonicalDigest(current)
+	hash, err := acceptance.Digest(current)
 	return changed && err == nil && hash == saved.Before
 }
 
@@ -88,7 +89,7 @@ func (d *Console) LegacyConsolePredecessor(saved acceptedState, prior json.RawMe
 			changed = true
 		}
 	}
-	hash, err := canonicalDigest(current)
+	hash, err := acceptance.Digest(current)
 	return changed && err == nil && hash == saved.Before
 }
 

@@ -19,7 +19,7 @@ func TestAcceptedEffectDirectAndChildDoNotReadRetainedHistory(t *testing.T) {
 				decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1",
 					map[string]any{"name": "Bolt", "qty": 1, "line": "L1"}, at)
 				et := live.records.types["stock.item"]
-				prior := et.rows.get("I1")
+				prior := et.rows.Get("I1")
 				history := make([]RecordChange, count)
 				first := prior.recordHistory()[0]
 				for i := range history {
@@ -46,7 +46,7 @@ func TestAcceptedEffectDirectAndChildDoNotReadRetainedHistory(t *testing.T) {
 			live, reads := seed()
 			var saved Entry
 			live.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
-				if *reads != 0 || live.records.types["stock.bin"].rows.get("B2") != nil {
+				if *reads != 0 || live.records.types["stock.bin"].rows.Get("B2") != nil {
 					t.Fatal("sealing loaded retained history or exposed the child before acceptance")
 				}
 				if _, err := acceptedStorageDelta(entry.Body); err != nil {
@@ -68,9 +68,9 @@ func TestAcceptedEffectDirectAndChildDoNotReadRetainedHistory(t *testing.T) {
 			if _, applied, err := fresh.applyAcceptedEffect(saved.Body); err != nil || !applied || *recoveryReads != 0 {
 				t.Fatalf("saved effect application read retained history: reads=%d, error=%v, applied=%t", *recoveryReads, err, applied)
 			}
-			current := fresh.records.types["stock.item"].rows.get("I1")
+			current := fresh.records.types["stock.item"].rows.Get("I1")
 			if current.historyLength() != count+1 || current.value.Interface().(Item).Note != "accepted" ||
-				fresh.records.types["stock.bin"].rows.get("B2") == nil {
+				fresh.records.types["stock.bin"].rows.Get("B2") == nil {
 				t.Fatal("pure application lost the direct suffix or child record")
 			}
 			all := current.recordHistory()

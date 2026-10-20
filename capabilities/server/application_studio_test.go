@@ -133,7 +133,7 @@ func TestApplicationStudioNativeExtensionPublicationAndRecovery(t *testing.T) {
 			t.Fatalf("published extension lost its metadata or original owner: %+v", definitions)
 		}
 		var draft build.Application
-		if raw, err := live.records.types[construction.AppType].rows.get("EXT").image(); err != nil || json.Unmarshal(raw, &draft) != nil || draft.Title != "Later draft" {
+		if raw, err := live.records.types[construction.AppType].rows.Get("EXT").image(); err != nil || json.Unmarshal(raw, &draft) != nil || draft.Title != "Later draft" {
 			t.Fatal("activation replaced the mutable application draft")
 		}
 	}

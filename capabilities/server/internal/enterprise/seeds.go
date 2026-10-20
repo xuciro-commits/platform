@@ -1,4 +1,4 @@
-package enterpriseapi
+package enterprise
 
 import (
 	"fmt"
@@ -149,7 +149,7 @@ func (m Model) children(id, kind string) []string {
 
 // Apply grafts a pattern into the model under an organisation ("" for the top),
 // on day. Ids never collide with what the model already holds.
-func (m *Model) Apply(id, under, name string, params Params, day Date) (string, error) {
+func (m *Model) Apply(id, under, name string, params Params, day platform.Date) (string, error) {
 	pat, ok := PatternByID(id)
 	if !ok {
 		return "", fmt.Errorf("there is no pattern %q", id)
@@ -193,7 +193,7 @@ type SeedParams struct {
 	Sites         int
 	LegalEntities int
 	Industry      string
-	Day           Date
+	Day           platform.Date
 }
 
 // ScaleOf picks the scale a headcount suggests.
@@ -348,11 +348,11 @@ func capabilitiesFor(scale, industry string) []string {
 
 type builder struct {
 	m   Model
-	day Date
+	day platform.Date
 	ids map[string]int
 }
 
-func newBuilder(scale string, day Date, existing *Model) *builder {
+func newBuilder(scale string, day platform.Date, existing *Model) *builder {
 	b := &builder{day: day, ids: map[string]int{}}
 	if existing != nil {
 		b.m = *existing

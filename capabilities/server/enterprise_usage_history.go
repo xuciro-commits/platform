@@ -52,7 +52,7 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 		fields(et.info.Type, et.info.Fields, nil)
 	}
 	if objects := store.types[construction.ObjectType]; objects != nil {
-		for _, row := range objects.rows.all() {
+		for _, row := range objects.rows.All() {
 			typ := construction.TypeOf(businessField(objects.info, row.value, "name"))
 			if published := businessField(objects.info, row.value, "published"); published != "" {
 				bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})

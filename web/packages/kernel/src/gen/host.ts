@@ -1508,6 +1508,7 @@ export type Effect = {
   last?: string;
   due?: string;
   error?: string;
+  publicMessage?: string;
   callbackError?: string;
   digest?: string;
   body?: string;

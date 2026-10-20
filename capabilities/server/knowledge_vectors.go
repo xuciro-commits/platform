@@ -112,7 +112,7 @@ func (t *Tenant) currentPassageReadable(c *chunk, reader *platform.Member, app s
 			if !fileSource || files == nil {
 				return false
 			}
-			r := files.rows.get(fileID)
+			r := files.rows.Get(fileID)
 			if r == nil {
 				return false
 			}
@@ -129,7 +129,7 @@ func (t *Tenant) currentPassageReadable(c *chunk, reader *platform.Member, app s
 		if et == nil {
 			return false
 		}
-		r := et.rows.get(id)
+		r := et.rows.Get(id)
 		if r == nil {
 			return false
 		}

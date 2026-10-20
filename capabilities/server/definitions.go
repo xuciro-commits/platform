@@ -490,7 +490,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 			ownerRecord := ""
 			t.records.mu.Lock()
 			if records := t.records.types[asset.Ref.App+".agent"]; records != nil {
-				for id, row := range records.rows.all() {
+				for id, row := range records.rows.All() {
 					if businessField(records.info, row.value, "name") == asset.Ref.Name && !recordOf(row.value).Archived {
 						ownerRecord = records.info.Type + "/" + id
 						break
@@ -518,7 +518,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		if _, ok := t.app(et.info.App).(platform.AssetLifecycleOwner); !ok {
 			continue
 		}
-		for id, row := range et.rows.all() {
+		for id, row := range et.rows.All() {
 			if recordOf(row.value).Archived {
 				continue
 			}

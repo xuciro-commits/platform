@@ -117,8 +117,18 @@ func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...st
 		if (public || internal) && (name == "platformserver" || strings.HasPrefix(name, "platformserver/apps/")) {
 			report(imported, "owner contract depends on implementation "+name)
 		}
-		if strings.HasPrefix(path, "capabilities/server/internal/construction/") && name == "platformserver/internal/host" {
-			report(imported, "construction declaration depends on host coordination")
+		pure := strings.HasPrefix(path, "capabilities/server/internal/construction/") ||
+			strings.HasPrefix(path, "capabilities/server/internal/records/") ||
+			strings.HasPrefix(path, "capabilities/server/internal/acceptance/") ||
+			strings.HasPrefix(path, "capabilities/server/internal/enterprise/")
+		if pure && (name == "platformserver/internal/host" || strings.HasPrefix(name, "platformserver/internal/host/")) {
+			report(imported, "pure internal module depends on host coordination")
+		}
+		if name == "platformserver/internal/enterprise/uafgen" {
+			report(imported, "runtime imports generation-only UAF parser")
+		}
+		if strings.HasPrefix(path, "capabilities/server/internal/enterprise/uaf/") && name == "encoding/xml" {
+			report(imported, "UAF runtime model depends on XML parsing")
 		}
 		if external && !harness {
 			if name == "platformserver" || strings.HasPrefix(name, "platformserver/apps/") || strings.HasPrefix(name, "platformserver/internal/") {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"time"
 
@@ -83,15 +84,15 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		if err := op.Input.Validate(raw, op.Limits.DataInputBytes); err != nil {
 			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		hash, _ := canonicalDigest(json.RawMessage(raw))
-		definition, _ := canonicalDigest([]any{q.App, op, version})
+		hash, _ := acceptance.Digest(json.RawMessage(raw))
+		definition, _ := acceptance.Digest([]any{q.App, op, version})
 		ref, err := t.staged.sealInput(id, current.ID, definition, hash, raw, op.Limits.DataInputBytes)
 		if err != nil {
 			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
 		// The receipt binds content, rather than a random preparation attempt.
 		q.Inputs = platform.Raw(map[string]any{"sealedInput": map[string]any{"digest": ref.Digest, "size": ref.Size, "inputHash": ref.InputHash, "definition": ref.Definition}})
-		requestHash, _ := canonicalDigest(q)
+		requestHash, _ := acceptance.Digest(q)
 		prepared = &preparedOperationInput{ref: ref, requestHash: requestHash}
 	} else if len(q.Inputs) > 1<<20 {
 		return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds the operation inline budget")

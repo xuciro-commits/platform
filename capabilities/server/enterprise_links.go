@@ -13,8 +13,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/construction"
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/internal/host"
-	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
 
@@ -31,19 +31,19 @@ type EnterpriseLinkPreview struct {
 	Base               string                 `json:"base"`
 	Content            string                 `json:"content"`
 	ConnectionRevision uint32                 `json:"connectionRevision"`
-	Slice              enterprise.Slice       `json:"slice"`
+	Slice              enterprisemodel.Slice  `json:"slice"`
 	Changes            []EnterpriseLinkChange `json:"changes"`
 }
 
 type enterpriseLinkModel interface {
-	Model() enterprise.Model
-	ValidateImportedModel(enterprise.Model, string, enterprise.Date) error
+	Model() enterprisemodel.Model
+	ValidateImportedModel(enterprisemodel.Model, string, platform.Date) error
 }
 
-func (t *Tenant) tenantLinkModel() (enterprise.Model, *kernel.Error) {
-	owner, ok := t.app(enterprise.ID).(enterpriseLinkModel)
+func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *kernel.Error) {
+	owner, ok := t.app(enterprisemodel.ID).(enterpriseLinkModel)
 	if !ok {
-		return enterprise.Model{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The enterprise model is unavailable")
+		return enterprisemodel.Model{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The enterprise model is unavailable")
 	}
 	return owner.Model(), nil
 }
@@ -115,7 +115,7 @@ func (t *Tenant) authorizeEnterpriseImport(c platform.Caller, now time.Time) *ke
 	if !c.InScope(schema) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The source preview requires permission to import shared enterprise data")
 	}
-	return authorizationRefusal(c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Type: enterprise.ModelType, Action: schema}, now))
+	return authorizationRefusal(c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Type: enterprisemodel.ModelType, Action: schema}, now))
 }
 
 // PreviewEnterpriseLink snapshots local declarations under the tenant lock,
@@ -123,7 +123,7 @@ func (t *Tenant) authorizeEnterpriseImport(c platform.Caller, now time.Time) *ke
 func (t *Tenant) PreviewEnterpriseLink(ctx context.Context, m platform.Member, id string, now time.Time) (EnterpriseLinkPreview, *kernel.Error) {
 	var answer EnterpriseLinkPreview
 	t.mu.Lock()
-	c := platform.NewCaller(runtime{t}, t.authorizationMember(m), enterprise.ID, false, false)
+	c := platform.NewCaller(runtime{t}, t.authorizationMember(m), enterprisemodel.ID, false, false)
 	if err := t.authorizeEnterpriseImport(c, now); err != nil {
 		t.mu.Unlock()
 		return answer, err
@@ -172,7 +172,7 @@ func (t *Tenant) PreviewEnterpriseLink(ctx context.Context, m platform.Member, i
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	c = platform.NewCaller(runtime{t}, t.authorizationMember(m), enterprise.ID, false, false)
+	c = platform.NewCaller(runtime{t}, t.authorizationMember(m), enterprisemodel.ID, false, false)
 	if refusal = t.authorizeEnterpriseImport(c, now); refusal != nil {
 		return answer, refusal
 	}
@@ -187,14 +187,14 @@ func (t *Tenant) PreviewEnterpriseLink(ctx context.Context, m platform.Member, i
 	if err != nil {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
-	if err := t.app(enterprise.ID).(enterpriseLinkModel).ValidateImportedModel(next, answer.Slice.Tenant, now.UTC().Format(time.DateOnly)); err != nil {
+	if err := t.app(enterprisemodel.ID).(enterpriseLinkModel).ValidateImportedModel(next, answer.Slice.Tenant, now.UTC().Format(time.DateOnly)); err != nil {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	answer.Changes = enterpriseImportChanges(current, next, now.UTC().Format(time.DateOnly))
 	return answer, nil
 }
 
-func enterpriseImportChanges(before, after enterprise.Model, day string) []EnterpriseLinkChange {
+func enterpriseImportChanges(before, after enterprisemodel.Model, day string) []EnterpriseLinkChange {
 	changes := []EnterpriseLinkChange{}
 	for _, element := range after.Elements {
 		previous := before.ElementOf(element.ID)

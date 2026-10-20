@@ -1,4 +1,6 @@
-package enterpriseapi
+// Package enterprise owns the enterprise declarations, valid-time model and
+// pure checks shared by its application owner and host consumers.
+package enterprise
 
 import (
 	"encoding/json"
@@ -35,10 +37,6 @@ const (
 	Typed      = "typedBy"                    // instance → its type element (platform, not UAF)
 )
 
-type Date = platform.Date
-
-type Period = platform.Period
-
 // Kind is a way organisations relate (ADR-0022's Structure): legal,
 // management, finance, site, project, governance, community, custom.
 type Kind struct {
@@ -51,39 +49,39 @@ type Kind struct {
 
 // Element is one thing in the enterprise, typed by a UAF stereotype.
 type Element struct {
-	ID         string         `json:"id"`
-	Stereotype string         `json:"stereotype"`
-	Name       string         `json:"name"`
-	ShortName  string         `json:"shortName,omitempty"`
-	Kind       string         `json:"kind,omitempty"` // open vocabulary within the stereotype: factory, line, team; plant, bin; machine
-	Legal      bool           `json:"legal,omitempty"`
-	External   bool           `json:"external,omitempty"`
-	From       Date           `json:"from,omitempty"`
-	Until      Date           `json:"until,omitempty"`
-	Closed     string         `json:"closed,omitempty"`
-	Calendar   string         `json:"calendar,omitempty"`
-	Owner      string         `json:"owner,omitempty"`     // "tenant:<id>" when federated in from another tenant (read-only here)
-	Published  bool           `json:"published,omitempty"` // shared with the tenants this one federates with (ADR-0022 D5)
-	Properties map[string]any `json:"properties,omitempty"`
-	Periods    []Period       `json:"periods,omitempty"`
-	Deleted    bool           `json:"deleted,omitempty"`
+	ID         string            `json:"id"`
+	Stereotype string            `json:"stereotype"`
+	Name       string            `json:"name"`
+	ShortName  string            `json:"shortName,omitempty"`
+	Kind       string            `json:"kind,omitempty"` // open vocabulary within the stereotype: factory, line, team; plant, bin; machine
+	Legal      bool              `json:"legal,omitempty"`
+	External   bool              `json:"external,omitempty"`
+	From       platform.Date     `json:"from,omitempty"`
+	Until      platform.Date     `json:"until,omitempty"`
+	Closed     string            `json:"closed,omitempty"`
+	Calendar   string            `json:"calendar,omitempty"`
+	Owner      string            `json:"owner,omitempty"`     // "tenant:<id>" when federated in from another tenant (read-only here)
+	Published  bool              `json:"published,omitempty"` // shared with the tenants this one federates with (ADR-0022 D5)
+	Properties map[string]any    `json:"properties,omitempty"`
+	Periods    []platform.Period `json:"periods,omitempty"`
+	Deleted    bool              `json:"deleted,omitempty"`
 }
 
 // Relationship joins two things; Source and Target are element ids, or for a
 // Membership the source may be a party "member:<id>".
 type Relationship struct {
-	ID         string   `json:"id"`
-	Stereotype string   `json:"stereotype"`
-	Kind       string   `json:"kind,omitempty"` // for a Placement: the Kind.ID it sits in
-	Source     string   `json:"source"`
-	Target     string   `json:"target"`
-	Role       string   `json:"role,omitempty"`     // for a Membership: employee, chair, volunteer …
-	Relation   string   `json:"relation,omitempty"` // for a Placement: part of, owned by, reports to …
-	Share      float64  `json:"share,omitempty"`
-	Primary    bool     `json:"primary,omitempty"`
-	From       Date     `json:"from,omitempty"`
-	Until      Date     `json:"until,omitempty"`
-	Periods    []Period `json:"periods,omitempty"`
+	ID         string            `json:"id"`
+	Stereotype string            `json:"stereotype"`
+	Kind       string            `json:"kind,omitempty"` // for a Placement: the Kind.ID it sits in
+	Source     string            `json:"source"`
+	Target     string            `json:"target"`
+	Role       string            `json:"role,omitempty"`     // for a Membership: employee, chair, volunteer …
+	Relation   string            `json:"relation,omitempty"` // for a Placement: part of, owned by, reports to …
+	Share      float64           `json:"share,omitempty"`
+	Primary    bool              `json:"primary,omitempty"`
+	From       platform.Date     `json:"from,omitempty"`
+	Until      platform.Date     `json:"until,omitempty"`
+	Periods    []platform.Period `json:"periods,omitempty"`
 }
 
 type TenantLink struct {
@@ -106,7 +104,7 @@ type View struct {
 	Layout    map[string][2]float64 `json:"layout,omitempty"`
 	Context   []string              `json:"context,omitempty"`
 	Pins      []Pin                 `json:"pins,omitempty"`
-	AsOf      Date                  `json:"asOf,omitempty"`
+	AsOf      platform.Date         `json:"asOf,omitempty"`
 }
 
 // Pin is a record drawn on a view beside the element it names (ADR-0031 D3):
@@ -132,8 +130,6 @@ type Model struct {
 	Calendars     []platform.Calendar `json:"calendars,omitempty"`
 	TenantLinks   []TenantLink        `json:"tenantLinks,omitempty"`
 }
-
-func ActiveOn(from, until, day Date) bool { return platform.ActiveOn(from, until, day) }
 
 func (m *Model) ElementOf(id string) *Element {
 	if i := slices.IndexFunc(m.Elements, func(e Element) bool { return e.ID == id }); i >= 0 {
@@ -175,13 +171,13 @@ func (m *Model) RelationshipOf(id string) *Relationship {
 }
 
 // live says the element exists on day: open, or not yet closed.
-func (m Model) LiveOn(id string, day Date) bool {
+func (m Model) LiveOn(id string, day platform.Date) bool {
 	e := m.ElementOf(id)
 	return e != nil && e.ActiveOn(day)
 }
 
 // below reports whether unit sits (transitively) under ancestor in kind on day.
-func (m Model) BelowIn(kind, ancestor, unit string, day Date) bool {
+func (m Model) BelowIn(kind, ancestor, unit string, day platform.Date) bool {
 	if !m.LiveOn(unit, day) || !m.LiveOn(ancestor, day) {
 		return false
 	}
@@ -207,7 +203,7 @@ func (m Model) BelowIn(kind, ancestor, unit string, day Date) bool {
 
 // units are the organisations party belongs to on day, directly or through a
 // member organisation, and every one below them in kind ("" for none below).
-func (m Model) UnitsIn(party, kind string, day Date) []string {
+func (m Model) UnitsIn(party, kind string, day platform.Date) []string {
 	var out []string
 	add := func(u string) bool {
 		if slices.Contains(out, u) {
@@ -230,7 +226,7 @@ func (m Model) UnitsIn(party, kind string, day Date) []string {
 }
 
 // descendants expands only active elements and placements of the named structure.
-func (m Model) Descendants(units []string, kind string, day Date) []string {
+func (m Model) Descendants(units []string, kind string, day platform.Date) []string {
 	var out []string
 	add := func(id string) {
 		if m.LiveOn(id, day) && !slices.Contains(out, id) {
@@ -255,7 +251,7 @@ func (m Model) Descendants(units []string, kind string, day Date) []string {
 
 // Of are the elements one relationship away from id: targets of stereotype
 // going out (out=true) or sources coming in, live on day.
-func (m Model) Of(id, stereotype string, out bool, day Date) []string {
+func (m Model) Of(id, stereotype string, out bool, day platform.Date) []string {
 	var found []string
 	for _, r := range m.Relationships {
 		if r.Stereotype != stereotype || !r.ActiveOn(day) {
@@ -379,7 +375,7 @@ func (m Model) Published(tenant string) Slice {
 // mirrored elements are kept while their ends still exist.
 func (m *Model) Import(s Slice) { m.ImportOn(s, "") }
 
-func (m *Model) ImportOn(s Slice, today Date) {
+func (m *Model) ImportOn(s Slice, today platform.Date) {
 	owner := "tenant:" + s.Tenant
 	if today != "" {
 		for _, kind := range s.Kinds {
@@ -480,16 +476,16 @@ type SyncResult struct {
 	Added, Changed, Closed, Reopened, Related, Ended int
 }
 
-func (m *Model) Sync(source string, elements []Element, relationships []Relationship, today Date) SyncResult {
+func (m *Model) Sync(source string, elements []Element, relationships []Relationship, today platform.Date) SyncResult {
 	return m.sync(source, elements, relationships, today, false)
 }
 
 // ReplaySync preserves already accepted single-window source semantics.
-func (m *Model) ReplaySync(source string, elements []Element, relationships []Relationship, today Date) SyncResult {
+func (m *Model) ReplaySync(source string, elements []Element, relationships []Relationship, today platform.Date) SyncResult {
 	return m.sync(source, elements, relationships, today, true)
 }
 
-func (m *Model) sync(source string, elements []Element, relationships []Relationship, today Date, replay bool) SyncResult {
+func (m *Model) sync(source string, elements []Element, relationships []Relationship, today platform.Date, replay bool) SyncResult {
 	owner, res := "source:"+source, SyncResult{}
 	seen := map[string]bool{}
 	for _, in := range elements {

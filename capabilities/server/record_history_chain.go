@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	"platformserver/internal/acceptance"
 	"platformserver/internal/records"
 	"reflect"
 )
@@ -97,7 +98,7 @@ func recordPredecessor(typ, id string, r *row) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return canonicalDigest(struct {
+	return acceptance.Digest(struct {
 		Version    int               `json:"version"`
 		Type       string            `json:"type"`
 		ID         string            `json:"id"`
@@ -152,7 +153,7 @@ func acceptedRowAlreadyApplied(prior *row, image acceptedRow) bool {
 		head, err := prior.historyDigest()
 		return err == nil && prior.historyLength() == image.HistoryRef.Base+len(image.History) && head == image.HistoryRef.Head
 	}
-	a, err := canonicalDigest(prior.recordHistory())
-	b, err2 := canonicalDigest(image.History)
+	a, err := acceptance.Digest(prior.recordHistory())
+	b, err2 := acceptance.Digest(image.History)
 	return err == nil && err2 == nil && a == b
 }

@@ -87,7 +87,7 @@ func TestOwnedRelationsAtomicCardinalityAndReplay(t *testing.T) {
 	if got := refuse(t, tn, "writer", "invariants", "invariants.entry.attach", owner.entity.Type, "root", map[string]any{"child": "rejected", "create": true}, at); !strings.Contains(got, "Constraint relation.children") {
 		t.Fatalf("duplicate parent: %s", got)
 	}
-	if tn.records.types[platform.OwnedRelationType("invariants")].rows.len() != 1 {
+	if tn.records.types[platform.OwnedRelationType("invariants")].rows.Len() != 1 {
 		t.Fatal("refusal left a relationship row")
 	}
 	if _, err := tn.RecordOf(memberOf(t, tn, "writer"), owner.entity.Type, "rejected", at); err == nil {

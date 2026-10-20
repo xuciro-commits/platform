@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"platformserver/internal/records"
 	"platformserver/journal"
 	"platformserver/platform"
 )
@@ -218,8 +219,8 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 			t.records.mu.Lock()
 			et := t.records.types[typ]
 			var v reflect.Value
-			if et != nil && et.rows.get(id) != nil {
-				v = et.rows.get(id).value
+			if et != nil && et.rows.Get(id) != nil {
+				v = et.rows.Get(id).value
 			}
 			t.records.mu.Unlock()
 			if et == nil || !v.IsValid() || v.FieldByName("Record").Interface().(platform.Record).Archived {
@@ -299,12 +300,12 @@ func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := s.dirty
-	s.dirty = recordIndex[bool]{}
+	s.dirty = records.Index[bool]{}
 	if !walked {
 		return nil
 	}
-	changed := make(map[string]bool, out.len())
-	for ref, dirty := range out.all() {
+	changed := make(map[string]bool, out.Len())
+	for ref, dirty := range out.All() {
 		changed[ref] = dirty
 	}
 	return changed
@@ -407,10 +408,10 @@ func (t *Tenant) knowledgeSourceReadable(store *recordStore, m platform.Member, 
 		return false
 	}
 	et := store.types[platform.KnowledgeDocumentType]
-	if et == nil || et.rows.get(id) == nil {
+	if et == nil || et.rows.Get(id) == nil {
 		return false
 	}
-	d, ok := et.rows.get(id).value.Interface().(platform.KnowledgeDocument)
+	d, ok := et.rows.Get(id).value.Interface().(platform.KnowledgeDocument)
 	return ok && !d.Archived && knowledgeAppsReadable(d.Apps, &m, "")
 }
 

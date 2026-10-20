@@ -313,12 +313,12 @@ func (p *Projection) rows(typ string, ids map[string]bool) (rows [][]any, change
 		ends[typ+"/"+id] = r.historyLength()
 	}
 	if ids == nil {
-		for id, row := range et.rows.all() {
+		for id, row := range et.rows.All() {
 			take(id, row)
 		}
 	} else {
 		for id := range ids {
-			take(id, et.rows.get(id))
+			take(id, et.rows.Get(id))
 		}
 	}
 	return rows, changes, ends

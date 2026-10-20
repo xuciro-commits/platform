@@ -113,71 +113,6 @@ func stockTenant(t testing.TB, extra ...platform.App) *Tenant {
 }
 
 func TestRecordDraftIsolationAndPromotion(t *testing.T) {
-	t.Run("immutable index snapshots", func(t *testing.T) {
-		var index recordIndex[int]
-		for i := range 3000 {
-			key := (i * 137) % 3000
-			index.set(fmt.Sprintf("%04d", key), key+1)
-		}
-		saved := index
-		for i := range 3000 {
-			key := fmt.Sprintf("%04d", i)
-			if i%3 == 0 {
-				index.remove(key)
-			} else {
-				index.set(key, -i-1)
-			}
-			if saved.get(key) != i+1 {
-				t.Fatal("write changed a retained index snapshot")
-			}
-		}
-		if saved.len() != 3000 || index.len() != 2000 {
-			t.Fatal("snapshot counts changed")
-		}
-		var check func(*recordNode[int]) (int, int)
-		check = func(n *recordNode[int]) (int, int) {
-			if n == nil {
-				return 0, 0
-			}
-			lh, ls := check(n.left)
-			rh, rs := check(n.right)
-			if lh-rh > 1 || rh-lh > 1 || n.height != 1+max(lh, rh) || n.size != 1+ls+rs ||
-				n.left != nil && n.left.key >= n.key || n.right != nil && n.right.key <= n.key {
-				t.Fatal("record index lost its bounded ordered structure")
-			}
-			return n.height, n.size
-		}
-		check(saved.root)
-		check(index.root)
-		entries := make([]recordEntry[int], 0, saved.len())
-		for key, value := range saved.all() {
-			entries = append(entries, recordEntry[int]{key, value})
-		}
-		slices.Reverse(entries)
-		bulk, err := recordIndexFrom(entries)
-		if err != nil || bulk.len() != saved.len() {
-			t.Fatal("bulk image did not recover an unordered record set", err)
-		}
-		check(bulk.root)
-		for key, value := range saved.all() {
-			if bulk.get(key) != value {
-				t.Fatal("bulk image changed a retained record")
-			}
-		}
-		if _, err := recordIndexFrom([]recordEntry[int]{{"same", 1}, {"same", 2}}); err == nil {
-			t.Fatal("bulk image silently overwrote a duplicate identity")
-		}
-		last, seen := "", 0
-		for key, value := range index.all() {
-			if key <= last || value >= 0 || saved.get(key) != -value {
-				t.Fatal("iteration lost or changed a retained record")
-			}
-			last, seen = key, seen+1
-		}
-		if seen != 2000 {
-			t.Fatal("iteration count differs")
-		}
-	})
 	t.Run("declared record constraints include unchanged endpoints and zero values", func(t *testing.T) {
 		type window struct {
 			platform.Record
@@ -226,7 +161,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	var touched []string
 	tn.records.touched = func(typ, id string) { touched = append(touched, typ+"/"+id) }
 	discarded := tn.records.forkRecords()
-	if discarded.types["stock.item"].rows.root != et.rows.root || discarded.dirty.root != tn.records.dirty.root || discarded.changed.root != tn.records.changed.root {
+	if discarded.types["stock.item"].rows != et.rows || discarded.dirty != tn.records.dirty || discarded.changed != tn.records.changed {
 		t.Fatal("fork copied record or derived indexes")
 	}
 	read, _ := discarded.get(c, reflect.TypeFor[Item](), "I2")
@@ -245,12 +180,12 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	}
 	draft := tn.records.forkRecords()
 	put(draft, "c2", 2, 3)
-	if draft.types["stock.item"].rows.get("I2") != untouched || tn.records.changed.get("stock/c2") != nil || tn.records.dirty.get("stock.item/I2") {
+	if draft.types["stock.item"].rows.Get("I2") != untouched || tn.records.changed.Get("stock/c2") != nil || tn.records.dirty.Get("stock.item/I2") {
 		t.Fatal("write copied an unrelated row or leaked index metadata")
 	}
 	child := draft.forkRecords()
 	put(child, "nested", 3, 7)
-	if draft.types["stock.item"].rows.get("I1").value.Interface().(Item).Qty != 3 || child.types["stock.item"].rows.get("I2") != untouched {
+	if draft.types["stock.item"].rows.Get("I1").value.Interface().(Item).Qty != 3 || child.types["stock.item"].rows.Get("I2") != untouched {
 		t.Fatal("discarded nested write changed its parent or unrelated rows")
 	}
 	if got := len(touched); got != 0 {
@@ -261,15 +196,15 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	if live.(Item).Qty != 2 || staged.(Item).Qty != 3 {
 		t.Fatalf("draft leaked into live records: live=%+v staged=%+v", live, staged)
 	}
-	if tn.records.types["stock.item"].rows.get("I1").historyLength() != 1 {
+	if tn.records.types["stock.item"].rows.Get("I1").historyLength() != 1 {
 		t.Fatal("draft changed live history before promotion")
 	}
-	draft.types["stock.item"].rows.get("I1").history[0].Fields[0].After[0] ^= 1
-	if draft.types["stock.item"].rows.get("I1").history[0].Fields[0].After[0] ==
-		tn.records.types["stock.item"].rows.get("I1").history[0].Fields[0].After[0] {
+	draft.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] ^= 1
+	if draft.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] ==
+		tn.records.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] {
 		t.Fatal("draft shares history bytes with live store")
 	}
-	draft.types["stock.item"].rows.get("I1").history[0].Fields[0].After[0] ^= 1
+	draft.types["stock.item"].rows.Get("I1").history[0].Fields[0].After[0] ^= 1
 	if err := tn.records.promoteRecords(draft); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +212,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 		t.Fatalf("projected rows after promotion: %v", touched)
 	}
 	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
-	if live.(Item).Qty != 3 || tn.records.types["stock.item"].rows.get("I1").historyLength() != 2 {
+	if live.(Item).Qty != 3 || tn.records.types["stock.item"].rows.Get("I1").historyLength() != 2 {
 		t.Fatalf("accepted image or history missing: %+v", live)
 	}
 	if err := tn.records.promoteRecords(draft); err == nil {
@@ -304,7 +239,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 				if value.(Item).Qty != 4 {
 					t.Error("parent write changed a captured record")
 				}
-				for _, row := range captured.types["stock.item"].rows.all() {
+				for _, row := range captured.types["stock.item"].rows.All() {
 					_ = jsonOf(row.value.Interface())
 				}
 			}

@@ -3,15 +3,15 @@ package enterprise
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host/enterpriseapi"
-	"platformserver/internal/host/enterpriseapi/uaf"
+	enterprisemodel "platformserver/internal/enterprise"
+	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
 	"slices"
 	"strings"
 )
 
 // decideRelationship validates before exposing any change to the model.
-func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *kernel.Error) {
+func decideRelationship(m *enterprisemodel.Model, mm *uaf.Metamodel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := func(msg string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, msg, args...)
 	}
@@ -53,10 +53,10 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload, stric
 	// model, and the refusal names the rule it breaks.
 	sourceEnd := source
 	if sourceEnd == nil && strings.HasPrefix(p.Source, "member:") {
-		sourceEnd = &Element{Stereotype: Person} // an account stands where a person stands
+		sourceEnd = &enterprisemodel.Element{Stereotype: Person} // an account stands where a person stands
 	}
 	if sourceEnd != nil {
-		if ok, why := enterpriseapi.Allowed(enterpriseapi.Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
+		if ok, why := enterprisemodel.Allowed(enterprisemodel.Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
 			return nil, invalid(why)
 		}
 	}
@@ -71,7 +71,7 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload, stric
 			return nil, invalid("{target} already sits under {source}; an organisation cannot sit under itself", target.Name, source.Name)
 		}
 		if strict {
-			days := []Date{p.From}
+			days := []platform.Date{p.From}
 			for _, r := range m.Relationships {
 				if r.Stereotype != Placement || r.Kind != p.Kind {
 					continue
@@ -120,7 +120,7 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload, stric
 		if ends != nil {
 			ends()
 		}
-		m.Relationships = append(m.Relationships, Relationship{ID: id, Stereotype: p.Stereotype, Kind: p.Kind, Source: p.Source, Target: p.Target, Role: p.Role, Relation: p.Relation, Share: p.Share, Primary: p.Primary, From: p.From, Until: p.Until})
+		m.Relationships = append(m.Relationships, enterprisemodel.Relationship{ID: id, Stereotype: p.Stereotype, Kind: p.Kind, Source: p.Source, Target: p.Target, Role: p.Role, Relation: p.Relation, Share: p.Share, Primary: p.Primary, From: p.From, Until: p.Until})
 	}, nil
 
 }
@@ -128,8 +128,8 @@ func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload, stric
 func sourceRelationship(id string) bool {
 	return strings.HasPrefix(id, "sync:") || strings.HasPrefix(id, "fed:")
 }
-func overlap(a, b, c, d Date) bool { return (b == "" || c < b) && (d == "" || a < d) }
-func closingUsage(m Model, id string, day Date) string {
+func overlap(a, b, c, d platform.Date) bool { return (b == "" || c < b) && (d == "" || a < d) }
+func closingUsage(m enterprisemodel.Model, id string, day platform.Date) string {
 	if refs := m.ElementPropertyUses(id, day); len(refs) > 0 {
 		return refs[0]
 	}
@@ -156,7 +156,7 @@ func closingUsage(m Model, id string, day Date) string {
 	return ""
 }
 
-func checkSourceRelationships(m Model, mm *uaf.Metamodel, prefix string, today Date) *kernel.Error {
+func checkSourceRelationships(m enterprisemodel.Model, mm *uaf.Metamodel, prefix string, today platform.Date) *kernel.Error {
 	for _, r := range m.Relationships {
 		if !strings.HasPrefix(r.ID, prefix) {
 			continue
@@ -170,7 +170,7 @@ func checkSourceRelationships(m Model, mm *uaf.Metamodel, prefix string, today D
 				from = today
 			}
 			candidate := copyModel(m)
-			candidate.Relationships = slices.DeleteFunc(candidate.Relationships, func(other Relationship) bool { return other.ID == r.ID })
+			candidate.Relationships = slices.DeleteFunc(candidate.Relationships, func(other enterprisemodel.Relationship) bool { return other.ID == r.ID })
 			p := payload{Stereotype: r.Stereotype, Source: r.Source, Target: r.Target, Kind: r.Kind, Role: r.Role, Relation: r.Relation, Share: r.Share, Primary: r.Primary, From: from, Until: period.Until}
 			// Source ids remain reserved; the shared validator checks their semantic shape.
 			_, err := decideRelationship(&candidate, mm, "", p, true, true)
@@ -183,7 +183,7 @@ func checkSourceRelationships(m Model, mm *uaf.Metamodel, prefix string, today D
 }
 
 // ValidateImportedModel lets preview use the same relationship checks as the accepted import.
-func (e *Enterprise) ValidateImportedModel(model Model, sourceTenant string, today Date) error {
+func (e *Enterprise) ValidateImportedModel(model enterprisemodel.Model, sourceTenant string, today platform.Date) error {
 	if refusal := checkSourceRelationships(model, uaf.Current(), "fed:"+sourceTenant+":", today); refusal != nil {
 		return refusal
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"slices"
 	"time"
@@ -95,7 +96,7 @@ func (t *Tenant) validateAcceptedNotices(n *acceptedNotices) error {
 		return nil
 	}
 	current, seq := t.notices.state()
-	before, err := canonicalDigest(current)
+	before, err := acceptance.Digest(current)
 	if err != nil || n.Base != seq || n.Before != before || n.Seq < n.Base || len(n.Notices) > noticesKept {
 		return fmt.Errorf("notification result predecessor differs")
 	}

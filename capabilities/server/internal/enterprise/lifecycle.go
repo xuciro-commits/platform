@@ -1,41 +1,46 @@
-package enterpriseapi
+package enterprise
 
 import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/host/enterpriseapi/uaf"
+	"platformserver/internal/enterprise/uaf"
+	"platformserver/platform"
 	"slices"
 	"strings"
 	"time"
 )
 
-func periodsOrLegacy(periods []Period, from, until Date) []Period {
+func periodsOrLegacy(periods []platform.Period, from, until platform.Date) []platform.Period {
 	if len(periods) > 0 {
 		return periods
 	}
-	return []Period{{From: from, Until: until}}
+	return []platform.Period{{From: from, Until: until}}
 }
-func periodsActive(periods []Period, from, until, day Date) bool {
-	return slices.ContainsFunc(periodsOrLegacy(periods, from, until), func(p Period) bool { return ActiveOn(p.From, p.Until, day) })
+func periodsActive(periods []platform.Period, from, until, day platform.Date) bool {
+	return slices.ContainsFunc(periodsOrLegacy(periods, from, until), func(p platform.Period) bool { return platform.ActiveOn(p.From, p.Until, day) })
 }
-func (e Element) ActiveOn(day Date) bool {
+func (e Element) ActiveOn(day platform.Date) bool {
 	return !e.Deleted && periodsActive(e.Periods, e.From, e.Until, day)
 }
-func (r Relationship) ActiveOn(day Date) bool { return periodsActive(r.Periods, r.From, r.Until, day) }
-func (e Element) Covers(from, until Date) bool {
+func (r Relationship) ActiveOn(day platform.Date) bool {
+	return periodsActive(r.Periods, r.From, r.Until, day)
+}
+func (e Element) Covers(from, until platform.Date) bool {
 	if e.Deleted {
 		return false
 	}
-	return slices.ContainsFunc(periodsOrLegacy(e.Periods, e.From, e.Until), func(p Period) bool {
+	return slices.ContainsFunc(periodsOrLegacy(e.Periods, e.From, e.Until), func(p platform.Period) bool {
 		return (p.From == "" || from >= p.From) && (p.Until == "" || until != "" && until <= p.Until)
 	})
 }
-func (r Relationship) PeriodsFromLegacy() []Period {
+func (r Relationship) PeriodsFromLegacy() []platform.Period {
 	return periodsOrLegacy(r.Periods, r.From, r.Until)
 }
-func (e Element) PeriodsFromLegacy() []Period { return periodsOrLegacy(e.Periods, e.From, e.Until) }
-func CheckPeriods(periods []Period) error {
+func (e Element) PeriodsFromLegacy() []platform.Period {
+	return periodsOrLegacy(e.Periods, e.From, e.Until)
+}
+func CheckPeriods(periods []platform.Period) error {
 	for i, p := range periods {
 		if p.From != "" {
 			if _, err := time.Parse(time.DateOnly, p.From); err != nil {
@@ -56,7 +61,7 @@ func CheckPeriods(periods []Period) error {
 	}
 	return nil
 }
-func (e *Element) CloseOn(day Date, reason string) error {
+func (e *Element) CloseOn(day platform.Date, reason string) error {
 	periods := slices.Clone(e.PeriodsFromLegacy())
 	last := &periods[len(periods)-1]
 	if day == "" || day <= last.From || last.Until != "" && day > last.Until {
@@ -72,13 +77,13 @@ func (e *Element) CloseOn(day Date, reason string) error {
 	}
 	return nil
 }
-func (e *Element) ReopenOn(day Date) error {
+func (e *Element) ReopenOn(day platform.Date) error {
 	periods := slices.Clone(e.PeriodsFromLegacy())
 	last := periods[len(periods)-1]
 	if e.Deleted || last.Until == "" || day == "" || day < last.Until {
 		return fmt.Errorf("Reopening starts a new period after the previous one ends")
 	}
-	periods = append(periods, Period{From: day})
+	periods = append(periods, platform.Period{From: day})
 	if err := CheckPeriods(periods); err != nil {
 		return err
 	}
@@ -96,7 +101,7 @@ func (e *Element) Reinstate() error {
 	}
 	return nil
 }
-func (r *Relationship) EndOn(day Date) error {
+func (r *Relationship) EndOn(day platform.Date) error {
 	if _, err := time.Parse(time.DateOnly, day); err != nil {
 		return fmt.Errorf("Invalid effective period")
 	}
@@ -112,11 +117,11 @@ func (r *Relationship) EndOn(day Date) error {
 	}
 	return nil
 }
-func (r *Relationship) ReopenOn(day Date) {
+func (r *Relationship) ReopenOn(day platform.Date) {
 	periods := slices.Clone(r.PeriodsFromLegacy())
 	last := periods[len(periods)-1]
 	if last.Until != "" && day >= last.Until {
-		r.Periods = append(periods, Period{From: day})
+		r.Periods = append(periods, platform.Period{From: day})
 		r.Until = ""
 	}
 }
@@ -171,14 +176,14 @@ func (m Model) InternalUsage(id string) string {
 
 // ElementPropertyUses follows the metamodel's element-typed tagged values, never free text.
 // Empty day includes every retained period; otherwise only use on or after day counts.
-func (m Model) ElementPropertyUses(id string, day Date) []string {
+func (m Model) ElementPropertyUses(id string, day platform.Date) []string {
 	mm := uaf.Current()
 	out := []string{}
 	for _, element := range m.Elements {
 		if element.ID == id || element.Deleted && day != "" {
 			continue
 		}
-		if day != "" && !slices.ContainsFunc(element.PeriodsFromLegacy(), func(period Period) bool { return period.Until == "" || period.Until > day }) {
+		if day != "" && !slices.ContainsFunc(element.PeriodsFromLegacy(), func(period platform.Period) bool { return period.Until == "" || period.Until > day }) {
 			continue
 		}
 		for _, property := range mm.Properties(element.Stereotype) {
@@ -210,7 +215,7 @@ func (m Model) ElementPropertyUses(id string, day Date) []string {
 func ImportedElementID(tenant, id string) string { return "tenant:" + tenant + ":" + id }
 
 // PreviewImport is the same pure model update used by preview and accepted import.
-func (m Model) PreviewImport(s Slice, linkID, content, base string, today Date) (Model, error) {
+func (m Model) PreviewImport(s Slice, linkID, content, base string, today platform.Date) (Model, error) {
 	if base != m.Fingerprint() {
 		return Model{}, fmt.Errorf("The enterprise model changed; preview the import again")
 	}
@@ -361,7 +366,7 @@ func (m Model) NamespaceSlice(s Slice) (Slice, error) {
 	return s, nil
 }
 
-func closeSourceElement(e *Element, day Date, reason string) {
+func closeSourceElement(e *Element, day platform.Date, reason string) {
 	e.Until, e.Closed = day, reason
 	if len(e.Periods) > 0 {
 		e.Periods[len(e.Periods)-1].Until = day

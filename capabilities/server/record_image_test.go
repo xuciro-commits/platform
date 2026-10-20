@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"platformserver/internal/acceptance"
 	"reflect"
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func TestRecordImageRestoreAndReinstallRetainOriginal(t *testing.T) {
 	}
 	check := func() {
 		t.Helper()
-		saved := store.types["example.item"].rows.get("one")
+		saved := store.types["example.item"].rows.Get("one")
 		image, err := saved.image()
 		value := saved.value.Interface().(currentModel)
 		if err != nil || string(image) != string(raw) || saved.format != "" || value.Title != "Original" || value.Revision != 2 {
@@ -63,7 +64,7 @@ func TestRecordImageRestoreAndReinstallRetainOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shape, _ := canonicalDigest(view.Fields)
+	shape, _ := acceptance.Digest(view.Fields)
 	projection := &recordProjection{From: "source-release", Shape: shape, Value: raw}
 	actual, _ := json.Marshal(currentModel{Record: platform.Record{ID: "one", Revision: 2}, Title: "Original"})
 	decoded, err := rowDecodeFormattedImage(view, actual, projection, "source-release", "item.v2")
@@ -141,7 +142,7 @@ func TestPostgresRecordImageConvertedFieldQueryRetainsOriginal(t *testing.T) {
 	if refusal != nil || len(matches) != 1 || matches[0].Interface().(currentModel).ID != "row-256" {
 		t.Fatalf("converted-field query lost its visible match or bypassed filtering: %v, %v", matches, refusal)
 	}
-	saved := store.types[info.Type].rows.get("row-256")
+	saved := store.types[info.Type].rows.Get("row-256")
 	image, err := saved.image()
 	if err != nil || string(image) != string(original) || saved.format != "" {
 		t.Fatalf("query rewrote the original Go image: %s, %v", image, err)

@@ -32,7 +32,7 @@ func (d *stagedDecision) sequenceWaterline(app string, sequence platform.Sequenc
 	prefix := strings.ReplaceAll(sequence.Pattern[:index[0]], "{year}", strconv.Itoa(year))
 	suffix := strings.ReplaceAll(sequence.Pattern[index[1]:], "{year}", strconv.Itoa(year))
 	last := 0
-	for _, row := range owner.rows.all() {
+	for _, row := range owner.rows.All() {
 		value := businessField(owner.info, row.value, sequence.SeedField)
 		number, ok := strings.CutPrefix(value, prefix)
 		if !ok || !strings.HasSuffix(number, suffix) {

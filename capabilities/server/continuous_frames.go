@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"platformserver/internal/acceptance"
 	"platformserver/internal/host"
 	"slices"
 	"strings"
@@ -461,7 +462,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 		t.mu.Unlock()
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The prepared window Compute operation is not retained")
 	}
-	definition, err := canonicalDigest([]any{request.App, op, version})
+	definition, err := acceptance.Digest([]any{request.App, op, version})
 	budget := op.Limits.DataInputBytes
 	t.mu.Unlock()
 	if err != nil {
@@ -473,7 +474,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 	if err := op.Input.Validate(request.Inputs, budget); err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The window does not satisfy its Compute input: "+err.Error())
 	}
-	hash, err := canonicalDigest(request.Inputs)
+	hash, err := acceptance.Digest(request.Inputs)
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window Compute input cannot be encoded")
 	}
@@ -483,7 +484,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 		t.staged.discardInput(ref)
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute input could not be sealed: "+err.Error())
 	}
-	requestHash, err := canonicalDigest(request)
+	requestHash, err := acceptance.Digest(request)
 	if err != nil {
 		t.staged.discardInput(ref)
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute request cannot be bound")
@@ -558,7 +559,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	frozenSource.DefinitionVersion, frozenSource.Published, frozenSource.Versions = 0, "", nil
 	frozenConnection.DefinitionVersion, frozenConnection.Published, frozenConnection.Versions = 0, "", nil
 	frozenConnection.Name, frozenConnection.Title = "", ""
-	hash, hashErr := canonicalDigest([]any{frozenSource, frozenConnection, intake})
+	hash, hashErr := acceptance.Digest([]any{frozenSource, frozenConnection, intake})
 	if hashErr != nil {
 		return refuse("The Flow source configuration cannot be bound")
 	}
@@ -625,7 +626,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		if before.Batch != nil {
 			batch.Predecessor = before.Batch.Cursor
 		}
-		fingerprint, fingerprintErr := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
+		fingerprint, fingerprintErr := acceptance.Digest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
 		if fingerprintErr != nil {
 			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source bootstrap cannot be bound")
 		}
@@ -677,7 +678,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		}
 		batch.Signals = append(batch.Signals, platform.FlowSignal{Key: key, Partition: string(platform.Raw(partition)), At: at, Value: value})
 	}
-	fingerprint, err := canonicalDigest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
+	fingerprint, err := acceptance.Digest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
 	if err != nil {
 		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source batch cannot be bound")
 	}

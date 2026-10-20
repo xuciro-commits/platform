@@ -8,8 +8,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/internal/host"
-	enterprise "platformserver/internal/host/enterpriseapi"
 	"platformserver/platform"
 )
 
@@ -72,7 +72,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 			continue
 		}
 		types = append(types, et)
-		for _, r := range et.rows.all() {
+		for _, r := range et.rows.All() {
 			rows[et.info.Type] = append(rows[et.info.Type], r)
 		}
 	}
@@ -141,7 +141,7 @@ func (t *Tenant) EnterpriseUsage(m platform.Member, id, until string, now time.T
 	if _, err := time.Parse(time.DateOnly, until); err != nil {
 		return EnterpriseUsage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid effective period")
 	}
-	c := platform.NewCaller(runtime{t}, m, enterprise.ID, false, false)
+	c := platform.NewCaller(runtime{t}, m, enterprisemodel.ID, false, false)
 	result := t.enterpriseExternalUsage(c, t.records, id, until, now, true)
 	model, err := t.tenantLinkModel()
 	if err != nil {
@@ -167,13 +167,13 @@ func (t *Tenant) EnterpriseUsage(m platform.Member, id, until string, now time.T
 	}
 	for _, r := range model.Relationships {
 		if r.Source == id || r.Target == id {
-			current := slices.ContainsFunc(r.PeriodsFromLegacy(), func(p enterprise.Period) bool { return p.Until == "" || p.Until > until })
+			current := slices.ContainsFunc(r.PeriodsFromLegacy(), func(p platform.Period) bool { return p.Until == "" || p.Until > until })
 			add("relationship", r.Relation, r.ID, current)
 		}
 	}
 	for _, v := range model.Views {
 		_, placed := v.Layout[id]
-		if placed || slices.Contains(v.Elements, id) || slices.Contains(v.Context, id) || slices.ContainsFunc(v.Pins, func(p enterprise.Pin) bool { return p.Anchor == id || p.Ref == "record:enterprise.element/"+id }) {
+		if placed || slices.Contains(v.Elements, id) || slices.Contains(v.Context, id) || slices.ContainsFunc(v.Pins, func(p enterprisemodel.Pin) bool { return p.Anchor == id || p.Ref == "record:enterprise.element/"+id }) {
 			add("view", v.Name, v.ID, false)
 		}
 	}

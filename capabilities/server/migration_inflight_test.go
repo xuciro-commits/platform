@@ -111,7 +111,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						if kind == "retire-action" {
 							decide(t, tn, "user", construction.ID, "build.sample.hold", "build.sample", rowID, map[string]any{}, at)
 						}
-						history[rowID] = copyHistory(tn.records.types["build.sample"].rows.get(rowID).recordHistory())
+						history[rowID] = copyHistory(tn.records.types["build.sample"].rows.Get(rowID).recordHistory())
 					}
 					step := platform.MigrateStep{Kind: kind, Types: []string{"build.sample"}, Batch: 2}
 					want := map[string]string{"value": updated}
@@ -237,7 +237,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 					tn.Work(at)
 					for _, rowID := range []string{"A", "B", "C"} {
 						et := tn.records.types["build.sample"]
-						row := et.rows.get(rowID)
+						row := et.rows.Get(rowID)
 						instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "build.review:"+rowID)
 						if instance.State != "done" || instance.Release != from || businessField(et.info, row.value, "state") != "done" {
 							t.Fatalf("retained flow did not finish: %s; record: %s", jsonOf(instance), jsonOf(row.value.Interface()))
@@ -268,8 +268,8 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						t.Fatal(err)
 					}
 					for _, rowID := range []string{"A", "B", "C"} {
-						before, _ := acceptedRowOf("build.sample", rowID, tn.records.types["build.sample"].rows.get(rowID))
-						after, _ := acceptedRowOf("build.sample", rowID, recovered.records.types["build.sample"].rows.get(rowID))
+						before, _ := acceptedRowOf("build.sample", rowID, tn.records.types["build.sample"].rows.Get(rowID))
+						after, _ := acceptedRowOf("build.sample", rowID, recovered.records.types["build.sample"].rows.Get(rowID))
 						if !bytes.Equal(jsonOf(before), jsonOf(after)) {
 							t.Fatal("recovery changed saved values or history")
 						}

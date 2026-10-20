@@ -36,7 +36,7 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 		freeze(tn, "stock")
 		_, err := tn.Submit(memberOf(t, tn, "ana"), submission(tn, memberOf(t, tn, "ana"), "stock", "stock.item.create", "stock.item", "blocked", map[string]any{"name": "Press"}), txnAt)
 		denied(err)
-		if tn.records.types["stock.item"].rows.len() != 0 {
+		if tn.records.types["stock.item"].rows.Len() != 0 {
 			t.Fatal("refused submit wrote a row")
 		}
 	})

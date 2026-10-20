@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"platformserver/internal/acceptance"
 	"regexp"
 	"slices"
 	"strconv"
@@ -139,7 +140,7 @@ func (c ContainerCompiler) Compile(ctx context.Context, q platform.CodeBuildRequ
 	var result platform.CodeBuildResult
 	hash := sha256.Sum256([]byte(q.Source))
 	result.SourceHash = hex.EncodeToString(hash[:])
-	result.BuildHash, _ = canonicalDigest(q)
+	result.BuildHash, _ = acceptance.Digest(q)
 	image := c.GoImage
 	if q.Language == "tinygo" {
 		image = c.TinyGoImage

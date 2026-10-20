@@ -27,7 +27,7 @@ func TestGeneratedDecisionStaysPrivate(t *testing.T) {
 	if err != nil || record == nil {
 		t.Fatalf("staged create: %v", err)
 	}
-	if len(app.ledger.RecordsFor(tn.ID)) != 0 || tn.records.types["stock.item"].rows.get("I1") != nil ||
+	if len(app.ledger.RecordsFor(tn.ID)) != 0 || tn.records.types["stock.item"].rows.Get("I1") != nil ||
 		len(tn.events) != 0 || tn.acted != 0 {
 		t.Fatal("decision changed the live ledger, record or event queue before acceptance")
 	}
@@ -49,7 +49,7 @@ func TestGeneratedDecisionStaysPrivate(t *testing.T) {
 		t.Fatalf("changed reuse of staged key was accepted: %v", err)
 	}
 	refused := submission("bad", "stock.item.create", "stock.item", "I2", `{}`)
-	if _, err := app.Submit(c, refused, now); err == nil || draft.records.types["stock.item"].rows.get("I2") != nil ||
+	if _, err := app.Submit(c, refused, now); err == nil || draft.records.types["stock.item"].rows.Get("I2") != nil ||
 		len(draft.events) != 1 || len(draft.logs[app.ledger].Records(tn.ID)) != 1 {
 		t.Fatalf("refusal left staged records, receipts or events: %v", err)
 	}

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
 	"time"
@@ -198,7 +199,7 @@ func (a *Agents) evaluationVersion(d *agentDef) string {
 	for i, c := range d.Cases {
 		cases[i] = []string{c.Name, c.Goal, c.Ref}
 	}
-	digest, _ := canonicalDigest([]any{a.definitionVersion(d), cases})
+	digest, _ := acceptance.Digest([]any{a.definitionVersion(d), cases})
 	return digest
 }
 
@@ -245,7 +246,7 @@ func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time, checkpoint func(*Ev
 	config := ""
 	if err == nil {
 		var problem error
-		config, problem = canonicalDigest([]any{model, pv})
+		config, problem = acceptance.Digest([]any{model, pv})
 		if problem != nil || ev.ModelConfig != "" && config != ev.ModelConfig {
 			definitionErr = fmt.Errorf("the evaluation's model configuration changed")
 		}
@@ -616,7 +617,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		if refusal != nil {
 			return nil, refusal
 		}
-		config, err = canonicalDigest([]any{model, provider})
+		config, err = acceptance.Digest([]any{model, provider})
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
