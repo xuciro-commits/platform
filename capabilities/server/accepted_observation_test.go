@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -102,7 +103,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	if _, err := live.Submit(ana, sub, at); err != nil {
 		t.Fatal(err)
 	}
-	batch, _, err := decodeAcceptedBatch(entries[0].Body)
+	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(batch.Observations) != 1 || !batch.Decisions[0].Event.Observed ||
 		len(live.notices.all) != 1 || len(live.app("projection").(*resultProjection).notes) != 1 {
 		t.Fatalf("observer result missing: %+v %v", batch, err)
@@ -116,7 +117,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	}
 	// A late invalid projection cannot advance even the earlier valid ledger.
 	batch.Observations[0].Body = json.RawMessage(`{}`)
-	batch.Digest, _ = digestAcceptedBatch(batch)
+	batch.Digest, _ = resultformat.DigestBatch(batch)
 	bad, _ := json.Marshal(batch)
 	empty := compose()
 	before = snapshot(empty)

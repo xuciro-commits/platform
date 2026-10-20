@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"time"
 
@@ -47,7 +48,7 @@ func decodeOperationClaim(raw []byte) (acceptedOperationClaim, error) {
 	}
 	digest, err := operationClaimDigest(saved)
 	hash, _ := acceptance.Digest([]any{saved.Before, saved.PriorWork})
-	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != operationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
+	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != resultformat.OperationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
 		return saved, fmt.Errorf("invalid operation ownership result")
 	}
 	if saved.After.Generation == 0 || saved.Key != fmt.Sprintf("operation-claim:%s:%d", saved.Before.ID, saved.After.Generation) {
@@ -182,12 +183,12 @@ func (t *Tenant) operationDispatches(now time.Time) []func() {
 	ids := []string{}
 	active := 0
 	for _, x := range t.outbound {
-		if x.Endpoint == operationEndpoint && x.sending {
+		if x.Endpoint == resultformat.OperationEndpoint && x.sending {
 			active++
 		}
 	}
 	for _, x := range t.outbound {
-		if x.Endpoint == operationEndpoint && !x.sending && !settled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
+		if x.Endpoint == resultformat.OperationEndpoint && !x.sending && !settled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
 			ids = append(ids, x.ID)
 		}
 	}
@@ -201,7 +202,7 @@ func (t *Tenant) operationDispatches(now time.Time) []func() {
 	return runs
 }
 func (t *Tenant) prepareOperationFinish(before platform.Effect, out platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error) {
-	if before.Endpoint != operationEndpoint {
+	if before.Endpoint != resultformat.OperationEndpoint {
 		return nil, nil, nil, nil
 	}
 	if out.Generation != before.Generation || !t.operationCurrent(before.ID, out.Generation) {

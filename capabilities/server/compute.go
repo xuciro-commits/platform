@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/host"
 	"slices"
 	"strings"
@@ -17,8 +18,6 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
-
-const operationEndpoint = "operation"
 
 // Both compilation and execution use the original effect outbox. They are
 // internal, owned computations: no endpoint configuration or external webhook.
@@ -121,7 +120,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation dependencies cannot be bound")
 	}
 	hash, _ := acceptance.Digest(q.Inputs)
-	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, operationEndpoint)
+	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, resultformat.OperationEndpoint)
 	if input != nil {
 		if input.Tenant != t.ID || input.Member != member.ID || input.Call != id || input.Definition != definition || op.Binding.ABI != platform.WasmDataABI || input.Size > op.Limits.DataInputBytes {
 			return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The operation changed while its input was prepared")
@@ -144,12 +143,12 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	exists := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id })
 	queued := 0
 	for _, x := range t.outbound {
-		if x.Endpoint == operationEndpoint && !settled(x.State) {
+		if x.Endpoint == resultformat.OperationEndpoint && !settled(x.State) {
 			queued++
 		}
 	}
 	for _, x := range pending {
-		if x.Endpoint == operationEndpoint {
+		if x.Endpoint == resultformat.OperationEndpoint {
 			queued++
 		}
 	}
@@ -206,7 +205,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	}
 	body, _ := json.Marshal(binding)
 	at := r.GetRecordedTime().AsTime()
-	return call, platform.Effect{Applications: applications, ID: id, Endpoint: operationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
+	return call, platform.Effect{Applications: applications, ID: id, Endpoint: resultformat.OperationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
 }
 func operationDefinition(app platform.App, name string, version int) (platform.Operation, int, bool) {
 	if owner, ok := app.(host.OperationDefinitions); ok {
@@ -225,7 +224,7 @@ func (t *Tenant) operationResult(c platform.Caller, id string) (platform.Operati
 	t.opsMu.Lock()
 	var found *platform.Effect
 	for _, x := range t.outbound {
-		if x.ID != id || x.Endpoint != operationEndpoint {
+		if x.ID != id || x.Endpoint != resultformat.OperationEndpoint {
 			continue
 		}
 		copy := x.Effect
@@ -324,13 +323,13 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	d.tenant.opsMu.Lock()
 	queued := 0
 	for _, x := range d.tenant.outbound {
-		if x.Endpoint == operationEndpoint && !settled(x.State) {
+		if x.Endpoint == resultformat.OperationEndpoint && !settled(x.State) {
 			queued++
 		}
 	}
 	d.tenant.opsMu.Unlock()
 	for _, x := range d.intents {
-		if x.Endpoint == operationEndpoint {
+		if x.Endpoint == resultformat.OperationEndpoint {
 			queued++
 		}
 	}
@@ -338,12 +337,12 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 		return refuse("Operation queue is at capacity")
 	}
 	hash, _ := acceptance.Digest(q)
-	id := fmt.Sprintf("%s:build:operation:%s:%s", d.tenant.ID, key, operationEndpoint)
+	id := fmt.Sprintf("%s:build:operation:%s:%s", d.tenant.ID, key, resultformat.OperationEndpoint)
 	call := platform.OperationCall{ID: id, InputHash: hash, Definition: hash}
 	body, _ := json.Marshal(operationBinding{Build: &q, Call: call, Member: c.ID})
 	at := r.GetRecordedTime().AsTime()
 	if !d.probing {
-		d.intents = append(d.intents, platform.Effect{ID: id, Endpoint: operationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
+		d.intents = append(d.intents, platform.Effect{ID: id, Endpoint: resultformat.OperationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
 	}
 	return call, nil
 }

@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"maps"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Erro
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
-		result, err := decodeAcceptedRelease(raw)
+		result, err := resultformat.DecodeRelease(raw)
 		if err == nil && result.Active {
 			activated[result.CandidateID] = true
 		}

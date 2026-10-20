@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"slices"
 	"strings"
@@ -18,7 +19,7 @@ func (d *stagedDecision) stageExtractionDefinitions(c platform.Caller, receipt *
 	if !slices.ContainsFunc(run.Plan.Steps, func(step platform.MigrateStep) bool { return step.Kind == "extract" }) {
 		return nil
 	}
-	definitions := []releaseInstallation{}
+	definitions := []resultformat.ReleaseInstallation{}
 	for _, installation := range prepared.installations {
 		if installation.Ref == nil || installation.Ref.Kind != platform.AssetObject || d.records.types[installation.Ref.Name] != nil {
 			continue
@@ -60,7 +61,7 @@ func (d *stagedDecision) stageExtractionDefinitions(c platform.Caller, receipt *
 	return nil
 }
 
-func (t *Tenant) installExtractionDefinitions(recordView *recordStore, definitions []releaseInstallation) (*Tenant, error) {
+func (t *Tenant) installExtractionDefinitions(recordView *recordStore, definitions []resultformat.ReleaseInstallation) (*Tenant, error) {
 	view, err := t.assetInstallationView(recordView)
 	if err != nil {
 		return nil, err
@@ -90,7 +91,7 @@ func (t *Tenant) installExtractionDefinitions(recordView *recordStore, definitio
 
 // Recovery validates the saved source/target pins and predecessor, then only
 // installs saved images. No expression, member policy or migration runs here.
-func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.ChangeRecord, recordView *recordStore) (*recordStore, error) {
+func (t *Tenant) prepareExtractionDefinitions(result resultformat.Batch, receipt *pb.ChangeRecord, recordView *recordStore) (*recordStore, error) {
 	sub := receipt.GetSubmission()
 	if result.App != "build" || sub.GetTarget().GetType() != platform.MigrationRunType || sub.GetSchema().GetName() != platform.MigrationRunType+".start" {
 		return nil, fmt.Errorf("object declaration has no migration start")
@@ -161,7 +162,7 @@ func (t *Tenant) prepareExtractionDefinitions(result acceptedBatch, receipt *pb.
 	return view.records, nil
 }
 
-func (t *Tenant) applyExtractionDefinitions(definitions []releaseInstallation) error {
+func (t *Tenant) applyExtractionDefinitions(definitions []resultformat.ReleaseInstallation) error {
 	if len(definitions) == 0 {
 		return nil
 	}

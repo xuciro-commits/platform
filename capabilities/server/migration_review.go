@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"time"
 
@@ -153,7 +154,7 @@ type preparedMigration struct {
 	targets       map[string]platform.EntityInfo
 	types         []string
 	trial         *Tenant
-	installations []releaseInstallation
+	installations []resultformat.ReleaseInstallation
 }
 
 func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.Member, at time.Time, store *recordStore) (*preparedMigration, error) {
@@ -216,14 +217,14 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 	if err != nil {
 		return nil, err
 	}
-	installations := []releaseInstallation{}
+	installations := []resultformat.ReleaseInstallation{}
 	for _, plan := range plans {
 		before, err := view.installationPredecessor(plan.Record)
 		if err != nil {
 			return nil, err
 		}
 		ref := plan.Ref
-		installation := releaseInstallation{Before: before, Ref: &ref, Record: plan.Record}
+		installation := resultformat.ReleaseInstallation{Before: before, Ref: &ref, Record: plan.Record}
 		installation.Schema, installation.Image = plan.Schema, plan.Image
 		installations = append(installations, installation)
 	}

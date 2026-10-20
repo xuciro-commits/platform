@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"slices"
 	"strings"
@@ -48,7 +49,7 @@ type RefusalCodeCount struct {
 	Count    int    `json:"count"`
 }
 
-func refusalCategory(result refusedResult) (string, string) {
+func refusalCategory(result resultformat.Refusal) (string, string) {
 	if result.Business != nil {
 		return "business", result.Business.Code
 	}
@@ -172,7 +173,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		category, code := refusalCategory(r)
 		e := BusinessRefusalEntry{At: r.At, Category: category, Code: code, Message: r.Error.Message, State: "refused", Issues: r.Issues}
 		if r.Business != nil {
-			e.Facts = []platform.BusinessRefusalFact{cloneBusinessFact(*r.Business)}
+			e.Facts = []platform.BusinessRefusalFact{resultformat.CloneBusinessFact(*r.Business)}
 			e.Message = r.Business.Message
 		}
 		add(&sub, e)
@@ -182,11 +183,11 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		if json.Unmarshal(raw, &kind) != nil || kind.Kind != "record-batch" {
 			continue
 		}
-		r, receipt, err := decodeAcceptedBatch(raw)
+		r, receipt, err := resultformat.DecodeBatch(raw)
 		if err != nil {
 			continue
 		}
-		sub, err := batchSubmission(r, receipt)
+		sub, err := resultformat.BatchSubmission(r, receipt)
 		if err != nil {
 			continue
 		}
@@ -232,7 +233,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 }
 
 func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefusalFact, at time.Time) platform.BusinessRefusalFact {
-	f = cloneBusinessFact(f)
+	f = resultformat.CloneBusinessFact(f)
 	if f.Record != "" && !t.Readable(m, f.Record, at) {
 		f.Record = ""
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -14,17 +15,13 @@ import (
 // Callback observations have no new kernel change receipt. Their authority is
 // the host-delivered, already accepted effect and the exact owner callback,
 // with the same direct-row preimage/history checks as connector/effect results.
-type acceptedCallbackRow struct {
-	Row    acceptedInputRow `json:"row"`
-	Source platform.Effect  `json:"source"`
-}
 type callbackWrite struct {
 	Source  platform.Effect
 	History int
 }
 
-func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]acceptedCallbackRow, error) {
-	var rows []acceptedCallbackRow
+func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]resultformat.CallbackRow, error) {
+	var rows []resultformat.CallbackRow
 	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
 		if published[ref] {
 			continue
@@ -47,14 +44,14 @@ func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]accepte
 		if _, err := d.tenant.prepareAcceptedDirectRows(direct, "app:"+callback.Source.App, d.at); err != nil {
 			return nil, err
 		}
-		rows = append(rows, acceptedCallbackRow{Row: direct[0], Source: callback.Source})
+		rows = append(rows, resultformat.CallbackRow{Row: direct[0], Source: callback.Source})
 	}
 	return rows, nil
 }
 
 // Validate sources and direct rows in private views before any ledger or
 // business/control state in the containing result is promoted.
-func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedCallbackRow, at time.Time) error {
+func (t *Tenant) prepareCallbackRows(target *recordStore, rows []resultformat.CallbackRow, at time.Time) error {
 	seen := map[string]bool{}
 	for _, callback := range rows {
 		row, source := callback.Row, callback.Source
@@ -80,7 +77,7 @@ func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedCallbac
 		if current.ID == "" || err != nil || expectedErr != nil || actual != expected {
 			return fmt.Errorf("callback row source effect predecessor differs")
 		}
-		private, err := t.prepareAcceptedDirectRows([]acceptedInputRow{row}, "app:"+row.App, at)
+		private, err := t.prepareAcceptedDirectRows([]resultformat.InputRow{row}, "app:"+row.App, at)
 		if err != nil {
 			return err
 		}

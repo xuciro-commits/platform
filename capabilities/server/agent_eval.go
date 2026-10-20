@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/agents"
 	"slices"
 	"strings"
 	"time"
@@ -499,7 +500,7 @@ func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel,
 			dry.Result, dry.State = answer.Content, "done"
 			break
 		}
-		calls, err := completeToolCalls(answer.ToolCalls, run.ID+":evaluation", dry.StepsUsed)
+		calls, err := agents.CompleteToolCalls(answer.ToolCalls, run.ID+":evaluation", dry.StepsUsed)
 		if err != nil {
 			return dry, err.Error()
 		}
@@ -522,7 +523,7 @@ func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel,
 			case tool.kind == "ask":
 				dry.State, dry.Result, step.Outcome = "asked", "asks: "+fmt.Sprint(args["question"]), "asked"
 			default:
-				step.Outcome = clipObservation(a.dryUse(d, run, dry, tool, args, call.Arguments, now), outcomeLimit)
+				step.Outcome = agents.Observation(a.dryUse(d, run, dry, tool, args, call.Arguments, now), outcomeLimit)
 			}
 			dry.Steps = append(dry.Steps, step)
 		}

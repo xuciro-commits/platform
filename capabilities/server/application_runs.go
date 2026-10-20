@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -280,7 +281,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 	t.opsMu.Lock()
 	effects := make([]platform.Effect, 0, len(t.outbound))
 	for _, x := range t.outbound {
-		if x.Endpoint == operationEndpoint {
+		if x.Endpoint == resultformat.OperationEndpoint {
 			effects = append(effects, x.Effect)
 		}
 	}
@@ -383,7 +384,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 	if value, err := t.Read(m, "effects"); err == nil {
 		if effects, ok := value.([]platform.Effect); ok {
 			for _, effect := range effects {
-				if effect.Endpoint == operationEndpoint {
+				if effect.Endpoint == resultformat.OperationEndpoint {
 					continue
 				}
 				typ, _, _ := strings.Cut(effect.Target, "/")

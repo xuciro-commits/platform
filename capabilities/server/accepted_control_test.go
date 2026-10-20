@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"errors"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -132,7 +133,7 @@ func TestControlComputeDiscardCancelsOnlyAfterAcceptance(t *testing.T) {
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
-		tenant.outbound = append(tenant.outbound, &effect{Effect: platform.Effect{ID: id + ":compute", App: PlatformApp, Endpoint: operationEndpoint, Body: "{}", Generation: generation, State: "pending", At: at, Due: at}})
+		tenant.outbound = append(tenant.outbound, &effect{Effect: platform.Effect{ID: id + ":compute", App: PlatformApp, Endpoint: resultformat.OperationEndpoint, Body: "{}", Generation: generation, State: "pending", At: at, Due: at}})
 		return tenant
 	}
 	live := build()

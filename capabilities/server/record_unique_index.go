@@ -10,15 +10,6 @@ import (
 	"platformserver/platform"
 )
 
-// A rule index uses the same persistent AVL tree as records and references.
-// Buckets retain every occupant, including old duplicate/archived rows; a
-// derived index must not silently repair historical business data.
-type uniqueIndex struct {
-	rule platform.Constraint
-	keys records.Index[records.Index[bool]]
-	rows records.Index[string]
-}
-
 func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (string, error) {
 	values := make([]any, 0, len(rule.Fields)+2)
 	for _, name := range rule.Fields {
@@ -66,43 +57,20 @@ func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constrai
 	return string(raw), err
 }
 
-func (index *uniqueIndex) replace(id, key string) {
-	before := index.rows.Get(id)
-	if before == key {
-		return
-	}
-	if before != "" {
-		bucket := index.keys.Get(before)
-		bucket.Remove(id)
-		if bucket.Len() == 0 {
-			index.keys.Remove(before)
-		} else {
-			index.keys.Set(before, bucket)
-		}
-		index.rows.Remove(id)
-	}
-	if key != "" {
-		bucket := index.keys.Get(key)
-		bucket.Set(id, true)
-		index.keys.Set(key, bucket)
-		index.rows.Set(id, key)
-	}
-}
-
-func (et *entityType) uniqueIndex(s *recordStore, rule platform.Constraint) uniqueIndex {
+func (et *entityType) uniqueIndex(s *recordStore, rule platform.Constraint) records.UniqueIndex {
 	if index, ok := et.uniqueIndexes[rule.Name]; ok {
 		return index
 	}
-	index := uniqueIndex{rule: rule}
+	index := records.UniqueIndex{Rule: rule}
 	s.prepareUniqueScopeReferences(et.info, rule)
 	for id, r := range et.rows.All() {
 		key, err := s.uniqueKey(et.info, rule, r.Value)
 		if err == nil {
-			index.replace(id, key)
+			index.Replace(id, key)
 		}
 	}
 	if et.uniqueIndexes == nil {
-		et.uniqueIndexes = map[string]uniqueIndex{}
+		et.uniqueIndexes = map[string]records.UniqueIndex{}
 	}
 	et.uniqueIndexes[rule.Name] = index
 	return index
@@ -186,16 +154,16 @@ func (s *recordStore) scopeDependents(info platform.EntityInfo, rule platform.Co
 func (s *recordStore) refreshUniqueIndexes(changedType, changedID string) {
 	for _, et := range s.types {
 		for name, index := range et.uniqueIndexes {
-			ids := s.scopeDependents(et.info, index.rule, changedType, changedID)
+			ids := s.scopeDependents(et.info, index.Rule, changedType, changedID)
 			if et.info.Type == changedType {
 				ids.Set(changedID, true)
 			}
 			for id := range ids.All() {
 				key := ""
 				if current := et.rows.Get(id); current != nil {
-					key, _ = s.uniqueKey(et.info, index.rule, current.Value)
+					key, _ = s.uniqueKey(et.info, index.Rule, current.Value)
 				}
-				index.replace(id, key)
+				index.Replace(id, key)
 			}
 			et.uniqueIndexes[name] = index
 		}

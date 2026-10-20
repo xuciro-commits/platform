@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/platform"
 	"time"
 )
@@ -54,6 +55,6 @@ type ProjectAccess interface {
 }
 
 type HistoricalIdentity interface {
-	LegacyCoreSeedPredecessor(acceptedState, json.RawMessage) bool
-	LegacyConsolePredecessor(acceptedState, json.RawMessage) bool
+	LegacyCoreSeedPredecessor(resultformat.State, json.RawMessage) bool
+	LegacyConsolePredecessor(resultformat.State, json.RawMessage) bool
 }

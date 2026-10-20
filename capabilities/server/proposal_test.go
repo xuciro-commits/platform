@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"slices"
 	"strings"
@@ -177,7 +178,7 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	if rejected.Decision != "rejected" || rejected.DecidedBy != "reviewer" {
 		t.Fatalf("proposal rejection lost its lifecycle: %+v", rejected)
 	}
-	rejection, _, decodeErr := decodeAcceptedBatch(entries[len(entries)-1].Body)
+	rejection, _, decodeErr := resultformat.DecodeBatch(entries[len(entries)-1].Body)
 	if decodeErr != nil || len(rejection.Business) != 1 || rejection.Business[0].Code != "AI_PROPOSAL_REJECTED" || rejection.Business[0].Record != construction.FunctionCallType+"/REJECT" {
 		t.Fatalf("proposal rejection did not enter business refusal history: %+v %v", rejection.Business, decodeErr)
 	}

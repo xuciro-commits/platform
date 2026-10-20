@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func TestAcceptedConsoleMemberStateCommitsWithReceipt(t *testing.T) {
 	if err != nil || receipt == nil || len(entries) != 1 {
 		t.Fatalf("member decision not accepted: %v", err)
 	}
-	batch, _, decodeErr := decodeAcceptedBatch(entries[0].Body)
+	batch, _, decodeErr := resultformat.DecodeBatch(entries[0].Body)
 	if decodeErr != nil || len(batch.States) != 1 || batch.States[0].App != PlatformApp || len(batch.Rows) != 0 {
 		t.Fatalf("directory was not saved as a single owned state: %+v %v", batch, decodeErr)
 	}
@@ -66,12 +67,12 @@ func TestAcceptedConsoleMemberStateCommitsWithReceipt(t *testing.T) {
 	CheckReplay(t, tn, entries, compose)
 
 	damaged := entries[0]
-	var result acceptedBatch
+	var result resultformat.Batch
 	if err := json.Unmarshal(damaged.Body, &result); err != nil {
 		t.Fatal(err)
 	}
 	result.States[0].Image = []byte(`{"members":{},"subjects":{"orphan":"missing"}}`)
-	result.Digest, _ = digestAcceptedBatch(result)
+	result.Digest, _ = resultformat.DigestBatch(result)
 	damaged.Body, _ = json.Marshal(result)
 	if err := compose().Replay([]Entry{damaged}); err == nil {
 		t.Fatal("invalid directory image was accepted on recovery")

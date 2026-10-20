@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -287,7 +288,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		if json.Unmarshal(raw, &header) != nil || header.Kind != "record-batch" {
 			continue
 		}
-		result, _, err := decodeAcceptedBatch(raw)
+		result, _, err := resultformat.DecodeBatch(raw)
 		if err != nil {
 			continue
 		}
@@ -320,7 +321,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
-		release, err := decodeAcceptedRelease(raw)
+		release, err := resultformat.DecodeRelease(raw)
 		if err != nil || !release.Active {
 			continue
 		}
@@ -436,12 +437,12 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 }
 
 type ApplicationDecisionTrace struct {
-	Change     string                  `json:"change"`
-	Schema     string                  `json:"schema"`
-	At         time.Time               `json:"at"`
-	Content    *platform.SchemaVersion `json:"content,omitempty"`
-	Versions   []ApplicationVersion    `json:"versions"`
-	Definition *DecisionDefinition     `json:"definition,omitempty"`
+	Change     string                           `json:"change"`
+	Schema     string                           `json:"schema"`
+	At         time.Time                        `json:"at"`
+	Content    *platform.SchemaVersion          `json:"content,omitempty"`
+	Versions   []ApplicationVersion             `json:"versions"`
+	Definition *resultformat.DecisionDefinition `json:"definition,omitempty"`
 }
 type ApplicationDiagnostic struct {
 	Application platform.AssetRef          `json:"application"`

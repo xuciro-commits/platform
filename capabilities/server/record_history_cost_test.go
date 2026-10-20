@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 			if reads != 0 {
 				t.Fatalf("ordinary edit read retained history %d times", reads)
 			}
-			result, _, err := decodeAcceptedResult(saved.Body)
+			result, _, err := resultformat.DecodeRecord(saved.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -61,9 +62,9 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 			ref := *result.Row.HistoryRef
 			ref.Prior = "bad"
 			broken.Row.HistoryRef = &ref
-			broken.Digest, _ = digestAcceptedResult(broken)
+			broken.Digest, _ = resultformat.DigestRecord(broken)
 			raw, _ := json.Marshal(broken)
-			if _, _, err := decodeAcceptedResult(raw); err == nil {
+			if _, _, err := resultformat.DecodeRecord(raw); err == nil {
 				t.Fatal("invalid historical chain was accepted")
 			}
 		})

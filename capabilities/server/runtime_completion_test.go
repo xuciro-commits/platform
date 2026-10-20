@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
+	resultformat "platformserver/internal/acceptance/result"
 	"strings"
 	"testing"
 	"time"
@@ -127,7 +128,7 @@ func TestRuntimeWorkAndEffectAcceptInRecordMode(t *testing.T) {
 	if live.quarantined() || len(entries) != 3 {
 		t.Fatalf("effect Record acceptance: %v", live.fault.Load())
 	}
-	if _, err := decodeAcceptedEffect(entries[2].Body); err != nil {
+	if _, err := resultformat.DecodeEffect(entries[2].Body); err != nil {
 		t.Fatal(err)
 	}
 }

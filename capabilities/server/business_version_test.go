@@ -5,6 +5,7 @@ import "platformserver/internal/construction"
 import (
 	"context"
 	"encoding/json"
+	resultformat "platformserver/internal/acceptance/result"
 	"strings"
 	"testing"
 	"time"
@@ -210,7 +211,7 @@ func TestBusinessVersionPinAndDocumentLinesShareOneAcceptedResult(t *testing.T) 
 	var result []byte
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) { result = entry.Body; return entry.Body, nil }
 	decision := decide(t, tn, "user", construction.ID, "build.request.release", "build.request", "request", nil, txnAt)
-	batch, _, err := decodeAcceptedBatch(result)
+	batch, _, err := resultformat.DecodeBatch(result)
 	if err != nil || len(batch.Rows) != 3 {
 		t.Fatalf("document and line did not share accepted rows: %v", err)
 	}

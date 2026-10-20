@@ -1,7 +1,8 @@
 package platformserver
 
 import (
-	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
+
 	"platformserver/internal/acceptance"
 	"platformserver/internal/records"
 	"reflect"
@@ -36,44 +37,16 @@ func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, a
 	} else if et := d.records.types[q.Type]; et != nil {
 		app = et.info.App
 	}
-	d.authorizations = append(d.authorizations, authorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesIn(app))})
+	d.authorizations = append(d.authorizations, resultformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesIn(app))})
 	return decision
-}
-
-type authorizationEvidence struct {
-	Request  platform.AuthzRequest  `json:"request"`
-	Decision platform.AuthzDecision `json:"decision"`
-	Roles    []string               `json:"roles"`
 }
 
 func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.AuthzRequest, decision platform.AuthzDecision) {
 	c.Member = d.tenant.authorizationMember(c.Member)
-	d.authorizations = append(d.authorizations, authorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+	d.authorizations = append(d.authorizations, resultformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
 	if d.TraceEnabled() {
 		d.RecordDecisionTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
 	}
-}
-
-// Recovery checks the saved shape, never current grants or policies. Missing
-// evidence remains valid for historical results written before ADR-0044.
-func validateAuthorizationEvidence(tenant string, evidence []authorizationEvidence) error {
-	order := []string{"tenant", "principal", "deny", "verb", "row", "fields", "derived", "markings", "allow"}
-	for _, item := range evidence {
-		q, decision := item.Request, item.Decision
-		if q.Principal == "" || q.Tenant != tenant || !slices.Contains([]string{"read", "write", "create", "archive", "action", "derive", "export", "protocol"}, q.Kind) || decision.Reason == "" || len(decision.Layers) == 0 || len(decision.Layers) > len(order) {
-			return fmt.Errorf("saved authorization identity or layers are invalid")
-		}
-		for i, layer := range decision.Layers {
-			if layer.Name != order[i] || layer.Reason == "" || !layer.Allowed && i != len(decision.Layers)-1 {
-				return fmt.Errorf("saved authorization layer order is invalid")
-			}
-		}
-		last := decision.Layers[len(decision.Layers)-1]
-		if decision.Allow != last.Allowed || decision.Allow && len(decision.Layers) != len(order) {
-			return fmt.Errorf("saved authorization outcome differs from its layers")
-		}
-	}
-	return nil
 }
 
 // Native entry facts are host declarations, not an authorization bypass.
@@ -154,7 +127,7 @@ func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string
 
 func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *kernel.Error {
 	decision := d.tenant.authorizeNative(c, permission, kind, allowed, declared)
-	d.authorizations = append(d.authorizations, authorizationEvidence{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: kind, Action: permission}, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+	d.authorizations = append(d.authorizations, resultformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: kind, Action: permission}, Decision: decision, Roles: slices.Clone(c.RolesHere())})
 	return authorizationRefusal(decision)
 }
 
@@ -342,7 +315,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 					context.Row = authz.Gate{Reason: "The owning record is unavailable or exceeds 16 segments"}
 				}
 			} else {
-				visible, err := t.scopeVisibility(store, c.Member, et, at)
+				visible, err := records.ScopeVisibility(et.info, c.Member, t.directory, at)
 				context.Row = authz.Gate{Allowed: current != nil && err == nil && (visible == nil || visible(current.Value)), Reason: "The record is outside the caller's row scope"}
 			}
 		}

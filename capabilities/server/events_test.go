@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"testing"
@@ -233,7 +234,7 @@ func TestSubscriptionCycleStops(t *testing.T) {
 		tn.Work(now)
 	}
 	d := tn.Deliveries()
-	if len(d) != maxHops+2 || !strings.HasPrefix(d[len(d)-1].Outcome, "stopped") || len(tn.Tasks()) != 0 {
+	if len(d) != resultformat.MaxHops+2 || !strings.HasPrefix(d[len(d)-1].Outcome, "stopped") || len(tn.Tasks()) != 0 {
 		t.Fatalf("%d deliveries, last %+v, work %v", len(d), d[len(d)-1], tn.Tasks())
 	}
 }

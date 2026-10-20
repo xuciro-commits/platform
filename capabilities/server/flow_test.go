@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"testing"
@@ -445,7 +446,7 @@ func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 	tn.opsMu.Lock()
 	var inputRef *operationInputArtifact
 	for _, item := range tn.outbound {
-		if item.Endpoint != operationEndpoint {
+		if item.Endpoint != resultformat.OperationEndpoint {
 			continue
 		}
 		var binding operationBinding

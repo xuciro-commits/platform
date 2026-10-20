@@ -4,6 +4,7 @@ import "platformserver/internal/construction"
 
 import (
 	"bytes"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestBusinessTestPlanRetainsVersionsAndInstalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trial, err := target.stageReleaseInstallationLocked([]releaseInstallation{{ReleasePublication: construction.ReleasePublication{Schema: plans[0].Schema, Image: plans[0].Image}, Before: before, Ref: &plans[0].Ref, Record: plans[0].Record}}, true)
+	trial, err := target.stageReleaseInstallationLocked([]resultformat.ReleaseInstallation{{ReleasePublication: construction.ReleasePublication{Schema: plans[0].Schema, Image: plans[0].Image}, Before: before, Ref: &plans[0].Ref, Record: plans[0].Record}}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

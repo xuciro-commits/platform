@@ -3,7 +3,7 @@ package platformserver
 import (
 	"fmt"
 	"platformserver/internal/acceptance"
-	"time"
+	resultformat "platformserver/internal/acceptance/result"
 
 	"platformkernel/kernel"
 )
@@ -11,14 +11,6 @@ import (
 // A connector's cursor and last-seen mark belong to the same durable result
 // as the decisions caused by its delivery. Before guards both fields, including
 // push deliveries (which have no cursor transition).
-type acceptedConnectorDelivery struct {
-	Connector string    `json:"connector"`
-	DataClass string    `json:"dataClass"`
-	From      string    `json:"from,omitempty"`
-	To        string    `json:"to,omitempty"`
-	At        time.Time `json:"at"`
-	Before    string    `json:"before"`
-}
 
 func markFor(marks []kernel.ConnectorMark, tenant, connector string) kernel.ConnectorMark {
 	for _, mark := range marks {
@@ -29,7 +21,7 @@ func markFor(marks []kernel.ConnectorMark, tenant, connector string) kernel.Conn
 	return kernel.ConnectorMark{}
 }
 
-func (t *Tenant) validateAcceptedDeliveries(deliveries []acceptedConnectorDelivery) error {
+func (t *Tenant) validateAcceptedDeliveries(deliveries []resultformat.ConnectorDelivery) error {
 	if len(deliveries) == 0 {
 		return nil
 	}
@@ -55,7 +47,7 @@ func (t *Tenant) validateAcceptedDeliveries(deliveries []acceptedConnectorDelive
 	return nil
 }
 
-func (t *Tenant) applyAcceptedDeliveries(deliveries []acceptedConnectorDelivery) error {
+func (t *Tenant) applyAcceptedDeliveries(deliveries []resultformat.ConnectorDelivery) error {
 	if len(deliveries) == 0 {
 		return nil
 	}

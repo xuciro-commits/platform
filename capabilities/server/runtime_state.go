@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"reflect"
 	"slices"
@@ -66,7 +67,7 @@ func (b *storageDeltaBuilder) record(r records.Image, base int) error {
 	b.records[r.Type+"/"+r.ID] = stored
 	return nil
 }
-func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definition *DecisionDefinition, binding *platform.SchemaVersion) error {
+func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definition *resultformat.DecisionDefinition, binding *platform.SchemaVersion) error {
 	r := new(pb.ChangeRecord)
 	if err := protojson.Unmarshal(raw, r); err != nil {
 		return err
@@ -92,7 +93,7 @@ func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definitio
 // plan translates the same declared changes used by accepted application.
 // It never infers writes from application actions or reinterprets a family as
 // a loosely typed envelope with coincidentally matching field names.
-func (b *storageDeltaBuilder) plan(plan acceptedChangePlan) error {
+func (b *storageDeltaBuilder) plan(plan resultformat.ChangePlan) error {
 	for _, row := range plan.Rows {
 		if err := b.record(row.Image, -1); err != nil {
 			return err
@@ -110,14 +111,14 @@ func (b *storageDeltaBuilder) plan(plan acceptedChangePlan) error {
 		b.value("sequence", name, n)
 	}
 	for _, intent := range plan.Intents {
-		b.value("effect", intent.ID, effectState{Effect: intent})
+		b.value("effect", intent.ID, resultformat.EffectState{Effect: intent})
 	}
 	if plan.Notices != nil {
 		for _, notice := range plan.Notices.Notices {
 			b.value("notice", notice.ID, notice)
 		}
 		for _, intent := range plan.Notices.Effects {
-			b.value("effect", intent.ID, effectState{Effect: intent})
+			b.value("effect", intent.ID, resultformat.EffectState{Effect: intent})
 		}
 		b.value("notice-sequence", "current", plan.Notices.Seq)
 	}
@@ -139,20 +140,20 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 	}
 	switch envelope.Kind {
 	case "input-result":
-		result, err := decodeAcceptedInput(raw)
+		result, err := resultformat.DecodeInput(raw)
 		if err != nil {
 			return err
 		}
 		b.legacyUnique = b.legacyUnique || result.Version < 2
 		b.value("input", result.App+"/"+result.Key, raw)
-		return b.plan(result.changePlan())
+		return b.plan(result.ChangePlan())
 	case "effect-result":
-		result, err := decodeAcceptedEffect(raw)
+		result, err := resultformat.DecodeEffect(raw)
 		if err != nil {
 			return err
 		}
 		b.legacyUnique = b.legacyUnique || result.Version < 4
-		if err := b.plan(result.changePlan()); err != nil {
+		if err := b.plan(result.ChangePlan()); err != nil {
 			return err
 		}
 		if len(result.Work) > 0 {
@@ -166,19 +167,19 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 			return err
 		}
 		b.legacyUnique = b.legacyUnique || result.Version < 3
-		if err := b.plan(result.changePlan()); err != nil {
+		if err := b.plan(result.ChangePlan()); err != nil {
 			return err
 		}
 		b.value("work", "kernel", result.Work)
 		b.value("task", result.After.ID, result.After)
 		return nil
 	case "record-batch":
-		result, receipt, err := decodeAcceptedBatch(raw)
+		result, receipt, err := resultformat.DecodeBatch(raw)
 		if err != nil {
 			return err
 		}
 		b.legacyUnique = b.legacyUnique || result.Version < 8
-		sub, err := batchSubmission(result, receipt)
+		sub, err := resultformat.BatchSubmission(result, receipt)
 		if err != nil {
 			return err
 		}
@@ -206,9 +207,9 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 				return err
 			}
 		}
-		return b.plan(result.changePlan())
+		return b.plan(result.ChangePlan())
 	case "refusal":
-		result, sub, err := decodeRefusedResult(raw)
+		result, sub, err := resultformat.DecodeRefusal(raw)
 		if err != nil {
 			return err
 		}
@@ -225,9 +226,9 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		}
 		b.value("composite-answer", result.Key, raw)
 		b.value("composite", result.Key, result.Digest)
-		return b.plan(acceptedChangePlan{Changes: result.Changes})
+		return b.plan(resultformat.ChangePlan{Changes: result.Changes})
 	case "release-result":
-		result, err := decodeAcceptedRelease(raw)
+		result, err := resultformat.DecodeRelease(raw)
 		if err != nil {
 			return err
 		}
@@ -235,7 +236,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		for _, installation := range result.Installations {
 			b.value("installation", installation.Schema+"/"+installation.Record, installation)
 		}
-		return b.plan(acceptedChangePlan{Changes: result.Bootstrap})
+		return b.plan(resultformat.ChangePlan{Changes: result.Bootstrap})
 	case "operation-claim":
 		result, err := decodeOperationClaim(raw)
 		if err != nil {
@@ -249,15 +250,15 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		return b.plan(acceptedChangePlan{Changes: result.Changes})
+		return b.plan(resultformat.ChangePlan{Changes: result.Changes})
 	case "host-result":
 		_, err := decodeAcceptedHostControl(raw)
 		return err
 	case "usage-result":
-		_, err := decodeAcceptedUsage(raw)
+		_, err := resultformat.DecodeUsage(raw)
 		return err
 	default:
-		result, _, err := decodeAcceptedResult(raw)
+		result, _, err := resultformat.DecodeRecord(raw)
 		if err != nil {
 			return err
 		}
@@ -268,7 +269,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err := b.receipt(result.App, result.Receipt, result.Definition, result.SchemaVersion); err != nil {
 			return err
 		}
-		return b.plan(acceptedChangePlan{Unique: result.Unique})
+		return b.plan(resultformat.ChangePlan{Unique: result.Unique})
 	}
 }
 
@@ -331,7 +332,7 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 				t.records.mu.Unlock()
 				return err
 			}
-			emptyLists(value)
+			records.EmptyLists(value)
 			count := r.HistoryLength()
 			head, err := r.HistoryDigest()
 			if err != nil {

@@ -1,17 +1,14 @@
 package platformserver
 
 import (
-	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
-	"io"
-	"platformserver/internal/acceptance"
+	"platformserver/internal/agents"
 	"slices"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"google.golang.org/protobuf/proto"
 
@@ -38,8 +35,6 @@ type stepBody struct {
 	// Evaluation is a checkpoint or final report; Run is then its ID.
 	Evaluation *Evaluation `json:"evaluation,omitempty"`
 }
-
-const preamble = `You are an agent of a business platform. You act only through the tools given: each action is a decision recorded with your name, and what cannot be undone waits for a person. Give a one-sentence rationale with every tool call. Read before you act; ask a person when you are unsure; end with finish and the result the goal asks for.`
 
 type AgentTurn struct {
 	Run      AgentRunRecord
@@ -124,7 +119,7 @@ func (t *Tenant) take(x turn, now time.Time) {
 			body.Failure = failure.Detail
 		} else if len(answer.ToolCalls) > 0 {
 			var err error
-			body.Calls, err = completeToolCalls(answer.ToolCalls, x.Run.ID, x.Run.StepsUsed+1)
+			body.Calls, err = agents.CompleteToolCalls(answer.ToolCalls, x.Run.ID, x.Run.StepsUsed+1)
 			if err != nil {
 				body.Failure = err.Error()
 			} else if body.Calls[0].Name == "knowledge" {
@@ -211,11 +206,11 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 			x.Stop = "the person no longer has access to this agent's app"
 		case name == "" && len(run.Pending) == 0:
 			x.Stop = "no model is set for agents"
-		case len(run.Pending) == 0 && d.spentOut(run):
+		case len(run.Pending) == 0 && agents.SpentOut(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost):
 			// A run at its budget is not given another model call: the reply
 			// that crossed the budget already happened, and one more would
 			// only spend more (ADR-0008, review AI-05).
-			x.Stop = d.budgetReason(run)
+			x.Stop = agents.BudgetReason(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost)
 		case h.AgentSuspended("agent:" + run.Agent): // the off switch (ADR-0008 D4)
 			sw, _ := h.Record(SwitchType + "/agent:" + run.Agent)
 			x.Stop = "suspended by " + sw.(Switch).By
@@ -244,194 +239,32 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 	return out
 }
 
-// spentOut reports whether a run may not make another model call: what its
-// budget allows is spent. Steps and tokens are counted as they happen; cost,
-// only when the provider reports it (ADR-0008, review AI-05).
-func (d *agentDef) spentOut(run AgentRunRecord) bool {
-	return run.StepsUsed >= d.Budget.Steps || d.Budget.Tokens > 0 && run.TokensUsed >= d.Budget.Tokens ||
-		d.Budget.Cost > 0 && run.Cost >= d.Budget.Cost
-}
-
-// budgetReason says what a run ran out of, for the person who takes it over.
-func (d *agentDef) budgetReason(run AgentRunRecord) string {
-	reason := fmt.Sprintf("%d steps, %d tokens", run.StepsUsed, run.TokensUsed)
-	if d.Budget.Cost > 0 {
-		reason += fmt.Sprintf(", %.4f USD", run.Cost)
-	}
-	return "over its budget (" + reason + ")"
-}
-
-// prompt is the conversation so far: instructions, the goal with its record's
-// context, then each step as the tool call it was and what came of it.
+// prompt gathers observations through the run's current reader. Conversation
+// shaping never receives a reader or any host callback.
 func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, model string, now time.Time) ChatRequest {
-	goal := "Goal: " + run.Goal
-	if run.OnBehalf != "" {
-		goal += "\nOn behalf of: " + run.OnBehalf
-	}
-	// Historical Seen bytes remain immutable recovery evidence. A new model
-	// call grounds itself through today's reader, including after ADR-0008
-	// narrowed an old flow agent's scope or a member's grants changed.
+	input := agents.Prompt{Goal: run.Goal, OnBehalf: run.OnBehalf, Ref: run.Ref,
+		Instructions: d.Instructions, Meaning: a.host.AgentMeaning(d.app),
+		Glossary: a.host.AgentGlossary(d.app), Language: a.host.AgentLanguage(run.Language)}
+	// Historical Seen bytes remain immutable recovery evidence. New model calls
+	// use today's reader, including after a person's grants changed.
 	if typ, id, ok := strings.Cut(run.Ref, "/"); ok {
 		if view, err := a.host.AgentContext(a.readsAs(run), typ, id, now); err == nil {
-			goal += "\nAbout " + run.Ref + ":\n" + clipObservation(string(view.Body), 6000)
+			input.Context = string(view.Body)
+			input.HasContext = true
 		}
 	}
-	system := preamble + "\n\n" + d.Instructions
-	if meaning := a.host.AgentMeaning(d.app); meaning != "" {
-		system += "\n\nWhat the records of your app mean:\n" + meaning
+	for _, memory := range a.memories(c, run, now) {
+		input.Memories = append(input.Memories, memory.Fact)
 	}
-	if terms := a.host.AgentGlossary(d.app); terms != "" {
-		system += "\n\nThis organisation's own words (its glossary; the records above keep their meaning):\n" + terms
+	for _, step := range run.Steps {
+		input.History = append(input.History, agents.HistoryStep{Calls: step.Calls, Content: step.Content,
+			Tool: step.Tool, CallID: step.CallID, Outcome: step.Outcome, Rationale: step.Rationale, Arguments: step.Arguments})
 	}
-	if name := a.host.AgentLanguage(run.Language); name != "" {
-		system += "\n\nWrite your rationale, questions, drafts' free text and result in " + name + ", the language of the person you work for; keep IDs, codes and field names as they are."
+	input.Tools = make(map[string]platform.Tool, len(d.tools))
+	for name, tool := range d.tools {
+		input.Tools[name] = tool.tool
 	}
-	if ms := a.memories(c, run, now); len(ms) > 0 {
-		system += "\n\nWhat you remember from earlier runs:"
-		for _, m := range ms {
-			system += "\n- " + m.Fact
-		}
-	}
-	req := ChatRequest{Model: model, PromptCache: true, Messages: []Message{{Role: "system", Content: system}, {Role: "user", Content: goal}}}
-	for i, s := range run.Steps {
-		if len(s.Calls) > 0 {
-			req.Messages = append(req.Messages, Message{Role: "assistant", Content: s.Content, ToolCalls: s.Calls})
-		}
-		if s.Tool == "" {
-			continue // a failed model call or a text-only answer
-		}
-		if s.CallID != "" {
-			req.Messages = append(req.Messages, Message{Role: "tool", ToolCallID: s.CallID, Content: s.Outcome})
-			continue
-		}
-		id := fmt.Sprintf("s%d", i+1)
-		req.Messages = append(req.Messages, Message{Role: "assistant", Content: s.Rationale, ToolCalls: []ToolCall{{ID: id, Name: s.Tool, Arguments: json.RawMessage(cmp.Or(s.Arguments, "{}"))}}},
-			Message{Role: "tool", ToolCallID: id, Content: s.Outcome})
-	}
-	for _, name := range slices.Sorted(func(yield func(string) bool) {
-		for n := range d.tools {
-			if !yield(n) {
-				return
-			}
-		}
-	}) {
-		req.Tools = append(req.Tools, d.tools[name].tool)
-	}
-	return req
-}
-
-func clip(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n] + "…"
-}
-
-// clipObservation cuts values, never JSON syntax. The envelope tells the model
-// that a bounded observation is incomplete and how to request more information.
-func clipObservation(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	decoder := json.NewDecoder(strings.NewReader(s))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil || decoder.Decode(new(any)) != io.EOF {
-		return clip(s, n)
-	}
-	prefix := `{"truncated":true,"continue":"Use context for a record, or query/read with a narrower scope.","data":`
-	const suffix = `}`
-	budget := n - len(prefix) - len(suffix)
-	if budget < 4 {
-		return `{"truncated":true}`
-	}
-	return prefix + string(boundedJSON(value, budget)) + suffix
-}
-
-func boundedJSON(value any, budget int) json.RawMessage {
-	raw, _ := json.Marshal(value)
-	if len(raw) <= budget {
-		return raw
-	}
-	switch value := value.(type) {
-	case string:
-		low, high := 0, len(value)
-		for low < high {
-			mid := (low + high + 1) / 2
-			candidate, _ := json.Marshal(clip(value, mid))
-			if len(candidate) <= budget {
-				low = mid
-			} else {
-				high = mid - 1
-			}
-		}
-		raw, _ = json.Marshal(clip(value, low))
-		if len(raw) <= budget {
-			return raw
-		}
-	case []any:
-		out := []json.RawMessage{}
-		remaining := budget - 2
-		for _, item := range value {
-			if remaining < 4 {
-				break
-			}
-			part := boundedJSON(item, remaining)
-			out = append(out, part)
-			remaining -= len(part) + 1
-		}
-		raw, _ = json.Marshal(out)
-		return raw
-	case map[string]any:
-		out := map[string]json.RawMessage{}
-		remaining := budget - 2
-		for _, key := range slices.Sorted(func(yield func(string) bool) {
-			for key := range value {
-				if !yield(key) {
-					return
-				}
-			}
-		}) {
-			name, _ := json.Marshal(key)
-			room := remaining - len(name) - 2
-			if room < 4 {
-				continue
-			}
-			out[key] = boundedJSON(value[key], room)
-			remaining = room - len(out[key])
-		}
-		raw, _ = json.Marshal(out)
-		return raw
-	}
-	return json.RawMessage(`null`)
-}
-
-// completeToolCalls preserves the provider IDs and checks complete JSON before
-// any call is executed. Missing IDs get a stable per-turn ID; duplicate IDs
-// cannot safely be paired with their results and are reported as a model error.
-func completeToolCalls(calls []ToolCall, run string, turn int) ([]ToolCall, error) {
-	out := slices.Clone(calls)
-	seen := map[string]bool{}
-	for i := range out {
-		call := &out[i]
-		if call.ID == "" {
-			call.ID = fmt.Sprintf("%s:%d:%d", run, turn, i+1)
-		}
-		if call.Name == "" || seen[call.ID] {
-			return nil, fmt.Errorf("invalid or duplicate tool call %q", call.ID)
-		}
-		seen[call.ID] = true
-		value, err := platform.DecodeValue(call.Arguments, acceptance.MaxResultBytes)
-		if _, object := value.(map[string]any); err != nil || !object {
-			return nil, fmt.Errorf("tool call %q requires a complete JSON object", call.ID)
-		}
-		raw, _ := json.Marshal(value)
-		call.Arguments = raw
-	}
-	return out, nil
+	return input.Request(model)
 }
 
 // reader is the person a run works for, or nil for an app's automation. It
@@ -513,19 +346,6 @@ func (t *Tenant) applyAgentStep(b stepBody, now time.Time, releaseTurn bool) boo
 	return !t.quarantined()
 }
 
-func normalizedStepJSON(raw json.RawMessage) (json.RawMessage, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return nil, fmt.Errorf("step JSON has trailing data")
-	}
-	return json.Marshal(value)
-}
-
 // apply takes one journaled step as a decision of the agent app.
 func (a *Agents) ApplyAgentStep(b stepBody, now time.Time, replaying bool) *kernel.Error {
 	return a.ApplyAgentStepCaller(a.automation(AgentApp, replaying), b, now)
@@ -580,12 +400,12 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 	// encoder. Normalize on both live application and replay, not only before
 	// journaling, because these raw bytes become strings in the run history.
 	if len(b.Arguments) > 0 {
-		if normalized, err := normalizedStepJSON(b.Arguments); err == nil {
+		if normalized, err := agents.NormalizeStepJSON(b.Arguments); err == nil {
 			b.Arguments = normalized
 		}
 	}
 	if len(b.Observation) > 0 {
-		if normalized, err := normalizedStepJSON(b.Observation); err == nil {
+		if normalized, err := agents.NormalizeStepJSON(b.Observation); err == nil {
 			b.Observation = normalized
 		}
 	}
@@ -634,7 +454,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		// The reply that crossed the budget: what it cost is kept, and no
 		// further call is made for this run (ADR-0008, review AI-05).
 		step.Outcome = "over budget"
-		stop(d.budgetReason(run))
+		stop(agents.BudgetReason(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost))
 	case b.Tool == "": // a text answer ends the run with it
 		step.Outcome = "finished"
 		run.Result, run.State = b.Content, "done"
@@ -659,9 +479,9 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		step.Outcome, then = a.use(c, d, &run, tool, args, b.Arguments, &step, now)
 	}
 	if step.CallID == "" { // the retained single-call journal format keeps its original result bytes
-		step.Outcome = legacyAgentOutcome(step.Outcome)
+		step.Outcome = agents.LegacyOutcome(step.Outcome, outcomeLimit)
 	} else {
-		step.Outcome = clipObservation(step.Outcome, outcomeLimit)
+		step.Outcome = agents.Observation(step.Outcome, outcomeLimit)
 	}
 	run.Steps = append(run.Steps, step)
 	return func(r *pb.ChangeRecord) {
@@ -676,13 +496,6 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 			a.ended(c, r, run, now)
 		}
 	}
-}
-
-func legacyAgentOutcome(s string) string {
-	if len(s) <= outcomeLimit {
-		return s
-	}
-	return s[:outcomeLimit] + "…"
 }
 
 // Every accepted model call retains a result, including calls deliberately
@@ -794,15 +607,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	if tool.target != "" && target != "" {
 		step.Sources = append(step.Sources, tool.target+"/"+target)
 	}
-	var payload map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	if step.CallID != "" {
-		decoder.UseNumber()
-	} // retain legacy replay's original number encoding
-	decoder.Decode(&payload)
-	delete(payload, "target")
-	delete(payload, "rationale")
-	body, _ := json.Marshal(payload)
+	body := agents.ActionPayload(raw, step.CallID != "")
 	if d.Guard != nil {
 		if err := d.Guard(h.Automation(c, d.app), a.run(*run), tool.schema, target, body); err != nil {
 			return "refused by its guard: " + err.Error(), nil
@@ -992,7 +797,7 @@ func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platf
 		last := &run.Steps[len(run.Steps)-1]
 		switch o.Result {
 		case "delivered":
-			last.Outcome += "\nanswered: " + clip(answerOf(o), outcomeLimit)
+			last.Outcome += "\nanswered: " + agents.Clip(answerOf(o), outcomeLimit)
 		case "discarded":
 			last.Outcome += "\n" + o.Detail
 		default:
@@ -1012,6 +817,3 @@ func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platf
 		return
 	}
 }
-
-// languageNames name the languages agents answer in (ADR-0005 D6).
-var languageNames = map[string]string{"zh-CN": "Simplified Chinese (简体中文)", "zh-TW": "Traditional Chinese (繁體中文)", "ja": "Japanese", "de": "German", "fr": "French", "es": "Spanish"}

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"strings"
 	"testing"
@@ -232,7 +233,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 		tn.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 			raw, err := j.AppendAccepted(context.Background(), tn.ID, e, key, hash)
 			if err == nil {
-				batch, answer, batchErr := decodeAcceptedBatch(raw)
+				batch, answer, batchErr := resultformat.DecodeBatch(raw)
 				if batchErr == nil && batch.Kind == "record-batch" && answer.GetSubmission().GetSchema().GetName() == "build.request.apply" {
 					if err := os.WriteFile(filepath.Join(dir, "expected-result"), raw, 0600); err != nil {
 						t.Fatal(err)
@@ -324,7 +325,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("expected one acceptance: %v %d", err, len(entries))
 	}
-	batch, answer, err := decodeAcceptedBatch(entries[0].Body)
+	batch, answer, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,14 +392,14 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	prefix := txnState(predecessor)
 	for _, typ := range []string{"build.detail", "build.request"} {
 		tampered := batch
-		tampered.Rows = append([]acceptedBatchRow(nil), batch.Rows...)
+		tampered.Rows = append([]resultformat.BatchRow(nil), batch.Rows...)
 		for i := range tampered.Rows {
 			if tampered.Rows[i].Type == typ {
 				tampered.Rows[i].Before = "not-the-predecessor"
 				break
 			}
 		}
-		tampered.Digest, _ = digestAcceptedBatch(tampered)
+		tampered.Digest, _ = resultformat.DigestBatch(tampered)
 		raw, _ := json.Marshal(tampered)
 		if _, err := predecessor.applyAcceptedBatch(predecessor.app(construction.ID).AcceptedLedger(), raw); err == nil {
 			t.Fatal("different-type predecessor accepted")
@@ -472,7 +473,7 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	if err := restarted.Replay(persisted); err != nil {
 		t.Fatal(err)
 	}
-	saved, savedReply, err := decodeAcceptedBatch(frozen)
+	saved, savedReply, err := resultformat.DecodeBatch(frozen)
 	if err != nil {
 		t.Fatal(err)
 	}

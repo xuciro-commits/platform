@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"time"
 
 	"platformserver/platform"
@@ -40,13 +41,13 @@ func decodeAcceptedAgent(raw []byte) (acceptedAgent, error) {
 	}
 	hash, err := agentHash(r)
 	digest, digestErr := digestAgent(r)
-	batch, receipt, batchErr := decodeAcceptedBatch(r.Changes)
+	batch, receipt, batchErr := resultformat.DecodeBatch(r.Changes)
 	if err != nil || digestErr != nil || batchErr != nil || r.Version != 1 || r.Kind != "agent-result" || r.Tenant == "" || r.App != AgentApp || r.Member == "" || r.At.IsZero() || r.Step.Run == "" || r.RequestHash != hash || r.Digest != digest ||
 		batch.Tenant != r.Tenant || batch.App != AgentApp || !batch.At.Equal(r.At) || receipt.GetSubmission().GetPrincipalId() != r.Member || r.Key != "agent:"+receipt.GetSubmission().GetIdempotencyKey() {
 		return r, fmt.Errorf("agent result has inconsistent identity or changes")
 	}
 	if r.Step.Evaluation == nil && r.Step.Usage.Model != "" {
-		if !validUsage(r.Step.Usage) || r.UsageBefore == "" || r.Step.Usage.Member != r.Member {
+		if !resultformat.ValidUsage(r.Step.Usage) || r.UsageBefore == "" || r.Step.Usage.Member != r.Member {
 			return r, fmt.Errorf("agent result has invalid usage")
 		}
 	} else if r.UsageBefore != "" {
@@ -155,7 +156,7 @@ func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedAgent, error) {
 			return r, fmt.Errorf("agent usage predecessor differs: %v", err)
 		}
 	}
-	batch, _, _ := decodeAcceptedBatch(r.Changes)
+	batch, _, _ := resultformat.DecodeBatch(r.Changes)
 	if applied, err := t.applyAcceptedBatch(t.agents.AcceptedLedger(), r.Changes); err != nil || !applied {
 		return r, fmt.Errorf("agent result application: %v (applied=%t)", err, applied)
 	}

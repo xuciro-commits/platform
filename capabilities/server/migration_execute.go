@@ -431,7 +431,7 @@ func (d *stagedDecision) cancelMigrationBatch(c platform.Caller, r *pb.ChangeRec
 				return run, err
 			}
 			d.RecordAuthorization(c, question, grant)
-			archived := copyOf(et.info.Go, current.Value.Interface())
+			archived := records.Copy(et.info.Go, current.Value.Interface())
 			record := records.Header(archived)
 			record.Archived = true
 			if err := d.Put(c, r, archived.Interface()); err != nil {
@@ -533,7 +533,7 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 	if err != nil {
 		return migrationRefusal(err)
 	}
-	source := copyOf(et.info.Go, prior.Value.Interface())
+	source := records.Copy(et.info.Go, prior.Value.Interface())
 	if err := d.Put(c, r, source.Interface()); err != nil {
 		return err
 	}

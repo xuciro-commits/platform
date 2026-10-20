@@ -99,7 +99,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		draft := tn.records.forkRecords()
 		private := draft.types[child]
 		changed := *private.rows.Get("C2")
-		changed.Value = copyOf(private.info.Go, changed.Value.Interface())
+		changed.Value = records.Copy(private.info.Go, changed.Value.Interface())
 		changed.Value.FieldByIndex(field.Index).SetString("P1")
 		private.setRow("C2", &changed)
 		draft.writes[child+"/C2"] = true

@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"reflect"
 	"slices"
@@ -18,68 +19,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/journal"
+
 	"platformserver/platform"
 )
-
-// One top-level input, not one row or one nested decision. Before validates
-// the predecessor image/history before any authoritative ledger is advanced.
-type acceptedBatch struct {
-	Unique         []journal.StateUnique           `json:"unique,omitempty"`
-	Business       []platform.BusinessRefusalFact  `json:"business,omitempty"`
-	SchemaVersion  *platform.SchemaVersion         `json:"schemaVersion,omitempty"`
-	Authorizations []authorizationEvidence         `json:"authorizations,omitempty"`
-	Version        int                             `json:"version"`
-	Kind           string                          `json:"kind"`
-	Tenant         string                          `json:"tenant"`
-	App            string                          `json:"app"`
-	At             time.Time                       `json:"at"`
-	RequestHash    string                          `json:"requestHash"`
-	Digest         string                          `json:"digest"`
-	Receipt        json.RawMessage                 `json:"receipt"`              // top-level answer/key
-	Submission     json.RawMessage                 `json:"submission,omitempty"` // original input, when answer is an approval receipt
-	Rows           []acceptedBatchRow              `json:"rows"`
-	Decisions      []acceptedDecision              `json:"decisions"`
-	Sequences      map[string]int                  `json:"sequences,omitempty"`
-	SequenceBases  map[string]int                  `json:"sequenceBases,omitempty"`
-	Notices        *acceptedNotices                `json:"notices,omitempty"`
-	Intents        []platform.Effect               `json:"intents,omitempty"`
-	Observations   []acceptedObservation           `json:"observations,omitempty"`
-	States         []acceptedState                 `json:"states,omitempty"`
-	Deliveries     []acceptedConnectorDelivery     `json:"deliveries,omitempty"`
-	Operations     []acceptedOperationCancellation `json:"operations,omitempty"`
-	Control        *acceptedControl                `json:"control,omitempty"`
-	DirectRows     []acceptedCallbackRow           `json:"directRows,omitempty"`
-	Iterations     []platform.TxnIteration         `json:"iterations,omitempty"`
-	Definitions    []releaseInstallation           `json:"definitions,omitempty"`
-}
-
-type acceptedBatchRow struct {
-	records.Image
-	App         string   `json:"app"`
-	Before      string   `json:"before,omitempty"`
-	Authorities []string `json:"authorities,omitempty"` // receipt authority for each new history entry
-	HistoryBase int      `json:"historyBase,omitempty"` // format 2: retained prefix length; History carries only this input's suffix
-}
-
-type acceptedResultBudgetError struct{ Bytes, Limit int }
-
-func (e *acceptedResultBudgetError) Error() string {
-	return fmt.Sprintf("record batch is %d bytes; limit is %d bytes", e.Bytes, e.Limit)
-}
-
-type acceptedDecision struct {
-	Definition  *DecisionDefinition  `json:"definition,omitempty"`
-	Receipt     json.RawMessage      `json:"receipt"`
-	Event       acceptedEvent        `json:"event"`
-	Publication *acceptedPublication `json:"publication,omitempty"`
-}
-
-type acceptedPublication struct {
-	Format string          `json:"format,omitempty"`
-	Schema string          `json:"schema"`
-	Image  json.RawMessage `json:"image"`
-}
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
 	if err := d.checkFinalConstraints(); err != nil {
@@ -91,7 +33,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if err := d.records.validateChangedLinkConstraints(); err != nil {
 		return nil, err
 	}
-	result := acceptedBatch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
+	result := resultformat.Batch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
 		App: app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
 		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
 		Deliveries: slices.Clone(d.deliveries), Authorizations: slices.Clone(d.authorizations)}
@@ -122,7 +64,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 	}
 	result.SchemaVersion = d.schemaVersion
-	result.RequestHash, err = submissionHash(request, result.SchemaVersion)
+	result.RequestHash, err = resultformat.SubmissionHash(request, result.SchemaVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -149,10 +91,10 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		plan := d.routingTenant().planAcceptedEvent(event)
 		plan.Observed = d.observed
 		plan.Hops = d.hops
-		if plan.Hops > maxHops {
+		if plan.Hops > resultformat.MaxHops {
 			plan.Stopped, plan.Subscribers = plan.Subscribers, nil
 		}
-		result.Decisions = append(result.Decisions, acceptedDecision{Receipt: raw, Event: plan, Definition: d.definitions[event.App+"/"+event.Record.GetChangeId()],
+		result.Decisions = append(result.Decisions, resultformat.Decision{Receipt: raw, Event: plan, Definition: d.definitions[event.App+"/"+event.Record.GetChangeId()],
 			Publication: d.publications[event.App+"/"+event.Record.GetChangeId()]})
 		if publication := result.Decisions[len(result.Decisions)-1].Publication; publication != nil {
 			copied := *publication
@@ -213,14 +155,14 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if err != nil {
 			return nil, err
 		}
-		row := acceptedBatchRow{Image: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
+		row := resultformat.BatchRow{Image: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
 		row.Before, err = records.Predecessor(typ, id, prior)
 		if err != nil {
 			return nil, err
 		}
 		result.Rows = append(result.Rows, row)
 	}
-	result.Digest, err = digestAcceptedBatch(result)
+	result.Digest, err = resultformat.DigestBatch(result)
 	if err != nil {
 		return nil, err
 	}
@@ -228,234 +170,16 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := decodeAcceptedBatch(raw); err != nil {
+	if _, _, err := resultformat.DecodeBatch(raw); err != nil {
 		return nil, err
 	}
 	return raw, nil
 }
 
-func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
-	var result acceptedBatch
-	if len(raw) > acceptance.MaxResultBytes {
-		return result, nil, &acceptedResultBudgetError{len(raw), acceptance.MaxResultBytes}
-	}
-	if len(raw) == 0 {
-		return result, nil, fmt.Errorf("record batch is empty")
-	}
-	if err := acceptance.DecodeJSON(raw, &result, "record batch"); err != nil {
-		return result, nil, err
-	}
-	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
-		return result, nil, err
-	}
-
-	digest, err := digestAcceptedBatch(result)
-	if err != nil || result.Digest != digest {
-		return result, nil, fmt.Errorf("record batch content digest differs")
-	}
-	receipt := new(pb.ChangeRecord)
-	if err := protojson.Unmarshal(result.Receipt, receipt); err != nil {
-		return result, nil, fmt.Errorf("record batch receipt: %w", err)
-	}
-	sub, err := batchSubmission(result, receipt)
-	if err != nil {
-		return result, nil, err
-	}
-	if result.Version < 1 || result.Version > 8 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
-		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
-		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
-		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
-		receipt.GetRecordedTime() == nil || receipt.GetValidTime() == nil ||
-		len(result.Decisions) == 0 {
-		return result, nil, fmt.Errorf("record batch has inconsistent identity or effects")
-	}
-	if result.Version < 8 && (result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || result.Version < 7 && (result.Version == 6) != (len(result.Definitions) > 0) || result.Version < 8 && (result.Version == 7) != (len(result.Business) > 0)) {
-		return result, nil, fmt.Errorf("record batch control format differs")
-	}
-	if result.Version < 8 && len(result.Unique) > 0 {
-		return result, nil, fmt.Errorf("legacy batch has unique-key metadata")
-	}
-	if len(result.Business) > 64 {
-		return result, nil, fmt.Errorf("business result exceeds its evidence bound")
-	}
-	for _, f := range result.Business {
-		if f.Level == "block" || !f.At.Equal(result.At) {
-			return result, nil, fmt.Errorf("accepted business evidence is not a successful branch")
-		}
-		owner, _, _ := strings.Cut(f.Action, ".")
-		if err := validateBusinessFact(owner, f); err != nil {
-			return result, nil, err
-		}
-	}
-	if err := validateTxnIterations(result.App, result.Iterations); err != nil {
-		return result, nil, err
-	}
-	if err := validateSubmissionSchemaVersion(sub, result.SchemaVersion); err != nil {
-		return result, nil, err
-	}
-	hash, err := submissionHash(sub, result.SchemaVersion)
-	if err != nil || result.RequestHash != hash {
-		return result, nil, fmt.Errorf("record batch request digest differs")
-	}
-	changes := map[string]*pb.ChangeRecord{}
-	written := map[string]bool{}
-	top := false
-	for _, decision := range result.Decisions {
-		r := new(pb.ChangeRecord)
-		if err := protojson.Unmarshal(decision.Receipt, r); err != nil {
-			return result, nil, fmt.Errorf("record batch child receipt: %w", err)
-		}
-		s, e := r.GetSubmission(), decision.Event
-		key := e.App + "/" + r.GetChangeId()
-		if decision.Definition != nil {
-			if err := decision.Definition.check(e.App, s.GetSchema().GetName()); err != nil {
-				return result, nil, err
-			}
-		}
-		if s == nil || s.GetTenantId() != result.Tenant || s.GetAuthority() != e.App ||
-			s.GetIdempotencyKey() == "" || s.GetPrincipalId() == "" || s.GetTarget() == nil || s.GetSchema() == nil ||
-			r.GetChangeId() == "" || r.GetRecordedTime() == nil || r.GetValidTime() == nil ||
-			e.App == "" || len(e.Names) == 0 || e.Names[0] != s.GetSchema().GetName() || changes[key] != nil {
-			return result, nil, fmt.Errorf("record batch has an inconsistent child decision")
-		}
-		if e.Hops < 0 || e.Hops > maxHops+1 || e.Hops > maxHops && len(e.Subscribers) > 0 ||
-			e.Hops <= maxHops && len(e.Stopped) > 0 {
-			return result, nil, fmt.Errorf("record batch has an invalid delivery hop boundary")
-		}
-		changes[key] = r
-		top = top || proto.Equal(r, receipt)
-		changed := map[string]bool{}
-		for _, ref := range e.Changed {
-			if ref == "" || changed[ref] {
-				return result, nil, fmt.Errorf("record batch has duplicate or foreign changed records")
-			}
-			changed[ref], written[ref] = true, true
-		}
-		subscribers := map[string]bool{}
-		for _, id := range e.Subscribers {
-			if id == "" || subscribers[id] {
-				return result, nil, fmt.Errorf("record batch has duplicate or empty subscriber")
-			}
-			subscribers[id] = true
-		}
-		for _, effect := range e.Effects {
-			if effect.ID == "" || effect.Endpoint == "" || effect.Event == "" {
-				return result, nil, fmt.Errorf("record batch has incomplete effect intent")
-			}
-		}
-	}
-	for _, fact := range result.Business {
-		matched := false
-		for _, decision := range result.Decisions {
-			r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
-			if r != nil && fact.Member == r.GetSubmission().GetPrincipalId() && fact.Action == r.GetSubmission().GetSchema().GetName() && fact.Subject == target(r.GetSubmission()) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return result, nil, fmt.Errorf("business evidence has no matching accepted decision")
-		}
-	}
-	if !top || len(written) != len(result.Rows) {
-		return result, nil, fmt.Errorf("record batch omits the top-level receipt or a written row")
-	}
-	seen := map[string]bool{}
-	for _, row := range result.Rows {
-		ref := row.Type + "/" + row.ID
-		if result.Version == 8 {
-			if row.HistoryRef == nil || row.HistoryBase != row.HistoryRef.Base {
-				return result, nil, fmt.Errorf("record batch has no versioned history")
-			}
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, nil, err
-			}
-		} else if row.HistoryRef != nil || row.Format != "" || row.Predecessor != "" {
-			return result, nil, fmt.Errorf("legacy record batch carries new metadata")
-		}
-
-		if row.Type == "" || row.ID == "" || row.App == "" || len(row.Value) == 0 ||
-			len(row.History) == 0 || row.HistoryBase < 0 || result.Version == 1 && row.HistoryBase != 0 || seen[ref] || !written[ref] {
-			return result, nil, fmt.Errorf("record batch omits or duplicates a row")
-		}
-		seen[ref] = true
-		last := row.History[len(row.History)-1]
-		lastApp := row.App
-		if len(row.Authorities) > 0 {
-			lastApp = row.Authorities[len(row.Authorities)-1]
-		}
-		r := changes[lastApp+"/"+last.Change]
-		if r == nil || last.Schema != r.GetSubmission().GetSchema().GetName() ||
-			last.By != r.GetSubmission().GetPrincipalId() || !last.At.Equal(r.GetRecordedTime().AsTime()) {
-			return result, nil, fmt.Errorf("record batch row history differs from its decision")
-		}
-	}
-	for _, direct := range result.DirectRows {
-		row := direct.Row
-		if result.Version == 8 {
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, nil, err
-			}
-		} else if row.HistoryRef != nil || row.Format != "" {
-			return result, nil, fmt.Errorf("legacy callback row carries new metadata")
-		}
-		ref := row.Type + "/" + row.ID
-		if seen[ref] || written[ref] || row.Type == "" || row.ID == "" || row.App == "" || direct.Source.ID == "" || direct.Source.App != row.App || len(row.History) == 0 || len(row.Value) == 0 {
-			return result, nil, fmt.Errorf("record batch has invalid or overlapping callback rows")
-		}
-		seen[ref] = true
-	}
-	for key, n := range result.Sequences {
-		app, _, ok := strings.Cut(key, "/")
-		base, exists := result.SequenceBases[key]
-		if !ok || !exists || base < 0 || n <= base ||
-			!slices.ContainsFunc(result.Decisions, func(d acceptedDecision) bool { return d.Event.App == app }) {
-			return result, nil, fmt.Errorf("record batch has invalid sequence allocation")
-		}
-	}
-	if len(result.SequenceBases) != len(result.Sequences) {
-		return result, nil, fmt.Errorf("record batch has unmatched sequence predecessors")
-	}
-	return result, receipt, nil
-}
-
-func batchSubmission(result acceptedBatch, receipt *pb.ChangeRecord) (*pb.Submission, error) {
-	if len(result.Submission) == 0 {
-		return receipt.GetSubmission(), nil
-	}
-	s := new(pb.Submission)
-	if err := protojson.Unmarshal(result.Submission, s); err != nil {
-		return nil, fmt.Errorf("record batch original submission: %w", err)
-	}
-	if receipt.GetSubmission().GetAuthority() != "work" ||
-		receipt.GetSubmission().GetSchema().GetName() != "work.approval.request" {
-		return nil, fmt.Errorf("record batch answer differs without an approval request")
-	}
-	answer := receipt.GetSubmission()
-	var payload struct {
-		Requester  string          `json:"requester"`
-		Submission json.RawMessage `json:"submission"`
-	}
-	held := new(pb.Submission)
-	if json.Unmarshal(answer.GetPayload(), &payload) != nil || protojson.Unmarshal(payload.Submission, held) != nil ||
-		!proto.Equal(held, s) || payload.Requester != s.GetPrincipalId() || answer.GetPrincipalId() != "app:work" ||
-		answer.GetTarget().GetType() != "work.approval" ||
-		answer.GetTarget().GetId() != s.GetAuthority()+"."+s.GetIdempotencyKey() ||
-		answer.GetIdempotencyKey() != "approval:"+answer.GetTarget().GetId() {
-		return nil, fmt.Errorf("record batch approval does not hold its original submission")
-	}
-	return s, nil
-}
-
-func digestAcceptedBatch(result acceptedBatch) (string, error) {
-	result.Digest = ""
-	return acceptance.Digest(result)
-}
-
 // Validate every row, counter and ledger on private forks before promotion.
 // A late invalid child cannot advance an earlier authoritative ledger.
 type preparedAcceptedBatch struct {
-	result  acceptedBatch
+	result  resultformat.Batch
 	records *recordStore
 	ledgers map[string]*platform.Ledger
 	changes map[string]*pb.ChangeRecord
@@ -472,7 +196,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 }
 
 func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*preparedAcceptedBatch, error) {
-	result, receipt, err := decodeAcceptedBatch(raw)
+	result, receipt, err := resultformat.DecodeBatch(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -480,10 +204,10 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if result.Tenant != t.ID || !ok || owner.AcceptedLedger() != l {
 		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
 	}
-	sub, _ := batchSubmission(result, receipt)
+	sub, _ := resultformat.BatchSubmission(result, receipt)
 	key := result.App + "/" + sub.GetIdempotencyKey()
 	if saved := t.committed.answer(key); len(saved) > 0 {
-		prior, answer, err := decodeAcceptedBatch(saved)
+		prior, answer, err := resultformat.DecodeBatch(saved)
 		if err != nil || prior.RequestHash != result.RequestHash || !proto.Equal(answer, receipt) {
 			return nil, fmt.Errorf("record batch key belongs to another answer")
 		}
@@ -558,7 +282,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 			decision.Publication.Schema != decision.Event.Names[0] {
 			return nil, fmt.Errorf("record batch has an invalid publication")
 		}
-		r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
+		r := changes[decision.Event.App+"/"+resultformat.ReceiptID(decision.Receipt)]
 		if r == nil {
 			return nil, fmt.Errorf("publication has no receipt")
 		}
@@ -610,7 +334,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		checks[app] = ledger.ForkAcceptedChanges()
 	}
 	for _, decision := range result.Decisions {
-		r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
+		r := changes[decision.Event.App+"/"+resultformat.ReceiptID(decision.Receipt)]
 		if changed, err := checks[decision.Event.App].ApplyAccepted(r); err != nil || !changed {
 			return nil, fmt.Errorf("record batch ledger validation: %v (new=%t)", err, changed)
 		}
@@ -622,7 +346,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	result, draft := prepared.result, prepared.records
 	ledgers, changes, key, raw := prepared.ledgers, prepared.changes, prepared.key, prepared.raw
 	for _, decision := range result.Decisions {
-		r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
+		r := changes[decision.Event.App+"/"+resultformat.ReceiptID(decision.Receipt)]
 		if changed, err := ledgers[decision.Event.App].ApplyAcceptedChange(r); err != nil || !changed {
 			return false, fmt.Errorf("record batch ledger application: %v (new=%t)", err, changed)
 		}
@@ -659,7 +383,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	}
 	t.sequences.set(result.Sequences)
 	for _, child := range result.Decisions {
-		t.committed.saveDecisionDefinition(child.Event.App, receiptID(child.Receipt), child.Definition)
+		t.committed.saveDecisionDefinition(child.Event.App, resultformat.ReceiptID(child.Receipt), child.Definition)
 	}
 	if result.SchemaVersion != nil {
 		_, request, _ := strings.Cut(key, "/")
@@ -667,7 +391,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	}
 	answer := new(pb.ChangeRecord)
 	_ = protojson.Unmarshal(result.Receipt, answer)
-	input, _ := batchSubmission(result, answer)
+	input, _ := resultformat.BatchSubmission(result, answer)
 	if len(result.Submission) > 0 || len(result.Business) > 0 || strings.HasPrefix(input.GetCorrelationId(), "correction:") {
 		t.committed.saveAnswer(key, raw)
 	}
@@ -676,7 +400,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 
 // applyBatchRows writes the batch's row images into the forked records, each
 // under a ledger that declares its type, keeping the history it extends.
-func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledgers map[string]*platform.Ledger, changes map[string]*pb.ChangeRecord) error {
+func (t *Tenant) applyBatchRows(draft *recordStore, result resultformat.Batch, ledgers map[string]*platform.Ledger, changes map[string]*pb.ChangeRecord) error {
 	draft.mu.Lock()
 	defer draft.mu.Unlock()
 	for _, image := range result.Rows {
@@ -810,7 +534,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		et.setRow(rec.ID, recovered)
 		draft.writes[image.Type+"/"+rec.ID] = true
 		for _, change := range image.History[baseHistory:] {
-			draft.remember(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
+			draft.recentChanges.Remember(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
 		}
 		if et.knowledge {
 			draft.dirty.Set(image.Type+"/"+rec.ID, true)
@@ -819,13 +543,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 	return nil
 }
 
-func receiptID(raw json.RawMessage) string {
-	r := new(pb.ChangeRecord)
-	_ = protojson.Unmarshal(raw, r)
-	return r.GetChangeId()
-}
-
-func (t *Tenant) publishAcceptedBatch(result acceptedBatch) {
+func (t *Tenant) publishAcceptedBatch(result resultformat.Batch) {
 	for _, decision := range result.Decisions {
 		r := new(pb.ChangeRecord)
 		_ = protojson.Unmarshal(decision.Receipt, r) // already checked

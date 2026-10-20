@@ -44,7 +44,7 @@ func uniqueIndexStore(t *testing.T) (*recordStore, platform.Constraint) {
 	return store, rule
 }
 func putUniqueTest(store *recordStore, typ string, value any) {
-	v := copyOf(reflect.TypeOf(value), value)
+	v := records.Copy(reflect.TypeOf(value), value)
 	store.types[typ].setRow(records.Header(v).ID, &records.Row{Value: v})
 }
 func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
@@ -57,16 +57,16 @@ func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	store.prepareUniqueIndexes()
 	original := et.uniqueIndexes[rule.Name]
 	candidate := indexedUniqueChild{Record: platform.Record{ID: "new"}, Parent: "1", Code: "same"}
-	if ok, err := store.uniqueConstraint(et.info, rule, copyOf(reflect.TypeOf(candidate), candidate)); ok || err != nil {
+	if ok, err := store.uniqueConstraint(et.info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
 		t.Fatal("zero/false did not occupy scope", ok, err)
 	}
 	candidate.Code = " "
-	if ok, err := store.uniqueConstraint(et.info, rule, copyOf(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
+	if ok, err := store.uniqueConstraint(et.info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
 		t.Fatal("blank field occupied a key", ok, err)
 	}
 	candidate.Code = "same"
 	candidate.Archived = true
-	if ok, _ := store.uniqueConstraint(et.info, rule, copyOf(reflect.TypeOf(candidate), candidate)); ok {
+	if ok, _ := store.uniqueConstraint(et.info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok {
 		t.Fatal("archived record bypassed original rule")
 	}
 	draft := store.forkRecords()
@@ -74,13 +74,13 @@ func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	draft.writes["unique.parent/2"] = true
 	updated := draft.types["unique.child"].uniqueIndexes[rule.Name]
 	key, _ := draft.uniqueKey(et.info, rule, draft.types["unique.child"].rows.Get("1").Value)
-	if updated.keys.Get(key).Len() != 2 {
+	if updated.Keys.Get(key).Len() != 2 {
 		t.Fatal("parent scope change missed dependent key")
 	}
-	if original.keys.Get(key).Len() != 1 || store.types["unique.child"].uniqueIndexes[rule.Name].keys != original.keys {
+	if original.Keys.Get(key).Len() != 1 || store.types["unique.child"].uniqueIndexes[rule.Name].Keys != original.Keys {
 		t.Fatal("private index leaked")
 	}
-	if updated.rows.Get("3") != original.rows.Get("3") {
+	if updated.Rows.Get("3") != original.Rows.Get("3") {
 		t.Fatal("unrelated key changed")
 	}
 	changes := draft.uniqueChanges()
@@ -92,10 +92,10 @@ func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	}
 	draft = store.forkRecords()
 	putUniqueTest(draft, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "1"}, Parent: "1", Code: "different"})
-	if draft.types["unique.child"].uniqueIndexes[rule.Name].keys.Has(key) {
+	if draft.types["unique.child"].uniqueIndexes[rule.Name].Keys.Has(key) {
 		t.Fatal("replacement retained old key")
 	}
-	if original.keys.Get(key).Len() != 1 {
+	if original.Keys.Get(key).Len() != 1 {
 		t.Fatal("replacement mutated predecessor")
 	}
 }
@@ -117,7 +117,7 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 	}
 	putUniqueTest(store, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "missing"}, Group: "g"})
 	key, _ := store.uniqueKey(et.info, rule, existing)
-	if et.uniqueIndexes[rule.Name].keys.Get(key).Len() != 3 {
+	if et.uniqueIndexes[rule.Name].Keys.Get(key).Len() != 3 {
 		t.Fatal("new parent missed old child")
 	}
 	et.setRows(et.rows)
@@ -125,7 +125,7 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 		t.Fatal("bulk retained obsolete roots")
 	}
 	store.prepareUniqueIndexes()
-	if et.uniqueIndexes[rule.Name].keys.Get(key).Len() != 3 {
+	if et.uniqueIndexes[rule.Name].Keys.Get(key).Len() != 3 {
 		t.Fatal("bulk changed occupants")
 	}
 }
@@ -149,7 +149,7 @@ func BenchmarkUniqueIndexLookup(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				if ok, err := store.uniqueConstraint(info, rule, copyOf(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
+				if ok, err := store.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
 					b.Fatal(ok, err)
 				}
 			}
@@ -170,11 +170,11 @@ func TestScopedUniqueParentEditChecksOnlyDependentChildren(t *testing.T) {
 		decide(t, tn, "builder", "build", parent+".create", parent, id, map[string]any{"group": fmt.Sprintf("G%d", i+1)}, txnAt)
 		decide(t, tn, "builder", "build", child+".create", child, fmt.Sprintf("C%d", i+1), map[string]any{"parent": id, "code": "same"}, txnAt)
 	}
-	original := tn.records.types[child].uniqueIndexes[rule.Name].keys
+	original := tn.records.types[child].uniqueIndexes[rule.Name].Keys
 	if result := refuse(t, tn, "builder", "build", parent+".edit", parent, "P2", map[string]any{"group": "G1"}, txnAt); !strings.Contains(result, rule.Message) {
 		t.Fatal("parent scope edit escaped unchanged child rule", result)
 	}
-	if tn.records.types[child].uniqueIndexes[rule.Name].keys != original {
+	if tn.records.types[child].uniqueIndexes[rule.Name].Keys != original {
 		t.Fatal("refused parent edit published private keys")
 	}
 	record, err := tn.RecordOf(memberOf(t, tn, "builder"), parent, "P2", txnAt)
@@ -216,18 +216,18 @@ func TestUniqueSQLReadsPrivateKeyChangesWithoutResidentIndex(t *testing.T) {
 	store.appliedPosition = 7
 	candidate := indexedUniqueChild{Record: platform.Record{ID: "new"}, Parent: "1", Code: "same"}
 	info := store.types["unique.child"].info
-	if ok, err := store.uniqueConstraint(info, rule, copyOf(reflect.TypeOf(candidate), candidate)); ok || err != nil {
+	if ok, err := store.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
 		t.Fatal("SQL occupant ignored", ok, err)
 	}
 	draft := store.forkRecords()
 	putUniqueTest(draft, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "1"}, Parent: "1", Code: "different"})
 	draft.writes["unique.child/1"] = true
-	if ok, err := draft.uniqueConstraint(info, rule, copyOf(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
+	if ok, err := draft.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
 		t.Fatal("private key replacement retained SQL predecessor", ok, err)
 	}
 	putUniqueTest(draft, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "2"}, Group: "1"})
 	draft.writes["unique.parent/2"] = true
-	if ok, err := draft.uniqueConstraint(info, rule, copyOf(reflect.TypeOf(candidate), candidate)); ok || err != nil {
+	if ok, err := draft.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
 		t.Fatal("private parent scope omitted child key", ok, err)
 	}
 	for _, et := range draft.types {

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"testing"
@@ -135,7 +136,7 @@ func TestTenantComposition(t *testing.T) {
 	if len(journal) != 4 {
 		t.Fatalf("expected four complete accepted results, got %d", len(journal))
 	}
-	refused, original, decodeErr := decodeRefusedResult(journal[2].Body)
+	refused, original, decodeErr := resultformat.DecodeRefusal(journal[2].Body)
 	if decodeErr != nil || journal[2].Kind != "accepted-result" || original.GetIdempotencyKey() != "k3" || refused.Error.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		t.Fatalf("unauthorized decision lost its accepted refusal: %+v, %v", refused, decodeErr)
 	}

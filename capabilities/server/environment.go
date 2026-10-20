@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -192,7 +193,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 		return result, fmt.Errorf("tenant %s is quarantined", to.ID)
 	}
 	if prior, ok := to.releases.request("promotion:" + key); ok {
-		hash, hashErr := releaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
+		hash, hashErr := resultformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
 		if hashErr != nil || prior != hash {
 			return result, fmt.Errorf("promotion key belongs to another request")
 		}
@@ -201,7 +202,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if prior := to.releases.raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
 		return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
 	}
-	var installations []releaseInstallation
+	var installations []resultformat.ReleaseInstallation
 	var bootstrap json.RawMessage
 	if activate {
 		if installations, bootstrap, err = to.prepareReleaseLifecycleLocked(candidate, member, now, false); err != nil {
@@ -211,12 +212,12 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 			return result, err
 		}
 	}
-	saved := acceptedRelease{Version: 2, Kind: "release-result", Tenant: to.ID, App: construction.ID, Member: member.ID,
+	saved := resultformat.Release{Version: 2, Kind: "release-result", Tenant: to.ID, App: construction.ID, Member: member.ID,
 		Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, Bootstrap: bootstrap, From: from.ID}
 	if activate {
 		saved.Version = 4
 	}
-	if saved.RequestHash, err = releaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
+	if saved.RequestHash, err = resultformat.ReleaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
 		return result, err
 	}
 	// The target's audit of the promotion is written where the result is
@@ -298,7 +299,7 @@ type MigrationManifest struct {
 }
 
 // rememberMigration keeps the console's own view of what moved.
-func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time, evidence ...authorizationEvidence) error {
+func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time, evidence ...resultformat.AuthorizationEvidence) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, err := t.acceptHostControl("migration", member, result, now,

@@ -411,7 +411,7 @@ func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool)
 	changed := false
 	out := v
 	if len(hidden) > 0 {
-		out, changed = reflect.ValueOf(masked(et, v, hidden)), true
+		out, changed = reflect.ValueOf(records.Mask(et.info, v, hidden)), true
 	}
 	if !et.info.HasReadSources() && len(et.info.VersionPins) == 0 && !w.derivedContext {
 		return out, changed
@@ -448,7 +448,7 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 		}
 		return true
 	}
-	copy := copyOf(et.info.Go, value.Interface())
+	copy := records.Copy(et.info.Go, value.Interface())
 	id := records.Header(copy).ID
 	if id == "" {
 		return true
@@ -467,7 +467,7 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 // source the reader may not read now is emptied, or its element left out, and
 // the declared withheld field says so.
 func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool) {
-	out := copyOf(et.info.Go, v.Interface())
+	out := records.Copy(et.info.Go, v.Interface())
 	self := et.info.Type + "/" + records.Header(out).ID
 	readable := func(refs []string) bool {
 		for _, ref := range refs {

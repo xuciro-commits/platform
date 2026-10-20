@@ -1,8 +1,8 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -10,11 +10,6 @@ import (
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
-
-type acceptedObservation struct {
-	App  string          `json:"app"`
-	Body json.RawMessage `json:"body"`
-}
 
 func (d *stagedDecision) stageObservers() *kernel.Error {
 	if d.observed {
@@ -37,7 +32,7 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 			if err != nil || owner.ValidateObserved(raw) != nil {
 				return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			d.observations = append(d.observations, acceptedObservation{App: id, Body: raw})
+			d.observations = append(d.observations, resultformat.Observation{App: id, Body: raw})
 		}
 	}
 	if len(d.events) != count {
@@ -47,7 +42,7 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 	return d.failure
 }
 
-func (t *Tenant) validateAcceptedObservations(saved []acceptedObservation) error {
+func (t *Tenant) validateAcceptedObservations(saved []resultformat.Observation) error {
 	for _, item := range saved {
 		owner, ok := t.app(item.App).(host.AcceptedObserver)
 		if !ok || len(item.Body) == 0 {
@@ -60,7 +55,7 @@ func (t *Tenant) validateAcceptedObservations(saved []acceptedObservation) error
 	return nil
 }
 
-func (t *Tenant) applyAcceptedObservations(saved []acceptedObservation) error {
+func (t *Tenant) applyAcceptedObservations(saved []resultformat.Observation) error {
 	for _, item := range saved {
 		if err := t.app(item.App).(host.AcceptedObserver).ApplyObserved(item.Body); err != nil {
 			return err

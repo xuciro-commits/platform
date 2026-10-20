@@ -87,7 +87,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if err := s.migrationDefinitionLocked(info); err != nil {
 		return err
 	}
-	et := &entityType{store: s, info: info, rows: records.Index[*records.Row]{}, knowledge: knowledgeBearing(info)}
+	et := &entityType{store: s, info: info, rows: records.Index[*records.Row]{}, knowledge: records.KnowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
@@ -110,7 +110,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 				return err
 			}
 			platform.ApplyFieldAliases(info, v)
-			emptyLists(v)
+			records.EmptyLists(v)
 			installed := &records.Row{Value: v, Format: r.Format, HistoryParent: r.HistoryParent, HistoryHead: r.HistoryHead, History: r.History, LoadHistory: r.LoadHistory, HistoryCount: r.HistoryCount, Projection: r.Projection, Extraction: r.Extraction}
 			installed.RetainOriginal(raw)
 			entries = append(entries, records.Entry[*records.Row]{Key: id, Value: installed})

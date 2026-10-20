@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	"platformserver/internal/agents"
 	"slices"
 	"strings"
 	"sync"
@@ -588,7 +589,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 	}
 	if typ, rid, ok := strings.Cut(ref, "/"); ok {
 		if view, err := a.host.AgentContext(a.readsAs(run), typ, rid, now); err == nil {
-			run.Seen = clip(string(view.Body), 6000)
+			run.Seen = agents.Clip(string(view.Body), 6000)
 		}
 	}
 	if recorded {

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"hash/fnv"
 	"io"
 	"net"
 	"net/http"
@@ -25,6 +24,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/construction"
 	"platformserver/platform"
 )
@@ -67,23 +67,11 @@ type effect struct {
 	span    trace.SpanContext // the work that caused it: its attempts continue that trace
 }
 
-// effectRetry is how an effect tries again: 5 s … 1 h apart, about seven hours, then failed.
-var effectRetry = platform.Retry{Initial: 5 * time.Second, Max: time.Hour, Attempts: 12}
-
 const (
 	effectsKept   = 1000
 	bodyKept      = 30 * 24 * time.Hour
 	effectTimeout = 10 * time.Second
 )
-
-// effectBackoff grows from 5 s to an hour, with jitter derived from the key so
-// a replay computes the same due time.
-func effectBackoff(id string, attempts int) time.Duration {
-	d := effectRetry.After(attempts)
-	h := fnv.New32a()
-	h.Write([]byte(id + strconv.Itoa(attempts)))
-	return d + time.Duration(h.Sum32()%1000)*d/5000 // up to +20 %
-}
 
 func settled(state string) bool {
 	return state == "delivered" || state == "rejected" || state == "failed" || state == "discarded" || state == "compensated"
@@ -297,8 +285,8 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	t.opsMu.Lock()
 	// Apps' model requests go to the built-in model destination (ADR-0008 D3);
 	// the model door keeps each provider's own breaker.
-	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: modelEndpoint, Kind: modelEndpoint}) {
-		if ep.Kind != modelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now) {
+	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: resultformat.ModelEndpoint, Kind: resultformat.ModelEndpoint}) {
+		if ep.Kind != resultformat.ModelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now) {
 			continue
 		}
 		// A held effect waits for its approval outside the endpoint's order.
@@ -332,7 +320,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 				return // an already in-flight call may have escaped; do not record its answer in damaged state
 			}
 			counted(t, "effect", j.effect.App, outcome.Result)
-			if j.endpoint.Kind != modelEndpoint {
+			if j.endpoint.Kind != resultformat.ModelEndpoint {
 				t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
 			}
 			t.settleWithUsage(j.effect.ID, outcome, usage, now)
@@ -342,7 +330,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 }
 
 func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
-	if ep.Kind == modelEndpoint {
+	if ep.Kind == resultformat.ModelEndpoint {
 		return t.sendModel(x, now)
 	}
 	return t.send(ep, x, now), nil
@@ -351,7 +339,7 @@ func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (p
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
 // both webhook-id and Idempotency-Key.
 func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
-	if ep.Kind == modelEndpoint {
+	if ep.Kind == resultformat.ModelEndpoint {
 		out, _ := t.sendModel(x, now)
 		return out
 	}
@@ -482,7 +470,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	if x.State == "failed" {
 		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
 	}
-	if x.Endpoint == modelEndpoint {
+	if x.Endpoint == resultformat.ModelEndpoint {
 		// Legacy journals contain the separate model reply submission. Recovery
 		// updates only the effect here and reads that saved reply later.
 		return true
@@ -507,7 +495,7 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 		t.controlAnswer(x, o, now)
 		return
 	}
-	if x.Endpoint == modelEndpoint { // a model request answers its app's reply action, refused
+	if x.Endpoint == resultformat.ModelEndpoint { // a model request answers its app's reply action, refused
 		return
 	}
 	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
@@ -528,26 +516,8 @@ func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) 
 }
 
 func markEffect(x *effect, o platform.Outcome, at time.Time) {
-	x.sending, x.Last, x.Digest, x.Error, x.PublicMessage = false, at, o.Digest, o.Detail, o.PublicMessage
-	if x.State == "discarded" {
-		return // discarded while its attempt was on the way
-	}
-	if x.Endpoint == operationEndpoint && o.Result == "delivered" {
-		x.Output, x.Millis = slices.Clone(o.Answer), o.Millis
-	}
-	x.Attempts++
-	switch {
-	case o.Result == "delivered":
-		x.State = "delivered"
-	case o.Result == "rejected":
-		x.State = "rejected"
-	case o.Result == "unknown":
-		x.State = "unknown"
-	case x.Attempts-x.since >= effectRetry.Attempts:
-		x.State = "failed"
-	default:
-		x.State, x.Due = "retrying", at.Add(effectBackoff(x.ID, x.Attempts-x.since))
-	}
+	x.sending = false
+	resultformat.MarkEffect(&x.Effect, x.since, o, at)
 }
 
 // The console's actions about endpoints and effects.

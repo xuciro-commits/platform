@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
-	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -14,20 +14,6 @@ import (
 
 // A direct model call has no owned effect. Its immutable usage observation is
 // accepted before changing the meter, using the same predecessor as effects.
-type acceptedUsage struct {
-	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
-	Version        int                     `json:"version"`
-	Kind           string                  `json:"kind"`
-	Tenant         string                  `json:"tenant"`
-	App            string                  `json:"app"`
-	Member         string                  `json:"member"`
-	Key            string                  `json:"key"`
-	At             time.Time               `json:"at"`
-	RequestHash    string                  `json:"requestHash"`
-	Digest         string                  `json:"digest"`
-	Before         string                  `json:"before"`
-	Usage          platform.AIUsage        `json:"usage"`
-}
 
 func (t *Tenant) usagePredecessor() (string, error) {
 	if t.ai == nil {
@@ -40,64 +26,26 @@ func (t *Tenant) usagePredecessor() (string, error) {
 	return acceptance.Digest(raw)
 }
 
-func validUsage(u platform.AIUsage) bool {
-	remaining := u.Input
-	for _, count := range []*int{u.CacheReadInput, u.CacheWriteInput} {
-		if count != nil {
-			if *count < 0 || *count > remaining {
-				return false
-			}
-			remaining -= *count
-		}
-	}
-	return u.Member != "" && u.Model != "" && !u.At.IsZero() && u.Input >= 0 && u.Output >= 0 && u.Cost >= 0 && u.Millis >= 0
-}
-
-func usageHash(before string, u platform.AIUsage) (string, error) {
-	return acceptance.Digest([]any{before, u})
-}
-func digestUsage(r acceptedUsage) (string, error) { r.Digest = ""; return acceptance.Digest(r) }
-func decodeAcceptedUsage(raw []byte) (acceptedUsage, error) {
-	var r acceptedUsage
-	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
-		return r, fmt.Errorf("usage result is empty or too large")
-	}
-	if err := acceptance.DecodeJSON(raw, &r, "usage result"); err != nil {
-		return r, err
-	}
-	if err := validateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {
-		return r, err
-	}
-
-	hash, err := usageHash(r.Before, r.Usage)
-	digest, digestErr := digestUsage(r)
-	if err != nil || digestErr != nil || r.Version != 1 || r.Kind != "usage-result" || r.Tenant == "" || r.App != platform.AIApp || r.Before == "" ||
-		r.Member != r.Usage.Member || !validUsage(r.Usage) || !r.At.Equal(r.Usage.At) || r.RequestHash != hash || r.Key != "usage:"+hash || r.Digest != digest {
-		return r, fmt.Errorf("usage result has inconsistent identity, reading or digest")
-	}
-	return r, nil
-}
-
 func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
 	// Usage observes a completed call. Its principal is the meter owner; a
 	// later revocation of the attributed caller cannot erase an incurred cost.
 	c := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + platform.AIApp, Tenant: m.Tenant}, platform.AIApp, false, true)
-	decision := t.authorizeNative(c, "usage:observe", "derive", nil, m.ID != "" && m.ID == u.Member && validUsage(u))
+	decision := t.authorizeNative(c, "usage:observe", "derive", nil, m.ID != "" && m.ID == u.Member && resultformat.ValidUsage(u))
 	if refusal := authorizationRefusal(decision); refusal != nil {
 		return refusal
 	}
 	before, err := t.usagePredecessor()
-	if err != nil || m.Tenant != t.ID || m.ID != u.Member || !validUsage(u) {
+	if err != nil || m.Tenant != t.ID || m.ID != u.Member || !resultformat.ValidUsage(u) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
 	}
-	r := acceptedUsage{Version: 1, Kind: "usage-result", Tenant: t.ID, App: platform.AIApp, Member: m.ID, At: u.At.UTC(), Before: before, Usage: u}
-	r.Authorizations = []authorizationEvidence{{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Action: "usage:observe"}, Decision: decision, Roles: slices.Clone(c.RolesHere())}}
-	r.RequestHash, err = usageHash(before, u)
+	r := resultformat.Usage{Version: 1, Kind: "usage-result", Tenant: t.ID, App: platform.AIApp, Member: m.ID, At: u.At.UTC(), Before: before, Usage: u}
+	r.Authorizations = []resultformat.AuthorizationEvidence{{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Action: "usage:observe"}, Decision: decision, Roles: slices.Clone(c.RolesHere())}}
+	r.RequestHash, err = resultformat.UsageHash(before, u)
 	if err != nil {
 		return unknown()
 	}
 	r.Key = "usage:" + r.RequestHash
-	r.Digest, err = digestUsage(r)
+	r.Digest, err = resultformat.DigestUsage(r)
 	if err != nil {
 		return unknown()
 	}
@@ -105,7 +53,7 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Erro
 	if err != nil {
 		return unknown()
 	}
-	if _, err := decodeAcceptedUsage(raw); err != nil {
+	if _, err := resultformat.DecodeUsage(raw); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
 	}
 	principal, _ := json.Marshal(m)
@@ -113,7 +61,7 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Erro
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")
 	}
-	saved, err := decodeAcceptedUsage(committed)
+	saved, err := resultformat.DecodeUsage(committed)
 	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
 		t.quarantine(fmt.Errorf("committed model usage differs: %v", err))
 		return unknown()
@@ -127,8 +75,8 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Erro
 	return nil
 }
 
-func (t *Tenant) applyAcceptedUsage(raw []byte) (acceptedUsage, error) {
-	r, err := decodeAcceptedUsage(raw)
+func (t *Tenant) applyAcceptedUsage(raw []byte) (resultformat.Usage, error) {
+	r, err := resultformat.DecodeUsage(raw)
 	if err != nil {
 		return r, err
 	}

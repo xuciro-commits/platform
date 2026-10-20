@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"strings"
 	"testing"
 	"time"
@@ -129,13 +130,13 @@ func TestReplayPanicCannotTakeDownNeighbor(t *testing.T) {
 	if _, err := source.Submit(member, acceptedBin(t, source, "missing-listener"), at); err != nil {
 		t.Fatal(err)
 	}
-	var result acceptedResult
+	var result resultformat.Record
 	if err := json.Unmarshal(durable.Body, &result); err != nil {
 		t.Fatal(err)
 	}
 	result.Event.Subscribers = append(result.Event.Subscribers, "removed-app")
 	var err error
-	result.Digest, err = digestAcceptedResult(result)
+	result.Digest, err = resultformat.DigestRecord(result)
 	if err != nil {
 		t.Fatal(err)
 	}

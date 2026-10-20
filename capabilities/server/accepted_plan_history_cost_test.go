@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func TestAcceptedEffectDirectAndChildDoNotReadRetainedHistory(t *testing.T) {
 				return entry.Body, nil
 			}
 			live.settle("retained-effect", platform.Outcome{Effect: "retained-effect", Result: "delivered", Detail: "accepted"}, at.Add(time.Second))
-			result, err := decodeAcceptedEffect(saved.Body)
+			result, err := resultformat.DecodeEffect(saved.Body)
 			if err != nil || live.quarantined() || *reads != 0 {
 				t.Fatalf("effect sealing/application read retained history: reads=%d, error=%v, fault=%+v", *reads, err, live.fault.Load())
 			}

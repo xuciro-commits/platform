@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/host"
 	"strconv"
 	"strings"
@@ -132,7 +133,7 @@ func decodeAcceptedComposite(raw []byte) (acceptedComposite, error) {
 		return saved, fmt.Errorf("composite result has incompatible changes or refusal")
 	}
 	if saved.Version == 2 && saved.Refusal == "" {
-		batch, receipt, err := decodeAcceptedBatch(saved.Changes)
+		batch, receipt, err := resultformat.DecodeBatch(saved.Changes)
 		if err != nil || batch.Tenant != saved.Tenant || batch.App != saved.App || !batch.At.Equal(saved.At) || receipt.GetSubmission().GetPrincipalId() != saved.Member {
 			return saved, fmt.Errorf("composite result changes differ: %v", err)
 		}
@@ -319,7 +320,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	}
 	if saved.Version == 2 {
 		if saved.Refusal == "" {
-			batch, _, _ := decodeAcceptedBatch(saved.Changes)
+			batch, _, _ := resultformat.DecodeBatch(saved.Changes)
 			if _, err := t.applyAcceptedBatch(t.app(construction.ID).AcceptedLedger(), saved.Changes); err != nil {
 				return saved, err
 			}

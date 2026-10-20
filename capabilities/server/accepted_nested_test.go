@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 			}
 			definition, _ := acceptance.Digest([]any{q.App, op, version})
 			inputHash, _ := acceptance.Digest(q.Inputs)
-			ref, sealErr := tn.staged.sealInput(id+":frames:operation:"+q.Key+":"+operationEndpoint, member.ID, definition, inputHash, q.Inputs, op.Limits.DataInputBytes)
+			ref, sealErr := tn.staged.sealInput(id+":frames:operation:"+q.Key+":"+resultformat.OperationEndpoint, member.ID, definition, inputHash, q.Inputs, op.Limits.DataInputBytes)
 			if sealErr != nil {
 				t.Fatal(sealErr)
 			}
@@ -275,9 +276,9 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	if _, err := live.Submit(member, sub, at); err != nil {
 		t.Fatalf("nested publication: %v fault=%+v", err, live.fault.Load())
 	}
-	result, _, err := decodeAcceptedBatch(entries[0].Body)
+	result, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(result.Decisions) != 5 || len(result.Rows) != 3 ||
-		!slices.ContainsFunc(result.Decisions, func(d acceptedDecision) bool { return d.Publication != nil }) ||
+		!slices.ContainsFunc(result.Decisions, func(d resultformat.Decision) bool { return d.Publication != nil }) ||
 		live.owner["action:build.visit.create"] == nil || live.records.types["build.visit"] == nil {
 		t.Fatalf("nested publication was not installed from its one saved result: %v", err)
 	}
@@ -319,7 +320,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 	if refused != nil || receipt == nil || len(entries) != 1 {
 		t.Fatalf("nested decisions did not commit together: %+v, %v, fault=%+v, entries=%+v", receipt, refused, live.fault.Load(), entries)
 	}
-	result, _, err := decodeAcceptedBatch(entries[0].Body)
+	result, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(result.Decisions) != 3 || len(result.Rows) != 2 {
 		t.Fatalf("one batch omitted nested receipts or rows: %+v, %v", result, err)
 	}
@@ -357,7 +358,7 @@ func TestAcceptedNestedRefusalDiscardsEveryChild(t *testing.T) {
 			len(entries) != 1 {
 			t.Fatalf("refused/cyclic parent had no durable refusal: cycle=%t, %v", cycle, err)
 		}
-		if _, _, err := decodeRefusedResult(entries[0].Body); err != nil {
+		if _, _, err := resultformat.DecodeRefusal(entries[0].Body); err != nil {
 			t.Fatal(err)
 		}
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
@@ -376,7 +377,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 	if _, err := source.Submit(member, nestedSubmission(source, "D1"), time.Now()); err != nil {
 		t.Fatalf("%v, fault=%+v, entry=%s", err, source.fault.Load(), entry.Body)
 	}
-	result, _, err := decodeAcceptedBatch(entry.Body)
+	result, _, err := resultformat.DecodeBatch(entry.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +402,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 			result.Rows[i].Value, _ = json.Marshal(record)
 		}
 	}
-	result.Digest, _ = digestAcceptedBatch(result)
+	result.Digest, _ = resultformat.DigestBatch(result)
 	raw, _ := json.Marshal(result)
 	recovered := nestedTenant(t)
 	if _, err := recovered.applyAcceptedBatch(recovered.app("nested").(*nestedIssuer).ledger, raw); err == nil {

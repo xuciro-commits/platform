@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"time"
 
 	"platformserver/internal/construction"
@@ -13,7 +14,7 @@ import (
 func pendingComputeEffects(t *Tenant) []platform.Effect {
 	var out []platform.Effect
 	for _, effect := range t.outbound {
-		if effect.Endpoint == operationEndpoint && !settled(effect.State) {
+		if effect.Endpoint == resultformat.OperationEndpoint && !settled(effect.State) {
 			out = append(out, effect.Effect)
 		}
 	}

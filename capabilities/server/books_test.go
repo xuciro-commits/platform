@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"strings"
 	"testing"
 	"time"
@@ -260,7 +261,7 @@ func TestBooksDeliveryClassificationAndPublicMessage(t *testing.T) {
 			if live.quarantined() || len(entries) != 1 {
 				t.Fatalf("classified result was not accepted once: entries=%d fault=%v", len(entries), live.fault.Load())
 			}
-			accepted, err := decodeAcceptedEffect(entries[0].Body)
+			accepted, err := resultformat.DecodeEffect(entries[0].Body)
 			if err != nil || accepted.Version != 5 || accepted.Outcome.PublicMessage != tc.message || accepted.After.PublicMessage != tc.message {
 				t.Fatalf("safe delivery text was not saved with its outcome: %+v %v", accepted, err)
 			}

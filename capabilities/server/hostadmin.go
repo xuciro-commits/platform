@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strconv"
 	"strings"
@@ -106,13 +107,13 @@ func (h *Host) hostAuthorization(subject string, authenticated bool, permission,
 	return authz.Decide(authz.Request{Kind: "action", Subject: authz.Subject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &authz.Context{Tenant: pass, Principal: authz.Gate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
 }
 
-func hostRequestAuthorization(r *http.Request, tenant string) []authorizationEvidence {
-	evidence, found := r.Context().Value(hostAuthorizationKey{}).(authorizationEvidence)
+func hostRequestAuthorization(r *http.Request, tenant string) []resultformat.AuthorizationEvidence {
+	evidence, found := r.Context().Value(hostAuthorizationKey{}).(resultformat.AuthorizationEvidence)
 	if !found {
 		return nil
 	}
 	evidence.Request.Tenant = tenant // target selected by the registered management route
-	return []authorizationEvidence{evidence}
+	return []resultformat.AuthorizationEvidence{evidence}
 }
 
 // hostRoute registers a console route: the API contract lists it, and the
@@ -140,7 +141,7 @@ func (h *Host) hostRoute(mux *http.ServeMux, route Route, f func(http.ResponseWr
 			}
 		}
 		question := platform.AuthzRequest{Principal: "host:" + subject, Tenant: r.PathValue("tenant"), Kind: "action", Action: route.Pattern}
-		evidence := authorizationEvidence{Request: question, Decision: decision, Roles: []string{"host-admin"}}
+		evidence := resultformat.AuthorizationEvidence{Request: question, Decision: decision, Roles: []string{"host-admin"}}
 		r = r.WithContext(context.WithValue(r.Context(), hostAuthorizationKey{}, evidence))
 		f(w, r, subject, tenant)
 	})
@@ -443,7 +444,7 @@ func (e errSupport) Error() string { return string(e) }
 // record and blocks ordinary requests; decommissioning does the same and is
 // terminal until the console opens the tenant again. Both are recorded in the
 // tenant's audit next to the reason, so support work leaves a trace.
-func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time, evidence ...authorizationEvidence) error {
+func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time, evidence ...resultformat.AuthorizationEvidence) error {
 	if now.IsZero() {
 		now = Now()
 	}
@@ -469,7 +470,7 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time,
 
 // openSupport authorizes a support session for a real member. Its accepted
 // receipt fixes the original grant; a same-clock retry does not append another.
-func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time, evidence ...authorizationEvidence) (SupportGrant, error) {
+func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time, evidence ...resultformat.AuthorizationEvidence) (SupportGrant, error) {
 	if member == "" || reason == "" || subject == "" || now.IsZero() || minutes < 1 || minutes > 24*60 {
 		return SupportGrant{}, errSupport("a support session needs a member, a reason and 1 to 1440 minutes")
 	}
@@ -504,7 +505,7 @@ func (t *Tenant) supportGrants(now time.Time) []SupportGrant {
 // useSupport performs one authorized read of the tenant: health, the audit tail
 // and the reads the granted member may make. The use is recorded in the audit
 // with the operator and the grant, and the grant's count moves.
-func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...authorizationEvidence) (SupportRead, error) {
+func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...resultformat.AuthorizationEvidence) (SupportRead, error) {
 	t.mu.Lock()
 	_, err := t.acceptHostControl("support.use", "host:"+subject, struct{ ID string }{id}, now,
 		AuditEntry{Action: "host.support.use", Target: id}, func(image *hostControlImage) (SupportGrant, error) {

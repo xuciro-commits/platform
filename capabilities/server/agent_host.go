@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/agents"
 	"strings"
 	"time"
 
@@ -67,7 +68,7 @@ func (h hostView) AgentSources(value any) []string { return h.t.refsIn(value) }
 func (h hostView) AgentKnowledge(reader *platform.Member, app, q string, limit int, now time.Time) json.RawMessage {
 	found := h.t.Knowledge(aiContextReader(reader), app, q, limit, now)
 	for i := range found {
-		found[i].Text = clip(found[i].Text, 700)
+		found[i].Text = agents.Clip(found[i].Text, 700)
 	}
 	raw, _ := json.Marshal(found)
 	return raw
@@ -75,7 +76,7 @@ func (h hostView) AgentKnowledge(reader *platform.Member, app, q string, limit i
 func (h hostView) AgentAppReader(app string) *platform.Member { return h.t.appReader(app) }
 func (h hostView) AgentMeaning(app string) string             { return h.t.meaning(app) }
 func (h hostView) AgentGlossary(app string) string            { return h.t.glossary(app) }
-func (h hostView) AgentLanguage(language string) string       { return languageNames[language] }
+func (h hostView) AgentLanguage(language string) string       { return agents.LanguageName(language) }
 func (h hostView) AgentSuspended(member string) bool          { return h.t.suspended(member) }
 func (h hostView) ExternalAgentMembers() []platform.Member {
 	owner, ok := h.t.app(PlatformApp).(host.IdentityDirectory)

@@ -13,6 +13,7 @@ import (
 	"maps"
 	"net/http"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strconv"
 	"strings"
@@ -656,8 +657,6 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 // A replay rebuilds the request from the decision and takes the answer from
 // the journal: it asks no model.
 
-const modelEndpoint = "model"
-
 // modelAsk is a model request as the outbound queue keeps it.
 type modelAsk struct {
 	Model              string               `json:"model"`
@@ -693,17 +692,17 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 	defer t.opsMu.Unlock()
 	n := 0
 	for _, x := range t.outbound {
-		if x.Endpoint == modelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
+		if x.Endpoint == resultformat.ModelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
 			n++
 		}
 	}
 	for _, x := range pending {
-		if x.Endpoint == modelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
+		if x.Endpoint == resultformat.ModelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
 			n++
 		}
 	}
 	key := fmt.Sprintf("%s#%d", rec.GetChangeId(), n)
-	return platform.Effect{ID: fmt.Sprintf("%s:%s:model:%s", t.ID, c.App, key), Endpoint: modelEndpoint,
+	return platform.Effect{ID: fmt.Sprintf("%s:%s:model:%s", t.ID, c.App, key), Endpoint: resultformat.ModelEndpoint,
 		Event: c.App + "/model", App: c.App, Key: key, Target: q.Target, At: rec.GetRecordedTime().AsTime(), State: "pending", Due: rec.GetRecordedTime().AsTime(), Body: string(body)}
 }
 

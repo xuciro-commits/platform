@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 
@@ -18,7 +19,7 @@ func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
 		}
 		kind, ok := strings.CutPrefix(x.Event, x.App+"/")
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, x.App, kind, x.Key, x.Endpoint)
-		if kind == "model" && x.Endpoint == modelEndpoint {
+		if kind == "model" && x.Endpoint == resultformat.ModelEndpoint {
 			id = fmt.Sprintf("%s:%s:model:%s", t.ID, x.App, x.Key)
 		}
 		if !ok || kind == "" || x.App == "" || t.app(x.App) == nil || x.Key == "" || x.Endpoint == "" ||

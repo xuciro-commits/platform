@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"time"
 
@@ -46,7 +47,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	if app != nil {
 		op, version, declared = operationDefinition(app, q.Name, q.Version)
 	}
-	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, operationEndpoint)
+	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, resultformat.OperationEndpoint)
 	t.opsMu.Lock()
 	for _, x := range t.outbound {
 		if x.ID == id {

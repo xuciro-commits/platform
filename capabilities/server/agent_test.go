@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"platformserver/internal/agents"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -21,7 +22,7 @@ import (
 )
 
 func TestAgentStepUsesJournalJSONOrder(t *testing.T) {
-	got, err := normalizedStepJSON(json.RawMessage(`{"z":{"y":2,"x":1},"a":9007199254740993}`))
+	got, err := agents.NormalizeStepJSON(json.RawMessage(`{"z":{"y":2,"x":1},"a":9007199254740993}`))
 	if err != nil || string(got) != `{"a":9007199254740993,"z":{"x":1,"y":2}}` {
 		t.Fatalf("model step does not use stable JSONB-compatible bytes: %s, %v", got, err)
 	}
@@ -33,16 +34,16 @@ func TestAgentObservationBoundsPreserveJSONAndChinese(t *testing.T) {
 		[]any{map[string]any{"text": strings.Repeat("生产进度", 1000)}, map[string]any{"id": "next"}},
 	} {
 		raw, _ := json.Marshal(input)
-		got := clipObservation(string(raw), 256)
+		got := agents.Observation(string(raw), 256)
 		if !json.Valid([]byte(got)) || !utf8.ValidString(got) || len(got) > 256 || !strings.Contains(got, `"truncated":true`) {
 			t.Fatalf("invalid bounded observation (%d bytes): %s", len(got), got)
 		}
 	}
-	if got := clip(strings.Repeat("中文", 20), 5); !utf8.ValidString(got) || got != "中…" {
+	if got := agents.Clip(strings.Repeat("中文", 20), 5); !utf8.ValidString(got) || got != "中…" {
 		t.Fatalf("text cut inside a character: %q", got)
 	}
 	for _, args := range []string{`{"id":`, `{"id":1,"id":2}`, `[]`} {
-		if _, err := completeToolCalls([]ToolCall{{ID: "a", Name: "read", Arguments: json.RawMessage(args)}}, "r", 1); err == nil {
+		if _, err := agents.CompleteToolCalls([]ToolCall{{ID: "a", Name: "read", Arguments: json.RawMessage(args)}}, "r", 1); err == nil {
 			t.Fatalf("accepted incomplete or ambiguous tool input: %s", args)
 		}
 	}

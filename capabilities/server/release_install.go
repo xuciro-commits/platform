@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/construction"
 	"platformserver/internal/host"
 	"platformserver/platform"
@@ -11,13 +12,6 @@ import (
 	"slices"
 	"strings"
 )
-
-type releaseInstallation struct {
-	construction.ReleasePublication
-	Before string             `json:"before"`
-	Ref    *platform.AssetRef `json:"ref,omitempty"`
-	Record string             `json:"record,omitempty"`
-}
 
 func (t *Tenant) installationPredecessor(record string) (string, error) {
 	typ, id, ok := strings.Cut(record, "/")
@@ -37,7 +31,7 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	return acceptance.Digest(image)
 }
 
-func (t *Tenant) installationPlan(registry *platform.AssetRegistry, installation releaseInstallation) (platform.AssetInstallation, error) {
+func (t *Tenant) installationPlan(registry *platform.AssetRegistry, installation resultformat.ReleaseInstallation) (platform.AssetInstallation, error) {
 	app := construction.ID
 	if installation.Ref != nil {
 		app = installation.Ref.App
@@ -54,7 +48,7 @@ func (t *Tenant) installationPlan(registry *platform.AssetRegistry, installation
 
 // The owner performs every kind-specific install into this isolated runtime.
 // Historical images and new plans share this machinery, never a second switch.
-func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
+func (t *Tenant) stageReleaseInstallationLocked(installations []resultformat.ReleaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
 	draft, err := t.assetInstallationView(t.records)
 	if err != nil {
 		return nil, err

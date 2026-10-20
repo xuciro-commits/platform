@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -179,7 +180,7 @@ func TestMigrationBatchesResumeSavedResults(t *testing.T) {
 	if run.Processed != 2 || run.Migrated != 2 || run.Cursor != "build.asset/B" || run.State != "running" {
 		t.Fatalf("first batch progress: %+v", run)
 	}
-	batch, _, err := decodeAcceptedBatch(entries[len(entries)-1].Body)
+	batch, _, err := resultformat.DecodeBatch(entries[len(entries)-1].Body)
 	if err != nil || len(batch.Rows) != 3 {
 		t.Fatalf("batch must pair two data rows with its progress: %+v %v", batch, err)
 	}

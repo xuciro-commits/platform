@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"reflect"
 	"testing"
@@ -96,7 +97,7 @@ func TestAcceptedGeneratedRecordKeepsPrivateOwnerState(t *testing.T) {
 	if refusal != nil || owner.accepted != 1 || len(entries) != 1 {
 		t.Fatalf("accepted record lost its owner's state: count=%d, refusal=%v", owner.accepted, refusal)
 	}
-	batch, _, err := decodeAcceptedBatch(entries[0].Body)
+	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(batch.States) != 1 || batch.States[0].App != "stock" {
 		t.Fatalf("result omitted private owner state: %+v, %v", batch.States, err)
 	}
@@ -174,7 +175,7 @@ func TestJournalAcceptedResultAtomicRetryAndRecovery(t *testing.T) {
 	if err != nil || len(entries) != 1 || entries[0].Kind != "accepted-result" {
 		t.Fatalf("committed journal: %v %v", entries, err)
 	}
-	result, _, err := decodeAcceptedResult(entries[0].Body)
+	result, _, err := resultformat.DecodeRecord(entries[0].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +263,7 @@ func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	if _, err := live.Submit(member, sub("bad", "edit", `{"qty":"wrong"}`), now); err == nil || len(entries) != 2 {
 		t.Fatal("rejected edit did not retain its durable refusal")
 	}
-	rejected, _, err := decodeRefusedResult(entries[1].Body)
+	rejected, _, err := resultformat.DecodeRefusal(entries[1].Body)
 	if err != nil || rejected.Kind != "refusal" {
 		t.Fatalf("rejected edit did not preserve its answer: %+v, %v", rejected, err)
 	}
@@ -298,7 +299,7 @@ func TestGeneratedActionWithWrongTargetCannotFallBackToLegacy(t *testing.T) {
 		tn.records.types["stock.bin"].rows.Get("B1") != nil {
 		t.Fatalf("malformed generated action escaped the isolated result boundary: %v, journal=%+v", err, journal)
 	}
-	if _, _, decodeErr := decodeRefusedResult(journal[0].Body); decodeErr != nil {
+	if _, _, decodeErr := resultformat.DecodeRefusal(journal[0].Body); decodeErr != nil {
 		t.Fatalf("malformed target was not committed as a refusal: %v", decodeErr)
 	}
 }
@@ -388,7 +389,7 @@ func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, _, decodeErr := decodeAcceptedResult(saved.Body)
+	result, _, decodeErr := resultformat.DecodeRecord(saved.Body)
 	if decodeErr != nil || result.Version != 5 || result.Kind != "record" || len(result.Event.Subscribers) != 1 ||
 		result.Event.Subscribers[0] != "listener" || len(result.Event.Effects) != 1 {
 		t.Fatalf("result omitted owned work: %+v, %v", result.Event, decodeErr)
@@ -435,7 +436,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result acceptedResult
+	var result resultformat.Record
 	if err := json.Unmarshal(committed.Body, &result); err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +446,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	result.Unique = nil
 	result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
 	result.Row.History = records.CopyHistory(source.records.types["stock.bin"].rows.Get("B1").RecordHistory())
-	previousDigest, previousDigestErr := digestAcceptedResult(result)
+	previousDigest, previousDigestErr := resultformat.DigestRecord(result)
 	if previousDigestErr != nil {
 		t.Fatal(previousDigestErr)
 	}
@@ -456,7 +457,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 		t.Fatalf("version 2 result no longer recovers: %v", err)
 	}
 	result.Event.Names = nil
-	digest, digestErr := digestAcceptedResult(result)
+	digest, digestErr := resultformat.DigestRecord(result)
 	if digestErr != nil {
 		t.Fatal(digestErr)
 	}
@@ -469,7 +470,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	// Results written by the previous format must remain readable.
 	result.Version = 1
 	result.At = time.Time{}
-	digest, digestErr = digestAcceptedResult(result)
+	digest, digestErr = resultformat.DigestRecord(result)
 	if digestErr != nil {
 		t.Fatal(digestErr)
 	}
@@ -610,21 +611,21 @@ func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	reordered, _ := json.Marshal(asJSON)
-	if _, _, err := decodeAcceptedResult(reordered); err != nil {
+	if _, _, err := resultformat.DecodeRecord(reordered); err != nil {
 		t.Fatalf("JSONB-style reordered keys changed the result digest: %v", err)
 	}
-	for name, mutate := range map[string]func(*acceptedResult){
-		"version":        func(r *acceptedResult) { r.Version++ },
-		"request digest": func(r *acceptedResult) { r.RequestHash = "other" },
-		"record type":    func(r *acceptedResult) { r.Row.Type = "other" },
-		"record image":   func(r *acceptedResult) { r.Row.Value = []byte(`{"id":"I2"}`) },
-		"changed value": func(r *acceptedResult) {
+	for name, mutate := range map[string]func(*resultformat.Record){
+		"version":        func(r *resultformat.Record) { r.Version++ },
+		"request digest": func(r *resultformat.Record) { r.RequestHash = "other" },
+		"record type":    func(r *resultformat.Record) { r.Row.Type = "other" },
+		"record image":   func(r *resultformat.Record) { r.Row.Value = []byte(`{"id":"I2"}`) },
+		"changed value": func(r *resultformat.Record) {
 			r.Row.Value = bytes.Replace(r.Row.Value, []byte(`"qty":2`), []byte(`"qty":99`), 1)
 		},
-		"history": func(r *acceptedResult) { r.Row.History[len(r.Row.History)-1].Change = "other" },
+		"history": func(r *resultformat.Record) { r.Row.History[len(r.Row.History)-1].Change = "other" },
 	} {
 		t.Run(name, func(t *testing.T) {
-			var changed acceptedResult
+			var changed resultformat.Record
 			if err := json.Unmarshal(raw, &changed); err != nil {
 				t.Fatal(err)
 			}
@@ -638,7 +639,7 @@ func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 			}
 		})
 	}
-	if _, _, err := decodeAcceptedResult(bytes.Repeat([]byte(" "), acceptance.MaxResultBytes+1)); err == nil {
+	if _, _, err := resultformat.DecodeRecord(bytes.Repeat([]byte(" "), acceptance.MaxResultBytes+1)); err == nil {
 		t.Fatal("oversized result accepted")
 	}
 }

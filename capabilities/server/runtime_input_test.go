@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -153,7 +154,7 @@ func TestRecordedInputCannotDropAnOperationCancellation(t *testing.T) {
 			tn := composeTenant(t, "input-cancel", []Seat{seatOf("ana", "a:writer")}, owner)
 			member := memberOf(t, tn, "ana")
 			owner.cancel = &pb.ChangeRecord{Submission: submission(tn, member, "a", "a.note", "a.topic", "feed", "")}
-			tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: owner.operation, Endpoint: operationEndpoint,
+			tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: owner.operation, Endpoint: resultformat.OperationEndpoint,
 				State: "pending", Body: string(platform.Raw(operationBinding{Member: member.ID}))}})
 			if mode == "record" {
 				tn.Record = func(Entry) { t.Fatal("unsupported cancellation wrote a result") }

@@ -3,8 +3,9 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
-	"platformserver/internal/records"
+
+	resultformat "platformserver/internal/acceptance/result"
+
 	"slices"
 	"time"
 
@@ -13,59 +14,19 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/journal"
+
 	"platformserver/platform"
 )
-
-// A recorded connector input is an independent top-level result, not a
-// submission manufactured to make its application callback fit a ledger.
-// Its answer, record images and K8 marks are saved together. An application
-// with additional mutable state must supply an AcceptedStateApp fork.
-type acceptedInput struct {
-	Unique         []journal.StateUnique       `json:"unique,omitempty"`
-	Authorizations []authorizationEvidence     `json:"authorizations,omitempty"`
-	Version        int                         `json:"version"`
-	Kind           string                      `json:"kind"`
-	Tenant         string                      `json:"tenant"`
-	App            string                      `json:"app"`
-	Name           string                      `json:"name"`
-	Member         string                      `json:"member"`
-	Key            string                      `json:"key"`
-	At             time.Time                   `json:"at"`
-	Body           []byte                      `json:"body"`
-	RequestHash    string                      `json:"requestHash"`
-	Digest         string                      `json:"digest"`
-	Answer         json.RawMessage             `json:"answer,omitempty"`
-	Refusal        *kernel.Error               `json:"refusal,omitempty"`
-	Changes        json.RawMessage             `json:"changes,omitempty"`
-	Rows           []acceptedInputRow          `json:"rows,omitempty"`
-	Deliveries     []acceptedConnectorDelivery `json:"deliveries,omitempty"`
-	States         []acceptedState             `json:"states,omitempty"`
-	Notices        *acceptedNotices            `json:"notices,omitempty"`
-}
-
-type acceptedInputRow struct {
-	records.Image
-	App    string `json:"app"`
-	Before string `json:"before,omitempty"`
-}
-
-func acceptedInputHash(tenant, app, name, member string, body []byte) (string, error) {
-	return acceptance.Digest(struct {
-		Tenant, App, Name, Member string
-		Body                      []byte
-	}{tenant, app, name, member, body})
-}
 
 func (d *stagedDecision) inputResult(app, name string, m platform.Member, body []byte, answer any, at time.Time) ([]byte, error) {
 	if d.failure != nil || len(d.requests) > 0 {
 		return nil, fmt.Errorf("connector input contains effects not represented by its result")
 	}
-	hash, err := acceptedInputHash(d.tenant.ID, app, name, m.ID, body)
+	hash, err := resultformat.InputHash(d.tenant.ID, app, name, m.ID, body)
 	if err != nil {
 		return nil, err
 	}
-	result := acceptedInput{Version: 2, Kind: "input-result", Tenant: d.tenant.ID, App: app,
+	result := resultformat.Input{Version: 2, Kind: "input-result", Tenant: d.tenant.ID, App: app,
 		Name: name, Member: m.ID, Key: "input:" + hash, At: at.UTC(), Body: slices.Clone(body),
 		RequestHash: hash, Deliveries: slices.Clone(d.deliveries), Notices: d.savedNotices(), Authorizations: slices.Clone(d.authorizations)}
 	if message, ok := answer.(proto.Message); ok {
@@ -88,7 +49,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		// The child batch owns the entire staged state; do not apply its marks,
 		// notices or record images twice from the enclosing input.
 		result.Deliveries, result.Notices = nil, nil
-		result.Digest, err = digestAcceptedInput(result)
+		result.Digest, err = resultformat.DigestInput(result)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +57,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		if err != nil {
 			return nil, err
 		}
-		if _, err := decodeAcceptedInput(raw); err != nil {
+		if _, err := resultformat.DecodeInput(raw); err != nil {
 			return nil, err
 		}
 		return raw, nil
@@ -121,7 +82,7 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if err != nil {
 		return nil, err
 	}
-	result.Digest, err = digestAcceptedInput(result)
+	result.Digest, err = resultformat.DigestInput(result)
 	if err != nil {
 		return nil, err
 	}
@@ -129,26 +90,21 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if err != nil {
 		return nil, err
 	}
-	if _, err := decodeAcceptedInput(raw); err != nil {
+	if _, err := resultformat.DecodeInput(raw); err != nil {
 		return nil, err
 	}
 	return raw, nil
 }
 
-func digestAcceptedInput(result acceptedInput) (string, error) {
-	result.Digest = ""
-	return acceptance.Digest(result)
-}
-
 func encodeAcceptedInputRefusal(tenant, app, name string, m platform.Member, body []byte, at time.Time, refusal *kernel.Error) ([]byte, error) {
-	hash, err := acceptedInputHash(tenant, app, name, m.ID, body)
+	hash, err := resultformat.InputHash(tenant, app, name, m.ID, body)
 	if err != nil {
 		return nil, err
 	}
-	result := acceptedInput{Version: 2, Kind: "input-result", Tenant: tenant, App: app,
+	result := resultformat.Input{Version: 2, Kind: "input-result", Tenant: tenant, App: app,
 		Name: name, Member: m.ID, Key: "input:" + hash, At: at.UTC(), Body: slices.Clone(body),
 		RequestHash: hash, Refusal: refusal}
-	result.Digest, err = digestAcceptedInput(result)
+	result.Digest, err = resultformat.DigestInput(result)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +112,7 @@ func encodeAcceptedInputRefusal(tenant, app, name string, m platform.Member, bod
 	if err != nil {
 		return nil, err
 	}
-	if _, err := decodeAcceptedInput(raw); err != nil {
+	if _, err := resultformat.DecodeInput(raw); err != nil {
 		return nil, err
 	}
 	return raw, nil
@@ -166,7 +122,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	if m.ID == "" || m.Tenant != t.ID || name == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connector input has an invalid identity")
 	}
-	hash, hashErr := acceptedInputHash(t.ID, a.Manifest().ID, name, m.ID, body)
+	hash, hashErr := resultformat.InputHash(t.ID, a.Manifest().ID, name, m.ID, body)
 	if hashErr != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -176,7 +132,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	}
 	draft := t.newStagedDecision()
 	entry := t.authorizeEntry(m, a.Manifest().ID, "input:"+name, "action", now)
-	draft.authorizations = append(draft.authorizations, authorizationEvidence{Request: platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: "input:" + name}, Decision: entry, Roles: slices.Clone(m.RolesIn(a.Manifest().ID))})
+	draft.authorizations = append(draft.authorizations, resultformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: "input:" + name}, Decision: entry, Roles: slices.Clone(m.RolesIn(a.Manifest().ID))})
 	answer, refusal, unsupported := decideAcceptedInput(a, draft, m, name, body, now)
 	if unsupported {
 		return nil, refusal
@@ -191,9 +147,9 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This input cannot produce a bounded accepted result")
 	}
-	result, err := decodeAcceptedInput(raw)
+	result, err := resultformat.DecodeInput(raw)
 	if err == nil {
-		_, err = t.prepareAcceptedChanges(result.changePlan())
+		_, err = t.prepareAcceptedChanges(result.ChangePlan())
 	}
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -251,7 +207,7 @@ func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m p
 }
 
 func (t *Tenant) answerAcceptedInput(a platform.AcceptedInputApp, raw []byte) (any, *kernel.Error) {
-	result, err := decodeAcceptedInput(raw)
+	result, err := resultformat.DecodeInput(raw)
 	if err != nil || result.Tenant != t.ID || result.App != a.Manifest().ID {
 		t.quarantine(fmt.Errorf("saved connector answer is incompatible: %v", err))
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -267,66 +223,8 @@ func (t *Tenant) answerAcceptedInput(a platform.AcceptedInputApp, raw []byte) (a
 	return answer, nil
 }
 
-func decodeAcceptedInput(raw []byte) (acceptedInput, error) {
-	var result acceptedInput
-	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
-		return result, fmt.Errorf("connector result is empty or oversized")
-	}
-	if err := acceptance.DecodeJSON(raw, &result, "connector result"); err != nil {
-		return result, err
-	}
-	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
-		return result, err
-	}
-
-	if result.Version == 1 && len(result.Unique) > 0 {
-		return result, fmt.Errorf("legacy connector result carries derived unique keys")
-	}
-	digest, err := digestAcceptedInput(result)
-	if err != nil || digest != result.Digest {
-		return result, fmt.Errorf("connector result digest differs")
-	}
-	hash, err := acceptedInputHash(result.Tenant, result.App, result.Name, result.Member, result.Body)
-	if err != nil || (result.Version != 1 && result.Version != 2) || result.Kind != "input-result" ||
-		result.Tenant == "" || result.App == "" || result.Name == "" || result.Member == "" ||
-		result.At.IsZero() || result.RequestHash != hash || result.Key != "input:"+hash ||
-		result.Refusal != nil && (result.Refusal.Code == pb.ErrorCode_ERROR_CODE_UNSPECIFIED ||
-			len(result.Changes) > 0 || len(result.Rows) > 0 || len(result.Deliveries) > 0 ||
-			len(result.States) > 0 || len(result.Unique) > 0 || result.Notices != nil) ||
-		result.Refusal == nil && len(result.Answer) == 0 {
-		return result, fmt.Errorf("connector result has inconsistent identity or effects")
-	}
-	if len(result.Changes) > 0 {
-		batch, receipt, err := decodeAcceptedBatch(result.Changes)
-		answer := new(pb.ChangeRecord)
-		if err != nil || protojson.Unmarshal(result.Answer, answer) != nil ||
-			batch.Tenant != result.Tenant || batch.App != result.App || !batch.At.Equal(result.At) ||
-			receipt.GetSubmission().GetPrincipalId() != result.Member || !proto.Equal(receipt, answer) ||
-			len(result.Rows) > 0 || len(result.Deliveries) > 0 || len(result.States) > 0 || len(result.Unique) > 0 || result.Notices != nil {
-			return result, fmt.Errorf("connector result has a foreign child decision: %v", err)
-		}
-	}
-	seen := map[string]bool{}
-	for _, row := range result.Rows {
-		if result.Version >= 2 {
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, err
-			}
-		} else if row.HistoryRef != nil || row.Predecessor != "" || row.Format != "" {
-			return result, fmt.Errorf("legacy connector result carries new record metadata")
-		}
-		ref := row.Type + "/" + row.ID
-		if row.Type == "" || row.ID == "" || row.App != result.App || seen[ref] ||
-			len(row.Value) == 0 || len(row.History) == 0 {
-			return result, fmt.Errorf("connector result has a duplicate or invalid row")
-		}
-		seen[ref] = true
-	}
-	return result, nil
-}
-
-func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedInput, bool, error) {
-	result, err := decodeAcceptedInput(raw)
+func (t *Tenant) applyAcceptedInput(raw []byte) (resultformat.Input, bool, error) {
+	result, err := resultformat.DecodeInput(raw)
 	if err != nil {
 		return result, false, err
 	}
@@ -340,13 +238,13 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedInput, bool, error) {
 		}
 	}
 	if prior := t.committed.input(result.App + "/" + result.Key); len(prior) > 0 {
-		saved, err := decodeAcceptedInput(prior)
+		saved, err := resultformat.DecodeInput(prior)
 		if err != nil || saved.Digest != result.Digest {
 			return result, false, fmt.Errorf("connector input key belongs to another result")
 		}
 		return result, false, nil
 	}
-	prepared, err := t.prepareAcceptedChanges(result.changePlan())
+	prepared, err := t.prepareAcceptedChanges(result.ChangePlan())
 	if err != nil {
 		return result, false, err
 	}

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"platformserver/internal/agents"
 	"slices"
 	"strings"
 	"time"
@@ -81,7 +82,7 @@ func (a *Agents) remember(c platform.Caller, run *AgentRunRecord, fact string, a
 	if fact == "" {
 		return "refused: nothing to remember", nil
 	}
-	m := Memory{Record: platform.Record{ID: fmt.Sprintf("%s:m%d", run.ID, len(run.Steps)+1)}, Agent: run.Agent, Fact: clip(fact, 500), Run: run.ID,
+	m := Memory{Record: platform.Record{ID: fmt.Sprintf("%s:m%d", run.ID, len(run.Steps)+1)}, Agent: run.Agent, Fact: agents.Clip(fact, 500), Run: run.ID,
 		Sources: sourcesOf(*run), State: "active", Expires: now.AddDate(0, 0, memoryDays)}
 	if aboutPerson {
 		m.For = run.OnBehalf

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -45,7 +46,7 @@ func TestAcceptedConsoleCoreSeedReplay(t *testing.T) {
 		t.Fatalf("initial receipt: %v", err)
 	}
 	restored := compose(true)
-	batch, _, err := decodeAcceptedBatch(entries[1].Body)
+	batch, _, err := resultformat.DecodeBatch(entries[1].Body)
 	if err != nil {
 		t.Fatal(err)
 	}

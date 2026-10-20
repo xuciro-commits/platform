@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"testing"
 	"time"
@@ -65,16 +66,16 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if len(entries) != 2 {
 		t.Fatalf("expected two accepted inputs, got %d", len(entries))
 	}
-	result, _, err := decodeAcceptedBatch(entries[1].Body)
+	result, _, err := resultformat.DecodeBatch(entries[1].Body)
 	if err != nil || len(result.Rows) != 1 {
 		t.Fatalf("count did not save its canonical batch: %+v, %v", result, err)
 	}
 	if result.Version != 8 || result.Rows[0].HistoryRef == nil || result.Rows[0].HistoryRef.Base != 1 || result.Rows[0].HistoryBase != 1 || len(result.Rows[0].History) != 1 || tn.records.types["stock.item"].rows.Get("I1").HistoryLength() != 2 {
 		t.Fatal("a new result must append one change without discarding its history")
 	}
-	encode := func(batch acceptedBatch) []byte {
+	encode := func(batch resultformat.Batch) []byte {
 		t.Helper()
-		batch.Digest, err = digestAcceptedBatch(batch)
+		batch.Digest, err = resultformat.DigestBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,7 +114,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if err := recoveredSuffix.Replay([]Entry{entries[0], legacySuffixSecond, entries[2]}); err != nil || recoveredSuffix.records.types["stock.item"].rows.Get("I1").HistoryLength() != 3 {
 		t.Fatalf("old suffix followed by a new suffix failed to recover: %v", err)
 	}
-	result, _, err = decodeAcceptedBatch(entries[2].Body)
+	result, _, err = resultformat.DecodeBatch(entries[2].Body)
 	if err != nil {
 		t.Fatal(err)
 	}

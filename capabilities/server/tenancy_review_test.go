@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-jose/go-jose/v4"
+	resultformat "platformserver/internal/acceptance/result"
+
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -140,7 +142,7 @@ func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch, _, errDecode := decodeAcceptedBatch(entries[len(entries)-1].Body)
+	batch, _, errDecode := resultformat.DecodeBatch(entries[len(entries)-1].Body)
 	if errDecode != nil || batch.Notices == nil || len(batch.Notices.Effects) != 1 {
 		t.Fatalf("accepted invitation omitted mail intent: %+v %v", batch.Notices, errDecode)
 	}

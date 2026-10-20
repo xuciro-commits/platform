@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/internal/records"
 	"reflect"
 	"strings"
 	"testing"
@@ -174,16 +175,16 @@ func TestEnterpriseUsageUnchangedRetiredLineReferences(t *testing.T) {
 	previous := reflect.ValueOf(document{Lines: []line{{Unit: "closed", Note: "old"}}})
 	value := reflect.ValueOf(document{Lines: []line{{Unit: "closed", Note: "updated"}}})
 	// The empty caller resolves no active element: only retained references pass.
-	if refusal := checkEnterpriseReferences(platform.Caller{}, info.Fields, value, previous, time.Now()); refusal != nil {
+	if refusal := records.CheckEnterpriseReferences((platform.Caller{}).Enterprise(), false, info.Fields, value, previous, time.Now()); refusal != nil {
 		t.Fatal(refusal)
 	}
 	value = reflect.ValueOf(document{Lines: []line{{Unit: "closed"}, {Unit: "closed"}}})
-	if refusal := checkEnterpriseReferences(platform.Caller{}, info.Fields, value, previous, time.Now()); refusal == nil {
+	if refusal := records.CheckEnterpriseReferences((platform.Caller{}).Enterprise(), false, info.Fields, value, previous, time.Now()); refusal == nil {
 		t.Fatal("duplicating an old closed reference created another use")
 	}
 	field := info.Fields[0].Fields[0]
 	field.Read = []string{"private"}
-	if paths := matchingRefs([]platform.FieldInfo{field}, "", reflect.ValueOf(line{Unit: "closed"}), "closed", nil); len(paths) != 0 {
+	if paths := records.MatchingRefs([]platform.FieldInfo{field}, "", reflect.ValueOf(line{Unit: "closed"}), "closed", nil); len(paths) != 0 {
 		t.Fatal("nil roles exposed a private reference")
 	}
 }

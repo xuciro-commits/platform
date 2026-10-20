@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"reflect"
 	"slices"
@@ -26,11 +27,11 @@ type stagedDecision struct {
 	businessRefusals     map[*kernel.Error]platform.BusinessRefusalFact
 	businessFacts        []platform.BusinessRefusalFact
 	simulation           bool
-	definitions          map[string]*DecisionDefinition
+	definitions          map[string]*resultformat.DecisionDefinition
 	schemaVersion        *platform.SchemaVersion
 	retirements          []migrationRetirement
-	migrationDefinitions []releaseInstallation
-	authorizations       []authorizationEvidence
+	migrationDefinitions []resultformat.ReleaseInstallation
+	authorizations       []resultformat.AuthorizationEvidence
 	iterations           []platform.TxnIteration
 	constraintWrites     map[string]constraintWrite
 	callbackOrigin       *platform.Effect
@@ -56,9 +57,9 @@ type stagedDecision struct {
 	noticeChanged        bool
 	writers              map[string][]string
 	changed              map[string][]string
-	publications         map[string]*acceptedPublication
+	publications         map[string]*resultformat.Publication
 	intents              []platform.Effect
-	observations         []acceptedObservation
+	observations         []resultformat.Observation
 	observed             bool
 	hops                 int
 	requests             []request
@@ -68,11 +69,11 @@ type stagedDecision struct {
 	states               map[string]platform.AcceptedStateApp
 	stateBases           map[string]json.RawMessage
 	connectors           *kernel.Connectors
-	deliveries           []acceptedConnectorDelivery
+	deliveries           []resultformat.ConnectorDelivery
 	operationAnswers     map[string]platform.OperationResult
 	operationCancels     map[string]bool
 	operationInputs      map[string][]*preparedOperationInput
-	observationInput     *ObservationDecisionEvidence
+	observationInput     *resultformat.ObservationDecisionEvidence
 }
 
 // HoldChanges tracks the stack that owns a private ledger receive. Savepoints
@@ -143,7 +144,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 	if d.receiving[app.AcceptedLedger()] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held owner")
 	}
-	if d.active[id] || len(d.active) >= maxHops {
+	if d.active[id] || len(d.active) >= resultformat.MaxHops {
 		unsupportedStagedEffect()
 	}
 	d.active[id] = true
@@ -174,7 +175,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		}
 		definition.Contract.Family = r.GetSubmission().GetSchema().GetVersion()
 		if d.definitions == nil {
-			d.definitions = map[string]*DecisionDefinition{}
+			d.definitions = map[string]*resultformat.DecisionDefinition{}
 		}
 		d.definitions[id+"/"+r.GetChangeId()] = definition
 	}
@@ -211,7 +212,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 	var ref string
 	if et != nil {
 		info = et.info
-		id := records.Header(copyOf(et.info.Go, entity)).ID
+		id := records.Header(records.Copy(et.info.Go, entity)).ID
 		before, ref = et.rows.Get(id), et.info.Type+"/"+id
 	}
 	d.records.mu.Unlock()
@@ -234,7 +235,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 	if err == nil {
 		d.records.mu.Lock()
 		et := d.records.of(c, reflect.TypeOf(entity))
-		id := records.Header(copyOf(et.info.Go, entity)).ID
+		id := records.Header(records.Copy(et.info.Go, entity)).ID
 		ref := et.info.Type + "/" + id
 		history := et.rows.Get(id).HistoryLength()
 		d.records.mu.Unlock()
@@ -291,9 +292,9 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 			return
 		}
 		if d.publications == nil {
-			d.publications = map[string]*acceptedPublication{}
+			d.publications = map[string]*resultformat.Publication{}
 		}
-		d.publications[c.App+"/"+record.GetChangeId()] = &acceptedPublication{Schema: schema, Image: raw}
+		d.publications[c.App+"/"+record.GetChangeId()] = &resultformat.Publication{Schema: schema, Image: raw}
 	}
 }
 
@@ -435,7 +436,7 @@ func (d *stagedDecision) Deliver(c platform.Caller, dataClass, from, to string, 
 		}
 		return refusal
 	}
-	d.deliveries = append(d.deliveries, acceptedConnectorDelivery{
+	d.deliveries = append(d.deliveries, resultformat.ConnectorDelivery{
 		Connector: c.ID, DataClass: dataClass, From: from, To: to, At: now, Before: before})
 	return nil
 }
@@ -453,7 +454,7 @@ func (d *stagedDecision) Find(c platform.Caller, typ reflect.Type, q platform.Qu
 	page, total, err := d.records.find(et, q, nil)
 	out := make([]any, len(page))
 	for i, v := range page {
-		out[i] = copyOf(typ, v.Interface()).Interface()
+		out[i] = records.Copy(typ, v.Interface()).Interface()
 	}
 	return out, total, err
 }

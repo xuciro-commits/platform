@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"strings"
 	"sync"
@@ -480,7 +481,7 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 	if len(entries) != position+1 {
 		t.Fatal("failure produced additional ledger entries")
 	}
-	saved, _, decodeErr := decodeRefusedResult(entries[len(entries)-1].Body)
+	saved, _, decodeErr := resultformat.DecodeRefusal(entries[len(entries)-1].Body)
 	if decodeErr != nil || saved.Version != 3 {
 		t.Fatal("constraint refusal not versioned", decodeErr)
 	}
@@ -489,7 +490,7 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 		t.Fatal("unbalanced amounts escaped the atomic boundary", err, issues)
 	}
 	receipt := decide(t, tenant, "builder", construction.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 1}, txnAt)
-	batch, _, decodeErr := decodeAcceptedBatch(entries[len(entries)-1].Body)
+	batch, _, decodeErr := resultformat.DecodeBatch(entries[len(entries)-1].Body)
 	if decodeErr != nil || len(batch.Rows) != 4 || len(batch.Decisions) != 1 || len(batch.Sequences) != 1 {
 		t.Fatalf("reference and rows did not share one result: %+v %v", batch, decodeErr)
 	}

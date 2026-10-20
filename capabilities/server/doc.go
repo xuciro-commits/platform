@@ -27,12 +27,17 @@
 // and Agents own their state and receive ConsoleHost/AgentHost, never Tenant.
 // Pure construction and enterprise declarations live in internal/construction
 // and internal/enterprise; UAF runtime data is generated before the build.
-// Record images, immutable history segments, indexes and pure query/order
-// compilation live in internal/records. Host recordStore owns authorized
+// Record images, immutable history segments, recent changes, indexes and pure
+// field/scope/query compilation live in internal/records. Host recordStore owns authorized
 // storage access, private decision coordination and accepted application.
 // Construction owns pure object/process compilation and declaration/member
 // projections; original owners supply narrow read roles and execute results.
 // Accepted canonical encoding and strict decoding live in internal/acceptance.
+// Seven pure result families, shared evidence and the typed change plan live
+// in internal/acceptance/result. Runtime-owned Task/Agent/console formats keep
+// their owner-specific checks and use those same shared values and decoders.
+// Agent prompt/history compilation, observation bounds and budget arithmetic
+// live in internal/agents, which receives only already-authorized values.
 // Runtime code imports no compiled apps. Public DTOs retain
 // the original host API schema names and journal encodings.
 //

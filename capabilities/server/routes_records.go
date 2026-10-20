@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"platformserver/internal/records"
 	"reflect"
 	"strconv"
 	"strings"
@@ -425,7 +426,7 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 	et := t.records.types[construction.ObjectType]
 	t.records.mu.Unlock()
 	_, hidden := viewOf(m, et)
-	return masked(et, reflect.ValueOf(canonical), hidden), nil
+	return records.Mask(et.info, reflect.ValueOf(canonical), hidden), nil
 }
 
 func (t *Tenant) objectDraftPage(m platform.Member, page RecordPage) (RecordPage, *kernel.Error) {

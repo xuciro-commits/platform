@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/journal"
 	"platformserver/platform"
 	"slices"
@@ -20,11 +21,11 @@ type committed struct {
 	pending             map[string]bool
 	storage             journal.RuntimeState
 	tenant              string
-	decisionDefinitions map[string]*DecisionDefinition
+	decisionDefinitions map[string]*resultformat.DecisionDefinition
 	schemaVersions      map[string]platform.SchemaVersion
-	refusals            map[string]refusedResult   // "<app>/<key>"
-	answers             map[string]json.RawMessage // "<app>/<key>", "release:<key>"
-	inputs              map[string]json.RawMessage // "<app>/<key>"
+	refusals            map[string]resultformat.Refusal // "<app>/<key>"
+	answers             map[string]json.RawMessage      // "<app>/<key>", "release:<key>"
+	inputs              map[string]json.RawMessage      // "<app>/<key>"
 	compositeAnswers    map[string]json.RawMessage
 	composites          map[string]string // key → applied digest
 }
@@ -74,20 +75,20 @@ func (c *committed) restore(s *tenantState) {
 	c.compositeAnswers = maps.Clone(s.CompositeAnswers)
 	c.refusals, c.answers, c.inputs = maps.Clone(s.Refusals), maps.Clone(s.AcceptedAnswers), maps.Clone(s.AcceptedInputs)
 	if c.refusals == nil {
-		c.refusals = map[string]refusedResult{}
+		c.refusals = map[string]resultformat.Refusal{}
 	}
 	if s.Composites != nil {
 		c.composites = s.Composites
 	}
 }
 
-func (c *committed) saveDecisionDefinition(app, change string, definition *DecisionDefinition) {
+func (c *committed) saveDecisionDefinition(app, change string, definition *resultformat.DecisionDefinition) {
 	if definition == nil {
 		return
 	}
 	c.advance()
 	if c.decisionDefinitions == nil {
-		c.decisionDefinitions = map[string]*DecisionDefinition{}
+		c.decisionDefinitions = map[string]*resultformat.DecisionDefinition{}
 	}
 	c.decisionDefinitions[app+"/"+change] = definition
 }
@@ -175,7 +176,7 @@ func (c *committed) input(key string) json.RawMessage {
 	v, _ := storedValue(c, "input", key, c.inputs)
 	return v
 }
-func (c *committed) refusal(key string) (refusedResult, bool) {
+func (c *committed) refusal(key string) (resultformat.Refusal, bool) {
 	return storedValue(c, "refusal", key, c.refusals)
 }
 func (c *committed) compositeAnswer(key string) json.RawMessage {
@@ -188,7 +189,7 @@ func (c *committed) composite(key string) (string, bool) {
 func (c *committed) schemaVersion(key string) (platform.SchemaVersion, bool) {
 	return storedValue(c, "schema-version", key, c.schemaVersions)
 }
-func (c *committed) decisionDefinition(key string) *DecisionDefinition {
+func (c *committed) decisionDefinition(key string) *resultformat.DecisionDefinition {
 	v, _ := storedValue(c, "decision-definition", key, c.decisionDefinitions)
 	return v
 }
@@ -200,7 +201,7 @@ func (c *committed) allAnswers() map[string]json.RawMessage {
 	return answers
 }
 func (c *committed) allInputs() map[string]json.RawMessage { return storedValues(c, "input", c.inputs) }
-func (c *committed) allRefusals() map[string]refusedResult {
+func (c *committed) allRefusals() map[string]resultformat.Refusal {
 	return storedValues(c, "refusal", c.refusals)
 }
 func (c *committed) allCompositeAnswers() map[string]json.RawMessage {
@@ -212,13 +213,13 @@ func (c *committed) allComposites() map[string]string {
 func (c *committed) allSchemaVersions() map[string]platform.SchemaVersion {
 	return storedValues(c, "schema-version", c.schemaVersions)
 }
-func (c *committed) allDecisionDefinitions() map[string]*DecisionDefinition {
+func (c *committed) allDecisionDefinitions() map[string]*resultformat.DecisionDefinition {
 	return storedValues(c, "decision-definition", c.decisionDefinitions)
 }
-func (c *committed) saveRefusal(key string, r refusedResult) {
+func (c *committed) saveRefusal(key string, r resultformat.Refusal) {
 	c.advance()
 	if c.refusals == nil {
-		c.refusals = map[string]refusedResult{}
+		c.refusals = map[string]resultformat.Refusal{}
 	}
 	c.refusals[key] = r
 }

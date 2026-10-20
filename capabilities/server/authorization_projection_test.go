@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"platformkernel/kernel"
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -216,7 +217,7 @@ func TestOriginalReadSourceDoesNotWidenRecordsOrExplicitDerivedFields(t *testing
 	}
 	for _, source := range []string{"generated", "invented"} {
 		owner.original = source
-		if checkManifest(owner) == nil {
+		if construction.CheckManifest(owner.Manifest(), false) == nil {
 			t.Fatal("uncontrolled read source was accepted")
 		}
 	}

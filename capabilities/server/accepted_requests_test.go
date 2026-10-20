@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -101,7 +102,7 @@ func TestAcceptedProtocolRequestAndReplyShareCommit(t *testing.T) {
 	if refusal != nil || len(entries) != 1 {
 		t.Fatalf("protocol transaction did not commit: %v, entries=%d", refusal, len(entries))
 	}
-	saved, _, err := decodeAcceptedBatch(entries[0].Body)
+	saved, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(saved.Decisions) != 3 || len(saved.Rows) != 2 {
 		t.Fatalf("request and reply were not one result: %+v, %v", saved, err)
 	}
@@ -143,7 +144,7 @@ func TestAcceptedProtocolRefusalKeepsRequestAndReplyOnly(t *testing.T) {
 			if _, err := tn.Submit(member, sub, at); err != nil || len(entries) != 1 {
 				t.Fatalf("the accepted request's refused answer did not commit: %v", err)
 			}
-			saved, _, err := decodeAcceptedBatch(entries[0].Body)
+			saved, _, err := resultformat.DecodeBatch(entries[0].Body)
 			if err != nil || len(saved.Decisions) != 2 || len(saved.Rows) != 1 ||
 				tn.records.types["stock.hold"].rows.Len() != 0 {
 				t.Fatalf("refused provider left a decision or record: %+v, %v", saved, err)
@@ -270,7 +271,7 @@ func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
 	for i, intent := range tn.outbound {
 		var ask modelAsk
 		if json.Unmarshal([]byte(intent.Body), &ask) != nil || intent.Key != fmt.Sprintf("%s#%d", receipt.GetChangeId(), i) ||
-			intent.Endpoint != modelEndpoint || !intent.At.Equal(at) || ask.Model != "local/chosen" ||
+			intent.Endpoint != resultformat.ModelEndpoint || !intent.At.Equal(at) || ask.Model != "local/chosen" ||
 			ask.Record != "cart.line/L1" || ask.Reply != "cart.line.answer" || ask.Prompt.MaxTokens != 12 {
 			t.Fatalf("model intent lost its committed input: %+v, %+v", intent, ask)
 		}

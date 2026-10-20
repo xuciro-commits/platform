@@ -87,7 +87,7 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		return entity, nil
 	}
 	info := et.info
-	value := copyOf(info.Go, entity)
+	value := records.Copy(info.Go, entity)
 	record := records.Header(value)
 	before := et.rows.Get(record.ID)
 	if before != nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"reflect"
 	"slices"
@@ -15,7 +16,7 @@ import (
 
 // Capture the same full record image and predecessor for connector inputs,
 // effect answers and callback observations, in the supplied stable order.
-func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]acceptedInputRow, error) {
+func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]resultformat.InputRow, error) {
 	d.records.mu.Lock()
 	defer d.records.mu.Unlock()
 	d.records.parent.mu.Lock()
@@ -23,7 +24,7 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 	if refs == nil {
 		refs = slices.Sorted(maps.Keys(d.records.writes))
 	}
-	var rows []acceptedInputRow
+	var rows []resultformat.InputRow
 	for _, ref := range refs {
 		if exclude[ref] {
 			continue
@@ -41,7 +42,7 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 		if err != nil {
 			return nil, err
 		}
-		row := acceptedInputRow{Image: image, App: owner}
+		row := resultformat.InputRow{Image: image, App: owner}
 		row.Before, err = records.Predecessor(typ, id, prior)
 		if err != nil {
 			return nil, err
@@ -55,11 +56,11 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 // top-level input without a child ledger decision (connector facts or an
 // external effect's answer). The caller promotes only after all other owners
 // of the same result have passed their predecessor checks.
-func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member string, at time.Time) (*recordStore, error) {
+func (t *Tenant) prepareAcceptedDirectRows(rows []resultformat.InputRow, member string, at time.Time) (*recordStore, error) {
 	return t.prepareAcceptedDirectRowsOn(t.records, rows, member, at)
 }
 
-func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedInputRow, member string, at time.Time) (*recordStore, error) {
+func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []resultformat.InputRow, member string, at time.Time) (*recordStore, error) {
 	draft := base.forkRecords()
 	draft.mu.Lock()
 	defer draft.mu.Unlock()

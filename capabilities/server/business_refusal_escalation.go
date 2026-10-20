@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -52,7 +53,7 @@ func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Ti
 		if json.Unmarshal(raw, &envelope) != nil || envelope.Kind != "record-batch" {
 			continue
 		}
-		r, _, err := decodeAcceptedBatch(raw)
+		r, _, err := resultformat.DecodeBatch(raw)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted refusal history cannot be read")
 		}

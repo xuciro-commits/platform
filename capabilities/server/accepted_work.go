@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"time"
 
@@ -22,26 +23,26 @@ import (
 // result includes the K9 generation, scheduling outcome, business changes and
 // notices. No runner/listener executes when this result is recovered.
 type acceptedWork struct {
-	Unique         []journal.StateUnique   `json:"unique,omitempty"`
-	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
-	Version        int                     `json:"version"`
-	Kind           string                  `json:"kind"`
-	Tenant         string                  `json:"tenant"`
-	App            string                  `json:"app"`
-	Key            string                  `json:"key"`
-	At             time.Time               `json:"at"`
-	RequestHash    string                  `json:"requestHash"`
-	Digest         string                  `json:"digest"`
-	Input          taskState               `json:"input"`
-	PriorWork      json.RawMessage         `json:"priorWork,omitempty"`
-	Work           json.RawMessage         `json:"work"`
-	Outcome        string                  `json:"outcome"`
-	After          Task                    `json:"after"`
-	Changes        json.RawMessage         `json:"changes,omitempty"`
-	Notices        *acceptedNotices        `json:"notices,omitempty"`
-	Intents        []platform.Effect       `json:"intents,omitempty"`
-	States         []acceptedState         `json:"states,omitempty"`
-	Control        *acceptedControl        `json:"control,omitempty"`
+	Unique         []journal.StateUnique                `json:"unique,omitempty"`
+	Authorizations []resultformat.AuthorizationEvidence `json:"authorizations,omitempty"`
+	Version        int                                  `json:"version"`
+	Kind           string                               `json:"kind"`
+	Tenant         string                               `json:"tenant"`
+	App            string                               `json:"app"`
+	Key            string                               `json:"key"`
+	At             time.Time                            `json:"at"`
+	RequestHash    string                               `json:"requestHash"`
+	Digest         string                               `json:"digest"`
+	Input          taskState                            `json:"input"`
+	PriorWork      json.RawMessage                      `json:"priorWork,omitempty"`
+	Work           json.RawMessage                      `json:"work"`
+	Outcome        string                               `json:"outcome"`
+	After          Task                                 `json:"after"`
+	Changes        json.RawMessage                      `json:"changes,omitempty"`
+	Notices        *resultformat.Notices                `json:"notices,omitempty"`
+	Intents        []platform.Effect                    `json:"intents,omitempty"`
+	States         []resultformat.State                 `json:"states,omitempty"`
+	Control        *resultformat.Control                `json:"control,omitempty"`
 }
 
 func stateOfTask(task *Task) (taskState, error) {
@@ -154,7 +155,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {
-		var plan acceptedChangePlan
+		var plan resultformat.ChangePlan
 		plan, err = draft.savedChangePlan()
 		result.Notices, result.Intents = plan.Notices, plan.Intents
 		result.States, result.Control = plan.States, plan.Control
@@ -174,7 +175,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 	if _, err := decodeAcceptedWork(raw); err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
-	if _, err := t.prepareAcceptedChanges(result.changePlan()); err != nil {
+	if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	principal, _ := json.Marshal(c.Member)
@@ -265,7 +266,7 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 	if err := acceptance.DecodeJSON(raw, &result, "work result"); err != nil {
 		return result, err
 	}
-	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
+	if err := resultformat.ValidateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
 		return result, err
 	}
 
@@ -317,7 +318,7 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 		}
 	}
 	if len(result.Changes) > 0 {
-		changes, _, err := decodeAcceptedBatch(result.Changes)
+		changes, _, err := resultformat.DecodeBatch(result.Changes)
 		if err != nil || changes.Tenant != result.Tenant || !changes.At.Equal(result.At) || result.Notices != nil || len(result.Intents) > 0 || len(result.States) > 0 || result.Control != nil ||
 			result.Outcome != "ok" {
 			return result, fmt.Errorf("work result has invalid business changes")
@@ -371,7 +372,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	if !proto.Equal(expected, finished) {
 		return false, fmt.Errorf("work result K9 state differs")
 	}
-	prepared, err := t.prepareAcceptedChanges(result.changePlan())
+	prepared, err := t.prepareAcceptedChanges(result.ChangePlan())
 	if err != nil {
 		return false, err
 	}

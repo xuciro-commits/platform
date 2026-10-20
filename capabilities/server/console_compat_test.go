@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestAcceptedConsoleEnterpriseRenameReplay(t *testing.T) {
 	decide(live, SchemaAdd, "old-add", `{"subject":"user:extra@example.test"}`)
 	restored := compose("enterprise")
 	prior, _ := restored.app(PlatformApp).(*Console).AcceptedState()
-	batch, _, err := decodeAcceptedBatch(entries[0].Body)
+	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || !restored.legacyConsolePredecessor(batch.States[0], prior) {
 		t.Fatalf("historical predecessor not recognized: %v", err)
 	}

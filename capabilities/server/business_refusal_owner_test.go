@@ -4,6 +4,7 @@ import "platformserver/internal/construction"
 
 import (
 	"encoding/json"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -77,7 +78,7 @@ func TestBusinessRefusalOwnerApproval(t *testing.T) {
 				if err == nil || receipt != nil {
 					t.Fatalf("approval preflight accepted a blocked transaction: %v", err)
 				}
-				saved, _, decodeErr := decodeRefusedResult(entries[len(entries)-1].Body)
+				saved, _, decodeErr := resultformat.DecodeRefusal(entries[len(entries)-1].Body)
 				if decodeErr != nil || len(saved.Issues) != 1 || saved.Issues[0].Code != "business_refusal" {
 					t.Fatalf("approval preflight discarded its business refusal diagnosis: %+v %v", saved.Issues, decodeErr)
 				}

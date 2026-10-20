@@ -1,38 +1,14 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
-	"time"
-
-	"platformserver/journal"
-	"platformserver/platform"
 )
 
-// acceptedChangePlan is the shared, typed part of a saved result. Result
-// families keep their own identities, answers and transitions; this plan owns
-// only changes which already have the same preparation/application rules.
-// It is a projection of each versioned envelope, not another wire format.
-type acceptedChangePlan struct {
-	Rows          []acceptedInputRow
-	Member        string
-	At            time.Time
-	Changes       json.RawMessage
-	States        []acceptedState
-	Control       *acceptedControl
-	Intents       []platform.Effect
-	Deliveries    []acceptedConnectorDelivery
-	Notices       *acceptedNotices
-	Sequences     map[string]int
-	SequenceBases map[string]int
-	Unique        []journal.StateUnique
-	CheckUnique   bool
-}
-
-func (d *stagedDecision) savedChangePlan() (acceptedChangePlan, error) {
-	plan := acceptedChangePlan{Notices: d.savedNotices(), Intents: slices.Clone(d.intents),
+func (d *stagedDecision) savedChangePlan() (resultformat.ChangePlan, error) {
+	plan := resultformat.ChangePlan{Notices: d.savedNotices(), Intents: slices.Clone(d.intents),
 		Deliveries: slices.Clone(d.deliveries), Sequences: maps.Clone(d.allocated),
 		SequenceBases: maps.Clone(d.sequenceBases), Unique: d.savedUniqueChanges()}
 	var err error
@@ -43,36 +19,20 @@ func (d *stagedDecision) savedChangePlan() (acceptedChangePlan, error) {
 	return plan, err
 }
 
-func (r acceptedInput) changePlan() acceptedChangePlan {
-	return acceptedChangePlan{Rows: r.Rows, Member: r.Member, At: r.At, Changes: r.Changes,
-		States: r.States, Deliveries: r.Deliveries, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 2 && len(r.Changes) == 0}
-}
-
-func (r acceptedEffect) changePlan() acceptedChangePlan {
-	return acceptedChangePlan{Rows: r.Rows, Member: r.Member, At: r.At, Changes: r.Changes,
-		States: r.States, Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 4}
-}
-
-func (r acceptedWork) changePlan() acceptedChangePlan {
-	return acceptedChangePlan{At: r.At, Changes: r.Changes, States: r.States,
+func (r acceptedWork) ChangePlan() resultformat.ChangePlan {
+	return resultformat.ChangePlan{At: r.At, Changes: r.Changes, States: r.States,
 		Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 3}
-}
-
-func (r acceptedBatch) changePlan() acceptedChangePlan {
-	return acceptedChangePlan{At: r.At, States: r.States, Control: r.Control, Intents: r.Intents,
-		Deliveries: r.Deliveries, Notices: r.Notices, Sequences: r.Sequences,
-		SequenceBases: r.SequenceBases, Unique: r.Unique, CheckUnique: r.Version >= 8}
 }
 
 // This preparation changes no live owner. In particular a valid child cannot
 // advance its ledger before the outer result's remaining owners are checked.
 type preparedAcceptedChanges struct {
-	plan    acceptedChangePlan
+	plan    resultformat.ChangePlan
 	records *recordStore
 	child   *preparedAcceptedBatch
 }
 
-func (t *Tenant) prepareAcceptedChanges(plan acceptedChangePlan) (*preparedAcceptedChanges, error) {
+func (t *Tenant) prepareAcceptedChanges(plan resultformat.ChangePlan) (*preparedAcceptedChanges, error) {
 	if err := t.validateAcceptedControl(plan.Control); err != nil {
 		return nil, err
 	}
@@ -94,7 +54,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedChangePlan) (*preparedAccep
 	prepared := &preparedAcceptedChanges{plan: plan}
 	var err error
 	if len(plan.Changes) > 0 {
-		batch, _, err := decodeAcceptedBatch(plan.Changes)
+		batch, _, err := resultformat.DecodeBatch(plan.Changes)
 		if err != nil || batch.Tenant != t.ID || !batch.At.Equal(plan.At) {
 			return nil, fmt.Errorf("accepted result has an invalid child decision: %v", err)
 		}

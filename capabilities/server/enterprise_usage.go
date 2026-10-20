@@ -80,7 +80,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 	store.mu.Unlock()
 	for _, et := range types {
 		for _, r := range rows[et.info.Type] {
-			paths := matchingRefsWithAccess(et.info.Fields, "", r.Value, id, nil, true)
+			paths := records.MatchingRefsWithAccess(et.info.Fields, "", r.Value, id, nil, true)
 			historical := historyNamesEnterprisePaths(historicalPaths[et.info.Type], r.RecordHistory(), id)
 			if len(paths) == 0 && !historical {
 				continue
@@ -94,10 +94,10 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 					if value.Kind() == reflect.Pointer {
 						value = value.Elem()
 					}
-					allowed := matchingRefs(et.info.Fields, "", value, id, c.RolesIn(et.info.App))
+					allowed := records.MatchingRefs(et.info.Fields, "", value, id, c.RolesIn(et.info.App))
 					if len(allowed) > 0 {
 						visible = true
-						title = recordLabel(et, view.Record, records.Header(r.Value).ID)
+						title = records.RecordLabel(et.info, view.Record, records.Header(r.Value).ID)
 						field = allowed[0].Path
 					}
 				}

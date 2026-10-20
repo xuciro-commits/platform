@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"reflect"
 	"strings"
@@ -26,7 +27,7 @@ func TestLegacyFlowAgentContextPreservesExactAcceptedPredecessor(t *testing.T) {
 	wanted := &records.Row{Value: reflect.ValueOf(oldRun), History: oldHistory}
 	original, _ := records.FullImage(RunType, run.ID, wanted)
 	before, _ := acceptance.Digest(original)
-	image := acceptedBatchRow{App: AgentApp, Before: before, Image: original}
+	image := resultformat.BatchRow{App: AgentApp, Before: before, Image: original}
 	image.History = append(records.CopyHistory(oldHistory), records.RecordChange{Change: "chg-2", Schema: "flow.instance.step"})
 	if restored := legacyAgentContextPredecessor(prior, image); restored == nil || restored.Value.Interface().(AgentRunRecord).Seen != historical {
 		t.Fatal("the original sealed context was not restored")
@@ -81,7 +82,7 @@ func TestLegacyAgentBindingRecoversOnlyExactCommittedStartupMetadata(t *testing.
 	expected := &records.Row{Value: reflect.ValueOf(saved), History: expectedHistory}
 	body, _ := records.FullImage(RunType, run.ID, expected)
 	digest, _ := acceptance.Digest(body)
-	image := acceptedBatchRow{App: AgentApp, Before: digest, Image: body}
+	image := resultformat.BatchRow{App: AgentApp, Before: digest, Image: body}
 	image.History = append(records.CopyHistory(expectedHistory), records.RecordChange{Change: "step", Schema: SchemaRunStep})
 	if recovered := legacyAgentContextPredecessor(prior, image); recovered == nil || recovered.Value.Interface().(AgentRunRecord).DefinitionVersion != saved.DefinitionVersion {
 		t.Fatal("exact startup metadata was not restored")

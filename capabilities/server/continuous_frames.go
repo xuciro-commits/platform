@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/host"
 	"slices"
 	"strings"
@@ -478,7 +479,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window Compute input cannot be encoded")
 	}
-	call := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, request.App, request.Key, operationEndpoint)
+	call := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, request.App, request.Key, resultformat.OperationEndpoint)
 	ref, err := t.staged.sealInput(call, member.ID, definition, hash, request.Inputs, budget)
 	if err != nil {
 		t.staged.discardInput(ref)

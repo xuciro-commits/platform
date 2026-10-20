@@ -4,6 +4,7 @@ import "platformserver/internal/construction"
 
 import (
 	"encoding/json"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"testing"
@@ -117,7 +118,7 @@ func TestOwnerAuthorizationExplainsRowsFieldsAndSavedEvidence(t *testing.T) {
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) { saved = entry.Body; return entry.Body, nil }
 	decide(t, tn, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"note": "Updated"}, txnAt)
 	var result struct {
-		Authorizations []authorizationEvidence `json:"authorizations"`
+		Authorizations []resultformat.AuthorizationEvidence `json:"authorizations"`
 	}
 	if json.Unmarshal(saved, &result) != nil || len(result.Authorizations) == 0 || !result.Authorizations[0].Decision.Allow {
 		t.Fatal("accepted result omitted authorization basis")
@@ -189,11 +190,11 @@ func TestDeclaredInputAndWorkShareDenyPrecedence(t *testing.T) {
 	if refusal == nil || len(draft.authorizations) != 1 || draft.authorizations[0].Decision.Policy != "frozen" {
 		t.Fatal("owner work bypassed the shared deny decision")
 	}
-	if validateAuthorizationEvidence(tn.ID, draft.authorizations) != nil {
+	if resultformat.ValidateAuthorizationEvidence(tn.ID, draft.authorizations) != nil {
 		t.Fatal("recorded denial has an invalid layer shape")
 	}
 	draft.authorizations[0].Decision.Layers[0].Name = "allow"
-	if validateAuthorizationEvidence(tn.ID, draft.authorizations) == nil {
+	if resultformat.ValidateAuthorizationEvidence(tn.ID, draft.authorizations) == nil {
 		t.Fatal("recovery accepted reordered authorization layers")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 
@@ -13,19 +14,12 @@ import (
 	"platformserver/platform"
 )
 
-type acceptedOperationCancellation struct {
-	Before    platform.Effect `json:"before"`
-	After     platform.Effect `json:"after"`
-	PriorWork json.RawMessage `json:"priorWork,omitempty"`
-	Work      json.RawMessage `json:"work,omitempty"`
-}
-
 func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, id string) *kernel.Error {
 	if r == nil || c.Tenant != d.tenant.ID || r.GetSubmission().GetAuthority() != c.App {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Cancellation needs its accepted owner decision")
 	}
 	d.tenant.opsMu.Lock()
-	i := slices.IndexFunc(d.tenant.outbound, func(x *effect) bool { return x.ID == id && x.Endpoint == operationEndpoint })
+	i := slices.IndexFunc(d.tenant.outbound, func(x *effect) bool { return x.ID == id && x.Endpoint == resultformat.OperationEndpoint })
 	if i < 0 {
 		d.tenant.opsMu.Unlock()
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
@@ -51,19 +45,19 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 	d.operationCancels[id] = true
 	return nil
 }
-func (t *Tenant) operationCancellation(id string) (acceptedOperationCancellation, error) {
+func (t *Tenant) operationCancellation(id string) (resultformat.OperationCancellation, error) {
 	t.opsMu.Lock()
-	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id && x.Endpoint == operationEndpoint })
+	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id && x.Endpoint == resultformat.OperationEndpoint })
 	if i < 0 {
 		t.opsMu.Unlock()
-		return acceptedOperationCancellation{}, fmt.Errorf("operation cancellation has no intent")
+		return resultformat.OperationCancellation{}, fmt.Errorf("operation cancellation has no intent")
 	}
 	x := t.outbound[i].Effect
 	t.opsMu.Unlock()
 	after := x
 	after.State, after.Error = "discarded", "Cancelled"
 	after.Output = nil
-	r := acceptedOperationCancellation{Before: x, After: after}
+	r := resultformat.OperationCancellation{Before: x, After: after}
 	works := t.forkWorkState()
 	if work, err := works.Get(id); err == nil {
 		r.PriorWork, _ = protojson.Marshal(work)
@@ -77,13 +71,13 @@ func (t *Tenant) operationCancellation(id string) (acceptedOperationCancellation
 	}
 	return r, nil
 }
-func (d *stagedDecision) savedOperationCancellations() ([]acceptedOperationCancellation, error) {
+func (d *stagedDecision) savedOperationCancellations() ([]resultformat.OperationCancellation, error) {
 	ids := []string{}
 	for id := range d.operationCancels {
 		ids = append(ids, id)
 	}
 	slices.Sort(ids)
-	result := []acceptedOperationCancellation{}
+	result := []resultformat.OperationCancellation{}
 	for _, id := range ids {
 		r, err := d.tenant.operationCancellation(id)
 		if err != nil {
@@ -93,14 +87,14 @@ func (d *stagedDecision) savedOperationCancellations() ([]acceptedOperationCance
 	}
 	return result, nil
 }
-func (t *Tenant) validateOperationCancellations(saved []acceptedOperationCancellation) error {
+func (t *Tenant) validateOperationCancellations(saved []resultformat.OperationCancellation) error {
 	seen := map[string]bool{}
 	for _, r := range saved {
 		if seen[r.Before.ID] {
 			return fmt.Errorf("duplicate operation cancellation")
 		}
 		seen[r.Before.ID] = true
-		if r.Before.Endpoint != operationEndpoint || settled(r.Before.State) || !strings.HasPrefix(r.Before.ID, t.ID+":") {
+		if r.Before.Endpoint != resultformat.OperationEndpoint || settled(r.Before.State) || !strings.HasPrefix(r.Before.ID, t.ID+":") {
 			return fmt.Errorf("invalid operation cancellation")
 		}
 		expected, err := t.operationCancellation(r.Before.ID)
@@ -115,7 +109,7 @@ func (t *Tenant) validateOperationCancellations(saved []acceptedOperationCancell
 	}
 	return nil
 }
-func (t *Tenant) applyOperationCancellations(saved []acceptedOperationCancellation) error {
+func (t *Tenant) applyOperationCancellations(saved []resultformat.OperationCancellation) error {
 	for _, r := range saved {
 		if len(r.Work) > 0 {
 			work := &pb.Work{}

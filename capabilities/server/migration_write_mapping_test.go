@@ -136,7 +136,7 @@ func TestMigrationMapsRetainedFlowWrites(t *testing.T) {
 			point := pointExecution.(flowExecution)
 			pointCaller := pointExecution.Caller(pointParent, memberOf(t, tn, "user"), construction.ID)
 			current := pointDraft.records.types["build.sample"]
-			newValue := copyOf(current.info.Go, current.rows.Get("A").Value.Interface())
+			newValue := records.Copy(current.info.Go, current.rows.Get("A").Value.Interface())
 			records.Header(newValue).ID = "new-only"
 			current.setRow("new-only", &records.Row{Value: newValue})
 			shape := point.rt.shapes["build.sample"]

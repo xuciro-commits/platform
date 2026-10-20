@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/records"
 	"reflect"
 )
@@ -15,7 +16,7 @@ import (
 // original history and predecessor digest: recover only that omitted summary,
 // and require the entire reconstructed row to match that exact digest. Never
 // accept differences in business values, receipts or other history fields.
-func legacyAgentContextPredecessor(prior *records.Row, image acceptedBatchRow) *records.Row {
+func legacyAgentContextPredecessor(prior *records.Row, image resultformat.BatchRow) *records.Row {
 	prior = legacyAgentBindingImage(prior, image)
 	if prior != nil {
 		if before, err := records.FullImage(image.Type, image.ID, prior); err == nil {
@@ -84,7 +85,7 @@ func legacyAgentContextPredecessor(prior *records.Row, image acceptedBatchRow) *
 // Additive startup fields omitted by a legacy replay may be recovered only
 // from the already committed row image. The caller still requires the exact
 // predecessor digest; no version is inferred from today's agent registry.
-func legacyAgentBindingImage(prior *records.Row, image acceptedBatchRow) *records.Row {
+func legacyAgentBindingImage(prior *records.Row, image resultformat.BatchRow) *records.Row {
 	if prior == nil || image.App != AgentApp || image.Type != RunType || len(image.History) < len(prior.RecordHistory()) {
 		return prior
 	}

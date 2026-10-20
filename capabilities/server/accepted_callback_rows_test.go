@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 	if len(entries) != 1 || value(live).Note != "" || live.outbound[0].State != "pending" {
 		t.Fatal("callback became visible before application")
 	}
-	batch, _, err := decodeAcceptedBatch(entries[0].Body)
+	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || batch.Version != 8 || len(batch.DirectRows) != 1 || batch.Control == nil {
 		t.Fatalf("callback not sealed with control: %v", err)
 	}
@@ -66,7 +67,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 	}
 	for _, damage := range []string{"source", "foreign source", "predecessor", "receipt", "duplicate"} {
 		t.Run(damage, func(t *testing.T) {
-			broken, _, err := decodeAcceptedBatch(entries[0].Body)
+			broken, _, err := resultformat.DecodeBatch(entries[0].Body)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -82,7 +83,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 			case "duplicate":
 				broken.DirectRows = append(broken.DirectRows, broken.DirectRows[0])
 			}
-			broken.Digest, err = digestAcceptedBatch(broken)
+			broken.Digest, err = resultformat.DigestBatch(broken)
 			if err != nil {
 				t.Fatal(err)
 			}

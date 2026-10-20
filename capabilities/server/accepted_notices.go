@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"slices"
 	"time"
@@ -18,13 +19,6 @@ import (
 
 // Notification state and already-rendered mail intents belong to the decision,
 // not to enqueue. Replaying a result does not resolve recipients or translate it.
-type acceptedNotices struct {
-	Base    int                     `json:"base"`
-	Seq     int                     `json:"seq"`
-	Before  string                  `json:"before"`
-	Notices []platform.Notification `json:"notices"`
-	Effects []platform.Effect       `json:"effects,omitempty"`
-}
 
 // Reuse the tenant recipient resolver over private directory owners. This
 // read view has no runtime lane, storage hooks or mutable host components.
@@ -83,15 +77,15 @@ func (d *stagedDecision) Seen(c platform.Caller, keys ...string) {
 	}
 }
 
-func (d *stagedDecision) savedNotices() *acceptedNotices {
+func (d *stagedDecision) savedNotices() *resultformat.Notices {
 	if !d.noticeChanged {
 		return nil
 	}
-	return &acceptedNotices{Base: d.noticeBase, Seq: d.noticeSeq, Before: d.noticeBefore,
+	return &resultformat.Notices{Base: d.noticeBase, Seq: d.noticeSeq, Before: d.noticeBefore,
 		Notices: slices.Clone(d.notices), Effects: slices.Clone(d.noticeEffects)}
 }
 
-func (t *Tenant) validateAcceptedNotices(n *acceptedNotices) error {
+func (t *Tenant) validateAcceptedNotices(n *resultformat.Notices) error {
 	if n == nil {
 		return nil
 	}
@@ -156,7 +150,7 @@ func (t *Tenant) validateAcceptedNotices(n *acceptedNotices) error {
 	return nil
 }
 
-func (t *Tenant) applyAcceptedNotices(n *acceptedNotices) {
+func (t *Tenant) applyAcceptedNotices(n *resultformat.Notices) {
 	if n == nil {
 		return
 	}
@@ -197,11 +191,11 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
 	fork.businessFacts = slices.Clone(d.businessFacts)
 	for i := range fork.businessFacts {
-		fork.businessFacts[i] = cloneBusinessFact(fork.businessFacts[i])
+		fork.businessFacts[i] = resultformat.CloneBusinessFact(fork.businessFacts[i])
 	}
 	fork.businessRefusals = maps.Clone(d.businessRefusals)
 	for key, fact := range fork.businessRefusals {
-		fork.businessRefusals[key] = cloneBusinessFact(fact)
+		fork.businessRefusals[key] = resultformat.CloneBusinessFact(fact)
 	}
 	fork.migrationDefinitions = slices.Clone(d.migrationDefinitions)
 	fork.callbackWrites = maps.Clone(d.callbackWrites)

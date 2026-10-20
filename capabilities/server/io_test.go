@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"testing"
@@ -94,7 +95,7 @@ func TestIOLane(t *testing.T) {
 	// The slow endpoint keeps failing: its breaker opens and Settings shows it;
 	// once the effect gives up, the administrators are told.
 	at := t0
-	for range effectRetry.Attempts + breakerAfter {
+	for range resultformat.EffectRetryAttempts + breakerAfter {
 		at = at.Add(2 * time.Hour)
 		tn.Dispatch(at)
 	}

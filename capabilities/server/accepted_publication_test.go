@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/construction"
 	"platformserver/internal/records"
 	"slices"
@@ -356,7 +357,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	var publications int
 	for _, e := range entries {
 		if e.Kind == "accepted-result" {
-			result, receipt, err := decodeAcceptedResult(e.Body)
+			result, receipt, err := resultformat.DecodeRecord(e.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -380,7 +381,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		if e.Kind != "accepted-result" {
 			continue
 		}
-		result, _, err := decodeAcceptedResult(e.Body)
+		result, _, err := resultformat.DecodeRecord(e.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -391,7 +392,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		result.Unique = nil
 		result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
 		result.Row.History = records.CopyHistory(live.records.types[result.Row.Type].rows.Get(result.Row.ID).RecordHistory())
-		result.Digest, err = digestAcceptedResult(result)
+		result.Digest, err = resultformat.DigestRecord(result)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -425,7 +426,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		if e.Kind != "accepted-result" {
 			continue
 		}
-		result, receipt, err := decodeAcceptedResult(e.Body)
+		result, receipt, err := resultformat.DecodeRecord(e.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -434,7 +435,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		}
 		result.Row.Value = json.RawMessage(strings.Replace(string(result.Row.Value), `"installed":"build.visit"`,
 			`"installed":"build.other"`, 1))
-		result.Digest, err = digestAcceptedResult(result)
+		result.Digest, err = resultformat.DigestRecord(result)
 		if err != nil {
 			t.Fatal(err)
 		}

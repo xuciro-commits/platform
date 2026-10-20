@@ -170,7 +170,7 @@ func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.C
 		return true, nil
 	}
 	index := et.uniqueIndex(s, rule)
-	bucket := index.keys.Get(key)
+	bucket := index.Keys.Get(key)
 	return bucket.Len() == 0 || bucket.Len() == 1 && bucket.Has(records.Header(value).ID), nil
 }
 

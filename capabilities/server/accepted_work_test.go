@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"testing"
 	"time"
@@ -235,7 +236,7 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch, _, err := decodeAcceptedBatch(saved.Changes)
+	batch, _, err := resultformat.DecodeBatch(saved.Changes)
 	if err != nil || len(batch.Rows) != 2 || len(batch.Decisions) != 1 || batch.Notices == nil {
 		t.Fatalf("work omitted foreign task or notice intents: %+v %v", batch, err)
 	}
@@ -425,7 +426,7 @@ func TestAcceptedWorkerDirectLedgerKeepsParentAcrossSavepoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch, _, err := decodeAcceptedBatch(saved.Changes)
+	batch, _, err := resultformat.DecodeBatch(saved.Changes)
 	if err != nil || len(batch.Decisions) != 1 {
 		t.Fatalf("parent worker decision not sealed: %v", err)
 	}
@@ -442,7 +443,7 @@ func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
 		t.Fatal(refusal)
 	}
 	tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: operationID, App: "worker",
-		Endpoint: operationEndpoint, State: "running", Generation: generation, At: at, Due: at}})
+		Endpoint: resultformat.OperationEndpoint, State: "running", Generation: generation, At: at, Due: at}})
 	var saved []byte
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
 		saved = entry.Body
@@ -453,7 +454,7 @@ func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, _, err := decodeAcceptedBatch(result.Changes)
+	child, _, err := resultformat.DecodeBatch(result.Changes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +463,7 @@ func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	child.Operations = append(child.Operations, cancel)
-	child.Digest, _ = digestAcceptedBatch(child)
+	child.Digest, _ = resultformat.DigestBatch(child)
 	result.Changes, _ = json.Marshal(child)
 	result.Digest, _ = digestAcceptedWork(result)
 	raw, _ := json.Marshal(result)

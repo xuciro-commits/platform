@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"testing"
 	"time"
 
@@ -118,7 +119,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 	if refusal != nil || again.GetChangeId() != receipt.GetChangeId() || len(entries) != 1 {
 		t.Fatalf("a duplicate reran the cursor transition: %v", refusal)
 	}
-	batch, _, err := decodeAcceptedBatch(entries[0].Body)
+	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(batch.Deliveries) != 1 || batch.Deliveries[0].To != "cursor-1" {
 		t.Fatalf("result omitted the cursor transition: %+v %v", batch, err)
 	}
@@ -134,7 +135,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 
 	damaged := entries[0]
 	batch.Deliveries[0].Before = "not-the-prior-mark"
-	batch.Digest, _ = digestAcceptedBatch(batch)
+	batch.Digest, _ = resultformat.DigestBatch(batch)
 	damaged.Body, _ = json.Marshal(batch)
 	isolated := compose()
 	if err := isolated.recoverEntries([]Entry{damaged}); err == nil || !isolated.quarantined() {

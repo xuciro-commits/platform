@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"errors"
+	resultformat "platformserver/internal/acceptance/result"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +54,7 @@ func TestAcceptedRelationGraphIsPrivateUntilCommit(t *testing.T) {
 	if err != nil || len(entries) != 2 {
 		t.Fatalf("relation not accepted: %v", err)
 	}
-	batch, _, errDecode := decodeAcceptedBatch(entries[1].Body)
+	batch, _, errDecode := resultformat.DecodeBatch(entries[1].Body)
 	if errDecode != nil || len(batch.Rows) != 0 || len(batch.States) != 1 || batch.States[0].App != relations.ID {
 		t.Fatalf("relation graph is not a bounded owner state: %+v, %v", batch, errDecode)
 	}

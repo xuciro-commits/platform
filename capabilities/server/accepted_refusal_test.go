@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"testing"
 	"time"
@@ -42,7 +43,7 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 	if first == nil || len(entries) != 1 {
 		t.Fatalf("refusal not committed: %v, %+v", first, entries)
 	}
-	saved, sub, err := decodeRefusedResult(entries[0].Body)
+	saved, sub, err := resultformat.DecodeRefusal(entries[0].Body)
 	if err != nil || saved.Error != *first || sub.GetIdempotencyKey() != submission.IdempotencyKey {
 		t.Fatalf("refusal bytes differ from the answer: %+v, %v", saved, err)
 	}
@@ -84,7 +85,7 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		if refusal == nil || len(issues) != 1 || issues[0].Path[0] != "qty" || issues[0].Code != "min" {
 			t.Fatalf("missing input issue: %v %+v", refusal, issues)
 		}
-		saved, _, decodeErr := decodeRefusedResult(entries[0].Body)
+		saved, _, decodeErr := resultformat.DecodeRefusal(entries[0].Body)
 		if decodeErr != nil || saved.Version != 2 || len(saved.Issues) != 1 {
 			t.Fatalf("missing version 2 refusal: %+v %v", saved, decodeErr)
 		}
@@ -101,20 +102,20 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		if !reflect.DeepEqual(restored, issues) {
 			t.Fatalf("replay recast diagnostics: %+v", restored)
 		}
-		legacy, encodeErr := encodeRefusedResult(request, at, refusal)
-		old, _, decodeErr := decodeRefusedResult(legacy)
+		legacy, encodeErr := resultformat.EncodeRefusal(request, at, refusal)
+		old, _, decodeErr := resultformat.DecodeRefusal(legacy)
 		if encodeErr != nil || decodeErr != nil || old.Version != 1 || len(old.Issues) != 0 {
 			t.Fatalf("version 1 changed: %v %v", encodeErr, decodeErr)
 		}
 		saved.Issues[0].Message = "tampered issue"
 		damaged, _ := json.Marshal(saved)
-		if _, _, err := decodeRefusedResult(damaged); err == nil {
+		if _, _, err := resultformat.DecodeRefusal(damaged); err == nil {
 			t.Fatal("issue tampering passed the digest")
 		}
 	})
 
 	damaged := entries[0]
-	var decoded refusedResult
+	var decoded resultformat.Refusal
 	if err := json.Unmarshal(damaged.Body, &decoded); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +214,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 	if refusal == nil || reopened.Position(id) != 1 {
 		t.Fatalf("retry changed the committed refusal: %v, position=%d", refusal, reopened.Position(id))
 	}
-	saved, _, err := decodeRefusedResult(entries[0].Body)
+	saved, _, err := resultformat.DecodeRefusal(entries[0].Body)
 	if err != nil || *refusal != saved.Error {
 		t.Fatalf("retry lost the original answer: %v, %+v, %v", refusal, saved, err)
 	}
@@ -231,7 +232,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherHash, err := submissionHash(valid)
+	otherHash, err := resultformat.SubmissionHash(valid)
 	if err != nil {
 		t.Fatal(err)
 	}

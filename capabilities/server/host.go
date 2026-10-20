@@ -9,9 +9,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/journal"
 	"slices"
-	"strings"
+
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
+	"platformserver/internal/construction"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -142,7 +144,7 @@ func (t *Tenant) Audit() []AuditEntry { return t.audit.all() }
 // NewTenant enables apps for a tenant; it refuses duplicate names, consumed
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, committed: committed{refusals: map[string]refusedResult{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
+	t := &Tenant{ID: id, apps: apps, committed: committed{refusals: map[string]resultformat.Refusal{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
 		connectors: newConnectorRoster(), records: newRecordStore()}
 	t.staged = stagedChannel{tenant: id, files: t.files}
 	t.i18n = translator{apps: func() []platform.App { return t.apps }, tenant: t.words.clone}
@@ -199,21 +201,12 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if x, ok := a.(host.Glossary); ok {
 			t.knowledge = x
 		}
-		for _, action := range m.Subscribes {
-			if protocol, _, ok := strings.Cut(action, "#"); ok {
-				if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
-					return nil, fmt.Errorf("tenant %s: %s subscribes to %s of a protocol it does not consume", id, m.ID, action)
-				}
-				continue
-			}
-			if _, own := m.Actions.Action(action); !own {
-				return nil, fmt.Errorf("tenant %s: %s subscribes to %s, neither its own action nor a protocol event", id, m.ID, action)
-			}
-			if _, ok := a.(platform.Subscriber); !ok {
-				return nil, fmt.Errorf("tenant %s: %s subscribes but has no Handle", id, m.ID)
-			}
+		_, subscriber := a.(platform.Subscriber)
+		if err := construction.CheckSubscriptions(m, subscriber); err != nil {
+			return nil, fmt.Errorf("tenant %s: %w", id, err)
 		}
-		if err := checkManifest(a); err != nil {
+		_, runsJobs := a.(platform.Runner)
+		if err := construction.CheckManifest(a.Manifest(), runsJobs); err != nil {
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
 		if err := t.records.declare(a); err != nil {
@@ -384,7 +377,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 		s = t.currentSubmissionSchema(a, s)
 	}
 	if prior, ok := t.committed.refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
-		hash, _ := submissionHash(s, binding)
+		hash, _ := resultformat.SubmissionHash(s, binding)
 		if hash != prior.RequestHash || s.GetPrincipalId() != m.ID {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -400,7 +393,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal, nil)
 	if report != nil && err != nil {
 		if prior, ok := t.committed.refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
-			hash, _ := submissionHash(s, binding)
+			hash, _ := resultformat.SubmissionHash(s, binding)
 			if prior.RequestHash == hash {
 				report(err, prior.Issues)
 			}
@@ -409,28 +402,11 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	return record, err
 }
 
-// Callback-free transitions retain the smaller version-4 result format.
-// Callback and approval transactions use the validated multi-decision batch.
-func acceptsPureTransition(a platform.App, schema string) bool {
-	for _, entity := range a.Manifest().Entities {
-		verb, match := strings.CutPrefix(schema, entity.Type+".")
-		if !match || entity.Lifecycle == nil {
-			continue
-		}
-		for _, transition := range entity.Lifecycle.Transitions {
-			if transition.Name == verb && transition.Do == nil && transition.After == nil && transition.Approval == nil {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	return t.submitAcceptedVersion(a, m, t.currentSubmissionSchema(a, s), now, automation, nil, nil, nil, input...)
 }
 
-func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *ObservationDecisionEvidence, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *resultformat.ObservationDecisionEvidence, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// A malformed transport identity cannot reserve a durable key for another
 	// tenant, authority or member. The kernel still supplies its ordinary
 	// refusal, but no result under this tenant can represent that submission.
@@ -445,8 +421,8 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 	}
 	ledger := a.AcceptedLedger()
 	if saved := t.committed.answer(a.Manifest().ID + "/" + s.GetIdempotencyKey()); len(saved) > 0 {
-		result, receipt, err := decodeAcceptedBatch(saved)
-		hash, hashErr := submissionHash(s, binding)
+		result, receipt, err := resultformat.DecodeBatch(saved)
+		hash, hashErr := resultformat.SubmissionHash(s, binding)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -462,7 +438,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		}
 		return prior, nil
 	}
-	hash, err := submissionHash(s, binding)
+	hash, err := resultformat.SubmissionHash(s, binding)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
 	}
@@ -511,16 +487,16 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		if business {
 			businessFact = &fact
 		}
-		raw, err = encodeBusinessRefusedResult(s, now, refusal, binding, businessFact, draft.inputIssues[refusal]...)
+		raw, err = resultformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.inputIssues[refusal]...)
 	} else {
 		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
 		if err != nil {
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
-			var budget *acceptedResultBudgetError
+			var budget *resultformat.ResultBudgetError
 			if errors.As(err, &budget) {
 				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted result needs {bytes} bytes; limit is {limit} bytes / 接受结果超出字节预算", budget.Bytes, budget.Limit)
 			}
-			raw, err = encodeSchemaRefusedResult(s, now, refusal, binding)
+			raw, err = resultformat.EncodeSchemaRefusal(s, now, refusal, binding)
 		}
 	}
 	if err != nil {
@@ -559,7 +535,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if envelope.Kind == "refusal" {
-		saved, sub, err := decodeRefusedResult(committed)
+		saved, sub, err := resultformat.DecodeRefusal(committed)
 		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
 			saved.RequestHash != hash || sub.GetPrincipalId() != m.ID {
 			t.quarantine(fmt.Errorf("committed refusal differs from the accepted request: %v", err))
@@ -572,8 +548,8 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		return nil, &answer
 	}
 	if envelope.Kind == "record-batch" {
-		saved, receipt, err := decodeAcceptedBatch(committed)
-		sub, subErr := batchSubmission(saved, receipt)
+		saved, receipt, err := resultformat.DecodeBatch(committed)
+		sub, subErr := resultformat.BatchSubmission(saved, receipt)
 		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
 			saved.RequestHash != hash || subErr != nil || sub.GetPrincipalId() != m.ID {
 			t.quarantine(fmt.Errorf("committed batch differs from the accepted request: %v", err))
@@ -593,7 +569,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		t.enqueue(saved.At)
 		return receipt, nil
 	}
-	saved, receipt, err := decodeAcceptedResult(committed)
+	saved, receipt, err := resultformat.DecodeRecord(committed)
 	if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
 		saved.RequestHash != hash || receipt.GetSubmission().GetPrincipalId() != m.ID {
 		t.quarantine(fmt.Errorf("committed result differs from the accepted request: %v", err))
@@ -782,8 +758,8 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string) (any, 
 type caused struct {
 	platform.Event
 	hops int
-	span trace.SpanContext // the input that caused it, whose trace its delivery continues
-	plan *acceptedEvent    // durable work/effect intent; nil for legacy entries
+	span trace.SpanContext   // the input that caused it, whose trace its delivery continues
+	plan *resultformat.Event // durable work/effect intent; nil for legacy entries
 }
 
 // publish queues an accepted decision for its subscribers (Ledger, through Runtime).
@@ -796,9 +772,9 @@ func (t *Tenant) publish(e platform.Event) {
 // planAcceptedEvent freezes the subscribers and outbound intents while the
 // decision is private. Recovery does not rediscover them from a newer
 // manifest or changed endpoint subscriptions.
-func (t *Tenant) planAcceptedEvent(e platform.Event) acceptedEvent {
+func (t *Tenant) planAcceptedEvent(e platform.Event) resultformat.Event {
 	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
-	plan := acceptedEvent{App: e.App, Changed: slices.Clone(e.Changed), Names: names,
+	plan := resultformat.Event{App: e.App, Changed: slices.Clone(e.Changed), Names: names,
 		Effects: t.eventEffects(e, names)}
 	for _, a := range t.apps {
 		if slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
@@ -814,7 +790,7 @@ func (t *Tenant) planAcceptedEvent(e platform.Event) acceptedEvent {
 	return plan
 }
 
-func (t *Tenant) publishAccepted(e platform.Event, plan acceptedEvent, version int) {
+func (t *Tenant) publishAccepted(e platform.Event, plan resultformat.Event, version int) {
 	t.acted++
 	c := caused{Event: e, hops: t.hops, span: t.current()}
 	if version >= 2 {
@@ -935,63 +911,6 @@ type AppInfo struct {
 	Consumes     []string                  `json:"consumes"`
 	Emits        []platform.EffectKind     `json:"emits"`
 	Interfaces   []platform.Interface      `json:"interfaces"` // the shapes this app declares (ADR-0020 A2)
-}
-
-// checkManifest refuses a manifest the host could not honour: every app's
-// declarations are validated where it is composed, so each composition's
-// tests check them (#103).
-func checkManifest(a platform.App) error {
-	m := a.Manifest()
-	if m.ID == "" || m.Actions == nil {
-		return fmt.Errorf("manifest without ID or action catalog")
-	}
-	for _, action := range m.Actions.All() {
-		if action.Title == "" || action.Description == "" || action.Target == "" || action.Payload == nil || len(action.Roles) == 0 && !action.Automation {
-			return fmt.Errorf("action %s lacks a title, description, target, payload fields or roles", action.Schema)
-		}
-	}
-	if _, ok := a.(platform.Runner); len(m.Jobs) > 0 && !ok {
-		return fmt.Errorf("declares jobs but has no Run")
-	}
-	for _, j := range m.Jobs {
-		if j.Name == "" || j.Every <= 0 {
-			return fmt.Errorf("job %q needs a name and a positive interval", j.Name)
-		}
-	}
-	for i, s := range m.Settings {
-		if s.Name == "" || !s.Accepts(s.Default) || slices.ContainsFunc(m.Settings[:i], func(x platform.Setting) bool { return x.Name == s.Name }) {
-			return fmt.Errorf("setting %q: unnamed, repeated, or its default is not a %s", s.Name, s.Type)
-		}
-	}
-	for i, s := range m.Sequences {
-		if err := s.Check(); err != nil || slices.ContainsFunc(m.Sequences[:i], func(x platform.Sequence) bool { return x.Name == s.Name }) {
-			return fmt.Errorf("sequence %q: badly declared or repeated", s.Name)
-		}
-	}
-	for i, e := range m.Emits {
-		if e.Name == "" || strings.Contains(e.Name, "/") || slices.ContainsFunc(m.Emits[:i], func(x platform.EffectKind) bool { return x.Name == e.Name }) {
-			return fmt.Errorf("effect kind %q: unnamed, repeated or containing '/'", e.Name)
-		}
-	}
-	for _, action := range m.Actions.All() {
-		for _, used := range action.Uses {
-			protocol, _, ok := strings.Cut(used, "#")
-			if !ok || !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
-				return fmt.Errorf("action %s uses %s, not an action of a protocol it consumes", action.Schema, used)
-			}
-		}
-	}
-	for _, r := range m.Everyone {
-		if !slices.Contains(m.Reads, r) {
-			return fmt.Errorf("read %q is opened to everyone but not declared", r)
-		}
-	}
-	for name, source := range m.ReadSources {
-		if !slices.Contains(m.Reads, name) || !slices.Contains([]string{"record", "user-input", "external-input"}, source) {
-			return fmt.Errorf("read %q has an undeclared name or invalid original source type %q", name, source)
-		}
-	}
-	return nil
 }
 
 // Member is a member of the tenant's directory, as the console holds it now:

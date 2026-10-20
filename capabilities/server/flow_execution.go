@@ -438,7 +438,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		return r.stagedDecision.Put(c, receipt, entity)
 	}
 	current := r.records.types[old.info.Type]
-	id := records.Header(copyOf(old.info.Go, entity)).ID
+	id := records.Header(records.Copy(old.info.Go, entity)).ID
 	var input, before, result map[string]json.RawMessage
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
 		return migrationRefusal(fmt.Errorf("retained action wrote an invalid record"))

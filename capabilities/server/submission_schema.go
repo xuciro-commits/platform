@@ -2,8 +2,9 @@ package platformserver
 
 import (
 	"encoding/json"
-	"fmt"
+
 	"google.golang.org/protobuf/proto"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -22,9 +23,9 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 	family := uint32(1)
 	key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
 	if raw := t.committed.answer(key); len(raw) > 0 {
-		result, receipt, err := decodeAcceptedBatch(raw)
+		result, receipt, err := resultformat.DecodeBatch(raw)
 		if err == nil {
-			saved, err := batchSubmission(result, receipt)
+			saved, err := resultformat.BatchSubmission(result, receipt)
 			if err == nil {
 				family = saved.GetSchema().GetVersion()
 			}
@@ -32,7 +33,7 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 	} else if prior := app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()); prior != nil {
 		family = prior.GetSubmission().GetSchema().GetVersion()
 	} else if prior, exists := t.committed.refusal(key); exists {
-		_, saved, err := decodeRefusedResult(platform.Raw(prior))
+		_, saved, err := resultformat.DecodeRefusal(platform.Raw(prior))
 		if err == nil {
 			family = saved.GetSchema().GetVersion()
 		}
@@ -45,19 +46,6 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 	copy := proto.Clone(sub).(*pb.Submission)
 	copy.Schema.Version = family
 	return copy
-}
-
-func validateSubmissionSchemaVersion(sub *pb.Submission, binding *platform.SchemaVersion) error {
-	if binding == nil {
-		return nil
-	}
-	if err := binding.Check(); err != nil {
-		return err
-	}
-	if sub.GetSchema().GetVersion() != binding.Family {
-		return fmt.Errorf("submission family differs from its saved schema binding")
-	}
-	return nil
 }
 
 func (t *Tenant) actionSchemaVersion(app platform.App, action platform.Action) (platform.SchemaVersion, error) {

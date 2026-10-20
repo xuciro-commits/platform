@@ -5,17 +5,12 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
-
-type acceptedState struct {
-	App    string          `json:"app"`
-	Before string          `json:"before"`
-	Image  json.RawMessage `json:"image"`
-}
 
 func (d *stagedDecision) stateApp(app platform.App) platform.App {
 	id := app.Manifest().ID
@@ -73,8 +68,8 @@ func (d *stagedDecision) flowVersions() map[string]int {
 	return nil
 }
 
-func (d *stagedDecision) savedStates() ([]acceptedState, error) {
-	var out []acceptedState
+func (d *stagedDecision) savedStates() ([]resultformat.State, error) {
+	var out []resultformat.State
 	for _, id := range slices.Sorted(maps.Keys(d.states)) {
 		owner := d.states[id]
 		image, err := owner.AcceptedState()
@@ -93,13 +88,13 @@ func (d *stagedDecision) savedStates() ([]acceptedState, error) {
 			return nil, err
 		}
 		if before != after {
-			out = append(out, acceptedState{App: id, Before: before, Image: image})
+			out = append(out, resultformat.State{App: id, Before: before, Image: image})
 		}
 	}
 	return out, nil
 }
 
-func (t *Tenant) validateAcceptedStates(states []acceptedState) error {
+func (t *Tenant) validateAcceptedStates(states []resultformat.State) error {
 	seen := map[string]bool{}
 	for _, state := range states {
 		owner, ok := t.app(state.App).(platform.AcceptedStateApp)
@@ -122,7 +117,7 @@ func (t *Tenant) validateAcceptedStates(states []acceptedState) error {
 	return nil
 }
 
-func (t *Tenant) applyAcceptedStates(states []acceptedState) error {
+func (t *Tenant) applyAcceptedStates(states []resultformat.State) error {
 	for _, state := range states {
 		if err := t.app(state.App).(platform.AcceptedStateApp).ApplyAcceptedState(state.Image); err != nil {
 			return err

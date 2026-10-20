@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/host"
 	"platformserver/internal/records"
 	"reflect"
@@ -31,36 +32,36 @@ import (
 // the journal stays the truth. Explicit host/owner formats and the native
 // composition decide compatibility; the build digest is diagnostic metadata.
 type tenantState struct {
-	Checkpoint          *snapshotCheckpoint               `json:"checkpoint,omitempty"`
-	DecisionDefinitions map[string]*DecisionDefinition    `json:"decisionDefinitions,omitempty"`
-	SubmissionSchemas   map[string]platform.SchemaVersion `json:"submissionSchemas,omitempty"`
-	Apps                map[string]json.RawMessage        `json:"apps"`
-	Records             map[string][]recordState          `json:"records"`
-	Audit               []AuditEntry                      `json:"audit"`
-	Refusals            map[string]refusedResult          `json:"refusals,omitempty"`
-	AcceptedAnswers     map[string]json.RawMessage        `json:"acceptedAnswers,omitempty"`
-	AcceptedInputs      map[string]json.RawMessage        `json:"acceptedInputs,omitempty"`
-	ReleaseCandidates   map[string]json.RawMessage        `json:"releaseCandidates,omitempty"`
-	ReleaseRequests     map[string]string                 `json:"releaseRequests,omitempty"`
-	ReleaseApplied      map[string]string                 `json:"releaseApplied,omitempty"`
-	ActiveRelease       string                            `json:"activeRelease,omitempty"`
-	Deliveries          []Delivery                        `json:"deliveries"`
-	Acted               int                               `json:"acted"`
-	Bindings            map[string]string                 `json:"bindings"` // protocol → provider app
-	Works               json.RawMessage                   `json:"works"`
-	Queues              map[string][]string               `json:"queues"` // subscriber → task IDs, head first
-	Failed              []string                          `json:"failed"`
-	Tasks               []taskState                       `json:"tasks"` // every delivery task, by ID
-	Jobs                []Task                            `json:"jobs"`
-	Connectors          json.RawMessage                   `json:"connectors"`
-	Marks               []kernel.ConnectorMark            `json:"marks"`
-	LastError           map[string]ConnectorError         `json:"lastError"`
-	Notices             []platform.Notification           `json:"notices"`
-	NoticeSeq           int                               `json:"noticeSeq"`
-	Settings            map[string]string                 `json:"settings"`
-	Words               map[string]map[string]string      `json:"words,omitempty"` // the tenant's translations (ADR-0005)
-	Endpoints           []*Endpoint                       `json:"endpoints"`
-	Outbound            []effectState                     `json:"outbound"`
+	Checkpoint          *snapshotCheckpoint                         `json:"checkpoint,omitempty"`
+	DecisionDefinitions map[string]*resultformat.DecisionDefinition `json:"decisionDefinitions,omitempty"`
+	SubmissionSchemas   map[string]platform.SchemaVersion           `json:"submissionSchemas,omitempty"`
+	Apps                map[string]json.RawMessage                  `json:"apps"`
+	Records             map[string][]recordState                    `json:"records"`
+	Audit               []AuditEntry                                `json:"audit"`
+	Refusals            map[string]resultformat.Refusal             `json:"refusals,omitempty"`
+	AcceptedAnswers     map[string]json.RawMessage                  `json:"acceptedAnswers,omitempty"`
+	AcceptedInputs      map[string]json.RawMessage                  `json:"acceptedInputs,omitempty"`
+	ReleaseCandidates   map[string]json.RawMessage                  `json:"releaseCandidates,omitempty"`
+	ReleaseRequests     map[string]string                           `json:"releaseRequests,omitempty"`
+	ReleaseApplied      map[string]string                           `json:"releaseApplied,omitempty"`
+	ActiveRelease       string                                      `json:"activeRelease,omitempty"`
+	Deliveries          []Delivery                                  `json:"deliveries"`
+	Acted               int                                         `json:"acted"`
+	Bindings            map[string]string                           `json:"bindings"` // protocol → provider app
+	Works               json.RawMessage                             `json:"works"`
+	Queues              map[string][]string                         `json:"queues"` // subscriber → task IDs, head first
+	Failed              []string                                    `json:"failed"`
+	Tasks               []taskState                                 `json:"tasks"` // every delivery task, by ID
+	Jobs                []Task                                      `json:"jobs"`
+	Connectors          json.RawMessage                             `json:"connectors"`
+	Marks               []kernel.ConnectorMark                      `json:"marks"`
+	LastError           map[string]ConnectorError                   `json:"lastError"`
+	Notices             []platform.Notification                     `json:"notices"`
+	NoticeSeq           int                                         `json:"noticeSeq"`
+	Settings            map[string]string                           `json:"settings"`
+	Words               map[string]map[string]string                `json:"words,omitempty"` // the tenant's translations (ADR-0005)
+	Endpoints           []*Endpoint                                 `json:"endpoints"`
+	Outbound            []resultformat.EffectState                  `json:"outbound"`
 	// The host console's lifecycle and support sessions (ADR-0016 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
 	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
@@ -180,17 +181,12 @@ type recordState struct {
 
 type taskState struct {
 	Task
-	Since    int             `json:"since,omitempty"`
-	EventApp string          `json:"eventApp,omitempty"` // the event it delivers
-	Event    json.RawMessage `json:"event,omitempty"`
-	Hops     int             `json:"hops,omitempty"`
-	Changed  []string        `json:"changed,omitempty"` // the records its decision put
-	Plan     *acceptedEvent  `json:"plan,omitempty"`    // accepted-result delivery routing
-}
-
-type effectState struct {
-	platform.Effect
-	Since int `json:"since,omitempty"`
+	Since    int                 `json:"since,omitempty"`
+	EventApp string              `json:"eventApp,omitempty"` // the event it delivers
+	Event    json.RawMessage     `json:"event,omitempty"`
+	Hops     int                 `json:"hops,omitempty"`
+	Changed  []string            `json:"changed,omitempty"` // the records its decision put
+	Plan     *resultformat.Event `json:"plan,omitempty"`    // accepted-result delivery routing
 }
 
 // Snapshot saves the tenant's state between inputs; the caller's position
@@ -286,7 +282,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*reco
 	s.Settings, s.Endpoints, s.Words = t.settings.clone(), t.endpoints, t.words.clone()
 	s.Sequences = t.sequences.clone()
 	for _, x := range t.outbound {
-		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
+		s.Outbound = append(s.Outbound, resultformat.EffectState{Effect: x.Effect, Since: x.since})
 	}
 	t.console.snapshot(&s)
 	s.Staged = t.staged.snapshot()
@@ -324,7 +320,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			if err := checkRunApplicationBindings(v.Interface()); err != nil {
 				return nil, err
 			}
-			emptyLists(v) // a snapshot of older code may hold null lists
+			records.EmptyLists(v) // a snapshot of older code may hold null lists
 			recovered := &records.Row{Value: v, Format: r.Format, History: r.History, Projection: records.CloneProjection(r.Projection), Extraction: r.Extraction}
 			head, err := recovered.HistoryDigest()
 			if err != nil {
@@ -487,16 +483,16 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		receipt := owner.AcceptedLedger().AcceptedFor(t.ID, request)
 		sub := receipt.GetSubmission()
 		if raw := s.AcceptedAnswers[key]; len(raw) > 0 {
-			result, answer, err := decodeAcceptedBatch(raw)
+			result, answer, err := resultformat.DecodeBatch(raw)
 			if err != nil {
 				return fmt.Errorf("tenant %s: schema snapshot %s has an invalid answer", t.ID, key)
 			}
-			sub, err = batchSubmission(result, answer)
+			sub, err = resultformat.BatchSubmission(result, answer)
 			if err != nil || sub.GetIdempotencyKey() != request || result.App != app {
 				return fmt.Errorf("tenant %s: schema snapshot %s has no matching request", t.ID, key)
 			}
 		}
-		if sub == nil || validateSubmissionSchemaVersion(sub, &binding) != nil {
+		if sub == nil || resultformat.ValidateSubmissionSchemaVersion(sub, &binding) != nil {
 			return fmt.Errorf("tenant %s: schema snapshot %s has no matching receipt", t.ID, key)
 		}
 	}
@@ -505,7 +501,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		if err != nil {
 			return fmt.Errorf("tenant %s: refusal snapshot %s: %w", t.ID, key, err)
 		}
-		decoded, sub, err := decodeRefusedResult(raw)
+		decoded, sub, err := resultformat.DecodeRefusal(raw)
 		if err != nil || decoded.Tenant != t.ID || key != decoded.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: refusal snapshot %s is incompatible: %v", t.ID, key, err)
 		}
@@ -521,7 +517,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 			return fmt.Errorf("tenant %s: composite answer snapshot %s is incompatible", t.ID, key)
 		}
 		if r.Refusal == "" {
-			batch, _, _ := decodeAcceptedBatch(r.Changes)
+			batch, _, _ := resultformat.DecodeBatch(r.Changes)
 			for _, decision := range batch.Decisions {
 				receipt := new(pb.ChangeRecord)
 				if protojson.Unmarshal(decision.Receipt, receipt) != nil {
@@ -543,7 +539,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		}
 		for key, definition := range s.DecisionDefinitions {
 			receipt := receipts[key]
-			if definition == nil || receipt == nil || definition.check(receipt.GetSubmission().GetAuthority(), receipt.GetSubmission().GetSchema().GetName()) != nil || definition.Contract.Family != receipt.GetSubmission().GetSchema().GetVersion() {
+			if definition == nil || receipt == nil || definition.Check(receipt.GetSubmission().GetAuthority(), receipt.GetSubmission().GetSchema().GetName()) != nil || definition.Contract.Family != receipt.GetSubmission().GetSchema().GetVersion() {
 				return fmt.Errorf("tenant %s: decision definition snapshot %s has no matching receipt", t.ID, key)
 			}
 		}
@@ -551,14 +547,14 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 	t.committed.restore(s)
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
-			result, err := decodeAcceptedRelease(raw)
+			result, err := resultformat.DecodeRelease(raw)
 			if err != nil || (result.Version != 3 && result.Version != 4) || result.Tenant != t.ID || key != "release:"+result.Key || s.ReleaseApplied[result.Key] != result.Digest || !bytes.Equal(s.ReleaseCandidates[result.CandidateID], result.Bytes) {
 				return fmt.Errorf("tenant %s: release answer snapshot %s is incompatible", t.ID, key)
 			}
 			continue
 		}
-		result, receipt, err := decodeAcceptedBatch(raw)
-		sub, subErr := batchSubmission(result, receipt)
+		result, receipt, err := resultformat.DecodeBatch(raw)
+		sub, subErr := resultformat.BatchSubmission(result, receipt)
 		if err != nil || subErr != nil || result.Tenant != t.ID ||
 			(len(result.Submission) == 0 && len(result.Business) == 0 && !strings.HasPrefix(sub.GetCorrelationId(), "correction:")) || key != result.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
@@ -576,7 +572,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		}
 	}
 	for key, raw := range s.AcceptedInputs {
-		result, err := decodeAcceptedInput(raw)
+		result, err := resultformat.DecodeInput(raw)
 		owner, ok := t.app(result.App).(platform.AcceptedInputApp)
 		if err != nil || !ok || result.Tenant != t.ID ||
 			key != result.App+"/"+result.Key || !slices.Contains(owner.AcceptedInputs(), result.Name) {

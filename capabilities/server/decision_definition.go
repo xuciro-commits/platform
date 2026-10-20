@@ -1,7 +1,7 @@
 package platformserver
 
 import (
-	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -11,18 +11,9 @@ import (
 // DecisionDefinition belongs to the original accepted decision. It records
 // its execution contract and resource memberships, never an inferred time
 // interval or a second application/decision state.
-type DecisionDefinition struct {
-	Observation       *ObservationDecisionEvidence `json:"observation,omitempty"`
-	Definition        platform.AssetBinding        `json:"definition"`
-	Contract          platform.SchemaVersion       `json:"contract"`
-	Closure           string                       `json:"closure,omitempty"`
-	DependenciesState string                       `json:"dependenciesState"`
-	Release           string                       `json:"release,omitempty"`
-	Dependencies      []platform.AssetBinding      `json:"dependencies"`
-	Applications      []platform.AssetBinding      `json:"applications"`
-}
+type DecisionDefinition = resultformat.DecisionDefinition
 
-func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*DecisionDefinition, error) {
+func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*resultformat.DecisionDefinition, error) {
 	if declared := t.app(owner.Manifest().ID); declared != nil {
 		owner = declared
 	}
@@ -38,7 +29,7 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 		contract.Family = request.GetSchema().GetVersion()
 	}
 	root := platform.AssetRef{App: owner.Manifest().ID, Kind: platform.AssetAction, Name: action.Schema}
-	out := &DecisionDefinition{Definition: platform.AssetBinding{Ref: root, SourceVersion: owner.Manifest().Version}, Contract: contract, Release: release, DependenciesState: "unavailable", Dependencies: []platform.AssetBinding{}, Applications: []platform.AssetBinding{}}
+	out := &resultformat.DecisionDefinition{Definition: platform.AssetBinding{Ref: root, SourceVersion: owner.Manifest().Version}, Contract: contract, Release: release, DependenciesState: "unavailable", Dependencies: []platform.AssetBinding{}, Applications: []platform.AssetBinding{}}
 	var available []platform.ReleaseAsset
 	if len(retained) > 0 {
 		available = slices.Clone(retained[0])
@@ -101,25 +92,4 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 		}
 	}
 	return out, nil
-}
-
-func (b DecisionDefinition) check(app, schema string) error {
-	if b.Observation != nil {
-		if err := b.Observation.Check(); err != nil {
-			return err
-		}
-	}
-	if b.Definition.Ref != (platform.AssetRef{App: app, Kind: platform.AssetAction, Name: schema}) || b.Definition.SourceVersion == "" || b.Contract.Check() != nil || len(b.Dependencies) > 1000 || len(b.Applications) > 1000 || slices.ContainsFunc(b.Applications, func(binding platform.AssetBinding) bool { return binding.Ref.Kind != platform.AssetApp }) {
-		return fmt.Errorf("decision definition differs from its receipt")
-	}
-	for _, bindings := range [][]platform.AssetBinding{b.Dependencies, b.Applications} {
-		seen := map[platform.AssetRef]bool{}
-		for _, binding := range bindings {
-			if binding.Ref.Check() != nil || binding.SourceVersion == "" || seen[binding.Ref] {
-				return fmt.Errorf("decision dependency has an invalid or duplicate binding")
-			}
-			seen[binding.Ref] = true
-		}
-	}
-	return nil
 }

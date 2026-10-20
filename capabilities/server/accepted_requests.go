@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	resultformat "platformserver/internal/acceptance/result"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -17,7 +18,7 @@ import (
 // locks are released and before the single result is planned/committed.
 func (d *stagedDecision) answerRequests(now time.Time) *kernel.Error {
 	for count := 0; len(d.requests) > 0; count++ {
-		if count >= maxHops {
+		if count >= resultformat.MaxHops {
 			unsupportedStagedEffect()
 		}
 		q := d.requests[0]

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strings"
 	"time"
@@ -22,7 +23,6 @@ import (
 // and a replay runs it again through the same code (ADR-0010).
 
 const (
-	maxHops   = 100 // events caused by handlers of events …: a subscription cycle
 	workBurst = 100 // attempts per app in one Work call
 )
 
@@ -68,7 +68,7 @@ func (t *Tenant) enqueue(now time.Time) {
 		if e.plan != nil {
 			for _, id := range e.plan.Stopped {
 				t.delivered(Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
-					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", maxHops)})
+					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", resultformat.MaxHops)})
 			}
 			names = e.plan.Names
 		}
@@ -99,9 +99,9 @@ func (t *Tenant) enqueue(now time.Time) {
 				continue
 			}
 			id := a.Manifest().ID
-			if e.hops > maxHops {
+			if e.hops > resultformat.MaxHops {
 				t.delivered(Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
-					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", maxHops)})
+					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", resultformat.MaxHops)})
 				continue
 			}
 			t.deliver(id, e, now)

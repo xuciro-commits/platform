@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strconv"
 	"strings"
@@ -226,7 +227,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	return decision, raw, err
 }
 
-func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]releaseInstallation, json.RawMessage, error) {
+func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]resultformat.ReleaseInstallation, json.RawMessage, error) {
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind != platform.AssetEvaluation {
 			continue
@@ -245,7 +246,7 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 	return t.prepareReleaseInstallationLocked(candidate, member, at, upgrade, true)
 }
 
-func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]releaseInstallation, json.RawMessage, error) {
+func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]resultformat.ReleaseInstallation, json.RawMessage, error) {
 	if t.agents == nil && slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
 		return asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetAgent
 	}) {
@@ -289,14 +290,14 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 	if err != nil {
 		return nil, nil, err
 	}
-	installations := make([]releaseInstallation, 0, len(plans))
+	installations := make([]resultformat.ReleaseInstallation, 0, len(plans))
 	for _, plan := range plans {
 		before, err := view.installationPredecessor(plan.Record)
 		if err != nil {
 			return nil, nil, err
 		}
 		ref := plan.Ref
-		installations = append(installations, releaseInstallation{ReleasePublication: construction.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Before: before, Ref: &ref, Record: plan.Record})
+		installations = append(installations, resultformat.ReleaseInstallation{ReleasePublication: construction.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Before: before, Ref: &ref, Record: plan.Record})
 	}
 	trial, err := view.stageReleaseInstallationLocked(installations, true, upgrade)
 	if err != nil {

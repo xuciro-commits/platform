@@ -216,7 +216,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	narrower := t.narrowerIn(store, c.Member, at, true)
 	rows := make([]any, 0, len(values))
 	for _, value := range values {
-		v := masked(et, value, hidden)
+		v := records.Mask(et.info, value, hidden)
 		if et.info.HasReadSources() || len(et.info.VersionPins) > 0 {
 			narrowed, _ := narrower.derive(et, reflect.ValueOf(v))
 			v = narrowed.Interface()

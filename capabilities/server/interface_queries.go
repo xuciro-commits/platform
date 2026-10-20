@@ -195,7 +195,7 @@ func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, dec
 	start := min(query.Offset, len(rows))
 	end := min(start+query.Limit, len(rows))
 	for _, row := range rows[start:end] {
-		value := reflect.ValueOf(masked(row.read.entity, row.value, row.read.hidden))
+		value := reflect.ValueOf(records.Mask(row.read.entity.info, row.value, row.read.hidden))
 		if row.read.entity.info.HasReadSources() {
 			value, _ = t.narrowerIn(store, m, now, true).derive(row.read.entity, value)
 		}

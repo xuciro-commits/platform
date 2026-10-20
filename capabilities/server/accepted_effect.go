@@ -4,150 +4,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
+
 	"platformkernel/kernel"
 	"platformserver/internal/acceptance"
-	"platformserver/internal/records"
-	"reflect"
+	resultformat "platformserver/internal/acceptance/result"
+
 	"slices"
-	"strconv"
+
 	"time"
 
 	"platformserver/internal/host"
-	"platformserver/journal"
+
 	"platformserver/platform"
 )
 
-// An external attempt's answer is its own top-level input. The effect state,
-// application callback and any resulting decisions belong to the same
-// accepted journal row; applying one never resends the external request.
-type acceptedEffect struct {
-	Unique         []journal.StateUnique   `json:"unique,omitempty"`
-	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
-	Version        int                     `json:"version"`
-	Kind           string                  `json:"kind"`
-	Tenant         string                  `json:"tenant"`
-	App            string                  `json:"app"`
-	Key            string                  `json:"key"`
-	At             time.Time               `json:"at"`
-	RequestHash    string                  `json:"requestHash"`
-	Digest         string                  `json:"digest"`
-	Outcome        platform.Outcome        `json:"outcome"`
-	Usage          *platform.AIUsage       `json:"usage,omitempty"`
-	UsageBefore    string                  `json:"usageBefore,omitempty"`
-	CallbackError  string                  `json:"callbackError,omitempty"`
-	Before         effectState             `json:"before"`
-	After          effectState             `json:"after"`
-	Member         string                  `json:"member,omitempty"`
-	Rows           []acceptedInputRow      `json:"rows,omitempty"`
-	Changes        json.RawMessage         `json:"changes,omitempty"`
-	Notices        *acceptedNotices        `json:"notices,omitempty"`
-	Intents        []platform.Effect       `json:"intents,omitempty"`
-	States         []acceptedState         `json:"states,omitempty"`
-	WorkBefore     json.RawMessage         `json:"workBefore,omitempty"`
-	Work           json.RawMessage         `json:"work,omitempty"`
-	Control        *acceptedControl        `json:"control,omitempty"`
-}
-
-func effectResultKey(before effectState) string {
-	return "effect:" + before.ID + ":" + strconv.Itoa(before.Attempts+1)
-}
-
-func effectResultHash(before effectState, out platform.Outcome, at time.Time) (string, error) {
-	return acceptance.Digest([]any{before, out, at})
-}
-
-func digestAcceptedEffect(result acceptedEffect) (string, error) {
-	result.Digest = ""
-	return acceptance.Digest(result)
-}
-
-func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
-	var result acceptedEffect
-	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
-		return result, fmt.Errorf("effect result is empty or too large")
-	}
-	if err := acceptance.DecodeJSON(raw, &result, "effect result"); err != nil {
-		return result, err
-	}
-	if err := validateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
-		return result, err
-	}
-
-	if result.Version < 5 && (result.Outcome.PublicMessage != "" || result.Before.PublicMessage != "" || result.After.PublicMessage != "") {
-		return result, fmt.Errorf("legacy effect result carries public delivery text")
-	}
-	if result.Version >= 5 && result.Outcome.Detail != "" && result.Outcome.PublicMessage == "" {
-		return result, fmt.Errorf("effect result omits its public delivery text")
-	}
-	if result.Version < 4 && len(result.Unique) > 0 {
-		return result, fmt.Errorf("legacy effect result carries derived unique keys")
-	}
-	digest, err := digestAcceptedEffect(result)
-	hash, hashErr := effectResultHash(result.Before, result.Outcome, result.At)
-	expected := &effect{Effect: result.Before.Effect, since: result.Before.Since}
-	markEffect(expected, result.Outcome, result.At)
-	if result.Version >= 3 {
-		expected.CallbackError = result.CallbackError
-	}
-	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash ||
-		(result.Version != 1 && result.Version != 2 && result.Version != 3 && result.Version != 4 && result.Version != 5) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
-		result.App != PlatformApp || result.At.IsZero() || result.Before.ID == "" ||
-		!slices.Contains([]string{"delivered", "rejected", "retry", "unknown"}, result.Outcome.Result) ||
-		len(result.Outcome.Answer) > 64<<10 ||
-		len(result.Outcome.Answer) > 0 && !json.Valid(result.Outcome.Answer) ||
-		result.Outcome.Effect != result.Before.ID || result.Key != effectResultKey(result.Before) ||
-		!reflect.DeepEqual(result.After, effectState{Effect: expected.Effect, Since: expected.since}) {
-		return result, fmt.Errorf("effect result has inconsistent identity, transition or digest")
-	}
-	if len(result.Changes) > 0 && (result.Notices != nil || len(result.Intents) > 0 || len(result.States) > 0 || result.Control != nil) {
-		return result, fmt.Errorf("effect result duplicates its child decision effects")
-	}
-	if len(result.Rows) > 0 && result.Member == "" {
-		return result, fmt.Errorf("effect result omits the direct record writer")
-	}
-	for _, row := range result.Rows {
-		if result.Version >= 4 {
-			if err := records.ValidateHistoryRef(row.Image); err != nil {
-				return result, err
-			}
-		} else if row.HistoryRef != nil || row.Predecessor != "" || row.Format != "" {
-			return result, fmt.Errorf("legacy effect result carries new record metadata")
-		}
-		if row.App != result.Before.App || result.Member != "app:"+row.App ||
-			row.Type == "" || row.ID == "" || len(row.History) == 0 || len(row.Value) == 0 {
-			return result, fmt.Errorf("effect result has an invalid direct record")
-		}
-	}
-	if result.Usage != nil {
-		if result.Before.Endpoint != modelEndpoint || result.UsageBefore == "" ||
-			result.Usage.Member != "app:"+result.Before.App || result.Usage.Model == "" ||
-			!result.Usage.At.Equal(result.At) || result.Usage.Input < 0 || result.Usage.Output < 0 ||
-			result.Usage.Cost < 0 || result.Usage.Millis < 0 {
-			return result, fmt.Errorf("effect result has an invalid model usage")
-		}
-	} else if result.UsageBefore != "" {
-		return result, fmt.Errorf("effect result has a meter predecessor without usage")
-	}
-	if result.Before.Endpoint == operationEndpoint {
-		var prior, work pb.Work
-		if result.Outcome.Generation == 0 || result.Outcome.Generation != result.Before.Generation ||
-			protojson.Unmarshal(result.WorkBefore, &prior) != nil || protojson.Unmarshal(result.Work, &work) != nil ||
-			prior.GetWorkId() != result.Before.ID || prior.GetGeneration() != result.Before.Generation || prior.GetState() != pb.WorkState_WORK_STATE_RUNNING ||
-			work.GetWorkId() != prior.GetWorkId() || work.GetGeneration() != prior.GetGeneration() {
-			return result, fmt.Errorf("operation result has invalid ownership")
-		}
-	} else if len(result.WorkBefore) > 0 || len(result.Work) > 0 {
-		return result, fmt.Errorf("external effect has compute ownership")
-	}
-	return result, nil
-}
-
 // applyAcceptedEffect checks every predecessor before promoting an effect
 // outcome. Neither the application callback nor the external send is run here.
-func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
-	result, err := decodeAcceptedEffect(raw)
+func (t *Tenant) applyAcceptedEffect(raw []byte) (resultformat.Effect, bool, error) {
+	result, err := resultformat.DecodeEffect(raw)
 	if err != nil {
 		return result, false, err
 	}
@@ -162,9 +36,9 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 			break
 		}
 	}
-	var before effectState
+	var before resultformat.EffectState
 	if current != nil {
-		before = effectState{Effect: current.Effect, Since: current.since}
+		before = resultformat.EffectState{Effect: current.Effect, Since: current.since}
 	}
 	t.opsMu.Unlock()
 	beforeHash, err := acceptance.Digest(before)
@@ -195,7 +69,7 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 			return result, false, fmt.Errorf("effect result model usage predecessor differs")
 		}
 	}
-	prepared, err := t.prepareAcceptedChanges(result.changePlan())
+	prepared, err := t.prepareAcceptedChanges(result.ChangePlan())
 	if err != nil {
 		return result, false, err
 	}
@@ -230,9 +104,9 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			break
 		}
 	}
-	var before effectState
+	var before resultformat.EffectState
 	if pending != nil {
-		before = effectState{Effect: pending.Effect, Since: pending.since}
+		before = resultformat.EffectState{Effect: pending.Effect, Since: pending.since}
 	}
 	t.opsMu.Unlock()
 	if pending == nil || out.Effect != id {
@@ -246,7 +120,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		copy := *usage
 		copy.Applications = slices.Clone(before.Effect.Applications)
 		copy.Run = before.Effect.ID
-		if before.Effect.Endpoint == modelEndpoint {
+		if before.Effect.Endpoint == resultformat.ModelEndpoint {
 			var ask modelAsk
 			if json.Unmarshal([]byte(before.Effect.Body), &ask) == nil && ask.Function != nil {
 				owner := ask.Function.Owner
@@ -266,9 +140,9 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	}
 	after := &effect{Effect: before.Effect, since: before.Since}
 	markEffect(after, out, at)
-	result := acceptedEffect{Version: 5, Kind: "effect-result", Tenant: t.ID, App: PlatformApp,
-		Key: effectResultKey(before), At: at.UTC(), Before: before,
-		After: effectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
+	result := resultformat.Effect{Version: 5, Kind: "effect-result", Tenant: t.ID, App: PlatformApp,
+		Key: resultformat.EffectResultKey(before), At: at.UTC(), Before: before,
+		After: resultformat.EffectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
 	var err error
 	_, result.WorkBefore, result.Work, err = t.prepareOperationFinish(before.Effect, out)
 	if err != nil {
@@ -288,7 +162,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			return
 		}
 	}
-	result.RequestHash, err = effectResultHash(before, out, result.At)
+	result.RequestHash, err = resultformat.EffectResultHash(before, out, result.At)
 	if err != nil {
 		t.quarantine(err)
 		return
@@ -345,7 +219,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
 			draft.records.writes = writes
 		} else if err == nil {
-			var plan acceptedChangePlan
+			var plan resultformat.ChangePlan
 			plan, err = draft.savedChangePlan()
 			result.Notices, result.Intents = plan.Notices, plan.Intents
 			result.States, result.Control = plan.States, plan.Control
@@ -356,18 +230,18 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		return
 	}
 	result.Unique = draft.savedUniqueChanges()
-	if _, err := t.prepareAcceptedChanges(result.changePlan()); err != nil {
+	if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {
 		t.quarantine(fmt.Errorf("stage effect %s changes: %w", id, err))
 		return
 	}
-	result.Digest, err = digestAcceptedEffect(result)
+	result.Digest, err = resultformat.DigestEffect(result)
 	if err != nil {
 		t.quarantine(err)
 		return
 	}
 	raw, err := json.Marshal(result)
 	if err == nil {
-		_, err = decodeAcceptedEffect(raw)
+		_, err = resultformat.DecodeEffect(raw)
 	}
 	if err != nil {
 		t.quarantine(fmt.Errorf("encode effect %s: %w", id, err))
@@ -414,7 +288,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 			return refusal
 		}
 	}
-	if x.Endpoint == modelEndpoint {
+	if x.Endpoint == resultformat.ModelEndpoint {
 		app, reply := t.modelAnswerSubmission(x, out, usage)
 		if app == nil || reply == nil {
 			return nil
@@ -429,7 +303,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	if x.App == "" {
 		return nil
 	}
-	if x.Endpoint == operationEndpoint {
+	if x.Endpoint == resultformat.OperationEndpoint {
 		draft.operationAnswers = map[string]platform.OperationResult{x.ID: operationResultOf(x)}
 		processesOwner := t.procs
 		if app, ok := t.procs.(platform.App); ok {

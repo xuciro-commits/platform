@@ -162,14 +162,14 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	var touched []string
 	tn.records.touched = func(typ, id string) { touched = append(touched, typ+"/"+id) }
 	discarded := tn.records.forkRecords()
-	if discarded.types["stock.item"].rows != et.rows || discarded.dirty != tn.records.dirty || discarded.changed != tn.records.changed {
+	if discarded.types["stock.item"].rows != et.rows || discarded.dirty != tn.records.dirty || discarded.recentChanges.Entries != tn.records.recentChanges.Entries {
 		t.Fatal("fork copied record or derived indexes")
 	}
 	read, _ := discarded.get(c, reflect.TypeFor[Item](), "I2")
 	read.(Item).Tags[0] = "mutated"
 	held, _ := tn.Held("stock.item/I2")
 	held.(Item).Tags[0] = "mutated"
-	visible := masked(et, untouched.Value, nil).(Item)
+	visible := records.Mask(et.info, untouched.Value, nil).(Item)
 	visible.Tags[0] = "mutated"
 	if untouched.Value.Interface().(Item).Tags[0] != "steel" {
 		t.Fatal("read boundary exposed a mutable accepted value")
@@ -181,7 +181,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	}
 	draft := tn.records.forkRecords()
 	put(draft, "c2", 2, 3)
-	if draft.types["stock.item"].rows.Get("I2") != untouched || tn.records.changed.Get("stock/c2") != nil || tn.records.dirty.Get("stock.item/I2") {
+	if draft.types["stock.item"].rows.Get("I2") != untouched || tn.records.recentChanges.Entries.Get("stock/c2") != nil || tn.records.dirty.Get("stock.item/I2") {
 		t.Fatal("write copied an unrelated row or leaked index metadata")
 	}
 	child := draft.forkRecords()

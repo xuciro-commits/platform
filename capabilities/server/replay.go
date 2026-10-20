@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	resultformat "platformserver/internal/acceptance/result"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -183,7 +184,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		return nil
 	}
 	if envelope.Kind == "refusal" {
-		saved, sub, decodeErr := decodeRefusedResult(e.Body)
+		saved, sub, decodeErr := resultformat.DecodeRefusal(e.Body)
 		if decodeErr != nil || saved.App != e.App || saved.Tenant != t.ID ||
 			!journal.SameTime(saved.At, e.At) || sub.GetPrincipalId() != m.ID {
 			return fmt.Errorf("entry %d: invalid refused result: %v", i+1, decodeErr)
@@ -196,11 +197,11 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		return nil
 	}
 	if envelope.Kind == "record-batch" {
-		saved, receipt, decodeErr := decodeAcceptedBatch(e.Body)
+		saved, receipt, decodeErr := resultformat.DecodeBatch(e.Body)
 		if decodeErr != nil {
 			return fmt.Errorf("entry %d: invalid record batch: %w", i+1, decodeErr)
 		}
-		sub, subErr := batchSubmission(saved, receipt)
+		sub, subErr := resultformat.BatchSubmission(saved, receipt)
 		if subErr != nil {
 			return fmt.Errorf("entry %d: invalid record batch request: %w", i+1, subErr)
 		}
@@ -220,7 +221,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		t.enqueue(e.At)
 		return nil
 	}
-	saved, receipt, decodeErr := decodeAcceptedResult(e.Body)
+	saved, receipt, decodeErr := resultformat.DecodeRecord(e.Body)
 	if decodeErr != nil {
 		return fmt.Errorf("entry %d: invalid accepted result: %v", i+1, decodeErr)
 	}

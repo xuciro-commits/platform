@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"time"
 
@@ -16,14 +17,6 @@ import (
 // Control changes participate in the business result. Each owned component has
 // a typed immutable image and its own predecessor, rather than restoring an
 // entire tenant over records or concurrent outside-lane bookkeeping.
-type acceptedControl struct {
-	Changes []controlChange `json:"changes"`
-}
-type controlChange struct {
-	Kind   string          `json:"kind"`
-	Before string          `json:"before"`
-	Image  json.RawMessage `json:"image"`
-}
 type controlWork struct {
 	Queues map[string][]string `json:"queues"`
 	Failed []string            `json:"failed"`
@@ -66,9 +59,9 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 	if err := save("endpoints", t.endpoints); err != nil {
 		return nil, err
 	}
-	effects := make([]effectState, 0, len(t.outbound))
+	effects := make([]resultformat.EffectState, 0, len(t.outbound))
 	for _, e := range t.outbound {
-		effects = append(effects, effectState{e.Effect, e.since})
+		effects = append(effects, resultformat.EffectState{Effect: e.Effect, Since: e.since})
 	}
 	if err := save("effects", effects); err != nil {
 		return nil, err
@@ -227,7 +220,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 	case "effects":
 		t.opsMu.Lock()
 		defer t.opsMu.Unlock()
-		var states []effectState
+		var states []resultformat.EffectState
 		if err := decodeControl(raw, &states); err != nil {
 			return err
 		}
@@ -305,7 +298,7 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 	return view
 }
 
-func (d *stagedDecision) savedControl() (*acceptedControl, error) {
+func (d *stagedDecision) savedControl() (*resultformat.Control, error) {
 	if d.control == nil {
 		return nil, nil
 	}
@@ -313,23 +306,23 @@ func (d *stagedDecision) savedControl() (*acceptedControl, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &acceptedControl{}
+	result := &resultformat.Control{}
 	for _, kind := range slices.Sorted(maps.Keys(current)) {
 		base := d.control.base[kind]
 		image := current[kind]
 		if kind == "effects" {
-			var prior, after []effectState
+			var prior, after []resultformat.EffectState
 			if err := decodeControl(base, &prior); err != nil {
 				return nil, err
 			}
 			if err := decodeControl(image, &after); err != nil {
 				return nil, err
 			}
-			lookup := map[string]effectState{}
+			lookup := map[string]resultformat.EffectState{}
 			for _, x := range prior {
 				lookup[x.ID] = x
 			}
-			var beforeChanges, afterChanges []effectState
+			var beforeChanges, afterChanges []resultformat.EffectState
 			for _, x := range after {
 				old, known := lookup[x.ID]
 				if !known {
@@ -357,7 +350,7 @@ func (d *stagedDecision) savedControl() (*acceptedControl, error) {
 			return nil, err
 		}
 		if before != after {
-			result.Changes = append(result.Changes, controlChange{kind, before, image})
+			result.Changes = append(result.Changes, resultformat.ControlChange{Kind: kind, Before: before, Image: image})
 		}
 	}
 	if len(result.Changes) == 0 {
@@ -366,7 +359,7 @@ func (d *stagedDecision) savedControl() (*acceptedControl, error) {
 	return result, nil
 }
 
-func (t *Tenant) validateAcceptedControl(saved *acceptedControl) error {
+func (t *Tenant) validateAcceptedControl(saved *resultformat.Control) error {
 	if saved == nil {
 		return nil
 	}
@@ -378,17 +371,17 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedControl) error {
 	for _, change := range saved.Changes {
 		prior := current[change.Kind]
 		if change.Kind == "effects" {
-			var after, all []effectState
+			var after, all []resultformat.EffectState
 			if err := decodeControl(change.Image, &after); err != nil {
 				return err
 			}
 			if err := decodeControl(prior, &all); err != nil {
 				return err
 			}
-			selected := []effectState{}
+			selected := []resultformat.EffectState{}
 			seenIDs := map[string]bool{}
 			for _, next := range after {
-				i := slices.IndexFunc(all, func(x effectState) bool { return x.ID == next.ID })
+				i := slices.IndexFunc(all, func(x resultformat.EffectState) bool { return x.ID == next.ID })
 				if i < 0 || seenIDs[next.ID] {
 					return fmt.Errorf("control effect is missing or duplicated")
 				}
@@ -421,7 +414,7 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedControl) error {
 	return err
 }
 
-func (t *Tenant) applyAcceptedControl(saved *acceptedControl) error {
+func (t *Tenant) applyAcceptedControl(saved *resultformat.Control) error {
 	if saved == nil {
 		return nil
 	}
@@ -430,7 +423,7 @@ func (t *Tenant) applyAcceptedControl(saved *acceptedControl) error {
 		// owned bytes change; effects preserve outside-lane sending flags by ID.
 		image := change.Image
 		if change.Kind == "effects" {
-			var patches []effectState
+			var patches []resultformat.EffectState
 			if err := decodeControl(image, &patches); err != nil {
 				return err
 			}
@@ -507,7 +500,7 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 			}
 		}
 		d.tenant.opsMu.Unlock()
-		if current.Endpoint == operationEndpoint {
+		if current.Endpoint == resultformat.OperationEndpoint {
 			if settled(current.State) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "")
 			}
@@ -552,7 +545,7 @@ func (d *stagedDecision) routingTenant() *Tenant {
 	return d.tenant
 }
 
-func (t *Tenant) validateControlDeliveries(saved *acceptedControl, deliveries []acceptedConnectorDelivery) error {
+func (t *Tenant) validateControlDeliveries(saved *resultformat.Control, deliveries []resultformat.ConnectorDelivery) error {
 	if saved == nil || len(deliveries) == 0 {
 		return t.validateAcceptedDeliveries(deliveries)
 	}

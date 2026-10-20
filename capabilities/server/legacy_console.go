@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"platformserver/internal/acceptance"
+	resultformat "platformserver/internal/acceptance/result"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -24,11 +25,11 @@ import (
 // (never a decided grant) from the comparison and require the
 // entire resulting directory to match the exact saved predecessor digest.
 // The accepted image remains authoritative; this does not grant a new role.
-func (t *Tenant) legacyCoreSeedPredecessor(saved acceptedState, prior json.RawMessage) bool {
+func (t *Tenant) legacyCoreSeedPredecessor(saved resultformat.State, prior json.RawMessage) bool {
 	owner, ok := t.app(saved.App).(HistoricalIdentity)
 	return ok && owner.LegacyCoreSeedPredecessor(saved, prior)
 }
-func (d *Console) LegacyCoreSeedPredecessor(saved acceptedState, prior json.RawMessage) bool {
+func (d *Console) LegacyCoreSeedPredecessor(saved resultformat.State, prior json.RawMessage) bool {
 	if d.host == nil || d.host.App("core") == nil {
 		return false
 	}
@@ -56,11 +57,11 @@ func (d *Console) enterpriseRoles() bool {
 // A changed bootstrap may contain enterprise instead of org before the first
 // saved directory image. Accept only the exact historical predecessor, never
 // arbitrary directory drift or a mixed-role state. This does not mutate state.
-func (t *Tenant) legacyConsolePredecessor(saved acceptedState, prior json.RawMessage) bool {
+func (t *Tenant) legacyConsolePredecessor(saved resultformat.State, prior json.RawMessage) bool {
 	owner, ok := t.app(saved.App).(HistoricalIdentity)
 	return ok && owner.LegacyConsolePredecessor(saved, prior)
 }
-func (d *Console) LegacyConsolePredecessor(saved acceptedState, prior json.RawMessage) bool {
+func (d *Console) LegacyConsolePredecessor(saved resultformat.State, prior json.RawMessage) bool {
 	if !d.enterpriseRoles() {
 		return false
 	}

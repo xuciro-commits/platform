@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	resultformat "platformserver/internal/acceptance/result"
 	"strings"
 	"testing"
 	"time"
@@ -342,25 +343,25 @@ func TestAcceptedReleaseCandidateRejectsCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: "t", App: construction.ID,
+	saved := resultformat.Release{Version: 1, Kind: "release-result", Tenant: "t", App: construction.ID,
 		Member: "dana", Key: "release:k", At: time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC),
 		CandidateID: candidate.ID, Bytes: candidate.Bytes}
-	saved.RequestHash, _ = releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, false)
-	raw, err := encodeAcceptedRelease(saved)
+	saved.RequestHash, _ = resultformat.ReleaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, false)
+	raw, err := resultformat.EncodeRelease(saved)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var altered acceptedRelease
+	var altered resultformat.Release
 	if err := json.Unmarshal(raw, &altered); err != nil {
 		t.Fatal(err)
 	}
 	altered.Bytes = []byte(`{"format":1,"assets":[]}`)
-	altered.Digest, _ = releaseDigest(altered)
+	altered.Digest, _ = resultformat.DigestRelease(altered)
 	bad, _ := json.Marshal(altered)
-	if _, err := decodeAcceptedRelease(bad); err == nil {
+	if _, err := resultformat.DecodeRelease(bad); err == nil {
 		t.Fatal("valid envelope digest must not excuse a changed candidate")
 	}
-	if _, err := decodeAcceptedRelease(append(raw, []byte(`{}`)...)); err == nil {
+	if _, err := resultformat.DecodeRelease(append(raw, []byte(`{}`)...)); err == nil {
 		t.Fatal("trailing release data was accepted")
 	}
 }
