@@ -218,7 +218,7 @@ func TestTenantDefinedObject(t *testing.T) {
 		section map[string]any
 		want    string
 	}{
-		{"a widget the platform has not", map[string]any{"widget": "map"}, `no widget "map"`},
+		{"a widget the platform has not", map[string]any{"widget": "missing-widget"}, `widget missing-widget requires a page document`},
 		{"a field the object has not", map[string]any{"widget": "table", "fields": []string{"nothing"}}, `has no field nothing`},
 		{"an action about something else", map[string]any{"widget": "actions", "actions": []string{"stock.item.edit"}}, "no action stock.item.edit"},
 		{"a measure that is not one", map[string]any{"widget": "metric", "measure": "median:qty"}, "is not count"},

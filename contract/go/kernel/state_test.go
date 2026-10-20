@@ -27,7 +27,9 @@ func TestChangeLogRestore(t *testing.T) {
 		t.Fatalf("replayed key: %v %v", again, err)
 	}
 	two := uint32(2)
-	next, err := restored.Submit(sub("k3", &two), now)
+	request := sub("k3", &two)
+	request.CausationId = again.GetChangeId()
+	next, err := restored.Submit(request, now)
 	if err != nil || next.GetChangeId() != "chg-3" || next.GetRevision() != 3 {
 		t.Fatalf("next: %v %v", next, err)
 	}

@@ -217,7 +217,7 @@ func TestAcceptedGeneratedArchivePreservesReceiptAndHistory(t *testing.T) {
 		t.Fatalf("archive was not committed as a result: %+v", entries)
 	}
 	if row := live.records.types["stock.item"].rows.get("I1"); row == nil ||
-		!row.value.Interface().(Item).Archived || len(row.history) != 2 {
+		!row.value.Interface().(Item).Archived || row.historyLength() != 2 {
 		t.Fatal("committed archive or its history was lost")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return stockTenant(t) })
@@ -387,7 +387,7 @@ func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, _, decodeErr := decodeAcceptedResult(saved.Body)
-	if decodeErr != nil || result.Version != 2 || len(result.Event.Subscribers) != 1 ||
+	if decodeErr != nil || result.Version != 5 || result.Kind != "record" || len(result.Event.Subscribers) != 1 ||
 		result.Event.Subscribers[0] != "listener" || len(result.Event.Effects) != 1 {
 		t.Fatalf("result omitted owned work: %+v, %v", result.Event, decodeErr)
 	}
@@ -436,6 +436,22 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	var result acceptedResult
 	if err := json.Unmarshal(committed.Body, &result); err != nil {
 		t.Fatal(err)
+	}
+	// Construct the actual previous envelope, rather than relabeling a new
+	// suffix result whose format, kind and history reference did not exist then.
+	result.Version, result.Kind = 2, ""
+	result.Unique = nil
+	result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
+	result.Row.History = copyHistory(source.records.types["stock.bin"].rows.get("B1").recordHistory())
+	previousDigest, previousDigestErr := digestAcceptedResult(result)
+	if previousDigestErr != nil {
+		t.Fatal(previousDigestErr)
+	}
+	result.Digest = previousDigest
+	previous, _ := json.Marshal(result)
+	if err := stockTenant(t).Replay([]Entry{{App: "stock", Kind: "accepted-result", Body: previous,
+		Principal: committed.Principal, At: at}}); err != nil {
+		t.Fatalf("version 2 result no longer recovers: %v", err)
 	}
 	result.Event.Names = nil
 	digest, digestErr := digestAcceptedResult(result)
@@ -501,7 +517,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	c := platform.NewCaller(runtime{restored}, member, "stock", false, false)
 	got, _ := restored.records.get(c, reflect.TypeFor[Item](), "I1")
-	if got.(Item).Qty != 2 || len(restored.records.types["stock.item"].rows.get("I1").history) != 1 ||
+	if got.(Item).Qty != 2 || restored.records.types["stock.item"].rows.get("I1").historyLength() != 1 ||
 		len(ledger.RecordsFor(restored.ID)) != 1 || len(restored.events) != 0 {
 		t.Fatalf("saved create was not applied purely: %+v", got)
 	}
@@ -536,7 +552,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	}
 	got, _ = restored.records.get(c, reflect.TypeFor[Item](), "I1")
 	if got.(Item).Qty != 7 || len(ledger.RecordsFor(restored.ID)) != 2 ||
-		len(restored.records.types["stock.item"].rows.get("I1").history) != 2 {
+		restored.records.types["stock.item"].rows.get("I1").historyLength() != 2 {
 		t.Fatalf("saved edit was not applied purely: %+v", got)
 	}
 	if applied, err := restored.applyAcceptedResult(ledger, savedEdit); err != nil || applied {

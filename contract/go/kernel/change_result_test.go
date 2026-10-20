@@ -65,3 +65,45 @@ func TestChangeLogStagedAcceptedResult(t *testing.T) {
 		t.Fatal("a caller mutated the committed record")
 	}
 }
+
+func TestChangeLogCausationIsolation(t *testing.T) {
+	schemas := NewSchemaRegistry([]*pb.SchemaRef{{Name: "x.edit", Version: 1}}, nil)
+	live := NewChangeLog(schemas)
+	now := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	sub := func(tenant, key, cause string) *pb.Submission {
+		return &pb.Submission{TenantId: tenant, PrincipalId: "member", Authority: "app", IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: "x", Id: "one"}, Schema: &pb.SchemaRef{Name: "x.edit", Version: 1}, CausationId: cause}
+	}
+	first, err := live.Submit(sub("tenant", "one", ""), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fork := live.Fork()
+	second, err := fork.Submit(sub("tenant", "two", first.GetChangeId()), now)
+	if err != nil {
+		t.Fatalf("fork lost a resident causal reference: %v", err)
+	}
+	if _, err := live.Submit(sub("tenant", "three", second.GetChangeId()), now); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE {
+		t.Fatalf("a discarded fork leaked a causal reference: %v", err)
+	}
+	if _, err := live.Submit(sub("other", "one", first.GetChangeId()), now); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE {
+		t.Fatalf("a different tenant satisfied a causal reference: %v", err)
+	}
+	if applied, err := live.ApplyAccepted(second); !applied || err != nil {
+		t.Fatalf("saved result application: %v, %v", applied, err)
+	}
+	if _, err := live.Submit(sub("tenant", "three", second.GetChangeId()), now); err != nil {
+		t.Fatalf("saved result did not add its causal reference: %v", err)
+	}
+	// Adoption keeps the original authority's ID spelling, independently of
+	// local numbering. Its retained records supply the same causal references.
+	adopted := proto.Clone(first).(*pb.ChangeRecord)
+	adopted.ChangeId = "prior-authority:one"
+	successor := NewChangeLog(schemas)
+	if err := successor.Adopt([]*pb.ChangeRecord{adopted}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := successor.Submit(sub("tenant", "next", adopted.GetChangeId()), now); err != nil {
+		t.Fatalf("adoption lost the original causal reference: %v", err)
+	}
+}

@@ -51,7 +51,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 		t.Fatal("callback became visible before application")
 	}
 	batch, _, err := decodeAcceptedBatch(entries[0].Body)
-	if err != nil || batch.Version != 4 || len(batch.DirectRows) != 1 || batch.Control == nil {
+	if err != nil || batch.Version != 8 || len(batch.DirectRows) != 1 || batch.Control == nil {
 		t.Fatalf("callback not sealed with control: %v", err)
 	}
 	recovered := build(true)

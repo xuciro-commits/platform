@@ -361,7 +361,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 			}
 			if slices.Contains([]string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver},
 				receipt.GetSubmission().GetSchema().GetName()) {
-				if result.Version != 3 {
+				if result.Version != 5 || result.Kind != "publication" {
 					t.Fatalf("publication used result format %d", result.Version)
 				}
 				publications++
@@ -372,6 +372,34 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		t.Fatalf("expected three durable publications, found %d", publications)
 	}
 	CheckReplay(t, live, entries, compose)
+	// The prior publication format carried a full image and complete history,
+	// without the new row format, prefix reference or predecessor fields.
+	previous := slices.Clone(entries)
+	for i, e := range previous {
+		if e.Kind != "accepted-result" {
+			continue
+		}
+		result, _, err := decodeAcceptedResult(e.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Kind != "publication" {
+			continue
+		}
+		result.Version, result.Kind = 3, ""
+		result.Unique = nil
+		result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
+		result.Row.History = copyHistory(live.records.types[result.Row.Type].rows.get(result.Row.ID).recordHistory())
+		result.Digest, err = digestAcceptedResult(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		previous[i].Body, err = json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	CheckReplay(t, live, previous, compose)
 
 	// A crash after the append but before applying any in-memory definition
 	// must reconstruct all three kinds directly from the committed rows.

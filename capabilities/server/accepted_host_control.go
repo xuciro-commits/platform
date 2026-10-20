@@ -200,6 +200,7 @@ func (t *Tenant) acceptHostControl(action, member string, request any, now time.
 		t.quarantine(err)
 		return SupportGrant{}, err
 	}
+	t.acceptedResultApplied()
 	t.changed()
 	return saved.Answer, nil
 }

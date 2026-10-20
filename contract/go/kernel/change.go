@@ -25,7 +25,8 @@ type ChangeLog struct {
 	schemas  *SchemaRegistry
 	logs     map[string][]*pb.ChangeRecord
 	byKey    map[string]map[string]*pb.ChangeRecord
-	revs     map[[3]string]uint32 // (tenant, target type, target id) → revision (C12)
+	byID     map[string]map[string]bool // resident causal references; archived IDs stay in the archive
+	revs     map[[3]string]uint32       // (tenant, target type, target id) → revision (C12)
 	archive  ChangeArchive
 	archived map[string]int
 	last     map[string]time.Time
@@ -37,7 +38,19 @@ type ChangeLog struct {
 
 func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
 	return &ChangeLog{schemas: schemas, logs: map[string][]*pb.ChangeRecord{},
-		byKey: map[string]map[string]*pb.ChangeRecord{}, revs: map[[3]string]uint32{}}
+		byKey: map[string]map[string]*pb.ChangeRecord{}, byID: map[string]map[string]bool{}, revs: map[[3]string]uint32{}}
+}
+
+func (l *ChangeLog) index(record *pb.ChangeRecord) {
+	tenant := record.GetSubmission().GetTenantId()
+	if l.byKey[tenant] == nil {
+		l.byKey[tenant] = map[string]*pb.ChangeRecord{}
+	}
+	if l.byID[tenant] == nil {
+		l.byID[tenant] = map[string]bool{}
+	}
+	l.byKey[tenant][record.GetSubmission().GetIdempotencyKey()] = record
+	l.byID[tenant][record.GetChangeId()] = true
 }
 
 func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord {
@@ -99,6 +112,7 @@ func (l *ChangeLog) Compact(archive ChangeArchive) {
 	l.archive = archive
 	l.logs = map[string][]*pb.ChangeRecord{}
 	l.byKey = map[string]map[string]*pb.ChangeRecord{}
+	l.byID = map[string]map[string]bool{}
 }
 
 func (l *ChangeLog) lastTime(tenant string) time.Time {
@@ -113,7 +127,7 @@ func (l *ChangeLog) lastTime(tenant string) time.Time {
 // The host can discard this view when a durable append fails (ADR-0010 19a).
 func (l *ChangeLog) Fork() *ChangeLog {
 	copy := &ChangeLog{schemas: l.schemas, logs: make(map[string][]*pb.ChangeRecord, len(l.logs)),
-		byKey: make(map[string]map[string]*pb.ChangeRecord, len(l.byKey)), revs: make(map[[3]string]uint32, len(l.revs)), next: l.next, Facts: l.Facts, archive: l.archive, archived: map[string]int{}, last: map[string]time.Time{}, tail: map[string]*pb.ChangeRecord{}}
+		byKey: make(map[string]map[string]*pb.ChangeRecord, len(l.byKey)), byID: make(map[string]map[string]bool, len(l.byID)), revs: make(map[[3]string]uint32, len(l.revs)), next: l.next, Facts: l.Facts, archive: l.archive, archived: map[string]int{}, last: map[string]time.Time{}, tail: map[string]*pb.ChangeRecord{}}
 	for tenant, n := range l.archived {
 		copy.archived[tenant] = n
 	}
@@ -124,6 +138,12 @@ func (l *ChangeLog) Fork() *ChangeLog {
 		copy.byKey[tenant] = make(map[string]*pb.ChangeRecord, len(keys))
 		for key, record := range keys {
 			copy.byKey[tenant][key] = record
+		}
+	}
+	for tenant, ids := range l.byID {
+		copy.byID[tenant] = make(map[string]bool, len(ids))
+		for id := range ids {
+			copy.byID[tenant][id] = true
 		}
 	}
 	for tenant, r := range l.tail {
@@ -171,10 +191,7 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	l.next++
 	l.revs[target] = record.GetRevision()
 	l.logs[s.GetTenantId()] = append(log, record)
-	if l.byKey[s.GetTenantId()] == nil {
-		l.byKey[s.GetTenantId()] = map[string]*pb.ChangeRecord{}
-	}
-	l.byKey[s.GetTenantId()][s.GetIdempotencyKey()] = record
+	l.index(record)
 	return true, nil
 }
 
@@ -200,7 +217,7 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 		return existing, nil // C4
 	}
 	log := l.logs[s.GetTenantId()]
-	if c := s.GetCausationId(); c != "" && !slices.ContainsFunc(log, func(r *pb.ChangeRecord) bool { return r.GetChangeId() == c }) && (l.archive == nil || !l.archive.Contains(s.GetTenantId(), c, l.archived[s.GetTenantId()])) {
+	if c := s.GetCausationId(); c != "" && !l.byID[s.GetTenantId()][c] && (l.archive == nil || !l.archive.Contains(s.GetTenantId(), c, l.archived[s.GetTenantId()])) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // C3
 	}
 	for _, fact := range s.GetEvidenceFactIds() {
@@ -230,10 +247,7 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 	record := &pb.ChangeRecord{ChangeId: fmt.Sprintf("chg-%d", l.next), Submission: s,
 		ValidTime: valid, RecordedTime: timestamppb.New(recorded), Revision: l.revs[target]}
 	l.logs[s.GetTenantId()] = append(log, record)
-	if l.byKey[s.GetTenantId()] == nil {
-		l.byKey[s.GetTenantId()] = map[string]*pb.ChangeRecord{}
-	}
-	l.byKey[s.GetTenantId()][s.GetIdempotencyKey()] = record
+	l.index(record)
 	return record, nil
 }
 
@@ -261,8 +275,9 @@ func (l *ChangeLog) Adopt(records []*pb.ChangeRecord) *Error {
 	}
 	l.logs[tenant] = append([]*pb.ChangeRecord(nil), records...)
 	l.byKey[tenant] = map[string]*pb.ChangeRecord{}
+	l.byID[tenant] = map[string]bool{}
 	for _, r := range records {
-		l.byKey[tenant][r.GetSubmission().GetIdempotencyKey()] = r
+		l.index(r)
 		l.revs[[3]string{tenant, r.GetSubmission().GetTarget().GetType(), r.GetSubmission().GetTarget().GetId()}]++
 	}
 	return nil

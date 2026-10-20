@@ -241,7 +241,7 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
 		return nil, migrationRefusal(err)
 	}
-	return &row{value: decoded.Elem(), history: value.history, loadHistory: value.loadHistory, historyCount: value.historyCount}, nil
+	return &row{value: decoded.Elem(), format: value.format, historyHead: value.historyHead, historyParent: value.historyParent, history: value.history, loadHistory: value.loadHistory, historyCount: value.historyCount}, nil
 }
 
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
@@ -284,7 +284,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 				return nil, migrationRefusal(err)
 			}
 			delete(store.byGo, current.info.Go)
-			store.types[typ] = &entityType{info: info, rows: rows, knowledge: current.knowledge}
+			store.types[typ] = &entityType{store: store, info: info, rows: rows, knowledge: current.knowledge}
 			store.byGo[info.Go] = store.types[typ]
 		}
 		r.readSource, r.readStore, r.readOrigins = r.records, store, origins

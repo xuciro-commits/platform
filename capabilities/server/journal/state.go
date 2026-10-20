@@ -8,16 +8,22 @@ import (
 // StateDelta is supplied by the authority that sealed the accepted result.
 // The journal stores opaque images and history positions, never business rules.
 type StateDelta struct {
-	Records []StateRecord
-	Changes []StateChange
-	Values  []StateValue
+	// LegacyUnique identifies an old result without owner-supplied key changes.
+	// Only verified retained-suffix recovery may rebuild those derived keys.
+	LegacyUnique bool
+	Unique       []StateUnique
+	Records      []StateRecord
+	Changes      []StateChange
+	Values       []StateValue
 }
 
 type StateRecord struct {
-	Type, ID    string
-	Image       json.RawMessage
-	HistoryBase int // -1: full historical image; >=0: appended suffix
-	History     []json.RawMessage
+	Type, ID     string
+	Image        json.RawMessage
+	HistoryPrior string
+	HistoryHead  string
+	HistoryBase  int // -1: full historical image; >=0: appended suffix
+	History      []json.RawMessage
 }
 
 type StateChange struct {
@@ -63,4 +69,18 @@ type StateCheckpoint struct {
 type RuntimeStateRecovery interface {
 	StatePosition(context.Context, string) (int64, bool, error)
 	RestoreState(context.Context, string, int64, StateCheckpoint, StateDelta) error
+}
+
+// StateUnique replaces the complete derived key set of one owner record.
+// Multiple rows may occupy the same key: the business owner, rather than a
+// database uniqueness constraint, decides whether a new write is admissible.
+type StateUnique struct {
+	Type, ID string
+	Keys     map[string]string
+}
+
+// UniqueState is the optional lookup for owner-derived business constraints.
+// Reads require the same position as the owner's applied private read view.
+type UniqueState interface {
+	StateUnique(context.Context, string, string, string, string, int64) ([]string, error)
 }

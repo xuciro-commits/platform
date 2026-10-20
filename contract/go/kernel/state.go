@@ -17,8 +17,9 @@ import (
 func (l *ChangeLog) Restore(tenant string, records []*pb.ChangeRecord) {
 	l.logs[tenant] = slices.Clone(records)
 	l.byKey[tenant] = map[string]*pb.ChangeRecord{}
+	l.byID[tenant] = map[string]bool{}
 	for _, r := range records {
-		l.byKey[tenant][r.GetSubmission().GetIdempotencyKey()] = r
+		l.index(r)
 		l.revs[[3]string{tenant, r.GetSubmission().GetTarget().GetType(), r.GetSubmission().GetTarget().GetId()}]++
 	}
 	l.next += len(records) // change IDs continue after the restored ones

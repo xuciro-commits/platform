@@ -37,7 +37,7 @@ func TestMigrationRenameAliasFollowsNewWritesAndPreservesHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	originalRelease := bytes.Clone(tn.releases.raw(plan.From))
-	originalHistory := copyHistory(tn.records.types["build.asset"].rows.get("A").history)
+	originalHistory := copyHistory(tn.records.types["build.asset"].rows.get("A").recordHistory())
 	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
 	for i := 0; i < 2; i++ {
 		decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt.Add(time.Hour))
@@ -54,7 +54,7 @@ func TestMigrationRenameAliasFollowsNewWritesAndPreservesHistory(t *testing.T) {
 			t.Fatalf("alias %s lost the current value: %s", name, got)
 		}
 	}
-	if !bytes.Equal(originalRelease, tn.releases.raw(plan.From)) || string(platform.Raw(originalHistory)) != string(platform.Raw(tn.records.types["build.asset"].rows.get("A").history[:len(originalHistory)])) {
+	if !bytes.Equal(originalRelease, tn.releases.raw(plan.From)) || string(platform.Raw(originalHistory)) != string(platform.Raw(tn.records.types["build.asset"].rows.get("A").recordHistory()[:len(originalHistory)])) {
 		t.Fatal("rename rewrote its frozen source or original history")
 	}
 	recovered := builderTenant(t, tn.ID)

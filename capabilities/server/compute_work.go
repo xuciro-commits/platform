@@ -163,6 +163,7 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 		t.quarantine(err)
 		return platform.Effect{}, false
 	}
+	t.acceptedResultApplied()
 	t.spend(before.App, now)
 	return after, true
 }

@@ -18,12 +18,14 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
 // One top-level input, not one row or one nested decision. Before validates
 // the predecessor image/history before any authoritative ledger is advanced.
 type acceptedBatch struct {
+	Unique         []journal.StateUnique           `json:"unique,omitempty"`
 	Business       []platform.BusinessRefusalFact  `json:"business,omitempty"`
 	SchemaVersion  *platform.SchemaVersion         `json:"schemaVersion,omitempty"`
 	Authorizations []authorizationEvidence         `json:"authorizations,omitempty"`
@@ -74,6 +76,7 @@ type acceptedDecision struct {
 }
 
 type acceptedPublication struct {
+	Format string          `json:"format,omitempty"`
 	Schema string          `json:"schema"`
 	Image  json.RawMessage `json:"image"`
 }
@@ -175,6 +178,13 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		}
 		result.Decisions = append(result.Decisions, acceptedDecision{Receipt: raw, Event: plan, Definition: d.definitions[event.App+"/"+event.Record.GetChangeId()],
 			Publication: d.publications[event.App+"/"+event.Record.GetChangeId()]})
+		if publication := result.Decisions[len(result.Decisions)-1].Publication; publication != nil {
+			copied := *publication
+			if et := d.records.types[event.Record.GetSubmission().GetTarget().GetType()]; et != nil {
+				copied.Format = et.info.RecordFormat
+			}
+			result.Decisions[len(result.Decisions)-1].Publication = &copied
+		}
 		for _, ref := range event.Changed {
 			if !d.records.writes[ref] {
 				return nil, fmt.Errorf("batch event names an unwritten record")
@@ -204,6 +214,8 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		result.Business = slices.Clone(d.businessFacts)
 		result.Version = 7
 	}
+	result.Version = 8
+	result.Unique = d.savedUniqueChanges()
 	d.records.mu.Lock()
 	defer d.records.mu.Unlock()
 	d.records.parent.mu.Lock()
@@ -217,25 +229,18 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if !ok || et == nil || et.rows.get(id) == nil {
 			return nil, fmt.Errorf("batch includes an undeclared record")
 		}
-		image, err := acceptedRowOf(typ, id, et.rows.get(id))
+		var prior *row
+		if old := d.records.parent.types[typ]; old != nil {
+			prior = old.rows.get(id)
+		}
+		image, err := acceptedRowChange(typ, id, et.rows.get(id), prior)
 		if err != nil {
 			return nil, err
 		}
-		row := acceptedBatchRow{acceptedRow: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref])}
-		if priorType := d.records.parent.types[typ]; priorType != nil && priorType.rows.get(id) != nil {
-			before, err := acceptedRowOf(typ, id, priorType.rows.get(id))
-			if err != nil {
-				return nil, err
-			}
-			row.Before, err = canonicalDigest(before)
-			if err != nil {
-				return nil, err
-			}
-			row.HistoryBase = len(before.History)
-			if len(row.History) <= row.HistoryBase {
-				return nil, fmt.Errorf("record batch does not extend its history")
-			}
-			row.History = copyHistory(row.History[row.HistoryBase:])
+		row := acceptedBatchRow{acceptedRow: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
+		row.Before, err = recordPredecessor(typ, id, prior)
+		if err != nil {
+			return nil, err
 		}
 		result.Rows = append(result.Rows, row)
 	}
@@ -280,7 +285,7 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version < 1 || result.Version > 7 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > 8 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
@@ -288,8 +293,11 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 		len(result.Decisions) == 0 {
 		return result, nil, fmt.Errorf("record batch has inconsistent identity or effects")
 	}
-	if result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || result.Version < 7 && (result.Version == 6) != (len(result.Definitions) > 0) || (result.Version == 7) != (len(result.Business) > 0) {
+	if result.Version < 8 && (result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || result.Version < 7 && (result.Version == 6) != (len(result.Definitions) > 0) || result.Version < 8 && (result.Version == 7) != (len(result.Business) > 0)) {
 		return result, nil, fmt.Errorf("record batch control format differs")
+	}
+	if result.Version < 8 && len(result.Unique) > 0 {
+		return result, nil, fmt.Errorf("legacy batch has unique-key metadata")
 	}
 	if len(result.Business) > 64 {
 		return result, nil, fmt.Errorf("business result exceeds its evidence bound")
@@ -379,6 +387,17 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	seen := map[string]bool{}
 	for _, row := range result.Rows {
 		ref := row.Type + "/" + row.ID
+		if result.Version == 8 {
+			if row.HistoryRef == nil || row.HistoryBase != row.HistoryRef.Base {
+				return result, nil, fmt.Errorf("record batch has no versioned history")
+			}
+			if err := validateHistoryRef(row.acceptedRow); err != nil {
+				return result, nil, err
+			}
+		} else if row.HistoryRef != nil || row.Format != "" || row.Predecessor != "" {
+			return result, nil, fmt.Errorf("legacy record batch carries new metadata")
+		}
+
 		if row.Type == "" || row.ID == "" || row.App == "" || len(row.Value) == 0 ||
 			len(row.History) == 0 || row.HistoryBase < 0 || result.Version == 1 && row.HistoryBase != 0 || seen[ref] || !written[ref] {
 			return result, nil, fmt.Errorf("record batch omits or duplicates a row")
@@ -397,6 +416,13 @@ func decodeAcceptedBatch(raw []byte) (acceptedBatch, *pb.ChangeRecord, error) {
 	}
 	for _, direct := range result.DirectRows {
 		row := direct.Row
+		if result.Version == 8 {
+			if err := validateHistoryRef(row.acceptedRow); err != nil {
+				return result, nil, err
+			}
+		} else if row.HistoryRef != nil || row.Format != "" {
+			return result, nil, fmt.Errorf("legacy callback row carries new metadata")
+		}
 		ref := row.Type + "/" + row.ID
 		if seen[ref] || written[ref] || row.Type == "" || row.ID == "" || row.App == "" || direct.Source.ID == "" || direct.Source.App != row.App || len(row.History) == 0 || len(row.Value) == 0 {
 			return result, nil, fmt.Errorf("record batch has invalid or overlapping callback rows")
@@ -547,7 +573,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := t.validateControlDeliveries(result.Control, result.Deliveries); err != nil {
 		return nil, err
 	}
-	for _, decision := range result.Decisions {
+	for i, decision := range result.Decisions {
 		if decision.Publication == nil {
 			continue
 		}
@@ -556,7 +582,23 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 			decision.Publication.Schema != decision.Event.Names[0] {
 			return nil, fmt.Errorf("record batch has an invalid publication")
 		}
-		if err := publisher.ValidateAcceptedPublication(decision.Publication.Schema, decision.Publication.Image); err != nil {
+		r := changes[decision.Event.App+"/"+receiptID(decision.Receipt)]
+		if r == nil {
+			return nil, fmt.Errorf("publication has no receipt")
+		}
+		et := draft.types[r.GetSubmission().GetTarget().GetType()]
+		if et == nil {
+			return nil, fmt.Errorf("publication record type is unavailable")
+		}
+		decoded, err := rowDecodeFormattedImage(et.info, decision.Publication.Image, nil, draft.readRelease, decision.Publication.Format)
+		if err != nil {
+			return nil, err
+		}
+		copy := *decision.Publication
+		copy.Image = decoded
+		copy.Format = et.info.RecordFormat
+		result.Decisions[i].Publication = &copy
+		if err := publisher.ValidateAcceptedPublication(copy.Schema, copy.Image); err != nil {
 			return nil, err
 		}
 	}
@@ -575,6 +617,11 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	}
 	if err := draft.validateChangedLinkConstraints(); err != nil {
 		return nil, err
+	}
+	if result.Version == 8 {
+		if err := validateUniqueReplacements(draft, result.Unique); err != nil {
+			return nil, err
+		}
 	}
 	if err := validateExtractionOrigins(draft); err != nil {
 		return nil, err
@@ -683,40 +730,57 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 		}
 		before := ""
 		baseHistory, revision := 0, uint32(0)
-		if prior != nil {
-			row, err := acceptedRowOf(image.Type, image.ID, prior)
+		if result.Version == 8 {
+			if err := checkHistoryPredecessor(image.acceptedRow, prior); err != nil {
+				return err
+			}
+			var err error
+			before, err = recordPredecessor(image.Type, image.ID, prior)
 			if err != nil {
 				return err
 			}
-			before, err = canonicalDigest(row)
-			if err != nil {
-				return err
-			}
-			baseHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
-		}
-		if result.Version >= 2 {
-			if image.HistoryBase != baseHistory {
-				return fmt.Errorf("record batch history predecessor differs for %s/%s", image.Type, image.ID)
+			if before != image.Before {
+				return fmt.Errorf("record batch image predecessor differs")
 			}
 			if prior != nil {
-				image.History = append(copyHistory(prior.recordHistory()), image.History...)
+				revision = recordOf(prior.value).Revision
+			}
+		} else {
+			if prior != nil {
+				row, err := acceptedRowOf(image.Type, image.ID, prior)
+				if err != nil {
+					return err
+				}
+				before, err = canonicalDigest(row)
+				if err != nil {
+					return err
+				}
+				baseHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
+			}
+			if result.Version >= 2 {
+				if image.HistoryBase != baseHistory {
+					return fmt.Errorf("record batch history predecessor differs for %s/%s", image.Type, image.ID)
+				}
+				if prior != nil {
+					image.History = append(copyHistory(prior.recordHistory()), image.History...)
+				}
+			}
+			prefixEqual := true
+			if result.Version == 1 && prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
+				oldDigest, oldErr := canonicalDigest(prior.recordHistory())
+				savedDigest, savedErr := canonicalDigest(image.History[:baseHistory])
+				prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
+			}
+			// PostgreSQL JSONB normalizes JSON field-change bytes (object key
+			// order/whitespace). The canonical predecessor hash is authoritative;
+			// bytewise DeepEqual would quarantine a sound recovered result.
+			if before != image.Before || len(image.History) <= baseHistory || !prefixEqual {
+				return fmt.Errorf("record batch predecessor differs for %s/%s (value=%t history=%d/%d prefix=%t)",
+					image.Type, image.ID, before == image.Before, baseHistory, len(image.History), prefixEqual)
 			}
 		}
-		prefixEqual := true
-		if result.Version == 1 && prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
-			oldDigest, oldErr := canonicalDigest(prior.recordHistory())
-			savedDigest, savedErr := canonicalDigest(image.History[:baseHistory])
-			prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
-		}
-		// PostgreSQL JSONB normalizes JSON field-change bytes (object key
-		// order/whitespace). The canonical predecessor hash is authoritative;
-		// bytewise DeepEqual would quarantine a sound recovered result.
-		if before != image.Before || len(image.History) <= baseHistory || !prefixEqual {
-			return fmt.Errorf("record batch predecessor differs for %s/%s (value=%t history=%d/%d prefix=%t)",
-				image.Type, image.ID, before == image.Before, baseHistory, len(image.History), prefixEqual)
-		}
 		value := reflect.New(et.info.Go).Elem()
-		decode, err := rowDecodeImage(et.info, image.Value, image.Projection, draft.readRelease)
+		decode, err := rowDecodeFormattedImage(et.info, image.Value, image.Projection, draft.readRelease, image.Format)
 		if err != nil {
 			return err
 		}
@@ -760,7 +824,12 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedBatch, ledger
 				rec.Created.By != image.History[0].By || !rec.Created.At.Equal(image.History[0].At)) {
 			return fmt.Errorf("record batch image differs from its decisions")
 		}
-		recovered := &row{value: value, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
+		recovered := &row{value: value, format: image.Format, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
+		if result.Version == 8 {
+			if err := appendRowHistory(recovered, prior, image.History); err != nil {
+				return err
+			}
+		}
 		recovered.retainOriginal(image.Value)
 		et.setRow(rec.ID, recovered)
 		draft.writes[image.Type+"/"+rec.ID] = true

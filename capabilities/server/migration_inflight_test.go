@@ -111,7 +111,7 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						if kind == "retire-action" {
 							decide(t, tn, "user", construction.ID, "build.sample.hold", "build.sample", rowID, map[string]any{}, at)
 						}
-						history[rowID] = copyHistory(tn.records.types["build.sample"].rows.get(rowID).history)
+						history[rowID] = copyHistory(tn.records.types["build.sample"].rows.get(rowID).recordHistory())
 					}
 					step := platform.MigrateStep{Kind: kind, Types: []string{"build.sample"}, Batch: 2}
 					want := map[string]string{"value": updated}
@@ -242,7 +242,8 @@ func TestMigrationSixChangesResumeWaitingFlows(t *testing.T) {
 						if instance.State != "done" || instance.Release != from || businessField(et.info, row.value, "state") != "done" {
 							t.Fatalf("retained flow did not finish: %s; record: %s", jsonOf(instance), jsonOf(row.value.Interface()))
 						}
-						if len(row.history) < len(history[rowID]) || !bytes.Equal(jsonOf(history[rowID]), jsonOf(row.history[:len(history[rowID])])) {
+						fullHistory := row.recordHistory()
+						if len(fullHistory) < len(history[rowID]) || !bytes.Equal(jsonOf(history[rowID]), jsonOf(fullHistory[:len(history[rowID])])) {
 							t.Fatal("migration or retained execution rewrote historical decisions")
 						}
 						view, refusal := tn.RecordOf(memberOf(t, tn, "user"), "build.sample", rowID, at)

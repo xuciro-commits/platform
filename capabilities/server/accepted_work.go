@@ -13,6 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/host"
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
@@ -20,6 +21,7 @@ import (
 // result includes the K9 generation, scheduling outcome, business changes and
 // notices. No runner/listener executes when this result is recovered.
 type acceptedWork struct {
+	Unique         []journal.StateUnique   `json:"unique,omitempty"`
 	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
 	Version        int                     `json:"version"`
 	Kind           string                  `json:"kind"`
@@ -76,7 +78,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
-	result := acceptedWork{Version: 1, Kind: "work-result", Tenant: t.ID, App: task.App,
+	result := acceptedWork{Version: 3, Kind: "work-result", Tenant: t.ID, App: task.App,
 		At: now.UTC(), Input: input, Outcome: "ok"}
 	works := t.forkWorkState()
 	if prior, err := works.Get(task.ID); err == nil {
@@ -151,19 +153,15 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {
-		result.Notices = draft.savedNotices()
-		result.Intents = slices.Clone(draft.intents)
-		result.States, err = draft.savedStates()
-		if err == nil {
-			result.Control, err = draft.savedControl()
-		}
+		var plan acceptedChangePlan
+		plan, err = draft.savedChangePlan()
+		result.Notices, result.Intents = plan.Notices, plan.Intents
+		result.States, result.Control = plan.States, plan.Control
 		if err != nil {
 			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
 	}
-	if result.Control != nil || len(result.States) > 0 {
-		result.Version = 2
-	}
+	result.Unique = draft.savedUniqueChanges()
 	result.Digest, err = digestAcceptedWork(result)
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
@@ -173,6 +171,9 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	if _, err := decodeAcceptedWork(raw); err != nil {
+		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+	}
+	if _, err := t.prepareAcceptedChanges(result.changePlan()); err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	principal, _ := json.Marshal(c.Member)
@@ -190,6 +191,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		t.quarantine(err)
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
+	t.acceptedResultApplied()
 	t.enqueue(saved.At)
 	if len(saved.Changes) == 0 && len(saved.States) == 0 && saved.Notices == nil {
 		t.operationsChanged(saved.App)
@@ -266,12 +268,15 @@ func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
 		return result, err
 	}
 
+	if result.Version < 3 && len(result.Unique) > 0 {
+		return result, fmt.Errorf("legacy work result carries derived unique keys")
+	}
 	digest, err := digestAcceptedWork(result)
 	hash, hashErr := workInputHash(result.Input, result.PriorWork)
 	finished := new(pb.Work)
 	workErr := protojson.Unmarshal(result.Work, finished)
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash || workErr != nil ||
-		(result.Version != 1 && result.Version != 2) || result.Version == 1 && (result.Control != nil || len(result.States) > 0) || result.Kind != "work-result" || result.Tenant == "" || result.App == "" || result.At.IsZero() ||
+		(result.Version != 1 && result.Version != 2 && result.Version != 3) || result.Version == 1 && (result.Control != nil || len(result.States) > 0) || result.Kind != "work-result" || result.Tenant == "" || result.App == "" || result.At.IsZero() ||
 		result.Input.ID == "" || result.Input.App != result.App || result.Input.Kind != "delivery" && result.Input.Kind != "job" ||
 		result.After.ID != result.Input.ID || result.After.App != result.App || result.After.Kind != result.Input.Kind ||
 		result.After.Title != result.Input.Title || result.After.Attempts != result.Input.Attempts+1 ||
@@ -365,37 +370,14 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	if !proto.Equal(expected, finished) {
 		return false, fmt.Errorf("work result K9 state differs")
 	}
-	if err := t.validateAcceptedNotices(result.Notices); err != nil {
+	prepared, err := t.prepareAcceptedChanges(result.changePlan())
+	if err != nil {
 		return false, err
 	}
-	if err := t.validateAcceptedIntents(result.Intents); err != nil {
+	if err := prepared.apply(t); err != nil {
 		return false, err
 	}
-	if err := t.validateAcceptedControl(result.Control); err != nil {
-		return false, err
-	}
-	if err := t.validateAcceptedStates(result.States); err != nil {
-		return false, err
-	}
-	if len(result.Changes) > 0 {
-		batch, _, _ := decodeAcceptedBatch(result.Changes)
-		owner := t.app(batch.App)
-		if owner == nil {
-			return false, fmt.Errorf("work result needs missing business authority")
-		}
-		if applied, err := t.applyAcceptedBatch(owner.AcceptedLedger(), result.Changes); err != nil || !applied {
-			return false, fmt.Errorf("work result business application: %v", err)
-		}
-	}
-	if err := t.applyAcceptedControl(result.Control); err != nil {
-		return false, err
-	}
-	if err := t.applyAcceptedStates(result.States); err != nil {
-		return false, err
-	}
-	t.works = works
-	t.applyAcceptedNotices(result.Notices)
-	t.installAcceptedIntents(result.Intents)
+	t.installAcceptedWork(finished)
 	t.opsMu.Lock()
 	task.restoreOutcome(result.After)
 	if task.Kind == "delivery" {
@@ -410,10 +392,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 		t.delivered(Delivery{At: result.At, App: task.event.App, Action: s.GetSchema().GetName(), Target: target(s),
 			Subscriber: task.App, Outcome: result.Outcome, Attempt: task.Attempts})
 	}
-	if len(result.Changes) > 0 {
-		batch, _, _ := decodeAcceptedBatch(result.Changes)
-		t.publishAcceptedBatch(batch)
-	}
+	prepared.publish(t)
 	return true, nil
 }
 
@@ -431,4 +410,21 @@ func (t *Tenant) forkWorkState() *kernel.Works {
 	draft := kernel.NewWorks()
 	draft.Restore(items)
 	return draft
+}
+
+// Completing one accepted input must not restore its earlier full K9 fork:
+// its child decision may already have cancelled another running generation.
+func (t *Tenant) installAcceptedWork(finished *pb.Work) {
+	all := t.works.All()
+	found := false
+	for i, work := range all {
+		if work.GetWorkId() == finished.GetWorkId() {
+			all[i], found = finished, true
+			break
+		}
+	}
+	if !found {
+		all = append(all, finished)
+	}
+	t.works.Restore(all)
 }

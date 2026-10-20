@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"platformserver/internal/host"
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
@@ -20,6 +21,7 @@ import (
 // application callback and any resulting decisions belong to the same
 // accepted journal row; applying one never resends the external request.
 type acceptedEffect struct {
+	Unique         []journal.StateUnique   `json:"unique,omitempty"`
 	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
 	Version        int                     `json:"version"`
 	Kind           string                  `json:"kind"`
@@ -71,6 +73,9 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 		return result, err
 	}
 
+	if result.Version < 4 && len(result.Unique) > 0 {
+		return result, fmt.Errorf("legacy effect result carries derived unique keys")
+	}
 	digest, err := digestAcceptedEffect(result)
 	hash, hashErr := effectResultHash(result.Before, result.Outcome, result.At)
 	expected := &effect{Effect: result.Before.Effect, since: result.Before.Since}
@@ -79,7 +84,7 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 		expected.CallbackError = result.CallbackError
 	}
 	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash ||
-		(result.Version != 1 && result.Version != 2 && result.Version != 3) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
+		(result.Version != 1 && result.Version != 2 && result.Version != 3 && result.Version != 4) || result.Version == 1 && result.Control != nil || result.Kind != "effect-result" || result.Tenant == "" ||
 		result.App != PlatformApp || result.At.IsZero() || result.Before.ID == "" ||
 		!slices.Contains([]string{"delivered", "rejected", "retry", "unknown"}, result.Outcome.Result) ||
 		len(result.Outcome.Answer) > 64<<10 ||
@@ -95,6 +100,13 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 		return result, fmt.Errorf("effect result omits the direct record writer")
 	}
 	for _, row := range result.Rows {
+		if result.Version >= 4 {
+			if err := validateHistoryRef(row.acceptedRow); err != nil {
+				return result, err
+			}
+		} else if row.HistoryRef != nil || row.Predecessor != "" || row.Format != "" {
+			return result, fmt.Errorf("legacy effect result carries new record metadata")
+		}
 		if row.App != result.Before.App || result.Member != "app:"+row.App ||
 			row.Type == "" || row.ID == "" || len(row.History) == 0 || len(row.Value) == 0 {
 			return result, fmt.Errorf("effect result has an invalid direct record")
@@ -175,69 +187,13 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 			return result, false, fmt.Errorf("effect result model usage predecessor differs")
 		}
 	}
-	if err := t.validateAcceptedNotices(result.Notices); err != nil {
+	prepared, err := t.prepareAcceptedChanges(result.changePlan())
+	if err != nil {
 		return result, false, err
 	}
-	if err := t.validateAcceptedIntents(result.Intents); err != nil {
+	if err := prepared.apply(t); err != nil {
 		return result, false, err
 	}
-	if err := t.validateAcceptedControl(result.Control); err != nil {
-		return result, false, err
-	}
-	if err := t.validateAcceptedStates(result.States); err != nil {
-		return result, false, err
-	}
-	if len(result.Rows) > 0 {
-		if _, err := t.prepareAcceptedDirectRows(result.Rows, result.Member, result.At); err != nil {
-			return result, false, err
-		}
-	}
-	var child *acceptedBatch
-	if len(result.Changes) > 0 {
-		batch, _, err := decodeAcceptedBatch(result.Changes)
-		if err != nil || batch.Tenant != t.ID || !batch.At.Equal(result.At) {
-			return result, false, fmt.Errorf("effect result has an invalid child decision: %v", err)
-		}
-		owner := t.app(batch.App)
-		if owner == nil {
-			return result, false, fmt.Errorf("effect result needs missing child authority")
-		}
-		directRefs := make(map[string]bool, len(result.Rows))
-		for _, row := range result.Rows {
-			directRefs[row.Type+"/"+row.ID] = true
-		}
-		for _, row := range batch.Rows {
-			if directRefs[row.Type+"/"+row.ID] {
-				return result, false, fmt.Errorf("effect result writes the same direct and child record")
-			}
-		}
-		if applied, err := t.applyAcceptedBatch(owner.AcceptedLedger(), result.Changes); err != nil || !applied {
-			return result, false, fmt.Errorf("effect child result: %v (applied=%t)", err, applied)
-		}
-		child = &batch
-	}
-	if len(result.Rows) > 0 {
-		// The child advances the record-store generation. Fork after it is
-		// applied, having checked the disjoint direct preimages above.
-		direct, err := t.prepareAcceptedDirectRows(result.Rows, result.Member, result.At)
-		if err != nil {
-			return result, false, err
-		}
-		if err := t.records.promoteRecords(direct); err != nil {
-			return result, false, err
-		}
-	}
-	if child != nil {
-		t.publishAcceptedBatch(*child)
-	}
-	if err := t.applyAcceptedControl(result.Control); err != nil {
-		return result, false, err
-	}
-	if err := t.applyAcceptedStates(result.States); err != nil {
-		return result, false, err
-	}
-	t.applyAcceptedNotices(result.Notices)
-	t.installAcceptedIntents(result.Intents)
 	t.opsMu.Lock()
 	current.Effect, current.since, current.sending = result.After.Effect, result.After.Since, false
 	t.opsMu.Unlock()
@@ -245,17 +201,12 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 		// The child may have cancelled other computation generations. Promote
 		// only this work's frozen completion, never overwrite that child state.
 		finished, _ := works.Get(result.Before.ID)
-		all := t.works.All()
-		for i, work := range all {
-			if work.GetWorkId() == finished.GetWorkId() {
-				all[i] = finished
-			}
-		}
-		t.works.Restore(all)
+		t.installAcceptedWork(finished)
 	}
 	if result.Usage != nil {
 		t.ai.Meter(*result.Usage)
 	}
+	prepared.publish(t)
 	return result, true, nil
 }
 
@@ -302,7 +253,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	}
 	after := &effect{Effect: before.Effect, since: before.Since}
 	markEffect(after, out, at)
-	result := acceptedEffect{Version: 1, Kind: "effect-result", Tenant: t.ID, App: PlatformApp,
+	result := acceptedEffect{Version: 4, Kind: "effect-result", Tenant: t.ID, App: PlatformApp,
 		Key: effectResultKey(before), At: at.UTC(), Before: before,
 		After: effectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
 	var err error
@@ -381,28 +332,20 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
 			draft.records.writes = writes
 		} else if err == nil {
-			result.Notices, result.Intents = draft.savedNotices(), slices.Clone(draft.intents)
-			result.States, err = draft.savedStates()
-			if err == nil {
-				result.Control, err = draft.savedControl()
-			}
+			var plan acceptedChangePlan
+			plan, err = draft.savedChangePlan()
+			result.Notices, result.Intents = plan.Notices, plan.Intents
+			result.States, result.Control = plan.States, plan.Control
 		}
 	}
 	if err != nil {
 		t.quarantine(fmt.Errorf("stage effect %s: %w", id, err))
 		return
 	}
-	if len(result.Rows) > 0 {
-		if _, err := t.prepareAcceptedDirectRows(result.Rows, result.Member, result.At); err != nil {
-			t.quarantine(fmt.Errorf("stage effect %s direct rows: %w", id, err))
-			return
-		}
-	}
-	if result.Control != nil {
-		result.Version = 2
-	}
-	if result.CallbackError != "" || result.Before.CallbackError != "" {
-		result.Version = 3
+	result.Unique = draft.savedUniqueChanges()
+	if _, err := t.prepareAcceptedChanges(result.changePlan()); err != nil {
+		t.quarantine(fmt.Errorf("stage effect %s changes: %w", id, err))
+		return
 	}
 	result.Digest, err = digestAcceptedEffect(result)
 	if err != nil {
@@ -434,6 +377,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		t.quarantine(fmt.Errorf("apply committed effect %s: %v (applied=%t)", id, err, applied))
 		return
 	}
+	t.acceptedResultApplied()
 	t.enqueue(saved.At)
 	if len(saved.Changes) == 0 && len(saved.Rows) == 0 && len(saved.States) == 0 && saved.Notices == nil {
 		t.operationsChanged(saved.App)

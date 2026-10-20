@@ -69,11 +69,52 @@ func TestAcceptedEffectKeepsDirectObservationAndChildDecisionTogether(t *testing
 		live.records.types["stock.bin"].rows.get("B2") == nil {
 		t.Fatalf("mixed callback did not commit as one result: %v fault=%+v result=%+v", err, live.fault.Load(), result)
 	}
+	delta, err := acceptedStorageDelta(saved.Body)
+	if err != nil || len(delta.Records) != 2 || len(delta.Unique) != 2 {
+		t.Fatalf("storage did not receive the same direct and child changes: %+v, %v", delta, err)
+	}
+	for _, row := range delta.Records {
+		current := live.records.types[row.Type].rows.get(row.ID)
+		head, _ := current.historyDigest()
+		if row.HistoryBase != current.historyLength()-len(row.History) || row.HistoryHead != head {
+			t.Fatalf("storage history differs from the applied record: %+v", row)
+		}
+	}
+	outcomeStored := false
+	for _, value := range delta.Values {
+		if value.Owner == "effect" && value.Key == result.After.ID {
+			outcomeStored = sameStoredJSON(value.Image, jsonOf(result.After))
+		}
+	}
+	if !outcomeStored {
+		t.Fatal("storage omitted the original effect's final transition")
+	}
 	recovered := build()
 	if err := recovered.Replay([]Entry{saved}); err != nil ||
 		recovered.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "accepted" ||
 		recovered.records.types["stock.bin"].rows.get("B2") == nil {
 		t.Fatalf("mixed callback recovery lost a change: %v", err)
+	}
+	// A callback row inside the child also counts as a child write. Reject
+	// overlap before its ledger or either copy of the observation is applied.
+	conflicting := result
+	child, _, err := decodeAcceptedBatch(result.Changes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child.DirectRows = append(child.DirectRows, acceptedCallbackRow{Row: result.Rows[0], Source: result.Before.Effect})
+	child.Digest, err = digestAcceptedBatch(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicting.Changes, _ = json.Marshal(child)
+	conflicting.Digest, _ = digestAcceptedEffect(conflicting)
+	conflictBytes, _ := json.Marshal(conflicting)
+	conflicted := build()
+	if _, applied, err := conflicted.applyAcceptedEffect(conflictBytes); err == nil || applied ||
+		conflicted.records.types["stock.item"].rows.get("I1").value.Interface().(Item).Note != "" ||
+		conflicted.records.types["stock.bin"].rows.get("B2") != nil || conflicted.outbound[0].State != "pending" {
+		t.Fatalf("overlapping child exposed an observation or advanced its outcome: %v (applied=%t)", err, applied)
 	}
 	// A sound outer digest must not let a damaged child decision expose the
 	// direct observation before the child predecessor has been checked.

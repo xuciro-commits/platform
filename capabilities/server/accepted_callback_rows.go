@@ -36,7 +36,11 @@ func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]accepte
 		if err != nil || len(direct) != 1 {
 			return nil, fmt.Errorf("callback row cannot be captured: %v", err)
 		}
-		if len(direct[0].History) != callback.History {
+		historyCount := len(direct[0].History)
+		if direct[0].HistoryRef != nil {
+			historyCount += direct[0].HistoryRef.Base
+		}
+		if historyCount != callback.History {
 			return nil, fmt.Errorf("callback row has a write outside its source callback")
 		}
 		if _, err := d.tenant.prepareAcceptedDirectRows(direct, "app:"+callback.Source.App, d.at); err != nil {

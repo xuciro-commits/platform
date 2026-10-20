@@ -41,3 +41,15 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 }
 
 func (t *Tenant) recordsAcceptedResults() bool { return t.AcceptResult != nil || t.Record != nil }
+
+// acceptedResultApplied advances the record read view only after the complete
+// top-level durable result has been applied. Nested batches and partial owner
+// application must keep the prior position until their enclosing result ends.
+// The tenant writer lock covers acceptance, application and this transition.
+func (t *Tenant) acceptedResultApplied() {
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	if t.records.currentPosition != nil {
+		t.records.appliedPosition = t.records.currentPosition()
+	}
+}

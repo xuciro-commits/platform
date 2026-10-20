@@ -49,7 +49,7 @@ func TestChangeArchivePreservesAcceptanceAndForkPosition(t *testing.T) {
 	}
 	archive := &testChangeArchive{records: live.Records("t")}
 	live.Compact(archive)
-	if len(live.logs) != 0 || len(live.byKey) != 0 || len(live.revs) != 1 {
+	if len(live.logs) != 0 || len(live.byKey) != 0 || len(live.byID) != 0 || len(live.revs) != 1 {
 		t.Fatal("compaction did not release history while retaining revisions")
 	}
 	repeated, err := live.Submit(sub("one"), at.Add(time.Hour))

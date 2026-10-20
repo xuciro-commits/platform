@@ -552,6 +552,7 @@ func (t *Tenant) finishCommittedRelease(m platform.Member, saved acceptedRelease
 		t.quarantine(fmt.Errorf("committed release result differs: %v", err))
 		return "", fmt.Errorf("committed release result differs: %v", err)
 	}
+	t.acceptedResultApplied()
 	t.changed()
 	return applied.CandidateID, nil
 }

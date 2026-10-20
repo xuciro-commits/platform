@@ -536,7 +536,7 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 		return err
 	}
 	updated := *et.rows.get(id)
-	updated.history = copyHistory(updated.recordHistory())
+	updated.history = copyHistory(updated.history)
 	updated.loadHistory = nil
 	current := &updated
 	projection, err := json.Marshal(current.value.Interface())
@@ -578,9 +578,12 @@ func (d *stagedDecision) putMigrationImage(c platform.Caller, r *pb.ChangeRecord
 			last.Fields = append(last.Fields, FieldChange{Field: name, Before: old[name], After: values[name]})
 		}
 	}
+	if err := appendRowHistory(current, prior, current.history); err != nil {
+		return migrationRefusal(err)
+	}
 	current.original = actual
 	retained := current.projection
-	current.projection = &recordProjection{From: d.tenant.releases.active, Shape: shape, Value: projection}
+	current.projection = &recordProjection{Format: current.format, From: d.tenant.releases.active, Shape: shape, Value: projection}
 	if retained != nil {
 		if retained.From != current.projection.From {
 			previous := *retained

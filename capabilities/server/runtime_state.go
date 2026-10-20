@@ -18,7 +18,7 @@ import (
 // The result owners already sealed these deltas. This adapter translates their
 // envelopes into storage addresses; SQL never interprets actions or decisions.
 func acceptedStorageDelta(raw []byte) (journal.StateDelta, error) {
-	b := storageDeltaBuilder{records: map[string]journal.StateRecord{}, changes: map[string]journal.StateChange{}, values: map[string]journal.StateValue{}}
+	b := storageDeltaBuilder{records: map[string]journal.StateRecord{}, changes: map[string]journal.StateChange{}, values: map[string]journal.StateValue{}, unique: map[string]journal.StateUnique{}}
 	if err := b.accepted(raw); err != nil {
 		return journal.StateDelta{}, err
 	}
@@ -26,14 +26,16 @@ func acceptedStorageDelta(raw []byte) (journal.StateDelta, error) {
 	for _, key := range b.changeOrder {
 		changes = append(changes, b.changes[key])
 	}
-	return journal.StateDelta{Records: slices.Collect(maps.Values(b.records)), Changes: changes, Values: slices.Collect(maps.Values(b.values))}, nil
+	return journal.StateDelta{Records: slices.Collect(maps.Values(b.records)), Changes: changes, Values: slices.Collect(maps.Values(b.values)), Unique: slices.Collect(maps.Values(b.unique)), LegacyUnique: b.legacyUnique}, nil
 }
 
 type storageDeltaBuilder struct {
-	records     map[string]journal.StateRecord
-	changes     map[string]journal.StateChange
-	changeOrder []string
-	values      map[string]journal.StateValue
+	records      map[string]journal.StateRecord
+	changes      map[string]journal.StateChange
+	changeOrder  []string
+	values       map[string]journal.StateValue
+	unique       map[string]journal.StateUnique
+	legacyUnique bool
 }
 
 func (b *storageDeltaBuilder) value(owner, key string, image any) {
@@ -44,11 +46,18 @@ func (b *storageDeltaBuilder) value(owner, key string, image any) {
 	b.values[owner+"/"+key] = journal.StateValue{Owner: owner, Key: key, Image: raw}
 }
 func (b *storageDeltaBuilder) record(r acceptedRow, base int) error {
-	image, err := json.Marshal(recordState{Value: r.Value, Projection: r.Projection, Extraction: r.Extraction})
+	image, err := json.Marshal(recordState{Value: r.Value, Format: r.Format, Projection: r.Projection, Extraction: r.Extraction})
 	if err != nil {
 		return err
 	}
+	if r.HistoryRef != nil {
+		base = r.HistoryRef.Base
+	}
 	stored := journal.StateRecord{Type: r.Type, ID: r.ID, Image: image, HistoryBase: base}
+	if r.HistoryRef != nil {
+		stored.HistoryPrior = r.HistoryRef.Prior
+		stored.HistoryHead = r.HistoryRef.Head
+	}
 	for _, h := range r.History {
 		stored.History = append(stored.History, jsonOf(h))
 	}
@@ -77,133 +86,188 @@ func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definitio
 	}
 	return nil
 }
-func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
-	id, err := acceptedIdentity(raw)
-	if err != nil {
-		return err
-	}
-	var e struct {
-		Kind          string                  `json:"kind"`
-		Version       int                     `json:"version"`
-		Row           acceptedRow             `json:"row"`
-		Rows          []acceptedBatchRow      `json:"rows"`
-		DirectRows    []acceptedCallbackRow   `json:"directRows"`
-		Receipt       json.RawMessage         `json:"receipt"`
-		Decisions     []acceptedDecision      `json:"decisions"`
-		Definition    *DecisionDefinition     `json:"definition"`
-		SchemaVersion *platform.SchemaVersion `json:"schemaVersion"`
-		Changes       json.RawMessage         `json:"changes"`
-		Bootstrap     json.RawMessage         `json:"bootstrap"`
-		States        []acceptedState         `json:"states"`
-		Control       *acceptedControl        `json:"control"`
-		Sequences     map[string]int          `json:"sequences"`
-		Intents       []platform.Effect       `json:"intents"`
-		Notices       *acceptedNotices        `json:"notices"`
-		Work          json.RawMessage         `json:"work"`
-		After         json.RawMessage         `json:"after"`
-		Installations []releaseInstallation   `json:"installations"`
-	}
-	if err = json.Unmarshal(raw, &e); err != nil {
-		return err
-	}
-	key := id.App + "/" + id.Key
-	switch e.Kind {
-	case "record-batch":
-		b.value("answer", key, raw)
-	case "input-result":
-		b.value("input", key, raw)
-	case "refusal":
-		b.value("refusal", key, raw)
-	case "composite-result":
-		b.value("composite-answer", id.Key, raw)
-		var c acceptedComposite
-		_ = json.Unmarshal(raw, &c)
-		b.value("composite", id.Key, c.Digest)
-	case "release-result":
-		b.value("answer", "release:"+id.Key, raw)
-	}
-	if e.SchemaVersion != nil {
-		b.value("schema-version", key, e.SchemaVersion)
-	}
-	if len(e.Row.Value) > 0 {
-		if err = b.record(e.Row, -1); err != nil {
+
+// plan translates the same declared changes used by accepted application.
+// It never infers writes from application actions or reinterprets a family as
+// a loosely typed envelope with coincidentally matching field names.
+func (b *storageDeltaBuilder) plan(plan acceptedChangePlan) error {
+	for _, row := range plan.Rows {
+		if err := b.record(row.acceptedRow, -1); err != nil {
 			return err
 		}
 	}
-	for _, r := range e.Rows {
-		base := -1
-		if e.Kind == "record-batch" && e.Version >= 2 {
-			base = r.HistoryBase
-		}
-		if err = b.record(r.acceptedRow, base); err != nil {
-			return err
-		}
+	for _, state := range plan.States {
+		b.value("app-state", state.App, state.Image)
 	}
-	for _, r := range e.DirectRows {
-		if err = b.record(r.Row.acceptedRow, -1); err != nil {
-			return err
+	if plan.Control != nil {
+		for _, change := range plan.Control.Changes {
+			b.value("control", change.Kind, change.Image)
 		}
 	}
-	if len(e.Receipt) > 0 && len(e.Row.Value) > 0 {
-		if err = b.receipt(id.App, e.Receipt, e.Definition, e.SchemaVersion); err != nil {
-			return err
-		}
-	}
-	for _, r := range e.Decisions {
-		if err = b.receipt(r.Event.App, r.Receipt, r.Definition, nil); err != nil {
-			return err
-		}
-	}
-	for _, r := range e.States {
-		b.value("app-state", r.App, r.Image)
-	}
-	if e.Control != nil {
-		for _, r := range e.Control.Changes {
-			b.value("control", r.Kind, r.Image)
-		}
-	}
-	for name, n := range e.Sequences {
+	for name, n := range plan.Sequences {
 		b.value("sequence", name, n)
 	}
-	for _, r := range e.Intents {
-		b.value("effect", r.ID, effectState{Effect: r})
+	for _, intent := range plan.Intents {
+		b.value("effect", intent.ID, effectState{Effect: intent})
 	}
-	if e.Notices != nil {
-		for _, n := range e.Notices.Notices {
-			b.value("notice", n.ID, n)
+	if plan.Notices != nil {
+		for _, notice := range plan.Notices.Notices {
+			b.value("notice", notice.ID, notice)
 		}
-		for _, r := range e.Notices.Effects {
-			b.value("effect", r.ID, effectState{Effect: r})
+		for _, intent := range plan.Notices.Effects {
+			b.value("effect", intent.ID, effectState{Effect: intent})
 		}
-		b.value("notice-sequence", "current", e.Notices.Seq)
+		b.value("notice-sequence", "current", plan.Notices.Seq)
 	}
-	if len(e.Work) > 0 {
-		b.value("work", "kernel", e.Work)
-	}
-	if len(e.After) > 0 {
-		var r struct {
-			ID string `json:"id"`
+	if len(plan.Changes) > 0 {
+		if err := b.accepted(plan.Changes); err != nil {
+			return err
 		}
-		if json.Unmarshal(e.After, &r) == nil && r.ID != "" {
-			owner := "task"
-			if e.Kind == "effect-result" || e.Kind == "operation-claim" {
-				owner = "effect"
+	}
+	for _, replacement := range plan.Unique {
+		b.unique[replacement.Type+"/"+replacement.ID] = replacement
+	}
+	return nil
+}
+
+func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
+	var envelope struct{ Kind string }
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return err
+	}
+	switch envelope.Kind {
+	case "input-result":
+		result, err := decodeAcceptedInput(raw)
+		if err != nil {
+			return err
+		}
+		b.legacyUnique = b.legacyUnique || result.Version < 2
+		b.value("input", result.App+"/"+result.Key, raw)
+		return b.plan(result.changePlan())
+	case "effect-result":
+		result, err := decodeAcceptedEffect(raw)
+		if err != nil {
+			return err
+		}
+		b.legacyUnique = b.legacyUnique || result.Version < 4
+		if err := b.plan(result.changePlan()); err != nil {
+			return err
+		}
+		if len(result.Work) > 0 {
+			b.value("work", "kernel", result.Work)
+		}
+		b.value("effect", result.After.ID, result.After)
+		return nil
+	case "work-result":
+		result, err := decodeAcceptedWork(raw)
+		if err != nil {
+			return err
+		}
+		b.legacyUnique = b.legacyUnique || result.Version < 3
+		if err := b.plan(result.changePlan()); err != nil {
+			return err
+		}
+		b.value("work", "kernel", result.Work)
+		b.value("task", result.After.ID, result.After)
+		return nil
+	case "record-batch":
+		result, receipt, err := decodeAcceptedBatch(raw)
+		if err != nil {
+			return err
+		}
+		b.legacyUnique = b.legacyUnique || result.Version < 8
+		sub, err := batchSubmission(result, receipt)
+		if err != nil {
+			return err
+		}
+		key := result.App + "/" + sub.GetIdempotencyKey()
+		b.value("answer", key, raw)
+		if result.SchemaVersion != nil {
+			b.value("schema-version", key, result.SchemaVersion)
+		}
+		for _, row := range result.Rows {
+			base := -1
+			if result.Version >= 2 {
+				base = row.HistoryBase
 			}
-			b.value(owner, r.ID, e.After)
-		}
-	}
-	for _, r := range e.Installations {
-		b.value("installation", r.Schema+"/"+r.Record, r)
-	}
-	// Original nested result formats retain the same single accepted transaction.
-	for _, child := range []json.RawMessage{e.Changes, e.Bootstrap} {
-		if len(child) > 0 {
-			if err = b.accepted(child); err != nil {
+			if err := b.record(row.acceptedRow, base); err != nil {
 				return err
 			}
 		}
+		for _, callback := range result.DirectRows {
+			if err := b.record(callback.Row.acceptedRow, -1); err != nil {
+				return err
+			}
+		}
+		for _, decision := range result.Decisions {
+			if err := b.receipt(decision.Event.App, decision.Receipt, decision.Definition, nil); err != nil {
+				return err
+			}
+		}
+		return b.plan(result.changePlan())
+	case "refusal":
+		result, sub, err := decodeRefusedResult(raw)
+		if err != nil {
+			return err
+		}
+		key := result.App + "/" + sub.GetIdempotencyKey()
+		b.value("refusal", key, raw)
+		if result.SchemaVersion != nil {
+			b.value("schema-version", key, result.SchemaVersion)
+		}
+		return nil
+	case "composite-result":
+		result, err := decodeAcceptedComposite(raw)
+		if err != nil {
+			return err
+		}
+		b.value("composite-answer", result.Key, raw)
+		b.value("composite", result.Key, result.Digest)
+		return b.plan(acceptedChangePlan{Changes: result.Changes})
+	case "release-result":
+		result, err := decodeAcceptedRelease(raw)
+		if err != nil {
+			return err
+		}
+		b.value("answer", "release:"+result.Key, raw)
+		for _, installation := range result.Installations {
+			b.value("installation", installation.Schema+"/"+installation.Record, installation)
+		}
+		return b.plan(acceptedChangePlan{Changes: result.Bootstrap})
+	case "operation-claim":
+		result, err := decodeOperationClaim(raw)
+		if err != nil {
+			return err
+		}
+		b.value("work", "kernel", result.Work)
+		b.value("effect", result.After.ID, result.After)
+		return nil
+	case "agent-result":
+		result, err := decodeAcceptedAgent(raw)
+		if err != nil {
+			return err
+		}
+		return b.plan(acceptedChangePlan{Changes: result.Changes})
+	case "host-result":
+		_, err := decodeAcceptedHostControl(raw)
+		return err
+	case "usage-result":
+		_, err := decodeAcceptedUsage(raw)
+		return err
+	default:
+		result, _, err := decodeAcceptedResult(raw)
+		if err != nil {
+			return err
+		}
+		b.legacyUnique = b.legacyUnique || result.Version < 5
+		if err := b.record(result.Row, -1); err != nil {
+			return err
+		}
+		if err := b.receipt(result.App, result.Receipt, result.Definition, result.SchemaVersion); err != nil {
+			return err
+		}
+		return b.plan(acceptedChangePlan{Unique: result.Unique})
 	}
-	return nil
 }
 
 // migrateRuntimeState is called before serving this tenant. Its mutex pauses
@@ -255,7 +319,7 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 				t.records.mu.Unlock()
 				return fmt.Errorf("SQL current image differs: %s/%s", typ, id)
 			}
-			decoded, err := rowDecodeImage(et.info, image.Value, image.Projection, t.records.readRelease)
+			decoded, err := rowDecodeFormattedImage(et.info, image.Value, image.Projection, t.records.readRelease, image.Format)
 			if err != nil {
 				t.records.mu.Unlock()
 				return err
@@ -266,14 +330,19 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 				return err
 			}
 			emptyLists(value)
-			count := len(r.history)
-			if r.loadHistory != nil {
-				count = r.historyCount
+			count := r.historyLength()
+			head, err := r.historyDigest()
+			if err != nil {
+				t.records.mu.Unlock()
+				return err
 			}
-			current := &row{value: value, historyCount: count, projection: image.Projection, extraction: image.Extraction}
+			current := &row{value: value, format: image.Format, historyCount: count, historyHead: head, projection: image.Projection, extraction: image.Extraction}
 			current.retainOriginal(image.Value)
 			t.records.attachHistory(et, id, current, store, t.ID)
 		}
+	}
+	for _, et := range t.records.types {
+		et.uniqueIndexes = nil
 	}
 	t.records.historyStore, t.records.tenant = store, t.ID
 	t.records.appliedPosition = j.Position(t.ID)
@@ -303,12 +372,18 @@ func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 				t.records.mu.Unlock()
 				return journal.StateDelta{}, err
 			}
-			state := recordState{Value: image, Projection: r.projection, Extraction: r.extraction}
-			rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1}
+			state := recordState{Value: image, Format: r.format, Projection: r.projection, Extraction: r.extraction}
+			head, err := r.historyDigest()
+			if err != nil {
+				t.records.mu.Unlock()
+				return journal.StateDelta{}, err
+			}
+			rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1, HistoryHead: head}
 			for _, h := range r.recordHistory() {
 				rr.History = append(rr.History, jsonOf(h))
 			}
 			d.Records = append(d.Records, rr)
+			d.Unique = append(d.Unique, journal.StateUnique{Type: typ, ID: id, Keys: t.records.uniqueKeys(typ, id)})
 		}
 	}
 	t.records.mu.Unlock()

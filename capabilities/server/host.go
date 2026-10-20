@@ -566,6 +566,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		t.committed.saveRefusal(saved.App+"/"+sub.GetIdempotencyKey(), saved)
+		t.acceptedResultApplied()
 		t.changedOwner(saved.App)
 		answer := saved.Error
 		return nil, &answer
@@ -583,6 +584,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 			t.quarantine(fmt.Errorf("committed record batch could not be applied: %w", err))
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
+		t.acceptedResultApplied()
 		if applied {
 			t.audit.remember(submitted(m.ID, a, sub, saved.At))
 			t.publishAcceptedBatch(saved)
@@ -608,6 +610,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		t.quarantine(fmt.Errorf("committed accepted result could not be applied: %w", err))
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
+	t.acceptedResultApplied()
 	if saved.At.IsZero() {
 		saved.At = receipt.GetRecordedTime().AsTime()
 	}

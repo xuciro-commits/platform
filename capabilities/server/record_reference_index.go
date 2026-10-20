@@ -63,7 +63,14 @@ func (et *entityType) referenceIndex(field platform.FieldInfo) referenceIndex {
 // All replacements, including pure accepted-result application, use this
 // type owner. No decision rules run here; only derived lookup buckets change.
 func (et *entityType) setRows(rows recordIndex[*row]) {
-	et.rows, et.referenceIndexes, et.fullImage = rows, nil, true
+	et.rows, et.referenceIndexes, et.uniqueIndexes, et.fullImage = rows, nil, nil, true
+	if et.store != nil {
+		// A schema/full-image replacement may change every referenced scope.
+		// Bulk recovery may rebuild; ordinary setRow keeps its existing roots.
+		for _, other := range et.store.types {
+			other.uniqueIndexes = nil
+		}
+	}
 }
 
 func (et *entityType) setRow(id string, value *row) {
@@ -103,6 +110,9 @@ func (et *entityType) setRow(id string, value *row) {
 		et.referenceIndexes[name] = index
 	}
 	et.rows.set(id, value)
+	if et.store != nil {
+		et.store.refreshUniqueIndexes(et.info.Type, id)
+	}
 }
 
 func (s *recordStore) indexedRecordCandidates(et *entityType, q platform.Query) ([]string, bool) {

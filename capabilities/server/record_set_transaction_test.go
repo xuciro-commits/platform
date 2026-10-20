@@ -90,7 +90,7 @@ func TestRecordSetTransactionSplitConstraintsAndRecovery(t *testing.T) {
 	}
 	receipt := decide(t, tn, "user", construction.ID, "build.batch.split", "build.batch", "root", nil, txnAt)
 	result, _, failure := decodeAcceptedBatch(entries[len(entries)-1].Body)
-	if failure != nil || result.Version != 5 || len(result.Iterations) != 1 || !reflect.DeepEqual(result.Iterations[0].IDs, []string{"A", "B", "C", "D"}) {
+	if failure != nil || result.Version != 8 || len(result.Iterations) != 1 || !reflect.DeepEqual(result.Iterations[0].IDs, []string{"A", "B", "C", "D"}) {
 		t.Fatalf("ordered witness: %+v %v", result.Iterations, failure)
 	}
 	for _, side := range []struct {

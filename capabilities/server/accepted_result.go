@@ -16,16 +16,18 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
 // acceptedResult is the bounded journal result for one generated create/edit/archive
 // or builder publication decision. Its version and size are checked before
 // persistence and recovery.
-const acceptedResultVersion = 4
+const acceptedResultVersion = 5
 const maxAcceptedResultBytes = 1 << 20
 
 type acceptedResult struct {
+	Unique         []journal.StateUnique   `json:"unique,omitempty"`
 	Definition     *DecisionDefinition     `json:"definition,omitempty"`
 	SchemaVersion  *platform.SchemaVersion `json:"schemaVersion,omitempty"`
 	Authorizations []authorizationEvidence `json:"authorizations,omitempty"`
@@ -42,12 +44,15 @@ type acceptedResult struct {
 }
 
 type acceptedRow struct {
-	Type       string            `json:"type"`
-	ID         string            `json:"id"`
-	Value      json.RawMessage   `json:"value"`
-	History    []RecordChange    `json:"history"`
-	Projection *recordProjection `json:"projection,omitempty"`
-	Extraction *extractionOrigin `json:"extraction,omitempty"`
+	Type        string              `json:"type"`
+	Format      string              `json:"format,omitempty"`
+	HistoryRef  *acceptedHistoryRef `json:"historyRef,omitempty"`
+	Predecessor string              `json:"predecessor,omitempty"`
+	ID          string              `json:"id"`
+	Value       json.RawMessage     `json:"value"`
+	History     []RecordChange      `json:"history"`
+	Projection  *recordProjection   `json:"projection,omitempty"`
+	Extraction  *extractionOrigin   `json:"extraction,omitempty"`
 }
 
 type acceptedEvent struct {
@@ -117,8 +122,14 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		d.records.mu.Unlock()
 		return nil, fmt.Errorf("versioned migration row requires the complete record batch")
 	}
-	value, err := json.Marshal(et.rows.get(id).value.Interface())
-	history := copyHistory(et.rows.get(id).recordHistory())
+	var prior *row
+	if old := d.records.parent.types[typ]; old != nil {
+		prior = old.rows.get(id)
+	}
+	image, err := acceptedRowChange(typ, id, et.rows.get(id), prior)
+	if err == nil {
+		image.Predecessor, err = recordPredecessor(typ, id, prior)
+	}
 	d.records.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -131,19 +142,20 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	if err != nil {
 		return nil, err
 	}
-	version := 2
-	kind := ""
+	version := acceptedResultVersion
+	kind := "record"
 	if publisher, ok := d.tenant.app(app).(platform.AcceptedPublisher); ok &&
 		slices.Contains(publisher.AcceptedPublicationSchemas(), receipt.GetSubmission().GetSchema().GetName()) {
-		version = 3
+		kind = "publication"
 	} else if acceptsPureTransition(d.tenant.app(app), receipt.GetSubmission().GetSchema().GetName()) {
-		version, kind = acceptedResultVersion, "pure-transition"
+		kind = "pure-transition"
 	}
 	result := acceptedResult{Version: version, Tenant: receipt.GetSubmission().GetTenantId(),
 		Definition: d.definitions[app+"/"+receipt.GetChangeId()],
 		Kind:       kind, App: app, At: submittedAt.UTC(), RequestHash: hash, Receipt: raw, SchemaVersion: d.schemaVersion,
-		Row:   acceptedRow{Type: typ, ID: id, Value: value, History: history},
+		Row:   image,
 		Event: d.tenant.planAcceptedEvent(d.events[0]), Authorizations: slices.Clone(d.authorizations)}
+	result.Unique = d.savedUniqueChanges()
 	result.Digest, err = digestAcceptedResult(result)
 	if err != nil {
 		return nil, err
@@ -230,12 +242,22 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 	}
 	verb, ok := strings.CutPrefix(sub.GetSchema().GetName(), result.Row.Type+".")
 	standard := verb == "create" || verb == "edit" || verb == "archive"
-	publication := result.Version == 3 && verb == "publish" && result.Kind == ""
-	pureTransition := result.Version == 4 && !standard && verb != "publish" && result.Kind == "pure-transition"
+	publication := (result.Version == 3 && result.Kind == "" || result.Version == 5 && result.Kind == "publication") && verb == "publish"
+	pureTransition := (result.Version == 4 || result.Version == 5) && !standard && verb != "publish" && result.Kind == "pure-transition"
 	legacy := result.Version == 1 && (verb == "create" || verb == "edit")
 	if !ok || !(legacy && result.Kind == "" ||
-		standard && result.Version == 2 && result.Kind == "" || publication || pureTransition) {
+		standard && (result.Version == 2 && result.Kind == "" || result.Version == 5 && result.Kind == "record") || publication || pureTransition) {
 		return result, nil, fmt.Errorf("accepted result is outside the supported generated action family")
+	}
+	if result.Version < 5 && len(result.Unique) > 0 {
+		return result, nil, fmt.Errorf("legacy result has unique-key metadata")
+	}
+	if result.Version == 5 {
+		if err := validateHistoryRef(result.Row); err != nil {
+			return result, nil, err
+		}
+	} else if result.Row.HistoryRef != nil || result.Row.Predecessor != "" || result.Row.Format != "" {
+		return result, nil, fmt.Errorf("legacy record carries new metadata")
 	}
 	if err := validateSubmissionSchemaVersion(sub, result.SchemaVersion); err != nil {
 		return result, nil, err
@@ -302,7 +324,12 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return false, fmt.Errorf("accepted result needs installed entity %s", result.Row.Type)
 	}
 	value := reflect.New(et.info.Go).Elem()
-	decoder := json.NewDecoder(bytes.NewReader(result.Row.Value))
+	decoded, err := rowDecodeFormattedImage(et.info, result.Row.Value, result.Row.Projection, draft.readRelease, result.Row.Format)
+	if err != nil {
+		draft.mu.Unlock()
+		return false, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(decoded))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(value.Addr().Interface()); err != nil {
 		draft.mu.Unlock()
@@ -325,7 +352,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return false, fmt.Errorf("accepted record image differs from receipt")
 	}
 	var publisher platform.AcceptedPublisher
-	if result.Version == 3 {
+	if result.Version == 3 || result.Version == 5 && result.Kind == "publication" {
 		schema := receipt.GetSubmission().GetSchema().GetName()
 		var ok bool
 		publisher, ok = t.app(result.App).(platform.AcceptedPublisher)
@@ -333,14 +360,14 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 			draft.mu.Unlock()
 			return false, fmt.Errorf("accepted publication has no installer")
 		}
-		if err := publisher.ValidateAcceptedPublication(schema, result.Row.Value); err != nil {
+		if err := publisher.ValidateAcceptedPublication(schema, decoded); err != nil {
 			draft.mu.Unlock()
 			return false, fmt.Errorf("accepted publication is invalid: %w", err)
 		}
 	}
 	prior := et.rows.get(rec.ID)
 	if prior != nil && reflect.DeepEqual(prior.value.Interface(), value.Interface()) &&
-		reflect.DeepEqual(prior.recordHistory(), result.Row.History) {
+		acceptedRowAlreadyApplied(prior, result.Row) {
 		draft.mu.Unlock()
 		changed, err := l.ApplyAcceptedChange(receipt)
 		if err == nil {
@@ -349,17 +376,35 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		}
 		return changed, err
 	}
-	verb, _ := strings.CutPrefix(receipt.GetSubmission().GetSchema().GetName(), result.Row.Type+".")
-	before := len(result.Row.History) - 1
-	if verb == "create" && prior != nil || verb != "create" && prior == nil ||
-		prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
-		prior == nil && before != 0 || prior != nil && (len(prior.recordHistory()) != before ||
-		before > 0 && !reflect.DeepEqual(prior.recordHistory(), result.Row.History[:before]) ||
-		!reflect.DeepEqual(recordOf(prior.value).Created, rec.Created)) {
-		draft.mu.Unlock()
-		return false, fmt.Errorf("accepted record is missing its predecessor")
+	if result.Version == 5 {
+		if err := checkHistoryPredecessor(result.Row, prior); err != nil {
+			draft.mu.Unlock()
+			return false, err
+		}
+		before, err := recordPredecessor(result.Row.Type, result.Row.ID, prior)
+		if err != nil || before != result.Row.Predecessor || prior != nil && !reflect.DeepEqual(recordOf(prior.value).Created, rec.Created) || prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) {
+			draft.mu.Unlock()
+			return false, fmt.Errorf("accepted record predecessor differs: %v", err)
+		}
+	} else {
+		verb, _ := strings.CutPrefix(receipt.GetSubmission().GetSchema().GetName(), result.Row.Type+".")
+		before := len(result.Row.History) - 1
+		if verb == "create" && prior != nil || verb != "create" && prior == nil ||
+			prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
+			prior == nil && before != 0 || prior != nil && (len(prior.recordHistory()) != before ||
+			before > 0 && !reflect.DeepEqual(prior.recordHistory(), result.Row.History[:before]) ||
+			!reflect.DeepEqual(recordOf(prior.value).Created, rec.Created)) {
+			draft.mu.Unlock()
+			return false, fmt.Errorf("accepted record is missing its predecessor")
+		}
 	}
-	recovered := &row{value: value, history: copyHistory(result.Row.History)}
+	recovered := &row{value: value, format: result.Row.Format, history: copyHistory(result.Row.History)}
+	if result.Version == 5 {
+		if err := appendRowHistory(recovered, prior, result.Row.History); err != nil {
+			draft.mu.Unlock()
+			return false, err
+		}
+	}
 	recovered.retainOriginal(result.Row.Value)
 	et.setRow(rec.ID, recovered)
 	draft.writes[result.Row.Type+"/"+rec.ID] = true
@@ -368,6 +413,11 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.dirty.set(result.Row.Type+"/"+rec.ID, true)
 	}
 	draft.mu.Unlock()
+	if result.Version == 5 {
+		if err := validateUniqueReplacements(draft, result.Unique); err != nil {
+			return false, err
+		}
+	}
 	// An invalid receipt cannot expose the staged row. With the tenant lock
 	// held, promote cannot race another supported write after this check.
 	changed, err := l.ApplyAcceptedChange(receipt)
@@ -380,7 +430,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	t.committed.saveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
 	t.committed.saveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
 	if changed && publisher != nil {
-		if err := publisher.ApplyAcceptedPublication(receipt.GetSubmission().GetSchema().GetName(), result.Row.Value); err != nil {
+		if err := publisher.ApplyAcceptedPublication(receipt.GetSubmission().GetSchema().GetName(), decoded); err != nil {
 			return false, err
 		}
 	}

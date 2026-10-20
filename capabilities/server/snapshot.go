@@ -168,10 +168,12 @@ func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
 }
 
 type recordState struct {
-	Value      json.RawMessage   `json:"value"`
-	History    []RecordChange    `json:"history"`
-	Projection *recordProjection `json:"projection,omitempty"`
-	Extraction *extractionOrigin `json:"extraction,omitempty"`
+	HistoryHead string            `json:"historyHead,omitempty"`
+	Value       json.RawMessage   `json:"value"`
+	Format      string            `json:"format,omitempty"`
+	History     []RecordChange    `json:"history"`
+	Projection  *recordProjection `json:"projection,omitempty"`
+	Extraction  *extractionOrigin `json:"extraction,omitempty"`
 }
 
 type taskState struct {
@@ -212,7 +214,11 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 			if err != nil {
 				return nil, 0, err
 			}
-			saved[i] = recordState{Value: raw, History: r.recordHistory(), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}
+			head, err := r.historyDigest()
+			if err != nil {
+				return nil, 0, err
+			}
+			saved[i] = recordState{HistoryHead: head, Value: raw, Format: r.format, History: r.recordHistory(), Projection: cloneRecordProjection(r.projection), Extraction: r.extraction}
 		}
 		slices.SortFunc(saved, func(a, b recordState) int { return strings.Compare(string(a.Value), string(b.Value)) })
 		s.Records[typ] = saved
@@ -306,7 +312,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 		entries := make([]recordEntry[*row], 0, len(rows))
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
-			decode, err := rowDecodeImage(et.info, r.Value, r.Projection, t.records.readRelease)
+			decode, err := rowDecodeFormattedImage(et.info, r.Value, r.Projection, t.records.readRelease, r.Format)
 			if err != nil {
 				return nil, err
 			}
@@ -317,7 +323,15 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 				return nil, err
 			}
 			emptyLists(v) // a snapshot of older code may hold null lists
-			recovered := &row{value: v, history: r.History, projection: cloneRecordProjection(r.Projection), extraction: r.Extraction}
+			recovered := &row{value: v, format: r.Format, history: r.History, projection: cloneRecordProjection(r.Projection), extraction: r.Extraction}
+			head, err := recovered.historyDigest()
+			if err != nil {
+				return nil, err
+			}
+			if r.HistoryHead != "" && r.HistoryHead != head {
+				return nil, fmt.Errorf("snapshot history chain differs")
+			}
+			recovered.historyHead = head
 			recovered.retainOriginal(r.Value)
 			entries = append(entries, recordEntry[*row]{recordOf(v).ID, recovered})
 		}

@@ -261,7 +261,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 	if live.(Item).Qty != 2 || staged.(Item).Qty != 3 {
 		t.Fatalf("draft leaked into live records: live=%+v staged=%+v", live, staged)
 	}
-	if len(tn.records.types["stock.item"].rows.get("I1").history) != 1 {
+	if tn.records.types["stock.item"].rows.get("I1").historyLength() != 1 {
 		t.Fatal("draft changed live history before promotion")
 	}
 	draft.types["stock.item"].rows.get("I1").history[0].Fields[0].After[0] ^= 1
@@ -277,7 +277,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 		t.Fatalf("projected rows after promotion: %v", touched)
 	}
 	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
-	if live.(Item).Qty != 3 || len(tn.records.types["stock.item"].rows.get("I1").history) != 2 {
+	if live.(Item).Qty != 3 || tn.records.types["stock.item"].rows.get("I1").historyLength() != 2 {
 		t.Fatalf("accepted image or history missing: %+v", live)
 	}
 	if err := tn.records.promoteRecords(draft); err == nil {

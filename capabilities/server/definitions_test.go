@@ -135,7 +135,7 @@ func TestDefinitionValidation(t *testing.T) {
 		tn := composeTenant(t, "directory-records", []Seat{seatOf("admin", "core:steward", "enterprise:admin")}, core.New("directory-records"), enterprise.New("directory-records", platform.OrgSeed{}))
 		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "plant", map[string]any{"name": "Plant", "stereotype": enterprise.Location}, at)
 		decide(t, tn, "admin", core.ID, "core.site.create", core.SiteType, "warehouse", map[string]any{"name": "Warehouse", "code": "W1", "kind": "warehouse", "place": "plant"}, at)
-		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementClose, enterprise.ElementType, "plant", map[string]any{"until": "2026-10-09"}, at)
+		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementClose, enterprise.ElementType, "plant", map[string]any{"until": "2026-10-09", "reason": "Plant retired"}, at)
 		if el, ok := tn.directory.Element("plant", "2026-10-09"); ok {
 			t.Fatalf("closed element still active: %+v", el)
 		}

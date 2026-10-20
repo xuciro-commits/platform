@@ -326,7 +326,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 		t.Fatal("the number was not committed with its predecessor")
 	}
 	item := live.records.types["stock.item"].rows.get("D1-child")
-	if item == nil || item.value.Interface().(Item).Qty != 7 || len(item.history) != 2 {
+	if item == nil || item.value.Interface().(Item).Qty != 7 || item.historyLength() != 2 {
 		t.Fatal("the committed nested create/edit result is incomplete")
 	}
 	calls := live.app("nested").(*nestedIssuer).calls

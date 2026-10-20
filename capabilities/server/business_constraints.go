@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"platformkernel/kernel"
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
@@ -126,76 +128,49 @@ func constraintEmpty(value any) bool {
 	return false // a stored zero number or false is present
 }
 
-// Unique sees the complete private owner store under its record lock. The
-// tenant's single writer keeps this check and durable acceptance indivisible.
-// It never returns the competing record or its fields to the applicant.
+// Unique checks the complete owner index; member read filters never hide a
+// competing row. The tenant writer keeps this check and acceptance indivisible.
 func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	et := s.types[info.Type]
-	keyOf := func(v reflect.Value) (string, error) {
-		values := []any{}
-		for _, name := range rule.Fields {
-			field, _ := info.Field(name)
-			if name == "id" {
-				values = append(values, recordOf(v).ID)
-			} else if name == "archived" {
-				values = append(values, recordOf(v).Archived)
-			} else {
-				x := v.FieldByIndex(field.Index).Interface()
-				if constraintEmpty(x) {
-					return "", nil // required is a separate invariant
-				}
-				values = append(values, x)
-			}
-		}
-		if rule.Scope != "" && rule.Scope != "tenant" {
-			path, err := platform.ConstraintScopePath(info, rule.Scope)
-			if err != nil {
-				return "", err
-			}
-			current, currentType := v, info
-			for i, name := range path {
-				field, ok := currentType.Field(name)
-				if !ok {
-					return "", fmt.Errorf("unique scope is unavailable")
-				}
-				x := current.FieldByIndex(field.Index)
-				if constraintEmpty(x.Interface()) {
-					return "", fmt.Errorf("unique scope is missing")
-				}
-				if i == len(path)-1 {
-					values = append(values, field.Ref, x.Interface())
-					break
-				}
-				parent := s.types[field.Ref]
-				if parent == nil || parent.info.App != info.App || parent.rows.get(x.String()) == nil {
-					return "", fmt.Errorf("unique scope reference is unavailable")
-				}
-				current, currentType = parent.rows.get(x.String()).value, parent.info
-			}
-		}
-		raw, err := json.Marshal(values)
-		return string(raw), err
-	}
-	key, err := keyOf(value)
+	key, err := s.uniqueKey(info, rule, value)
 	if err != nil || key == "" {
 		return err == nil, err
 	}
-	for id, other := range et.rows.all() {
-		if id == recordOf(value).ID {
-			continue
+	et := s.types[info.Type]
+	if s.historyStore != nil {
+		storage, ok := s.historyStore.(journal.UniqueState)
+		if !ok {
+			panic("record storage does not provide derived unique keys")
 		}
-		otherKey, err := keyOf(other.value)
-		if err != nil {
-			// Old incomplete scopes remain readable and occupy no new scope.
-			continue
+		changes := s.uniqueChanges()
+		if !et.fullImage {
+			ids, err := storage.StateUnique(context.Background(), s.tenant, info.Type, rule.Name, key, s.appliedPosition)
+			if err != nil {
+				// As with candidate reads, a storage failure cannot become a
+				// durable business refusal or silently pass a constraint.
+				panic(fmt.Errorf("record unique keys: %w", err))
+			}
+			for _, id := range ids {
+				if id == recordOf(value).ID {
+					continue
+				}
+				if _, replaced := changes[info.Type+"/"+id]; !replaced {
+					return false, nil
+				}
+			}
 		}
-		if key == otherKey {
-			return false, nil
+		for ref, keys := range changes {
+			typ, id, _ := strings.Cut(ref, "/")
+			if typ == info.Type && id != recordOf(value).ID && keys[rule.Name] == key {
+				return false, nil
+			}
 		}
+		return true, nil
 	}
-	return true, nil
+	index := et.uniqueIndex(s, rule)
+	bucket := index.keys.get(key)
+	return bucket.len() == 0 || bucket.len() == 1 && bucket.has(recordOf(value).ID), nil
 }
 
 func constraintLocked(info platform.EntityInfo, before *row) bool {
@@ -366,15 +341,26 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 		local := true
 		for i, rule := range et.info.Constraints {
 			plans[i] = d.constraintReadPlan(et.info, rule)
-			local = local && plans[i].local
+			local = local && (plans[i].local || rule.Kind == "unique" && rule.Reads == nil)
 		}
 		var ids []string
 		if local {
+			var candidates recordIndex[bool]
 			for _, ref := range refs {
 				typ, id, _ := strings.Cut(ref, "/")
 				if typ == et.info.Type && et.rows.get(id) != nil {
-					ids = append(ids, id)
+					candidates.set(id, true)
 				}
+				for _, rule := range et.info.Constraints {
+					if rule.Kind == "unique" {
+						for dependent := range d.records.scopeDependents(et.info, rule, typ, id).all() {
+							candidates.set(dependent, true)
+						}
+					}
+				}
+			}
+			for id := range candidates.all() {
+				ids = append(ids, id)
 			}
 		} else {
 			ids = make([]string, 0, et.rows.len())

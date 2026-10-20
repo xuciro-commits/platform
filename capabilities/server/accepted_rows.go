@@ -31,20 +31,18 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 		if !ok || et == nil || et.info.App != owner || et.rows.get(id) == nil {
 			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
 		}
-		image, err := acceptedRowOf(typ, id, et.rows.get(id))
+		var prior *row
+		if old := d.records.parent.types[typ]; old != nil {
+			prior = old.rows.get(id)
+		}
+		image, err := acceptedRowChange(typ, id, et.rows.get(id), prior)
 		if err != nil {
 			return nil, err
 		}
 		row := acceptedInputRow{acceptedRow: image, App: owner}
-		if prior := d.records.parent.types[typ]; prior != nil && prior.rows.get(id) != nil {
-			old, err := acceptedRowOf(typ, id, prior.rows.get(id))
-			if err != nil {
-				return nil, err
-			}
-			row.Before, err = canonicalDigest(old)
-			if err != nil {
-				return nil, err
-			}
+		row.Before, err = recordPredecessor(typ, id, prior)
+		if err != nil {
+			return nil, err
 		}
 		rows = append(rows, row)
 	}
@@ -56,7 +54,11 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 // external effect's answer). The caller promotes only after all other owners
 // of the same result have passed their predecessor checks.
 func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member string, at time.Time) (*recordStore, error) {
-	draft := t.records.forkRecords()
+	return t.prepareAcceptedDirectRowsOn(t.records, rows, member, at)
+}
+
+func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedInputRow, member string, at time.Time) (*recordStore, error) {
+	draft := base.forkRecords()
 	draft.mu.Lock()
 	defer draft.mu.Unlock()
 	for _, image := range rows {
@@ -66,25 +68,42 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 		}
 		prior := et.rows.get(image.ID)
 		before, previousHistory, revision := "", 0, uint32(0)
-		if prior != nil {
-			row, err := acceptedRowOf(image.Type, image.ID, prior)
+		if image.HistoryRef != nil {
+			if err := checkHistoryPredecessor(image.acceptedRow, prior); err != nil {
+				return nil, err
+			}
+			var err error
+			before, err = recordPredecessor(image.Type, image.ID, prior)
 			if err != nil {
 				return nil, err
 			}
-			before, err = canonicalDigest(row)
-			if err != nil {
-				return nil, err
+			if before != image.Before {
+				return nil, fmt.Errorf("direct record image predecessor differs")
 			}
-			previousHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
-		}
-		if image.Before != before || len(image.History) <= previousHistory {
-			return nil, fmt.Errorf("direct record predecessor differs")
-		}
-		if prior != nil {
-			old, err := canonicalDigest(image.History[:previousHistory])
-			actual, actualErr := canonicalDigest(prior.recordHistory())
-			if err != nil || actualErr != nil || old != actual {
-				return nil, fmt.Errorf("direct record history predecessor differs")
+			if prior != nil {
+				revision = recordOf(prior.value).Revision
+			}
+		} else {
+			if prior != nil {
+				row, err := acceptedRowOf(image.Type, image.ID, prior)
+				if err != nil {
+					return nil, err
+				}
+				before, err = canonicalDigest(row)
+				if err != nil {
+					return nil, err
+				}
+				previousHistory, revision = len(prior.recordHistory()), recordOf(prior.value).Revision
+			}
+			if image.Before != before || len(image.History) <= previousHistory {
+				return nil, fmt.Errorf("direct record predecessor differs")
+			}
+			if prior != nil {
+				old, err := canonicalDigest(image.History[:previousHistory])
+				actual, actualErr := canonicalDigest(prior.recordHistory())
+				if err != nil || actualErr != nil || old != actual {
+					return nil, fmt.Errorf("direct record history predecessor differs")
+				}
 			}
 		}
 		for _, change := range image.History[previousHistory:] {
@@ -93,7 +112,11 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 			}
 		}
 		value := reflect.New(et.info.Go).Elem()
-		if err := decodeAcceptedJSON(image.Value, value.Addr().Interface(), "direct record"); err != nil {
+		decode, err := rowDecodeFormattedImage(et.info, image.Value, image.Projection, draft.readRelease, image.Format)
+		if err != nil {
+			return nil, err
+		}
+		if err := decodeAcceptedJSON(decode, value.Addr().Interface(), "direct record"); err != nil {
 			return nil, err
 		}
 		if err := checkRunApplicationBindings(value.Interface()); err != nil {
@@ -109,7 +132,12 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 			last.Schema == "" {
 			return nil, fmt.Errorf("direct record image differs from history")
 		}
-		recovered := &row{value: value, history: copyHistory(image.History)}
+		recovered := &row{value: value, format: image.Format, history: copyHistory(image.History), projection: cloneRecordProjection(image.Projection), extraction: image.Extraction}
+		if image.HistoryRef != nil {
+			if err := appendRowHistory(recovered, prior, image.History); err != nil {
+				return nil, err
+			}
+		}
 		recovered.retainOriginal(image.Value)
 		et.setRow(image.ID, recovered)
 		draft.writes[image.Type+"/"+image.ID] = true

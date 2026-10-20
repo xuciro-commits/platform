@@ -344,7 +344,7 @@ func TestMigrationFailedBatchDoesNotAcceptEarlierRows(t *testing.T) {
 			if json.Unmarshal(image, &fields) != nil || fields["enabled"] != nil || string(fields["name"]) != `"1"` || row.projection != nil {
 				t.Fatal("cancellation lost source facts or retained a future field")
 			}
-			if strategy == "quarantine" && (len(row.history) != 3 || row.history[2].Schema != "build.migration.cancel") {
+			if strategy == "quarantine" && (row.historyLength() != 3 || row.recordHistory()[2].Schema != "build.migration.cancel") {
 				t.Fatal("cancellation erased history instead of recording compensation")
 			}
 			decide(t, recovered, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Writable again"}, txnAt.Add(2*time.Hour))

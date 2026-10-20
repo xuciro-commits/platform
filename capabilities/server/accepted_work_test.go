@@ -431,3 +431,50 @@ func TestAcceptedWorkerDirectLedgerKeepsParentAcrossSavepoint(t *testing.T) {
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return resultWorkTenant(t, live.ID) })
 }
+
+func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
+	const id = "work-child-cancellation"
+	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	tn := resultWorkTenant(t, id)
+	operationID := id + ":operation:other"
+	generation, _, refusal := tn.works.Start(operationID, "engine")
+	if refusal != nil {
+		t.Fatal(refusal)
+	}
+	tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: operationID, App: "worker",
+		Endpoint: operationEndpoint, State: "running", Generation: generation, At: at, Due: at}})
+	var saved []byte
+	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		saved = entry.Body
+		return nil, errors.New("leave the accepted input unapplied")
+	}
+	_ = tn.acceptWork(tn.work.jobs[0], at)
+	result, err := decodeAcceptedWork(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, _, err := decodeAcceptedBatch(result.Changes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel, err := tn.operationCancellation(operationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child.Operations = append(child.Operations, cancel)
+	child.Digest, _ = digestAcceptedBatch(child)
+	result.Changes, _ = json.Marshal(child)
+	result.Digest, _ = digestAcceptedWork(result)
+	raw, _ := json.Marshal(result)
+	if applied, err := tn.applyAcceptedWork(raw); err != nil || !applied {
+		t.Fatalf("work with a cancelling child: %v (applied=%t)", err, applied)
+	}
+	other, refusal := tn.works.Get(operationID)
+	if refusal != nil || other.GetState() != pb.WorkState_WORK_STATE_CANCELLED || other.GetGeneration() != generation {
+		t.Fatalf("work completion replaced its child's cancellation: %v %v", other, refusal)
+	}
+	finished, refusal := tn.works.Get(result.Input.ID)
+	if refusal != nil || finished.GetState() != pb.WorkState_WORK_STATE_COMPLETED {
+		t.Fatalf("parent work completion was lost: %v %v", finished, refusal)
+	}
+}

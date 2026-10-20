@@ -9,12 +9,15 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"platformserver/internal/records"
 )
 
 var stateSchema = []string{
+
 	`create table if not exists runtime_tenants (tenant text primary key, seq bigint not null)`,
 	`create table if not exists runtime_records (tenant text not null, type text not null, id text not null, image bytea not null, query jsonb not null, history_count integer not null, seq bigint not null default 0, primary key(tenant,type,id))`,
 	`alter table runtime_records add column if not exists seq bigint not null default 0`,
+	`alter table runtime_records add column if not exists history_head text not null default ''`,
 	`create index if not exists runtime_records_query on runtime_records using gin (query)`,
 	`create index if not exists runtime_records_position on runtime_records (tenant,type,seq,id)`,
 	`create table if not exists runtime_history (tenant text not null, type text not null, id text not null, pos integer not null, image bytea not null, query jsonb not null, primary key(tenant,type,id,pos))`,
@@ -23,6 +26,8 @@ var stateSchema = []string{
 	`alter table runtime_values add column if not exists seq bigint not null default 0`,
 	`create table if not exists runtime_results (tenant text not null, app text not null, scope text not null, key text not null, hash text not null, seq bigint not null, body bytea not null, primary key(tenant,app,scope,key))`,
 }
+
+func init() { stateSchema = append(stateSchema, uniqueStateSchema...) }
 
 // InitializeState runs before this tenant accepts writes. The SQL position and
 // every image/history entry are compared at the same retained journal position;
@@ -62,7 +67,7 @@ func (j *Postgres) InitializeState(ctx context.Context, tenant string, position 
 	} else if saved != position {
 		return fmt.Errorf("tenant %s SQL state is at %d, journal at %d", tenant, saved, position)
 	}
-	if err = j.compareState(ctx, tx, tenant, delta); err != nil {
+	if err = j.compareState(ctx, tx, tenant, position, delta); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -101,7 +106,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 		return err
 	}
 	if saved == position {
-		if err = j.compareState(ctx, tx, tenant, full); err != nil {
+		if err = j.compareState(ctx, tx, tenant, position, full); err != nil {
 			return err
 		}
 		return tx.Commit(ctx)
@@ -109,7 +114,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 	if saved != prefix.Position || saved < 0 || saved >= position {
 		return fmt.Errorf("tenant %s SQL recovery predecessor differs: %d/%d/%d", tenant, saved, prefix.Position, position)
 	}
-	if err = j.compareState(ctx, tx, tenant, prefix.Delta); err != nil {
+	if err = j.compareState(ctx, tx, tenant, prefix.Position, prefix.Delta); err != nil {
 		return fmt.Errorf("SQL recovery prefix: %w", err)
 	}
 	if j.Delta == nil {
@@ -139,6 +144,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 		return err
 	}
 	next := saved + 1
+	legacyKeys := false
 	for _, result := range suffix {
 		if result.position != next || result.kind != "accepted-result" {
 			return fmt.Errorf("tenant %s recovery requires a contiguous accepted-result at %d", tenant, next)
@@ -151,6 +157,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 		if err != nil {
 			return fmt.Errorf("tenant %s retained state delta at %d: %w", tenant, next, err)
 		}
+		legacyKeys = legacyKeys || delta.LegacyUnique
 		if err = j.writeState(ctx, tx, tenant, next, delta); err != nil {
 			return err
 		}
@@ -162,7 +169,7 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 	if next != position+1 {
 		return fmt.Errorf("tenant %s recovery suffix is incomplete", tenant)
 	}
-	if err = j.compareState(ctx, tx, tenant, full); err != nil {
+	if err = j.compareStateImage(ctx, tx, tenant, position, full, legacyKeys); err != nil {
 		return fmt.Errorf("SQL recovered state: %w", err)
 	}
 	// Recheck the fixed journal head before publishing the repaired position.
@@ -178,7 +185,11 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 	return tx.Commit(ctx)
 }
 
-func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, d StateDelta) error {
+func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, position int64, d StateDelta) error {
+	return j.compareStateImage(ctx, tx, tenant, position, d, false)
+}
+
+func (j *Postgres) compareStateImage(ctx context.Context, tx pgx.Tx, tenant string, position int64, d StateDelta, rebuildUnique bool) error {
 	var count int
 	if err := tx.QueryRow(ctx, `select count(*) from runtime_records where tenant=$1`, tenant).Scan(&count); err != nil {
 		return err
@@ -189,7 +200,8 @@ func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, d
 	for _, r := range d.Records {
 		var equal bool
 		var n int
-		if err := tx.QueryRow(ctx, `select query=$4::jsonb,history_count from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID, []byte(r.Image)).Scan(&equal, &n); err != nil {
+		var storedHead string
+		if err := tx.QueryRow(ctx, `select query=$4::jsonb,history_count,history_head from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID, []byte(r.Image)).Scan(&equal, &n, &storedHead); err != nil {
 			return err
 		}
 		if !equal || n != len(r.History) {
@@ -200,6 +212,7 @@ func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, d
 			return err
 		}
 		at := 0
+		head := records.EmptyHistory
 		for rows.Next() {
 			var pos int
 			var raw []byte
@@ -211,6 +224,11 @@ func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, d
 				rows.Close()
 				return fmt.Errorf("tenant %s history differs for %s/%s at %d", tenant, r.Type, r.ID, at)
 			}
+			head, err = records.AppendHistory(head, at, raw)
+			if err != nil {
+				rows.Close()
+				return err
+			}
 			at++
 		}
 		err = rows.Err()
@@ -220,6 +238,14 @@ func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, d
 		}
 		if at != n {
 			return fmt.Errorf("tenant %s history is incomplete", tenant)
+		}
+		if storedHead != "" && storedHead != head || r.HistoryHead != "" && r.HistoryHead != head {
+			return fmt.Errorf("tenant %s history chain differs for %s/%s", tenant, r.Type, r.ID)
+		}
+		if storedHead == "" {
+			if _, err = tx.Exec(ctx, `update runtime_records set history_head=$4 where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID, head); err != nil {
+				return err
+			}
 		}
 	}
 	for _, c := range d.Changes {
@@ -240,7 +266,12 @@ func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, d
 			return fmt.Errorf("tenant %s owner state differs: %s/%s", tenant, v.Owner, v.Key)
 		}
 	}
-	return nil
+	if rebuildUnique {
+		if _, err := tx.Exec(ctx, `delete from runtime_unique_formats where tenant=$1`, tenant); err != nil {
+			return err
+		}
+	}
+	return j.compareUnique(ctx, tx, tenant, position, d.Unique)
 }
 
 func sameJSON(a, b []byte) bool {
@@ -260,7 +291,8 @@ func sameJSON(a, b []byte) bool {
 func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, position int64, d StateDelta) error {
 	for _, r := range d.Records {
 		var n int
-		err := tx.QueryRow(ctx, `select history_count from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID).Scan(&n)
+		var head string
+		err := tx.QueryRow(ctx, `select history_count,history_head from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID).Scan(&n, &head)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -274,12 +306,61 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 		} else if base != n {
 			return fmt.Errorf("record history predecessor differs: %s/%s (%d/%d)", r.Type, r.ID, base, n)
 		}
+		if n == 0 && head == "" {
+			head = records.EmptyHistory
+		}
+		if head == "" {
+			// Only historical writes need this bootstrap. New writers require startup
+			// to have verified and installed the derived prefix head.
+			if r.HistoryPrior != "" {
+				return fmt.Errorf("record history head was not initialized")
+			}
+			head = records.EmptyHistory
+			prefix, err := tx.Query(ctx, `select image from runtime_history where tenant=$1 and type=$2 and id=$3 order by pos`, tenant, r.Type, r.ID)
+			if err != nil {
+				return err
+			}
+			at := 0
+			for prefix.Next() {
+				var raw []byte
+				if err = prefix.Scan(&raw); err != nil {
+					prefix.Close()
+					return err
+				}
+				head, err = records.AppendHistory(head, at, raw)
+				if err != nil {
+					prefix.Close()
+					return err
+				}
+				at++
+			}
+			err = prefix.Err()
+			prefix.Close()
+			if err != nil {
+				return err
+			}
+			if at != n {
+				return fmt.Errorf("record history prefix is incomplete")
+			}
+		}
+		if r.HistoryPrior != "" && head != r.HistoryPrior {
+			return fmt.Errorf("record history chain predecessor differs")
+		}
+		for i, image := range h {
+			head, err = records.AppendHistory(head, base+i, image)
+			if err != nil {
+				return err
+			}
+		}
+		if r.HistoryHead != "" && head != r.HistoryHead {
+			return fmt.Errorf("record history appended chain differs")
+		}
 		for i, image := range h {
 			if _, err = tx.Exec(ctx, `insert into runtime_history (tenant,type,id,pos,image,query) values ($1,$2,$3,$4,$5,$6::jsonb)`, tenant, r.Type, r.ID, base+i, []byte(image), string(image)); err != nil {
 				return err
 			}
 		}
-		if _, err = tx.Exec(ctx, `insert into runtime_records (tenant,type,id,image,query,history_count,seq) values ($1,$2,$3,$4,$5::jsonb,$6,$7) on conflict(tenant,type,id) do update set image=excluded.image,query=excluded.query,history_count=excluded.history_count,seq=excluded.seq`, tenant, r.Type, r.ID, []byte(r.Image), string(r.Image), base+len(h), position); err != nil {
+		if _, err = tx.Exec(ctx, `insert into runtime_records (tenant,type,id,image,query,history_count,seq,history_head) values ($1,$2,$3,$4,$5::jsonb,$6,$7,$8) on conflict(tenant,type,id) do update set image=excluded.image,query=excluded.query,history_count=excluded.history_count,seq=excluded.seq,history_head=excluded.history_head`, tenant, r.Type, r.ID, []byte(r.Image), string(r.Image), base+len(h), position, head); err != nil {
 			return err
 		}
 	}
@@ -298,7 +379,7 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			return err
 		}
 	}
-	return nil
+	return j.writeUnique(ctx, tx, tenant, position, d.Unique)
 }
 
 func (j *Postgres) StateRecord(ctx context.Context, tenant, typ, id string) (json.RawMessage, error) {

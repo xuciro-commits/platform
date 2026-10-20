@@ -135,6 +135,7 @@ func (t *Tenant) acceptAgentStep(b stepBody, at time.Time) {
 		t.quarantine(err)
 		return
 	}
+	t.acceptedResultApplied()
 	t.enqueue(saved.At)
 	t.changedOwner(AgentApp)
 }

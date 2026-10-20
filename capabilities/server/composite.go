@@ -260,6 +260,7 @@ func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedCompo
 		t.quarantine(fmt.Errorf("committed composite result differs: %v", err))
 		return CompositeAnswer{}, fmt.Errorf("committed composite result differs: %v", err)
 	}
+	t.acceptedResultApplied()
 	t.changed()
 	return compositeAnswer(applied)
 }

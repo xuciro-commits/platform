@@ -90,8 +90,10 @@ func (t *Tenant) Held(ref string) (any, bool) {
 }
 
 type entityType struct {
-	info platform.EntityInfo
-	rows recordIndex[*row]
+	store         *recordStore
+	uniqueIndexes map[string]uniqueIndex
+	info          platform.EntityInfo
+	rows          recordIndex[*row]
 	// Derived indexes share the same immutable rows. Writes update only built
 	// reference buckets; schema replacement discards them with its type image.
 	referenceIndexes map[string]referenceIndex
@@ -157,10 +159,13 @@ func maskedHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange
 // A row and its nested values are immutable once stored. Writers replace it;
 // readers that expose editable values copy them at the API boundary.
 type row struct {
-	value        reflect.Value // the entity struct, a private copy
-	history      []RecordChange
-	loadHistory  func(int) []RecordChange
-	historyCount int
+	value         reflect.Value // the entity struct, a private copy
+	historyParent *row
+	historyHead   string
+	format        string
+	history       []RecordChange
+	loadHistory   func(int) []RecordChange
+	historyCount  int
 	// Recovery bytes preserve an accepted predecessor's identity when typed
 	// decoding normalises its definition. The next mutation writes only the
 	// current format; these bytes have no writable or executable API.
@@ -178,17 +183,18 @@ type extractionOrigin struct {
 // A migration retains the source release's read image while its target facts
 // are accepted in batches. Only that exact shape can select this projection.
 type recordProjection struct {
-	From  string             `json:"from"`
-	Shape string             `json:"shape"`
-	Value json.RawMessage    `json:"value"`
-	Prior []recordProjection `json:"prior,omitempty"`
+	Format string             `json:"format,omitempty"`
+	From   string             `json:"from"`
+	Shape  string             `json:"shape"`
+	Value  json.RawMessage    `json:"value"`
+	Prior  []recordProjection `json:"prior,omitempty"`
 }
 
 func cloneRecordProjection(p *recordProjection) *recordProjection {
 	if p == nil {
 		return nil
 	}
-	copy := &recordProjection{From: p.From, Shape: p.Shape, Value: slices.Clone(p.Value)}
+	copy := &recordProjection{Format: p.Format, From: p.From, Shape: p.Shape, Value: slices.Clone(p.Value)}
 	for _, prior := range p.Prior {
 		copy.Prior = append(copy.Prior, *cloneRecordProjection(&prior))
 	}
@@ -323,12 +329,13 @@ func (s *recordStore) forkRecords() *recordStore {
 }
 
 func (s *recordStore) forkRecordsLocked() *recordStore {
+	s.prepareUniqueIndexes()
 	draft := &recordStore{historyStore: s.historyStore, tenant: s.tenant, appliedPosition: s.appliedPosition, currentPosition: s.currentPosition, readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, changed: s.changed,
 		order: slices.Clone(s.order)}
 	for typ, et := range s.types {
-		copied := &entityType{info: et.info, knowledge: et.knowledge, rows: et.rows, referenceIndexes: maps.Clone(et.referenceIndexes), fullImage: s.parent != nil && et.fullImage}
+		copied := &entityType{store: draft, uniqueIndexes: maps.Clone(et.uniqueIndexes), info: et.info, knowledge: et.knowledge, rows: et.rows, referenceIndexes: maps.Clone(et.referenceIndexes), fullImage: s.parent != nil && et.fullImage}
 		draft.types[typ] = copied
 		draft.byGo[et.info.Go] = copied
 	}
@@ -367,6 +374,9 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	s.uniqueLinks = draft.uniqueLinks
 	s.archiveLinks = draft.archiveLinks
 	s.types, s.byGo = draft.types, draft.byGo
+	for _, et := range s.types {
+		et.store = s
+	}
 	if s.parent == nil {
 		for _, et := range s.types {
 			et.fullImage = false
@@ -375,9 +385,6 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	s.readRelease = draft.readRelease
 	s.dirty, s.changed, s.order = draft.dirty, draft.changed, draft.order
 	s.generation++
-	if s.parent == nil && s.currentPosition != nil {
-		s.appliedPosition = s.currentPosition()
-	}
 	draft.sealed = true
 	refs := make([]string, 0, len(draft.writes))
 	for ref := range draft.writes {
@@ -422,7 +429,7 @@ func (s *recordStore) declare(a platform.App) error {
 		if s.types[e.Type] != nil || s.byGo[info.Go] != nil {
 			return fmt.Errorf("entity %s is declared twice", e.Type)
 		}
-		et := &entityType{info: info, rows: recordIndex[*row]{}, knowledge: knowledgeBearing(info)}
+		et := &entityType{store: s, info: info, rows: recordIndex[*row]{}, knowledge: knowledgeBearing(info)}
 		s.types[e.Type], s.byGo[info.Go] = et, et
 		s.generation++
 	}
@@ -555,10 +562,9 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 			v.FieldByIndex(f.Index).SetString(stamp.By)
 		}
 	}
-	var history []RecordChange
 	if prev != nil {
 		old := recordOf(prev.value)
-		rec.Created, history, rec.Revision = old.Created, copyHistory(prev.recordHistory()), old.Revision
+		rec.Created, rec.Revision = old.Created, old.Revision
 		if old.Archived != rec.Archived {
 			change.Fields = append(change.Fields, FieldChange{Field: "archived", Before: jsonOf(old.Archived), After: jsonOf(rec.Archived)})
 		}
@@ -585,7 +591,11 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 			return err
 		}
 	}
-	et.setRow(rec.ID, &row{value: v, history: append(history, change), projection: projection, extraction: extraction})
+	next := &row{value: v, format: et.info.RecordFormat, projection: projection, extraction: extraction}
+	if err := appendRowHistory(next, prev, []RecordChange{change}); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	et.setRow(rec.ID, next)
 	s.generation++
 	s.liveTouched(et.info.Type)
 	if s.writes != nil {
@@ -908,7 +918,12 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 		out = append(out, v)
 	}
 	if s.historyStore != nil {
-		filters := sqlRecordFilters(et.info, q.Domain)
+		var filters []journal.StateFilter
+		// SQL retains the original image, while the owner may have renamed or
+		// transformed its fields. Filter the converted values below instead.
+		if len(et.info.RecordImages) == 0 {
+			filters = sqlRecordFilters(et.info, q.Domain)
+		}
 		seen := map[string]bool{}
 		after := ""
 		for {

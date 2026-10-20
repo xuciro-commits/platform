@@ -84,9 +84,14 @@ type Entity struct {
 	// (ADR-0005 D1); Synonyms are other names people use for it, comma-separated.
 	Description string
 	Synonyms    string
-	Model       any    // the struct's zero value, e.g. Opportunity{}
-	Display     string // the field naming a record; default: the first search field, else the ID
-	Scope       Scope
+	Model       any // the struct's zero value, e.g. Opportunity{}
+	// RecordFormat names the current persisted record shape. Empty is the
+	// original unversioned shape; it is independent of action and snapshot formats.
+	RecordFormat string
+	// RecordImages declares only historical shapes this owner can convert.
+	RecordImages []RecordImageFormat
+	Display      string // the field naming a record; default: the first search field, else the ID
+	Scope        Scope
 	// KnowledgeFiles makes the text files attached to its records knowledge,
 	// searched and cited like a knowledge field (ADR-0038).
 	KnowledgeFiles bool
@@ -465,6 +470,8 @@ type EntityInfo struct {
 	ExtensionSource *ExtensionSource    `json:"-"`
 	Lifecycle       *LifecycleInfo      `json:"lifecycle,omitempty"`
 	Go              reflect.Type        `json:"-"`
+	RecordFormat    string              `json:"-"`
+	RecordImages    []RecordImageFormat `json:"-"`
 	Scope           Scope               `json:"-"`
 	// Derived and Withheld are ADR-0009's declaration, resolved: the host
 	// narrows these fields to the sources the reader may still read.
@@ -498,6 +505,10 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
 	info := EntityInfo{EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info.RecordFormat, info.RecordImages = e.RecordFormat, slices.Clone(e.RecordImages)
+	if err := checkRecordImageFormats(info); err != nil {
+		return EntityInfo{}, err
+	}
 	if info.Title == "" {
 		info.Title = e.Type
 	}

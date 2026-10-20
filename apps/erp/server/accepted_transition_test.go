@@ -68,7 +68,7 @@ func TestAcceptedPeriodTransitionCommitRetryAndRecovery(t *testing.T) {
 		Kind    string `json:"kind"`
 	}
 	if err := json.Unmarshal(entries[1].Body, &result); err != nil ||
-		result.Version != 4 || result.Kind != "pure-transition" {
+		result.Version != 5 || result.Kind != "pure-transition" {
 		t.Fatalf("close used the wrong result format: %+v, %v", result, err)
 	}
 	retry := submit("close", PeriodType+".close")
@@ -119,11 +119,16 @@ func TestJournalAcceptedPeriodTransitionCrashAndRestart(t *testing.T) {
 			panic(err)
 		}
 	}
+	crash := false
 	live.AcceptResult = func(e platformserver.Entry, key, hash string) ([]byte, error) {
-		if _, err := journal.AppendAccepted(ctx, id, e, key, hash); err != nil {
+		raw, err := journal.AppendAccepted(ctx, id, e, key, hash)
+		if err != nil {
 			return nil, err
 		}
-		panic("injected crash after durable append")
+		if crash {
+			panic("injected crash after durable append")
+		}
+		return raw, nil
 	}
 	member, _ := live.Member("cy")
 	at := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
@@ -135,6 +140,7 @@ func TestJournalAcceptedPeriodTransitionCrashAndRestart(t *testing.T) {
 	if _, err := live.Submit(member, request("open", SchemaPeriodOpen), at); err != nil {
 		t.Fatal(err)
 	}
+	crash = true
 	func() {
 		defer func() {
 			if recover() == nil {

@@ -121,6 +121,7 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Erro
 		t.quarantine(err)
 		return unknown()
 	}
+	t.acceptedResultApplied()
 	t.operationsChanged(platform.AIApp)
 	return nil
 }

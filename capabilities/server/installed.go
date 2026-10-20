@@ -86,7 +86,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if err := s.migrationDefinitionLocked(info); err != nil {
 		return err
 	}
-	et := &entityType{info: info, rows: recordIndex[*row]{}, knowledge: knowledgeBearing(info)}
+	et := &entityType{store: s, info: info, rows: recordIndex[*row]{}, knowledge: knowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
@@ -101,7 +101,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 				return err
 			}
 			v := reflect.New(info.Go).Elem()
-			decode, err := rowDecodeImage(info, raw, r.projection, s.readRelease)
+			decode, err := rowDecodeFormattedImage(info, raw, r.projection, s.readRelease, r.format)
 			if err != nil {
 				return err
 			}
@@ -110,7 +110,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			}
 			platform.ApplyFieldAliases(info, v)
 			emptyLists(v)
-			installed := &row{value: v, history: r.history, loadHistory: r.loadHistory, historyCount: r.historyCount, projection: r.projection, extraction: r.extraction}
+			installed := &row{value: v, format: r.format, historyParent: r.historyParent, historyHead: r.historyHead, history: r.history, loadHistory: r.loadHistory, historyCount: r.historyCount, projection: r.projection, extraction: r.extraction}
 			installed.retainOriginal(raw)
 			entries = append(entries, recordEntry[*row]{id, installed})
 		}
