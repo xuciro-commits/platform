@@ -4,6 +4,7 @@ import "platformserver/internal/construction"
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -15,6 +16,9 @@ import (
 func protocolReadName(typ, name string) string { return "protocol:" + typ + ":" + name }
 
 func objectProvisions(object construction.Object, entity platform.Entity) []platform.Provision {
+	if len(object.Protocols) == 0 {
+		return nil
+	}
 	catalog := platform.NewCatalog(platform.EntityActions(entity)...)
 	var out []platform.Provision
 	for _, declaration := range object.Protocols {
@@ -55,15 +59,26 @@ func objectProvisions(object construction.Object, entity platform.Entity) []plat
 }
 
 func (b *Build) checkObjectProtocols(object construction.Object) error {
+	if len(object.Protocols) == 0 {
+		return nil
+	}
 	if len(object.Protocols) > 16 {
 		return fmt.Errorf("An object supports at most 16 protocol bindings")
+	}
+	if err := checkProcess(object, b.conditionLookup); err != nil {
+		return err
 	}
 	draft := object
 	draft.Protocols = slices.Clone(object.Protocols)
 	for i := range draft.Protocols {
 		draft.Protocols[i].Contract = nil
 	}
-	entity := Entity(draft)
+	declaration := draft
+	declaration.Protocols = nil
+	entity := Entity(declaration)
+	if _, err := platform.Describe(construction.ID, entity, func(reflect.Type) string { return "?" }); err != nil {
+		return err
+	}
 	catalog := platform.NewCatalog(platform.EntityActions(entity)...)
 	generated := objectProvisions(draft, entity)
 	seen := map[string]bool{}

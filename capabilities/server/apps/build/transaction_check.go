@@ -315,14 +315,43 @@ func (b *Build) checkTransactions(object construction.Object) error {
 		if len(action.Sets) > 0 || len(action.Creates) > 0 || len(action.Posts) > 0 || action.Journal != nil || action.Reverses != "" || len(action.Conditions) > 0 || action.To != "" || action.ToInput != "" {
 			return fmt.Errorf("transaction replaces legacy mutations and state routing")
 		}
-		ownInfo, _ := platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
+		spec := ruleSpec(object, action, txn.Reads)
+		var stateError error
+		walkBusinessTxn(txn, func(step platform.TxnStep) {
+			if stateError != nil || step.Target.Type != subject {
+				return
+			}
+			for _, assignment := range step.Changes {
+				if assignment.Field != "state" {
+					continue
+				}
+				expr, err := assignmentExpr("choice", assignment, spec)
+				if err != nil {
+					stateError = err
+					return
+				}
+				if expr.Lit != nil {
+					var state string
+					if json.Unmarshal(expr.Lit.Value, &state) != nil || !slices.ContainsFunc(object.States, func(s construction.State) bool { return s.Name == state }) {
+						stateError = fmt.Errorf("the action %q leaves records in %q, which is not a state of the object", action.Name, state)
+						return
+					}
+				}
+			}
+		})
+		if stateError != nil {
+			return stateError
+		}
+		ownInfo, err := platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
+		if err != nil {
+			return err
+		}
 		lookup := func(typ string) (platform.EntityInfo, bool) {
 			if typ == subject {
 				return ownInfo, true
 			}
 			return b.conditionLookup(typ)
 		}
-		spec := ruleSpec(object, action, txn.Reads)
 		if err := b.checkRefusalDeclarations(object, action, txn.Refusals, spec, "", lookup); err != nil {
 			return err
 		}
@@ -521,12 +550,6 @@ func (b *Build) checkTransactions(object construction.Object) error {
 					expr, err := assignmentExpr(field.Type, assignment, scope)
 					if err != nil {
 						return fmt.Errorf("%s: %w", where, err)
-					}
-					if field.Name == "state" && step.Target.Type == subject && expr.Lit != nil {
-						var state string
-						if json.Unmarshal(expr.Lit.Value, &state) != nil || !slices.ContainsFunc(object.States, func(s construction.State) bool { return s.Name == state }) {
-							return fmt.Errorf("the action %q leaves records in %q, which is not a state of the object", action.Name, state)
-						}
 					}
 					if !ruleAssignmentFits(field.Type, expr.Kind) {
 						return fmt.Errorf("%s assignment type differs", where)

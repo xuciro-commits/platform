@@ -755,6 +755,9 @@ func (b *Build) Check(o construction.Object, id string) error {
 	if err := checkEnterpriseUse(o); err != nil {
 		return err
 	}
+	if err := checkProcess(o, b.conditionLookup); err != nil {
+		return err
+	}
 	if err := b.checkObjectRules(o); err != nil {
 		return err
 	}
@@ -771,9 +774,6 @@ func (b *Build) Check(o construction.Object, id string) error {
 		return err
 	}
 	if err := checkScope(o); err != nil {
-		return err
-	}
-	if err := checkProcess(o, b.conditionLookup); err != nil {
 		return err
 	}
 	if err := b.checkTransactions(o); err != nil {
