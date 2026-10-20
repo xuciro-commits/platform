@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"platformserver/idp"
+	"platformserver/journal"
 	"strings"
 	"sync"
 	"syscall"
@@ -168,18 +169,27 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error)
 // after it. Both profiles run this same path (ADR-0017 D6): the lightweight
 // profile's journal is a file, not a second set of semantics, so a restart
 // replays and a damaged journal quarantines exactly as it does on PostgreSQL.
-func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
+func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
 	for _, t := range tenants {
 		recoveryStarted := time.Now().UTC()
+		var statePosition int64
+		var stateActive bool
+		if recovery, ok := j.(journal.RuntimeStateRecovery); ok {
+			var err error
+			statePosition, stateActive, err = recovery.StatePosition(ctx, t.ID)
+			if err != nil {
+				return fmt.Errorf("read SQL state position %s: %w", t.ID, err)
+			}
+		}
 		var after int64
 		if d.SnapshotEvery > 0 {
 			key, err := t.snapshotKey(code)
 			if err != nil {
 				return fmt.Errorf("snapshot format %s: %w", t.ID, err)
 			}
-			seq, state, ok, err := journal.Snapshot(ctx, t.ID, key)
+			seq, state, ok, err := j.Snapshot(ctx, t.ID, key)
 			if err == nil && !ok && key != code {
-				seq, state, ok, err = journal.Snapshot(ctx, t.ID, code)
+				seq, state, ok, err = j.Snapshot(ctx, t.ID, code)
 			}
 			if err != nil {
 				if errors.Is(err, errTenantSnapshot) {
@@ -189,7 +199,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 				}
 				return fmt.Errorf("snapshot %s: %w", t.ID, err)
 			}
-			if ok {
+			if ok && (!stateActive || seq <= statePosition) {
 				if err := t.checkSnapshotCheckpoint(state, seq); err != nil {
 					t.quarantine(err)
 					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
@@ -203,7 +213,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 			}
 			restored[t.ID] = after
 		}
-		entries, err := journal.Entries(ctx, t.ID, after)
+		entries, err := j.Entries(ctx, t.ID, after)
 		if err != nil {
 			if errors.Is(err, errTenantJournal) {
 				t.quarantine(err)
@@ -212,7 +222,36 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 			}
 			return fmt.Errorf("read journal %s: %w", t.ID, err) // a database error is not tenant-local
 		}
-		if err := t.recoverEntries(entries); err != nil {
+		var prefix *journal.StateCheckpoint
+		if stateActive && statePosition >= after && statePosition < j.Position(t.ID) {
+			split := int(statePosition - after)
+			if err := t.recoverEntries(entries[:split]); err != nil {
+				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				continue
+			}
+			t.mu.Lock()
+			delta, err := t.runtimeStateDeltaLocked()
+			t.mu.Unlock()
+			if err != nil {
+				t.quarantine(fmt.Errorf("runtime state prefix: %w", err))
+				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				continue
+			}
+			prefix = &journal.StateCheckpoint{Position: statePosition, Delta: delta}
+			acceptedOnly := true
+			for _, entry := range entries[split:] {
+				acceptedOnly = acceptedOnly && entry.Kind == "accepted-result"
+			}
+			if !acceptedOnly {
+				t.quarantine(fmt.Errorf("runtime state recovery suffix contains a legacy input"))
+				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				continue
+			}
+			if err := t.recoverEntries(entries[split:]); err != nil {
+				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				continue
+			}
+		} else if err := t.recoverEntries(entries); err != nil {
 			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 			continue
 		}
@@ -235,12 +274,12 @@ func (d *Deployment) restoreTenants(ctx context.Context, journal Journals, code 
 		}
 		// An input the journal did not take is never answered; the client's
 		// outbox resends it after the restart has replayed the rest.
-		if err := t.migrateRuntimeState(ctx, journal); err != nil {
+		if err := t.migrateRuntimeStateFrom(ctx, j, prefix); err != nil {
 			t.quarantine(fmt.Errorf("runtime state: %w", err))
 			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 			continue
 		}
-		t.attachJournal(ctx, journal)
+		t.attachJournal(ctx, j)
 	}
 	return nil
 }

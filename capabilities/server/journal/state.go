@@ -50,3 +50,17 @@ type StateFilter struct {
 	Values []string
 	List   bool
 }
+
+// StateCheckpoint is the original restored state at the SQL position, before
+// any retained accepted-result suffix is applied.
+type StateCheckpoint struct {
+	Position int64
+	Delta    StateDelta
+}
+
+// RuntimeStateRecovery only repairs a verified accepted-result suffix before
+// the tenant serves. Ordinary accepted writes still use AppendAccepted.
+type RuntimeStateRecovery interface {
+	StatePosition(context.Context, string) (int64, bool, error)
+	RestoreState(context.Context, string, int64, StateCheckpoint, StateDelta) error
+}

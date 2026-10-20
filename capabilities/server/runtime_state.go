@@ -210,53 +210,29 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 // writes while the original in-memory state is copied and compared at one
 // journal position. Only then are SQL-backed reads installed and history freed.
 func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
+	return t.migrateRuntimeStateFrom(ctx, j, nil)
+}
+
+func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix *journal.StateCheckpoint) error {
 	store, ok := j.(journal.RuntimeState)
 	if !ok {
 		return nil
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	d := journal.StateDelta{}
-	t.records.mu.Lock()
-	for typ, et := range t.records.types {
-		for id, r := range et.rows.all() {
-			image, err := r.image()
-			if err != nil {
-				t.records.mu.Unlock()
-				return err
-			}
-			state := recordState{Value: image, Projection: r.projection, Extraction: r.extraction}
-			rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1}
-			for _, h := range r.recordHistory() {
-				rr.History = append(rr.History, jsonOf(h))
-			}
-			d.Records = append(d.Records, rr)
+	d, err := t.runtimeStateDeltaLocked()
+	if err != nil {
+		return err
+	}
+	if prefix != nil {
+		recovery, ok := j.(journal.RuntimeStateRecovery)
+		if !ok {
+			return fmt.Errorf("tenant %s state store cannot recover a retained suffix", t.ID)
 		}
-	}
-	t.records.mu.Unlock()
-	for _, a := range t.apps {
-		for index, r := range a.AcceptedLedger().RecordsFor(t.ID) {
-			image, err := proto.MarshalOptions{Deterministic: true}.Marshal(r)
-			if err != nil {
-				return err
-			}
-			d.Changes = append(d.Changes, journal.StateChange{App: a.Manifest().ID, ID: r.GetChangeId(), Key: r.GetSubmission().GetIdempotencyKey(), Index: index + 1, Image: image})
+		if err := recovery.RestoreState(ctx, t.ID, j.Position(t.ID), *prefix, d); err != nil {
+			return err
 		}
-	}
-	for _, a := range t.apps {
-		if owner, ok := a.(platform.AcceptedStateApp); ok {
-			raw, err := owner.AcceptedState()
-			if err != nil {
-				return err
-			}
-			d.Values = append(d.Values, journal.StateValue{Owner: "app-state", Key: a.Manifest().ID, Image: raw})
-		}
-	}
-	t.committed.storageValues(&d)
-	for name, n := range t.sequences.clone() {
-		d.Values = append(d.Values, journal.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
-	}
-	if err := store.InitializeState(ctx, t.ID, j.Position(t.ID), d); err != nil {
+	} else if err := store.InitializeState(ctx, t.ID, j.Position(t.ID), d); err != nil {
 		return err
 	}
 	// Load committed current images rather than retaining the reconstruction as
@@ -315,6 +291,52 @@ func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
 	t.committed.useStorage(store, t.ID, func() int64 { return j.Position(t.ID) })
 	return nil
 }
+
+// The tenant lock fixes definitions and all owner state at the same replay position.
+func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
+	d := journal.StateDelta{}
+	t.records.mu.Lock()
+	for typ, et := range t.records.types {
+		for id, r := range et.rows.all() {
+			image, err := r.image()
+			if err != nil {
+				t.records.mu.Unlock()
+				return journal.StateDelta{}, err
+			}
+			state := recordState{Value: image, Projection: r.projection, Extraction: r.extraction}
+			rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1}
+			for _, h := range r.recordHistory() {
+				rr.History = append(rr.History, jsonOf(h))
+			}
+			d.Records = append(d.Records, rr)
+		}
+	}
+	t.records.mu.Unlock()
+	for _, a := range t.apps {
+		for index, r := range a.AcceptedLedger().RecordsFor(t.ID) {
+			image, err := proto.MarshalOptions{Deterministic: true}.Marshal(r)
+			if err != nil {
+				return journal.StateDelta{}, err
+			}
+			d.Changes = append(d.Changes, journal.StateChange{App: a.Manifest().ID, ID: r.GetChangeId(), Key: r.GetSubmission().GetIdempotencyKey(), Index: index + 1, Image: image})
+		}
+	}
+	for _, a := range t.apps {
+		if owner, ok := a.(platform.AcceptedStateApp); ok {
+			raw, err := owner.AcceptedState()
+			if err != nil {
+				return journal.StateDelta{}, err
+			}
+			d.Values = append(d.Values, journal.StateValue{Owner: "app-state", Key: a.Manifest().ID, Image: raw})
+		}
+	}
+	t.committed.storageValues(&d)
+	for name, n := range t.sequences.clone() {
+		d.Values = append(d.Values, journal.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
+	}
+	return d, nil
+}
+
 func sameStoredJSON(a, b json.RawMessage) bool {
 	x, e := canonicalDigest(a)
 	y, f := canonicalDigest(b)

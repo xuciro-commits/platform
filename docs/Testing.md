@@ -4,7 +4,7 @@
 
 验证方法与人工走查入口。环境、账号和服务地址归 [部署说明](../deploy/local/README.md)。 本地业务入口固定为酒店 `8495`、制造 `8490`；WMS 复用所在工作区。酒店的 `hotel-a` → `hotel-test` 用于同宿主晋级；改存储的 v2 先晋级不激活，再到目标审阅升级计划。
 
-技术转型（ADR-0063 / ADR-0054）：`make test-go PKG='. ./platform ./journal' RUN='TestAgent|TestActionInputSchema|TestModelToolStream|TestAnthropicToolStream|TestMCP|TestKnowledge|TestPostgresVector|TestPostgresMigration|TestPostgresAcceptedRetryAdvancesPosition|TestSnapshotRestoreFormats|TestProjection|TestPostgresProjection|TestPostgresRuntimeState'` 检查完整调用与重启、输入描述、工具流与用量、中文/JSON、兼容快照、投影表保留及历史后缀、SQL 状态与过滤后检索。PostgreSQL 相关项需要受控 `PLATFORM_TEST_DATABASE`；未配置时跳过，不能报告数据库通过。内核历史外置的等价检查用 `make test-go PKG=platformkernel/kernel RUN='TestChangeArchive|TestFactArchive|TestIdempotencySequences'`。浏览器复用 `dual-mode`、`application-studio`、`mes-actions`，不使用像素断言。
+技术转型（ADR-0063 / ADR-0054）：`make test-go PKG='. ./platform ./journal' RUN='TestAgent|TestActionInputSchema|TestModelToolStream|TestAnthropicToolStream|TestMCP|TestKnowledge|TestPostgresVector|TestPostgresMigration|TestPostgresAcceptedRetryAdvancesPosition|TestSnapshotRestoreFormats|TestProjection|TestPostgresProjection|TestPostgresRuntimeState'` 检查完整调用与重启、输入描述、工具流与用量、中文/JSON、兼容快照、投影表保留及历史后缀、SQL 状态与过滤后检索。PostgreSQL 相关项需要受控 `PLATFORM_TEST_DATABASE`；未配置时跳过，不能报告数据库通过。`TestPostgresRuntimeState` 同时覆盖 SQL 原位置落后时的安全恢复：跳过较新快照，先比旧位置再按原接受结果补后缀，检查原答复、真正 work-result 不调用 worker、再次恢复；原位置损坏、错误历史前驱及 legacy input 后缀须整事务拒绝，不能只升位置或覆盖原差异。内核历史外置的等价检查用 `make test-go PKG=platformkernel/kernel RUN='TestChangeArchive|TestFactArchive|TestIdempotencySequences'`。浏览器复用 `dual-mode`、`application-studio`、`mes-actions`，不使用像素断言。
 
 MES 源码作者任务由 `mes-actions` 检查：打开 Package 生成的原页面草稿，修改源码标题，切回画布保存，核对对象、字段顺序、动作和布局按原绑定转换保留，且声明 profile 不下降；尚未发布时运行定义保持原状，再共同激活后沿原业务流程操作。
 

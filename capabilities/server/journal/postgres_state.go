@@ -68,6 +68,116 @@ func (j *Postgres) InitializeState(ctx context.Context, tenant string, position 
 	return tx.Commit(ctx)
 }
 
+// StatePosition identifies the prefix that must be independently reconstructed
+// and compared before a legacy writer's retained suffix can be imported.
+func (j *Postgres) StatePosition(ctx context.Context, tenant string) (int64, bool, error) {
+	var position int64
+	err := j.pool.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1`, tenant).Scan(&position)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	return position, err == nil, err
+}
+
+// RestoreState imports only sealed results already retained in the journal.
+// Comparing the old prefix first prevents a newer image from hiding SQL damage.
+func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int64, prefix StateCheckpoint, full StateDelta) error {
+	tx, err := j.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1),63)`, tenant); err != nil {
+		return err
+	}
+	var latest, saved int64
+	if err = tx.QueryRow(ctx, `select coalesce(max(seq),0) from journal where tenant=$1`, tenant).Scan(&latest); err != nil {
+		return err
+	}
+	if latest != position {
+		return fmt.Errorf("tenant %s changed during state recovery: %d/%d", tenant, latest, position)
+	}
+	if err = tx.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1 for update`, tenant).Scan(&saved); err != nil {
+		return err
+	}
+	if saved == position {
+		if err = j.compareState(ctx, tx, tenant, full); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	if saved != prefix.Position || saved < 0 || saved >= position {
+		return fmt.Errorf("tenant %s SQL recovery predecessor differs: %d/%d/%d", tenant, saved, prefix.Position, position)
+	}
+	if err = j.compareState(ctx, tx, tenant, prefix.Delta); err != nil {
+		return fmt.Errorf("SQL recovery prefix: %w", err)
+	}
+	if j.Delta == nil {
+		return fmt.Errorf("tenant %s has no state delta owner", tenant)
+	}
+	type retainedResult struct {
+		position  int64
+		app, kind string
+		raw       []byte
+	}
+	rows, err := tx.Query(ctx, `select seq,app,kind,body from journal where tenant=$1 and seq>$2 and seq<=$3 order by seq`, tenant, saved, position)
+	if err != nil {
+		return err
+	}
+	var suffix []retainedResult
+	for rows.Next() {
+		var result retainedResult
+		if err = rows.Scan(&result.position, &result.app, &result.kind, &result.raw); err != nil {
+			rows.Close()
+			return err
+		}
+		suffix = append(suffix, result)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	next := saved + 1
+	for _, result := range suffix {
+		if result.position != next || result.kind != "accepted-result" {
+			return fmt.Errorf("tenant %s recovery requires a contiguous accepted-result at %d", tenant, next)
+		}
+		identity, err := j.identify(result.raw)
+		if err != nil || identity.Tenant != tenant || identity.App != result.app || identity.Key == "" || identity.Hash == "" {
+			return fmt.Errorf("tenant %s invalid retained result at %d: %v", tenant, next, err)
+		}
+		delta, err := j.Delta(result.raw)
+		if err != nil {
+			return fmt.Errorf("tenant %s retained state delta at %d: %w", tenant, next, err)
+		}
+		if err = j.writeState(ctx, tx, tenant, next, delta); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `insert into runtime_results (tenant,app,scope,key,hash,seq,body) values ($1,$2,$3,$4,$5,$6,$7)`, tenant, identity.App, identity.Scope, identity.Key, identity.Hash, next, result.raw); err != nil {
+			return err
+		}
+		next++
+	}
+	if next != position+1 {
+		return fmt.Errorf("tenant %s recovery suffix is incomplete", tenant)
+	}
+	if err = j.compareState(ctx, tx, tenant, full); err != nil {
+		return fmt.Errorf("SQL recovered state: %w", err)
+	}
+	// Recheck the fixed journal head before publishing the repaired position.
+	if err = tx.QueryRow(ctx, `select coalesce(max(seq),0) from journal where tenant=$1`, tenant).Scan(&latest); err != nil {
+		return err
+	}
+	if latest != position {
+		return fmt.Errorf("tenant %s changed during state recovery: %d/%d", tenant, latest, position)
+	}
+	if _, err = tx.Exec(ctx, `update runtime_tenants set seq=$2 where tenant=$1`, tenant, position); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, d StateDelta) error {
 	var count int
 	if err := tx.QueryRow(ctx, `select count(*) from runtime_records where tenant=$1`, tenant).Scan(&count); err != nil {
