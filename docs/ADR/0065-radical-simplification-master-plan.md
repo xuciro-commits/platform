@@ -78,7 +78,64 @@ HTTP / 部署 / 组合入口 → 租户提交/恢复/运行协调 → 宿主消�
 
 每阶段迁移一个模块即删除旧实现，不长期双写。每阶段后通过 `composition-static`。
 
-### 2.3 性能原则
+#
+## 2a. 能力归属全景（合并前）
+
+| 能力 | 当前 Owner | 重复 Owner | 问题 |
+|---|---|---|---|
+| 对象声明与校验 | `apps/build` (Build) | `internal/construction` (纯编译) | 同一 Object 类型在两处各有一份 `Check()`，新增字段需改两处 |
+| 页面 Widget 校验 | `platform/page_*.go` 80 文件 | `web/packages/app/src/widgets/` 40+ 文件 | 后端校验与前端预览各维护一套“何种 Section 合法”，无共享表 |
+| 知识索引 | `knowledge.go` 全文 | `knowledge_vectors.go` 向量 | 同一 `dirtyRecords` 变更被两条路径各扫一次 |
+| 效果与投递 | `operations.go` 任务队列 | `effects.go` 外部效果 | `opsMu` 被两者共享，锁序口头约定 |
+| 接受结果 | `accepted_*.go` 21 文件 | `internal/acceptance/result/` 10 文件 | 公共封套（摘要/版本/大小）在 21 处复制 |
+| Journal 存储 | `journal/postgres.go` | `journal/file.go` + `journal/memory.go` | 唯一约束、快照编码、分页各实现 3 次 |
+| 身份与组织 | `apps/enterprise` | `apps/core` + `internal/enterprise` | 登录成员/企业人员/业务人员三套 ID 关联，无统一引用 |
+| Tenant 协调 | `host.go` (Tenant) | `operations.go` + `effects.go` + `records.go` | 单个 `Tenant` 结构体 40 字段被 423 文件直接读写 |
+
+### 合并后归属
+
+| 能力 | 唯一 Owner | 消费者如何使用 |
+|---|---|---|
+| 纯对象/字段/动作声明 | `internal/construction` | `apps/build` 通过 `construction.Object` 读写；`platform` 通过 `EntityInfo` 投影 |
+| 页面契约 | `platform/page/` (新目录) + `web/packages/ui/src/` | 后端 `Check()` + 前端 `widget-declaration.ts` 共用 `widgets.json` manifest |
+| 知识索引 | `internal/knowledge` (新) | `Tenant` 持 `KnowledgeIndex` holder，`knowledge.go` 仅保留宿主胶合 |
+| 任务与效果 | `components/work` + `components/effects` | `Tenant` 持两个 holder，通过 channel 传递事件替代共享 `opsMu` |
+| 接受封套 | `internal/acceptance/envelope` | 各 `accepted_*.go` 调用 `envelope.Seal()` + `envelope.Apply()` |
+| Journal | `journal/store/` 共享内核 | 三后端实现 `store.Unique` / `store.Snapshot` / `store.Pagination` 薄包装 |
+| Tenant | `tenant/` 协调器 | 各组件 owner 通过构造函数注入窄接口，不再直接读写 `t.records` 等字段 |
+
+## 2b. 量化削减计划（production 口径）
+
+| 类别 | 当前行数 | 目标行数 | 削减 | 主要手段 |
+|---|---|---|---|---|
+| `internal/host` 碎接口 | 642 行，13 文件 | ~500 行，6 文件 | -142 行 | 6 个单方法文件合并为 `roles.go` |
+| `apps/build/public.go` 别名 | 249 行 | 0 行 | -249 行 | 消费者直连 `construction` |
+| `aicall.go` 平台别名 | 18 行别名 + 间接 | 0 行 | -18 行 | 直接 `platform.X` |
+| `platform/page_*.go` 重复守卫 | 17,050 行，162 文件 | ~14,500 行，~100 文件 | -2,550 行 | `hasBusinessBindings` 等 80 处收敛 + 按能力分组 |
+| `accepted_*.go` 公共封套 | 10,773 行，21 文件 | ~8,000 行，15 文件 | -2,773 行 | `envelope` 抽取公共 6 步 |
+| `knowledge.go` + `knowledge_vectors.go` | ~1,100 行 | ~600 行 | -500 行 | `internal/knowledge` 单 dirty 单切词 |
+| `journal/` 三后端重复 | ~2,500 行 | ~1,900 行 | -600 行 | `journal/store` 共享唯一/快照/分页 |
+| `web/packages/build/src/workshop/module-import/compile.ts` | 882 行 God 文件 | ~400 行 | -482 行 | 表驱动分发 |
+| `web/packages/build/src/workshop/page-editor` 碎状态 | ~800 行 | ~400 行 | -400 行 | `pipeline.ts` 单管线 |
+| **合计可直接度量** | | | **~-8,000 行** | 占 160k 的 5%，为第一期；后续 Tenant 拆解与前端深度整合再减 45k 至 1/3 |
+
+> 注：表内为首期可直接度量的“无行为变更”削减。达到 1/3 需后续 Tenant God Object 拆解（`host.go` 952 行 + `installed.go` 1,020 行 + `knowledge.go` 799 行等的职责分离）与 `web/packages/app/src/widgets/` 的 40+ widget 插件收敛，见各 XXL 专项。
+
+## 2c. 依赖方向强制（composition-static 扩展）
+
+新增检查项（`scripts/boundaries.sh` + `scripts/escapes.sh`）：
+
+```bash
+# 禁止新增
+platform/*  → internal/host        # platform 是稳定公开面，不反向依赖宿主
+internal/*  → capabilities/server/*  # 纯模块不依赖根包
+apps/build  → platformserver/*     # build 的宿主集成仅通过 host.BuildHost 等窄接口
+components/* → tenant/*             # 组件 owner 不反向依赖协调器
+```
+
+违反时 `make check` 失败，与现有 `escapes.sh` 同级门槛。
+
+## 2.3 性能原则
 
 重构的性能收益来自减少重复工作，不是新增缓存层：
 
