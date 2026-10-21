@@ -1,10 +1,10 @@
 {
   "docs.adr": 37,
-  "docs.adrChars": 444104,
+  "docs.adrChars": 444038,
   "docs.longestAdr": 29276,
   "docs.statusLine": 80,
   "docs.topLevel": 7,
-  "docs.chars": 659080,
+  "docs.chars": 659014,
   "ui.definitions": 19,
   "ui.apps": 18,
   "ui.navItems": 118,
