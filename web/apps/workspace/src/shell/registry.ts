@@ -1,7 +1,7 @@
-// The Applications portal's structure (ADR-0018 §3): categories in display
-// order, and the three workspace projections a member may switch between.
-// Everything here is presentation grouping; who may open what is decided by
-// the host (`/v1/me`, actions) and projected by the packages' own `for`/role checks.
+// The Applications portal's structure (ADR-0018 §3): the categories, in
+// display order. Everything here is presentation grouping; who may open what is
+// decided by the host (`/v1/me`, actions) and projected by the packages' own
+// `for`/role checks. There is one classification, not one per screen.
 import { categoryOf, type AppUI, type PlatformAppCategory } from "@platform/app";
 import { t, type PlatformApplication } from "@platform/ui";
 
@@ -10,14 +10,6 @@ export const categories: { id: PlatformAppCategory; label: () => string }[] = [
   { id: "ontology", label: () => t("Knowledge and data") },
   { id: "build", label: () => t("Build and intelligence") },
   { id: "operate", label: () => t("Run and manage") },
-];
-
-/** A projection: which categories lead the portal, and the id remembered per member. */
-export type Projection = "operations" | "build" | "admin";
-export const projections: { id: Projection; title: () => string; categories: PlatformAppCategory[] }[] = [
-  { id: "operations", title: () => t("Operations"), categories: ["business", "ontology"] },
-  { id: "build", title: () => t("Build"), categories: ["ontology", "build", "operate"] },
-  { id: "admin", title: () => t("Admin"), categories: ["operate"] },
 ];
 
 /** The portal entry of an app the workspace loaded. */

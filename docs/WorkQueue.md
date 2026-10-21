@@ -6,6 +6,8 @@
 
 范围、逐项审计结论、具体替代设计与删除条件归 [ADR-0064](ADR/0064-architecture-subtraction-and-code-organization.md)。当前从 PostgreSQL 按需工作集继续，已有实现不重做，不以目录搬迁、行数或检查数量代替完成。
 
+复杂度预算已生效（[ADR-0064 §9](ADR/0064-architecture-subtraction-and-code-organization.md#9-复杂度预算)）：`make budget` 进入 `make check`，入口、菜单项、ADR 与文档字数只减不增。**新增任何入口、菜单项或文档前，先在同一次改动里删掉等量的东西。**
+
 按以下顺序每次完成一整块，完成后移除，不在本队列保存完成记录：
 
 1. **E SQL 按需工作集（当前）：**按需当前记录、一致读视图、私有覆盖、SQL 派生索引及常规启动转型。

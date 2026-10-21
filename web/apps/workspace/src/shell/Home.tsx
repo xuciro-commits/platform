@@ -1,5 +1,5 @@
-// Home (ADR-0018 §3.1), after Foundry's landing page: search, what waits for
-// me, what I opened recently, what I starred, and the applications I may open.
+// Home (ADR-0018 §3.1): search, what waits for me, what I opened recently,
+// what I starred, and every application I may open — one list, in one place.
 // It reads only through the host's own reads; nothing here grants access.
 import { useHost, useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
@@ -28,16 +28,18 @@ export function Home() {
   const notifications = useRead<Api.Notification[]>("/v1/notifications");
   const apps = applications?.apps ?? [];
   const starred = apps.filter((a) => favorites.includes(a.id));
-  const business = apps.filter((a) => a.category === "business");
-  const tools = apps.filter((a) => a.category !== "business");
+  // One list: the applications this member may open, business first. The portal
+  // is the same list with search and grouping; there is no second list here.
+  const ordered = [...apps].sort((a, b) => categories.findIndex((c) => c.id === a.category) - categories.findIndex((c) => c.id === b.category));
   const title = (id: string) => apps.find((a) => a.id === id)?.title;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t("Good morning, {name}") : hour < 18 ? t("Good afternoon, {name}") : t("Good evening, {name}");
+  const member = me.account?.displayName || me.principalId;
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
       <header className="grid gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">{greeting.replace("{name}", me.principalId)}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{greeting.replace("{name}", member)}</h1>
         <Button onClick={palette} className="h-10 w-full max-w-2xl justify-start gap-2 px-3 font-normal text-muted hover:text-foreground">
           <Search className="size-4" /><span>{t("Search records, applications and commands…")}</span><kbd className="ml-auto text-xs">⌘K</kbd>
         </Button>
@@ -75,22 +77,14 @@ export function Home() {
         </div>
       </div>
 
-      {business.length > 0 && (
+      {ordered.length > 0 && (
         <div role="region" aria-labelledby="home-apps">
           <div className="mb-2 flex items-center justify-between">
-            <h2 id="home-apps" className="text-xs font-semibold uppercase tracking-wide text-muted">{categories[0]!.label()}</h2>
+            <h2 id="home-apps" className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Applications")}</h2>
             <Button variant="link" size="sm" onClick={() => open({ view: "portal" })}>{t("All applications")}<ArrowRight /></Button>
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
-            {business.map((a) => <ApplicationTile key={a.id} app={a} role={me.apps.find((e) => e.id === a.id)?.role} />)}
-          </div>
-        </div>
-      )}
-      {tools.length > 0 && (
-        <div role="region" aria-labelledby="home-tools">
-          <h2 id="home-tools" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("Platform tools")}</h2>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-1">
-            {tools.map((a) => <ApplicationTile key={a.id} app={a} compact />)}
+            {ordered.map((a) => <ApplicationTile key={a.id} app={a} role={me.apps.find((e) => e.id === a.id)?.role} />)}
           </div>
         </div>
       )}

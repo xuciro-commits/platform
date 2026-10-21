@@ -8,7 +8,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 
 ## 读什么
 
-**[ADR-0062](docs/ADR/0062-platform-consolidation.md)（整个项目的收敛范围、文档分工与现行主题入口）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ [Intent](docs/Intent.md)（宗旨）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。**
+**[ADR 索引](docs/ADR/README.md)（64 份 ADR，一行一份，标了现行/局部取代/历史；先在这里找，再读那一份）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ [Intent](docs/Intent.md)（宗旨）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。**
 
 应用构建方向与不可动的边界见 [ADR-0038](docs/ADR/0038-build-the-capability-to-build.md)；四层包见 ADR-0057，第一次真实交付见 ADR-0060。ADR 中的历史实施顺序不代替当前 WorkQueue。
 
@@ -30,7 +30,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 5. **租户扩展只走受控路径**：受控定义、隔离编译/执行与版本化制品（ADR-0013），不在宿主直接执行租户脚本。
 6. **最简代码。** 不保留永久重复路径或临时垫片（[ADR-0039 §1.5](docs/ADR/0039-business-transaction.md) 的档位是**替换不是增量**，一个语义只有一个实现）；替代旧路径时删除旧路径及其文档。
 7. **双语文案。** 产品界面文字英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web `t()` + 包内 `i18n.ts`。业务数据不翻译。
-8. **文档各司其职，只写现状。** Intent 管宗旨；Platform 管架构与能力摘要；ADR 管决策与"As built"边界（合并更新，不追加日志）；WorkQueue 管顺序（完成即移除）；Testing 管检查方法；Apps 管可执行用法。不新增总结文档、第二队列或检查点日记。被取代的 ADR 在状态行写明被谁取代。
+8. **文档各司其职，只写现状；`make budget` 守总量。** Intent 管宗旨；Platform 管架构与能力摘要；ADR 管决策与"As built"边界（合并更新，不追加日志）；WorkQueue 管顺序（完成即移除）；Testing 管检查方法；Apps 管可执行用法。不新增总结文档、第二队列或检查点日记。被取代的 ADR 在状态行写明被谁取代。
 9. **ADR 按主题和取代范围判断现行决定**：先看状态行与明确的取代说明；同一问题、同一适用范围发生冲突时，以较新的决定为准，不能用更大的编号撤销无关保证。内核规范、历史读取与已接受运行保证继续有效；[ADR-0038 §9 的 16 条边界](docs/ADR/0038-build-the-capability-to-build.md#9-不可动的边界)**优先于任何"顺手优化"**。
 10. **提交信息**单句祈使句，注明 ADR/工作号。提交、推送、部署遵循已有授权。
 

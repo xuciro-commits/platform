@@ -5,7 +5,7 @@ import { useHost } from "@platform/app";
 import { Button, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
 import { Star } from "lucide-react";
 import { useMemo, useState } from "react";
-import { categories, projections, type Projection } from "./registry";
+import { categories } from "./registry";
 
 /** One application tile: icon, title, description, the member's role in it, and a star. */
 export function ApplicationTile({ app, role, compact = false }: { app: PlatformApplication; role?: string; compact?: boolean }) {
@@ -30,29 +30,21 @@ export function ApplicationTile({ app, role, compact = false }: { app: PlatformA
   );
 }
 
-export function ApplicationsPortal({ projection }: { projection?: Projection }) {
+export function ApplicationsPortal() {
   const { applications, favorites } = useWorkspace();
   const { me } = useHost();
   const [query, setQuery] = useState("");
-  const [only, setOnly] = useState<string>(projection ?? "all");
-  const lead: readonly string[] | undefined = projections.find((p) => p.id === only)?.categories;
   const apps = useMemo(() => {
     const text = query.trim().toLowerCase();
-    return (applications?.apps ?? []).filter(a => (!lead || lead.includes(a.category)) && (!text || `${a.title} ${a.description ?? ""} ${a.id}`.toLowerCase().includes(text)));
-  }, [applications?.apps, query, only]);
-  const ordered = categories.filter(category => !lead || lead.includes(category.id));
+    return (applications?.apps ?? []).filter(a => !text || `${a.title} ${a.description ?? ""} ${a.id}`.toLowerCase().includes(text));
+  }, [applications?.apps, query]);
   const starred = apps.filter(app => favorites.includes(app.id));
   const role = (id: string) => me.apps.find((e) => e.id === id)?.role;
   return (
     <>
       <PageHeader title={t("Applications")} help={t("Every application you may open in {tenant}: the ones your organisation runs, and the platform's own tools your role allows.", { tenant: me.tenantId })} />
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4">
         <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Find an application…")} aria-label={t("Find an application…")} className="w-72" />
-        <div className="flex items-center gap-1 text-xs">
-          {[{ id: "all", title: () => t("All") }, ...projections].map((p) => (
-            <Button key={p.id} size="sm" variant={only === p.id ? "primary" : "ghost"} onClick={() => setOnly(p.id)}>{p.title()}</Button>
-          ))}
-        </div>
       </div>
       {starred.length > 0 && !query && (
         <div className="mb-5">
@@ -62,7 +54,7 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
           </div>
         </div>
       )}
-      {ordered.map((category) => {
+      {categories.map((category) => {
         const inCategory = apps.filter((a) => a.category === category.id);
         if (inCategory.length === 0) return null;
         return (

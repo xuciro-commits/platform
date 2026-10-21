@@ -96,7 +96,14 @@ setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright �
 ## check - 提交前检查（数分钟内完成，无浏览器，无容器）
 
 .PHONY: check
-check: check-go check-web check-local ## 执行宿主、边界、Web 类型及本地环境选择检查
+check: check-go check-web check-budget check-local ## 执行宿主、边界、Web 类型、复杂度预算及本地环境选择检查
+
+.PHONY: budget
+budget: ## 复杂度预算：入口、菜单、文档与最大文件的数字只减不增（ADR-0064 §9）
+	node scripts/budget.mjs $(if $(UPDATE),--update)
+
+.PHONY: check-budget
+check-budget: budget
 
 .PHONY: check-local
 check-local: ## 检查本地运行模式保留与基础服务启动，不操作实际容器

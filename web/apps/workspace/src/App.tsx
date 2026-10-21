@@ -191,9 +191,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }
   if (!host || !apps || !ready || !metadataReady) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
-  // The portal (ADR-0018 §3.2): every application this member may open, by
-  // category; and the projections they may switch between. Both only group
-  // what the host already allowed.
+  // The portal (ADR-0018 §3.2): every application this member may open, grouped
+  // by category. It only groups what the host already allowed.
   const portal = all.map(portalEntry);
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);

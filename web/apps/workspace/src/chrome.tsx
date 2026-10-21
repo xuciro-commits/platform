@@ -15,8 +15,6 @@ import { ApplicationsPortal } from "./shell/Applications";
 import { Home } from "./shell/Home";
 import { ObjectExplorer } from "./shell/Explorer";
 import { Lineage } from "./shell/Lineage";
-import type { Projection } from "./shell/registry";
-import { projectionOfSurface } from "./shell/legacy";
 
 type Notification = Api.Notification;
 type Request = Api.ApprovalRequest;
@@ -286,7 +284,7 @@ export const chromeViews = (apps: () => AppUI[], definitions: () => Definition[]
   { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
   { id: "home", title: () => t("Home"), render: () => <Home /> },
-  { id: "portal", title: () => t("Applications"), render: (p) => <ApplicationsPortal projection={(p.workspace as Projection | undefined) ?? projectionOfSurface(p.surface)} /> },
+  { id: "portal", title: () => t("Applications"), render: () => <ApplicationsPortal /> },
   { id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> },
   { id: "observations", title: () => t("Observations"), render: p => <Observations app={p.app} name={p.name} record={p.record} /> },
   { id: "lineage", title: () => t("Lineage"), render: (p) => <Lineage ref={p.ref} /> },

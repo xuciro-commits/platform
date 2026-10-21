@@ -1,7 +1,6 @@
 // Old entry points (ADR-0018 §6): routes written before the shell had an
 // Applications portal still open. They are decoded here, never produced.
 import type { Route } from "@platform/ui";
-import type { Projection } from "./registry";
 
 /** The views the shell owns; opening one keeps the current application. */
 export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage", "observations"];
@@ -11,7 +10,7 @@ const keep = (params: Params | undefined, ...names: string[]): Params => Object.
 
 /** Routes that no longer exist, redirected to their replacement (ADR-0018 §6; ADR-0047 for the builder's). */
 const retired: Record<string, Route | ((params?: Params) => Route)> = {
-  "tenant-overview": { view: "portal", params: { workspace: "admin" } },
+  "tenant-overview": { view: "portal" },
   launcher: { view: "portal" },
   // Builder views (ADR-0047): the Application editor became the Workshop module, pages open inside it,
   // the process editor is the object type, workflows are flows, candidate tests moved into the editors.
@@ -37,10 +36,6 @@ export const legacyRoute = (route: Route): Route | undefined => {
   const target = Object.hasOwn(retired, route.view) ? retired[route.view] : undefined;
   return typeof target === "function" ? target(route.params) : target;
 };
-
-/** Only incoming links carry the retired surface projection. */
-export const projectionOfSurface = (surface?: string): Projection | undefined =>
-  surface === "studio" || surface === "developer" ? "build" : surface === "tenant" ? "admin" : surface === "work" ? "operations" : undefined;
 
 /** Decode old links and saved tabs before any view is mounted. The two old
  * `flow` views named different record types: never guess from an ID's format.
