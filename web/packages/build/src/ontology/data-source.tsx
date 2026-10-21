@@ -119,7 +119,7 @@ export function DataSourceEditor({ id }: { id: string }) {
             {field && <div className="grid gap-1 text-xs"><PropertyList columns={3} items={[
               [t("Field type"), t(field.type)], [t("Required"), field.required ? t("Yes") : t("No")],
               [t("Reference object"), field.ref ? entities.find(entity => entity.type === field.ref)?.title ?? field.ref : t("None")],
-            ]} />{field.choices?.length ? <p className="text-muted">{t("Allowed values")}: {field.choices.join(" · ")}</p> : null}
+            ]} />{field.constraints && <div className="grid gap-1"><strong>{t("Field constraints")}</strong><PropertyList columns={3} items={Object.entries(field.constraints).map(([name,value])=>[name,typeof value==="boolean"?(value?t("Yes"):t("No")):String(value)])} /></div>}{field.range && <p className="text-muted">{t("Date range")}: {field.range.end} · {field.range.inclusive?t("Inclusive"):t("Exclusive")}</p>}{field.choices?.length ? <p className="text-muted">{t("Allowed values")}: {field.choices.join(" · ")}</p> : null}
               {(field.stereotypes?.length || field.stereotype) && <p className="text-muted">{t("Enterprise element types")}: {(field.stereotypes ?? [field.stereotype!]).join(" · ")}</p>}
               {constraints.length > 0 && <ul className="grid gap-1" aria-label={t("Business constraints")}>{constraints.map(rule => <li key={rule.name}><span className="font-medium">{rule.name}</span> · {t(rule.kind)}{rule.scope ? ` · ${rule.scope}` : ""}{rule.message ? ` · ${rule.message}` : ""}</li>)}</ul>}
               {targetDraft && transfer && host.can("build.object.edit") && <Button size="sm" variant="ghost" className="w-fit" onClick={() => editTarget(m.to)}>{t("Edit field definition")}</Button>}

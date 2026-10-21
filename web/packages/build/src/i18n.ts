@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Field constraints": "字段约束",
+  "Date range": "日期范围",
+  "Inclusive": "包含边界",
+  "Exclusive": "不含边界",
   "Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Retrying a pull keeps its previous row results. A new pull can update records even when the source content is unchanged.": "按周期或按需从 JSON/CSV 接口、OData 实体集或数据库表拉取行并写入一个对象。重试同一次拉取保留原行结果；新一次拉取即使来源内容未变，也可以更新记录。",
   "Step \"{step}\" refers to missing result \"{ref}\".": "步骤“{step}”引用的结果“{ref}”不存在。",
   "Step \"{step}\" uses \"{ref}\" before that result is available in this scope.": "步骤“{step}”使用了“{ref}”，但该结果在此范围内尚不可用。",

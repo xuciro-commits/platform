@@ -79,7 +79,10 @@ for (const fixture of [
         await page.locator(`[data-structured-editor^="build.pipeline:${pipe}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
         await expect.poll(async () => (await record("build.pipeline", pipe)).last).toMatchObject({ rows: 3, written: 1, quarantined: 2 });
         expect((await record("build.datasetversion", `${clean}@1`)).data).toEqual([{ id: "IN-A", sku: "A", qty: 3 }]);
-        await expect(page.getByText(/3 rows · 1 written · 2 quarantined/)).toBeVisible();
+        const lastRun = page.locator(`[data-structured-editor^="build.pipeline:${pipe}:"] section`).filter({ has: page.getByRole("heading", { name: "Last run", exact: true }) });
+        await expect(lastRun.getByRole("term").filter({ hasText: /^Rows$/ }).locator("..").getByRole("definition")).toHaveText("3");
+        await expect(lastRun.getByRole("term").filter({ hasText: /^Written$/ }).locator("..").getByRole("definition")).toHaveText("1");
+        await expect(lastRun.getByRole("term").filter({ hasText: /^Quarantined$/ }).locator("..").getByRole("definition")).toHaveText("2");
         if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("pipeline.png"), fullPage: true });
         await builder.open(page, `/dataset?id=${clean}`);
         await page.locator(`[data-structured-editor^="build.dataset:${clean}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
@@ -152,7 +155,8 @@ for (const fixture of [
         await editor.release(async () => {
           await expect(page.getByRole("list", { name: "Joint selection", exact: true })).toContainText(receiving.id);
           await expect(page.getByRole("list", { name: "Joint selection", exact: true })).toContainText(flowID);
-          candidate = await page.getByText("Saved candidate:", { exact: false }).locator("code").innerText();
+          await page.getByRole("button", { name: "Candidate identity", exact: true }).click();
+          candidate = await page.getByRole("term").filter({ hasText: /^Saved candidate$/ }).locator("..").getByRole("definition").locator("code").innerText();
           const saved = await request.get(`/v1/releases/candidates/${candidate}`, { headers });
           expect(saved.ok()).toBe(true);
           const review = await saved.json();
@@ -165,6 +169,8 @@ for (const fixture of [
 
         const context = await browser.newContext({ baseURL: fixture.baseURL, locale: "en-US" });
         const member = await (await request.get("/v1/me", { headers: operator.headers })).json();
+        const hadIntegrator = member.profile.roles.build === "integrator" || member.profile.grants?.some((grant: { app: string; role: string }) => grant.app === "build" && grant.role === "integrator");
+        let addedIntegrator = false;
         try {
           // An ordinary member receives the imported row in the released application, without builder access.
           const business = await context.newPage();
@@ -262,7 +268,10 @@ for (const fixture of [
           if (process.env.PLATFORM_SCREENSHOTS) await pickerRuntime.screenshot({ path: info.outputPath("interface-page-record.png"), fullPage: true });
 
           // Grant only the integration role; its delivery view must still redact host effect payloads.
-          await builder.decide("platform.member.grant", { type: "platform.member", id: member.principalId }, { app: "build", role: "integrator" }, "platform");
+          if (!hadIntegrator) {
+            await builder.decide("platform.member.grant", { type: "platform.member", id: member.principalId }, { app: "build", role: "integrator" }, "platform");
+            addedIntegrator = true;
+          }
           const integration = await context.newPage();
           await operator.open(integration, "/integration-health");
           await expect(integration.getByRole("button", { name: /Writeback · Receipt delivery/ })).toBeVisible();
@@ -277,7 +286,7 @@ for (const fixture of [
           if (process.env.PLATFORM_SCREENSHOTS) await integration.screenshot({ path: info.outputPath("integrator.png"), fullPage: true });
         } finally {
           await context.close();
-          await builder.decide("platform.member.grant", { type: "platform.member", id: member.principalId }, { app: "build", role: member.profile.roles.build }, "platform");
+          if (addedIntegrator) await builder.decide("platform.member.revoke", { type: "platform.member", id: member.principalId }, { app: "build", role: "integrator" }, "platform");
         }
       } finally { sink.closeAllConnections(); sink.close(); }
     });
