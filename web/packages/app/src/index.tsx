@@ -106,9 +106,27 @@ export type Host = {
 export const HostContext = createContext<Host | null>(null);
 
 export function useHost(): Host {
-  const host = useContext(HostContext),inputs=useInputDrafts();
+  const host = useContext(HostContext);
+  const drafts = useInputDrafts();
   if (!host) throw new Error("useHost outside the workspace");
-  return useMemo(()=>({...host,decide:async(schema,target,payload,options)=>{if(inputs?.invalid&&!options?.originalKey){const message=t("Correct the input drafts before submitting.");options?.onRefused?.(message);if(!options?.onRefused)notify.error(message);return false;}inputs?.reject();inputs?.pending(1);try{return await host.decide(schema,target,payload,inputs&&!options?.onRefused?{...options,onRefused:inputs.reject}:options);}finally{inputs?.pending(-1);}}}),[host,inputs?.invalid,inputs?.pending]);
+  // The draft scope is read at submit time, never used as a dependency: keeping it
+  // in the memo's deps rebuilt this object — and so re-rendered every consumer of
+  // useHost — on each keystroke anywhere in the workspace.
+  const current = useRef(drafts);
+  current.current = drafts;
+  return useMemo(() => ({ ...host, decide: async (schema, target, payload, options) => {
+    const inputs = current.current;
+    if (inputs?.invalid && !options?.originalKey) {
+      const message = t("Correct the input drafts before submitting.");
+      options?.onRefused?.(message);
+      if (!options?.onRefused) notify.error(message);
+      return false;
+    }
+    inputs?.reject();
+    inputs?.pending(1);
+    try { return await host.decide(schema, target, payload, inputs && !options?.onRefused ? { ...options, onRefused: inputs.reject } : options); }
+    finally { inputs?.pending(-1); }
+  } }), [host]);
 }
 
 /** A read of the host (`/v1/...`) for the signed-in member, refreshed while shown. */
