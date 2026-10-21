@@ -19,6 +19,8 @@
 
 X6 有用户可见收益，优先；X2–X4 是结构性减量主体；X8 是既有承诺，不能被新块挤掉。
 
+**拆文件的记账规则（2026-10-20）**：`--update` 每次把上限写成当时实测值，所以 X2/X3 这类"按职责切文件"的改动当前**没有行数余量**——新增模块的 import/export 行必须由同批删掉的代码抵掉（例如切开后留在原文件里的重复导入、被合并掉的辅助函数）。做不到就说明这次只是搬家，不算减量。
+
 **本轮预算数字（2026-10-20）**：`code.tsProduction` 56,974 → 56,795 行，`code.largestTs` 3,974 → 3,872 行（`build/i18n.ts`），入口三项同步下降（见下条）。上限已用 `--update` 按下调后的实测值写入：X1 新增的 `extendApp` 由同批删掉的词条抵掉，没有为它上调任何一项。
 
 **X1 已移出（2026-10-20）**：`data-connection` 与 `agents` 的身份只在 `web/packages/platform/src/index.tsx` 各声明一次；`web/packages/build/src/index.tsx` 改用 `extendApp(id, {serves, for, home, views, nav, opens})`，只追加视图与菜单。`@platform/app` 的 `extendApp` 与 `defineApp` 共用同一层视图作用域（`scopedViews`），扩展的视图不会绕开输入草稿与提交守卫。`composeApplications` 按贡献顺序分组：扩展不成门户入口，找不到宿主的扩展被丢弃而不是凭空造一个应用（两条都有单测）。**行为保持**靠三件事：`serves`（`build`）、逐视图的 `referenceContext` 包装、以及分组顺序仍按包加载次序而非「宿主优先」，因此构建者的菜单顺序与默认首页不变。`ui.definitions` 21 → 19，`ui.navItems` 132 → 118，`ui.views` 105 → 94，`ui.apps` 仍为 18；`pnpm -r typecheck`、`catalog:check`、`node scripts/budget.mjs` 通过，ui/workspace/build/catalog/kernel/platform/apps/catalog 测试全绿。`packages/app` 的用例需要 Go 编译的规则 WASM，本沙箱无 Go，未运行（见下条环境限制）。
