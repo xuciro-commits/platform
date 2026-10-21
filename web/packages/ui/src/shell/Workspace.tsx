@@ -1,21 +1,20 @@
 import {useInputDrafts} from "../fields/draft";
 import {useTheme} from "../themes/theme";
-import { Command } from "cmdk";
-import { DockviewDefaultTab, DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SerializedDockview } from "dockview-react";
-import { Bell, ChevronDown, Clock, Ellipsis, Grid2x2, Home as HomeIcon, LayoutGrid, PanelLeft, Search, Sparkles, Star } from "lucide-react";
-import { ContextMenu, DropdownMenu, Menubar } from "radix-ui";
+import { DockviewReact, themeLight,themeDark, type DockviewApi, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SerializedDockview } from "dockview-react";
+import { Bell, Clock, Ellipsis, Grid2x2, Home as HomeIcon, PanelLeft, Search, Sparkles, Star } from "lucide-react";
+import { DropdownMenu, Menubar } from "radix-ui";
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
 import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
-import { language, languages, setLanguage, t } from "../i18n";
-import { Dialog } from "../primitives/dialog";
+import { setLanguage, t } from "../i18n";
 import { Sheet } from "../primitives/sheet";
 import { Button } from "../primitives/button";
 import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
-import { resolveLayout, rewriteLayout } from "./WorkspaceLayout";
-import { NavigationItems, navigationLinks, type NavSection } from "./Navigation";
+import { resolveLayout, rewriteLayout } from "./WorkspaceSupport";
+import { NavigationItems, type NavSection } from "./Navigation";
+import { AppMenu, CommandPalette, RailList, SessionMenu, TabHeader, UnsavedChanges, menuItem, menuPanel, type PanelCommand } from "./WorkspaceSupport";
 export type { NavSection } from "./Navigation";
 
 export type View = {
@@ -503,24 +502,25 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail,
   }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, byId]);
 
-  const tab = useCallback((props: IDockviewPanelHeaderProps) => {
-    const id = props.api.id;
-    const items: { label: string; run: () => void; separator?: boolean; disabled?: boolean }[] = [
-      { label: t("Close"), run: () => closePanel(id) },
-      { label: t("Close others"), run: () => closeOthers(id) },
-      { label: t("Close to the right"), run: () => closeRight(id) },
-      { label: t("Close all"), run: closeAll },
-      { label: t("Open beside"), run: () => beside(id), separator: true, disabled: !canBeside(id) },
-      { label: t("Move to new window"), run: () => popout(id) },
-    ];
-    return <ContextMenu.Root>
-      <ContextMenu.Trigger asChild><div className="flex h-full"><DockviewDefaultTab {...props} closeActionOverride={() => closePanel(id)} /></div></ContextMenu.Trigger>
-      <ContextMenu.Portal><ContextMenu.Content className={menuPanel}>
-        {items.map((item) => <div key={item.label}>{item.separator && <ContextMenu.Separator className="my-1 h-px bg-border" />}
-          <ContextMenu.Item onSelect={item.run} disabled={item.disabled} className={menuItem}>{item.label}</ContextMenu.Item></div>)}
-      </ContextMenu.Content></ContextMenu.Portal>
-    </ContextMenu.Root>;
-  }, [closePanel, closeOthers, closeRight, closeAll, beside, popout, compact]);
+  /** One list of tab commands: the tab's own menu and the Window menu read the same source (ADR-0018 D1). */
+  const panelCommands = useCallback((id?: string): PanelCommand[] => [
+    { label: t("Close"), shortcut: "⌘W", run: () => closePanel(id!), disabled: !id },
+    { label: t("Close others"), run: () => closeOthers(id!), disabled: !id || openTabs.length < 2 },
+    { label: t("Close to the right"), run: () => closeRight(id!), disabled: !id },
+    { label: t("Close all"), run: closeAll, disabled: !openTabs.length },
+    { label: t("Open beside"), run: () => beside(id!), disabled: !id || !canBeside(id) },
+    { label: t("Move to new window"), run: () => popout(id!), disabled: !id },
+  ], [closePanel, closeOthers, closeRight, closeAll, beside, popout, openTabs.length, compact]);
+  const tab = useCallback((props: IDockviewPanelHeaderProps) => <TabHeader tab={props} commands={panelCommands(props.api.id)} onClose={() => closePanel(props.api.id)} />, [panelCommands, closePanel]);
+  // A closed tab keeps the draft registry; keeping editing returns to the tab that is still there.
+  const keepEditing = useCallback(() => { const id = pending?.panels[0]; setPending(undefined); if (id) dock.current?.getPanel(id)?.api.setActive(); }, [pending]);
+  const discardPending = useCallback(() => {
+    if (!pending) return;
+    const own = (id: string) => [...(drafts.current.get(id)?.entries() ?? [])].filter(([key]) => pending.owner === undefined || key === pending.owner);
+    if (pending.panels.some((id) => own(id).some(([, entry]) => entry.busy))) { toast.error(t("An operation is in progress. Wait for its result before leaving.")); return; }
+    for (const id of pending.panels) for (const [, entry] of own(id)) entry.discard();
+    const run = pending.run; setPending(undefined); run();
+  }, [pending]);
 
   const components = useMemo(() => ({
     view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
@@ -599,7 +599,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     return () => { removeEventListener("keydown", onKey); removeEventListener("hashchange", onHash); };
   }, [readLink, closePanel, mobileNavOpen]);
 
-  const activePanel = () => dock.current?.activePanel;
   const builtInMenus: Menu[] = [
     { label: t("View"), items: [
       { label: t("Command palette"), shortcut: "⌘K", onSelect: () => setPaletteOpen(true) },
@@ -612,12 +611,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       ...([["default", t("Standard look")], ["industrial", t("Industrial look")]] as const).map(([skin, label]) => ({ label, shortcut: appearance.skin === skin ? "✓" : undefined, onSelect: () => appearance.setSkin(skin) })),
     ] },
     { label: t("Window"), items: [
-      { label: t("Open beside"), disabled: !canBeside(active), onSelect: () => { const p = activePanel(); if (p) beside(p.id); } },
-      { label: t("Move to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id); } },
-      { label: t("Close"), shortcut: "⌘W", disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(p.id); } },
-      { label: t("Close others"), disabled: openTabs.length < 2, onSelect: () => { const p = activePanel(); if (p) closeOthers(p.id); } },
-      { label: t("Close all"), disabled: !openTabs.length, onSelect: closeAll },
-      ...openTabs.map((t) => ({ label: t.title, onSelect: () => dock.current?.getPanel(t.key)?.api.setActive() })),
+      ...panelCommands(active).map(({ label, disabled, shortcut, run }) => ({ label, disabled, shortcut, onSelect: run })),
+      ...openTabs.map((entry) => ({ label: entry.title, onSelect: () => dock.current?.getPanel(entry.key)?.api.setActive() })),
     ] },
   ];
 
@@ -751,185 +746,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </nav>
         )}
       </div>
-      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
-        overlayClassName="fixed inset-0 z-40 bg-black/30"
-        contentClassName="fixed left-1/2 top-[15%] z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-border bg-surface shadow-2xl">
-        <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search records, go to, open, run…")} className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
-        <Command.List className="max-h-80 overflow-auto p-1">
-          <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>
-          {found.length > 0 && (
-            <Command.Group heading={t("Records")} className={paletteGroup}>
-              {found.map((hit) => (
-                <Command.Item key={hit.id} value={`record ${typed} ${hit.label} ${hit.id}`} className={paletteItem}
-                  onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
-              ))}
-            </Command.Group>
-          )}
-          {applications && applications.apps.length > 0 && (
-            <Command.Group heading={t("Applications")} className={paletteGroup}>
-              {applications.apps.map((a) => (
-                <Command.Item key={a.id} value={`app ${a.title} ${applications.categories.find((c) => c.id === a.category)?.label ?? ""}`} className={paletteItem}
-                  onSelect={() => { applications.onSelect(a.id); setPaletteOpen(false); }}>{a.icon}{a.title}
-                  <span className="ml-auto text-xs text-muted">{applications.categories.find((c) => c.id === a.category)?.label}</span></Command.Item>
-              ))}
-            </Command.Group>
-          )}
-
-          {nav.map((section) => (
-            <Command.Group key={section.label} heading={section.label} className={paletteGroup}>
-              {navigationLinks(section.items).map((item) => (
-                <Command.Item key={routeKey(item.route)} value={`${section.label} ${item.label}`} className={paletteItem}
-                  onSelect={() => { open(item.route); setPaletteOpen(false); }}>{item.icon}{item.label}</Command.Item>
-              ))}
-            </Command.Group>
-          ))}
-          {openTabs.length > 0 && (
-            <Command.Group heading={t("Open tabs")} className={paletteGroup}>
-              {openTabs.map((tab) => (
-                <Command.Item key={tab.key} value={`tab ${tab.title} ${tab.key}`} className={paletteItem}
-                  onSelect={() => { dock.current?.getPanel(tab.key)?.api.setActive(); setPaletteOpen(false); }}>{tab.title}</Command.Item>
-              ))}
-            </Command.Group>
-          )}
-          {commands.length > 0 && (
-            <Command.Group heading={t("Commands")} className={paletteGroup}>
-              {commands.map((c) => (
-                <Command.Item key={c.id} value={`${c.group ?? ""} ${c.label}`} className={paletteItem}
-                  onSelect={() => { setPaletteOpen(false); c.run(); }}>
-                  {c.label}{c.shortcut && <span className="ml-auto text-xs text-muted">{c.shortcut}</span>}
-                </Command.Item>
-              ))}
-            </Command.Group>
-          )}
-        </Command.List>
-      </Command.Dialog>
-      <Dialog open={!!pending} title={t("Unsaved changes")} onOpenChange={(open) => {
-        if (!open) { const id = pending?.panels[0]; setPending(undefined); if (id) dock.current?.getPanel(id)?.api.setActive(); }
-      }}>
-        <div className="grid gap-3 text-sm">
-          <p>{t("Save your work in the editor, or discard the changes to continue.")}</p>
-          <ul className="list-inside list-disc text-muted">{pending?.panels.map((id) => <li key={id}>{dock.current?.getPanel(id)?.title ?? id}</li>)}</ul>
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => { const id = pending?.panels[0]; setPending(undefined); if (id) dock.current?.getPanel(id)?.api.setActive(); }}>{t("Keep editing")}</Button>
-            <Button variant="danger" onClick={() => {
-              if (!pending) return;
-              if (pending.panels.some((id) => [...(drafts.current.get(id)?.entries() ?? [])].some(([key, owner]) => (pending.owner === undefined || key === pending.owner) && owner.busy))) {
-                toast.error(t("An operation is in progress. Wait for its result before leaving.")); return;
-              }
-              for (const id of pending.panels) for (const [key, owner] of [...(drafts.current.get(id)?.entries() ?? [])]) if (pending.owner === undefined || key === pending.owner) owner.discard();
-              const run = pending.run; setPending(undefined); run();
-            }}>{t("Discard changes")}</Button>
-          </div>
-        </div>
-      </Dialog>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} typed={typed} onTypedChange={setTyped} found={found}
+        applications={applications} nav={nav} tabs={openTabs} commands={commands} onOpen={open}
+        onFocusTab={(key) => dock.current?.getPanel(key)?.api.setActive()} />
+      <UnsavedChanges panels={pending?.panels} title={(id) => dock.current?.getPanel(id)?.title ?? id} onKeep={keepEditing} onDiscard={discardPending} />
       <Toaster position="bottom-right" toastOptions={{ className: "!rounded-md !border-border !bg-surface !text-foreground !text-sm" }} />
     </WorkspaceContext.Provider>
   );
 }
-
-/** The application switcher in the header: the portal's applications by category, the current one marked. */
-function AppMenu({ applications, product, icon }: { applications: Applications; product: string; icon?: ReactNode }) {
-  const current = applications.apps.find((a) => a.id === applications.current);
-  const groups = applications.categories.map(category => ({ ...category, apps: applications.apps.filter(app => app.category === category.id) })).filter(group => group.apps.length);
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={t("Switch application")} className="flex h-7 min-w-0 max-w-64 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover max-sm:max-w-32 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted">
-        {current?.icon ?? icon ?? <LayoutGrid />}<span className="truncate">{product}</span><ChevronDown className="size-3.5 shrink-0 text-muted" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={4} collisionPadding={8} style={{ width: `min(calc(100vw - 16px), ${Math.min(4, groups.length) * 15}rem)` }} className={cn(menuPanel, "max-h-[70dvh] overflow-auto")}>
-          <DropdownMenu.RadioGroup value={applications.current ?? ""} onValueChange={applications.onSelect} className={cn("grid grid-cols-1 gap-3 p-1", groups.length > 1 && "sm:grid-cols-2", groups.length > 2 && "lg:grid-cols-3", groups.length > 3 && "xl:grid-cols-4")}>
-            {groups.map((category) => {
-              return <div key={category.id}>
-                <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{category.label}</DropdownMenu.Label>
-                {category.apps.map((a) => (
-                  <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "h-auto min-h-8 gap-2 py-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0")}>
-                    <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{a.icon}<span className="min-w-0 break-words">{a.title}</span>
-                  </DropdownMenu.RadioItem>
-                ))}
-              </div>;
-            })}
-          </DropdownMenu.RadioGroup>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-/** A rail entry that opens a list: Recent, Favorites. */
-function RailList({ label, icon, items, empty }: { label: string; icon: ReactNode; empty: string; items: { id: string; label: string; detail?: string; icon?: ReactNode; run: () => void }[] }) {
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger title={label} aria-label={label}
-        className="grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground data-[state=open]:bg-row-hover data-[state=open]:text-foreground [&_svg]:size-4">
-        {icon}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content side="right" align="start" sideOffset={6} className={cn(menuPanel, "max-h-[70vh] min-w-56 max-w-80 overflow-auto")}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{label}</DropdownMenu.Label>
-          {items.length === 0 && <p className="px-2 py-1.5 text-xs text-muted">{empty}</p>}
-          {items.map((item) => (
-            <DropdownMenu.Item key={item.id} onSelect={item.run} className={cn(menuItem, "gap-2 pl-2 [&_svg]:size-3.5")}>
-              {item.icon}<span className="truncate">{item.label}</span>{item.detail && <span className="ml-auto truncate pl-3 text-xs text-muted">{item.detail}</span>}
-            </DropdownMenu.Item>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-function SessionMenu({ session, onLanguageSelect, compact = false }: { session: Session; onLanguageSelect: (id: string) => void; compact?: boolean }) {
-  const shown = session.name || session.principal;
-  const avatar = <span className="grid size-5 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-    {shown.slice(0, 1).toUpperCase()}
-  </span>;
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`} title={compact ? `${session.principal} · ${session.tenant}` : undefined}
-        className={compact ? "grid size-9 place-items-center rounded-md hover:bg-row-hover data-[state=open]:bg-row-hover"
-          : "flex h-7 shrink-0 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover"}>
-        {avatar}
-        {!compact && <>
-          <span className="text-left leading-tight max-sm:hidden">
-            <span className="block text-sm">{shown}</span>
-            <span className="block text-xs text-muted">{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
-          </span>
-          <ChevronDown className="size-3.5 text-muted" />
-        </>}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content side={compact ? "right" : "bottom"} align="end" sideOffset={4} className={menuPanel}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs">
-            <span className="block text-sm text-foreground">{shown}</span>
-            <span className="block text-muted">{session.name ? `${session.principal} · ` : ""}{session.tenant}{session.detail ? ` · ${session.detail}` : ""}</span>
-          </DropdownMenu.Label>
-          {session.onAccount && <DropdownMenu.Item className={menuItem} onSelect={() => session.onAccount?.()}>{t("My account")}</DropdownMenu.Item>}
-          <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Switch tenant or identity")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
-            {session.options.map((o) => (
-              <DropdownMenu.RadioItem key={o.id} value={o.id} className={menuItem}>
-                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{o.label}
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
-          <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Language")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={language()} onValueChange={onLanguageSelect}>
-            {languages.map((l) => (
-              <DropdownMenu.RadioItem key={l.id} value={l.id} className={menuItem}>
-                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{l.name}
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-const menuPanel = "z-50 min-w-48 rounded-md border border-border bg-surface p-1 text-sm shadow-lg";
-const menuItem = "relative flex h-7 cursor-default select-none items-center rounded-sm pl-6 pr-2 outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-row-hover";
-const paletteGroup = "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted";
-const paletteItem = "flex h-8 cursor-default items-center gap-2 rounded-sm px-2 text-sm data-[selected=true]:bg-row-selected [&_svg]:size-3.5";

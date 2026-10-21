@@ -11,7 +11,7 @@
 | 块 | 目标 | 接受标准 | 起手证据 |
 |---|---|---|---|
 | **X2 构建者工作台分职责** | `web/packages/build/src/workshop/module-import/compile.ts` 882 行、`workshop/editor.tsx` 718 行混合解析、映射、诊断与渲染 | 编译与诊断可单测，不经 React；编辑器的草稿/撤销仍只有一份 | `compile.test.mjs` 已存在，可作回归基线 |
-| **X3 外壳与记录视图** | `ui/shell/Workspace.tsx` 935 行（Rail、页签、布局持久化、命令面板、未保存保护）；`ui/records/Records.tsx` 865 行 | 每个职责一个模块；`Workspace.test.tsx`（377 行）不改断言即通过 | 现有测试即 oracle |
+| **X3 记录视图分职责** | 外壳已收敛；余下 `ui/records/Records.tsx` 865 行仍混合实体描述、列表、详情、历史与任务 | 按现有领域模块边界切开，不新增转发层；`Records.test.tsx` 不改断言即通过 | 现有测试即 oracle |
 | **X4 宿主平铺包分组** | `capabilities/server` 423 个文件同层（10 万行） | 按协调职责分组（接受、记录、发布、运行、协议），先搬再改；`boundaries.sh` 与 `escapes.sh` 不变松 | `doc.go` 的组件地图即目标分组 |
 | **X6 死代码与死词条** | 本轮删 195 条无引用词条（40 条长词条 + 155 条短词条；口径：键内无引号、无 `{占位符}`、全仓无字面量，检索覆盖 `.go`/JSON/生成物/文档） | 删除前给出该词条的唯一可达路径或确认不可达 | 反例：`"{name}" mixes…` 因键内含引号被排除，`pageWidgetRegistry` 一类只被生成器读到的名字必须整仓检索 |
 | **X7 前端性能** | 首页排序已改预计算名次；其余热点：记录表全量重渲、`useRead` 轮询粒度、画布布局重算 | 有前后测量才声称改善，否则写"未测量" | `ui/records`、`graph/*/layout` |
