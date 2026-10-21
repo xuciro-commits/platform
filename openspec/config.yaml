@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  Language: zh-CN
+  All artifacts must be written in zh-CN.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Platform 是面向 FDE 与客户构建者的业务应用构建平台，参考应用用于验证能力。
+  先读 AGENTS.md、docs/Architecture.md 和 openspec/README.md，再读受影响模块的完整规范与代码。
+  规范按 kernel / runtime / platform / experience 四层组织，每个模块覆盖完整职责，不按小功能建目录。
+  contract/spec 与 vectors 是 K1–K9 的唯一语义来源；OpenSpec 只规定内核集成与演进边界。
+  当前约定在 openspec/specs；未实施变化在 openspec/changes；实施顺序只在 docs/WorkQueue.md。
+  Architecture 解释结构与实现位置，部署操作留在 deploy/local/README.md；不复制模块需求。
+  一项决策只改一个权威；新写持久接受后应用；原历史字节、当前权限与在途版本保留。
+  旧设计只从 Git 提炼仍成立的约束，必须核对当前实现，不把历史计划或模拟验证当作交付事实。
+
+rules:
+  proposal:
+    - 写清涉及的既有模块、可观察变化与范围；只有独立完整职责才增加模块。
+    - 文档整理不扩大业务施工范围，不恢复编号决策日志或第二份项目队列。
+  specs:
+    - 每项需求使用 SHALL 或 MUST 并提供具体 Scenario；正文用中文。
+    - 描述行为、不变量、兼容和拒绝条件；实现定位放独立的来源段，不把函数清单写成需求。
+    - 跨模块约束只在主责模块定义，其他模块链接引用；保留能力完整路径。
+    - 当前规范只写已经核对的约定，区分历史兼容、已实现能力和未验证的运行保证。
+  design:
+    - 写清责任归属、替代关系、数据与历史责任；避免另建执行器、存储或发布旁路。
+  tasks:
+    - 任务只分解本次已授权工作，完成才勾选；不复制 WorkQueue 的优先级和未来承诺。
+    - 按真实影响集中验证一次；文档只做规范、链接和差异检查，不增造证明实现的测试。

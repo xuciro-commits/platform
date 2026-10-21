@@ -16,6 +16,7 @@ GO ?= go
 PNPM ?= pnpm
 AIR ?= $(shell command -v air 2>/dev/null || printf '%s/bin/air' "$$($(GO) env GOPATH)")
 AIR_VERSION ?= v1.67.4
+OPENSPEC_VERSION := 1.14.3
 COMPOSE := docker compose -f deploy/local/compose.yaml
 INFRA := postgres rauthy rustfs webhook-sink
 SOLUTION ?= hospitality
@@ -94,6 +95,14 @@ setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright �
 	cd web && $(PNPM) --filter @platform/e2e exec playwright install chromium
 
 ## check - 提交前检查（数分钟内完成，无浏览器，无容器）
+
+.PHONY: openspec check-specs
+openspec: ## 调用固定版本的官方 OpenSpec CLI，例如 make openspec ARGS='list --specs'
+	OPENSPEC_TELEMETRY=0 npm exec --yes --package @fission-ai/openspec@$(OPENSPEC_VERSION) -- openspec $(ARGS)
+
+check-specs: ## 校验模块规范、活动变更及归档任务的 OpenSpec 格式
+	$(MAKE) openspec ARGS='validate --all --strict --no-interactive'
+	$(MAKE) openspec ARGS='validate --archived --strict --no-interactive'
 
 .PHONY: check
 check: check-go check-web check-local ## 执行宿主、边界、Web 类型及本地环境选择检查

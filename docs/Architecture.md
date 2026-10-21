@@ -1,6 +1,6 @@
 # 架构
 
-描述**当前真实存在的系统**：分层、模块、写入路径、数据归属与不可动的边界。这里只写代码里成立的事实；下一步做什么归 [WorkQueue](WorkQueue.md)，为什么做归 [Intent](Intent.md)，工作方式归 [AGENTS](../AGENTS.md)。实现以代码为准；自动检查、实际运行、使用体验和生产容量分别确认，不能互相代替。
+解释**当前真实存在的系统**：分层、模块、写入路径、数据归属与实现位置。稳定行为与不变量集中在 [OpenSpec 模块规范](../openspec/README.md)，内核精确语义仍归 [contract/spec](../contract/spec/README.md)。下一步做什么归 [WorkQueue](WorkQueue.md)，为什么做归 [Intent](Intent.md)，工作方式归 [AGENTS](../AGENTS.md)。发现代码与规范冲突时明确指出并修正；自动检查、实际运行、使用体验和生产容量分别确认，不能互相代替。
 
 ## 1. 分层
 
@@ -46,6 +46,8 @@ web/
 scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples
 docs/                Intent Architecture WorkQueue standards/uaf
+openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
+.agents/skills/      官方 OpenSpec 核心工作流（CLI 生成）
 ```
 
 内部模块按职责分工，不各自建立提交或执行入口：
@@ -113,32 +115,24 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 
 可视化和源码编辑同一份草稿，保留撤销、未应用输入和保存冲突；简单自动化不能表示的合法流程转到原 Flow 编辑器，不通过简化保存丢失高级字段。页面公共属性与检查使用现有 Widget 清单，专用检查器只保留真实的绑定和专业交互，不建立另一套 Schema 或画布。
 
-## 7. 归属规则
+## 7. 职责归属
 
 一个定义放在哪，由四个问题裁决：换一个行业是否仍成立；同行业转型后是否仍成立；是"必须如此"还是"若干实现之一"；谁有权写、谁有权发布、哪条不变量约束它、哪项能力执行它。
 
-- 应用只导入 `platformserver/platform`；跨应用只走 `protocols/`；客户端只用 `@platform/ui` 与 `@platform/app`。
-- 缺少能力时在归属方补齐，不在应用里自造表格、面板、审批、文件或外部调用。
-- 参考应用里的平台能力先迁回正确 owner，行业规则与界面才是退出对象。
-- 一个语义只有一个实现：规则求值、约束检查、授权判定、依赖解析各一份。
+应用公共表面是 `platformserver/platform`，跨应用耦合在 `protocols/`，客户端公共表面是 `@platform/ui` 与 `@platform/app`。宿主、平台应用与参考应用保留各自权威；共享声明和纯编译不另建执行入口。具体行为按下面的模块规范维护，不通过文件搬迁改变职责。
 
-## 8. 不可动的边界
+## 8. 规范导航
 
-改动前逐条核对；与任何"顺手优化"冲突时，以本节为准。
+详细约定只在主责模块定义，本文件保留导航。四层分类和全部十二个模块见 [规范目录](../openspec/README.md#层级与模块)。
 
-1. `contract/` 不含领域词汇；Protobuf 不定义业务含义。
-2. 内核变更先改规范与向量，再改实现；Go、Rust、TypeScript 边缘跑同一套向量。
-3. 一项决策只改一个权威；跨权威原子性不存在，跨应用用协议 + 补偿。
-4. 权威状态的新写入必须经接受结果；没有旁路。
-5. 已封存结果恢复不重跑规则、不重新授权、不发起外部调用；旧输入分支保留第 6 节的明确兼容责任。
-6. 历史永远可读，已产生的字节不重写。
-7. 每租户单写者与 `doc.go` 的锁义务不变。
-8. 锁外 I/O 遵守 prepare → revalidate → accept；不宣称跨系统 exactly-once。
-9. 生成文件不手改：`contract/go/gen`、`web/packages/kernel/src/gen/host.ts`、`web/apps/catalog/src/gen`。
-10. `scripts/boundaries.sh`、`scripts/escapes.sh` 的已知逃逸只减不增。
-11. 租户扩展只走受控编译与隔离执行。
-12. 替换而非增量：被取代的旧路径同批移除，不长期并存。
-13. 新能力必须能被构建器用出来，否则记为未完成。
-14. 已发布的定义、已保存候选、审批绑定与在途版本不被升级静默改写；编号与包生命周期不新增旁路。
-15. 正式 SQL 当前状态与日志同事务保存；异步投影不能代替正式状态，恢复差异不得覆盖。
-16. 当前权限约束历史及派生信息；投递、设备执行、业务确认各守自己的结果语义。
+| 涉及变化 | 主责规范 |
+|---|---|
+| 内核、语言边缘与形式化范围 | [契约](../openspec/specs/kernel/contracts/spec.md)；精确规则链接原契约正文 |
+| 单权威、接受顺序、并发与故障 | [宿主](../openspec/specs/runtime/host/spec.md) |
+| 正式状态、历史字节、格式与恢复 | [存储](../openspec/specs/runtime/storage/spec.md) |
+| 当前权限、历史与派生信息保护 | [身份与授权](../openspec/specs/runtime/access-control/spec.md) |
+| 草稿、发布、依赖、在途版本与旧实现退出 | [应用生命周期](../openspec/specs/platform/application-lifecycle/spec.md) |
+| 外部投递、设备执行、业务确认与未知结果 | [数据接入与外部协同](../openspec/specs/platform/integrations/spec.md) |
+| 运行形态、受控执行依赖与交付证据 | [部署与运维](../openspec/specs/runtime/deployment/spec.md) |
+
+生成物、共享入口、双语和验证选择等工作规则继续归 AGENTS；模型、流程、AI、工作区和专业可视化在目录中各有模块，避免在这里重复其需求。规范变化通过同一 OpenSpec change 修改所涉模块，不能新增永久的旁路规则或过程总结。

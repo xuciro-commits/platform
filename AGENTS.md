@@ -1,8 +1,8 @@
 # AGENTS.md
 
-给在本仓库工作的 AI 与人的工作原则。**这里只放不会过期的约束与入口**；系统结构归 [docs/Architecture.md](docs/Architecture.md)，产品宗旨归 [docs/Intent.md](docs/Intent.md)，当前任务归 [docs/WorkQueue.md](docs/WorkQueue.md)，内核语义归 [contract/spec](contract/spec/README.md)。`CLAUDE.md` 只引用本文件。
+给在本仓库工作的 AI 与人的工作原则。**这里只放不会过期的约束与入口**；系统结构归 [Architecture](docs/Architecture.md)，模块行为与不变量归 [OpenSpec 规范目录](openspec/README.md)，产品宗旨归 [Intent](docs/Intent.md)，当前任务归 [WorkQueue](docs/WorkQueue.md)，内核语义归 [contract/spec](contract/spec/README.md)。`CLAUDE.md` 只引用本文件。
 
-本仓库没有决策日志。决定写在代码、契约规范与提交信息里。**不要为工作过程新增文档、队列、检查点日记或"实施记录"。**
+本仓库使用 **OpenSpec** 管理规范及其变更，不恢复编号决策日志。稳定约定在 `openspec/specs`，本次变化的差量与必要设计在 `openspec/changes`；不要另建过程报告、状态队列或检查点日记。
 
 ## 项目
 
@@ -30,7 +30,7 @@
 1. **内核是契约。** `contract/` 不含领域词汇。内核语义变更先改规范与向量，再改 Go 与 Rust/TypeScript 边缘；三端跑同一套向量。`v1` 语义变更在提交信息里写清理由。
 2. **一项决策只改一个权威。** 跨应用只走 `protocols/`，用请求—应答与补偿，不做跨权威原子性。
 3. **写入只走一条路径。** 权威状态的新写入必须经接受结果；新封存结果恢复只应用已保存映像，不重跑规则、不重新授权、不发起外部调用；旧输入的兼容读取责任见 Architecture。历史字节永不重写。
-4. **单一归属，先复用。** 应用只导入 `platformserver/platform`；客户端只用 `@platform/ui` 与 `@platform/app`。缺的能力在归属方扩展。UI 变更前先 `node scripts/catalog.mjs search <关键词>`。
+4. **单一归属，先复用。** 应用只导入 `platformserver/platform`；客户端只用 `@platform/ui` 与 `@platform/app`。缺的能力在归属方扩展；`scripts/boundaries.sh`、`scripts/escapes.sh` 的已知逃逸只减不增。UI 变更前先 `node scripts/catalog.mjs search <关键词>`。
 5. **生成文件不手改。** `contract/go/gen`、`web/packages/kernel/src/gen/host.ts`（宿主 API 类型变了就在 `capabilities/server` 跑 `go run ./cmd/api-types`）、`web/apps/catalog/src/gen`（`node scripts/catalog.mjs generate`）。
 6. **一个语义一个实现。** 规则求值、约束检查、授权判定、依赖解析各一份。替换不是增量：同批删除被替代的路径，不保留两套规则。
 7. **租户扩展只走受控路径。** 受控编译、隔离执行、版本化制品；不在宿主直接执行租户脚本。
@@ -39,7 +39,14 @@
 10. **提交信息**单句祈使句；提交与推送按负责人授权。
 11. **安全。** 不提交密钥与凭据；密钥只按名字从部署环境取。
 
-不可动边界的完整清单在 [Architecture §8](docs/Architecture.md#8-不可动的边界)，开工前看一遍。
+开工前从 [规范目录](openspec/README.md#层级与模块) 选择相关模块，读完整需求和场景，再核对实现；不用每次审计全仓。内核精确条款仍以 `contract/spec` 为唯一语义来源，OpenSpec 不复制一份。
+
+## OpenSpec 工作方式
+
+- **按层级和模块维护。** `kernel / runtime / platform / experience` 下聚合完整职责。小功能、接口和组件进入现有模块；只有独立稳定的职责才拆分，不按任务新建 spec。同一规则只由一个主责模块定义，其他模块链接引用。
+- **使用官方 Skill。** `.agents/skills/openspec-*/SKILL.md` 由 CLI 生成。查明问题用 `openspec-explore`；需要改变行为、公开契约、存储、授权或发布边界时用 `openspec-propose`，落实用 `openspec-apply-change`，变化调整用 `openspec-update-change`，完成后用 `openspec-sync-specs` 同步并 `openspec-archive-change` 归档。用户仅要求提案时不实施；已有明确实施授权时继续完成该范围，不重复索取同一授权。
+- **保持轻量。** 修复既有约定下的回归、纯搬迁、措辞与来源定位，直接改实现或文档，不为凑流程创建需求。WorkQueue 仍是唯一项目顺序，change 的 tasks 只拆本次工作。当前 spec 不承接未实施设想，也不把场景当成已跑测试。
+- **统一命令。** 不要求全局安装；Skill 中的 `openspec <参数>` 在本仓库使用 `make openspec ARGS='<参数>'`，版本固定在 Makefile。先 `list --specs` / `show <完整模块路径> --type spec` 找现有约定；只读 `list` 看不到规范。细则见 [规范维护入口](openspec/README.md#后续怎样使用)。
 
 ## 检查入口
 
@@ -47,7 +54,7 @@
 
 | 改了 | 跑 |
 |---|---|
-| 文档、规则、注释 | 链接与引用一致、`git diff --check` |
+| 文档、规则、注释 | 链接与引用一致、`git diff --check`；涉及 OpenSpec 时加 `make check-specs`，格式校验不等于业务测试 |
 | 内核规范 / 向量 / 实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘 |
 | Lean 模型 | `scripts/verify.sh formal` |
 | Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改应用 API 或组合时加 `scripts/verify.sh composition` |

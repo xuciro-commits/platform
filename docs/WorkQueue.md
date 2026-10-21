@@ -1,6 +1,6 @@
 # 执行队列
 
-只放当前要交付的工作。完成即移除；被替代的条目删除，不留记录。为什么做归 [Intent](Intent.md)，系统结构归 [Architecture](Architecture.md)，工作方式归 [AGENTS](../AGENTS.md)。
+只放当前要交付的工作。完成即移除；被替代的条目删除，不留记录。为什么做归 [Intent](Intent.md)，系统结构归 [Architecture](Architecture.md)，行为约定归 [OpenSpec 模块规范](../openspec/README.md)，工作方式归 [AGENTS](../AGENTS.md)。OpenSpec change 只分解已授权的一块工作，不另排项目优先级。
 
 ## 1. 交付尾项：完整部署验证
 

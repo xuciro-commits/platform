@@ -2,7 +2,7 @@
 
 面向 FDE 与客户构建者，提供数据接入、语义建模、动作/流程/AI、操作界面、受控发布与后续修改。语言中立的内核契约在 contract/，Go 宿主在 capabilities/server/，Web 工作区在 web/；apps/ 是原生参考应用，solutions/ 负责组合宿主。
 
-产品宗旨见 [Intent](docs/Intent.md)，系统结构与边界见 [Architecture](docs/Architecture.md)，当前工作见 [WorkQueue](docs/WorkQueue.md)。开发从 [AGENTS](AGENTS.md) 开始；内核语义与一致性向量从 [契约入口](contract/README.md) 查阅。
+产品宗旨见 [Intent](docs/Intent.md)，系统结构见 [Architecture](docs/Architecture.md)，模块行为与不变量见 [OpenSpec 规范目录](openspec/README.md)，当前工作见 [WorkQueue](docs/WorkQueue.md)。开发从 [AGENTS](AGENTS.md) 开始；内核语义与一致性向量从 [契约入口](contract/README.md) 查阅。
 
 ## 快速启动
 
@@ -37,6 +37,8 @@ make local 在后台运行 Air/Vite，复用原数据卷；日志在 .build/dev/
 
 ~~~bash
 make help
+make openspec ARGS='list --specs'
+make check-specs
 make check
 make test-go PKG=./platform RUN=TestName
 make e2e SPEC=page-notice
