@@ -30,7 +30,7 @@ const (
 	Placement  = "ActualResourceRelationship" // unit under parent, in a kind
 	Membership = "ActualOrganizationRole"     // party (member:<id> or element id) in an organisation, with a role
 	FillsPost  = "FillsPost"                  // person holds post
-	Performs   = "IsCapableToPerform"         // the older pair for "has a capability"; UAF's own spelling is Exhibits (ADR-0031 D2)
+	Performs   = "IsCapableToPerform"         // the older pair for "has a capability"; UAF's own spelling is Exhibits (ADR-0022 D2)
 	Exhibits   = "Exhibits"                   // organisation/resource exhibits a Capability (UAF 1.3)
 	System     = "System"                     // a system the organisation runs (ERP, MES, WMS, PLM, CRM)
 	Owns       = "ResponsibleFor"             // organisation answers for resource/location/project
@@ -94,11 +94,11 @@ type TenantLink struct {
 	Content      string `json:"content,omitempty"`
 }
 
-// View is a drawing over the model: which elements, where, from which viewpoint (ADR-0031).
+// View is a drawing over the model: which elements, where, from which viewpoint (ADR-0022).
 type View struct {
 	ID        string                `json:"id"`
 	Name      string                `json:"name"`
-	Viewpoint string                `json:"viewpoint"` // "organization", "data", "function", "output", "control" (ADR-0031)
+	Viewpoint string                `json:"viewpoint"` // "organization", "data", "function", "output", "control" (ADR-0022)
 	Kind      string                `json:"kind,omitempty"`
 	Elements  []string              `json:"elements"`
 	Layout    map[string][2]float64 `json:"layout,omitempty"`
@@ -107,7 +107,7 @@ type View struct {
 	AsOf      platform.Date         `json:"asOf,omitempty"`
 }
 
-// Pin is a record drawn on a view beside the element it names (ADR-0031 D3):
+// Pin is a record drawn on a view beside the element it names (ADR-0022 D3):
 // the picture then holds the modules that work with the model, not only the
 // model. The ref is "record:<entity type>/<id>"; the anchor is the element it
 // points at. A pin is a mark on a drawing, not a fact about the model: nothing

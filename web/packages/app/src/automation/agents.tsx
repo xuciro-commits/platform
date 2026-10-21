@@ -1,5 +1,5 @@
 import { useRunControl } from "./use-run-control";
-// Agents in the workspace (ADR-0054): a run's page — its steps with the
+// Agents in the workspace (ADR-0008): a run's page — its steps with the
 // rationale the model gave, what people made of it, and the draft that waits
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
@@ -225,7 +225,7 @@ function Transcripts({ run }: { run: string }) {
 /**
  * The assistant: give one of your apps' agents a goal, about a record when
  * opened from one. It works on your behalf, within what you may do, and every
- * action it wants waits for you as a draft (ADR-0054).
+ * action it wants waits for you as a draft (ADR-0008).
  */
 export function Assistant({ about }: { about?: string }) {
   const { me, decide, can } = useHost();

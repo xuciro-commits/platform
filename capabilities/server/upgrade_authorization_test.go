@@ -22,7 +22,7 @@ import (
 )
 
 // The upgrade batch's authorization, host console, environment and package
-// behavior (ADR-0016 §6.5, §11, §10.3; ordered 2026-10-05).
+// behavior (ADR-0018 §6.5, §11, §10.3; ordered 2026-10-05).
 
 func upgradeSeats() []Seat {
 	seat := func(id string, roles map[string]string) Seat {

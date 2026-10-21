@@ -8,7 +8,7 @@ import (
 )
 
 // DemoMaster is a small plant with two lines: pump housings on L1 and valve bodies
-// on L2. It shows the three things the craft master data has to carry (ADR-0032):
+// on L2. It shows the three things the craft master data has to carry (ADR-0060):
 // a routing is its own versioned thing that two products can share, an operation
 // says what its equipment must be able to do and what it must hold while it runs,
 // and a resource says what it can do — so "which equipment can process this step"

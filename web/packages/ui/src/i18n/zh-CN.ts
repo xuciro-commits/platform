@@ -1494,7 +1494,7 @@ export default {
   "Page": "页面",
   "Agent run": "智能体运行",
   "Effect": "副作用",
-  // The force layout's word in the arrange menu (ADR-0035).
+  // The force layout's word in the arrange menu (ADR-0033).
   "Balance by distance": "按距离平衡",
   "Retry the original request before changing its inputs.": "更改输入之前，请先重试原请求。",
   "The capability result is still awaiting confirmation. Retry the original request.": "能力调用结果仍待确认，请重试原请求。",

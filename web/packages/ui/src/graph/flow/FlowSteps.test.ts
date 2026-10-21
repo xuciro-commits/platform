@@ -1,4 +1,4 @@
-// Read-only steps join the one class vocabulary (ADR-0035): declared class first,
+// Read-only steps join the one class vocabulary (ADR-0033): declared class first,
 // BPMN reading second, the plain step when neither is given.
 import { expect, test } from "vitest";
 import { flowStepKind } from "./FlowSteps";

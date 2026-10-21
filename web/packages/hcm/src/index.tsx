@@ -1,4 +1,4 @@
-// The HR app's UI (ADR-0007、ADR-0019): the platform renders declared leave
+// The HR app's UI (ADR-0007、ADR-0018): the platform renders declared leave
 // actions and records; approvers decide through the shared inbox.
 import "./i18n";
 import { Records, defineApp } from "@platform/app";

@@ -13,7 +13,7 @@ import (
 
 // EnterpriseReference is a record that names an enterprise element through a
 // declared reference, at whatever depth the reference sits: a top-level field
-// or a line of a line (ADR-0031 D4). The path is the record's own, so a reader
+// or a line of a line (ADR-0022 D4). The path is the record's own, so a reader
 // can go and look.
 type EnterpriseReference struct {
 	Type       string `json:"type"`
@@ -39,7 +39,7 @@ type EnterpriseReferenceGroup struct {
 // EnterpriseReferences are the records that name an enterprise element, across
 // every entity type the member may read, at any nesting depth, paged by column.
 // The modeler's "Used by" asks this instead of querying one field at a time
-// (ADR-0031 D4): a reference inside a line is found, a page says how many it
+// (ADR-0022 D4): a reference inside a line is found, a page says how many it
 // left out, and a type the member may not read is not mentioned.
 func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, offset, limit int, now time.Time) ([]EnterpriseReferenceGroup, *kernel.Error) {
 	if element == "" {

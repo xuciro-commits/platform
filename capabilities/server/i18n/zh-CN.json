@@ -559,7 +559,7 @@
   "Saved views": "已保存视图",
   "Score": "得分",
   "Send a failed or rejected effect again, with the same key.": "用同一个键重新发送失败或被拒的外发。",
-  "Send an irreversible effect an AI agent caused; only a person may approve it (ADR-0004 D6).": "发送 AI 代理造成的不可撤回外发；只有人可以批准（ADR-0004 D6）。",
+  "Send an irreversible effect an AI agent caused; only a person may approve it (ADR-0051 D6).": "发送 AI 代理造成的不可撤回外发；只有人可以批准（ADR-0051 D6）。",
   "Send the chosen events and effects to a URL, signed with a named secret (Standard Webhooks); or mail the chosen apps' notifications to members through an SMTP server.": "把选定的事件和外发发送到一个 URL，用指定密钥签名（Standard Webhooks）；或通过 SMTP 服务器把选定应用的通知邮件发给成员。",
   "Send the tenant's new calls of a protocol (target <name>/<version>) to another app that provides it; what every provider holds stays readable.": "把租户对某协议的新调用（目标 <name>/<version>）发给另一个提供该协议的应用；各提供方已有的数据仍可读取。",
   "Seq": "序号",

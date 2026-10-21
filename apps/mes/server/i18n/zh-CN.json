@@ -84,7 +84,7 @@
  "The ERP's planned order this order fulfils": "本订单履行的 ERP 计划订单",
  "The enterprise model's place this order runs at": "这张订单在企业模型中运行的场所",
  "The machine or station working on it now": "正在加工它的机器或工位",
- "The place in the enterprise model this order runs at — a plant, line, workshop or warehouse (optional; ADR-0034)": "订单在企业模型中的落点——工厂、产线、车间或库房（可选；ADR-0034）",
+ "The place in the enterprise model this order runs at — a plant, line, workshop or warehouse (optional; ADR-0022)": "订单在企业模型中的落点——工厂、产线、车间或库房（可选；ADR-0022）",
  "The product this lot becomes": "这个批次最终成为的产品",
  "Tool change": "换刀",
  "Tool change, Setup, Material shortage, Breakdown or Quality issue": "换刀、调机、缺料、故障或质量问题",

@@ -36,7 +36,7 @@ export function columnsFor<R>(entity: Entity<R>, keys: string[] = Object.keys(en
   });
 }
 
-/** Pure projection of the host's finite input declaration (ADR-0036). */
+/** Pure projection of the host's finite input declaration (ADR-0048). */
 export function inputIssues(fields:Api.Field[],values:Record<string,unknown>):Api.FieldIssue[]{
  const issues:Api.FieldIssue[]=[],valid=new Set<string>(),dependencies=new Set(fields.flatMap(f=>[f.constraints?.before,f.constraints?.after]).filter(Boolean));
  const add=(f:Api.Field,code:string,message:string,related?:string)=>{if(issues.length<64)issues.push({code,message,path:[f.name],relatedPaths:related?[[related]]:undefined});};

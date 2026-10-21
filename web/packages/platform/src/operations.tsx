@@ -1,4 +1,4 @@
-// Settings: owned work, integrations, app settings and the audit trail (ADR-0027、ADR-0004).
+// Settings: owned work, integrations, app settings and the audit trail (ADR-0044、ADR-0051).
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t } from "@platform/ui";
@@ -110,7 +110,7 @@ export function Integrations() {
   );
 }
 
-// Webhook endpoints and their effects (ADR-0004): events go out signed, at least
+// Webhook endpoints and their effects (ADR-0051): events go out signed, at least
 // once with a stable key; outcomes are journaled, a replay never sends.
 export function Endpoints() {
   const endpoints = useRead<EndpointView[]>("/v1/endpoints");

@@ -202,7 +202,7 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
     ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!actionStateInput(a),label:actionStateInput(a)})),
   ]);
-  // One layout brain decides where a state or an action sits (ADR-0035): the
+  // One layout brain decides where a state or an action sits (ADR-0033): the
   // same arrangement the canvas's own tidy-up would choose, sizes included.
   const places = useFlowArrangement([
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, position: { x: 0, y: 0 } })),

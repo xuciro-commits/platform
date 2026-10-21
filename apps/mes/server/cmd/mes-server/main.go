@@ -1,5 +1,5 @@
 // Command mes-server runs the MES alone on a development host (docs/Apps.md
-// step 6; ADR-0016) for one demo plant: shop orders released by its own
+// step 6; ADR-0018) for one demo plant: shop orders released by its own
 // supervisors, with no ERP, so nothing is confirmed. With -web the host serves
 // the workspace's build; the development tokens supervisor, operator-l1,
 // operator-l2, quality-1, quality-2, gateway-l1 and assistant-l1 sign in.
@@ -36,7 +36,7 @@ var demo = []platformserver.Seat{
 	agent(seat("assistant-l1", "agent-l1", mes.Assistant, "L1")),
 }
 
-// agent marks an AI agent: what it causes that cannot be recalled waits for a person (ADR-0004 D6).
+// agent marks an AI agent: what it causes that cannot be recalled waits for a person (ADR-0051 D6).
 func agent(s platformserver.Seat) platformserver.Seat { s.Agent = true; return s }
 
 // seat signs in as subject and belongs to units of the site structure (ADR-0022).

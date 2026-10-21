@@ -9,7 +9,7 @@ import { byHierarchy, FILLS_POST, hierarchyParent, MEMBERSHIP, type Element, typ
 export type Positions = Record<string, [number, number]>;
 export const STEREOTYPE_DROP = "application/x-uaf-stereotype";
 
-/** A record pinned on a view beside the element it names (ADR-0031 D3): the
+/** A record pinned on a view beside the element it names (ADR-0022 D3): the
  * drawing then holds the apps that work with the model, not only the model. */
 export type CanvasPin = { id: string; label: string; caption?: string; detail?: string; anchor: string; anchorName?: string };
 
@@ -45,7 +45,7 @@ export function Canvas({ elements, relationships, pins = [], positions, onPrepar
   /** What the details panel shows for an element: UAF type, kind, validity, where it sits. */
   onPrepared?: (positions: Record<string, [number, number]>) => void;
   facts: (el: Element) => { label: string; value: string }[];
-  /** Operations on the selected element and the selected relationship (ADR-0031). */
+  /** Operations on the selected element and the selected relationship (ADR-0022). */
   nodeActions: (id: string) => CanvasAction[]; edgeActions: (id: string) => CanvasAction[];
   onReconnect: (id: string, source: string, target: string) => void;
 }) {

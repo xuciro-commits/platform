@@ -1,4 +1,4 @@
-// Package mes is the manufacturing execution system (ADR-0016; #83),
+// Package mes is the manufacturing execution system (ADR-0018; #83),
 // modelled on Opcenter Execution and SAP ME: shop orders release SFCs that move
 // through a routing's operations on work centers; nonconformances hold an SFC
 // until quality signs a disposition; equipment states arrive from a gateway and
@@ -158,7 +158,7 @@ const (
 	Assistant  Role = "assistant" // an AI agent acting within the lines it is granted
 )
 
-// holds reports whether the caller holds role in this app (any of their roles, ADR-0027).
+// holds reports whether the caller holds role in this app (any of their roles, ADR-0044).
 func holds(c platform.Caller, role Role) bool { return c.Holds(c.App, string(role)) }
 
 // SiteStructure is the organisation structure the plant's rules read (ADR-0022):
@@ -429,7 +429,7 @@ type releasePayload struct {
 	Quantity int    `json:"quantity"`
 	SFCs     int    `json:"sfcs"`
 	Planned  string `json:"planned,omitempty"` // the ERP planned order it fulfils
-	Place    string `json:"place,omitempty"`   // the enterprise model's place this order runs at (ADR-0034)
+	Place    string `json:"place,omitempty"`   // the enterprise model's place this order runs at (ADR-0022)
 }
 
 // sfcPayload acts on the SFC's current operation; a stale screen is refused by
@@ -680,7 +680,7 @@ func Entities(p *Plant) []platform.Entity {
 // Reads.
 
 // Master serves the plant's master data with each operation's `capable` list
-// computed on the way out (ADR-0032): the floor screens read which equipment can
+// computed on the way out (ADR-0060): the floor screens read which equipment can
 // process a step instead of re-deriving it, and `start` refuses by the same rule.
 func (p *Plant) Master() MasterData {
 	served := p.master
@@ -713,7 +713,7 @@ var languageFiles embed.FS
 
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
-// Settings of the plant (ADR-0027), set by administrators in Settings.
+// Settings of the plant (ADR-0044), set by administrators in Settings.
 const (
 	SettingNotifyDowntime = "notify-downtime"
 	SettingReasonMinutes  = "reason-reminder-minutes"
@@ -757,9 +757,9 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 	return platform.RestoreFacts(p.facts, p.tenant, s.Facts)
 }
 
-// Manifest declares the plant as the "mes" app (ADR-0016): its actions, its
+// Manifest declares the plant as the "mes" app (ADR-0018): its actions, its
 // reads, its connector input (batches, journaled; the host keeps the
-// connectors), its settings, its scheduled job (ADR-0027), its flow (ADR-0007),
+// connectors), its settings, its scheduled job (ADR-0044), its flow (ADR-0007),
 // and the protocol it reaches an ERP through (ADR-0026).
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "MES", Version: "1", Actions: p.ledger.Catalog, Queries: queries, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},

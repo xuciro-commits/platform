@@ -263,7 +263,7 @@ func toCSV(v any) string {
 	return fmt.Sprint(v)
 }
 
-// restricted says whether typ holds restricted data (ADR-0025): a dataset or
+// restricted says whether typ holds restricted data (ADR-0044): a dataset or
 // version marked so, or an object a restricted pipeline writes.
 func (t *Tenant) restricted(typ string) bool {
 	c := t.automation(construction.ID, false)

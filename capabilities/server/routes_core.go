@@ -72,7 +72,7 @@ func (h *Host) routesCore(rt *routes) {
 		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))
 		Reply(w, record, t.i18n.said(err, t.Language(m, r)), localized...)
 	})
-	rt.authorized(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0027)", Answer: Explanation{},
+	rt.authorized(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0044)", Answer: Explanation{},
 		Query: []Param{{"member", "the member to ask about"}, {"permission", "an action's schema, or <app>:read:<name>"}}}, PlatformApp, []string{Admin, Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
 		if err != nil {

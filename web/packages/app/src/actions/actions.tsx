@@ -83,7 +83,7 @@ function ReadPicker({ id, field, app, value, onChange, onUnit }: { id: string; f
 
 /** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
  * field tagged ref:"enterprise.element" (ADR-0022 D8) — read through the typed query and
- * resolve contracts (ADR-0034), never the whole graph. The model is every member's to read. */
+ * resolve contracts (ADR-0022), never the whole graph. The model is every member's to read. */
 function ElementPicker({id,stereotype,stereotypes,value,onChange}:{id:string;stereotype?:string;stereotypes?:string[];value:string;onChange:(id:string)=>void}) {
  const {source}=useHost();
  return <RecordLookup id={id} source={source} type="enterprise.element" value={value} stereotypes={[...(stereotype?[stereotype]:[]),...(stereotypes??[])]} onChange={id=>onChange(id??"")} />;

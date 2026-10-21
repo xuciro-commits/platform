@@ -15,7 +15,7 @@ import (
 
 // The books (ADR-0026): a builder action that declares a Journal makes the
 // host land one balanced entry in core after the decision is accepted. It is
-// an ADR-0004 effect on the "core:books" endpoint - in order, retried while
+// an ADR-0051 effect on the "core:books" endpoint - in order, retried while
 // no period is open for it, delivered once per decision - so the general
 // ledger lags the business by a tick and never disagrees with it.
 

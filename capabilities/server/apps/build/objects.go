@@ -156,7 +156,7 @@ func (b *Build) checkName(name, id string) error {
 
 // fieldKnown answers whether a reference names an object this tenant can
 // compose against: an installed one, one selected as a draft in the candidate
-// being built, or another saved draft object (ADR-0011). Delivery still
+// being built, or another saved draft object (ADR-0045). Delivery still
 // proves the object installs.
 func (b *Build) fieldKnown(ref string) bool {
 	if ref == "enterprise.element" {

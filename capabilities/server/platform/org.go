@@ -196,7 +196,7 @@ func (e Enterprise) Related(element, stereotype string, outgoing bool, now time.
 }
 
 // Capable are the capabilities an organisation or resource has: «Exhibits»
-// (UAF 1.3's pair, ADR-0031 D2) and the older «IsCapableToPerform» models kept.
+// (UAF 1.3's pair, ADR-0022 D2) and the older «IsCapableToPerform» models kept.
 func (e Enterprise) Capable(element string, now time.Time) []string {
 	out := e.Related(element, "Exhibits", true, now)
 	for _, cap := range e.Related(element, "IsCapableToPerform", true, now) {

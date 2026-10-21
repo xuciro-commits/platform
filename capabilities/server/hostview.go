@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// hostView is the tenant as its own apps see it (internal/host.Host, ADR-0016).
+// hostView is the tenant as its own apps see it (internal/host.Host, ADR-0018).
 // hostView is the tenant as one of its own apps sees it; app is that app, for
 // what it declares at runtime (ADR-0048).
 type hostView struct {

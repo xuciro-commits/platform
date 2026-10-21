@@ -1,4 +1,4 @@
-// The Host every app reads through (ADR-0019): the member's catalog of
+// The Host every app reads through (ADR-0018): the member's catalog of
 // actions, the entity types and definitions the host projects for them, the
 // record source, the decision path (K5 outbox, idempotent send) and the
 // `opens` map from record types to the view that shows them.

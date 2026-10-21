@@ -6,7 +6,7 @@ import (
 	"platformserver/journal"
 )
 
-// The journal is its own package (ADR-0062 wave 1); the host keeps these names
+// The journal is its own package (ADR-0064 wave 1); the host keeps these names
 // so tenants, deployments and tests read as before. The only thing the host
 // gives the journal is how to read an accepted result's identity.
 
@@ -28,7 +28,7 @@ func OpenJournal(ctx context.Context, url string) (*journal.Postgres, error) {
 	return j, err
 }
 
-// OpenFileJournal opens the one-file journal of the lightweight profile (ADR-0017 D2).
+// OpenFileJournal opens the one-file journal of the lightweight profile (ADR-0029 D2).
 func OpenFileJournal(dir string) (*journal.File, error) {
 	return journal.OpenFile(dir, acceptedIdentity)
 }

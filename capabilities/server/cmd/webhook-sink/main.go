@@ -1,5 +1,5 @@
 // Command webhook-sink is a webhook receiver for the local stack and its
-// rehearsal (ADR-0004): it checks Standard Webhooks signatures with the secret
+// rehearsal (ADR-0051): it checks Standard Webhooks signatures with the secret
 // in WEBHOOK_SECRET, keeps one copy per webhook-id, and lists what it kept. It
 // is also a mail server (SMTP on -smtp) that keeps one message per Message-ID.
 //
@@ -9,13 +9,13 @@
 //	GET  /mail      [{"messageId", "to", "from", "subject", "text"}], oldest first
 //	GET  /v1/models, POST /v1/chat/completions   a local model server on the
 //	                OpenAI wire (ADR-0008): model "echo" repeats the last message;
-//	                given tools (an agent, ADR-0054), it calls a read tool first,
+//	                given tools (an agent, ADR-0008), it calls a read tool first,
 //	                then finishes proposing the first item read whose ID the goal
 //	                does not name and whose product it does; the helpdesk's
 //	                triage agent searches knowledge, triages a ticket as normal and
 //	                replies citing what it found; model "embed" embeds hashed words;
 //	                the plant's planner asks the supplier's agent, then answers
-//	                bounded record-advice requests get a fixed typed fixture (ADR-0054)
+//	                bounded record-advice requests get a fixed typed fixture (ADR-0008)
 //	POST /a2a       a supplier's agent over A2A 1.0 (card at /a2a/.well-known/agent-card.json):
 //	                every SendMessage gets a completed task with a lead time of 12 days
 package main
@@ -171,7 +171,7 @@ func main() {
 				"usage": map[string]any{"prompt_tokens": len(strings.Fields(last)), "completion_tokens": 20, "cost": 0.01}})
 			return
 		}
-		if len(req.Tools) > 0 { // an agent (ADR-0054): read first, then propose the first ID read that the goal does not name
+		if len(req.Tools) > 0 { // an agent (ADR-0008): read first, then propose the first ID read that the goal does not name
 			call := func(name string, args map[string]string) {
 				raw, _ := json.Marshal(args)
 				json.NewEncoder(w).Encode(map[string]any{"model": "echo", "usage": map[string]int{"prompt_tokens": 50, "completion_tokens": 10},

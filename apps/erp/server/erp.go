@@ -47,7 +47,7 @@ type Account struct {
 
 // Line is one line of a journal entry: an amount on the debit or the credit side of an account.
 // CostCentre names the enterprise model's organisation the amount is charged
-// to (ADR-0031): the dimension that lets the books be read by unit without
+// to (ADR-0022): the dimension that lets the books be read by unit without
 // a second chart of cost centres.
 type Line struct {
 	Account    platform.Ref[Account] `json:"account" field:"required"`

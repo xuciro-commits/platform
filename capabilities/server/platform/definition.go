@@ -428,7 +428,7 @@ func (a Application) CheckGroups() error {
 }
 
 // IconName reports whether a name is one the kit may draw (ADR-0046,
-// ADR-0031). The vocabulary belongs to the kit, which owns the glyphs and
+// ADR-0022). The vocabulary belongs to the kit, which owns the glyphs and
 // their words; the host only keeps names shaped like names, so the set can grow
 // without every host having to learn it first. A client that does not know a
 // name yet draws its default glyph.

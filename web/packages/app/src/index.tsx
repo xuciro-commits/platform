@@ -15,7 +15,7 @@ export type {CollaborationTarget,CollaborationHost} from "./collaboration/servic
 export {confirmedDecision} from "./collaboration/decision";
 export {createWorkViews,type WorkViewsHost} from "./work/service";
 export {searchInputObjects} from "./widgets/search-input";
-// The app API of the workspace (ADR-0019), the browser's counterpart of
+// The app API of the workspace (ADR-0018), the browser's counterpart of
 // platformserver/platform: an app's UI declares itself with defineApp and
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
@@ -43,7 +43,7 @@ export { AppSelect, RoleSelect, ProtocolSelect, MemberSelect, useTenantApps } fr
 export { DependencyGraph } from "./semantic/DependencyGraph";
 export { useDependencies, useProvidedCapabilities, type DependencyDescriptor, type DependencyRead, type ProvidedCapability } from "./semantic/dependencies";
 
-/** An app the member may open: the tenant runs it and they hold a role in it (ADR-0019). */
+/** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018). */
 export type AppEntry = Api.AppEntry;
 export type AssetRef = Api.AssetRef;
 export type Definition = Api.Definition;

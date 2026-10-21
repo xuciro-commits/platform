@@ -18,7 +18,7 @@ import (
 	"platformserver/platform"
 )
 
-// stepBody is an agent entry: what the model chose at one step (ADR-0054).
+// stepBody is an agent entry: what the model chose at one step (ADR-0008).
 type stepBody struct {
 	Run       string           `json:"run"`
 	Calls     []ToolCall       `json:"calls,omitempty"`  // complete new model response; Tool remains the legacy single-call encoding
@@ -45,7 +45,7 @@ type AgentTurn struct {
 }
 type turn = AgentTurn
 
-// Think gives each running agent its next model turn (ADR-0054). The host
+// Think gives each running agent its next model turn (ADR-0008). The host
 // wakes it with owned work, with a periodic fallback: model calls are slow and
 // happen outside the tenant's lock; each answer is then journaled and applied.
 func (t *Tenant) Think(now time.Time) { onLane(t.turns(now)) }
@@ -699,7 +699,7 @@ func (a *Agents) recipients(c platform.Caller, d *agentDef, run AgentRunRecord) 
 }
 
 // stop ends a run that cannot go on: a flow's run goes back to its flow; any
-// other goes to a person as a task (ADR-0054).
+// other goes to a person as a task (ADR-0008).
 func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord, why string, now time.Time) {
 	run.State, run.Stopped, run.Draft = "stopped", why, nil
 	finishPendingCalls(run, now)

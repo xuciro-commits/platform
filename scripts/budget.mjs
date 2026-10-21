@@ -43,7 +43,7 @@ const adrs = readdirSync(adrDir).filter((name) => name.endsWith(".md") && name !
 // WorkQueue 是施工队列，按当天的工作进出，不是知识库；不计入文档预算。
 const allDocs = walk(join(ROOT, "docs"), (path) => path.endsWith(".md") && !path.endsWith(join("docs", "WorkQueue.md")));
 const statusLine = (path) => {
-  const line = readFileSync(path, "utf8").split("\n").find((text) => /^状态[:：]/.test(text)) ?? "";
+  const line = readFileSync(path, "utf8").split("\n").find((text) => /^\*{0,2}状态[:：]/.test(text.trim())) ?? "";
   return line.length;
 };
 

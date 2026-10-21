@@ -201,7 +201,7 @@ func TestChannelDuplicatesCollapse(t *testing.T) {
 	}
 }
 
-// #98: the hotel is the second app on the platform's operations (ADR-0027):
+// #98: the hotel is the second app on the platform's operations (ADR-0044):
 // settings, notifications addressed by app role, a scheduled job and the connector.
 func TestHotelUsesPlatformOperations(t *testing.T) {
 	var journal []platformserver.Entry

@@ -16,7 +16,7 @@ if (previewWorkspace) {
   const { CatalogPreview } = await import("@platform/catalog-app/view");
   root.render(<StrictMode><CatalogPreview id="pattern/workspace" standalone /></StrictMode>);
 } else {
-  // The host says how to sign in (ADR-0019): at its identity provider, once for
+  // The host says how to sign in (ADR-0018): at its identity provider, once for
   // every app; or, on development tokens, as one of its development identities.
   const how = await fetch("/v1/sign-in").then((r) => r.json() as Promise<Api.SignIn>).catch((): Api.SignIn => ({}));
   const oidc: OidcConfig | undefined = how.issuer && how.client ? { issuer: how.issuer, clientId: how.client, redirectUri: `${location.origin}/` } : undefined;

@@ -1,4 +1,4 @@
-// Settings: flows (ADR-0007), agents and their evaluations (ADR-0054).
+// Settings: flows (ADR-0007), agents and their evaluations (ADR-0008).
 import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t } from "@platform/ui";
 import { useState } from "react";
@@ -33,7 +33,7 @@ export function Flows() {
   );
 }
 
-// Agents (ADR-0054): the agents the apps declare with their tools and budgets,
+// Agents (ADR-0008): the agents the apps declare with their tools and budgets,
 // every run with its trace, and evaluations of a candidate model against what
 // people confirmed or corrected.
 export function Agents() {

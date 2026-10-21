@@ -17,13 +17,13 @@ import (
 type Authenticate func(credential string) (subject string, ok bool)
 
 // Attest reports whether a credential was issued after a second factor: what a
-// tenant that requires one asks of the provider (ADR-0027 §2). A host without
+// tenant that requires one asks of the provider (ADR-0044 §2). A host without
 // one cannot attest, so such a tenant admits no sign-in.
 type Attest func(credential string) bool
 
 // Local is the lightweight profile's identity provider: one HMAC-SHA256 key
 // in the data directory, tokens the host signs and verifies itself, and the
-// same seat directory as ever (ADR-0017 D3). The delivery profile keeps an
+// same seat directory as ever (ADR-0029 D3). The delivery profile keeps an
 // external OpenID provider, and development tokens stay in the development
 // host; a lightweight host accepts neither.
 type Local struct {
@@ -145,7 +145,7 @@ func (p *Local) Verify(token string) (string, bool) {
 }
 
 // Authenticate is how the host takes this provider's tokens: the subject, as
-// every authenticate function answers (K6, ADR-0016).
+// every authenticate function answers (K6, ADR-0018).
 func (p *Local) Authenticate() Authenticate {
 	return func(credential string) (string, bool) { return p.Verify(credential) }
 }

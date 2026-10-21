@@ -128,7 +128,7 @@ export function MemberDetail({ id }: { id: string }) {
   );
 }
 
-// Grant one role: app, role, optionally bounded to a unit and a time (ADR-0027 §3.3).
+// Grant one role: app, role, optionally bounded to a unit and a time (ADR-0044 §3.3).
 function GrantForm({ apps, onSubmit, onCancel }: { apps: { id: string; roles: string[] }[]; onSubmit: (g: Grant) => Promise<void>; onCancel: () => void }) {
   const chart = useRead<Chart>("/v1/organization").data;
   const [app, setApp] = useState(apps[0]?.id ?? "");

@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// Matching rules (ADR-0024、ADR-0062 Ⅰ-G). Several systems describe the same
+// Matching rules (ADR-0024、ADR-0064 Ⅰ-G). Several systems describe the same
 // party, material or site under different ids; a matching rule says when two
 // rows are one entity, and whose value wins per field. It is applied wherever
 // rows land in an object - a source's pull, a pipeline's run - so the object

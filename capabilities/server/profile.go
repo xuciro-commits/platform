@@ -91,7 +91,7 @@ func profileActions() []platform.Action {
 	}
 }
 
-// Tenant-wide defaults a profile inherits (ADR-0027 §2.1), as settings of the
+// Tenant-wide defaults a profile inherits (ADR-0044 §2.1), as settings of the
 // platform app so they are decided, journaled and read like any setting.
 const (
 	SettingName         = "name"

@@ -156,7 +156,7 @@ export function HostTenant({ tenant }: { tenant: string }) {
   </>;
 }
 
-/** A new tenant from a template (ADR-0027 §2.2): its first administrator holds admin in every app; settings are decided and journaled. */
+/** A new tenant from a template (ADR-0044 §2.2): its first administrator holds admin in every app; settings are decided and journaled. */
 function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const call = useConsole();
   const templates = useReadQuery<Api.TenantTemplate[]>("/v1/host/templates").data ?? [];

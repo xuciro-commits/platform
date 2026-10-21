@@ -1,4 +1,4 @@
-// The reader's own arrangement of a drawing (ADR-0035): every canvas can be
+// The reader's own arrangement of a drawing (ADR-0033): every canvas can be
 // dragged, and where the owner keeps no positions of their own the reader's
 // arrangement stays on this device until they tidy it again. A scene opts in by
 // naming a stable storeKey — the drawing's identity, not the run's — so the

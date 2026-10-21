@@ -21,20 +21,20 @@ import (
 	"time"
 )
 
-// Deployment is how a host binary runs (ADR-0010、ADR-0016): in memory with
+// Deployment is how a host binary runs (ADR-0010、ADR-0018): in memory with
 // development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
 	Addr, Database, Issuer, Keys, Web string
 	HostAdmins                        string // explicit authenticated subjects; tenant roles do not imply host authority
 	// TenantsFile lists the host's tenants with their seats and starting
-	// settings (ADR-0027 §2.2); the console appends to it. Empty: the
+	// settings (ADR-0044 §2.2); the console appends to it. Empty: the
 	// binary's development tenant. TemplatesDir holds tenant templates.
 	TenantsFile, TemplatesDir string
 	specs                     *specs
 	Files                     string // http(s)://host:port/bucket of an S3-compatible store (ADR-0038); empty: memory
 	Project                   bool
 	SnapshotEvery             int64
-	// Profile is which infrastructure the host runs on (ADR-0017 D1):
+	// Profile is which infrastructure the host runs on (ADR-0029 D1):
 	// "delivery" keeps the PostgreSQL journal, the S3 file bytes and an
 	// external OpenID provider; "lightweight" keeps everything in one data
 	// directory — a local journal file, local file bytes and the host's own
@@ -50,7 +50,7 @@ type Deployment struct {
 	Mint     string
 	NewKey   bool
 	TokenTTL time.Duration
-	// Packages is a directory of package descriptors (ADR-0016 §10.3): the
+	// Packages is a directory of package descriptors (ADR-0018 §10.3): the
 	// index the console lists and prechecks. Empty: no packages offered.
 	Packages     string
 	packageIndex *PackageIndex
@@ -75,9 +75,9 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.TemplatesDir, "templates", "", "directory of tenant templates the host console offers (empty: none)")
 	flag.BoolVar(&d.Project, "project", false, "copy records into PostgreSQL tables per tenant for tools outside the host (ADR-0024; needs -database)")
 	flag.Int64Var(&d.SnapshotEvery, "snapshot-every", 10000, "save each tenant's state every this many journal entries and at shutdown, and start from the newest compatible snapshot (ADR-0024; 0: replay the whole journal)")
-	flag.StringVar(&d.Web, "web", "", "directory of the workspace's build, served at / (ADR-0019; empty: API only)")
+	flag.StringVar(&d.Web, "web", "", "directory of the workspace's build, served at / (ADR-0018; empty: API only)")
 	flag.StringVar(&d.Profile, "profile", "delivery", "delivery: PostgreSQL journal, S3 file bytes, external OpenID provider; lightweight: one -data directory, an internal signing key, no external services")
-	flag.StringVar(&d.Data, "data", "", "directory of a lightweight host's state, journals and file bytes (ADR-0017; required with -profile lightweight)")
+	flag.StringVar(&d.Data, "data", "", "directory of a lightweight host's state, journals and file bytes (ADR-0029; required with -profile lightweight)")
 	flag.StringVar(&d.IDPKey, "idp-key", "", "file with the lightweight host's token signing key (default: <data>/idp.key)")
 	flag.BoolVar(&d.NewKey, "idp-new-key", false, "make a signing key when none exists, refuse to replace one, and stop")
 	flag.StringVar(&d.Mint, "mint-token", "", "print an access token for this subject and stop (<user:email> or <client:id>, as the seats name them)")
@@ -96,7 +96,7 @@ func (d *Deployment) idpKeyPath() string {
 
 // validate settles the profile before anything is opened: the profile is
 // explicit, its dependencies are required, and flags of the other profile are
-// refused rather than ignored (ADR-0017 D1).
+// refused rather than ignored (ADR-0029 D1).
 func (d *Deployment) validate() error {
 	switch d.Profile {
 	case "", "delivery":
@@ -112,7 +112,7 @@ func (d *Deployment) validate() error {
 		for name, set := range map[string]bool{"-database": d.Database != "", "-files": d.Files != "", "-oidc-issuer": d.Issuer != "",
 			"-oidc-keys": d.Keys != "", "-project": d.Project} {
 			if set {
-				return fmt.Errorf("%s is not part of the lightweight profile: its state is the -data directory (ADR-0017 D1)", name)
+				return fmt.Errorf("%s is not part of the lightweight profile: its state is the -data directory (ADR-0029 D1)", name)
 			}
 		}
 		return nil
@@ -122,7 +122,7 @@ func (d *Deployment) validate() error {
 
 // idp, on a lightweight host, is the provider it signs and verifies tokens
 // with. The seats served on /v1/sign-in are signed too, so no token of an
-// unsigned form is ever accepted (ADR-0017 D3).
+// unsigned form is ever accepted (ADR-0029 D3).
 func (d *Deployment) lightweightIdP() (*idp.Local, error) {
 	key, err := idp.LoadKey(d.idpKeyPath())
 	if err != nil {
@@ -145,7 +145,7 @@ func (d *Deployment) makeKey() error {
 }
 
 // lightweightState opens what a lightweight host runs on: its journal, its
-// file bytes and its signing key, all inside -data (ADR-0017 D2-D4).
+// file bytes and its signing key, all inside -data (ADR-0029 D2-D4).
 func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error) {
 	journal, err := OpenFileJournal(filepath.Join(d.Data, "journal"))
 	if err != nil {
@@ -166,7 +166,7 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error)
 
 // restoreTenants brings every tenant to the journal's state before the host
 // serves: the newest compatible snapshot when there is one, then the entries
-// after it. Both profiles run this same path (ADR-0017 D6): the lightweight
+// after it. Both profiles run this same path (ADR-0029 D6): the lightweight
 // profile's journal is a file, not a second set of semantics, so a restart
 // replays and a damaged journal quarantines exactly as it does on PostgreSQL.
 func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
@@ -348,7 +348,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 // Serve replays each tenant's journal, from its newest snapshot of this code
 // when there is one, then records into it (fail-stop), seeds a tenant whose
 // journal was empty, runs the tenants' owned
-// work every second (ADR-0027), saves snapshots as the journal grows and at
+// work every second (ADR-0044), saves snapshots as the journal grows and at
 // shutdown (ADR-0024), and serves until SIGINT or SIGTERM.
 func (d *Deployment) Serve(tenants ...*Tenant) error {
 	ctx := context.Background()
@@ -514,7 +514,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	host.HostAdmins = d.hostAdministrators()
 	host.tenantsFrom = registry.list
 	host.Templates = d.Templates
-	if d.Rebuild != nil { // the host console creates tenants (ADR-0027 §2.2)
+	if d.Rebuild != nil { // the host console creates tenants (ADR-0044 §2.2)
 		var createMu sync.Mutex
 		host.CreateTenant = func(req CreateTenantRequest, by string) (*Tenant, error) {
 			createMu.Lock()
@@ -553,7 +553,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.Issuer == ""
 	if signer != nil {
 		// The host serves its seats as signed tokens, and takes only those: the
-		// delivery path's development tokens are not accepted here (ADR-0017 D3).
+		// delivery path's development tokens are not accepted here (ADR-0029 D3).
 		host.SignWith(signer, d.TokenTTL)
 	}
 	return d.listen(ctx, host, func() {
@@ -707,8 +707,8 @@ func wakeWork() {
 	}
 }
 
-// RunWork runs the tenants' owned work (ADR-0027) and sends their outbound
-// effects (ADR-0004) when changed and at least every second.
+// RunWork runs the tenants' owned work (ADR-0044) and sends their outbound
+// effects (ADR-0051) when changed and at least every second.
 func RunWork(tenants ...*Tenant) {
 	runWorkFrom(func() []*Tenant { return tenants })
 }
@@ -724,8 +724,8 @@ func runWorkFrom(current func() []*Tenant) {
 			}
 			tenants := current()
 			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
-			// Work on the outside — effects (ADR-0004) and agents' model calls
-			// (ADR-0054) — goes to the I/O lane of every tenant at once, outside
+			// Work on the outside — effects (ADR-0051) and agents' model calls
+			// (ADR-0008) — goes to the I/O lane of every tenant at once, outside
 			// their locks; the next tick does not wait for it (ADR-0007 D2).
 			var outside []func()
 			for _, t := range tenants {

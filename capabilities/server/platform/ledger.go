@@ -172,7 +172,7 @@ func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 // may be nil) must hold, except in a replay (ADR-0057); rules (may be nil)
 // returns how to apply the decision, which runs with the new record only when
 // it is accepted (an idempotent replay applies nothing); a new decision is then
-// published to the tenant's subscribers (ADR-0016).
+// published to the tenant's subscribers (ADR-0018).
 func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
 	catalog := l.catalogFor(c)

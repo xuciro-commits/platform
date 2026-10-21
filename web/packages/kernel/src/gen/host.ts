@@ -5040,7 +5040,7 @@ export type WorkTask = {
   answer?: string;
 };
 
-/** Shared build-time page UI contracts (ADR-0015). */
+/** Shared build-time page UI contracts (ADR-0018). */
 export const pageUIManifest = {
   "documentless": {
     "widgets": [
@@ -12705,5 +12705,5 @@ export const pageUIManifest = {
 /** Authoring narrows manifest-owned properties and ports by widget; Section retains the installed wire format. */
 export type { PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor } from '../widget-authoring';
 
-/** Files owns normalized raster region bounds (ADR-0015). */
+/** Files owns normalized raster region bounds (ADR-0018). */
 export const imageRegionLimits = {"maxIDBytes":128,"maxLabelBytes":256,"maxRegions":64} as const;

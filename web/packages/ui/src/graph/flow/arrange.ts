@@ -1,4 +1,4 @@
-// One layout brain for the flow family (ADR-0035): the canvas's own "tidy up",
+// One layout brain for the flow family (ADR-0033): the canvas's own "tidy up",
 // the read-only step paths and the scenes that pre-compute positions all ask
 // the same function, so a kind's declared size or a lane's rule can never be
 // honoured in one place and forgotten in another.

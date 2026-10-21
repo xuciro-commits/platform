@@ -72,7 +72,7 @@ type Verdict struct {
 	Definition string   `json:"definition,omitempty"`
 }
 
-// Policy is a tenant rule over requests (ADR-0027 §3.4 ABAC): the first
+// Policy is a tenant rule over requests (ADR-0044 §3.4 ABAC): the first
 // matching deny wins over any allow; an allow lets through what roles do not.
 type Policy struct {
 	ID         string
@@ -147,7 +147,7 @@ func Decide(r Request, policies ...Policy) Verdict {
 			role = held
 		}
 	}
-	// A matching allow may supply the verb grant, preserving ADR-0027. It
+	// A matching allow may supply the verb grant, preserving ADR-0044. It
 	// remains pending until every narrowing layer below has passed.
 	verb := Gate{Allowed: role != "" || allow != nil || r.Subject.Automation, Reason: "No role or policy grants this operation"}
 	if role != "" {
@@ -186,7 +186,7 @@ func Decide(r Request, policies ...Policy) Verdict {
 	return v
 }
 
-// Widest is the widest of the scope levels several roles give (ADR-0027
+// Widest is the widest of the scope levels several roles give (ADR-0044
 // §3.3: roles add up): tenant > below > unit > own > none.
 func Widest(levels []string) string {
 	order := []string{"tenant", "below", "unit", "own", "none"}

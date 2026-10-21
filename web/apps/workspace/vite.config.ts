@@ -2,7 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// The workspace (ADR-0019): one page for every app of a host. The host serves
+// The workspace (ADR-0018): one page for every app of a host. The host serves
 // the build at "/"; in development Vite proxies the API to the host named by
 // PLATFORM_HOST (default: the sales host, 8495).
 export default defineConfig({

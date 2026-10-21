@@ -1,4 +1,4 @@
-// The code sandbox (ADR-0019 D4): one local prototype editor. Snippets are
+// The code sandbox (ADR-0018 D4): one local prototype editor. Snippets are
 // browser data, never published components, business records or credentials.
 import { HostContext } from "@platform/app";
 import { Button, PanelSection, StructureRow, Textarea, Workbench, language, notify, t, useUnsavedChanges, useViewVisible } from "@platform/ui";

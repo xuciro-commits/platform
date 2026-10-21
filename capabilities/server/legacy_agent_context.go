@@ -8,7 +8,7 @@ import (
 	"reflect"
 )
 
-// Replay-only branch, gathered per ADR-0062: delete when no hosted
+// Replay-only branch, gathered per ADR-0064: delete when no hosted
 // journal still holds an agent start written before ADR-0008.
 //
 // Legacy agent starts reconstructed their context with host-visible flow

@@ -4,7 +4,7 @@ import "encoding/json"
 
 // Historical view payloads and snapshots used the eight UAF grid cells.
 // Decode them into the current viewpoints; never rewrite journal bytes or
-// restore the retired grid field in the live write contract (ADR-0031).
+// restore the retired grid field in the live write contract (ADR-0022).
 func LegacyViewpoint(grid string) string {
 	switch grid {
 	case "Pr-Sr", "Pr-Cn", "Rs-Sr":

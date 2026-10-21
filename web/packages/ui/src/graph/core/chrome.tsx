@@ -39,7 +39,7 @@ export function CanvasHelpTool({ open, onToggle }: { open: boolean; onToggle: ()
 }
 
 /** The operations of the selected element or connection, along the canvas foot.
- * Narrow panels scroll it sideways instead of stacking the words (ADR-0031 D5). */
+ * Narrow panels scroll it sideways instead of stacking the words (ADR-0022 D5). */
 export function CanvasActionBar({ label, children }: { label: string; children: ReactNode }) {
   return <div className="nodrag nopan platform-canvas-actions" role="toolbar" aria-label={label}>{children}</div>;
 }

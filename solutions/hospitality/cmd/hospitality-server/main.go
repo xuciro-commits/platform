@@ -1,5 +1,5 @@
 // Command hospitality-server runs the hospitality solution (CRM, PMS, HCM, CSM) on the platform host
-// for one demo tenant; the deployment flags are platformserver's (ADR-0016).
+// for one demo tenant; the deployment flags are platformserver's (ADR-0018).
 package main
 
 import (

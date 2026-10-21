@@ -2,7 +2,7 @@
 
 <a id="adr-0040"></a>
 
-状态：已接受（2026-10-12，负责人指令，ADR-0038 A 块第二份）· 统一条件模型、公式语法、表格条件语法与 ADR-0015 的页面算子图；后三者的**数据与执行**继续有效（决策表、计算字段、页面变量不被删除）· 决策表与计算字段的现行决定归本文
+**状态：** 现行 · 2026-10-12 · 条件、公式与决策表是同一门语言。
 
 ## 0. 意图
 
@@ -42,7 +42,7 @@ type Expr struct {
 | **显式转换** | `parse-decimal` `parse-number` | text；无效、空白、超预算或非有限值明确拒绝 | decimal/number |
 | **时间** | `add-days` `add-months` `diff-days` `date-part`（year/month/day/weekday）`before` `after` `within-period` | date/datetime | date/integer/boolean |
 | **集合** | `count` `sum` `min` `max` `avg` | 集合（见下） | integer/decimal/money |
-| **观测窗口** | `delta` `rate` `over-window`（count/first/last/min/max/sum/mean） | 声明来源的一份固定大小汇总；不接受原始点；规范主人 ADR-0058 | decimal（count 为 integer）；空窗 count=0，其余为缺失 |
+| **观测窗口** | `delta` `rate` `over-window`（count/first/last/min/max/sum/mean） | 声明来源的一份固定大小汇总；不接受原始点；规范主人 ADR-0051 | decimal（count 为 integer）；空窗 count=0，其余为缺失 |
 | **量词** | `any` `all` `none` | 集合 + 谓词 | boolean |
 | **成员** | `in` `range`（`a..b` 的编译形态） | 标量与集合 | boolean |
 | **引用** | `path`（沿声明引用取值） | 记录 | 目标字段类型 |
@@ -66,9 +66,9 @@ type Expr struct {
 |---|---|---|
 | 动作/事务条件（`Guard`、`When`） | 不成立即拒绝，带构建者写的消息 | ADR-0039 的 `Condition` 改为引用 `Expr` + `Message` |
 | 字段赋值（`Set`） | 右值是 `Expr` | ADR-0039 |
-| 计算字段 | 对象上声明 `Formula Expr`，在 `Entity.Compute` 钩子求值（`platform/ledger.go:366,444`） | 本 ADR 扩展 ADR-0040 |
+| 计算字段 | 对象上声明 `Formula Expr`，在 `Entity.Compute` 钩子求值（`platform/ledger.go:366,444`） | 本 ADR 扩展 本文 |
 | 决策表单元格 | 条件单元格解析为 `Expr`；`a..b`/`a\|b\|c`/`*` 成为**语法糖**，编译到 `range`/`in`/`true` | 统一规则语言替换旧表格解析层；表的发布、执行、版本（≤64）不变 |
-| 页面变量与可见性 | `PageExpression` 迁到 `Expr`；算子白名单就是语言的算子集 | 本 ADR 取代 ADR-0015 的算子图 |
+| 页面变量与可见性 | `PageExpression` 迁到 `Expr`；算子白名单就是语言的算子集 | 本 ADR 取代 ADR-0018 的算子图 |
 
 **关键结果**：一条规则写一次，可以同时用于"页面是否显示这个按钮"、"动作是否允许"、"字段算多少"。运行判断仍由后端执行，页面显示不授予执行资格。
 
@@ -107,7 +107,7 @@ type Expr struct {
 
 ## 2. 不做
 
-- **不做通用编程语言**。没有变量绑定、没有循环、没有函数定义、没有模块。复杂算法走 ADR-0013 的受控代码（Go/TinyGo Wasm）。
+- **不做通用编程语言**。没有变量绑定、没有循环、没有函数定义、没有模块。复杂算法走 ADR-0057 的受控代码（Go/TinyGo Wasm）。
 - **不允许租户定义算子或类型**（这正是 ADR-0038 拒绝租户代码的边界）。
 - **不做运行时动态求值**：语言必须有编译表示，`Expr` 是树而非文本；文本只是编辑器与 API 的呈现。
 

@@ -8,7 +8,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 
 ## 读什么
 
-**[ADR 索引](docs/ADR/README.md)（64 份 ADR，一行一份，标了现行/局部取代/历史；先在这里找，再读那一份）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ [Intent](docs/Intent.md)（宗旨）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。**
+**[ADR 索引](docs/ADR/README.md)（37 份 ADR，一行一份，标了现行范围与并入关系；先在这里找，再读那一份）→ [WorkQueue](docs/WorkQueue.md)（当前要做的事）→ [Intent](docs/Intent.md)（宗旨）→ 与任务相关的 [Platform](docs/Platform.md) 章节、[ADR](docs/ADR/) 与 [Apps](docs/Apps.md)。**
 
 应用构建方向与不可动的边界见 [ADR-0038](docs/ADR/0038-build-the-capability-to-build.md)；四层包见 ADR-0057，第一次真实交付见 ADR-0060。ADR 中的历史实施顺序不代替当前 WorkQueue。
 
@@ -27,7 +27,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 2. **生成文件不手改**：`contract/go/gen`、`web/packages/kernel/src/gen/host.ts`（宿主 API 类型变化后在 `capabilities/server` 运行 `go run ./cmd/api-types`）、`web/apps/catalog/src/gen`（`node scripts/catalog.mjs generate`）。
 3. **单一归属，先复用。** 应用只导入 `platformserver/platform`，跨应用走 `protocols/`；客户端只用 `@platform/ui` 与 `@platform/app`；缺的能力在归属方扩展，不在应用里自造表格/面板/审批/文件/外部调用。`scripts/boundaries.sh` 与 `scripts/escapes.sh` 守这条线，已知逃逸只减不增。UI 变更前 `node scripts/catalog.mjs search <关键词>` 查已有组件。
 4. **参考应用是临时验证载体，不是产品；撞墙必须登记通用缺口。** `apps/*` 的行业实现用于证明平台能力，**最终按 [ADR-0053](docs/ADR/0053-retiring-native-apps.md) 退出**。构建过程中撞墙时按顺序走：① 查已有能力是否可用 → ② 确认是通用能力缺口则**登记到对应 ADR 的 As built 并在归属方补齐** → ③ 确认需新原语则立 ADR。**不允许在探针里绕过并把它当"行业特殊性"留下**——这正是 `apps/mes` 的 `canDo`、`apps/erp` 的过账链产生的方式。
-5. **租户扩展只走受控路径**：受控定义、隔离编译/执行与版本化制品（ADR-0013），不在宿主直接执行租户脚本。
+5. **租户扩展只走受控路径**：受控定义、隔离编译/执行与版本化制品（ADR-0057），不在宿主直接执行租户脚本。
 6. **最简代码。** 不保留永久重复路径或临时垫片（[ADR-0039 §1.5](docs/ADR/0039-business-transaction.md) 的档位是**替换不是增量**，一个语义只有一个实现）；替代旧路径时删除旧路径及其文档。
 7. **双语文案。** 产品界面文字英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web `t()` + 包内 `i18n.ts`。业务数据不翻译。
 8. **文档各司其职，只写现状；`make budget` 守总量。** Intent 管宗旨；Platform 管架构与能力摘要；ADR 管决策与"As built"边界（合并更新，不追加日志）；WorkQueue 管顺序（完成即移除）；Testing 管检查方法；Apps 管可执行用法。不新增总结文档、第二队列或检查点日记。被取代的 ADR 在状态行写明被谁取代。
@@ -60,7 +60,7 @@ AI 编程助手从这里开始；`CLAUDE.md` 只引用本文件。规则以本�
 1. **Go**：`cd /home/user/platform && bash scripts/sandbox-go.sh`，执行脚本打印的 `export`（包含 `PATH`、`GOTOOLCHAIN=local` 与 `GOWORK`，模块直连走 `GOPROXY=direct`）。Go 工具链从 PyPI 动态获取（`pip download go-bin`，已内置于脚本）；外部工具（如 `buf`）由 GitHub Releases 或 npm/PyPI 按需获取，不入库。脚本在忽略的 `.build/sandbox-go/` 装配多模块工作区，可在 `capabilities/server/`、`apps/*/server`、`protocols/*` 和 `solutions/*` 跑 `go build`/`go vet`/`go test`，也可直接 `make lite LITE_HOST=0.0.0.0`。Web 依赖先按下一条安装。新增模块后重新跑脚本；检查 workspace 以外的临时 scaffold 时须单独装配，不把它冒充已经验证。
 2. **Web**：`cd web && corepack pnpm install --frozen-lockfile`（npm 可达），随后从根目录执行 `npm_config_workspace_concurrency=1 make check PNPM="corepack pnpm"`，不要从根目录让 Corepack 猜 Web 的固定 pnpm 版本。默认浏览器未安装；若已准备 Chromium 及运行库，照原 Playwright 路线执行并报告实际结果；未准备时才写明"未在浏览器观察"，不能把 tsc 当浏览器证据。
 3. **宿主类型变了**：`go run ./cmd/api-types`（在 `capabilities/server/`）再生成 `web/packages/kernel/src/gen/host.ts`，否则 `TestAPIContract` 失败。文案变了：补 `i18n/zh-CN.json` / 包内 `i18n.ts`，否则 `TestLanguages` 失败。
-4. **轻量验证**：`make check-go` 不可用时（无 pnpm/buf）直接 `go build ./... && go vet ./...`；`go test ./apps/<改动包>/... ./platform/...` + 根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`；根包全量仅保留长期不变量测试（ADR-0030）；计时规模测试已删除。
+4. **轻量验证**：`make check-go` 不可用时（无 pnpm/buf）直接 `go build ./... && go vet ./...`；`go test ./apps/<改动包>/... ./platform/...` + 根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`；根包全量仅保留长期不变量测试（ADR-0029）；计时规模测试已删除。
 5. **沙箱会被重置**：`/home/user/platform` 以外（上传文件、`~/.gocache`）全丢，分支 HEAD 可能回退到旧树。每个整块做完立刻 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再跑第 1 步。需要长期保留的外部文件（规范）提交进仓库（`docs/standards/`，不含预编译工具链）。
 6. **分支纪律与双代理同步协议**（分支代理 = Arena 会话分支；集成代理 = 负责人授权的本地代理，在 main 上工作。双方都遵守，目标是不丢任何一行已提交代码）：
    - **永不 merge / cherry-pick / rebase / reset 到对方分支**（任一方向）。跨分支取内容只有一种方式：按路径复制，然后正常 commit/push 到自己的分支。路径复制不建立 Git 祖先关系，所以 `git merge-base` 不是同步点，提交号相同与否也不说明已同步。

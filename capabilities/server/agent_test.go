@@ -304,7 +304,7 @@ func scriptedModel(t *testing.T) *httptest.Server {
 	return s
 }
 
-// ADR-0054: agents run in the host as governed principals; each step the
+// ADR-0008: agents run in the host as governed principals; each step the
 // model chose is journaled and replayed without calling it.
 func TestAgents(t *testing.T) {
 	for _, accepted := range []bool{false, true} {

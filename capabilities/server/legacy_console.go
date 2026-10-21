@@ -9,7 +9,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// Replay-only branches of the console, gathered per ADR-0062 Each is a
+// Replay-only branches of the console, gathered per ADR-0064 Each is a
 // contract with journals already written and may be deleted only when no
 // hosted journal still contains the input it decodes:
 //
@@ -20,7 +20,7 @@ import (
 //
 // Nothing here is reached by a live submission.
 
-// ADR-0062 added core:steward to the local bootstrap seats. Existing journals
+// ADR-0064 added core:steward to the local bootstrap seats. Existing journals
 // still start with the former seats. Remove this one implicit seed role
 // (never a decided grant) from the comparison and require the
 // entire resulting directory to match the exact saved predecessor digest.

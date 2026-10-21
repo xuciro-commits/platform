@@ -1,5 +1,5 @@
 // Package relations is the platform's links and timeline (ADR-0006), a
-// platform app on the app API and internal/host (ADR-0016).
+// platform app on the app API and internal/host (ADR-0018).
 package relations
 
 import (

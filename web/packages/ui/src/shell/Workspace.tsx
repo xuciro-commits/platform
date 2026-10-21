@@ -141,7 +141,7 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
  * with the current application and its menus, a context pane with that
  * application's navigation, and a docking workspace whose tabs are routes
  * (one per entity) with a command palette (⌘K).
- * Tabs are grouped by application (ADR-0019 D1): each `layoutScope` has its own
+ * Tabs are grouped by application (ADR-0018 D1): each `layoutScope` has its own
  * remembered layout, swapped in when the scope changes; the recent/favorites memory is per `storageKey`; the active tab is in the URL.
  */
 export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, menus = [], commands = [], session, status, applications: appEntries, rail, onActiveRoute, onEmpty, onLanguage, search }: {

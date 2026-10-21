@@ -2,7 +2,7 @@
 
 <a id="adr-0024"></a>
 
-状态：有界首版已实施（2026-10-06）；Pipeline 画布由 ADR-0033 实现，集成定义候选与跨环境交付由 ADR-0037、ADR-0046 接续，规则表达归 ADR-0040。Source/Pipeline 执行身份和固定输入按 ADR-0064 实施（§3），替代原内容键。独立 Pipeline 草稿试跑已实现（§5）；Dataset 版本数据不随定义制品自动迁移 · 承接 ADR-0023、ADR-0040、ADR-0062
+**状态：** 现行 · 2026-10-06 · 连接、数据集、管道、匹配与回写（并入原 0023）。
 
 ## 决定
 
@@ -12,7 +12,7 @@
 
 - 装载是一项动作 `build.dataset.load`（payload `{rows, producer}`，≤ 5000 行/版）：`version++`，写一条 `build.datasetversion`（ID `<dataset>@<n>`，`data` 为行的 JSON），超过 `keep`（默认 3）的旧版本归档并清空 `data`（保留行数）；
 - 读：`/v1/records/build.dataset/{id}` 与 `/v1/records/build.datasetversion/{id}@{n}`，没有新的 read；
-- Source 新增 `dataset` 目标（与 `object` 二选一）：命中时每次拉取把**原始行**作为数据集下一版本（`loadDataset`），映射字段留空——"映射"从数据源迁到管道，这正是 ADR-0023 §2 预留的收口。老的 object 直映射保留给小而稳定的接口。
+- Source 新增 `dataset` 目标（与 `object` 二选一）：命中时每次拉取把**原始行**作为数据集下一版本（`loadDataset`），映射字段留空——"映射"从数据源迁到管道，这正是 本文 §2 预留的收口。老的 object 直映射保留给小而稳定的接口。
 
 Dataset 版本就是记录，走同一账本与恢复，未引入独立存储层。Connection/Source/Dataset/Pipeline 的定义已按 ADR-0037、ADR-0046 纳入原候选与环境交付；凭据和现场配置在目标环境绑定，Dataset 版本行属于运行数据，不因定义晋级而复制。
 
@@ -65,7 +65,7 @@ Datasets 提供定义、手动装载、结构变化与版本预览；Pipelines �
 
 - Source 的 `object/key/mapping` 不再是必填：数据集目标下留空。不再为数据源单独扩展映射能力（转换、计算、查找都在管道里做一次）。
 - 没有新的 read、没有预览端点：数据集版本就是记录，前端按 ID 读。
-- 不引入独立的 pipeline 执行器/调度器：外循环 + 账本动作已经足够，与 ADR-0023 C1 死胡同（不在裁决里 fetch）一致。
+- 不引入独立的 pipeline 执行器/调度器：外循环 + 账本动作已经足够，与 本文 C1 死胡同（不在裁决里 fetch）一致。
 
 ## 验证
 
@@ -87,7 +87,7 @@ Datasets 提供定义、手动装载、结构变化与版本预览；Pipelines �
 
 原 `eventEffects` 在接受时冻结请求（方法、地址、体、私网条件与密钥名），投递复用同一 dispatcher、每 Connection 的保序与重试。效果 ID 作为 Idempotency-Key；2xx 送达，非 408/429 的 4xx 拒绝，其余按原退避重试。普通回写是至少一次投递，外部系统需按同键去重；应答经原 Answerer 保存计数和最近记录，结果字段再沿对象自身 edit 写回，不能把普通送达当成跨系统业务确认。未知结果/对账归 ADR-0051，恢复只应用已保存意图。
 
-血缘声明从同一 Definition.Requires 投影（ADR-0056），运行版本、隔离行和送达状态并排显示，不冒充记录级或字段级冻结来源。对象与数据集使用同一依赖图，不另存第二套边。原独立集成血缘实现已被替代；页面字段血缘和运行冻结字段血缘没有实现，取消其无需求的后续施工承诺。
+血缘声明从同一 Definition.Requires 投影（ADR-0057），运行版本、隔离行和送达状态并排显示，不冒充记录级或字段级冻结来源。对象与数据集使用同一依赖图，不另存第二套边。原独立集成血缘实现已被替代；页面字段血缘和运行冻结字段血缘没有实现，取消其无需求的后续施工承诺。
 
 ## 主数据匹配
 
@@ -104,3 +104,55 @@ Datasets 提供定义、手动装载、结构变化与版本预览；Pipelines �
 原 Pipeline 编辑器的 Trial pipeline / 试跑管道直接试跑当前未保存配置，展示输出、隔离行与采样提示；编辑后隐藏旧结果，拒绝保留输入。这里只观察转换与期望结果，实际目标写入、匹配合并和业务动作拒绝仍由正式运行决定。
 
 检查入口：`TestPipelineDraftPreview`、`TestPipelineDraftPreviewBoundsAndAuthorization` 与 `integration-authoring` 浏览器路线；前者检查未保存转换、取样/隔离、正常成员入口、严格公式及试跑前后原状态/日志不变，后者检查 join 行数、原数据读取拒绝和显式 deny。实际运行继续由原 `RunPipelines`、出站/记录与账本 owner 承担。
+
+## 并入：连接与 Source profile（原 0023）
+
+连接是接入的声明，Dataset/Pipeline/Writeback/Matching 是它的下游；两者不再各写一份边界。
+
+### 决定
+
+### 1. Connection：到一个外部系统的可达性与凭据引用
+
+`build.connection` 是构建器的一项资产（与 Source 同一 owner，沿 本文"没有独立的 integration owner"）：
+
+- `kind`：`http`（任意 REST/文件 URL）、`odata`（SAP Gateway / 任何 OData v2/v4 服务根）、`postgres`（只读数据库）；
+- `address`：服务根 URL 或 **不含密码的** DSN；
+- `secret`：宿主密钥库中的**名字**（沿 AI Provider 的 `Secret` 先例：`PLATFORM_SECRETS_DIR` / `PLATFORM_SECRET_<NAME>`），http/odata 下其内容作为 `Authorization` 头的值，postgres 下作为密码；凭据本身永不进入记录、候选或发布包；
+- `allowPrivate`：允许 http 与私网地址（本地系统）；
+- 生命周期 `draft → ready`：`check` 让宿主在外循环上实际连一次（http/odata：GET 服务根或 `$metadata`；postgres：`select 1`），结果记在 `last`（`build.connection.checked`），不是裁决。
+
+Connection/Source/Dataset/Pipeline 的定义已由 ADR-0037、ADR-0046 纳入原封存候选与环境交付（本文）。凭据值不随制品复制；目标环境独立绑定连接地址、凭据引用和协议配置，并检查连接就绪。Dataset 版本行仍属于运行数据，不随定义晋级复制。
+
+### 2. Source 的四个 profile
+
+`build.source` 从"一个 URL"扩成"一个 Connection 上的一个表/实体/文件"：
+
+| profile | 需要 | 读什么 | 增量 |
+|---|---|---|---|
+| `json` | http | `url`（可相对 Connection 地址）+ `path` | 无（整表；一次拉取固定一次执行） |
+| `csv` | http | 同上，首行为列名 | 无 |
+| `odata` | odata | `entity`（实体集名）+ 可选 `filter` | `since`：时间戳/序列属性，`$filter=since gt <cursor>&$orderby=since`，跟随 `@odata.nextLink` / `d.__next` 分页，v2 `d.results` 与 v4 `value` 都认 |
+| `table` | postgres | `entity`（`schema.table`）+ 可选 `filter`（WHERE 片段，参数化不可用于片段，故只允许标识符与常量的简单比较） | `since`：列名，`WHERE since > $1 ORDER BY since LIMIT 5000` |
+
+`cursor` 是只读字段，每次成功拉取后随 `build.source.pulled` 一起写回（最大 `since` 值）；`pull` 之外另有 `reset` 把 cursor 清空重拉。无 Connection 的 json source 继续按 本文 工作（向后兼容：`connection` 为空、`profile` 为空视为 json）。
+
+行处理按 ADR-0064 改为：拉取与映射 → 持久接受固定输入/执行身份 → 目标对象自己的 create/edit → 原执行的 `pulled` 摘要。同次执行重试复用原答复；新的快照拉取拥有新身份，A→B→A 不会漏掉最后一次变化。Dataset 输出及复杂映射归 本文，原直写路径仍适用于小而稳定的接口。
+
+### 3. 构建器
+
+Ontology › **Connections**（列表 + 编辑器：种类、地址、密钥名、私网、Check、最近检查）；Data source 编辑器增加 Connection 选择与 profile 分支字段（实体/表、过滤、增量列、cursor 与 Reset）。
+
+### 做减法
+
+- 原生 erpadapter 已退出，不恢复独立凭据与轮询实现。
+- Source 的 `header` 字段保留给无 Connection 的 json；有 Connection 时忽略（凭据只在一个地方）。
+
+### 不做
+
+RFC/IDoc、CDC、OAuth 刷新流程（密钥名可以指向一个会轮换的文件）、MySQL/SQL Server（pgx 之外的驱动等真实需要）。
+
+### HTTP JSON 原接入与保留行为
+
+没有 Connection 的 JSON 来源仍可直接声明 URL、行路径、id 字段、映射和可选请求头。单次读取至多 16 MB、5,000 行，经原受控网络访问规则；http/私网必须显式允许。拉取在锁外进行，映射及匹配结果由原 FileStore 固定，接受执行后才以原发布者的当前权限提交目标自身 create/edit。操作键来自执行和行身份，内容摘要不再当作事件身份。`pulled` 保存计数及最多 20 条失败；追加失败保留原输入以便重启继续，全部成功才推进游标。重置游标结束旧 pending 拉取并请求新的完整拉取，旧接受结果不改写。恢复不读取外部网络，具体执行与版本安排见 本文 §3。
+
+原 0023 的 CSV/数据库/预览/血缘待建列表已取消：四类 Source 已在本文实现，数据集与管道归 本文，来源回读归 ADR-0051。Source 直写对象和 Dataset 输出同时是有效路径，不能因引入 Dataset 强制迁移所有小接口。已退出的 erpadapter 不再作为待迁移任务；外部 ERP 使用原 Connection、协议与效果机制。

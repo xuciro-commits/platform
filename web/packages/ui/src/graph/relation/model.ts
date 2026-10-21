@@ -42,7 +42,7 @@ export const relationLayouts: RelationLayout[] = ["down", "up", "right", "left",
 export const relationNodeSize = { width: 180, height: 56 };
 
 /** The standing relation classes (ADR-0033): what a thing on a relationship
- * drawing *is*. The icon is a name from the kit's one icon vocabulary (ADR-0031
+ * drawing *is*. The icon is a name from the kit's one icon vocabulary (ADR-0022
  * D1), so this table is pure data — a new class is one row, never a renderer. A
  * node's own icon/tone/caption always win; the class only fills what is absent. */
 export const relationNodeClasses: Record<string, { title: string; icon: string; tone?: string }> = {

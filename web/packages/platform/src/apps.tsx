@@ -1,4 +1,4 @@
-// Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0016、ADR-0006).
+// Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0018、ADR-0006).
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";

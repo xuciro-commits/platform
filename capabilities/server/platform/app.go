@@ -19,8 +19,8 @@ import (
 	"platformkernel/kernel"
 )
 
-// Member is a person, service or AI agent of a tenant (ADR-0016). Grants are
-// what they hold (ADR-0027 §3.3): roles in apps, each optionally bounded to a
+// Member is a person, service or AI agent of a tenant (ADR-0018). Grants are
+// what they hold (ADR-0044 §3.3): roles in apps, each optionally bounded to a
 // unit and a time. Roles is derived from the active grants by the host — the
 // primary role per app (the app's first declared role the member holds) —
 // for the many places that ask for one; RolesIn answers with all of them.
@@ -39,7 +39,7 @@ type Member struct {
 	// permission patterns (exact, or a prefix ending in *); nil is unbounded.
 	Scopes []string `json:"scopes,omitempty"`
 	// Agent marks an AI agent: an irreversible effect it causes waits for a
-	// person's approval, and it cannot give one (ADR-0004 D6).
+	// person's approval, and it cannot give one (ADR-0051 D6).
 	Agent bool `json:"agent,omitempty"`
 	// Language is the member's own choice (ADR-0005 6b, ADR-0028), such as
 	// "zh-CN", derived from their profile when the host hands a member to an
@@ -52,7 +52,7 @@ type Member struct {
 	Timezone string `json:"timezone,omitempty"`
 }
 
-// Grant is one role a member holds in an app (ADR-0027 §3.3): everywhere in
+// Grant is one role a member holds in an app (ADR-0044 §3.3): everywhere in
 // the app, or within a unit of a structure; from a day, until a day; given by
 // someone for a reason. Dates are YYYY-MM-DD, inclusive from, exclusive until.
 type Grant struct {
@@ -89,7 +89,7 @@ func (m Member) RolesIn(app string) []string {
 // Holds reports whether the member holds role in app, among any of their roles.
 func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(app), role) }
 
-// May asks the engine (ADR-0027 §3.4) whether the member may exercise a
+// May asks the engine (ADR-0044 §3.4) whether the member may exercise a
 // permission of app that names roles: any role they hold there suffices.
 func (m Member) May(app, permission string, roles []string) authz.Verdict {
 	return authz.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
@@ -413,11 +413,11 @@ type Runtime interface {
 	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
 }
 
-// Manifest declares an app (ADR-0016). Names of actions, reads and inputs are
+// Manifest declares an app (ADR-0018). Names of actions, reads and inputs are
 // unique within a tenant; the host routes by them.
 type Manifest struct {
 	ID      string
-	Title   string // the app's name in the workspace's launcher (ADR-0019)
+	Title   string // the app's name in the workspace's launcher (ADR-0018)
 	Version string
 	Actions *Catalog
 	Reads   []string
@@ -435,21 +435,21 @@ type Manifest struct {
 	Provides      []Provision   // protocols this app implements (ADR-0006)
 	Consumes      []Consumption // protocols this app uses; the host binds a provider
 	Everyone      []string      // reads any member may use; the app filters by caller
-	Jobs          []Job         // scheduled work (Runner), ADR-0027
+	Jobs          []Job         // scheduled work (Runner), ADR-0044
 	Retry         *Retry        // how events delivered to it are retried; nil: the host's (ADR-0007 D4)
 	Settings      []Setting     // typed values administrators set in Settings
-	Emits         []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0004)
+	Emits         []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0051)
 	Entities      []Entity      // entity types whose records the host keeps (ADR-0046)
 	Pages         []Page        // bounded code page descriptors over those records/actions (ADR-0020 13b)
 	LinkTypes     []LinkType
 	PropertyTypes []PropertyType
 	Interfaces    []Interface             // shapes several entity types share (ADR-0020 A2)
 	Queries       []NamedQuery            // named pure queries pages and agents share (ADR-0047 21c)
-	Functions     []AIFunction            // typed, bounded inference through existing model effects (ADR-0054)
-	Operations    []Operation             // typed native or controlled Wasm computation (ADR-0013)
-	Observations  []ObservationDefinition // external summaries and result-only business decisions (ADR-0058)
+	Functions     []AIFunction            // typed, bounded inference through existing model effects (ADR-0008)
+	Operations    []Operation             // typed native or controlled Wasm computation (ADR-0057)
+	Observations  []ObservationDefinition // external summaries and result-only business decisions (ADR-0051)
 	Flows         []Flow                  // long-running processes the host runs for the app (ADR-0007)
-	Agents        []Agent                 // AI agents the host runs for the app (ADR-0054)
+	Agents        []Agent                 // AI agents the host runs for the app (ADR-0008)
 	Sequences     []Sequence              // numbers of its documents, without gaps (ADR-0026)
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0008); the roles its actions grant need not be listed.
@@ -499,7 +499,7 @@ type Event struct {
 }
 
 // Subscriber is an app that handles the events its manifest subscribes to, as
-// owned work after the input (ADR-0027). A refusal is retried, then recorded as
+// owned work after the input (ADR-0044). A refusal is retried, then recorded as
 // a failed delivery; the event's decision stands. Handle must depend only on
 // tenant state: a replay runs it again and must reach the same outcome.
 type Subscriber interface {

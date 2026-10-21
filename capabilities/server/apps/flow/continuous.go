@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// Continuous Flow (ADR-0016 §13, plan A; ordered by the owner on 2026-10-05).
+// Continuous Flow (ADR-0018 §13, plan A; ordered by the owner on 2026-10-05).
 //
 // Plan A keeps the original Flow as the only owner that advances state: a
 // continuous instance waits in its own token, and each arriving batch is one
@@ -28,7 +28,7 @@ import (
 // staged-result facility (compute_channel.go); the worker ABI to use it is a
 // later step and is not claimed here.
 
-// BatchFrame is the continuous instance's own bookkeeping (ADR-0016 §13.3):
+// BatchFrame is the continuous instance's own bookkeeping (ADR-0018 §13.3):
 // what has been consumed, the watermark, per-node state and what could not be
 // accepted. It is committed with the accepted result and replayed with it.
 type BatchFrame = platform.FlowBatchFrame
@@ -38,7 +38,7 @@ type BatchFrame = platform.FlowBatchFrame
 type SourceCheckpoint = platform.FlowSourceCheckpoint
 
 // DeadLetter keeps one signal that could not be folded, with its cause, so it
-// can be inspected and replayed under the original authorization (ADR-0016 §13.3).
+// can be inspected and replayed under the original authorization (ADR-0018 §13.3).
 type DeadLetter = platform.FlowDeadLetter
 
 // Batch is one accepted batch of a real source: its identity, its predecessor,

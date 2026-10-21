@@ -47,10 +47,10 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/packages", Summary: "Administrators read the package index; application builders discover installed blueprints", Answer: []PackageView{}},
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},
 	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles and profiles (administrators)", Answer: []MemberView{}},
-	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors; ADR-0027)", Answer: []AppPermissions{}},
+	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors; ADR-0044)", Answer: []AppPermissions{}},
 	{Pattern: "GET /v1/projects", Summary: "The tenant's projects: the members and assets each covers; editors of a live project build within it (administrators, auditors; #141)", Answer: []BuildProject{}},
-	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors; ADR-0027)", Answer: AccessConfig{}},
-	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member; ADR-0027)", Answer: TenantRecord{}},
+	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors; ADR-0044)", Answer: AccessConfig{}},
+	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member; ADR-0044)", Answer: TenantRecord{}},
 	{Pattern: "GET /v1/account", Summary: "The caller's profile over the tenant's defaults (ADR-0028)", Answer: Account{}},
 	{Pattern: "GET /v1/audit", Summary: "Accepted inputs, newest first, rebuilt from the journal (administrators)", Answer: []AuditEntry{}},
 	{Pattern: "GET /v1/deliveries", Summary: "Delivery attempts of events to subscribers (administrators)", Answer: []Delivery{}},
@@ -122,7 +122,7 @@ type MeView struct {
 	Preferred   string          `json:"preferred,omitempty"` // the member's own choice
 	Currency    string          `json:"currency"`            // the tenant's, the default of amounts people enter (ADR-0026)
 	Account     Account         `json:"account"`             // the member's profile over the tenant's defaults (ADR-0028)
-	Tenant      TenantRecord    `json:"tenant"`              // the tenant's record (ADR-0027)
+	Tenant      TenantRecord    `json:"tenant"`              // the tenant's record (ADR-0044)
 }
 
 // SignIn tells the workspace how to sign in: an OpenID issuer and client, or
@@ -491,10 +491,10 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 		}
 		fmt.Fprintf(&b, "\nexport type %s = %s;\n", name, tsOf(d, 0))
 	}
-	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts (ADR-0015). */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
+	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts (ADR-0018). */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
 	b.WriteString("\n/** Authoring narrows manifest-owned properties and ports by widget; Section retains the installed wire format. */\nexport type { PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor } from '../widget-authoring';\n")
 	limits, _ := json.Marshal(map[string]int{"maxRegions": platform.MaxImageRegions, "maxLabelBytes": platform.MaxImageRegionLabelBytes, "maxIDBytes": platform.MaxImageRegionIDBytes})
-	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds (ADR-0015). */\nexport const imageRegionLimits = %s as const;\n", limits)
+	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds (ADR-0018). */\nexport const imageRegionLimits = %s as const;\n", limits)
 	return b.String()
 }
 

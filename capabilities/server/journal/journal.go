@@ -11,7 +11,7 @@ import (
 )
 
 // Journals is a tenant journal a host runs on: PostgreSQL on the delivery path
-// (ADR-0024), or one local file on the lightweight one (ADR-0017 D2). Both keep
+// (ADR-0024), or one local file on the lightweight one (ADR-0029 D2). Both keep
 // the same semantics — entries in order per tenant, appends expect the read
 // position, an accepted result is committed once under its idempotency key,
 // snapshots carry an explicit restore-compatibility key (or a legacy code

@@ -412,7 +412,7 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 }
 
 // Activation installs a saved draft and moves the single pointer. The result
-// survives replay, and a non-builder cannot change it (ADR-0011 D2).
+// survives replay, and a non-builder cannot change it (ADR-0045 D2).
 func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 	const tenantID = "release-activate"
 	compose := func() *Tenant {

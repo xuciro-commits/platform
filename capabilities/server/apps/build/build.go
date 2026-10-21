@@ -1,5 +1,5 @@
 // Package build is the platform's builder app (ADR-0048), on the app API and
-// internal/host (ADR-0016): objects a tenant defines, published into the
+// internal/host (ADR-0018): objects a tenant defines, published into the
 // running host so they behave like an app's own — the same records, generated
 // actions and forms, search, aggregates, journal and replay. The definition is
 // data; nothing about it is a second runtime.
@@ -31,13 +31,13 @@ type Build struct {
 	installed map[string]platform.Entity
 	// jointEntities are the object drafts of the candidate being built, so the
 	// same validation answers entity lookups as the candidate would install
-	// them (ADR-0011). Empty outside a joint build.
+	// them (ADR-0045). Empty outside a joint build.
 	jointEntities     map[string]platform.EntityInfo
 	jointAssets       map[platform.AssetRef]bool
 	jointDeclarations map[platform.AssetRef]platform.ReleaseAsset
 	// jointMode is set while a candidate holds more than one draft: the host's
 	// installed-state install checks then move to the candidate's own install
-	// dry run, because no single draft's image is installed yet (ADR-0011).
+	// dry run, because no single draft's image is installed yet (ADR-0045).
 	jointMode     bool
 	linkTypes     map[string]LinkType
 	propertyTypes map[string]PropertyType
@@ -94,7 +94,7 @@ func New(tenant string) *Build {
 }
 
 // releaseProfile is declared, not hidden: an operator sets it through the
-// platform's settings surface (ADR-0011b).
+// platform's settings surface (ADR-0045b).
 func (b *Build) settings() []platform.Setting {
 	return []platform.Setting{{Name: SettingReleaseProfile, Title: "Release profile", Type: "choice",
 		Choices: []string{ProfileProduction, ProfileDevelopment}, Default: ProfileDevelopment,
@@ -113,7 +113,7 @@ func (b *Build) Manifest() platform.Manifest {
 	}
 	// Every role an object names is a role of this app, which the Console
 	// grants — one that only reads grants no action (ADR-0044). Builder and
-	// Publisher are the two roles releases need (ADR-0016 §11).
+	// Publisher are the two roles releases need (ADR-0018 §11).
 	roles := []string{construction.User, construction.Builder, construction.Publisher, construction.Integrator}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
@@ -156,7 +156,7 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 	return out
 }
 
-// SettingReleaseProfile declares how definitions reach operators (ADR-0011
+// SettingReleaseProfile declares how definitions reach operators (ADR-0045
 // D5b): a tenant that declares "production" delivers only through a saved joint
 // candidate, and the direct install its authoring surfaces used to offer is
 // refused by the owner. Any other value — including the default below — is the
@@ -202,7 +202,7 @@ func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(ra
 
 // Read release-profile answers how this tenant delivers definitions, for the
 // authoring surfaces that must not offer an entry the owner would refuse
-// (ADR-0011b). Every role of this app may read it: it is a declaration of
+// (ADR-0045b). Every role of this app may read it: it is a declaration of
 // the tenant's profile, not a record.
 func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name != ReadReleaseProfile {

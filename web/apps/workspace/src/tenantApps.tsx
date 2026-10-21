@@ -23,7 +23,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     const pages = new Map(definitions.filter((d) => d.ref.kind === "page" && d.ref.app === definition.ref.app).map((d) => [d.ref.name, d.page]));
     const held = application.pages.filter((name) => pages.has(name));
     if (held.length === 0 && !application.resources?.length) return [];
-    const icon = <IconGlyph name={application.icon} />; // the kit's vocabulary (ADR-0031)
+    const icon = <IconGlyph name={application.icon} />; // the kit's vocabulary (ADR-0022)
     const id = `${definition.ref.app}:${application.name}`;
     const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
     const item = (name: string) => ({ label: pages.get(name)?.title ?? name, icon, route: route(name) });

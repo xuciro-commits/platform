@@ -474,7 +474,7 @@ func summarize(ua string) string {
 }
 
 // joins reports whether subject may take a seat by its mail domain alone: a
-// person of one of the tenant's sign-in domains (ADR-0027 §2, ADR-0028 §4).
+// person of one of the tenant's sign-in domains (ADR-0044 §2, ADR-0028 §4).
 func (d *Console) JoinsSubject(subject string) bool {
 	if d.host == nil {
 		return false

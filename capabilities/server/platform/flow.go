@@ -31,11 +31,11 @@ type Flow struct {
 	// step there → the step here (a decision, taken by an administrator).
 	From map[string]string
 	// Continuous declares a flow an arriving batch advances, instead of one
-	// decision starting one instance (ADR-0016 §13, plan A).
+	// decision starting one instance (ADR-0018 §13, plan A).
 	Continuous *Continuous
 }
 
-// Continuous is a flow's declared batch contract (ADR-0016 §13.3): the real
+// Continuous is a flow's declared batch contract (ADR-0018 §13.3): the real
 // source it consumes, the batch and state budgets, and whether dead letters are
 // kept. The batch identity, predecessor and watermark travel with each batch;
 // the instance's frame keeps what was consumed.
@@ -261,7 +261,7 @@ type Ask struct {
 	On      string
 	Match   func(c Caller, r *Run, e Event) bool
 	// Reviews names the agent step whose proposal this asks a person to
-	// accept (ADR-0054): the first answer accepts it, another corrects it,
+	// accept (ADR-0008): the first answer accepts it, another corrects it,
 	// and an event On bypasses it. What people make of it is kept on the run.
 	Reviews string
 }
@@ -274,7 +274,7 @@ type Call struct {
 	Data    func(c Caller, r *Run) any
 }
 
-// AgentStep gives one of the app's agents a goal (ADR-0054) and waits for its
+// AgentStep gives one of the app's agents a goal (ADR-0008) and waits for its
 // run: its result is the Answer. When the run stops (a budget, a guard, no
 // model), the flow goes to the step's Fault, or else a person does the step (To).
 type AgentStep struct {

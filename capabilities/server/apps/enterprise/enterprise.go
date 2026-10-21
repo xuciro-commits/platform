@@ -68,7 +68,7 @@ type Enterprise struct {
 }
 
 // declarations is the enterprise action catalog in full — the write contract
-// the host enforces and the generated SDK types (ADR-0034 D3): one source for
+// the host enforces and the generated SDK types (ADR-0022 D3): one source for
 // the ledger and for every consumer outside this package.
 func declarations() []platform.Action {
 	admin := []string{Admin}
@@ -148,7 +148,7 @@ func declarations() []platform.Action {
 // New is a tenant's enterprise app, starting from an ADR-0022 seed (which an
 // industry package or the development seats give) lifted into the model. Its
 // ledger is declared from declarations(), the single source of the write
-// contract the generated SDK also reads (ADR-0034).
+// contract the generated SDK also reads (ADR-0022).
 func New(tenant string, seed platform.OrgSeed) *Enterprise {
 	catalog := platform.NewCatalog(declarations()...)
 	return &Enterprise{tenant: tenant, model: enterprisemodel.FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
@@ -484,7 +484,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				case r.Stereotype == Placement && r.Kind != "" && m.KindOf(r.Kind) == nil:
 					return nil, invalid("{kind} is not a relationship kind of this model", r.Kind)
 				}
-				// The same contract as Relate (ADR-0031 D2): a slice or a sync
+				// The same contract as Relate (ADR-0022 D2): a slice or a sync
 				// cannot write a pair the profile refuses.
 				src, dst := m.ElementOf(r.Source), m.ElementOf(r.Target)
 				if st, ok := stereotypes[r.Source]; ok {

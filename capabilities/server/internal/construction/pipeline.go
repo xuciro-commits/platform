@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// Pipelines (ADR-0024、ADR-0062 I-D): a declared, closed set of steps from
+// Pipelines (ADR-0024、ADR-0064 I-D): a declared, closed set of steps from
 // datasets to a dataset or to an object. No script: every step is data the
 // builder can read back, every row that fails an expectation is quarantined
 // with its reason, and a run is an ordinary journaled input like a pull.
@@ -35,7 +35,7 @@ type Pipeline struct {
 	OutputDataset string `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject  string `json:"outputObject,omitempty" title:"Output object"`
 	Key           string `json:"key,omitempty" title:"Record id column"`
-	// Marking (ADR-0025) is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
+	// Marking (ADR-0044) is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
 	Marking string `json:"marking,omitempty" field:"readonly" title:"Marking"`
 	// OutputEnterprise lands the rows in the enterprise model instead (ADR-0022): one element per row.
 	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
@@ -104,7 +104,7 @@ type PipelineRun struct {
 	Input             int                   `json:"inputVersion"`
 	Rows              int                   `json:"rows"`              // rows after the steps
 	Written           int                   `json:"written"`           // rows written to the output
-	Marking           string                `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0025)
+	Marking           string                `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0044)
 	Merged            int                   `json:"merged,omitempty"`  // rows merged into matched records (ADR-0024)
 	Quarantined       int                   `json:"quarantined"`
 	Failed            int                   `json:"failed"` // rows the output refused

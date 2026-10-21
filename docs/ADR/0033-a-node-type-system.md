@@ -2,11 +2,9 @@
 
 <a id="adr-0033"></a>
 
-状态：已落地（2026-10-09）；补 ADR-0033 的核心缺口——画布有了形状词汇，却没有节点种类的词汇。
+**状态：** 现行 · 2026-10-09 · 画布节点词汇与排布规则（并入原 0035）。
 
-## 背景
-
-ADR-0033 把两套画布收敛成两族，流程侧拿到了 BPMN 的形状与标记（`FlowNotation`、`FlowShape`、`notationOf`），泳道随后进了 ADR-0033。但往下看 `FlowNodeKind`，`category` 还是一个自由字符串：它同时被当成调色板的分组标题、节点视图的图标键（`icons[kind.category]`），而每个站点又各自维护一张 `icons` 映射表——Logic Studio 有一张（`capability.kind` → 图标），节点视图有一张（`category` → 图标），调色板干脆没有（落到 `<Blocks />`）。同一个 `compute` 在检视器里是 `Braces`、在画布里是 `Code2`，而在没有对应 `category` 条目的站点里两者都不是。
+## 背景 本文 把两套画布收敛成两族，流程侧拿到了 BPMN 的形状与标记（`FlowNotation`、`FlowShape`、`notationOf`），泳道随后进了 本文。但往下看 `FlowNodeKind`，`category` 还是一个自由字符串：它同时被当成调色板的分组标题、节点视图的图标键（`icons[kind.category]`），而每个站点又各自维护一张 `icons` 映射表——Logic Studio 有一张（`capability.kind` → 图标），节点视图有一张（`category` → 图标），调色板干脆没有（落到 `<Blocks />`）。同一个 `compute` 在检视器里是 `Braces`、在画布里是 `Code2`，而在没有对应 `category` 条目的站点里两者都不是。
 
 端口的 `type` 同样是自由字符串，而"什么能连什么"的规则被写了**四遍**：
 
@@ -58,7 +56,7 @@ ADR-0033 把两套画布收敛成两族，流程侧拿到了 BPMN 的形状与�
 
 流程线表达执行/数据次序，用类型化端口的 FlowCanvas；关系线表达事物关联，用无执行端口的 RelationCanvas。FlowSteps 是只读路径，FlowGraph/FlowRun 绘制定义/实例；app 的 FlowInstanceView 才负责正式读取、授权与操作。公共 core 只拥有盒子/位置、工具栏/帮助/操作条、适配和连线外观，不造第三个引擎。
 
-旧 Graph、NodeCanvas、BlockCanvas、DiagramCanvas、重复 layout/diagramLayouts/neighborhood 与 flows/FlowView 已删除，不恢复转发包装。模型图、血缘、运行关联和记录邻域使用关系族；真正流程编写保留端口、插步、撤销与布局。BPMN notation 表达任务、网关、事件、附着与标记的呈现，不能仅凭图形声明执行支持。排布归 ADR-0035，连接合法性继续由同一类别/端口规则检查。
+旧 Graph、NodeCanvas、BlockCanvas、DiagramCanvas、重复 layout/diagramLayouts/neighborhood 与 flows/FlowView 已删除，不恢复转发包装。模型图、血缘、运行关联和记录邻域使用关系族；真正流程编写保留端口、插步、撤销与布局。BPMN notation 表达任务、网关、事件、附着与标记的呈现，不能仅凭图形声明执行支持。排布归 本文，连接合法性继续由同一类别/端口规则检查。
 
 ## 泳道是编排声明
 
@@ -71,3 +69,25 @@ ADR-0033 把两套画布收敛成两族，流程侧拿到了 BPMN 的形状与�
 RelationNode.class 与 size 使用同一纯数据类别表描述数据、资产、运行关联和模型；图标通过 IconName 绘制。节点显式 icon/tone/caption 优先，类别只补缺。FlowNodeKind.size/collapsed 是默认声明，节点可覆盖，尺寸与拖入放置共用同一计算。FlowStepNode 的 class/notation 进入相同图标解析，未声明时保留原 kind。
 
 类别不是业务事实或执行能力，不能因出现一个节点种类就新增运行器。除企业的既有编辑场景外，不为只读关系图建设通用建点面板；取消原文把泛化面板列为“下一块”的安排。实际任务有编辑需求时再扩展原 owner。
+
+## 并入：画布排布（原 0035）
+
+节点类型词汇与排布是同一种画布语言的两半；ELK 只排非树与流程，树用整洁排布，个人位置不进模型。
+
+### 决定与落地
+
+`@platform/ui/graph` 是唯一自动排布与连线归属。关系族与流程族分开：
+
+- **关系族的层级是 owner 声明的事实。** `RelationEdge.parent` 说明哪一端是父：`target`（"属于"，child → parent）或 `source`（"负责"，parent → child）。只要有一条线声明，只有声明的线构成树；都不声明时每条线按 source → target 读作父 → 子。每个节点保留第一个父，成环的线不进树。企业 owner 声明：放置（ActualResourceRelationship）、任职（FillsPost）、成员（ActualOrganizationRole）以 target 为父，负责（ResponsibleFor）以 source 为父；排序为放置 → 负责 → 任职 → 成员。其余关系照画，但不影响树形。
+- **四个方向就是四个按钮**：自上而下 / 自下而上 / 自左向右 / 自右向左。图是树时由 `relation/tree.ts` 的整洁树排布：父居中于子之上、兄弟按轮廓贴紧、同父的多个叶子在纵向图里沿父的主干左右成对堆叠；兄弟子树过多时按画面比例（约 1.6:1）折成多行分列主干两侧，而不是拉成一长条。一次计算，四个方向只是旋转。不是树时由 ELK Layered 排。放射（ELK Radial，只用层级边）、距离平衡（ELK Stress）、紧凑排列（ELK Rectangle Packing）保留。
+- **连线从不取自排布结果。** `core/route.ts` 每次按节点当前的盒子计算：两端取相对两边的中点，正交折线；同一父的子线共用一条距子行 20px 的总线，父的子节点多数在哪个方向决定总线方向；堆叠叶子从父的主干横接到叶子侧边中点；直线穿过他人盒子时，在附近区域内对盒子边线组成的稀疏网格做带转弯代价的 A* 避障，找不到再扩大到全图；结果按几何缓存，每次重算设上限。拖动、显式排布、已存视图走同一条路，拖到哪里线就跟到哪里。层级线的名称默认收起，选中线或其一端时显示。
+- **位置的归属不变（本文）。** owner 位置与读者本地存储的位置优先；只有没有位置的节点才被排布，有已放置节点时新来者作为一组放在已有图下方，已放置的节点不会因为新节点而移动。显式选择排布才把完整新位置交回 owner 或本地存储。
+- **流程族保持 ELK Layered**：节点尺寸、固定端口、边标签、泳道 compound + INCLUDE_CHILDREN；`layeredLayout` / `arrangeFlow` 保持归属词汇。浏览器用官方 `elk-api` + 独立 `elk-worker.min.js`，SSR 与 owner 测试用同版本 bundled 引擎；算法查询走 `knownLayoutAlgorithms()`。
+
+### 单一排布与个人位置
+
+自研分层/力导向旧方案已退出，不再保留待实现算法。流程族统一用 arrangeFlow 解析真实尺寸、compact、间距、方向与泳道，编辑器/运行图/对象流程/FlowSteps 不再自己手排；排布结果不改变业务边与方向。
+
+storeKey 标识稳定图纸，个人位置写本机 localStorage，最多保留 60 张图；存储不可用只失去记忆。换图清理当前缓存，拖动不触发重复适配。Flow 首见节点从个人位置播种，owner 的新位置仍优先；关系只读图把个人位置叠加到 owner/default 位置，显式排布更新个人结果。企业管理员继续走原服务端位置保存，读者拖动不获得写模型权限。图纸键由各 owner 提供，不用一次读取请求作身份。
+
+本机位置不承诺跨设备同步、导出或屏幕自适应推荐；这些旧未来安排删除，不建立第二个用户偏好服务。既有位置优先与按图身份隔离的保证保留。历史 ui 的 store、arrange、FlowSteps/FlowCanvas 测试证明各自逻辑；本轮文档合并不新增浏览器观察结论。

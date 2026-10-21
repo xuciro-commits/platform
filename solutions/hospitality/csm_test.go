@@ -24,7 +24,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0054 (2): the helpdesk's triage agent grounds itself in what the
+// ADR-0008 (2): the helpdesk's triage agent grounds itself in what the
 // CRM knows of the customer, triages and replies; its reply's mail waits for a
 // person. A ticket the agent cannot take goes to the desk, and to its leads
 // when it is late. A reply promising money is refused by the agent's guard.

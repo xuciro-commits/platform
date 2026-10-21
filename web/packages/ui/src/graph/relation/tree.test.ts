@@ -1,4 +1,4 @@
-// The tidy tree and the live router (ADR-0035): structural evidence — parents
+// The tidy tree and the live router (ADR-0033): structural evidence — parents
 // over their children, nothing overlapping, lines from side middles that never
 // pass through a box — not a pixel arrangement.
 import { describe, expect, it } from "vitest";

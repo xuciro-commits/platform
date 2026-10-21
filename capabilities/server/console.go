@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// The platform app (ADR-0016) is the tenant's console: its directory of
+// The platform app (ADR-0018) is the tenant's console: its directory of
 // members and their role in each app, and every administrator's decision about
 // the host's operations — connectors, app settings, owned work, protocol
 // bindings, notifications, endpoints and effects. Every change is one of its
@@ -63,8 +63,8 @@ type Console struct {
 	minted   map[string]bool      // token secrets already handed out
 	lastSeen map[string]time.Time // the host's memory, not decided state
 	sessions sessionTable
-	roles    map[string]*CustomRole   // ADR-0027 §3.3
-	policies map[string]*PolicyRecord // ADR-0027 §3.4
+	roles    map[string]*CustomRole   // ADR-0044 §3.3
+	policies map[string]*PolicyRecord // ADR-0044 §3.4
 	teams    map[string]*Team
 	projects map[string]*BuildProject
 	packages map[string]*InstalledPackage
@@ -209,7 +209,7 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	return nil
 }
 
-// restoreAccess takes the access configuration (ADR-0027 D) and tokens
+// restoreAccess takes the access configuration (ADR-0044 D) and tokens
 // (ADR-0028 D) of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
 	d.projects, d.packages = s.Projects, s.Packages

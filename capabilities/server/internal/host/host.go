@@ -1,5 +1,5 @@
 // Package host is what the host offers its own apps beyond the app API
-// (ADR-0016): the platform's apps import platformserver/platform and this
+// (ADR-0018): the platform's apps import platformserver/platform and this
 // package, never the host runtime. Business apps outside this module cannot
 // import it. The host detects an app's roles by the interfaces it implements;
 // it keeps no field for any particular app.
@@ -70,7 +70,7 @@ type Processes interface {
 	RunEnded(c platform.Caller, run RunEnd, now time.Time)
 }
 
-// Runs are agent runs (ADR-0054) a flow's agent step starts and signals.
+// Runs are agent runs (ADR-0008) a flow's agent step starts and signals.
 type Runs interface {
 	// Start puts a new run with the decision r.
 	Start(c platform.Caller, r *pb.ChangeRecord, run RunStart, now time.Time)
@@ -86,7 +86,7 @@ type RunStart struct {
 	Token                            int
 }
 
-// RunSignal is what people made of a run's result (ADR-0054).
+// RunSignal is what people made of a run's result (ADR-0008).
 type RunSignal struct {
 	At               time.Time
 	Kind, By, Detail string

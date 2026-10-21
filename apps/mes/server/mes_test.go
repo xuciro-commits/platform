@@ -44,7 +44,7 @@ func member(id string, role Role, in ...string) platform.Caller {
 }
 
 // testPlant sends every input through a tenant on the platform host, so it is
-// journaled as in production (ADR-0016).
+// journaled as in production (ADR-0018).
 type testPlant struct {
 	*Plant
 	tenant  *platformserver.Tenant
@@ -270,7 +270,7 @@ func TestDispositionNeedsTwoSignatures(t *testing.T) {
 
 // A lot reads the routing version it was released against, not the newest version
 // of its product's routing: that is the whole of what "released against" buys, and
-// why revising a routing cannot move a lot already on the floor (ADR-0032).
+// why revising a routing cannot move a lot already on the floor (ADR-0060).
 func TestLotReadsItsOwnRoutingVersion(t *testing.T) {
 	p := New(tenant, DemoMaster())
 	at := func(version, number int) string {
@@ -394,7 +394,7 @@ func TestDowntimeReasonSurvivesRecomputation(t *testing.T) {
 }
 
 // #97: a downtime that starts tells the supervisors of its line; one still
-// without a reason reminds them once, after the plant's setting (ADR-0027).
+// without a reason reminds them once, after the plant's setting (ADR-0044).
 func TestDowntimeTellsSupervisors(t *testing.T) {
 	p := newPlant(t)
 	inbox := func(who platform.Caller) []string {

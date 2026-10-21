@@ -20,7 +20,7 @@ const SchemaAgentPublish = AgentType + ".publish"
 // Agent is an AI agent a builder declares over the ontology (ADR-0008): what
 // it is for, its instructions, the published actions and queries it may use,
 // its budget, who takes over when it stops, and the cases it must pass. The
-// host runs it as any code-declared agent (ADR-0054): every step journaled,
+// host runs it as any code-declared agent (ADR-0008): every step journaled,
 // irreversible effects drafted for a person to confirm, evaluations archived
 // against its version.
 type Agent struct {

@@ -20,7 +20,7 @@ type FunctionDefinitions interface {
 }
 
 // AIFunction is a bounded, declarative inference over explicit scalar fields
-// of one object (ADR-0054). It has no tools, code or business writes; the
+// of one object (ADR-0008). It has no tools, code or business writes; the
 // application's ordinary Reply action decides whether to adopt the answer.
 type AIFunction struct {
 	Proposal       *ProposalPolicy `json:"proposal,omitempty"`

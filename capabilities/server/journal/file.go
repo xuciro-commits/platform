@@ -18,7 +18,7 @@ import (
 )
 
 // File is a host's journals in one local directory, with no database
-// (ADR-0017 D2): journal.jsonl holds every tenant's entries, one line each;
+// (ADR-0029 D2): journal.jsonl holds every tenant's entries, one line each;
 // snapshots/ holds each tenant's checkpoints; derived/ holds what is kept
 // outside the journal, the passage vectors and the model-call transcripts.
 //

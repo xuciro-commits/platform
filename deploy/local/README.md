@@ -27,7 +27,7 @@ PostgreSQL 仍使用原 18 主版本和 `pgdata` 数据卷，镜像由 `Dockerfi
 
 需要先有 Docker（OrbStack：`orb start`）。
 
-每个主机自己提供工作台页面（ADR-0019），所以先构建一次工作台：
+每个主机自己提供工作台页面（ADR-0018），所以先构建一次工作台：
 
 ```bash
 pnpm --dir web/apps/workspace build
@@ -57,7 +57,7 @@ cd deploy/local && docker compose ps
 
 - 停止：`docker compose stop`。数据保存在 Docker 卷 `pgdata` 和 `rauthy` 里，下次启动会重放日志，数据还在。
 - 只重建主机：`docker compose up -d --build manufacturing-server hospitality-server webhook-sink`。改了前端要先重新构建工作台。
-- 计算能力（ADR-0013）：`wasm-worker` 与 `code-builder` 共用私有 `compute-sockets` 卷，没有公开端口、业务数据库或自有队列。主机通过 `PLATFORM_WASM_WORKER_SOCKET` / `PLATFORM_CODE_BUILDER_SOCKET` 委托执行与编译。只有固定命令的构建 driver 持有 Docker daemon socket；业务主机、Wasm worker、租户编译容器均不挂载它。worker 无网络、只读根、2 GiB RSS/2 CPU 限额；编译容器无网络、只读根、65534 用户及 CPU/RSS/进程限额。源码经内存 tar 输入，Wasm 与构建元数据走现有制品存储和发布。
+- 计算能力（ADR-0057）：`wasm-worker` 与 `code-builder` 共用私有 `compute-sockets` 卷，没有公开端口、业务数据库或自有队列。主机通过 `PLATFORM_WASM_WORKER_SOCKET` / `PLATFORM_CODE_BUILDER_SOCKET` 委托执行与编译。只有固定命令的构建 driver 持有 Docker daemon socket；业务主机、Wasm worker、租户编译容器均不挂载它。worker 无网络、只读根、2 GiB RSS/2 CPU 限额；编译容器无网络、只读根、65534 用户及 CPU/RSS/进程限额。源码经内存 tar 输入，Wasm 与构建元数据走现有制品存储和发布。
 - **在 8495/8490 验收本次代码时**：先运行 `pnpm --dir web/apps/workspace build`，再在 `deploy/local` 运行 `docker compose up -d --no-deps --build hospitality-server`（或对应的 `manufacturing-server`），最后刷新浏览器。`scripts/verify.sh web` 的浏览器路线使用一次性的内存酒店主机 `18496`；它通过也不会自动更新你正在看的 8495 容器。两者的测试数据和登录方式也不同，视觉验收应以你实际使用的容器地址为准。
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
 - 灌酒店业演示数据：`./seed-hospitality.sh`。可以重复执行，结果不变。
@@ -70,9 +70,9 @@ cd deploy/local && docker compose ps
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-主机按名字取密钥（ADR-0004 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
+主机按名字取密钥（ADR-0051 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
 
-## 轻量 profile（无 Docker 的单机运行，ADR-0017）
+## 轻量 profile（无 Docker 的单机运行，ADR-0029）
 
 同一套语义可以在小设备上用一个二进制加一个数据目录跑起来：没有 Docker、没有 PostgreSQL、没有对象存储、没有外部身份服务。profile 是**声明**的，缺依赖就失败退出，不会悄悄回退到另一个 profile 的存储或身份。
 
@@ -162,7 +162,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 每个人只担一份职责，测试时换人登录就能看到权限的差别；要同时看两个人，用一个普通窗口加一个无痕窗口分别登录。
 - 新加的账号要 Rauthy 重新初始化才有（本地数据可丢）：`cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy`，再重建两个主机。
-- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`（ADR-0027）；模板在 `deploy/templates/`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
+- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`（ADR-0044）；模板在 `deploy/templates/`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
 ## 服务账号与 AI 代理（client credentials）
 
@@ -193,7 +193,7 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 | 酒店业：CRM、PMS、HCM、CSM | `solutions/hospitality`：`go run ./cmd/hospitality-server` | 8496 | `workspace-hospitality` | `manager`、`sales`、`sales-only`、`desk` |
 | 制造业：MES、ERP | `solutions/manufacturing`：`go run ./cmd/manufacturing-server` | 8491 | `workspace-manufacturing` | `supervisor`（也是 ERP 主管会计）、`accountant`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`assistant-l1`（AI 代理） |
 
-**每个应用单独运行**（ADR-0016：每个应用先能自己干，不依赖别的应用和外部系统）：在 `apps/<应用>/server` 下运行 `go run ./cmd/<应用>-server -web ../../../web/apps/workspace/dist`，端口都是 8499（一次起一个），启动配置 `workspace-app`：
+**每个应用单独运行**（ADR-0018：每个应用先能自己干，不依赖别的应用和外部系统）：在 `apps/<应用>/server` 下运行 `go run ./cmd/<应用>-server -web ../../../web/apps/workspace/dist`，端口都是 8499（一次起一个），启动配置 `workspace-app`：
 
 | 应用 | 开发令牌 |
 |---|---|

@@ -177,7 +177,7 @@ export function MyAccount() {
   );
 }
 
-// Hand what I hold in an app to someone else until a day (ADR-0027 §3.3).
+// Hand what I hold in an app to someone else until a day (ADR-0044 §3.3).
 function Delegate() {
   const { me, decide, can } = useHost();
   const apps = Object.keys(me.profile.roles ?? {});

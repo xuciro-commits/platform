@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// CheckReplay is the platform's replay conformance (ADR-0010、ADR-0027,
-// ADR-0004), for the tests of every composition: build makes a fresh tenant of
+// CheckReplay is the platform's replay conformance (ADR-0010、ADR-0044,
+// ADR-0051), for the tests of every composition: build makes a fresh tenant of
 // the same apps, the journal is replayed into it with every outbound call
 // failing the test, and what the host shows must equal the live tenant's —
 // audit, deliveries, owned work, effects and endpoints, notifications, connector

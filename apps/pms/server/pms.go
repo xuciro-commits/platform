@@ -1,4 +1,4 @@
-// Package pms is the property management system (ADR-0016; #79), modelled
+// Package pms is the property management system (ADR-0018; #79), modelled
 // on Oracle OPERA: room types, reservations taken at the desk or from a
 // channel, and the lodging protocol it provides. It accepts reservation
 // decisions through the kernel contract. It may
@@ -211,7 +211,7 @@ func (h *Hotel) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 
 func (h *Hotel) AcceptedLedger() *platform.Ledger { return h.ledger }
 
-// Settings, job and notices of the hotel (ADR-0027), the second app on them after the MES.
+// Settings, job and notices of the hotel (ADR-0044), the second app on them after the MES.
 const (
 	SettingOverbooking  = "allow-overbooking"
 	SettingChannelNotes = "channel-booking-notice"
@@ -286,7 +286,7 @@ func ChannelConnector(id string) *pb.ConnectorDescriptor {
 // Declarations are the tenant's authority declarations, for edges (K5 A9).
 func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Declarations() }
 
-// Manifest declares the hotel as an app (ADR-0016).
+// Manifest declares the hotel as an app (ADR-0018).
 // Snapshot and Restore: the channel's facts and the decisions; reservations
 // and room types are the host's records (ADR-0024).
 func (h *Hotel) SnapshotFormat() string { return "pms.facts.v1" }

@@ -1,4 +1,4 @@
-// The CRM's UI (ADR-0019): accounts and opportunities, composed from the
+// The CRM's UI (ADR-0018): accounts and opportunities, composed from the
 // platform's lists and record pages. An account's page lists its opportunities
 // (a reference); an opportunity's page lists the stays linked to it from
 // whichever app provides the lodging protocol, and what the provider told about

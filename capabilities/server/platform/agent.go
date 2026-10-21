@@ -6,11 +6,11 @@ import (
 	"platformkernel/kernel"
 )
 
-// Agent is an AI agent an app declares (ADR-0054): instructions, the tools it
+// Agent is an AI agent an app declares (ADR-0008): instructions, the tools it
 // may use, budgets, guards and the people it hands its goal to. It is a
 // principal of its own, "agent:<app>.<name>": it may do what its tools allow
 // and, running for a person, only what that person may do too. What it causes
-// that cannot be recalled waits for a person (ADR-0004 D6). Each run is a
+// that cannot be recalled waits for a person (ADR-0051 D6). Each run is a
 // record of the host's agent app; each step the model chose is journaled with
 // its rationale, and replay applies it without calling the model.
 type Agent struct {

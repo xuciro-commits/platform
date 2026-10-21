@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// The agent app runs the agents apps declare (ADR-0054). A run is a record of
+// The agent app runs the agents apps declare (ADR-0008). A run is a record of
 // it. The host calls the model outside the tenant's lock (Think), then journals
 // the step the model chose — tool, arguments, rationale, usage — as an entry of
 // kind agent and applies it as one decision of this app: the tool's action is
@@ -78,7 +78,7 @@ type AgentRunRecord struct {
 }
 
 // Draft is an action an agent running for a person proposes; the person
-// confirms it, changed or not, or rejects it (ADR-0054).
+// confirms it, changed or not, or rejects it (ADR-0008).
 type Draft struct {
 	Kind      string `json:"kind"` // action or protocol
 	Action    string `json:"action"`
@@ -97,7 +97,7 @@ type Citation struct {
 	Step     int    `json:"step"`
 }
 
-// Signal is what a person made of an agent's work (ADR-0054): a draft
+// Signal is what a person made of an agent's work (ADR-0008): a draft
 // confirmed, changed or rejected; a proposal accepted, corrected, or bypassed
 // by someone acting meanwhile. Signals are the evaluation's reference.
 type Signal struct {

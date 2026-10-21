@@ -1,10 +1,10 @@
-// Package csm is customer service management (ADR-0016, ADR-0054 (2),
+// Package csm is customer service management (ADR-0018, ADR-0008 (2),
 // ADR-0007's second proof), modelled on ServiceNow CSM: customers' tickets with a lifecycle, a service level kept by
 // a flow, and a triage agent. The agent classifies a new ticket, grounds itself
 // in what the tenant knows of the customer — their account, opportunities and
 // stays, through the context graph and search, whatever apps hold them — and
 // replies. Its reply is mailed only after a person approves it: the reply's
-// mail is an irreversible effect, held when an agent causes it (ADR-0004 D6).
+// mail is an irreversible effect, held when an agent causes it (ADR-0051 D6).
 // Late tickets are escalated to the desk's leads.
 package csm
 

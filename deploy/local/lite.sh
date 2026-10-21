@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The existing lightweight profile: one data directory, signed local seats,
-# local journal/files and the same workspace (ADR-0017、ADR-0029).
+# local journal/files and the same workspace (ADR-0029).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 root=$(pwd)

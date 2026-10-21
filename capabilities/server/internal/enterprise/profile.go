@@ -17,13 +17,13 @@ type ProfileEntry struct {
 	Icon       string   `json:"icon,omitempty"`
 }
 
-// Viewpoint is one ARIS description view (ADR-0031): the whole model seen from
+// Viewpoint is one ARIS description view (ADR-0022): the whole model seen from
 // one question — who is where, what it holds, what it can do, what it offers,
 // how it is run. Views are projections of the one model, never stores of their
 // own: Elements declares the slice, Context names the stereotypes drawn only
 // beside a slice element (the organisation is a fact of every view, not all of
 // it in every drawing), and Relationships derive from the contracts just as a
-// grid cell's did (ADR-0031 D2).
+// grid cell's did (ADR-0022 D2).
 type Viewpoint struct {
 	ID            string   `json:"id"` // "organization"
 	Title         string   `json:"title"`
@@ -67,10 +67,10 @@ var Vocabulary = map[string]bool{
 	"MilestoneDependency": true, "ProjectSequence": true,
 }
 
-// Views are the five description views (ADR-0031): one model, five questions.
+// Views are the five description views (ADR-0022): one model, five questions.
 // Each declares the stereotypes it draws as its own and the ones it draws only
 // as context; the relationships are derived — a view offers a relation only
-// when the contracts admit some pair of its own slice (ADR-0031 D2).
+// when the contracts admit some pair of its own slice (ADR-0022 D2).
 func Views(mm *uaf.Metamodel) []Viewpoint {
 	contracts := Contracts(mm)
 	drawable := func(elements []string) []string {

@@ -24,7 +24,7 @@ type session struct {
 	changed            map[string]*FlowInstance
 	order              []string
 	assigns            []flowTask
-	runs               []host.RunStart // agent runs its steps start (ADR-0054)
+	runs               []host.RunStart // agent runs its steps start (ADR-0008)
 	signals            []runSignal     // what people made of their proposals
 	close              []string
 	event              *platform.Event
@@ -551,7 +551,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			tok.Due = due
 		}
 		ss.trace(x, tok.Step, "waiting", waitingFor(step), "")
-	case step.Agent != nil && ss.f.host.Runs() != nil: // the app's agent takes the step (ADR-0054); its run ends it
+	case step.Agent != nil && ss.f.host.Runs() != nil: // the app's agent takes the step (ADR-0008); its run ends it
 		ag := step.Agent
 		id := fmt.Sprintf("%s:%d", x.ID, x.Seq)
 		x.Seq++

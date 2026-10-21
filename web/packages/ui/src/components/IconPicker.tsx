@@ -1,4 +1,4 @@
-// One icon vocabulary for the whole platform (ADR-0031). The kit owns the
+// One icon vocabulary for the whole platform (ADR-0022). The kit owns the
 // names, the glyphs and their words; the host only checks that a name looks
 // like a name, so the set can grow here without a host change. Anything that
 // lets a person choose an icon — a module, an application, an enterprise

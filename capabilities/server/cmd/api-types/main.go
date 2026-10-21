@@ -1,6 +1,6 @@
 // Command api-types writes the TypeScript types of the host API from the
 // host's Go types (ADR-0005 D7): the web edge's types are generated, never
-// written by hand. The same run writes the enterprise SDK (ADR-0034 D4) —
+// written by hand. The same run writes the enterprise SDK (ADR-0022 D4) —
 // query/ref/write contracts typed from the app's own declarations. Run it in
 // capabilities/server after changing a type the host answers with or a
 // declaration the SDK types; TestAPIContract fails while either file is stale.

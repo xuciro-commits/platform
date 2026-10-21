@@ -42,7 +42,7 @@ export type FlowCanvasProps = {
   onLaneChange?: (id: string, lane: string) => void;
   history?: FlowHistory;
   /** The reader's own arrangement is kept on this device for this drawing
-   * (ADR-0035): nodes become draggable even in view mode, and the arrangement
+   * (ADR-0033): nodes become draggable even in view mode, and the arrangement
    * survives a reload until the reader tidies it up again. */
   storeKey?: string;
 };

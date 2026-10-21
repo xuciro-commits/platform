@@ -21,7 +21,7 @@ import (
 	"platformserver/platform"
 )
 
-// Data source pulls (ADR-0023, block C of ADR-0038). A pull is an import whose
+// Data source pulls (ADR-0024, block C of ADR-0038). A pull is an import whose
 // file comes from an endpoint: the host fetches the answer on the I/O lane,
 // outside every lock and decision, then submits each mapped row as the
 // publisher - the target's own generated create or edit, keyed by the source,
@@ -316,7 +316,7 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 	return true
 }
 
-// connectionMarking is what a connection classifies everything read through it as (ADR-0025).
+// connectionMarking is what a connection classifies everything read through it as (ADR-0044).
 func (t *Tenant) connectionMarking(connection string) string {
 	if connection == "" {
 		return ""
@@ -383,7 +383,7 @@ func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marki
 	return err
 }
 
-// readSource reads the source's rows by its profile (ADR-0023): json and csv
+// readSource reads the source's rows by its profile (ADR-0024): json and csv
 // fetch one body, odata walks an entity set's pages, table queries a database.
 func (t *Tenant) readSource(s construction.Source) ([]map[string]any, error) {
 	var conn *construction.Connection

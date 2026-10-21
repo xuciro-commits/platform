@@ -29,7 +29,7 @@ import (
 	"platformserver/platform"
 )
 
-// Outbound effects (ADR-0004). An intent is created inside an input, so replay
+// Outbound effects (ADR-0051). An intent is created inside an input, so replay
 // rebuilds it; an attempt is made by the dispatcher outside the tenant's lock
 // and never during replay; its outcome is journaled as an input of its own.
 // This is the K5 outbox with the host as the edge and the endpoint as the
@@ -556,7 +556,7 @@ func effectActions() []platform.Action {
 		{Schema: SchemaEffectDiscard, Target: EffectType, Capability: "integrations", Title: "Discard effect",
 			Description: "Give up on an effect not yet delivered.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectApprove, Target: EffectType, Capability: "integrations", Title: "Approve effect",
-			Description: "Send an irreversible effect an AI agent caused; only a person may approve it (ADR-0004 D6).", Payload: []platform.Field{}, Roles: admin},
+			Description: "Send an irreversible effect an AI agent caused; only a person may approve it (ADR-0051 D6).", Payload: []platform.Field{}, Roles: admin},
 	}
 }
 

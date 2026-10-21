@@ -12,7 +12,7 @@ import (
 )
 
 // localFiles keeps file bytes in a directory on the host's own disk: the
-// lightweight profile's FileStore (ADR-0017 D4). Keys are the same content
+// lightweight profile's FileStore (ADR-0029 D4). Keys are the same content
 // addresses the S3 store takes ("<tenant>/<hash>"), the bytes are the same
 // bytes, and the journal still keeps only each file's hash.
 type localFiles struct {

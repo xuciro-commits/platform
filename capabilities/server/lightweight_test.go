@@ -22,7 +22,7 @@ import (
 
 // TestLocalFilesKeepsTheSameContract: the lightweight profile's bytes are the
 // same bytes under the same content addresses as the S3 store, and a key that
-// would leave the directory is refused rather than cleaned up (ADR-0017 D4).
+// would leave the directory is refused rather than cleaned up (ADR-0029 D4).
 func TestLocalFilesKeepsTheSameContract(t *testing.T) {
 	ctx := context.Background()
 	local, err := NewLocalFiles(filepath.Join(t.TempDir(), "files"))
@@ -81,7 +81,7 @@ func TestLocalFilesKeepsTheSameContract(t *testing.T) {
 }
 
 // TestLightweightProfileIsDeclaredNotInferred: a host that names a profile gets
-// that profile's storage or a refusal, never the other's (ADR-0017 D1).
+// that profile's storage or a refusal, never the other's (ADR-0029 D1).
 func TestLightweightProfileIsDeclaredNotInferred(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -120,7 +120,7 @@ func TestLightweightProfileIsDeclaredNotInferred(t *testing.T) {
 
 // TestLightweightProfileServesSignedSeats: the tokens /v1/sign-in serves are
 // signed by the host's key, the development tokens a delivery development host
-// accepts are not, and /v1/me answers the same member either way (ADR-0017 D3).
+// accepts are not, and /v1/me answers the same member either way (ADR-0029 D3).
 func TestLightweightProfileServesSignedSeats(t *testing.T) {
 	dir := t.TempDir()
 	d := &Deployment{Profile: "lightweight", Data: dir, TokenTTL: time.Hour}
@@ -145,7 +145,7 @@ func TestLightweightProfileServesSignedSeats(t *testing.T) {
 	}
 	host := NewHost(Tokens(map[string]string{"ana": "ana"}), tenant) // as a delivery development host starts
 	host.Development = true
-	host.SignWith(signer, time.Hour) // what the lightweight deployment does (ADR-0017 D3)
+	host.SignWith(signer, time.Hour) // what the lightweight deployment does (ADR-0029 D3)
 	call := func(path, token string) (int, string) {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		if token != "" {
@@ -200,7 +200,7 @@ func TestLightweightProfileServesSignedSeats(t *testing.T) {
 
 // TestLightweightProfileRestartsAndContinues is the M4 walk on the lightweight
 // host's own storage: work, stop, start again from -data, and the entries, the
-// committed answer and the file bytes are still there (ADR-0017 D6, §3.5).
+// committed answer and the file bytes are still there (ADR-0029 D6, §3.5).
 func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 	ctx := context.Background()
 	at := time.Now().UTC()

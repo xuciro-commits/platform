@@ -42,7 +42,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, actions)
 	})
-	rt.handle(Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none (ADR-0016 §11)", Body: struct {
+	rt.handle(Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none (ADR-0018 §11)", Body: struct {
 		Key   string          `json:"key"`
 		Edits []CompositeEdit `json:"edits"`
 	}{}, Answer: CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -174,7 +174,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0011)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet (ADR-0045)", Body: ReleaseDraftsRequest{}, Answer: ReleaseDraftClosure{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
 		if readErr != nil || len(body) > 4096 {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -199,7 +199,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0011 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0045 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
 		if readErr != nil || len(body) > 4096 {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -246,7 +246,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		return []construction.JointDraftRef{{Kind: request.Kind, ID: request.ID}}
 	}
-	rt.authorized(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0011 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0045 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseSaveRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -264,7 +264,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		// A saved candidate is sealed at once: its exact bytes become an
 		// addressable artifact in the file store, which promotion to another
-		// environment reads (ADR-0016 §11). The save stands if sealing fails;
+		// environment reads (ADR-0018 §11). The save stands if sealing fails;
 		// the next save or promotion seals the same bytes again.
 		if _, err := t.SealCandidate(id, h.Now()); err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": "saved, but not sealed: " + err.Error()})
@@ -272,7 +272,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseSaved{ID: id})
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate (ADR-0054)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate (ADR-0008)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseEvaluationRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -288,7 +288,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseEvaluationStarted{ID: id})
 	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/active", Summary: "Builder and publisher atomic installation and activation of a saved object/page/application closure (ADR-0011 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(Route{Pattern: "POST /v1/releases/active", Summary: "Builder and publisher atomic installation and activation of a saved object/page/application closure (ADR-0045 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ReleaseActivateRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -362,7 +362,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.handle(Route{Pattern: "GET /v1/releases/active", Summary: "The tenant's active release ID, readable by any member (ADR-0011 20b)", Answer: ReleaseActive{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "GET /v1/releases/active", Summary: "The tenant's active release ID, readable by any member (ADR-0045 20b)", Answer: ReleaseActive{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, ReleaseActive{ID: t.ActiveRelease()})
 	})
 }

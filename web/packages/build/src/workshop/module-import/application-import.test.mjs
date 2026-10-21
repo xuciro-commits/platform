@@ -33,7 +33,7 @@ test('one complete source and shared binding map compile all seven original page
 const payload=name=>({name,object:'build.asset',title:name,description:'',sections:[],selections:[],document:{formatVersion:2,uiProfile:manifest.uiProfile,root:'root',nodes:{root:{kind:'rows',children:[]}}}});
 const writes=['one','two'].map((name,i)=>({destination:{sourcePage:name,id:`PAGE-${i}`,name,object:'build.asset'},payload:payload(name)}));
 function io(directInstall=true){const records=new Map(),calls=[],progress=[];let pending=false,reject='';return {records,calls,progress,directInstall,setPending:v=>pending=v,setReject:v=>reject=v,active:()=>true,read:async id=>records.get(id),pending:()=>pending,decide:async(schema,id,value,revision)=>{calls.push({schema,id,revision});if(schema===reject)return false;if(schema==='build.page.create')records.set(id,{...structuredClone(value),id,revision:1});else if(schema==='build.page.publish'){const r=records.get(id);assert.equal(revision,r.revision);r.published=JSON.stringify(r);r.revision++;}else throw Error('unexpected edit');return true;},progress:value=>progress.push(value)};}
-test('the imported pages report their saved object drafts as candidate inputs (ADR-0011)',()=>{
+test('the imported pages report their saved object drafts as candidate inputs (ADR-0045)',()=>{
  const destinations=[{sourcePage:'one',id:'PAGE-1',name:'import1',object:'stock.item'},{sourcePage:'two',id:'PAGE-2',name:'import2',object:'sales.order'},{sourcePage:'three',id:'PAGE-3',name:'import3',object:'stock.item'}];
  const drafts=[{id:'OBJ-1',name:'stock.item',title:'Items'},{id:'OBJ-2',name:'unused.object',title:'Unused'}];
  assert.deepEqual(importDependencies(destinations,drafts),[ {kind:'object',id:'OBJ-1',name:'stock.item',title:'Items'} ]);
@@ -42,7 +42,7 @@ test('the imported pages report their saved object drafts as candidate inputs (A
  assert.deepEqual(importDependencies([{sourcePage:'one',id:'PAGE-1',name:'import1',object:'sales.order'}],drafts),[]);
  assert.deepEqual(importDependencies(destinations,[{id:'OBJ-1',name:'stock.item'}]),[ {kind:'object',id:'OBJ-1',name:'stock.item'} ]);
 });
-test('a delivery tenant saves the imported pages as drafts and publishes nothing (ADR-0011)',async()=>{
+test('a delivery tenant saves the imported pages as drafts and publishes nothing (ADR-0045)',async()=>{
  const state=io(false),seen=[];
  await saveImportedPages(writes,{...state,progress:value=>seen.push(value)});
  assert.deepEqual(state.calls.map(c=>c.schema),['build.page.create','build.page.create']);

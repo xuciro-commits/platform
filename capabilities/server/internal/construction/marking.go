@@ -6,7 +6,7 @@ import (
 	"platformserver/platform"
 )
 
-// Markings (ADR-0025、ADR-0062 Ⅰ-I): a bounded classification that travels
+// Markings (ADR-0044、ADR-0064 Ⅰ-I): a bounded classification that travels
 // with data. A connection or dataset is marked internal, confidential or
 // restricted; what is loaded or run from it can only raise the marking of
 // where it lands, never lower it. There is no second permission engine: a

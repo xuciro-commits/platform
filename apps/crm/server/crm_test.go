@@ -63,7 +63,7 @@ func TestOpportunityOwnership(t *testing.T) {
 		{submit("ana", "crm.account.edit", AccountType, "ACME", "9", map[string]string{"name": "Acme Corp"}), "ok"},
 		{submit("ana", "crm.account.edit", AccountType, "ACME", "10", map[string]string{"id": "OTHER"}), "ERROR_CODE_INVALID_ARGUMENT"},
 		{submit("ana", "crm.account.archive", AccountType, "ACME", "11", map[string]string{}), "ok"},
-		// From outside (ADR-0016): a web form's service account captures an account through the same action.
+		// From outside (ADR-0018): a web form's service account captures an account through the same action.
 		{submit("webform", SchemaAccount, AccountType, "WEB-1", "12", map[string]string{"name": "Harbour Travel", "kind": "company"}), "ok"},
 		{submit("webform", SchemaAccount, AccountType, "WEB-1", "12", map[string]string{"name": "Harbour Travel", "kind": "company"}), "ok"}, // resent: the same decision
 	} {

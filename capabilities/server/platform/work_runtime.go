@@ -56,7 +56,7 @@ type ApprovalRequest struct {
 	Outcome    string         `json:"outcome,omitempty" field:"readonly" source:"user-input"` // refusal or the approver's note
 	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by" source:"record"`
 	// Release is the tenant's active release when the request opened; a later
-	// activation may not change the held action under it (ADR-0011 D4).
+	// activation may not change the held action under it (ADR-0045 D4).
 	Release         string `json:"release,omitempty" field:"readonly" source:"record"`
 	RedirectAction  string `json:"redirectAction,omitempty" field:"readonly" source:"record" title:"Redirect action"`
 	RedirectRelease string `json:"redirectRelease,omitempty" field:"readonly" source:"record" title:"Redirect release"`

@@ -17,7 +17,7 @@ import (
 )
 
 // Package flow is the platform's flow app, on the app API and internal/host
-// (ADR-0016). It runs the flows apps declare (ADR-0007). An instance is a record
+// (ADR-0018). It runs the flows apps declare (ADR-0007). An instance is a record
 // of it; every step it takes is one of its decisions, made inside the owned
 // work that caused it (a delivery of an event, or its timer job), so replay
 // takes it again. Acts are submitted as the declaring app's automation

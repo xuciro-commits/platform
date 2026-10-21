@@ -1,6 +1,6 @@
 // Package platformserver is the host: it composes a tenant's apps, takes
 // members' submissions through the accepted-result pipeline, runs the owned
-// work and effects they cause, and serves the tenant API (ADR-0062 layout).
+// work and effects they cause, and serves the tenant API (ADR-0064 layout).
 //
 // A Tenant (host.go) is an identity, the submit pipeline, and holders for
 // components that each own their state and, where reads cross the pipeline,

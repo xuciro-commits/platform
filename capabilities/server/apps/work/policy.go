@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-// Multi-approval policies (ADR-0016 §11, ordered by the owner on 2026-10-05).
+// Multi-approval policies (ADR-0018 §11, ordered by the owner on 2026-10-05).
 //
 // An approval level already says who may approve and whether one or all of them
 // must. A policy adds the tenant's own rule on top: for a named action, how

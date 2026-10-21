@@ -1,5 +1,5 @@
 // Package hospitality is a hotel company's software as a solution (ADR-0006,
-// ADR-0016): the platform's directory, relations, AI, work (approvals, tasks),
+// ADR-0018): the platform's directory, relations, AI, work (approvals, tasks),
 // flows and agents, a lodging provider (the PMS), the CRM, HCM and CSM,
 // composed without a bridge. The CRM consumes the lodging protocol; any provider serves it.
 package hospitality

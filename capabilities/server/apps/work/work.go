@@ -1,6 +1,6 @@
 // Package work is the platform's work app (ADR-0007): approval requests for
 // actions that wait for approvers, and tasks for people, with one inbox. A
-// platform app on the app API and internal/host (ADR-0016).
+// platform app on the app API and internal/host (ADR-0018).
 package work
 
 import (
@@ -41,7 +41,7 @@ const (
 type ApprovalRequest = platform.ApprovalRequest
 
 // ApprovalStep is one level: who may approve, and who did. Count is how many
-// distinct approvals close the level (ADR-0016 §11): 0 keeps the level's own
+// distinct approvals close the level (ADR-0018 §11): 0 keeps the level's own
 // rule of one, or all when All is set.
 type ApprovalStep = platform.ApprovalStep
 
@@ -258,7 +258,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		}
 		step := ApprovalStep{Title: level.Title, Approvers: approvers, All: level.All, Approved: []string{}, Delegates: w.delegates(c, approvers, now)}
 		// A tenant policy may ask several distinct members for this action
-		// (ADR-0016 §11); the count is fixed now, with the approvers.
+		// (ADR-0018 §11); the count is fixed now, with the approvers.
 		step.Count = CountFor(step, level.All, w.PolicyCount(c, app, declared.Schema), len(approvers))
 		if level.Due > 0 {
 			step.Due = now.Add(level.Due)
@@ -341,7 +341,7 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 }
 
 // decider refuses a caller who is not an approver of the current level, the
-// requester, or an AI agent (a person decides, ADR-0004 D6).
+// requester, or an AI agent (a person decides, ADR-0051 D6).
 func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	a := record.(*ApprovalRequest)
 	step := a.Levels[a.Level]

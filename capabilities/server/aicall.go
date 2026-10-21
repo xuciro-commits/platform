@@ -36,7 +36,7 @@ const aiTimeout = 120 * time.Second
 // system, user or assistant turn, an assistant's tool calls, or a tool's result.
 type Message = platform.Message
 
-// Tool is a function the model may call (ADR-0054): a name, what it does, and
+// Tool is a function the model may call (ADR-0008): a name, what it does, and
 // its parameters as JSON Schema properties.
 type Tool = platform.Tool
 

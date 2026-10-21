@@ -12,7 +12,7 @@ import (
 )
 
 // TestLocalIdPSignsAndVerifies: the lightweight host takes only tokens it
-// signed, for itself and unexpired (ADR-0017 D3).
+// signed, for itself and unexpired (ADR-0029 D3).
 func TestLocalIdPSignsAndVerifies(t *testing.T) {
 	key, err := NewKey()
 	if err != nil {

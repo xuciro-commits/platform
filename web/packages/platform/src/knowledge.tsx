@@ -3,7 +3,7 @@ import { Records, useDefinitions, useHost, useReadQuery, type Passage } from "@p
 import { Button, Card, Form, Input, Markdown, Panel, Tag, t } from "@platform/ui";
 import { useState } from "react";
 
-// Where a term is actually felt (ADR-0031): the host validates RefersTo when
+// Where a term is actually felt (ADR-0022): the host validates RefersTo when
 // the term is saved (knowledge.go, host.Declares), Search proposes entity names
 // whose title, plural, synonyms or glossary terms contain the word
 // (languages.go, names()), and an agent's prompt carries the glossary of the app

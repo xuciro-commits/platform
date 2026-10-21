@@ -4,7 +4,7 @@ import { TransactionEditor } from "./TransactionEditor";
 import {ConfirmationEditor} from "./ConfirmationEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import {RefusalEditor} from "./RefusalEditor";
-// The action type workbench (ADR-0047, built under ADR-0019): an action is a
+// The action type workbench (ADR-0047, built under ADR-0018): an action is a
 // first-class resource with its own sections — Overview, Parameters, Form,
 // Transaction, Approval, Permissions. Left: the
 // object's actions and this action's sections. Main: the section as a table or

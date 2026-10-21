@@ -2,7 +2,7 @@
 
 <a id="adr-0044"></a>
 
-状态：已接受（2026-10-12，负责人指令，ADR-0038 B 块第三份）· 修订 ADR-0027 的分层判定口径、扩展 ADR-0009 的派生闭包 · 合并 ADR-0044 的对象动作/访问控制及 ADR-0044 的角色与组织范围决定 · 不实现 ReBAC `related` 谓词（维持 ADR-0027 §0 的既有边界）
+**状态：** 现行 · 2026-10-12 · 四层判定合成一个授权决定；租户边界、权限管理与 Markings 是它的输入（并入原 0025、0027）。
 
 ## 0. 意图
 
@@ -33,7 +33,7 @@
 ```go
 // 一次授权判定的完整输入与输出。
 type AuthzRequest struct {
-    Principal   string        // 主体（含 agent / service 主体，沿 ADR-0027）
+    Principal   string        // 主体（含 agent / service 主体，沿 本文）
     Tenant      string
     Kind        string        // read | write | create | archive | action | derive | export | protocol
     Type        string        // 对象类型
@@ -59,13 +59,13 @@ type AuthzDecision struct {
 
 ```
 1. 租户隔离      跨租户一律拒绝
-2. 主体有效性    主体存在、未撤权、未被停用（ADR-0027 的撤销语义）
+2. 主体有效性    主体存在、未撤权、未被停用（本文 的撤销语义）
 3. 显式 deny     策略拒绝优先于一切允许
 4. 动作/动词     该主体是否有权执行 Kind（RBAC）
 5. 行范围        Scope.Levels/Unit/Structure/Owner
 6. 字段          read/write 标签（ADR-0038）
 7. 派生闭包      全部来源可读才可读
-8. 标记          Markings 与分级随血缘传播（ADR-0025）
+8. 标记          Markings 与分级随血缘传播（本文）
 9. allow 策略    最后才是允许
 ```
 
@@ -84,7 +84,7 @@ type AuthzDecision struct {
 
 ### D5 递归与反向引用的边界
 
-ADR-0043 D4 决定反向引用必须**声明**。本 ADR 明确：**不实现 ReBAC `related` 谓词**（ADR-0027 §0 的既有决定维持），因为任意深度关系遍历会让"派生授权完全闭包"（Platform §10.6）无法证明。声明的反向引用 + 有界深度（16 段）覆盖实际业务需要。
+ADR-0043 D4 决定反向引用必须**声明**。本 ADR 明确：**不实现 ReBAC `related` 谓词**（本文 §0 的既有决定维持），因为任意深度关系遍历会让"派生授权完全闭包"（Platform §10.6）无法证明。声明的反向引用 + 有界深度（16 段）覆盖实际业务需要。
 
 ### D6 判定的记录与不可重放
 
@@ -94,9 +94,9 @@ ADR-0043 D4 决定反向引用必须**声明**。本 ADR 明确：**不实现 Re
 
 ## 2. 不做
 
-- **不做第二套权限引擎**，不引入 OPA/Cedar 之类的策略语言（ADR-0027 已拒绝策略表达式）。
+- **不做第二套权限引擎**，不引入 OPA/Cedar 之类的策略语言（本文 已拒绝策略表达式）。
 - **不做 ReBAC**（见 D5）。
-- **不做"管理员绕过"**：运维动作（记录迁移、修复）走 ADR-0044 之外的显式管理路径并留痕，不通过放宽判定实现。
+- **不做"管理员绕过"**：运维动作（记录迁移、修复）走 本文 之外的显式管理路径并留痕，不通过放宽判定实现。
 - **不做前端权限判断**：前端只显示后端决定的结果（今天已有此原则，ADR-0057）；判定结果里的 `Layers` 是给用户解释用的，不是给前端自己算的。
 
 ## 3. 后果
@@ -142,3 +142,78 @@ record / batch / input / work / effect / usage / host 接受结果保存可选 `
 能力目录、当前/保留版本详情与 AI 调用结果读取共用原 `authorizeCapability`，不再各自按主角色字符串决定权限。发现投影与保留版本的来源字段都收窄到当前目录仍保留的角色与原 owner 策略；计算详情直接使用原定义投影，不再重复解析一份当前定义。AI 结果保留原调用人/构建者的读取范围，并由同一决定检查函数角色、显式拒绝及来源。`TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization` 检查非主角色授予、当前与保留函数、原调用结果、deny、函数角色撤销，以及保留函数角色但撤销来源字段角色时旧成员快照均被拒绝；历史版本字节与接受结果不改。
 
 非实体/JSON、缺少出处、撤权、原始声明不能扩大嵌入权限以及原值不变的反例归 `authorization_projection_test.go`；定义依据变化归 `TestAuthorizationDefinitionChangesWithItsSourceContractAndPolicies`。实现边界仍是声明的来源与有界遍历，不实现 `related`、第二套授权语言或跨主体缓存。原生 owner 须如实声明自己复制的字段；AST 守门与反例不构成对任意新 Go 业务算法的数学证明。
+
+## 并入：租户边界、权限管理与 Markings（原 0025、0027）
+
+租户隔离与权限声明是本引擎的输入，不是第二套判定；字段级 Markings 是同一决定里的收窄条件。原文的 As-built 台账归 Git 历史。
+
+### 1. 四个边界
+
+Tenant 是身份、账本、密钥、审计和运维隔离单位；Enterprise 表达租户内的法人/工厂/部门/人/岗位与有效关系。组织层级本身不是另开租户的理由，只有数据主权、独立 IdP、备份/升级责任等隔离需要才另开租户。Deployment 是宿主运行位置；Application 是权限和写入的命名空间。
+
+跨租户不共享存储或做联合事务。授权支持会话和企业模型的显式只读切片各沿原受控入口，不形成租户父子权限或集团直接写子公司模型。企业模型的单位与 Scope 的有效结构提供 unit/below 范围，不自动产生角色。
+
+同一集团的子组织默认在同租户模型内表达；有独立数据、身份或运维责任时，仍由 Host Console 显式创建独立租户。创建租户不会复制 Enterprise 子树、成员、岗位或授权。需要集团视图时，由来源显式共享元素，接收方用 TenantLink 的 ready HTTP Connection 预览结构，再提交原导入动作。代表组织、来源关联与租户 id 是三个不同引用，不能推断彼此的权限或生命周期。来源连接与手动预览/确认的实际边界见 ADR-0022。
+
+### 2. 租户生命周期与设置
+
+租户视图由 platform.setting 投影成 TenantRecord，没有第二张 tenant 实体。语言/时区/币种仍从原设置读取，SettingLanguage 保留为账户有效语言的默认回退。应用自身的 Settings 继续由 Manifest 声明，不能扩成任意代码。
+
+Control Panel → Organisation 的 Representative organization 保存原 `enterpriseRoot` 设置，可打开 `enterprise?element=<id>&section=organization`。设置改变不重命名企业节点，节点改名不重命名租户；该引用参加企业元素的关闭/删除使用检查。People and places 的 Core 记录、成员授权和企业人员/任职仍分别维护，新增显式引用不构成自动同步。
+
+原 Host Console 的模板目录、POST /v1/host/tenants、显式 -host-admins 与 lifecycle 管理共同负责租户创建/停用/退役；宿主管理主体与租户 admin 分开。模板含应用、组织种子、默认设置与首位管理员，持久目录取代旧 directory.json，重启沿原日志恢复。不存在自动按组织层级复制权限或无条件按保留天数删客户数据的机制。
+
+登录域、MFA 与会话时长的执行边界见上表；个人令牌使用独立路径。会话/撤销的内存范围仍明确，不把 IdP 的证明或一次登录等同于跨重启的持久会话。
+
+### 3. 权限声明与管理
+
+权限从 Manifest、原动作和实体读取声明产生（platform.Permissions），不要求应用再维护第二份清单。GET /v1/permissions 给出同一目录。Member.Grants 与 RolesIn/Holds 解析多授予，Catalog.ForRoles/PermitsAny、字段 ReadsAny/WritesAny 和原 Scope 复用这些角色；实际顺序与接受依据以 本文 为准，不保留旧单角色路径。
+
+Grant 保存 App、Role、Unit、Structure、From、Until、By、Reason、At。有效期和单位只收窄原授权，不能用授予扩大对象自己的 all/own/unit/below 范围；多个有效角色和授予的可见行取原并集。
+
+platform.role.save/remove 定义租户内某应用动作集合的自定义角色，不能覆盖原应用角色。目录变更只在持久接受后安装，删除角色同步撤销其目录权限。没有租户可写的 includes/denies/scope/fields 第二套角色语言。
+
+platform.policy.save/remove 保存 deny/allow、权限或前缀、where{member,app,agent,target} 的精确匹配和起止日，原 Catalog.UsePolicies 读取。没有租户表达式、记录任意属性、网络位置或 related 遍历规则；Policy.When 仅为可信 Go 内部接口。Markings 保留原传播、机密读者与受限导出保护，不以“统一”删掉现有行为。
+
+platform.team.save/remove 在成员属于团队期间合成 By=team:<id> 的团队授予，不等于企业岗位自动赋权。platform.member.delegate 允许成员在截止日内委托其原应用角色，记实际委托人，管理员可撤销；服务账号与智能体仍是受权成员，没有旁路。
+
+### 4. 管理面、解释与审计
+
+Roles and permissions 使用原成员授予、角色目录、策略/团队表单与解释器；My account 提供 Delegate my roles。GET /v1/access 和 /v1/authz/explain 提供实际结果。授予、撤销、角色、策略、团队和委托变更本身是正式决定，拒绝说明原因，不另建权限事实账。
+
+构建器 access[] 仍是对象 owner 的角色权限声明，发布到同一目录；项目的角色矩阵只读该结果。管理界面看见的声明不替代真正动作、行、字段、来源与标记的执行授权。
+
+检查方法与明确入口证据归 Testing 和 本文；不重开历史 XXL 分块、SettingLanguage 删除、岗位自动授权、自由表达式策略或第二 IAM/图数据库工程。
+
+### 共享运维职责
+
+K9 受属工作与定时作业沿同一宿主提交、重试和人工处理入口。当前恢复应用已保存的接受结果（ADR-0010、ADR-0037），旧输入日志按其原格式保留；取消 本文 中“恢复必须重新执行事件处理函数”的当前设计要求。空轮询不产生业务事实时不追加日志。
+
+K8 连接器由部署绑定，Deliver 使用其服务主体；游标/心跳等诊断与启停决定分开，启停必须持久化。通知受众在接受时按成员、组织或原应用角色解析并保存，个人读取和已读动作沿原权限；不另建行业通知中心。应用设置由 Manifest 声明名称、类型、默认值与说明，管理提交检查类型，`Caller.Setting` 只读该声明内的值，设置不是任意执行代码。
+
+`Everyone` 只表示所有合法租户成员可调用的读取声明，实际数据仍按调用者身份过滤。连接器、通知和配置不增加第二套授权；新授权统一以 本文 为准。原文邮件/移动渠道与并行工作节点的未来设想不再自动成为待实现任务。
+
+### 决定
+
+### 1. 标记是随数据走的一个词，不是第二套权限引擎
+
+Connection 与 Dataset 各有一个 `marking`：`internal` < `confidential` < `restricted`（空为未标记）。它只会随数据**抬高**，不会自动降低：
+
+- 数据源经连接拉入数据集 → 数据集的标记抬到连接的标记（`build.dataset.load` 载荷里的 `marking`）；
+- 管道运行 → 本次运行的 `marking` = 输入与步骤查表数据集中的最高者，输出数据集抬到它；管道记录 `marking`（只读）为历次最高，血缘面板由此能看到一个页面字段上游最高的标记；
+- 降低只能由人编辑数据集或连接。
+
+### 2. 编译到既有机制，而不是新查一次权限
+
+- **机密/受限 → 对象字段必须指明读者**：管道以 confidential/restricted 输入写对象时，若对象有任何字段未设 ADR-0038 的 `read` 角色，发布被拒并列出字段名；运行时输入标记升高后同样拒绝并写进 Last run。这样"谁能看到工资"仍由对象字段的读角色回答，Markings 只保证没有人把机密数据倒进人人可读的字段。
+- **防止其他目标绕过字段读者**：confidential/restricted 连接只能先进入数据集，再通过管道应用对象字段规则；禁止直接写对象。企业模型当前为租户可读，因此机密/受限管道的企业模型输出在发布及运行时都拒绝。已发布管道的编辑也重新验证目标规则。
+- **受限不出 CSV**：`GET /v1/export/{type}` 对 restricted 的数据集/版本，以及被 restricted 管道写入的对象，一律 POLICY_DENIED。
+
+### 3. Integrator 角色
+
+Builder 应用新增角色 `integrator`：Connections / Data sources / Datasets / Pipelines / Writebacks / Matching rules / Integration health 的全部读写与动作，**不含**对象、页面、流程、函数与发布。构建器左栏给 integrator 一个仅"Integration"分组；页面上原本只放行 builder 的检查改为 builder 或 integrator。投递状态通过限定为 build 回写的元数据视图读取，管理效果端点仍按原授权拒绝。接入外部系统的人从此不必是设计本体的人。
+
+### 4. 没做的
+
+- 不做行级/单元格级标记、不做标记继承到链接对象、不做解密/脱敏视图。需要时在对象字段 `read` 角色层面解决。
+- 不做"清除级别"的成员属性：机密能否被某角色读，由对象字段读角色说了算，Markings 不另设第二张表。

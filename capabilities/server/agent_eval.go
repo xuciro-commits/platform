@@ -16,7 +16,7 @@ import (
 )
 
 // An evaluation re-runs an agent's past runs dry against a candidate model
-// (ADR-0054). Its reference is what people made of each run — the signals:
+// (ADR-0008). Its reference is what people made of each run — the signals:
 // a confirmed or accepted decision should come again, a rejected or corrected
 // one should not. The candidate sees what the run saw (its context at the
 // start, what its reads answered); reads it makes anew read the records as

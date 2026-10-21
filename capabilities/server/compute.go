@@ -528,7 +528,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		if err == nil {
 			// Inline while it fits; above that, the operation's declared
 			// per-call channel seals the bytes and the result references them
-			// (ADR-0016 §13.3). A result over every budget is refused, never
+			// (ADR-0018 §13.3). A result over every budget is refused, never
 			// trimmed.
 			answer, staged, stageErr := t.staged.output(op, x.ID, output)
 			err = stageErr

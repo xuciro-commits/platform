@@ -109,7 +109,7 @@ type Tenant struct {
 	outbound   []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
 	// PLATFORM_SECRET_<NAME>); Outbound sends an effect's request (default: a
-	// client refusing private addresses). Tests replace both (ADR-0004).
+	// client refusing private addresses). Tests replace both (ADR-0051).
 	Secrets  func(name string) ([]byte, bool)
 	Outbound func(req *http.Request, allowPrivate bool) (*http.Response, error)
 	// AIClient sends model calls (default: a client refusing private addresses
@@ -120,7 +120,7 @@ type Tenant struct {
 	tasks     host.Tasks      // serves Caller.Assign: the work app (ADR-0007)
 	procs     host.Processes  // the flow app (ADR-0007)
 	listeners []string        // platform apps given other apps' events as owned work (host.Listener)
-	agents    AgentRuntime    // AI agents (ADR-0054)
+	agents    AgentRuntime    // AI agents (ADR-0008)
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
 	// Files keeps file bytes (ADR-0038); nil: memory, for development and tests.
 	Files         FileStore
@@ -165,7 +165,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if err := t.bind(i, a); err != nil {
 			return nil, err
 		}
-		// Roles the host's own apps take (ADR-0016), by the interfaces they implement.
+		// Roles the host's own apps take (ADR-0018), by the interfaces they implement.
 		host.Attach(a, hostView{t: t, app: a})
 		if x, ok := a.(host.Observer); ok {
 			t.observers = append(t.observers, x)
@@ -233,7 +233,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			}
 		}
 	}
-	for _, a := range apps { // agents, once every app is composed (ADR-0054); flows may give them steps
+	for _, a := range apps { // agents, once every app is composed (ADR-0008); flows may give them steps
 		if len(a.Manifest().Agents) == 0 {
 			continue
 		}
@@ -864,7 +864,7 @@ func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
 	return out
 }
 
-// Apps describes the enabled apps from their manifests (ADR-0016): discovery,
+// Apps describes the enabled apps from their manifests (ADR-0018): discovery,
 // the protocol graph and the capability matrix read this.
 func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
@@ -892,7 +892,7 @@ func (t *Tenant) Apps() []AppInfo {
 	return out
 }
 
-// AppEntry is an app a member may open in the workspace (ADR-0019): the
+// AppEntry is an app a member may open in the workspace (ADR-0018): the
 // tenant runs it and the member holds a role in it.
 type AppEntry struct {
 	ID    string `json:"id"`

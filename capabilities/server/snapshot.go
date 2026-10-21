@@ -66,7 +66,7 @@ type tenantState struct {
 	Words               map[string]map[string]string                `json:"words,omitempty"` // the tenant's translations (ADR-0005)
 	Endpoints           []*Endpoint                                 `json:"endpoints"`
 	Outbound            []resultformat.EffectState                  `json:"outbound"`
-	// The host console's lifecycle and support sessions (ADR-0016 §6.5) travel
+	// The host console's lifecycle and support sessions (ADR-0018 §6.5) travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
 	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
 	HostLifecycle    string                           `json:"hostLifecycle,omitempty"`

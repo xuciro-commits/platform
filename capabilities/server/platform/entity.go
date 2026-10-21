@@ -320,7 +320,7 @@ func (s Scope) Level(role string) string {
 	return s.Default
 }
 
-// LevelFor is the widest level any of roles gives (ADR-0027 §3.3); none without a role.
+// LevelFor is the widest level any of roles gives (ADR-0044 §3.3); none without a role.
 func (s Scope) LevelFor(roles []string) string {
 	levels := make([]string, 0, len(roles))
 	for _, r := range roles {
@@ -971,7 +971,7 @@ func (f FieldInfo) Writes(role string) bool {
 	return f.Reads(role) && (len(f.Write) == 0 || slices.Contains(f.Write, role))
 }
 
-// ReadsAny reports whether a member holding any of roles reads it (ADR-0027 §3.3: roles add up).
+// ReadsAny reports whether a member holding any of roles reads it (ADR-0044 §3.3: roles add up).
 func (f FieldInfo) ReadsAny(roles []string) bool {
 	return len(f.Read) == 0 || slices.ContainsFunc(roles, f.Reads)
 }

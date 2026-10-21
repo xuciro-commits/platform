@@ -12,7 +12,7 @@ const (
 	ObjectType             = "build.object"
 	// Builder defines and publishes objects; Publisher saves and activates
 	// release candidates without editing definitions; User works with what is
-	// published (ADR-0016 §11).
+	// published (ADR-0018 §11).
 	Builder       = "builder"
 	Publisher     = "publisher"
 	User          = "user"

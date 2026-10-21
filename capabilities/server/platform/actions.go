@@ -121,7 +121,7 @@ type Field struct {
 	Manual bool `json:"manual,omitempty"`
 }
 
-// InputConstraints are pure input checks, applied after authorization (ADR-0036).
+// InputConstraints are pure input checks, applied after authorization (ADR-0048).
 type InputConstraints struct {
 	Min          *float64 `json:"min,omitempty"`
 	Max          *float64 `json:"max,omitempty"`
@@ -175,8 +175,8 @@ type Catalog struct {
 	mu       sync.RWMutex
 	actions  []Action
 	disabled map[string]bool
-	custom   map[string][]string   // tenant-defined roles → the schemas they may call (ADR-0027 §3.3)
-	policies func() []authz.Policy // the tenant's policies, asked at decision time (ADR-0027 §3.4)
+	custom   map[string][]string   // tenant-defined roles → the schemas they may call (ADR-0044 §3.3)
+	policies func() []authz.Policy // the tenant's policies, asked at decision time (ADR-0044 §3.4)
 }
 
 // DefineRole declares a tenant's custom role: a name and the enabled actions
@@ -326,13 +326,13 @@ func (c *Catalog) Permits(role, schema string) bool {
 	return slices.ContainsFunc(c.For(role), func(a Action) bool { return a.Schema == schema })
 }
 
-// PermitsAny reports whether any of roles may call schema (a member with several grants, ADR-0027).
+// PermitsAny reports whether any of roles may call schema (a member with several grants, ADR-0044).
 func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 	return slices.ContainsFunc(c.ForRoles(roles), func(a Action) bool { return a.Schema == schema })
 }
 
 // Decide asks the engine whether the caller's roles let them call schema
-// (ADR-0027 §3.4); a disabled capability is no action at all. Modern recovery
+// (ADR-0044 §3.4); a disabled capability is no action at all. Modern recovery
 // applies saved results, while owner automation still passes the engine.
 func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
 	return c.DecideOn(caller, schema, "")

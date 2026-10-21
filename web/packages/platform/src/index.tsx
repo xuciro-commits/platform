@@ -1,5 +1,5 @@
 // The platform package contributes the applications a tenant is governed and
-// operated with (ADR-0016 M1, ADR-0018 §3.3): Control Panel (people, access,
+// operated with (ADR-0018 M1, ADR-0018 §3.3): Control Panel (people, access,
 // packages, settings, audit), Runs (automation and workflow runs), Data
 // Connection (connectors and webhooks), Agents, AI assistance, Knowledge, and
 // the Host Console for host administrators. One package, several entries in the

@@ -207,7 +207,7 @@ type Draft struct {
 // releaseDraftsOf lists the builder drafts a candidate's assets are published onto:
 // objects, authored pages (an object's generated page has no draft), applications
 // and flows. Promotion into an environment that never authored them creates each
-// missing one through the builder's own create action (ADR-0016 §11).
+// missing one through the builder's own create action (ADR-0018 §11).
 func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
 	generated := map[string]bool{}
 	for _, asset := range candidate.Assets {

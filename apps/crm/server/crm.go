@@ -409,7 +409,7 @@ func (c *CRM) Handle(who platform.Caller, e platform.Event) *kernel.Error {
 
 func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 
-// Manifest declares the CRM as an app (ADR-0016).
+// Manifest declares the CRM as an app (ADR-0018).
 // Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
 func (c *CRM) SnapshotFormat() string { return "platform.ledger.v1" }
 
@@ -460,7 +460,7 @@ func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
 	return options, nil
 }
 
-// Assistant is the CRM's assistant (ADR-0054): asked about an account or an
+// Assistant is the CRM's assistant (ADR-0008): asked about an account or an
 // opportunity, it reads what the tenant knows and drafts the change — a new
 // opportunity, a plan for rooms, an outcome — that the member confirms.
 func Assistant() platform.Agent {

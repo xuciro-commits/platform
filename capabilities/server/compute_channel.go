@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// The per-call result channel (ADR-0016 §13.3, plan A; ordered 2026-10-05).
+// The per-call result channel (ADR-0018 §13.3, plan A; ordered 2026-10-05).
 //
 // An operation's inline profile is bounded (48 KiB today). Plan A adds a
 // call-specific channel for results above that bound: the host allocates a

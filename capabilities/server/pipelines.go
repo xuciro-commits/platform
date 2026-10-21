@@ -226,7 +226,7 @@ func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 
 const pipelineQuarantineKept = 50
 
-// unguarded are the object's fields every role reads, when marking forbids pouring into them (ADR-0025).
+// unguarded are the object's fields every role reads, when marking forbids pouring into them (ADR-0044).
 func (t *Tenant) unguarded(object, marking string) []string {
 	if !construction.Guarded(marking) {
 		return nil

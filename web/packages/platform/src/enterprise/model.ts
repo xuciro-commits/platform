@@ -11,7 +11,7 @@ export type Relationship = Api.Relationship;
 export const sourceRelationship = (relationship: Relationship) => relationship.id.startsWith("sync:") || relationship.id.startsWith("fed:");
 export type Metamodel = Api.Metamodel;
 /** One description view of the model: who and where, what it holds, what it can
- * do, what it offers, how it is run (ADR-0031). */
+ * do, what it offers, how it is run (ADR-0022). */
 export type Viewpoint = Api.Viewpoint;
 export type Pin = Api.Pin;
 
@@ -46,7 +46,7 @@ export function is(meta: Metamodel, stereotype: string, general: string): boolea
 const anyEnd = (meta: Metamodel, ends: string[] | undefined, stereotype: string) =>
   !ends?.length || ends.some((e) => is(meta, stereotype, e));
 
-/** The relationships the profile admits between two elements (ADR-0031 D2):
+/** The relationships the profile admits between two elements (ADR-0022 D2):
  * the same contracts the host validates with, so the list here and the
  * refusal there are one rule. */
 export function allowedRelationships(meta: Metamodel, source: string, target: string): string[] {
@@ -59,7 +59,7 @@ export function allowedRelationships(meta: Metamodel, source: string, target: st
 }
 
 /** What a relationship admits, for a surface that has to say which ends are
- * allowed without a shrug (ADR-0031 D2): the profile's own words where the
+ * allowed without a shrug (ADR-0022 D2): the profile's own words where the
  * profile decides, the standard's ends where the standard does. */
 export function contractNote(meta: Metamodel, stereotype: string): string {
   const c = (meta.contracts ?? []).find((x) => x.stereotype === stereotype);
@@ -88,7 +88,7 @@ export const live = (x: { from?: string; until?: string; periods?: ElementPeriod
   : (x.from ?? "") <= day && (!x.until || day < x.until));
 export const elementStatus = (element: Element, day: string) => live(element, day) ? "Active" : (element.periods ?? [{ from: element.from ?? "", until: element.until }]).some(period => (period.from ?? "") > day) ? "Future" : "Inactive";
 
-/** The elements a viewpoint draws (ADR-0031): its own slice, plus the context
+/** The elements a viewpoint draws (ADR-0022): its own slice, plus the context
  * stereotypes — every one of them drawn only when a relationship puts it beside
  * a slice element. The organisation belongs to every question's context rather
  * than all of it in every drawing; the model's relationships name the owners. */

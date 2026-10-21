@@ -240,7 +240,7 @@ type ReleasePreview struct {
 	Changed     []platform.AssetRef `json:"changed"`
 	Diagnostic  string              `json:"diagnostic,omitempty"`
 	// Drafts is the exact saved-draft selection this review was built from, in
-	// the order it was selected (ADR-0011): the provenance of a joint
+	// the order it was selected (ADR-0045): the provenance of a joint
 	// candidate. One draft keeping its installed dependency is not repeated.
 	Drafts []construction.JointDraftRef `json:"drafts,omitempty"`
 	// CandidateActions are owner-compiled draft inputs for builder test forms,
@@ -252,7 +252,7 @@ type ReleasePreviewRequest struct {
 	ApplicationDrafts bool               `json:"applicationDrafts,omitempty"`
 	Kind              platform.AssetKind `json:"kind,omitempty"`
 	ID                string             `json:"id,omitempty"`
-	// Drafts selects several saved drafts as one joint candidate (ADR-0011).
+	// Drafts selects several saved drafts as one joint candidate (ADR-0045).
 	// A request carries either one kind/id or a non-empty drafts list.
 	Drafts []construction.JointDraftRef `json:"drafts,omitempty"`
 }
@@ -278,7 +278,7 @@ type ReleaseDraftClosure struct {
 }
 
 // ReferencedDrafts answers which saved record drafts a chosen draft needs, so
-// a builder can select them together (ADR-0011).
+// a builder can select them together (ADR-0045).
 func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id string) (ReleaseDraftClosure, error) {
 	if err := t.admits(m); err != nil {
 		return ReleaseDraftClosure{}, err
@@ -335,7 +335,7 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 
 // PreviewReleaseDrafts compares one or several saved drafts with the installed
 // development definitions, and proves the resulting joint candidate installs
-// before it can be saved (ADR-0011/D2).
+// before it can be saved (ADR-0045/D2).
 func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []construction.JointDraftRef) (ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
 		return ReleasePreview{}, err
@@ -399,7 +399,7 @@ func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, membe
 		reply.Diagnostic = diagnostic.Error()
 		// A review still names what is installed now: a draft that cannot be
 		// assembled refuses the candidate, and the running closure is what the
-		// reader needs to compare against (ADR-0011).
+		// reader needs to compare against (ADR-0045).
 		if len(assets.Priors) > 0 {
 			if available, err := t.releaseAssetsLocked(nil, false); err == nil {
 				var installedRoots []platform.AssetRef
@@ -450,7 +450,7 @@ func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, membe
 	}
 	// The same private installation path that activates a saved candidate runs
 	// here against a tenant draft: a joint selection that installs nothing is
-	// diagnosed now, before it can be saved (ADR-0011/D4). Preview validates
+	// diagnosed now, before it can be saved (ADR-0045/D4). Preview validates
 	// the sealed definitions; storage admission belongs to migration/activation.
 	if len(drafts) > 1 {
 		if _, _, err := t.prepareReleaseInstallationLocked(candidate, member, time.Now().UTC(), true, false); err != nil {
@@ -473,7 +473,7 @@ func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, membe
 }
 
 // Code behavior is pinned by Manifest.Version rather than serialized Go
-// callbacks (ADR-0011 D3). This body preserves the complete declarative
+// callbacks (ADR-0045 D3). This body preserves the complete declarative
 // security and lifecycle contract that JSON discovery intentionally omits.
 func codeObjectDescriptor(entity platform.Entity, info platform.EntityInfo) any {
 	type scope struct {

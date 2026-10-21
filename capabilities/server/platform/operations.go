@@ -8,7 +8,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// What the host operates for apps (ADR-0027): scheduled jobs, typed settings,
+// What the host operates for apps (ADR-0044): scheduled jobs, typed settings,
 // notifications and connector deliveries (K8).
 
 // Job is work an app runs on a schedule, as "app:<id>" (manifest).

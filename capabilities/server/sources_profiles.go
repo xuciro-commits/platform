@@ -17,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-// The OData and table profiles (ADR-0023) and connection checks. Both run on
+// The OData and table profiles (ADR-0024) and connection checks. Both run on
 // the outside loop like fetches: no lock held while a system is reached, and
 // every outcome enters the journal as an ordinary input.
 

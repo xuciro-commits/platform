@@ -4,7 +4,7 @@
 
 **意图：** 让平台像 Palantir Foundry/AIP 一样，以**本体（Ontology）为中心、以应用门户为入口、以可配置工作区为交付面**，而不是以源码包、owner 角色和"surface"枚举为入口。业务人员打开的是"应用"，构建者打开的是"本体与工坊"，管理员打开的是"控制面板"；三者共享一个 Shell、一套搜索、一套资源寻址和一套权限投影。
 
-**状态：** 已接受（2026-10-06），P0–P6 前端已落地（§10–§11）。本文确立 Shell、门户与功能块的基础结构，取代 ADR-0016 §5–§6、§9、§14 的四入口/页面清单、ADR-0015 §3 的顶层结构及 ADR-0047 第 4 点的命名。页签与编辑器间组织由 ADR-0019 修订，§3.1 的投影/Rail 切换和构建者资产分类导航已由 [ADR-0047 As built](0047-application-studio.md#5-as-built) 取代。ADR-0016 的功能域/依赖层/术语/边界、ADR-0015 的页面文档/变量/组件契约，以及原权限、发布、恢复语义继续有效。旧批次不再进入当前队列，当前顺序只归 WorkQueue。
+**状态：** 现行 · 2026-10-06 · Shell、门户、工作区与应用设计台的组织（并入原 0015、0016、0019）。
 
 **设计日期与基线：** 2026-10-06，`main@9ba4cca9`。本轮为源码审查与设计；沙箱内无 Go 工具链与浏览器，未运行宿主与 Playwright，Shell 预览通过 `?preview=pattern/workspace` 固定装置核对。
 
@@ -24,7 +24,7 @@
 | **功能块** | 已有后端能力可观：对象/属性/关系/查询（Ontology）、页面与 60+ Widget（Workshop）、AI 函数（Logic）、Agents/Evals、Flow/Work（Automate）、Code（Functions）、Candidates/Release、Integrations/Connectors、Members/Org、Audit、Knowledge。 | 这些块**散在三个 surface 的 nav 中**，缺少 Foundry 的三类关键视图：① **Object Explorer / 对象视图**（跨应用按对象浏览、链接导航、动作面板）；② **Projects & files 资源树**（按项目组织的资产浏览、权限、血缘）；③ **Developer Console**（OSDK/API 接入）。Catalog 承担了部分 ③，但放在"developer surface"里与业务入口并列。 |
 | **使用方式** | 深链 = `#/view?params`；view ID 全工作区唯一且无命名空间；旧布局 JSON 存 localStorage；切换租户/身份靠重置一堆 state。 | 没有**资源 RID 式的稳定寻址**（`app:kind:name` 已有 `Definition.ref`，但路由不用）；无法从任意位置"Open in …"（Foundry 的对象/资源右键菜单）；无 Recent/Favorites/Pin；无"在 Workshop 中打开此对象类型"这类跨工具跳转。 |
 
-**结论：** 需要重建的是**产品层的三件事**——(1) Shell 与入口模型，(2) 应用/资源/对象的统一寻址与导航模型，(3) 功能块按 Foundry 的工具边界重新切分——而不是继续在 `App.tsx` 里加分支。后端 owner、API 与权限保持不变（ADR-0016 §8 边界）。
+**结论：** 需要重建的是**产品层的三件事**——(1) Shell 与入口模型，(2) 应用/资源/对象的统一寻址与导航模型，(3) 功能块按 Foundry 的工具边界重新切分——而不是继续在 `App.tsx` 里加分支。后端 owner、API 与权限保持不变（ADR-0038 §8 边界）。
 
 ---
 
@@ -53,7 +53,7 @@
 | Object view（单对象页：属性、链接对象、动作面板、历史、关联工作） | **Record page** 标准布局 | `RecordDetail` + `RecordWork/Events/Activity` widget | B |
 | Data Connection / Pipeline Builder（来源、同步、映射、血缘） | **Data Connection**（来源 → 映射 → 受控对象） | `Integrations`/`/v1/connectors`、`module-import`、WorkQueue #134 | C（首个接入在 #134） |
 | Data Lineage | **Lineage**（资源依赖图：对象 ← 查询 ← 页面 ← 应用；候选闭包） | `/v1/releases/drafts/referenced`、候选差异 | B |
-| Projects & files（Compass：项目树、资源、权限、Marketplace 安装产物） | **Projects & resources** | `Applications`/`StudioOverview`/`/v1/definitions`/`/v1/packages`；ADR-0016 §4.1 Project | B |
+| Projects & files（Compass：项目树、资源、权限、Marketplace 安装产物） | **Projects & resources** | `Applications`/`StudioOverview`/`/v1/definitions`/`/v1/packages`；本文 §4.1 Project | B |
 
 ### 2.3 构建应用（Build）
 
@@ -61,8 +61,8 @@
 |---|---|---|---|
 | Workshop（模块 = 页面 + 变量 + 事件 + 布局；左组件栏 / 中画布 / 右属性） | **Workshop**（页面编辑器改名、按 ADR-0048） | `build/page-editor`、`@platform/app` widgets/runtime | A |
 | Slate / 自定义代码应用 | （不采纳；代码应用走 `AppUI` 贡献） | 原生 UI 包 | — |
-| Functions / Code Repositories | **Code**（Go/TinyGo Wasm 函数、SDK） | `build/code.tsx`、ADR-0013 | A |
-| AIP Logic（无代码 LLM 函数：输入/输出类型、工具、调试、发布到 Ontology） | **AIP Logic → "AI Functions"** | `build/function.tsx`（ADR-0054） | A |
+| Functions / Code Repositories | **Code**（Go/TinyGo Wasm 函数、SDK） | `build/code.tsx`、ADR-0057 | A |
+| AIP Logic（无代码 LLM 函数：输入/输出类型、工具、调试、发布到 Ontology） | **AIP Logic → "AI Functions"** | `build/function.tsx`（ADR-0008） | A |
 | AIP Agent Studio（Agent：系统提示、工具、记忆、评测、发布） | **Agents** | `platform/processes.tsx` Agents + `/v1/agents` | B（移入 Build 域，运行留 Operate） |
 | AIP Evals | **Evals** | `Evaluations` 视图、`/v1/releases/evaluations` | B |
 | Automate（对象条件 → 效果：动作/通知/函数；运行历史） | **Automate**（Flow 编辑 + 触发） | `build/workflow.tsx`、`platform/operations.tsx Automation` | B（编辑与运行分家：编辑在 Build、运行在 Operate） |
@@ -73,7 +73,7 @@
 
 | Foundry | 目标块 | 现有归属 | 差距 |
 |---|---|---|---|
-| Ontology proposals / 分支 → 合并（提案审查） | **Candidates & releases**（草稿 → 候选 → 审查 → 激活） | `release.tsx`、`simulate.tsx`、ADR-0011 | A |
+| Ontology proposals / 分支 → 合并（提案审查） | **Candidates & releases**（草稿 → 候选 → 审查 → 激活） | `release.tsx`、`simulate.tsx`、ADR-0045 | A |
 | Builds / Job tracker / Monitoring views | **Runs**（Flow / Agent / 计算 / Work / 外部效果，按应用归属过滤） | `Flows`/`RunView`/`FlowInstanceView`/`/v1/effects`、WorkQueue #141-C | B |
 | Resource policies / Data lineage impact | **Impact & dependencies** | 候选差异、`drafts/referenced` | B |
 | Control Panel → Enrollments / Organizations / Settings | **Control Panel**（身份与访问 · 包与能力 · 连接与模型 · 策略与审计） | `@pkg/platform` 四段 nav | A→B |
@@ -112,7 +112,7 @@ Platform Shell（所有人同一 Shell）
 | **Build** | `build.builder` / `publisher` | + Ontology、Workshop、AI Functions、Agents、Automate、Code、Evals、Candidates、Developer Console |
 | **Admin** | `platform.admin` / `auditor` / `publisher` / 各 owner admin | + Control Panel 分区、Runs、Packages、Host Console（独立主体） |
 
-投影只影响门户分类与默认首页，**不影响任何读取/动作授权**（ADR-0016 §5.1）。单一职责成员直接进入其投影；多职责成员在 Rail 底部切换，记忆上次选择。租户 Application 可声明 `locked: true`（Carbon 的"限制导航"）：该应用成员的 Rail 只保留 Home/Search/Notifications/Account，Context pane 为其菜单栏。
+投影只影响门户分类与默认首页，**不影响任何读取/动作授权**（本文 §5.1）。单一职责成员直接进入其投影；多职责成员在 Rail 底部切换，记忆上次选择。租户 Application 可声明 `locked: true`（Carbon 的"限制导航"）：该应用成员的 Rail 只保留 Home/Search/Notifications/Account，Context pane 为其菜单栏。
 
 ### 3.2 平台应用清单（Applications portal 的固定分类）
 
@@ -193,9 +193,9 @@ definePlatformApp({
 });
 ```
 
-路由规范：`#/<app>/<view>?params`；`Definition.ref`（`app:kind:name`）作为资产参数，记录用 `type` + `id`。旧 `#/<view>?…` 由 `registry.decodeLegacy()` 单向译码（ADR-0016 §6.6）。
+路由规范：`#/<app>/<view>?params`；`Definition.ref`（`app:kind:name`）作为资产参数，记录用 `type` + `id`。旧 `#/<view>?…` 由 `registry.decodeLegacy()` 单向译码（本文 §6.6）。
 
-### 4.4 导航三层与页面形态（沿 ADR-0016 §6.6）
+### 4.4 导航三层与页面形态（沿 本文 §6.6）
 
 Rail（平台） → Context pane（当前应用） → Dock 标签（具体资源/记录/实例）。页面五形态不变：概览/目录、列表与详情、专业编辑器、审查与确认、运行与诊断。所有列表使用 `Records`/`DataTable`；所有编辑器使用 `EditorWorkbench` 三栏；所有运行页使用同一状态/原因/恢复面板。
 
@@ -288,7 +288,7 @@ Shell 采用“顶栏切换大应用 → 左侧当前应用菜单 → 中央工�
 
 **P1 工作区装配拆分。** `web/apps/workspace/src/App.tsx` 从 412 行降为组合根：`session/`（`identity.ts` 记忆的身份与租户、`Problems.tsx` 恢复页与拒绝页、`ReleaseInformation.tsx`）、`host/`（`packages.ts` 包表；`usePlatformHost.ts` 读取、决策、outbox、record source、`opens` 表、`/v1/host/me` 探测）、`shell/legacy.ts`（`shellViews`、`legacyRoute` 退役路由重定向、`projectionOfSurface` 旧 `surface` 译码）。**决定：不引入 view 命名空间**——view id 在整个工作区仍然唯一（`#/<view>`），由 `owner` 表回答归属；命名空间会迫使所有编辑器与 e2e 改路由却不带来新能力。退役路由：`tenant-overview` → `portal?workspace=admin`，`launcher` → `portal`。
 
-**P2 Ontology 与 Object Explorer。**（已被 [ADR-0019](0019-ide-workspaces.md) D2 修订：`@pkg/build` 收回为一个门户应用 **Builder**，下列七个条目成为它左栏的分组。）当时 `@pkg/build` 不再是一个"Application Studio"，而是七个门户应用（§3.3）：`ontology`（Object types = 既有对象中心 `ModelWorkbench`、Relationships、Shared properties、Queries；Explore 分组链接 Object Explorer 与 Lineage）、`workshop`（Pages、Templates）、`automate`（Workflows，持 flow 角色时附 Workflow runs）、`ai-functions`、`code`（developer 分类）、`releases`（Release review、Test a candidate；publisher 角色只装载此应用）、`build`=**Projects**（All projects、Shared resources、Templates、Discover capabilities；默认导出，保留 `surface:"studio"` 以维持当前项目上下文 nav）。工作区新增 Shell 视图 `explorer`（`shell/Explorer.tsx`：左侧按应用分组的对象类型列表 + 右侧 `RecordList`，`?type=` 直达）与 `lineage`。`@platform/app` 新增 `OpenIn`（`OpenIn.tsx`）并接入 `RecordDetail` 的动作区：Object Explorer / Object type in Ontology（构建者且 `build` 对象）/ 页面（`page.object` 命中）/ Lineage；`@platform/ui` 新增 `ActionMenu`（下拉命令按钮，与 `CommandMenu` 共用 `ContextCommand`）。
+**P2 Ontology 与 Object Explorer。**（已被 本文 D2 修订：`@pkg/build` 收回为一个门户应用 **Builder**，下列七个条目成为它左栏的分组。）当时 `@pkg/build` 不再是一个"Application Studio"，而是七个门户应用（§3.3）：`ontology`（Object types = 既有对象中心 `ModelWorkbench`、Relationships、Shared properties、Queries；Explore 分组链接 Object Explorer 与 Lineage）、`workshop`（Pages、Templates）、`automate`（Workflows，持 flow 角色时附 Workflow runs）、`ai-functions`、`code`（developer 分类）、`releases`（Release review、Test a candidate；publisher 角色只装载此应用）、`build`=**Projects**（All projects、Shared resources、Templates、Discover capabilities；默认导出，保留 `surface:"studio"` 以维持当前项目上下文 nav）。工作区新增 Shell 视图 `explorer`（`shell/Explorer.tsx`：左侧按应用分组的对象类型列表 + 右侧 `RecordList`，`?type=` 直达）与 `lineage`。`@platform/app` 新增 `OpenIn`（`OpenIn.tsx`）并接入 `RecordDetail` 的动作区：Object Explorer / Object type in Ontology（构建者且 `build` 对象）/ 页面（`page.object` 命中）/ Lineage；`@platform/ui` 新增 `ActionMenu`（下拉命令按钮，与 `CommandMenu` 共用 `ContextCommand`）。
 
 **P3 Build 与 Operate 分家。** `@pkg/platform` 从一个 15 项单列的"Tenant console"拆为：`platform`=**Control Panel**（Identity and access / Packages and capabilities / Models / Audit 四分区，概览页按分区成卡）、`runs`（Workflow runs、Automation and deliveries；operate 分类）、`data-connection`（Integrations=连接器与 Webhook、Lineage；ontology 分类）、`agents`（Agents、Evaluations）、`ai`、`knowledge`、`host-console`。Studio 平铺 nav 与 Tenant console 单列 nav 均已删除；Delivery 不再同时出现在 Studio 与 Tenant console 两处。
 
@@ -296,7 +296,7 @@ Shell 采用“顶栏切换大应用 → 左侧当前应用菜单 → 中央工�
 
 **P5 Packages / Environments / Host Console。** Packages 即 Control Panel 的 Installed packages（`/v1/packages`）。**Host Console** 作为 govern 分类的宿主级应用（`@pkg/platform/src/host.tsx`）：租户总览（`GET /v1/host/overview`，健康/生命周期/失败工作/候选/支持会话/生效发布）、租户详情（受信任制品、支持会话、迁移清单；Suspend/Resume/Decommission 带原因；开启支持会话）、Promote a release（`POST …/promotions`）、Migrate records（`POST …/migrations`）——即 Environments 的前端。工作区仅在 `/v1/host/me` 对当前主体应答时显示它（`usePlatformHost.hostAdmin`）；不改任何后端路由。
 
-**P6 收口。** e2e 选择器改为新应用名（Projects / Control Panel / Runs / Releases；项目上下文从下拉改为 nav 分组）；Catalog 提示语、zh-CN 词条（ui 共享词 + 各包）补齐；`scripts/escapes.sh` 对本次新文件为零新增（Home/Applications/Explorer 改用 `Button` 与 `role="region"`）；Catalog 产物重生成。未做：两行业路线的页面迁移（ADR-0016 M6）仍按 WorkQueue 推进。
+**P6 收口。** e2e 选择器改为新应用名（Projects / Control Panel / Runs / Releases；项目上下文从下拉改为 nav 分组）；Catalog 提示语、zh-CN 词条（ui 共享词 + 各包）补齐；`scripts/escapes.sh` 对本次新文件为零新增（Home/Applications/Explorer 改用 `Button` 与 `role="region"`）；Catalog 产物重生成。未做：两行业路线的页面迁移（本文 M6）仍按 WorkQueue 推进。
 
 ## 12. 共享技术栈与外观归属
 
@@ -304,10 +304,188 @@ Shell 采用“顶栏切换大应用 → 左侧当前应用菜单 → 中央工�
 
 Web 使用 pnpm、React/TypeScript/Vite；`@platform/ui` 统一组件与交互，基于 Radix、Tailwind tokens、TanStack 表格/虚拟化、原表单与 Dockview。应用不得另造表格/表单/面板；复杂页面仍用类型化代码或已注册组件的受控页面定义，不逆向解析任意 React 树。共享控件归平台，使用和领域配置归应用；不依赖 Blueprint 源码。旧 Gallery 已由 ADR-0014 的资产库替代，不恢复独立展示应用。
 
-字段定义统一决定显示、编辑、校验、排序、过滤、搜索与引用导航，`columnsFor`、RecordForm/EntityForm 和单元格编辑复用它；表单输入与操作会话现行边界归 ADR-0036。加载、空、失败/重试、冲突、只读和键盘导航同属共享组件责任。虚拟滚动和历史测试不等于十万条真实数据的性能或负责人完整视觉/移动体验确认。
+字段定义统一决定显示、编辑、校验、排序、过滤、搜索与引用导航，`columnsFor`、RecordForm/EntityForm 和单元格编辑复用它；表单输入与操作会话现行边界归 ADR-0048。加载、空、失败/重试、冲突、只读和键盘导航同属共享组件责任。虚拟滚动和历史测试不等于十万条真实数据的性能或负责人完整视觉/移动体验确认。
 
 ### 外观的 scheme 与 skin
 
 `useTheme()` 持有两个独立轴：`data-theme=light/dark`（未设跟随系统）与 `data-skin=industrial`（未设标准），同存 `platform.appearance`，Shell 的 Appearance 菜单只改根属性，不重挂组件、不建第二组件库。工业皮肤位于 `themes/industrial.css`，覆盖 tokens 并用稳定 `data-ui` / `data-variant` 挂钩处理按钮、字段、卡片、状态与外框，不依赖 Tailwind 类名。
 
 工业视觉用紧凑数字、清晰边界/下压按钮、凹入字段、实色状态灯及琥珀焦点；primary/danger 保持语义色。CSS 仅用颜色、边框、零模糊小阴影及小渐变，按压只 transform；不加入 blur/filter/backdrop-filter、图片、动画或布局属性过渡。维护组件时保留 data-ui 挂钩。RetroButton 仍是可单独使用的原组件，皮肤不依赖它；低成本 CSS 设计不代替面板设备上的性能实测。
+
+## 13. 并入的体验结构决定（原 0015 / 0016 / 0019）
+
+这三份文档与本文回答同一个问题——产品怎么组织、入口在哪、工作区怎么摆，因此并入本文；原文里的实施记录、入口清单与迁移流水归 Git 历史，这里只留仍然生效的结构决定。
+
+### 13.1 四个功能域、五个依赖层与统一术语（原 0016 §2–§4）
+
+### 2. 四个功能域：用、建、交、管
+
+四域按任务划分，每域四个稳定模块。它们是功能归属，**不是让所有用户看到十六个菜单，也不是新建十六个服务或包**。一个功能有一个主入口；其他任务只通过上下文链接进入它。
+
+| 功能域 | 四个模块 | 为谁解决什么问题 | 主要入口 |
+|---|---|---|---|
+| **U 业务使用 / Use** | 我的工作；业务应用；数据与分析；业务协作与助手 | 业务人员完成岗位任务、跟踪结果、处理审批与异常 | 业务工作台 |
+| **B 应用构建 / Build** | 项目与资源；数据与语义；页面与体验；逻辑与 AI | FDE 和客户构建者把业务目标组装成可测试的应用 | 应用工坊 |
+| **D 交付运行 / Deliver & Operate** | 验证与候选；版本与发布；环境与绑定；运行与异常 | 发布者交付确定版本，运维定位和处理这份交付的问题 | 工坊的交付区、租户控制台的运行区 |
+| **G 平台治理 / Govern** | 身份与访问；包与能力；连接与模型；策略与审计 | 管理员决定谁可使用什么、哪些能力可安装、如何受控运行 | 租户控制台；平台提供者使用专属入口 |
+
+具体边界：
+
+- **业务数据与分析**使用已交付的列表、详情、保存视图、仪表盘和报表；对象结构、指标定义及页面编写在 B，执行和恢复在 D。
+- **项目与资源**承载构建上下文、应用清单、可复用资产和模板。Catalog、租户定义目录是来源不同的投影，沿原 API 引用，不形成新的资产主库。
+- **数据与语义**承载对象、属性、关系、查询、接入映射与知识来源设计；连接凭据、可用模型及租户级来源许可在 G，生产环境绑定在 D。
+- **逻辑与 AI**承载动作、生命周期、流程、计算、AI 函数、智能体和评测定义。运行实例在 D，业务确认在 U；同一能力不能因为存在三个视图就有三份执行器。
+- **验证与候选**是一处共同工作台：编辑器中的测试面板和交付区中的汇总引用同一报告。测试报告、封存候选、激活版本分别显示。
+- **策略与审计**管理授权、预算及治理规则，并查阅原审计证据；专业业务规则归原业务 owner，不写进平台治理。
+- 身份、租户、搜索、通知、个人偏好、标签和未保存保护是所有入口共用的 Shell 服务，不另立“第五功能域”。
+
+```mermaid
+flowchart LR
+  G["G 平台治理：身份、能力、连接、策略"] -. "提供许可与配置" .-> B["B 应用构建：资源、模型、页面、逻辑"]
+  B -->|"显式选择并验证依赖"| D["D 交付运行：候选、版本、绑定、运行"]
+  D -->|"已激活应用"| U["U 业务使用：任务、应用、数据、协作"]
+  U -->|"原任务与运行引用"| D
+  D -->|"诊断与改进证据"| B
+  G -. "约束交付与运行" .-> D
+  G -. "约束业务访问" .-> U
+```
+
+图表示功能协作，不表示调用可以跳过鉴权。下层 owner 和 API 的归属仍由 §3、§10 决定。
+
+### 3. 五个依赖层：谁提供能力，谁消费能力
+
+这是面向本次前端改造的依赖视图，对 [Platform §2.1](../Platform.md#21-分层)中的既有归属做归组。它不取代 K1–K9、Platform 的数据平面或 ADR-0014 的六层资产分类；那些分类各回答自己的问题。
+
+| 层 | 职责与归属 | 不承担的产品职责 |
+|---|---|---|
+| **L1 内核契约** | `contract/`：身份、事实、决定、权威、租户、演进、接入、工作所有权 | 不知道页面、项目、启动器或行业菜单 |
+| **L2 可信宿主** | `capabilities/server/`：认证接收、注册、路由、日志、接受结果、制品与执行隔离 | 不因某个行业界面增加私有执行规则 |
+| **L3 平台能力与公共 API** | 应用 API、平台应用、`@platform/app`：受权读取/动作、Work/Flow/AI/知识、定义与发布等 | API 是共同边界；平台 owner 数量不决定菜单数量 |
+| **L4 应用与交付资产** | 原生业务包、租户受控定义、Application、项目关联、候选与版本绑定；应用间通过协议 | 组合不改变资源 owner；引用不会复制数据或授予权限 |
+| **L5 产品界面** | Workspace Shell、五种入口、原生 UI 贡献、共享 Renderer；`@platform/ui` 提供交互零件与模式 | 不自行实现授权、提交、发布、工作流或恢复 |
+
+前端使用 L3 的公开接口消费 L4 的资源；执行经原 owner 进入 L2，服从 L1。共享 UI 依赖平台语义绑定；业务规则不反向进入 UI Kit。L3 的实现接口与 L2 宿主保持既有抽象方向，不通过这张分层表引入循环导入。
+
+前端自身再明确三种职责：Shell 管身份和导航；工坊及控制台管任务组织；页面/工作台管具体业务交互。调度、关系探索、流程编排和页面布局各用适合的专业界面，复用公共交互基础，不强迫放进一个万能画布。
+
+### 4. 三种结构与统一术语
+
+### 4.1 管理范围、构建关系、交付版本分开
+
+| 结构 | 回答的问题 | 关系 |
+|---|---|---|
+| **管理范围** | 我在哪个客户、哪个运行环境，谁能管理这里？ | Host 承载 Tenant；环境是目标交付绑定，不自动成为新租户或权限边界 |
+| **构建关系** | 我正在交付哪个应用，它使用什么？ | Project 关联 Application 与资源；资源可被多个应用引用，资源依赖是图，不是文件夹所有权 |
+| **交付版本** | 本次到底交付了哪些字节，在哪里生效？ | 显式资源集合 → 验证/封存候选 → 发布版本 → 环境绑定与激活；包安装是供应能力的另一种生命周期 |
+
+不强制用户逐层创建“租户 → 方案 → 项目 → 包 → 应用 → 页面”。租户由管理员开通；构建者从应用目标进入，单应用可获得默认项目上下文。跨应用项目只有在实际协作需要时才建立。环境、项目均须声明实现范围，不能用 UI 下拉框冒充隔离或部署能力。
+
+### 4.2 “App”拆成可辨认的对象
+
+| 名称 | 唯一含义 |
+|---|---|
+| **Owner / 后端能力主人** | 当前 `platform.App` 及其权威 ID；负责实体、读取、动作和规则，不保证有同名业务图标 |
+| **Application / 用户应用** | 产品层面向岗位的稳定业务入口；可由受审原生 UI 或租户受控定义供应，二者可组合。当前 `build.app`/`platform.Application` 是页面型定义 profile，不是所有原生应用的等价表示 |
+| **Asset / 资源** | 有 owner、身份、类型、来源、草稿/发布版本和使用处的对象、页面、查询、流程或函数 |
+| **Project / 构建项目** | Build 的任务组织与关联草稿上下文；显式项目成员可取得所列资产的编辑委派，普通归组不授予权限，发布仍独立授权 |
+| **Package / 能力包** | 可信代码或受控定义的版本化分发单元；可贡献多个能力和多个默认应用 |
+| **Installation / 安装实例** | 某租户选择某包版本及其受支持绑定的状态；安装不复制业务记录或成员授权 |
+| **UI contribution / 界面贡献** | 已审查的页面、编辑器、命令或专业工作台贡献；AppUI 是现有承载接口，不是身份主体 |
+| **Release / 发布版本** | 明确封存的资源与依赖集合；与记录 revision、BOM 业务版本、安装包版本分别绑定 |
+| **Runtime instance / 运行实例** | 按固定定义版本与主体启动的流程、计算或智能体；关闭界面不等于取消实例 |
+
+一包可供多个应用使用，一应用可引用多个 owner 的能力；一页可被多个应用复用，链接仍保留所选应用上下文。名称是显示和检索信息，不能靠改名改变 owner、历史实体 type 或资产身份。
+
+业务启动器对两种来源做同一入口投影：稳定入口身份、名称、来源、获权导航及首页。原生来源沿既有 AppUI 保留 views、nav、home、dashboard、opens 与记录/协议跳转；租户定义沿原 Application/Renderer 投影。M1 不要求把原生工作台先转写成 `build.app` 或普通部件页面，也不增加第二个启动器。入口身份与后端 authority 的绑定显式声明；菜单改名不改写现有 ID。
+
+`solutions/`继续称为“宿主装配/参考部署”。客户的交付内容可以是一个或多个 Application，单应用继续使用原候选和发布路径，不新增平行的 Solution 发布器。
+
+### 4.3 发布标识、当前资源和运行启动版本分开
+
+控制台与业务页区分三种证据：租户最后激活的候选；当前应用所用资源闭包与该候选的实际一致性；某个实例的启动定义/发布版本。发布应用 B 不能把应用 A 或 A 的旧运行标成 B 的版本。原生贡献显示可核实的代码/契约版本；未提供版本证据时明确未知。
+
+M1 沿原接口显示真实作用域，保留直接安装产生的漂移说明；有指针但不能核对当前闭包时，不显示“整个应用已运行该版本”。M3 扩展候选时沿原发布闭包核对，M4 按应用关联运行时读取实例自己的版本；不新增应用私有激活指针来绕过原发布主人。
+
+### 13.2 不能被菜单改造削弱的边界（原 0016 §8）
+
+### 8. 不能被菜单改造削弱的边界
+
+| 边界 | 本设计要求 |
+|---|---|
+| 读取与执行权限 | 入口资格、定义编辑、测试、发布、运行恢复、租户管理、业务记录/字段/动作分别检查；导航只投影有效权限 |
+| 多角色与授予 | 原直接、团队和项目授予按同一授权决定处理；行范围、字段、来源及显式 deny 保持原收窄规则，导航不自行计算权限并集 |
+| Builder 权限 | 生成对象仍显式声明 Builder 的整对象读取与标准动作资格；它不是绕过 deny、来源或标记的特权。项目派生的构建资格受原资产/编辑动作范围约束，不取得发布权；审批继续按原参与人和当前权限检查 |
+| 候选与环境 | 草稿、封存候选、活跃版本、环境配置分别标识；环境选择不证明物理隔离，测试沙箱按 ADR-0045 的实际范围说明 |
+| 原动作与权威 | 跨 owner 使用公开能力/协议，各 owner 验证自身数据；页面和项目不直接写别人的账本 |
+| 原子性 | 同租户宿主暂存批次与独立系统的分布式事务分开；使用 ADR-0010 已支持路径，不由 UI 串行请求推导整体原子保存 |
+| 版本与恢复 | 旧候选、实例、收据、必要解码器及制品保留；恢复使用已保存结果的覆盖范围按 ADR-0010、ADR-0045 声明 |
+| 代码与插件信任 | 可信 Go 和前端贡献随受审制品交付；租户计算沿 ADR-0057 的受控编译与隔离执行；安装不授予任意宿主访问 |
+| 停用与取消 | 注册清理、停止新调用、在途工作排空和业务数据退役分别处理；卸载不撤销已接受动作，迟到结果检查 generation |
+| 专项规模能力 | 集合、层级、复合编辑、持续 Flow 和大制品需要各自的语义与预算，不静默削减外包配置来报完成 |
+
+K4/K5 的动作权威、同宿主日志提交单元与远端权威不是一个概念。ADR-0006 与 ADR-0010 的解释应按实际受支持路径对齐；本稿不另定跨系统原子承诺。拒绝回执、接受结果与内核 ChangeLog 也不因统一诊断页变成一种日志。
+
+### 13.3 页签、面板与工作区规则（原 0019 §2–§3）
+
+### 2. 决策
+
+### D1 Shell 页签按应用分组
+
+- `Workspace` 的 dockview 布局以 `storageKey:${applicationId}` 记忆；切换应用时**保存当前应用布局、载入目标应用布局**（没有就打开 home）。Shell 自己的页面（Home、门户、通知、收件箱、搜索、助手、Object Explorer、Lineage）属于一个固定的 `shell` 组，在任何应用里都能打开，但不进入应用的页签记忆。
+- 页签右键菜单（`TabMenu`）：**关闭 · 关闭其他 · 关闭右侧 · 关闭全部 · 在旁边打开 · 弹出到新窗口**。Window 菜单保留同一套命令加"切到页签…"列表。
+- 删除"Float tab"与悬浮组（`addFloatingGroup`、`dockFloating`、`window: "float"`）。`open(route, { window: "beside" })` 在当前组右侧分栏打开（已有分栏则加入）；`"popout"` 不变。
+- 有未保存草稿的页签在批量关闭时仍走 `unsaved.ask`，一次询问列出全部。
+
+### D2 应用设计台是一个工作空间
+
+- 门户里构建侧只有一个应用 `build`（标题 **Builder / 应用设计台**）。原 `ontology / workshop / automate / ai-functions / code / releases` 六个门户条目删除（`contributions` 退役），它们的视图全部由 `build` 持有。
+- 左栏（固定，不随视图变）：
+
+  | 分组 | 条目 | 视图 |
+  |---|---|---|
+  | **项目** | 全部项目；当前项目（名字）| `projects` / `project` |
+  | **本体** | 对象类型 · 动作类型 · 关系 · 共享属性 · 查询 | `object-type` `action-type` `link-type` `property-type` `query` |
+  | **界面** | 模块 · 模板 | `module` `studio-templates` |
+  | **自动化** | 自动化 · 流程 · 运行记录 | `automation` `flow` `runs` |
+  | **函数** | AI 函数 · 代码函数 | `function` `code` |
+  | **发布** | 变更 · 发布历史 | `changes` `release-history` |
+  | **探索** | 对象浏览器 · 血缘 · 资产库 | `explorer` `lineage` `catalog` |
+
+  命名规则：**名词、资源名、无动词**。"发现可用能力"→"资产库"；"共享资源"消失（它就是本体的几项）；"测试候选 / 发布候选审查"已由 0047 并入编辑器与"变更"。
+- 当前项目作用域：列表视图（对象类型、模块、自动化…）按 `application` 参数过滤；左栏"项目"分组列出项目，点哪个就把作用域切过去（已有的 `ApplicationScope` 机制不变）。
+
+### D3 资产库（Asset Library）
+
+- 应用 `catalog` 更名 **Asset Library / 资产库**，类别 `developer`，对构建者与开发者可见（公开包，不改）。
+- 单一视图 `catalog`，用 `Workbench`：
+  - **左栏 Assets**：搜索框 + 层级分组（L0–L5）的树；每行 `名称 · 归属包`；用法筛选是树顶的一个 `Select`。
+  - **主区**：被选资产的文档——标题、摘要、权威性/成熟度标签、约束、状态处理；下面是**可操作示例**（`CatalogPreview`），工具栏有"在页签中展开"。
+  - **右栏 Use it**：导入片段（复制）、来源文件、源类型、归属包 API、组成（依赖）、被谁引用（声明的配方 + 静态消费者）；对可进入设计台的资产给出"在应用设计台中打开/创建"。
+  - **底栏**：**Health**（资产总数、按归属包计数、无示例/已弃用/实验性清单，全部由索引实时算出）与 **Runtime**（原"租户运行时能力"，需要在线主机）。
+- 删除：`构建使用 / 开发接入` 模式切换、"从任务开始"芯片、离线 Workspace URL 输入框、`Governance.tsx` 与 `governance` 视图、`catalog-example` 独立视图改为 `catalog?id=…&expand=1`（示例占满主区）。
+
+### D4 代码沙箱（Sandbox）
+
+- 视图 `sandbox`，用 `Workbench`：
+  - **左栏 Snippets**：预设（工业仪表、HMI 看板、金属按钮、复古按钮——内容保留，标题走 `t()`）与"我的片段"（localStorage），每行可打开/删除；工具栏"保存为片段"。
+  - **主区**：代码编辑器（`<textarea>` 等宽字体、Tab 缩进、⌘S 保存片段、⌘Enter 运行）；运行即刷新预览。
+  - **右栏 Preview**：iframe（`sandbox="allow-scripts"`），设备宽度 100% / 768 / 375，"最大化"把预览切到主区。
+  - **底栏 Console**：iframe 内注入一段桥接脚本，把 `console.log/warn/error` 与 `window.onerror` `postMessage` 回来按时间列出；"清空"。
+  - 标题栏命令：运行 · 复制代码 · 复制为 React 组件（把 HTML 片段包成 `export function Snippet()` 的 TSX 骨架，原"转为组件"）· 重置。
+- 删除 `inspirations / convert` 两个"标签页"及其路由参数。
+
+### D5 面板归属
+
+- **检查器永远在右栏**，底栏只装诊断类（Problems、Variables、Runs、Console、Health、Runtime）。已有编辑器符合；本 ADR 把它写成规则，`Workbench` 的 `dock` 文档注明。
+
+---
+
+### 3. 不做什么
+
+- 不做可自由拖拽到任意边的面板系统（VS Code 级别）。`Workbench` 的四区 + dockview 的分栏/弹出已覆盖 IDE 的日常；拖拽吸附留给后续，不留半成品。
+- 不改 0047 规定的各编辑器内部结构。
+- 不做资产库的服务端索引；`catalog.json` 仍由 `scripts/catalog.mjs` 生成。
+
+---
+
+### 13.4 原 0015 的去向 本文（历史，123k 字）不再保留：产品结构与体验保真并入本文；页面文档 V2、Widget 体系与变量绑定归 ADR-0048；表达式与算子图归 ADR-0040；交互运行时的数据与执行以 `capabilities/server/platform/page_variables.go`、`apps/build` 与 `web/packages/build` 的实现为准，不另存一份设计稿。原 0016 §9 的入口迁移表已执行完毕或作废，不再维护第二份迁移清单。

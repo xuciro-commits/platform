@@ -1,6 +1,6 @@
 # 旧实现的替代与退出依赖
 
-这里只保留现行替代关系和历史读取责任。当前施工顺序归 [WorkQueue](WorkQueue.md)，删除原则归 [ADR-0062](ADR/0062-platform-consolidation.md)，原生应用退出条件归 [ADR-0053](ADR/0053-retiring-native-apps.md)。已完成删除的逐文件命令和调查过程从本文移除，需要时查 Git 历史。
+这里只保留现行替代关系和历史读取责任。当前施工顺序归 [WorkQueue](WorkQueue.md)，删除原则归 [ADR-0064](ADR/0064-architecture-subtraction-and-code-organization.md)，原生应用退出条件归 [ADR-0053](ADR/0053-retiring-native-apps.md)。已完成删除的逐文件命令和调查过程从本文移除，需要时查 Git 历史。
 
 ## 1. 已退出的 ERP 适配器
 
@@ -56,7 +56,7 @@ make check、控制保存点/嵌套决定和相关宿主/Build、Web 包测试�
 
 无调用私有函数、未引用依赖和同值翻译已按真实调用删除；公开导出、动态词条与历史适配不因静态匹配少而删除。scripts/escapes.sh 当前只剩 MES/PMS 两个后端事实日志条目，不通过删清单伪造退出。
 
-## 12. 代码规模与本轮可删除空间（ADR-0062）
+## 12. 代码规模与本轮可删除空间（ADR-0064）
 
 使用 make code-size REVISION=<提交> 与 make code-size 按同一口径复算；Python 3、cloc 2.10，按 Git 源文件统计，分开生产、测试、生成物、构建/示例和文档/配置/数据。空白、注释、文件搬迁、行压缩与生成物删量不计手写生产删量。
 

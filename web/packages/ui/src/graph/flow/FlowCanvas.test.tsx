@@ -40,7 +40,7 @@ test("a fresh catalog array every render does not loop", () => {
   expect(loops).toEqual([]);
 });
 
-// A reader's own arrangement (ADR-0035): a view-mode canvas seeds its nodes from
+// A reader's own arrangement (ADR-0033): a view-mode canvas seeds its nodes from
 // the store the first time it sees them, and tidying up writes the fresh
 // arrangement back — the store, not the owner, is what remembers it.
 test("the stored arrangement seeds a view and tidying writes it back", async () => {

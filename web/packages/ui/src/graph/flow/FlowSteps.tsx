@@ -14,7 +14,7 @@ export type FlowStepNode = {
   id: string; label: string; detail?: string; tone?: Tone; current?: boolean;
   /** Its BPMN reading; without it, the step's own kind name decides. */
   notation?: FlowNotation; kind?: string; loop?: boolean;
-  /** What the step is, from the one class vocabulary (ADR-0035): declared, else
+  /** What the step is, from the one class vocabulary (ADR-0033): declared, else
    * derived from the BPMN reading, else the plain step. */
   class?: string;
   /** The lane responsible for it, when the owner drew this process across lanes. */
@@ -36,7 +36,7 @@ export function flowStepKind(node: Pick<FlowStepNode, "id" | "kind" | "notation"
 export function FlowSteps({ nodes, edges, lanes, direction = "right", height = 280, onOpen, label, children, positions, storeKey, selected, onActivate }: {
   nodes: FlowStepNode[]; edges: FlowStepEdge[]; lanes?: FlowLane[]; direction?: CanvasDirection; height?: number;
   selected?: string; onActivate?: (node: FlowStepNode) => void; onOpen?: (node: FlowStepNode) => void; label?: string; children?: ReactNode; positions?: Readonly<Record<string, CanvasPosition>>;
-  /** The reader's own arrangement of this drawing stays on the device (ADR-0035). */
+  /** The reader's own arrangement of this drawing stays on the device (ADR-0033). */
   storeKey?: string;
 }) {
   const catalog: FlowCatalog = useMemo(() => {

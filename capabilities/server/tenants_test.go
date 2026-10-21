@@ -14,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0027 §2.2: a host creates a tenant from a template with its first
+// ADR-0044 §2.2: a host creates a tenant from a template with its first
 // administrator; its settings and the administrator's roles are ordinary,
 // journaled decisions; the spec is written back so the tenant survives a restart.
 func TestCreateTenantFromTemplate(t *testing.T) {
@@ -139,7 +139,7 @@ func TestReachDueAndMemberToday(t *testing.T) {
 	}
 }
 
-// ADR-0027 §3.3: grants add up; Roles is the primary role per app; a grant
+// ADR-0044 §3.3: grants add up; Roles is the primary role per app; a grant
 // past its until day no longer holds; revoke removes one role or all.
 func TestGrantsAddUpAndExpire(t *testing.T) {
 	seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}
@@ -191,7 +191,7 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 		t.Fatal("grants not in the directory snapshot")
 	}
 
-	// ADR-0027 §3.4: the engine decides by any role held, and explains.
+	// ADR-0044 §3.4: the engine decides by any role held, and explains.
 	if x, err := tn.Explain("admin", "a.note"); err != nil || x.Verdict.Allow || x.Verdict.Rule != "none" || x.Verdict.Reason == "" {
 		t.Fatalf("explain before grant: %+v %v", x, err)
 	}
@@ -214,7 +214,7 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 	}
 }
 
-// ADR-0027 D: a custom role, a policy, a team and a delegation, each through the engine.
+// ADR-0044 D: a custom role, a policy, a team and a delegation, each through the engine.
 func TestAccessConfiguration(t *testing.T) {
 	seats := []Seat{
 		{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}},

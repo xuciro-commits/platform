@@ -1,4 +1,4 @@
-// Package hcm is human capital management (ADR-0016, ADR-0007), modelled
+// Package hcm is human capital management (ADR-0018, ADR-0007), modelled
 // on SAP SuccessFactors' absence management: people's leave requests,
 // approved along the organisation — the manager, and the department head above
 // five days. It is mostly declarations: the entity, its lifecycle and its

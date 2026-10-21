@@ -23,7 +23,7 @@ type Release struct {
 	CandidateID string    `json:"candidateId"`
 	Bytes       []byte    `json:"bytes"`
 	// Active marks an activation: the tenant's single release pointer moves to
-	// this saved candidate (ADR-0011 D2). A save leaves the pointer alone.
+	// this saved candidate (ADR-0045 D2). A save leaves the pointer alone.
 	Active    bool   `json:"active,omitempty"`
 	UpgradeID string `json:"upgradeId,omitempty"`
 	// From names the environment a promoted candidate's sealed bytes came

@@ -50,7 +50,7 @@ fail() {
 wait_for() { for _ in $(seq 60); do curl -sf -o /dev/null "$1" && return; sleep 1; done; fail "$1 never answered"; }
 
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0019)
+pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0018)
 # Built apart, with plain progress: an image build whose output goes to a file can stall otherwise.
 compose build --progress plain >"$backup/build.log" 2>&1 || { tail -n 30 "$backup/build.log" >&2; fail "compose build"; }
 # Build cache unused for three days goes; the Go module and build caches in use stay (Dockerfiles).
@@ -69,7 +69,7 @@ code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" "$
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/me" | jq -r .principalId) == sup-1 ]] || fail "OIDC principal"
 [[ $(code supervisor) == 401 ]] || fail "demo token accepted in production mode"
-# One workspace per host (ADR-0019): the page, how to sign in, and the apps a member may open.
+# One workspace per host (ADR-0018): the page, how to sign in, and the apps a member may open.
 curl -s "$MANUFACTURING/" | grep -q "<title>Workspace</title>" || fail "workspace page"
 [[ $(curl -s "$HOSPITALITY/v1/sign-in" | jq -cS .) == "{\"client\":\"platform-web\",\"issuer\":\"$IDP/\"}" ]] || fail "sign-in: $(curl -s "$HOSPITALITY/v1/sign-in")"
 [[ $(curl -s -H "Authorization: Bearer $OP1" "$MANUFACTURING/v1/me" | jq -c '[.apps[].id]') == '["ai","mes"]' ]] || fail "apps of op1: $(curl -s -H "Authorization: Bearer $OP1" "$MANUFACTURING/v1/me" | jq -c '[.apps[].id]')"
@@ -536,7 +536,7 @@ if awk '$1 == "batch" && $NF != 200 { bad = 1 } END { exit !bad }' "$backup/gate
 fi
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
 
-# Platform operations (ADR-0027): the gateway's downtime reached the supervisor
+# Platform operations (ADR-0044): the gateway's downtime reached the supervisor
 # of the line, not its operators; Settings disables the gateway's connector, and
 # that is a decision the restart below keeps.
 notified=false
@@ -609,7 +609,7 @@ echo "ok   AI assistant: catalog of permitted plant actions and personal control
 # An order released without a planned order is refused at once. The line's AI
 # assistant resends it against MO-3, but it holds no role in the ERP, so the ERP
 # refuses it too: an agent acts within its own grants in every app. The
-# supervisor resends it and the ERP confirms it. Email (ADR-0004 D7): the
+# supervisor resends it and the ERP confirms it. Email (ADR-0051 D7): the
 # plant's and the platform's notifications are mailed to members who sign in
 # with an email address, through the sink's SMTP server.
 AUTHORITY=platform submit "$SUP" o-3 platform.endpoint.add platform.endpoint mail \
@@ -652,7 +652,7 @@ streamed=$(curl -s -N -H "Authorization: Bearer $SUP" -H 'Content-Type: applicat
 [[ $streamed == *"event: delta"*"echo: hi"*"event: done"* ]] || fail "streamed call: $streamed"
 echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused; past the operator's limit the call is refused; a call streams"
 
-# ADR-0054 24b: the same bounded declaration and model effect path advises a
+# ADR-0008 24b: the same bounded declaration and model effect path advises a
 # real shop order. Advice never completes it or confirms production to ERP.
 AUTHORITY=platform submit "$SUP" fn-model platform.setting.set platform.setting ai/app-model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "plant function model"
 [[ $(submit "$OP1" fn-denied mes.order.advise mes.order WO-1 '{}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "operator called supervisor function"
@@ -660,7 +660,7 @@ submit "$SUP" fn-order mes.order.advise mes.order WO-1 '{}' | jq -e .record >/de
 for _ in $(seq 30); do [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-1" | jq -r .record.adviceState) == ready ]] && break; sleep 0.5; done
 curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-1" | jq -e '.record | .adviceState == "ready" and .status == "released" and .adviceCategory == "routine" and .adviceModel == "local/echo" and (.adviceDefinition | length == 64) and (.adviceSources | length == 3)' >/dev/null || fail "typed order result"
 
-# Agents (ADR-0054): the confirmation flow's agent corrects a refused order. For
+# Agents (ADR-0008): the confirmation flow's agent corrects a refused order. For
 # WO-4 (P-200, released without a planned order) the plant refuses; its agent,
 # on the local model, reads the planned orders and proposes MO-2; the
 # supervisor approves in the inbox; the flow resends it and the ERP confirms.
@@ -709,7 +709,7 @@ hosp platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app":
 catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/actions" | jq -c '[.[].schema | select(startswith("crm.") or startswith("pms."))]')
 [[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.advise","crm.opportunity.open","crm.opportunity.close","crm.opportunity.plan","crm.opportunity.answer"]' ]] || fail "catalog after revocation: $catalog"
 [[ $(hosp crm "$SALES_TOKEN" s-b2 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
-# Outbound effects (ADR-0004): the administrator subscribes a webhook endpoint to
+# Outbound effects (ADR-0051): the administrator subscribes a webhook endpoint to
 # the protocol's cancellation; the cancellation below reaches the sink signed, once.
 SERVER=$HOSPITALITY TENANT=hotel-a AUTHORITY=platform submit "$MGR" w-1 platform.endpoint.add platform.endpoint sink \
   '{"url":"http://webhook-sink:8080/hook","secret":"sink","events":["lodging.booking/1#canceled"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "add endpoint"
@@ -769,7 +769,7 @@ hosp crm "$SALES_TOKEN" f-1 crm.opportunity.open crm.opportunity OPP-9 '{"accoun
 hosp crm "$SALES_TOKEN" f-2 crm.opportunity.plan crm.opportunity OPP-9 '{"rooms":2,"roomType":"standard","arrive":"2026-12-01","depart":"2026-12-03","cutoff":"2026-11-20"}' | jq -e .record >/dev/null || fail "plan the group block"
 blockstate() { records "$MGR" 'crm.opportunity/OPP-9' | jq -r '.record.block + " " + ([.record.stays[].status] | join(","))'; }
 [[ $(blockstate) == "held held,held" ]] || fail "group block: $(blockstate)"
-# Customer service (ADR-0054 (2)): a ticket's triage agent, on the local model,
+# Customer service (ADR-0008 (2)): a ticket's triage agent, on the local model,
 # triages and replies; the reply's mail is held because an agent wrote it, and
 # reaches the mail gateway (the sink) once the manager approves it.
 hosp ai "$MGR" hd-1 ai.provider.add ai.provider local '{"kind":"local","baseUrl":"http://webhook-sink:8080/v1"}' | jq -e .record >/dev/null || fail "hospitality AI provider"
@@ -1133,7 +1133,7 @@ function_joint_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 deployed_browser after
 echo "ok   builder AI functions: both operators called the page's retained function again after backup restore and complete journal recovery"
 
-# The delivery profile (ADR-0011b). Every scenario above ran in the default
+# The delivery profile (ADR-0045b). Every scenario above ran in the default
 # development/import profile, which keeps the direct install. A tenant that
 # declares production refuses it at the owner — a hidden button is not a
 # retirement — names the candidate route, and still previews a saved candidate,

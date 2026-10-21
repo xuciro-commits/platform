@@ -14,7 +14,7 @@ import (
 )
 
 // Authorization is the platform's own, per-tenant separation of duties
-// (ADR-0016 §11, ordered by the owner on 2026-10-05). Three things live here:
+// (ADR-0018 §11, ordered by the owner on 2026-10-05). Three things live here:
 //
 //   - the auditor role: a member of the platform app who may read the tenant's
 //     audit, health, work, members, settings and catalog and may decide
@@ -25,7 +25,7 @@ import (
 //   - projects: a tenant-level organisational association that also carries
 //     asset edit delegation. A project names members and the assets assigned to
 //     it; an editor of a live project holds the builder role through it (a
-//     derived grant, `By: project:<id>`, ADR-0027 §3.3), so the Studio, the
+//     derived grant, `By: project:<id>`, ADR-0044 §3.3), so the Studio, the
 //     reads and the action catalogue open for them like for any builder. The
 //     bound is enforced on the submission path from each submission's target:
 //     a builder role held only through projects may draft the named assets and
@@ -179,7 +179,7 @@ func (p BuildProject) covers(ref ProjectAsset) bool {
 }
 
 // projectGrants are the builder grants a member holds through projects
-// (WorkQueue #141, ADR-0027 §3.3): editor of a live project → builder in the
+// (WorkQueue #141, ADR-0044 §3.3): editor of a live project → builder in the
 // build app, `By: project:<id>`. The grant is real for reading, loading the
 // Studio and the action catalogue; delegatedBound keeps its writes to the
 // assets the projects name. Call with d.mu held.

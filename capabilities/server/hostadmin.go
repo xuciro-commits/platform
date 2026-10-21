@@ -18,7 +18,7 @@ import (
 	"platformserver/platform/authz"
 )
 
-// The host console (ADR-0016 §6.5) is the host's own management scope: it is
+// The host console (ADR-0018 §6.5) is the host's own management scope: it is
 // independent of every tenant's administration and never inherits a customer
 // administrator's rights. Its operators are subjects the deployment names as
 // host administrators; a route under /v1/host answers their bearer token and

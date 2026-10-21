@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// One application, end to end, across two environments (ADR-0062): a
+// One application, end to end, across two environments (ADR-0064): a
 // definition is drafted and frozen in dev, activated, used by an operator,
 // promoted as sealed bytes into prod, its records migrated, then upgraded to a
 // v2 that adds one optional scalar — on both environments, through the

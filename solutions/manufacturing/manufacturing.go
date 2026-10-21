@@ -1,4 +1,4 @@
-// Package manufacturing is a plant's software as a solution (ADR-0026、ADR-0016): the
+// Package manufacturing is a plant's software as a solution (ADR-0026、ADR-0018): the
 // platform's directory, organisation, AI, work, flows, agents and knowledge,
 // the MES, and its books — the ERP app, or the adapter to an ERP outside —
 // composed without a bridge. The books provide production.orders/1 and the MES

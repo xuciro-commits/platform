@@ -103,7 +103,7 @@ make local                           # 全栈开发（需要 Docker：Air + Vite
 |---|---|
 | 这个系统是什么、代码在哪 | 本文件 |
 | 现在的结构与能力边界 | [Platform](docs/Platform.md)（§2 是结构，§2.4 是能力清单，其余按需查） |
-| 某个决定为什么这样、现在还有效吗 | [ADR 索引](docs/ADR/README.md)——64 份，一行一份，标了现行/局部被取代/历史 |
+| 某个决定为什么这样、现在还有效吗 | [ADR 索引](docs/ADR/README.md)——37 份，一行一份，标了现行范围与并入了谁 |
 | 现在做什么 | [WorkQueue](docs/WorkQueue.md)（唯一的施工队列） |
 | 为什么做这个产品、为谁做 | [Intent](docs/Intent.md) |
 | 怎么检查、检查能证明什么 | [Testing](docs/Testing.md) |

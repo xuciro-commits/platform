@@ -2,7 +2,7 @@
 
 <a id="adr-0057"></a>
 
-状态：已接受（2026-10-12，负责人指令）· **消歧**：宿主既有 `Package`（`capabilities/server/packages.go`，Platform §2.5 的"能力包=可信代码或受控定义的分发单元"）是**分发机制**，本文定义它承载的**四类内容**；机制沿用，协议原生制品扩展见 ADR-0061，术语归属见 §1 · 与 ADR-0046（工件）、ADR-0053（退出）、ADR-0038 §9（边界）配套
+**状态：** 现行 · 2026-10-12 · 四层包、功能块与唯一一份依赖描述（并入原 0013、0056）。
 
 协议能力包的可执行分发、独立网关与配置由 [ADR-0061](0061-pluggable-protocol-packages.md#11-as-built) 补充；原 Package 已支持可信原生制品的确切版本安装、封存与保留，不另建包管理器。
 
@@ -44,7 +44,7 @@
 
 | 层 | 谁写 | 客户可见 | 内容 | 例子 |
 |---|---|---|---|---|
-| **平台包** | 平台开发 | 否 | 内核契约、宿主、构建器与工作台、事务/规则/约束/集合/生命周期/集成/AI 的原语与执行 | ADR-0039、ADR-0040、ADR-0041、ADR-0042、ADR-0043、ADR-0044、ADR-0045、ADR-0046、ADR-0047、ADR-0048、ADR-0049、ADR-0050、ADR-0051、ADR-0052、ADR-0053、ADR-0038、ADR-0054、ADR-0055、ADR-0056 交付的东西 |
+| **平台包** | 平台开发 | 否 | 内核契约、宿主、构建器与工作台、事务/规则/约束/集合/生命周期/集成/AI 的原语与执行 | ADR-0039、ADR-0040、ADR-0041、ADR-0042、ADR-0043、ADR-0044、ADR-0045、ADR-0046、ADR-0047、ADR-0048、ADR-0050、ADR-0051、ADR-0060、ADR-0053、ADR-0038、ADR-0008、ADR-0055、本文 交付的东西 |
 | **能力包** | 平台开发 | 否 | **面向一种技术**的可插拔扩展；依赖平台包；向行业包提供能力 | 数字孪生、3D 库位实时预警、GIS/地图、时序视图与统计、设备对接适配（外部库的封装）、报表/看板平台连接器 |
 | **行业包** | 平台开发（可带 FDE 参与定义） | 否 | **某个行业的特殊性**：对象骨架、共享类型、规则模板、页面装配、样本数据、验收场景、构建步骤与工时记录 | 楼宇供暖、离散制造、大型化工、仓储与 AGV |
 | **应用包** | **FDE** | **是** | 某个客户的应用：他的模型、规则、页面、集成、AI、权限，即 ADR-0046 的工件 | 某物业公司的供暖管理系统 |
@@ -76,7 +76,7 @@
 
 | 项 | 规则 |
 |---|---|
-| 版本 | 每个包有稳定 ID 与内容版本（沿 ADR-0046 的工件版本与 ADR-0011 的封存语义） |
+| 版本 | 每个包有稳定 ID 与内容版本（沿 ADR-0046 的工件版本与 ADR-0045 的封存语义） |
 | 安装与卸载 | 安装状态与内容版本分开：卸载后可以重装同一份包，也可以显式切回已保留的原版；只有内容改变才需新版本。同 ID、同版本的完整描述及其制品必须与原封存内容一致，不能因卸载而覆盖 |
 | 交付 | 应用包的交付 = 工件 + 环境绑定 + 迁移计划（ADR-0046 §D4），不变 |
 | 行业包/能力包升级 | 需要数据变更时走 ADR-0045 的迁移计划；应用及协议绑定明确的确切版本，不自动跟随升级，也不求解版本范围（ADR-0061） |
@@ -92,7 +92,7 @@
 **预留的规则**（这条防止两种极端：什么都不留 → 以后改内核；什么都留 → 空抽象）：
 
 1. **预留的是机制，不是领域词汇。** `contract/` 不含领域词汇（AGENTS 硬规则 1、ADR-0038 §9.1）：不得为 AGV、库位、门禁之类预留字段或类型。预留发生在**平台层**（`platform` 与宿主的具名契约）。
-2. **只为"已命名的下一次交付"预留**：当前是**仓储与 AGV**（WMS 立库 RCS、AGV WCS、黑盒下游指令，ADR-0059 §D7）。没有命名交付的地方**不留**——边缘情况不留。
+2. **只为"已命名的下一次交付"预留**：当前是**仓储与 AGV**（WMS 立库 RCS、AGV WCS、黑盒下游指令，ADR-0051 §D7）。没有命名交付的地方**不留**——边缘情况不留。
 3. **扩展的形态**：实际任务使用原具名接口或受控定义；缺少声明时在其归属方连同实际实现补齐。不因未来可能性新增只有声明、没有调用者的空接口或资产种类。
 4. **预留不等于半实现**：不得留下空方法、`TODO` 分支或未接通的面板（AGENTS 硬规则 6）。预留的检查标准是"三天后能插进来"，不是"看起来像已经支持"。
 
@@ -100,10 +100,10 @@
 
 ## 7. 不做
 
-- **不做插件市场/公共分发**（ADR-0057 的既有边界：第三方生态待平台内部成熟后再考虑）。
+- **不做插件市场/公共分发**（本文 的既有边界：第三方生态待平台内部成熟后再考虑）。
 - **不让客户改行业包**（负责人明确）。
-- **不把能力包做成"组件库"**：能力包是**技术能力**（计算、呈现、对接），组件仍归 `@platform/ui`（ADR-0049）。
-- **不让行业包携带执行代码**：行业包是**受控定义 + 样本 + 装配**，不是 Go/TinyGo；需要代码的算法走 ADR-0013 的受控代码，作为能力包的一部分包装。
+- **不把能力包做成"组件库"**：能力包是**技术能力**（计算、呈现、对接），组件仍归 `@platform/ui`（ADR-0048）。
+- **不让行业包携带执行代码**：行业包是**受控定义 + 样本 + 装配**，不是 Go/TinyGo；需要代码的算法走 本文 的受控代码，作为能力包的一部分包装。
 - **不建第二套包管理**：复用宿主 `packages.go` 的机制。
 
 ## 8. 后果
@@ -139,3 +139,278 @@
 静态原生应用仍随宿主编译部署；受控定义、应用工件、代码与可信协议包沿各自原安装/候选机制分发，不再受早期“所有包必须重编译宿主”的限制。不允许任意租户脚本、未受控二进制或公共插件市场因此进入宿主。调用者包括人员、服务和 AI，工具目录只说明其当前可用动作，真正提交仍通过同一授权。
 
 客户可改应用包的模型、事务、规则和页面；行业包和技术包的原定义仍归各自作者。旧“客户只能配外围界面/分析”的范围已被取代；基础升级后的客户扩展按 ADR-0045 保留。停用或退役停止新的贡献，不删除已接受事实、旧版本或在途工作。历史恢复不重新授权。
+
+## 并入：能力装配、块与依赖（原 0013、0056）
+
+包是分发单元，块是装配单元，依赖是它们之间唯一的描述；三者原本分散在三份文档里，现并入本文。第三方选型与一次性改造流水（0013 §1–§3、§11–§12）不再保留。
+
+### 状态与核心决定
+
+**Accepted，2026-09-30，#139；关联 #123/#132/#133/#136。** 负责人已授权实施；当前范围见 §12。复用 K1–K9 与已有宿主/Flow/Work；Wasm 使用 Go 原生 wazero，不引入外部编排器或 Rust 构建链。一次统一改造，不保留双引擎或第二套恢复体系。
+
+名称保持**能力装配层（Capability Fabric）**：在本体语义和应用体验之间，把原生能力与代码算法变成可发现、可连接、可调用的类型化 Block。原 **Logic Studio / 逻辑工作台** 是当时的入口名称；现行产品入口按 ADR-0018、ADR-0047 组织到同一应用设计台。统一的是画布语法、能力契约与调用治理；生命周期、长流程、数据逻辑、AI 与行业执行保留各自语义主人。
+
+| 决定 | 采用 |
+|---|---|
+| 执行归属 | 状态变更归原 Action/Lifecycle，长等待归原 Flow/Work，计算归 Operation，推断归 AI；共同复用 Work/Effect 和 accepted-result/journal |
+| Wasm 运行 | Go + **wazero**，同仓库 Go worker；独立进程隔离计算，无新编排服务、数据库或日志 |
+| 源码工具链 | 普通 Go/TinyGo 编译为 WASIp1 command；不采用 Reactor。制品语言中立，本次不增加 Rust 构建链 |
+| 能力入口 | 现有 owner 目录和应用 API 的统一调用路由；原生方法、AI、代码函数使用同一发现/绑定/授权规则 |
+| 可视化 | 已有 React Flow 共用画布；以 n8n 的节点创作/数据映射为主，借鉴 Retool 调试布局及 Blender 类型插口/插入让位；不搬执行栈 |
+| 发布与恢复 | 新资产纳入现有候选/激活和已提交结果；不增独立 Wasm 上线按钮或外部执行历史 |
+| 改造方式 | 同一次改造统一定义、目录、前后端和运行入口，移除被替代的重复结构；不保留临时执行路径 |
+
+### 4. 原生能力与代码函数的共同契约
+
+目录只有一个公开发现协议。原生资产是 owner 声明，代码制品是受控 compute 资产；二者在 UI 中可按来源筛选，但不分别维护规范注册表。
+
+| 能力 | Block 输入/输出与语义 |
+|---|---|
+| Object / Relation | 数据资产；提供受权 Query 和 Action。实体本身不是可执行函数 |
+| Query | 参数 → 声明的分页/集合/聚合结果；保留记录/字段来源与读取限制 |
+| Compute | 输入 → 输出；可信 Go 方法或 Wasm 算法，不直接写业务/访问外部系统 |
+| Action / Effect | 参数 → canonical 接受回执/任务或效果状态；原权限、审批、事务与回执有效 |
+| AI Function / Agent | 受权输入 → 推断结果/受管运行；复用模型/工具/预算主人，不改称普通计算 |
+| Flow / Subflow | 参数 → 运行/输出；运行主体、工作状态与恢复归原 Flow |
+| Control | 条件、集合、等待、返回等内置步骤；不为每个 if/else 编译 Wasm |
+
+新增 `platform.Operation` / `compute` 资产承载普通算法；不把 Wasm 塞入现有 `AIFunction` 的模型字段。`CapabilityDescriptor` 是 owner 资产的共同视图；前端 `BlockSpec` 从它投影，不再注册一次能力。
+
+描述符包括限定 ID、owner、kind、英文/中文说明、输入/输出 Schema、配置 Schema、effects、权限/来源、执行绑定和资源策略。原生引用注册入口；Wasm 引用已发布模块摘要与 ABI。`BlockSpec` 另含图标/分组、输入端口、命名控制出口及检查器展示；展示信息不能改变执行。
+
+共同调用接受稳定 requestKey、精确能力引用与 inputs，返回 completed（原回执/输出引用）、pending（调用/任务 ID）或 rejected（原错误封套）。等待审批不是已成功修改业务。直接 Compute 与流程内 Compute 使用同一 RequestOperation/受属任务，HTTP 可以等待有界响应，不另建同步“快速执行”路径。
+
+**一份 Schema。** 复用 Field/Parameter 的原语义，结构类型由平台 `ValueSchema` 表达；以 [JSON Schema 2020-12](https://json-schema.org/draft/2020-12) 的结构约束为参考，公开的是有界平台 profile，`nullable/variant` 不是任意标准 Schema 的完整实现。限制对象/数组/字符串/深度和总大小，未知字段默认拒绝；禁止联网引用、任意递归和程序式校验。缺少结构定义的原生 JSON 参数保留 owner 的原 Field 元数据，不能伪装成 string 或编造封闭 Schema。金额、小数和对象引用沿原语义编码，不能自动冒充类型兼容。
+
+绑定只能是常量、流程输入、当前 item/index、可达前序输出字段、对象字段、具名查询或注册转换；保存 node ID + 字段路径及作用域。比较、布尔组合、投影是平台内置有类型操作；复杂算法用 Compute。没有 `{{ 任意 JavaScript }}`、自由 SQL 或租户私有表达式解释器。首版采用明确类型匹配/投影/转换，不宣称可求解任意 JSON Schema 子集关系。
+
+输入取材的受保护来源由宿主保存并传播到计算结果/运行详情/页面派生值，读取时重查当前权限。Wasm/AI 不能自己删除来源标签、伪造身份或宣称结果已脱敏；字段释放规则仍归原数据 owner。
+
+### 5. Block 封装、连线与校验
+
+### 5.1 五类流程，统一画布语法，保留执行职责
+
+| 流程类别 | 关注点与定义 | 唯一语义/执行主人 | 画布表达 |
+|---|---|---|---|
+| 实体生命周期 / FSM | 单记录允许的状态转换、角色、条件；已有 `build.object` States/Actions | 原 Lifecycle/Action 与该对象 owner；不新建 FSM 引擎 | 状态节点和转换边；检查器编辑原 From/To、条件及角色 |
+| 人工协同 / Human Workflow | Ask、认领/审批、长等待、会签/驳回等人机协作需求 | 原 `apps/flow` 的实例/Token，加 `apps/work` 人工任务；具体审批能力仍按现有实现边界 | 执行节点、等待/角色与任务状态；不是宣称完整 BPMN 标准实现 |
+| 数据/集成 / Data Logic | Payload、Query、Transform、Compute、ForEach、Connector/Effect | 纯计算用内置 Go 算子/Operation；集成归 K8/Effect；需要持久等待/重试/多步效果时由原 Flow 编排 | 控制线与数据绑定分开，普通 DAG 加有界循环 scope |
+| AI Logic / Agentic | 模型非确定输出、受权知识取材、工具循环、结构化结果与评测 | 原 `build.function` / 宿主 AI/Agent；人工确认或跨步骤长等待调用 Flow/Work | LLM、检索、工具与校验 Block；模型用量/评测归原治理 |
+| 制造/物流执行 / Routing | 物料/批次、工位、设备、操作者和业务不变式 | 行业对象/Action/Protocol/Connector 组合平台能力；行业语义留在领域包 | 工艺/站点和运行状态适配；共用画布，不把工艺路由当通用 DAG |
+
+所有类别共用连线、选中、缩放、键盘、属性面板和运行标记，但不互换边的含义。纯计算不创建人工 WorkTask 或长流程实例，也不在租户锁内开启长事务；其有界调用与结果仍遵守原执行/接受机制。微计算先采用具名算子、类型化 Binding/Predicate 与 Go/Wasm，不增加内嵌 JS 表达式语言。
+
+设计态由构建者编辑定义/草稿与候选；运行态由操作员读取 owner 的真实状态和已保存中间产物，复用只读画布高亮。认领、答复、取消等操作使用原受权动作，不通过修改运行图来改变已发布逻辑。
+
+### 5.2 统一 Block 族
+
+| 族 | 节点与配置 | 复用/扩展 |
+|---|---|---|
+| 触发/入口 | 手动、页面、记录事件、协议事件、定时；严格输入 | 原事件、Job、Flow Start；增加声明式输入 |
+| 数据读取 | Query、对象/集合/聚合读取 | 原具名查询/授权；参数绑定与输出描述符 |
+| 操作/效果 | 原生 Action、审批请求、Connector/Effect | 原 Submit、Work、Protocol、Effect，不新造提交/审批 |
+| 计算 | 原生 Operation、Go/TinyGo Wasm | 新普通计算类型及其受属执行适配 |
+| AI/Agent | 已发布 AI Function、受管工具运行 | 原模型与 Agent 路径，公共目录投影 |
+| 条件 | Branch、Switch、Filter、Transform | 结构化 Predicate/Binding、命名出口与结果类型 |
+| 集合/并发 | ForEach、Map/Reduce、受限 While、Fork、BranchMerge、AllJoin、Race | 复用 Token All/Any，增加 loop frame/结果汇合；明确物理计算并发 |
+| 等待/结束 | Wait、Ask、Subflow、Return、Fail、局部 Error/补偿 | 原等待/人工任务/子流程/重试/Undo；补类型化输出 |
+
+每个 Block 只是 capability/control 引用、typed config、inputs/outputs 与控制出口，不内嵌另一种业务实现。代码源码留在 CodePackage，画布引用其公开契约。
+
+### 5.3 控制线与数据绑定
+
+主线决定执行顺序，出口明确 success/error、if/else、case/default、loop/done；属性面板引用上游字段，选中时可显示数据依赖线。数据线不产生新的调度，控制线也不能弥补缺少输入。
+
+Branch 只执行命中路径并高亮；分支汇合只接收实际选择的路径。AllJoin 与明确 fork/scope 配对；`any` 定义为首个成功路径，全部失败才进入原错误/补偿路径。胜出后取消其余后续工作，不撤销已提交决策。数据合并只合并值，不提供调度等待。
+
+循环是显式子作用域，保存 item/index、迭代路径、最大次数、concurrency/batch size、结果顺序和错误策略；任意回边拒绝。串行、并行和分批是同一节点的策略，不是三个执行器。break/continue 只在所属 scope 生效；部分失败用显式 result/variant 表达，不能向成功 Schema 塞 null。
+
+Go 代码 Flow 与 Builder Process 最终使用同一 `platform.Flow/Step` 语义和同一 `apps/flow` 推进器。修订后的 Process 是唯一租户流程定义；Graph IR 是其校验/编译表示，不再保存另一份平行图真相。状态机和 AI 函数仍保存于各自 owner 定义，不强行改存为 Process。不反编译 Go 闭包；可信代码声明可保留函数，但公开成 Block 必须有完整具名契约。
+
+### 5.4 三处校验，一份规则
+
+| 时点 | 校验与反馈 |
+|---|---|
+| 编辑 | 缺参、Schema/端口类型、作用域、分支可空、错误出口；即时报出 node/port/field 路径 |
+| 保存/测试/发布 | 同一服务端 compiler 检查可达性、受控循环、必填输出、作用域、依赖、能力效果及权限；不能只信任 React Flow isValidConnection |
+| 执行/完成 | 再查实际输入、当前主体/源权限、预算和版本；worker 输出再次验证后才能被接受 |
+
+画布位置、颜色、折叠、视口与布局是 presentation metadata；它们不决定入口或执行次序，也不进入语义摘要。React Flow node/edge JSON 不是业务规范。
+
+### 6. 原生 Flow 的必要扩展
+
+保留原 `FlowInstance`、Token、宿主受属任务、人工任务、追踪与接受结果，不新建 graph-run 数据库。需要增加的状态是有界运行 frame：作用域/父 Token、迭代路径与游标、已完成结果引用、待调用 ID、Join 激活集合、剩余预算。计算任务/generation 归宿主 `operations.go` / `kernel.Works`，人工 WorkTask 只用于 Ask/审批。
+
+- Branch/Binding 作为类型化定义编译到原 Step；ForEach/While 使用 frame，恢复读取已保存游标和结果，不能只靠 Go Choose 回跳。
+- Fork/Join 沿原 Token 模型，计算任务在已有锁外 worker 通道并发；结果按稳定 iteration/branch ID 汇合，不按物理完成顺序改写集合语义。
+- 一次决策的推进/集合预算耗尽时保存 frame 和下一次受属推进意图，然后让出；不能把正常长集合一律当无限循环卡死，也不能在租户锁内无限推进。
+- 等待、人工答复、子流程和补偿沿已有事件/Work/Flow；局部错误出口处理后，全局 handler 不重复处理同一错误。
+- 定时/事件/重试继续归已有调度。需要更快唤醒或更大规模时优化该 owner 的到期索引/公平性，不为毫秒算法调用新建实时调度系统。
+
+这些是扩展现有平台的执行表达力，不是自研另一套 Temporal。现有 journal、Decision、世代、任务、协议与效果继续承担持久工作保证。
+
+### 7. Wasm 计算如何进入已有执行路径
+
+### 7.1 调用意图 → 锁外计算 → 已接受结果
+
+1. RequestOperation 解析 owner/输入/来源/模块/预算并检查权限。在现有接受决策中保存调用身份、固定输入、待计算状态与受属工作意图；Flow Token 保存同一 call ID 后等待。
+2. 稳定调用键来自 tenant/run/node/iterationPath/invocationOrdinal；直接调用使用接受的 requestKey。重试 attempt/generation 不改变逻辑键，同键不同提议沿 K4/现有结果入口拒绝。
+3. 宿主现有调度占用该工作，持久化当前 generation/待完成状态，在 tenant commit lock 外调用 Go/wazero worker。内存 busy 标记仅防同进程重复派发，不能代替持久所有权。
+4. worker 只返回计算输出/错误/执行度量。宿主在原结果提交入口核对 call、有效 generation、输入/模块摘要和输出 Schema，将结果及受支持 Flow 续接映像/意图一起接受后才可见。
+5. 已有完成结果直接读取；Replay 只应用保存的结果与 Token/frame，不重算 Wasm、不运行当前业务回调。计算完成但尚未入账的窗口可能再算一次，不能据此宣称物理执行恰好一次。
+6. 取消沿 K9 与 Flow 原入口；旧 generation/迟到结果不得推进。取消只阻止后续工作，不撤销原生 Action 已接受的决策。
+
+当前同步 acceptWork 不能直接包住第 3 步：需在原 owner 中扩展异步占用/完成适配。复用 effects 的锁外执行与 settleAccepted 结构、同一调度和 accepted-result 日志类别，新增必要的计算结果 payload；不伪装成任意外部 webhook，不复制一套日志/重试队列。
+
+执行进程重启后，按已有工作所有权规则使失去运行器的 generation 失效并重新占用未决工作；其输出已接受则不再运行。仅恢复未决工作所需的状态，不为一次性短算法引入通用指令级 checkpoint。真正长集合的检查点是 Flow frame，复杂算法需要内部断点时再使用 K9 已有 checkpoint 契约。
+
+### 7.2 业务写入仍走原 Action
+
+Compute 可以返回建议或变更计划，不能直接提交业务。后继 Action 使用原 owner 的 canonical submission 与稳定幂等键；调用结果只是原接受回执的引用，不能另接受一次变更。取消/权限检查在原 Action 提交时生效，不能仅靠早先的调用许可。
+
+跨应用动作走原 Protocol 和声明的消费关系；并行/循环不带来跨权威全局事务。需要同权威原子修改时注册一项原生 Action，不能以两个顺序 Block 冒充原子操作。AI/外部效果同样沿原 Request/Reply、审批与回执。
+
+### 8. Go/TinyGo 编译与制品
+
+本次正式提供普通 Go 与 TinyGo。普通 Go 使用 `GOOS=wasip1 GOARCH=wasm go build` 的 command 路线；TinyGo 固定支持版本的 WASI command 配置，不使用 Reactor/c-shared。见 [Go WASI](https://go.dev/blog/wasi)、[TinyGo WASI](https://tinygo.org/docs/guides/webassembly/wasi/)。Rust、其他语言可以以后通过同一语言中立制品协议接入，本次不安装其编译器/PDK 或增加对应服务。
+
+SDK 从 Input/Output Schema 生成类型和 main 包装，一个制品首版公开一个计算能力。TinyGo 的 [reflection/标准库兼容](https://tinygo.org/docs/guides/compatibility/) 有边界，使用 Schema 生成的无反射编解码模板；不能承诺任意 encoding/json、cgo 或第三方包都兼容。普通 Go 与 TinyGo 是编译 profile，不产生两套注册/执行 API。
+
+CodePackage 保留源码快照、锁文件、Schema、SDK、工具链镜像摘要及构建选项；BuildResult 记录输入摘要、诊断、模块摘要和 imports/exports 校验。构建工作仍归 Build 和已有受属工作，编译成功只产生可引用制品。
+
+隔离构建使用临时无特权容器、固定模板/工具链、受控离线依赖和 CPU/RSS/时间限额；无生产凭据、宿主目录或 Docker socket，租户不能提交 shell/构建命令或共享可执行缓存。产出后验证格式、features、imports、固定 `_start`、体积、ABI 与 Schema；由宿主计算摘要并登记。
+
+字节复用现有 `FileStore` 的 S3/RustFS；元数据复用 Build/定义发布。采用 artifact 存储类别/引用留存，不能将模块伪装成普通 files.file 而被 SweepUploads 清理。当前开发 store 是内存，磁盘 store 若需要也属于同一接口实现。
+
+候选、已发布引用和非终态调用保留模块；admission 取得引用与 GC 判定协调。便携 `.wasm` 是权威制品，worker 编译缓存可重建；版本/依赖继续沿现有发布规则，不设计新的制品发布治理层。
+
+### 9. wazero 执行配置与实际边界
+
+### 9.1 一个 Go 计算执行器
+
+同仓库 Go 程序提供常驻 wasm-worker 模式，生产与主宿主分进程/容器以控制计算故障；不引入 Rust、CGO、外部编排服务或专属数据库。worker 无业务权限/日志，只接受宿主授权的模块引用、输入、call ID、generation、deadline 和限额；返回结果给宿主。
+
+使用 wazero 的 Compiler 模式与 CompilationCache，按模块摘要和固定运行配置共享只读编译代码。每个调用创建独立实例、线性内存、stdio 和 context，结束即关闭；不共享可变 guest 状态或并发调用同一个 Function。缓存版本/平台/配置由 worker 管理，租户不能写缓存目录或提交 native 缓存字节。依据见 [wazero API](https://pkg.go.dev/github.com/tetratelabs/wazero)、[Function API](https://pkg.go.dev/github.com/tetratelabs/wazero/api#Function)。
+
+### 9.2 标准 WASIp1 command
+
+输入是已校验且有界的 UTF-8 JSON，通过调用专属内存 stdin 一次提供并结束输入；输出为 stdout 的一个 JSON 值，stderr 是截断诊断。无 shell、每调用 OS 子进程或 OCI 冷启动。ABI `platform-wasip1-json/v1` 只规定封套与错误约定，不自造指针分配接口。
+
+输出采用 `{ "ok": true, "value": ... }` 或 `{ "ok": false, "error": { "code": "...", "message": "..." } }`；要求正常退出、有效 UTF-8、单一 JSON 值后仅有空白，拒绝重复字段/非有限数。非零退出、trap、超时、无效输出是执行错误，不能采纳半截 stdout。成功还须通过 owner 的输出 Schema。
+
+标准命令执行 `_start`；wazero 默认实例化也会执行配置的 start function，因此不能把整次 Instantiate 耗时误称为纯实例化。需要分别测量时，使用 `WithStartFunctions()` 暂不执行导出的 `_start`，然后显式 Call；仍只执行一次，并处理 WASI 正常退出语义。该配置不跳过 Wasm binary 的 start section，若模块包含它，其执行计入实例化预算/取消及耗时。当前设计不要求 Component Model/WASIp2/3 或 guest 线程支持。
+
+### 9.3 预算与取消
+
+显式启用 `WithCloseOnContextDone(true)`，设置 deadline、`WithMemoryLimitPages`、实例/并发/排队上限，以及源码、模块、输入、输出和诊断体积限制。内存 pages 只限制 guest 线性内存，不能冒充 worker RSS 总限额；编译缓存、Go 缓冲、表/栈还需结构限制、缓存预算和外层 CPU/RSS 限额。
+
+wazero 当前公开配置没有确定性指令预算。本设计使用 guest context 取消与进程资源配额，CPU 度量与指令计数分开。host I/O 要自行遵守 context；输入来自有界内存，不接无法取消的管道。初始化/编译也有任务 deadline 和进程限额。依据见 [配置 API/源码](https://github.com/wazero/wazero/blob/main/config.go) 与 [运行原理](https://github.com/wazero/wazero/blob/main/RATIONALE.md)。
+
+WASI 不预打开文件/网络，不继承宿主环境、生产凭据或 stdio，不注册通用数据库/HTTP host-call。时钟/随机源按 profile 显式配置，不能直接继承真实系统值再声称纯确定性；语言运行时需要的受控源与算法公开输入由 SDK 约定。确定性仍需验证，结果恢复不依赖重新计算同值。
+
+### 9.4 毫秒目标，不额外造快通道
+
+目标是在常驻 worker、编译缓存命中、模块 ≤ 5 MiB / 输入 ≤ 64 KiB 的基准下，进入 `_start` 前的实例/输入准备 p95 ≤ 10 ms；记录 CPU、并发、限额与取消启用后的实际配置。这是待测目标。
+
+源码编译、首次下载/编译、排队、SDK 初始化、算法运行和宿主结果提交分别计量。Go 标准运行时的初始化成本尤其需实测；不能把纯实例化指标冒充端到端毫秒保证。达不到时先定位实际瓶颈，不引入另一个运行时/无持久化入口来优化演示数字。
+
+### 1. 决定
+
+### D1 一份依赖描述：所有跨块引用都是 `AssetRef` 或它的具名特化
+
+```go
+// 唯一依赖描述。每个已安装资产恰好一份。
+type Dependencies struct {
+    Ref      AssetRef      // 我是谁
+    Requires []AssetRef    // 我依赖谁（跨块统一）
+    Provides []Capability  // 我向别人提供什么（见 D2）
+    Version  string        // 我的内容版本
+}
+
+// Capability 是"能被别处引用"的东西：动作、查询、函数、操作、协议操作、接口。
+type Capability struct {
+    Kind    string       // action | query | function | operation | protocol | interface
+    Name    string       // 稳定名（命名空间内唯一）
+    Inputs  ValueSchema  // 输入形状（或引用到声明）
+    Outputs ValueSchema  // 输出形状
+    Roles   []string     // 谁能用它（授权仍由 ADR-0044 判定）
+    Side    string       // pure | effect | authoritative（见 D3）
+}
+```
+
+要点：
+
+- **引用一律解析到 `AssetRef` 或 `Capability`**：字段名/路径在**解析时**绑定到具体资产（如 `supplier.country` 解析为"对象 A 的字段 supplier → 对象 B 的字段 country"），因此依赖可以被机器算出，不靠人工声明。
+- **`Provides` 是块之间的连接面**：业务规则块通过 `Capability{action}` 提供动作；业务模型块通过 `Entity`+`Capability{interface}` 提供结构；协同块通过 `Capability{protocol}` 提供跨系统操作；AI 块通过 `Capability{function}` 提供类型化推断。
+- **`Side` 区分三类**（这是 ADR-0038 §2 反复强调的"业务规则成为正式定义"的落点）：
+  - `pure`：无副作用（查询、计算、决策表、计算字段）；
+  - `effect`：只声明意图（外部效果、通知、AI 调用）；
+  - `authoritative`：改变权威状态（动作、事务）。
+
+  **一个 `Capability` 的 `Side` 决定了它能被什么使用面调用**：`pure` 可用于条件、约束、页面绑定、AI 上下文；`effect` 与 `authoritative` 只能由受权提交路径调用。
+
+### D2 一份依赖描述，四种读法
+
+`Dependencies` 是**唯一写入点**，四种读法都是它的投影：
+
+| 读法 | 用途 | 现在的实现 | 变成 |
+|---|---|---|---|
+| **闭包** | 候选要带哪些资产（自闭合） | `release_candidate.go:18-179` | 读 `Requires` 的传递闭包；悬空引用发布期拒绝 |
+| **血缘** | "这个数据/字段从哪来" | `Lineage.tsx` + `Definition.requires`；集成血缘读定义本身（ADR-0022 已说明"证明的是声明不是观测"） | 同一份 `Requires` 的图；**运行时证据并排显示，不混入声明图** |
+| **影响面** | "改这个会波及什么" | 候选差异（`previewCandidateLocked`，`:179`） | `Requires` 的反向图；与血缘是同一份数据的两个方向 |
+| **能力发现** | "这里能引用什么" | `Operation` 目录 + `/v1/apps` 的声明 + 动作目录 | `Provides` 的合并视图；**角色过滤在读取时施加**（ADR-0044），不是另一份目录 |
+
+**"谁是主人"不再需要单独回答**：`Requires` 里指向别的应用的边就是跨应用依赖，它同时是权限边界（ADR-0006 的协议）、发布闭包（ADR-0045）、影响面（ADR-0047）的依据。
+
+### D3 块之间的调用资格由 `Side` 与授权共同决定
+
+这是本 ADR 最有约束力的一条：**块与块之间能不能调用，由 `Side` 加授权决定，不由"谁写代码"决定**。
+
+| 从 → 到 | pure | effect | authoritative |
+|---|---|---|---|
+| 条件 / 约束 / 计算字段 | ✅ | ❌ | ❌ |
+| 页面绑定 / 显示 | ✅ | ❌（显示只读结果） | ❌ |
+| 事务步骤（ADR-0039） | ✅ | ✅（只声明意图） | ✅（必须显式声明，且过授权） |
+| 流程步骤 | ✅ | ✅ | ✅（每一步是新提交） |
+| AI 上下文 / 工具 | ✅ | ❌ | ❌（AI 只能提议，采纳是人或受权主体的提交，ADR-0008 §D2） |
+| 协议（跨应用） | 通过 `Probe`（只读，ADR-0006 §设计 1） | ❌ | 必须走 `Request`（独立决策） |
+
+**这张表把今天散落在各处的"不允许"集中到一处。** 例如"AUI 在规则体内不能改别的应用"、"AI 工具只能调用已声明动作"、"页面不能写数据"，都是这张表的实例。
+
+### D4 应用生命周期块是"依赖真理"的持有者
+
+ADR-0050 的 `sample-set` 归 Build：有稳定名称、保留版本和合成记录的声明资产；依赖其样本所指的对象模型，应用通过原 `Resources` 引用，随原应用候选封存。样本不携带生产记录来源、凭据或执行权；试跑与原 `build.testplan` 共用这些输入，不新增测试执行器。它属于现有 D7 验证能力，规则、约束、动作与授权仍归原 owner。
+
+- `ReleaseAsset` / `Candidate` / `Active` 是唯一封存依赖描述的地方（`platform/revision.go:16-45`）；
+- **候选形成时必须校验整个闭包**，包括相互依赖（沿 ADR-0037 §4 的既有要求："计划必须验证整个集合及相互依赖"）；
+- **激活后的依赖关系可查**（ADR-0046 §D3 的诊断面直接读它）；
+- 依赖发生变化（升级、退役、重命名）走 ADR-0045 的迁移计划，不在别处补丁。
+
+### D5 六块之间的衔接逐对说清
+
+| 从 → 到 | 衔接方式 | 状态 |
+|---|---|---|
+| 业务模型 → 业务规则 | 规则引用字段与引用路径（解析为 `AssetRef`+字段） | ADR-0040 已统一原表达式与引用 |
+| 业务规则 → 业务执行 | 动作/事务编译为 `Transition` 与 `Operation` | ADR-0039 已提供同权威跨对象事务 |
+| 业务执行 → 业务模型 | 运行物携带应用与定义版本标签 | ADR-0046 已建立，运行仍归原 owner |
+| 数据与集成 → 业务模型 | Pipeline 目标/Backing（ADR-0024） | 已有 |
+| 业务模型 → 数据与集成 | 对象的来源声明、写回声明 | ADR-0051 已补显式确认与对账 |
+| 协同与 AI → 业务规则 | AI 提议经采纳动作进入事务 | ADR-0008 已提供 |
+| 协同与 AI → 数据与集成 | 集成的原始数据可成为 AI 上下文 | ADR-0046 §D3 / ADR-0008 §D5 已提供 |
+| 应用生命周期 → 全部 | 候选闭包、激活、迁移计划 | ADR-0045 已提供显式分批迁移 |
+| 全部 → 应用生命周期 | 每块声明自己的 `Provides` 与版本 | 由本 ADR 的同一描述提供 |
+
+### 2. 不做
+
+- **不建通用依赖注入/插件框架**：`AssetRef` 已经够用，缺的是**统一**，不是新机制。
+- **不在运行时解析依赖**：依赖解析是**发布期**的事（这与 ADR-0010、ADR-0037 的"运行不重新解析"一致）。
+- **不做第二份血缘**：一份描述，多种呈现。
+- **不把 `Provides` 变成权限声明**：`Roles` 只说明能力面向谁提供；真实授权由 ADR-0044 判定。
+
+### 3. 后果
+
+- `Definition.Requires` 的四个人工填充点（`definitions.go:1010,1130`、`:518-525`、`release_candidate.go:72-130`）收敛为**一处计算**：从定义体里的引用解析出来。
+- `AssetRef.Check()` 校验原受控资产种类；事务、约束和记录集属于对象/动作正文，不另建独立资产种类或执行器。
+- 血缘与影响面从两套代码变为一份数据的两个方向；`Lineage.tsx` 与候选差异继续存在但读同一份。
+- 前端"能引用什么"的候选列表由 `Provides` 生成，**按角色过滤**（ADR-0044），因此构建者看到的选择器与业务人员不同，但都不是前端自己判断。
+- **对后续 ADR 的约束**：ADR-0039、ADR-0040、ADR-0041、ADR-0042、ADR-0043、ADR-0044、ADR-0045、ADR-0046、ADR-0047、ADR-0048、ADR-0050、ADR-0051、ADR-0060、ADR-0053、ADR-0038、ADR-0008、ADR-0055 的每一项新能力都必须说明它提供哪种 `Capability`（`Kind` + `Side`）、它依赖什么 `AssetRef`。**没有说明的能力不算设计完成**——这是 ADR-0038 自举约束在依赖面的对应物。

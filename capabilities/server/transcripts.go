@@ -10,7 +10,7 @@ import (
 )
 
 // Transcript is one model call in full: what was sent and what came back
-// (ADR-0009, ADR-0054). It may hold personal data, so it stays outside
+// (ADR-0009, ADR-0008). It may hold personal data, so it stays outside
 // the journal, for as many days as the agent app's setting keeps it.
 const (
 	SettingTranscriptDays = "transcript-days"

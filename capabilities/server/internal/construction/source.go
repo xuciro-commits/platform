@@ -14,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-// Data sources (ADR-0023、ADR-0038 block C): a builder names an external JSON
+// Data sources (ADR-0024、ADR-0038 block C): a builder names an external JSON
 // endpoint, the array inside its answer, the field that identifies a row and
 // how fields map onto one of the tenant's objects. The host pulls it when due
 // or asked, outside any decision - like a CSV import: every row becomes the
@@ -33,7 +33,7 @@ type Source struct {
 	platform.Record
 	Name  string `json:"name" field:"required,search"`
 	Title string `json:"title" field:"required,search"`
-	// Connection is the system the source reads through (ADR-0023); empty: a bare JSON URL as in ADR-0023.
+	// Connection is the system the source reads through (ADR-0024); empty: a bare JSON URL as in ADR-0024.
 	Connection string `json:"connection,omitempty" ref:"build.connection"`
 	// Profile is how rows are read: json (default), csv, odata (an entity set), table (a database table).
 	Profile string `json:"profile,omitempty" choices:"json,csv,odata,table"`

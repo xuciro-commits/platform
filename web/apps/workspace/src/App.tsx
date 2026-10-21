@@ -1,4 +1,4 @@
-// The workspace (ADR-0019、ADR-0018): one page and one sign-in for every app a
+// The workspace (ADR-0018): one page and one sign-in for every app a
 // member may open on this host. The host decides who sees what — the apps the
 // tenant runs and the member holds a role in (`/v1/me`), the actions of their
 // catalog — and each app's UI package contributes its views and navigation

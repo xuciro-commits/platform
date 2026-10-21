@@ -8,5 +8,5 @@ export { codeChallenge, currentSession, keepFresh, signIn, signOut, type OidcCon
 export type * as Api from "./gen/host";
 export { pageUIManifest, imageRegionLimits } from "./gen/host";
 export type {PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor} from './widget-authoring';
-// The typed enterprise SDK: query/ref/write contracts over the model's own declarations (ADR-0034).
+// The typed enterprise SDK: query/ref/write contracts over the model's own declarations (ADR-0022).
 export * from "./gen/enterprise-sdk";

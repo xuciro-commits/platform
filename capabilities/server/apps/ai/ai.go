@@ -1,4 +1,4 @@
-// Package ai is the platform's AI app (ADR-0008), on the app API (ADR-0016).
+// Package ai is the platform's AI app (ADR-0008), on the app API (ADR-0018).
 package ai
 
 import (
@@ -466,7 +466,7 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 type AIUsage = platform.AIUsageReport
 
 // Model is an enabled model by name, whatever the caller's access: agents call
-// the model the tenant set for them (ADR-0054).
+// the model the tenant set for them (ADR-0008).
 func (a *AI) Model(name string) (Model, Provider, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

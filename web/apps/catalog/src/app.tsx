@@ -1,4 +1,4 @@
-// The Asset Library (ADR-0019 D3–D4): public reference content for builders and
+// The Asset Library (ADR-0018 D3–D4): public reference content for builders and
 // developers — the assets with their live examples, and a sandbox for
 // prototypes. Runtime access still uses the signed-in host.
 import { defineApp } from "@platform/app";

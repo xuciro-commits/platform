@@ -6,12 +6,12 @@
 #      the runtime is reachable only through platform.Runtime, which the host
 #      hands each caller. Their binaries (cmd/) compose tenants and may import
 #      it, and so may test harnesses (packages named *test, like httptest);
-#   3. every app has one shape (ADR-0016): apps/<id>/server is the Go module
+#   3. every app has one shape (ADR-0018): apps/<id>/server is the Go module
 #      <id> with <id>.go, <id>_test.go, i18n/zh-CN.json and a development host
 #      cmd/<id>-server; its UI, when it has one, is web/packages/<id> with
 #      src/index.tsx and src/i18n.ts;
 #   4. the host's own apps (capabilities/server/apps/*) import the app API and
-#      internal/host, never the host runtime (ADR-0016);
+#      internal/host, never the host runtime (ADR-0018);
 #   5. code outside platform never touches .Changes or .changes directly: all
 #      reads and decisions go through locked methods (RecordsFor, Receive, etc.).
 set -euo pipefail
@@ -42,7 +42,7 @@ for x in "${apps[@]}"; do
   dir=${x%%:*} id=${x#*:}
   [[ $dir == apps/$id/server ]] || fail "$dir holds the module $id: an app's directory, module and ID share one name"
   for f in "$id.go" "${id}_test.go" i18n/zh-CN.json "cmd/$id-server/main.go"; do
-    [[ -f $dir/$f ]] || fail "$dir has no $f (ADR-0016)"
+    [[ -f $dir/$f ]] || fail "$dir has no $f (ADR-0018)"
   done
   ui=web/packages/$id
   [[ ! -d $ui ]] || [[ -f $ui/src/index.tsx && -f $ui/src/i18n.ts ]] || fail "$ui has no src/index.tsx and src/i18n.ts"

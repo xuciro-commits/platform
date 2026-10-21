@@ -76,7 +76,7 @@ func (p *Plant) confirmation() platform.Flow {
 				}},
 			{Name: "record", Title: "Record the ERP's answer", Act: &platform.Act{Action: SchemaAnswer, Target: id}, Choose: verdict},
 			// The plant's agent looks for the planned order the order fulfils
-			// (ADR-0054); a supervisor approves its proposal before it is resent.
+			// (ADR-0008); a supervisor approves its proposal before it is resent.
 			// Stopped, or without a proposal, the supervisors correct it themselves.
 			{Name: "propose", Title: "The agent looks for the planned order", Fault: "correct",
 				Agent: &platform.AgentStep{Agent: "erp-fixer", To: supervisors,
@@ -147,7 +147,7 @@ func (p *Plant) confirmation() platform.Flow {
 		}}
 }
 
-// fixer is the plant's agent for refused confirmations (ADR-0054): it reads the
+// fixer is the plant's agent for refused confirmations (ADR-0008): it reads the
 // planned orders and proposes the one the order fulfils; it takes no action,
 // the flow asks a supervisor.
 func (p *Plant) fixer() platform.Agent {

@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-// Datasets (ADR-0024、ADR-0062 I-C): someone else's facts kept as they came -
+// Datasets (ADR-0024、ADR-0064 I-C): someone else's facts kept as they came -
 // a sequence of versions, each the rows one pull or one pipeline run produced,
 // with the schema inferred from them. A dataset is not a business object: no
 // business permission reads it, only the builder; a pipeline turns it into
@@ -27,7 +27,7 @@ type Dataset struct {
 	Title string `json:"title" field:"required,search"`
 	// Keep is how many versions stay; older ones are archived.
 	Keep int `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`
-	// Marking (ADR-0025): raised by what loads it - the connection, the pipeline's input - and by hand; lowered only by hand.
+	// Marking (ADR-0044): raised by what loads it - the connection, the pipeline's input - and by hand; lowered only by hand.
 	Marking string `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking"`
 	// Producer is what loads it: the source or pipeline that writes versions (set by them, informational).
 	Producer string         `json:"producer,omitempty" field:"readonly"`

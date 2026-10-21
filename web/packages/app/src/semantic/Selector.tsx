@@ -7,7 +7,7 @@ import { assetBindingKey, semanticModelView, semanticPropertyTypes, type Propert
  * the member's registered descriptors, without a second ontology cache.
  *
  * `drafts` adds objects that are saved as drafts and not installed yet: the
- * delivery releases them together (ADR-0011), so a binding to one is a
+ * delivery releases them together (ADR-0045), so a binding to one is a
  * candidate input rather than a missing definition.
  */
 export function SemanticObjectSelect({ value, onChange, label, disabled, filter, drafts, enterprise = false }: {

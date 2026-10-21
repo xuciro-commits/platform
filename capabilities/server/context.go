@@ -12,7 +12,7 @@ import (
 	"platformserver/platform"
 )
 
-// The context graph (ADR-0054): one read that grounds a person or an agent
+// The context graph (ADR-0008): one read that grounds a person or an agent
 // in a record — its fields and history, the records it references and that
 // reference it, its links across apps, the flows and the tasks about it.
 // Within the reader's scope: a person reads with their own grants, an app's

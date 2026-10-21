@@ -17,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-// Platform operations (ADR-0027): work the host owns (event deliveries and
+// Platform operations (ADR-0044): work the host owns (event deliveries and
 // scheduled jobs, K9), the tenant's connectors (K8), notifications and typed app
 // settings. Business results are accepted before application; only legacy
 // input entries re-execute during replay (ADR-0010). Empty job polls stay local.
@@ -109,7 +109,7 @@ func (t *Tenant) enqueue(now time.Time) {
 			}
 			t.deliver(id, e, now)
 		}
-		for _, id := range t.listeners { // flows start and wait on events (ADR-0007); a person answered an agent (ADR-0054)
+		for _, id := range t.listeners { // flows start and wait on events (ADR-0007); a person answered an agent (ADR-0008)
 			if id != e.App && t.app(id).(host.Listener).Interested(names, e.Event) {
 				t.deliver(id, e, now)
 			}
@@ -450,7 +450,7 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 	return out
 }
 
-// Notifications: an app tells members something from any input (ADR-0027).
+// Notifications: an app tells members something from any input (ADR-0044).
 
 const noticesKept = 2000
 

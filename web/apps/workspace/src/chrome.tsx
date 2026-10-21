@@ -1,7 +1,7 @@
-// The workspace's own views, shared by every app (ADR-0019 point 6): the
+// The workspace's own views, shared by every app (ADR-0018 point 6): the
 // launcher, the inbox and requests (the work app, ADR-0007), notifications
-// (ADR-0027), the outbox (K5), every record the member may read (ADR-0046),
-// and the assistant, agent runs and global search (ADR-0054).
+// (ADR-0044), the outbox (K5), every record the member may read (ADR-0046),
+// and the assistant, agent runs and global search (ADR-0008).
 import "./i18n";
 import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";

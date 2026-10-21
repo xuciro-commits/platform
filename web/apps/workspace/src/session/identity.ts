@@ -1,5 +1,5 @@
 // Who is signed in and which tenant they opened, remembered for this browser
-// session only (ADR-0019). Development identities come from the host's
+// session only (ADR-0018). Development identities come from the host's
 // `/v1/sign-in`; a production session comes from the identity provider.
 import type { Api } from "@platform/kernel";
 

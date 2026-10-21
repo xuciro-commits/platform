@@ -48,7 +48,7 @@ func main() {
 		supervisor[app] = role
 	}
 	assistant := manufacturing.Seat("assistant-l1", "agent-l1", seat(mes.Assistant), "L1")
-	assistant.Agent = true // what it causes that cannot be recalled waits for a person (ADR-0004 D6)
+	assistant.Agent = true // what it causes that cannot be recalled waits for a person (ADR-0051 D6)
 	development := []platformserver.Seat{
 		manufacturing.Seat("supervisor", "sup-1", supervisor, "plant-sz"),
 		manufacturing.Seat("accountant", "acc-1", map[string]string{erp.ID: erp.Accountant}),

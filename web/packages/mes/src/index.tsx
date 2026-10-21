@@ -1,4 +1,4 @@
-// The plant's UI (ADR-0019): planned orders from the ERP, SFCs through their
+// The plant's UI (ADR-0018): planned orders from the ERP, SFCs through their
 // routing, quality holds and equipment downtime — manufacturing's reference app
 // (Opcenter / SAP ME model) as a contribution to the workspace.
 import "./i18n";
@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
-// The shapes of the MES's reads these views show (apps/mes/server, ADR-0032).
+// The shapes of the MES's reads these views show (apps/mes/server, ADR-0060).
 /** One process setpoint an operation must hold: what to set, in what unit, and the
  * window it stays inside. */
 type Parameter = { name: string; title?: string; type?: "setpoint" | "range" | "limit" | "note"; unit?: string; target?: number; min?: number; max?: number };
@@ -135,7 +135,7 @@ function PlannedOrders() {
   );
 }
 
-// Shop orders the plant releases on its own (ADR-0016): a product, a
+// Shop orders the plant releases on its own (ADR-0018): a product, a
 // quantity and its lots, fulfilling an ERP planned order only when one is
 // named. The host checks the rest: the product's line is the supervisor's, and
 // a named planned order is open, for the product and enough quantity.
@@ -147,7 +147,7 @@ function ShopOrders() {
   const [releasing, setReleasing] = useState(false);
   const products = master?.products ?? [];
   // The enterprise model as the form's place options: the typed query contract
-  // (ADR-0034) over the two place families — organisation units (the demo types
+  // (ADR-0022) over the two place families — organisation units (the demo types
   // its plant and lines there) and locations from a pattern.
   const places = useQuery({
     queryKey: ["enterprise", "query", "places"],
@@ -218,7 +218,7 @@ function SFCTable({ initial = "work", title, description }: { initial?: keyof ty
   );
 }
 
-// The routing drawn as a process (#122, ADR-0033, ADR-0033): one lane per
+// The routing drawn as a process (#122, ADR-0033): one lane per
 // work center it touches, one step per operation. Without an SFC it is the routing
 // as designed; with one it also shows where the lot stands, how it stands there and
 // the nonconformances logged on each operation.
@@ -323,7 +323,7 @@ function SFCDetail({ id }: { id: string }) {
   );
 }
 
-// The craft master data as designed (ADR-0032): pick a routing and read it the way
+// The craft master data as designed (ADR-0060): pick a routing and read it the way
 // the floor will — drawn across its work centers, each operation with what it
 // requires, what it must hold and which equipment can run it.
 function Craft() {

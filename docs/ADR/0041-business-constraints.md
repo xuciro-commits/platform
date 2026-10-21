@@ -2,7 +2,7 @@
 
 <a id="adr-0041"></a>
 
-状态：已接受（2026-10-12，负责人指令，ADR-0038 A 块第三份）· 扩展 ADR-0044 的发布期校验、ADR-0018 的字段类型体系与 ADR-0020 的 LinkType；与 ADR-0040 分工见 §1
+**状态：** 现行 · 2026-10-12 · 约束是模型自带的不变式。
 
 ## 0. 意图
 
@@ -11,7 +11,7 @@ ADR-0040 管"这一次操作在什么条件下允许"。它管不了另一类要
 - 单据编号在租户内唯一且不跳号；
 - 已下达工单的工艺版本不可改；
 - 有未归档子记录的库位不能被归档（今天靠 `record_archive_links.go:14,37-73` 的孤儿检查兜住了一部分）；
-- 工序要求的每一项设备能力都必须被资源持有（今天只在 `apps/mes` 的 `canDo` Go 函数里，见 ADR-0032 D4）；
+- 工序要求的每一项设备能力都必须被资源持有（今天只在 `apps/mes` 的 `canDo` Go 函数里，见 ADR-0060 D4）；
 - 数量必须为正；结束时间不早于开始时间；关账期间的日期不被接受。
 
 这些今天散落在三处：Go 结构体标签（`platform/entity.go` 的 `Required`/`Ref`/`Choices`）、宿主记录写入的零散检查（`records.go:588-603` 引用校验）、以及**行业应用的 Go 代码里**。于是同一个规则在不同入口（记录表单、CSV 导入、AI 动作、协议写入、事务步骤）**执行得不一样**，而"不同入口执行不一样"正是 ADR-0038 §0 第二个判据要消灭的东西。
@@ -106,7 +106,7 @@ type Constraint struct {
 
 ### D6 拒绝的形状
 
-每次拒绝返回：约束名、涉及字段、**为什么**（可读消息，英文 + zh-CN）、以及**当前值**（在调用者有权限读取的范围内）。今天的 `CONFLICT`/`POLICY_DENIED` 错误码保留，约束拒绝使用独立的可区分码，便于前端就地把字段标红（沿 ADR-0036 的输入错误路径，`ErrorBody`）。
+每次拒绝返回：约束名、涉及字段、**为什么**（可读消息，英文 + zh-CN）、以及**当前值**（在调用者有权限读取的范围内）。今天的 `CONFLICT`/`POLICY_DENIED` 错误码保留，约束拒绝使用独立的可区分码，便于前端就地把字段标红（沿 ADR-0048 的输入错误路径，`ErrorBody`）。
 
 ## 3. 不做
 
@@ -135,7 +135,7 @@ type Constraint struct {
 
 ## 6. As built
 
-对象上的 `Constraints` 已贯通受控定义、生成 Entity、草稿、冻结候选与激活；构建器对象编辑器的“Business constraints / 业务约束”沿原 DraftSession、共享输入 buffer、撤销/重做与发布菜单保存，不另建运行时。约束与其读取依赖封存在原 object 资产中；它没有独立可调用的能力，Expr 是 pure，唯一可写入口仍是原 action/transaction（ADR-0056）。组合与发布检查种类、字段、类型、路径、完整查询、同应用归属及接受边界；每对象最多 64 条，每条 1–16 个字段，原因每种语言最多 512 字节。
+对象上的 `Constraints` 已贯通受控定义、生成 Entity、草稿、冻结候选与激活；构建器对象编辑器的“Business constraints / 业务约束”沿原 DraftSession、共享输入 buffer、撤销/重做与发布菜单保存，不另建运行时。约束与其读取依赖封存在原 object 资产中；它没有独立可调用的能力，Expr 是 pure，唯一可写入口仍是原 action/transaction（ADR-0057）。组合与发布检查种类、字段、类型、路径、完整查询、同应用归属及接受边界；每对象最多 64 条，每条 1–16 个字段，原因每种语言最多 512 字节。
 
 所有新记录写入在原 `stagedDecision.Put` 检查记录级约束，非恢复的 live runtime 写入明确拒绝；同一 `checkConstraint` 实现于接受前检查事务级及受影响的关联记录，读取实际私有视图，任一步失败使记录、编号、效果意图和观察全部消失。唯一性在完整私有库加锁检查，包含归档记录；只读/缺失事实明确拒绝。关系实例采用原引用字段存储，创建头和两行的引用与记录在同一个 `record-batch` 接受结果内共同落盘。独立 `relations` 图与 M:N 的替换仍归 ADR-0043；既有原生应用按 ADR-0038 §10 保留运行，不把它们改写为新模型冒充退出。
 
@@ -145,6 +145,6 @@ type Constraint struct {
 
 拒绝复用原 `FieldIssue`/`ErrorBody`：宿主码 `CONSTRAINT_VIOLATION`、issue 码 `constraint_violation`、稳定约束名、记录引用、字段及 relatedPaths、英中原因、读取范围内的有界值与失败类别。内核保留 `ERROR_CODE_INVALID_ARGUMENT`，未扩展契约词汇。拒绝事实按原接受结果路径保存为 refusal v3，同键重试返回原决定，旧 v1/v2 字节仍可恢复；发送诊断时再次过滤当前行/字段权限。CSV 每行明确返回 Error 与问题；空白单元格表示清空，不能静默保留旧字段。预览在私有副本执行同一门禁，不应用到权威状态；业务约束没有跳过开关。
 
-棕地与替换：旧已发布定义、记录和日志不迁写；新约束只影响新写入，收紧后旧违规记录仍可读取与恢复，不在恢复时求值。新模型的不变式归统一约束门禁，表单 Required/InputConstraints 保留输入语义，原行业 Go 守卫按 ADR-0052、ADR-0053 的等价构建产物退出，不形成新模型的第二写入实现。完整规则可视化编辑归 ADR-0048，本块用已有 JSON 输入编辑复杂 Expr 与固定查询集合。
+棕地与替换：旧已发布定义、记录和日志不迁写；新约束只影响新写入，收紧后旧违规记录仍可读取与恢复，不在恢复时求值。新模型的不变式归统一约束门禁，表单 Required/InputConstraints 保留输入语义，原行业 Go 守卫按 ADR-0060、ADR-0053 的等价构建产物退出，不形成新模型的第二写入实现。完整规则可视化编辑归 ADR-0048，本块用已有 JSON 输入编辑复杂 Expr 与固定查询集合。
 
 验收证据：`TestBusinessConstraintsAllWriteEntrances`（四种不变式 × 标准动作、事务、CSV 预览/导入、受权 agent 动作、协议；另测忽略 Put 错误与 live runtime 绕过）；`TestBusinessConstraintsTransactionTotalsAndReferenceCardinality`（合计与借贷 0.005 容差、单行改变触发父记录门禁、归档基数、同一接受结果、编号回滚与恢复）；`TestBusinessConstraintsUniqueConcurrentAndHistory`（并发唯一、状态返回仍锁定、收紧后历史恢复）；required/pattern/temporal/父作用域与空 CSV、关联来源改变和遮蔽字段反例；平台与 Build 的发布/冻结反例。`rule-language` 浏览器路线走构建器配置 → 冻结候选 → 激活 → 重复值拒绝、保留输入 → 更正成功。

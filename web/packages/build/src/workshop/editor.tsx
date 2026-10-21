@@ -18,7 +18,7 @@ import {addWidgetSlot} from "./page-editor/widget-slots";
 import {collaborationRecordSource,requiresOriginalRecord} from "./page-editor/collaboration";
 import {interfaceQueryForSection,pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../ontology/record-paths";
-// Application Studio page design (ADR-0015). Document history, UI selection
+// Application Studio page design (ADR-0018). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageUIProfile, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
