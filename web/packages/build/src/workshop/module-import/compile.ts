@@ -1,3 +1,4 @@
+import {arr,obj,own,parseWorkshopModule,pointer,text,type ImportDiagnostic,type Obj,type SourceModule} from "./diagnostics"; export {parseWorkshopModule,type ImportDiagnostic,type SourceModule};
 import {queryInventoryBudget} from "@platform/app/query-inventory";
 import {completedUnusedConfiguration,type UnusedImportBinding} from "./unused";
 import {validActionDefaults} from "@platform/app/action-defaults";
@@ -18,42 +19,12 @@ import {rangeGrid} from "@platform/ui/range";
 import {pageUIManifest,type Api} from "@platform/kernel";
 import type {PageDraft,AuthoringSection} from "../page-editor/draft";
 import {workshopMapping,workshopMigrationCatalog} from "./catalog";
-
-type Obj=Record<string,unknown>;
-type SourceWidget=Obj&{id:string;type:string;name:string;config:Obj};
-type SourceSection=Obj&{id:string;name:string;layout:string;children:{kind:string;id:string}[]};
-type SourceVariable=Obj&{id:string;name:string;type:string;definitionKind:string};
-export type SourceModule=Obj&{id:string;name:string;description:string;pages:{id:string;name:string;rootSectionId:string}[];sections:Record<string,SourceSection>;widgets:Record<string,SourceWidget>;variables:SourceVariable[];overlays:(Obj&{id:string;name:string;kind:string;rootSectionId:string;openVariableId?:string})[];unusedWidgetIds:string[]};
-export type ImportDiagnostic={path:string;code:string;blocking:boolean};
 export type ImportBindings={computations?:Record<string,{operation:Api.AssetBinding;inputs:Record<string,Api.Binding>;outputField?:string}>;unusedConfigurations?:Record<string,UnusedImportBinding>;regions?:Record<string,{maxHeight:number}>;actionDefaults?:Record<string,Api.PageActionParameter[]>;metricAnnotations?:Record<string,{interpretation:"static-note"|""}>;application?:ApplicationImportBinding;builders?:Record<string,{migration:"complete-predicate"|"";fields:string[]}>;spatial?:Record<string,SpatialImportBinding>;ai?:Record<string,AIImportBinding>;embeddings?:Record<string,EmbeddingImportBinding>;externalFrames?:Record<string,ExternalFrameImportBinding>;observations?:Record<string,ObservationImportBinding>;actionTables?:Record<string,Api.PageActionParameter[]>;notepads?:Record<string,{initial:string}>;analysis?:Record<string,{unit:string}>;resources?:Record<string,Api.PageResourceList>;directories?:Record<string,Api.AssetBinding[]>;graphs?:Record<string,{relations:Api.AssetBinding[];labelFields:Record<string,string>;outputMigration?:"graph-ports";outputObject?:Api.AssetRef}>;vertices?:Record<string,{groups:Api.AssetBinding[]}>;breadcrumbs?:Record<string,{homePage:Api.AssetRef;interfaceVersion:number;labelField?:string}>;avatars?:Record<string,{allQuery:Api.AssetBinding;contextQuery?:Api.AssetBinding;labelField:string;detailFields?:string[]}>;work?:Record<string,{kind:"caller-approvals"|"caller-notifications"|"record-history";recordVarId?:string}>;collaboration?:Record<string,{recordVarId:string;fileID?:string}>;comparisons?:Record<string,{labelField:string;fields:string[]}>;cards?:Record<string,{labelField:string;fields:string[];tone:string}>;scatters?:Record<string,{labelField:string}>;explorations?:Record<string,Record<string,string>>;users?:Record<string,{object:string;labelField:string;query?:Api.AssetBinding}>;datetimes?:Record<string,{offset:string}>;pickers?:Record<string,{labelField:string}>;leaderboards?:Record<string,{labelField:string}>;gantts?:Record<string,Api.PageRecordGantt>;calendars?:Record<string,{labelField:string;initialMonth:string}>;events?:Record<string,Api.PageRecordEvents>;boards?:Record<string,{label:string;fields:string[];moves:string[]}>;lists?:Record<string,{label:string;fields:string[]}>;aggregates?:Record<string,{measure:string;conditions?:Api.PageQueryCondition[]}>;states?:Record<string,Record<string,string>>;links?:Record<string,Api.PageRecordLink[]>;edits?:Record<string,{action:string;fields:string[]}>;objects:Record<string,string>;fields:Record<string,Record<string,string>>;actions:Record<string,string>;queries:Record<string,Api.AssetBinding|undefined>};
 type ImportEntity={type:string;app:string;lifecycle?:Api.LifecycleInfo;fields:{name:string;type:string;choices?:string[];ref?:string;inverse?:string}[]};
 export type ImportTarget={object:string;profile:string;entities:ImportEntity[];actions:{schema:string;target:string;new?:boolean;needsApproval?:boolean;automation?:boolean;title?:string;payload?:{name:string;type?:string;required?:boolean;description?:string;choices?:string[];ref?:string;from?:string}[]}[];definitions?:Api.Definition[]};
 export type ImportReport={formatVersion:1;source:string;sourceModule:string;selectedPage:string;inventoryRevision:string;diagnostics:ImportDiagnostic[];ids:{nodes:Record<string,string>;widgets:Record<string,string>;variables:Record<string,string>;overlays:Record<string,string>};draft?:PageDraft};
-const obj=(v:unknown):v is Obj=>!!v&&typeof v==="object"&&!Array.isArray(v);
-const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
-const text=(v:unknown)=>typeof v==="string"?v:"";
-const own=(o:Obj,key:string)=>Object.hasOwn(o,key)?o[key]:undefined;
-const pointer=(value:string)=>value.replaceAll("~","~0").replaceAll("/","~1");
 const staticImageProfile=(value:unknown):boolean=>validStaticImage(value);
 const sourceIdentifier=(value:unknown)=>typeof value==="string"&&/^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/.test(value);
-
-export function parseWorkshopModule(source:string):{module?:SourceModule;diagnostics:ImportDiagnostic[]} {
- if(new TextEncoder().encode(source).length>1_048_576)return {diagnostics:[{path:"/",code:"source-size",blocking:true}]};
- try {
-  const m:unknown=JSON.parse(source);
-  if(!obj(m)||!text(m.id)||!text(m.name)||m.description!==undefined&&typeof m.description!=="string"||!Array.isArray(m.pages)||!obj(m.sections)||!obj(m.widgets)||!Array.isArray(m.variables)||!Array.isArray(m.overlays)||!Array.isArray(m.unusedWidgetIds))throw Error();
-  if(m.pages.length>32||Object.keys(m.sections).length>256||Object.keys(m.widgets).length>128||m.variables.length>256||m.overlays.length>16) return {diagnostics:[{path:"/",code:"source-budget",blocking:true}]};
-  const validID=(v:unknown)=>typeof v==="string"&&!!v&&v.length<=128&&!Object.hasOwn(Object.prototype,v)&&v!=="__proto__"&&v!=="prototype";
-  const ids=new Set<string>();
-  for(const p of m.pages){if(!obj(p)||!validID(p.id)||!text(p.name)||!validID(p.rootSectionId)||ids.has(p.id as string))throw Error();ids.add(p.id as string);}
-  for(const [id,s] of Object.entries(m.sections)){if(!validID(id)||!obj(s)||s.id!==id||!text(s.layout)||!Array.isArray(s.children)||s.children.some(c=>!obj(c)||!["section","widget"].includes(text(c.kind))||!validID(c.id)))throw Error();}
-  for(const [id,w] of Object.entries(m.widgets)){if(!validID(id)||!obj(w)||w.id!==id||!text(w.type)||!text(w.name)||!obj(w.config))throw Error();}
-  ids.clear();for(const v of m.variables){if(!obj(v)||!validID(v.id)||!text(v.type)||!text(v.definitionKind)||ids.has(v.id as string))throw Error();ids.add(v.id as string);}
-  ids.clear();for(const o of m.overlays){if(!obj(o)||!validID(o.id)||!validID(o.rootSectionId)||ids.has(o.id as string)||!["modal","drawer"].includes(text(o.kind)))throw Error();ids.add(o.id as string);}
-  if(m.unusedWidgetIds.some(id=>!validID(id)))throw Error();
-  return {module:m as SourceModule,diagnostics:[]};
- }catch{return {diagnostics:[{path:"/",code:"module-shape",blocking:true}]};}
-}
 
 /** One-way authoring conversion. No source expression, Action or Flow executes. */
 export function compileWorkshopModule(source:string,pageID:string,bindings:ImportBindings,target:ImportTarget):ImportReport {

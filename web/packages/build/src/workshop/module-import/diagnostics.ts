@@ -1,3 +1,32 @@
+export type Obj=Record<string,unknown>;
+type SourceWidget=Obj&{id:string;type:string;name:string;config:Obj};
+type SourceSection=Obj&{id:string;name:string;layout:string;children:{kind:string;id:string}[]};
+type SourceVariable=Obj&{id:string;name:string;type:string;definitionKind:string};
+export type SourceModule=Obj&{id:string;name:string;description:string;pages:{id:string;name:string;rootSectionId:string}[];sections:Record<string,SourceSection>;widgets:Record<string,SourceWidget>;variables:SourceVariable[];overlays:(Obj&{id:string;name:string;kind:string;rootSectionId:string;openVariableId?:string})[];unusedWidgetIds:string[]};
+export type ImportDiagnostic={path:string;code:string;blocking:boolean};
+export const obj=(v:unknown):v is Obj=>!!v&&typeof v==="object"&&!Array.isArray(v);
+export const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
+export const text=(v:unknown)=>typeof v==="string"?v:"";
+export const own=(o:Obj,key:string)=>Object.hasOwn(o,key)?o[key]:undefined;
+export const pointer=(value:string)=>value.replaceAll("~","~0").replaceAll("/","~1");
+export function parseWorkshopModule(source:string):{module?:SourceModule;diagnostics:ImportDiagnostic[]} {
+ if(new TextEncoder().encode(source).length>1_048_576)return {diagnostics:[{path:"/",code:"source-size",blocking:true}]};
+ try {
+  const m:unknown=JSON.parse(source);
+  if(!obj(m)||!text(m.id)||!text(m.name)||m.description!==undefined&&typeof m.description!=="string"||!Array.isArray(m.pages)||!obj(m.sections)||!obj(m.widgets)||!Array.isArray(m.variables)||!Array.isArray(m.overlays)||!Array.isArray(m.unusedWidgetIds))throw Error();
+  if(m.pages.length>32||Object.keys(m.sections).length>256||Object.keys(m.widgets).length>128||m.variables.length>256||m.overlays.length>16) return {diagnostics:[{path:"/",code:"source-budget",blocking:true}]};
+  const validID=(v:unknown)=>typeof v==="string"&&!!v&&v.length<=128&&!Object.hasOwn(Object.prototype,v)&&v!=="__proto__"&&v!=="prototype";
+  const ids=new Set<string>();
+  for(const p of m.pages){if(!obj(p)||!validID(p.id)||!text(p.name)||!validID(p.rootSectionId)||ids.has(p.id as string))throw Error();ids.add(p.id as string);}
+  for(const [id,s] of Object.entries(m.sections)){if(!validID(id)||!obj(s)||s.id!==id||!text(s.layout)||!Array.isArray(s.children)||s.children.some(c=>!obj(c)||!["section","widget"].includes(text(c.kind))||!validID(c.id)))throw Error();}
+  for(const [id,w] of Object.entries(m.widgets)){if(!validID(id)||!obj(w)||w.id!==id||!text(w.type)||!text(w.name)||!obj(w.config))throw Error();}
+  ids.clear();for(const v of m.variables){if(!obj(v)||!validID(v.id)||!text(v.type)||!text(v.definitionKind)||ids.has(v.id as string))throw Error();ids.add(v.id as string);}
+  ids.clear();for(const o of m.overlays){if(!obj(o)||!validID(o.id)||!validID(o.rootSectionId)||ids.has(o.id as string)||!["modal","drawer"].includes(text(o.kind)))throw Error();ids.add(o.id as string);}
+  if(m.unusedWidgetIds.some(id=>!validID(id)))throw Error();
+  return {module:m as SourceModule,diagnostics:[]};
+ }catch{return {diagnostics:[{path:"/",code:"module-shape",blocking:true}]};}
+}
+
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
  "application-page-destination":"Choose one distinct page name, record and readable object for every source page.",
