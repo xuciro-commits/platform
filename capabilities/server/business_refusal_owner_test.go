@@ -89,7 +89,7 @@ func TestBusinessRefusalOwnerApproval(t *testing.T) {
 			if err != nil || receipt == nil {
 				t.Fatalf("approval request failed: %v", err)
 			}
-			if len(tenant.sequences.last) != 0 || tenant.records.types["build.disposition"].rows.Len() != 0 {
+			if len(tenant.sequences.Clone()) != 0 || tenant.records.types["build.disposition"].rows.Len() != 0 {
 				t.Fatal("approval preflight committed a business flag or route")
 			}
 			id := construction.ID + "." + request.IdempotencyKey
@@ -155,8 +155,8 @@ func TestBusinessRefusalOwnerAtomicBranches(t *testing.T) {
 			if level == "flag" && (value["done"] != true || value["number"] != "R-001") {
 				t.Fatalf("flag did not continue its transaction: %+v", value)
 			}
-			if level == "route" && (value["done"] != false || value["note"] != "Rework required" || value["number"] != nil && value["number"] != "" || len(tenant.sequences.last) != 0) {
-				t.Fatalf("route retained the discarded branch: %+v %+v", value, tenant.sequences.last)
+			if level == "route" && (value["done"] != false || value["note"] != "Rework required" || value["number"] != nil && value["number"] != "" || len(tenant.sequences.Clone()) != 0) {
+				t.Fatalf("route retained the discarded branch: %+v %+v", value, tenant.sequences.Clone())
 			}
 			if level == "route" {
 				found := false

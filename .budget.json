@@ -1,10 +1,10 @@
 {
   "docs.adr": 37,
-  "docs.adrChars": 444105,
+  "docs.adrChars": 444104,
   "docs.longestAdr": 29276,
   "docs.statusLine": 80,
   "docs.topLevel": 7,
-  "docs.chars": 659081,
+  "docs.chars": 659080,
   "ui.definitions": 19,
   "ui.apps": 18,
   "ui.navItems": 118,
@@ -12,9 +12,9 @@
   "ui.views": 94,
   "code.largestGo": 1343,
   "code.largestTs": 3872,
-  "code.fullestPackage": 423,
-  "code.goProduction": 138529,
-  "code.goFiles": 694,
+  "code.fullestPackage": 418,
+  "code.goProduction": 138485,
+  "code.goFiles": 690,
   "code.tsProduction": 56795,
   "code.tsFiles": 637
 }

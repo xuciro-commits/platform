@@ -445,7 +445,7 @@ func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 		}
 	}
 	t.committed.storageValues(&d)
-	for name, n := range t.sequences.clone() {
+	for name, n := range t.sequences.Clone() {
 		d.Values = append(d.Values, journal.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
 	}
 	return d, nil

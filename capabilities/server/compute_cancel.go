@@ -131,7 +131,7 @@ func (t *Tenant) applyOperationCancellations(saved []resultformat.OperationCance
 			}
 		}
 		t.opsMu.Unlock()
-		t.cancels.cancel(r.Before.ID)
+		t.cancels.Cancel(r.Before.ID)
 	}
 	return nil
 }

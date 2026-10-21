@@ -99,7 +99,7 @@ func TestApplicationProposalAdoption(t *testing.T) {
 		t.Fatal("AI-excluded context field leaked")
 	}
 	first := call("HIGH", 0.95)
-	if !bytes.Equal(before, business()) || len(tn.sequences.clone()) != 0 {
+	if !bytes.Equal(before, business()) || len(tn.sequences.Clone()) != 0 {
 		t.Fatal("proposal mutated a business record or allocated a number")
 	}
 	if first.SourceValues["temperature"] == nil || len(first.Applications) != 1 {
@@ -118,7 +118,7 @@ func TestApplicationProposalAdoption(t *testing.T) {
 		t.Fatal("unpersisted adoption accepted")
 	}
 	fail = false
-	if !bytes.Equal(before, business()) || len(tn.sequences.clone()) != 0 {
+	if !bytes.Equal(before, business()) || len(tn.sequences.Clone()) != 0 {
 		t.Fatal("durable failure leaked business writes")
 	}
 	receipt, err := tn.Submit(memberOf(t, tn, "operator"), sub, at.Add(2*time.Second))

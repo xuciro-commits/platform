@@ -39,7 +39,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 		return nil, err
 	}
 	out["connectors"] = raw
-	if err := save("settings", t.settings.clone()); err != nil {
+	if err := save("settings", t.settings.Clone()); err != nil {
 		return nil, err
 	}
 	bindings := map[string]string{}
@@ -126,7 +126,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 		if err := decodeControl(raw, &values); err != nil {
 			return err
 		}
-		t.settings.restore(values)
+		t.settings.Restore(values)
 	case "bindings":
 		var bindings map[string]string
 		if err := decodeControl(raw, &bindings); err != nil {

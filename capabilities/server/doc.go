@@ -12,13 +12,13 @@
 //	console          host_control.go       lifecycle, support sessions, migrations
 //	staged           compute_channel.go    the per-call result channel
 //	work             work_board.go         queues, failed deliveries, jobs
-//	quota            quota.go              attempts per app per minute
 //	connectors       connector_roster.go   registry, descriptor index, last refusals
 //	notices          notices.go            notifications
-//	settings         settings.go           app settings
-//	sequences        sequences.go          number counters
-//	uploads          uploads.go            file hashes not yet attached
-//	cancels          compute_cancel_registry.go
+//	settings         internal/tenantstate  app settings
+//	sequences        internal/tenantstate  number counters
+//	uploads          internal/tenantstate  unattached file hashes
+//	cancels          internal/tenantstate  running cancellation handles
+//	quota            internal/tenantstate  attempt pacing and fair turn
 //	i18n             translator.go         dictionaries and patterns
 //	memStore         journal/memory.go     the Store without one
 //

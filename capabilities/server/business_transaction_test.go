@@ -84,7 +84,7 @@ func txnState(tn *Tenant) string {
 }
 func txnUnchanged(t *testing.T, tn *Tenant, before string) {
 	t.Helper()
-	if txnState(tn) != before || len(tn.sequences.last) != 0 {
+	if txnState(tn) != before || len(tn.sequences.Clone()) != 0 {
 		t.Fatal("transaction left records or allocated a number")
 	}
 }
@@ -162,7 +162,7 @@ func TestBusinessTxnConditionalSubjectAndDynamicTargets(t *testing.T) {
 	if current["bucket"] != "A" || current["label"] != "Original" || current["revision"] != beforeSubject["revision"].(float64)+1 || uint32(current["revision"].(float64)) != noop.GetRevision() {
 		t.Fatalf("skipped subject fields lost their values or accepted revision: %v", current)
 	}
-	if !reflect.DeepEqual(beforeA, read("build.bucket", "A")) || !reflect.DeepEqual(beforeB, read("build.bucket", "B")) || len(tn.sequences.last) != 0 {
+	if !reflect.DeepEqual(beforeA, read("build.bucket", "A")) || !reflect.DeepEqual(beforeB, read("build.bucket", "B")) || len(tn.sequences.Clone()) != 0 {
 		t.Fatal("a false condition changed a target or allocated a number")
 	}
 	request := submission(tn, memberOf(t, tn, "operator"), construction.ID, "build.resource.move", "build.resource", "resource", map[string]any{"next": "B", "apply": true})
@@ -173,17 +173,17 @@ func TestBusinessTxnConditionalSubjectAndDynamicTargets(t *testing.T) {
 	if read("build.bucket", "A")["assigned"] != false || read("build.bucket", "B")["assigned"] != true || read("build.resource", "resource")["bucket"] != "B" || read("build.resource", "resource")["ticket"] != "M-1" {
 		t.Fatal("the move did not update its two original targets and subject together")
 	}
-	state, counters := txnState(tn), tn.sequences.clone()
+	state, counters := txnState(tn), tn.sequences.Clone()
 	if reason := refuse(t, tn, "operator", construction.ID, "build.resource.move", "build.resource", "resource", map[string]any{"next": "B", "apply": true}, txnAt); !strings.Contains(reason, "more than once") {
 		t.Fatalf("aliased dynamic targets were not refused: %s", reason)
 	}
-	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.last) {
+	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.Clone()) {
 		t.Fatal("a target collision left its earlier row change or allocated a number")
 	}
 	if reason := refuse(t, tn, "limited", construction.ID, "build.resource.move", "build.resource", "resource", map[string]any{"next": "A", "apply": true}, txnAt); !strings.Contains(reason, "POLICY_DENIED") {
 		t.Fatalf("the original target permission was bypassed: %s", reason)
 	}
-	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.last) {
+	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.Clone()) {
 		t.Fatal("a denied step left business changes or allocated a number")
 	}
 	decide(t, tn, "operator", construction.ID, "build.resource.rename", "build.resource", "resource", map[string]any{"first": true, "second": false}, txnAt)
@@ -431,12 +431,12 @@ func TestBusinessTxnMinimalSlice(t *testing.T) {
 	large := txnRequest(t, tn, "operator", strings.Repeat("x", 200000))
 	large.Target.Id = "large"
 	state := txnState(tn)
-	counters := tn.sequences.clone()
+	counters := tn.sequences.Clone()
 	_, over := tn.Submit(memberOf(t, tn, "operator"), large, txnAt)
 	if over == nil || !strings.Contains(over.Message, "4096") {
 		t.Fatalf("budget overflow did not identify its limit: %v", over)
 	}
-	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.last) {
+	if txnState(tn) != state || !reflect.DeepEqual(counters, tn.sequences.Clone()) {
 		t.Fatal("oversized transaction partially committed")
 	}
 	t.Logf("budget overflow explicitly refused: %s", over.Message)

@@ -401,9 +401,9 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		out.Detail = refusal.Message
 		return out
 	}
-	t.cancels.add(x.ID, cancel)
+	t.cancels.Add(x.ID, cancel)
 	t.mu.Unlock()
-	defer t.cancels.remove(x.ID)
+	defer t.cancels.Remove(x.ID)
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {

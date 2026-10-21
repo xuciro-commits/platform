@@ -179,7 +179,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 			if took >= budget {
 				break
 			}
-			a := t.apps[(t.quota.turn+i)%n].Manifest().ID
+			a := t.apps[(t.quota.Turn(n)+i)%n].Manifest().ID
 			if t.overQuota(a, now) {
 				continue
 			}
@@ -194,7 +194,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 			took, progressed = took+1, true
 		}
 	}
-	t.quota.next(n)
+	t.quota.Next(n)
 	for _, j := range t.work.jobs {
 		if j.due(now) && took < budget && !t.overQuota(j.App, now) {
 			t.run(j, now, false)
@@ -233,9 +233,9 @@ func (t *Tenant) pending(now time.Time) bool {
 }
 
 // overQuota reports whether app has used its attempts of the minute (Tenant.Quota).
-func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.over(app, t.Quota, now) }
+func (t *Tenant) overQuota(app string, now time.Time) bool { return t.quota.Over(app, t.Quota, now) }
 
-func (t *Tenant) spend(app string, now time.Time) { t.quota.spend(app, now) }
+func (t *Tenant) spend(app string, now time.Time) { t.quota.Spend(app, now) }
 
 // Deferred are the apps past their quota at now, with their ready work waiting.
 func (t *Tenant) Deferred(now time.Time) []string {
@@ -537,7 +537,7 @@ func (t *Tenant) setting(c platform.Caller, name string) string {
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if v, ok := t.settings.get(app + "/" + name); ok {
+	if v, ok := t.settings.Get(app + "/" + name); ok {
 		return v
 	}
 	return a.Manifest().Settings[i].Default
@@ -565,7 +565,7 @@ func (t *Tenant) Settings() []AppSettings {
 		}
 		s := AppSettings{App: m.ID}
 		for _, x := range m.Settings {
-			v, ok := t.settings.get(m.ID + "/" + x.Name)
+			v, ok := t.settings.Get(m.ID + "/" + x.Name)
 			if !ok {
 				v = x.Default
 			}
@@ -646,7 +646,7 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an active local organization for this tenant")
 		}
 	}
-	return func(*pb.ChangeRecord) { t.settings.set(id, p.Value) }, nil
+	return func(*pb.ChangeRecord) { t.settings.Set(id, p.Value) }, nil
 }
 
 func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {

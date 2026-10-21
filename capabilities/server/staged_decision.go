@@ -105,7 +105,7 @@ func (d *stagedDecision) FailDecision(err *kernel.Error) {
 }
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
-	sequences := t.sequences.clone()
+	sequences := t.sequences.Clone()
 	notices, noticeSeq := t.notices.state()
 	t.opsMu.Lock()
 	descriptors, marks := t.connectors.kernel.State()
@@ -377,7 +377,7 @@ func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id s
 func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
 	original := d.routingTenant()
 	view := &Tenant{ID: original.ID, apps: slices.Clone(original.apps), records: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
-	view.settings.restore(original.settings.clone())
+	view.settings.Restore(original.settings.Clone())
 	for i, app := range view.apps {
 		view.apps[i] = d.stateApp(app)
 	}

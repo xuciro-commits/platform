@@ -359,7 +359,7 @@ func TestBusinessConstraintsAllWriteEntrances(t *testing.T) {
 					} else if *expected != *refusal {
 						t.Fatalf("entrance changed refusal: expected=%+v actual=%+v", expected, refusal)
 					}
-					if txnState(tenant) != before || len(tenant.sequences.clone()) != 0 {
+					if txnState(tenant) != before || len(tenant.sequences.Clone()) != 0 {
 						t.Fatal("rejected entrance left state or consumed a number")
 					}
 				})
@@ -475,7 +475,7 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 	if err == nil || len(issues) != 1 || issues[0].Constraint != "total" {
 		t.Fatalf("unbalanced transaction accepted: %v %+v", err, issues)
 	}
-	if txnState(tenant) != before || len(tenant.sequences.clone()) != 0 {
+	if txnState(tenant) != before || len(tenant.sequences.Clone()) != 0 {
 		t.Fatal("transaction-level failure left rows, relationship or number")
 	}
 	if len(entries) != position+1 {
@@ -486,7 +486,7 @@ func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.
 		t.Fatal("constraint refusal not versioned", decodeErr)
 	}
 	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 0.99}), txnAt)
-	if err == nil || len(issues) != 1 || issues[0].Constraint != "balanced" || txnState(tenant) != before || len(tenant.sequences.clone()) != 0 {
+	if err == nil || len(issues) != 1 || issues[0].Constraint != "balanced" || txnState(tenant) != before || len(tenant.sequences.Clone()) != 0 {
 		t.Fatal("unbalanced amounts escaped the atomic boundary", err, issues)
 	}
 	receipt := decide(t, tenant, "builder", construction.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 1}, txnAt)

@@ -326,7 +326,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := validateExtractionOrigins(draft); err != nil {
 		return nil, err
 	}
-	if err := t.sequences.check(result.SequenceBases, result.Sequences); err != nil {
+	if err := t.sequences.Check(result.SequenceBases, result.Sequences); err != nil {
 		return nil, err
 	}
 	checks := map[string]*kernel.ChangeLog{}
@@ -381,7 +381,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	if err := t.applyAcceptedObservations(result.Observations); err != nil {
 		return false, err
 	}
-	t.sequences.set(result.Sequences)
+	t.sequences.Set(result.Sequences)
 	for _, child := range result.Decisions {
 		t.committed.saveDecisionDefinition(child.Event.App, resultformat.ReceiptID(child.Receipt), child.Definition)
 	}

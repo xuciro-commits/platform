@@ -138,7 +138,7 @@ func TestControlComputeDiscardCancelsOnlyAfterAcceptance(t *testing.T) {
 	}
 	live := build()
 	cancelled := false
-	live.cancels.add(id+":compute", func() { cancelled = true })
+	live.cancels.Add(id+":compute", func() { cancelled = true })
 	member := memberOf(t, live, "ana")
 	request := submission(live, member, PlatformApp, SchemaEffectDiscard, EffectType, id+":compute", map[string]any{})
 	live.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append failed") }

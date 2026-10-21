@@ -48,7 +48,7 @@ func (t *Tenant) prepareAcceptedChanges(plan resultformat.ChangePlan) (*prepared
 	if err := t.validateControlDeliveries(plan.Control, plan.Deliveries); err != nil {
 		return nil, err
 	}
-	if err := t.sequences.check(plan.SequenceBases, plan.Sequences); err != nil {
+	if err := t.sequences.Check(plan.SequenceBases, plan.Sequences); err != nil {
 		return nil, err
 	}
 	prepared := &preparedAcceptedChanges{plan: plan}
@@ -139,7 +139,7 @@ func (p *preparedAcceptedChanges) apply(t *Tenant) error {
 	}
 	t.applyAcceptedNotices(p.plan.Notices)
 	t.installAcceptedIntents(p.plan.Intents)
-	t.sequences.set(p.plan.Sequences)
+	t.sequences.Set(p.plan.Sequences)
 	return nil
 }
 

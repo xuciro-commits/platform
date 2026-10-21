@@ -24,6 +24,7 @@ import (
 
 	"platformserver/internal/construction"
 	"platformserver/internal/host"
+	"platformserver/internal/tenantstate"
 	"platformserver/platform"
 )
 
@@ -98,13 +99,13 @@ type Tenant struct {
 	work  workBoard // queues, failed deliveries and jobs (work_board.go)
 	// Quota is the attempts of owned work each app may make in a minute (ADR-0007 D3); 0: no limit.
 	Quota      int
-	quota      quota           // attempts per app per minute and the round-robin turn (quota.go)
-	breakers   breakers        // per endpoint and AI provider (volatile)
-	connectors connectorRoster // registry, descriptor index, last refusals (connector_roster.go)
-	notices    noticeBoard     // notifications (notices.go)
-	settings   settingValues   // "<app>/<name>" → value (settings.go)
-	words      tenantWords     // the tenant's own translations (words.go, ADR-0005)
-	sequences  sequences       // number counters (ADR-0026)
+	quota      tenantstate.Quota     // attempts per app per minute and the round-robin turn (internal/tenantstate)
+	breakers   breakers              // per endpoint and AI provider (volatile)
+	connectors connectorRoster       // registry, descriptor index, last refusals (connector_roster.go)
+	notices    noticeBoard           // notifications (notices.go)
+	settings   tenantstate.Settings  // "<app>/<name>" → value (internal/tenantstate)
+	words      tenantWords           // the tenant's own translations (words.go, ADR-0005)
+	sequences  tenantstate.Sequences // number counters (ADR-0026)
 	endpoints  []*Endpoint
 	outbound   []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
@@ -126,9 +127,9 @@ type Tenant struct {
 	Files         FileStore
 	ComputeWorker WasmWorker
 	Compiler      CodeCompiler
-	cancels       cancels // running operations' cancel handles
+	cancels       tenantstate.Cancels // running operations' cancel handles
 	memFiles      memoryFiles
-	uploads       uploads // hashes uploaded and not yet attached (uploads.go)
+	uploads       tenantstate.Uploads // hashes uploaded and not yet attached (internal/tenantstate)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
