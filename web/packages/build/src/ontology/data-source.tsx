@@ -2,7 +2,7 @@ import { PropertyList, StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
-import { useApplicationWorkspace } from "../projects/application-scope";
+import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
 
 import type { Api } from "@platform/kernel";
@@ -25,14 +25,15 @@ export function DataSources() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Data sources")} help={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Each row is the object's own create or edit, decided once per content.")}
+    <PageHeader title={t("Data sources")} help={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Retrying a pull keeps its previous row results. A new pull can update records even when the source content is unchanged.")}
       actions={<Button onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
     <ResourceList source={source} type="build.source" fields={["title", "name", "object", "dataset", "every", "state"]} onOpen={(record) => open({ view: "data-source", params: { id: record.id } })} />
   </div>;
 }
 
 export function DataSourceEditor({ id }: { id: string }) {
-  const host = useHost(), { role } = host, { open } = useApplicationWorkspace();
+  const host = useHost(), { role } = host, { open, transfer } = useApplicationWorkspace();
+  const application = useApplicationScope();
   const model = useAuthoringModel();
   const entities = role("build") === "builder" ? model.entities : host.entities;
   const connectionQuery = useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100");
@@ -49,6 +50,10 @@ export function DataSourceEditor({ id }: { id: string }) {
     },
   });
   const target = entities.find((entity) => entity.type === draft.object);
+  const targetDraft = model.drafts.data?.records.find(record => !record.archived && `build.${record.name}` === draft.object);
+  const editTarget = (field?: string) => {
+    if (targetDraft && host.can("build.object.edit")) transfer?.("", { view: "object-type", params: { id: targetDraft.id, ...(field ? { field } : {}), ...(application ? { application } : {}) } }, { returnLabel: t("Return to source") }, () => {});
+  };
   const writable = (target?.fields ?? []).filter((field) => !field.readOnly);
   const setMapping = (mapping: Api.SourceField[]) => patch({ mapping });
   if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
@@ -95,16 +100,32 @@ export function DataSourceEditor({ id }: { id: string }) {
           <option value="object">{t("An object, mapped here")}</option><option value="dataset" disabled={!datasets.length}>{t("A dataset, as they came")}</option><option value="stream" disabled={profile !== "table"}>{t("A continuous Flow")}</option></Select></label>
         {draft.stream ? <p className="text-xs text-muted">{t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.")}</p> : draft.dataset ? <label className={fieldClass}>{t("Target dataset")}<Select value={draft.dataset} onChange={(e) => patch({ dataset: e.target.value })}>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
           <span className="text-[11px] text-muted">{t("Each pull becomes a new version; a pipeline maps the rows to an object later.")}</span></label> : <>
-        <label className={fieldClass}>{t("Target object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, mapping: [] })}><option value="">{t("Choose an object type")}</option>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
+        <label className={fieldClass}>{t("Target object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, mapping: [] })}><option value="">{t("Choose an object type")}</option>{draft.object && !target && <option value={draft.object}>{draft.object} · {t("Unavailable object type")}</option>}{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
+        {target && <p className="text-xs text-muted">{targetDraft ? t("Saved model draft") : t("Published model")}</p>}
+        {targetDraft && transfer && host.can("build.object.edit") && <Button size="sm" variant="ghost" className="w-fit" onClick={() => editTarget()}>{t("Edit target object")}</Button>}
         <label className={fieldClass}>{t("Row id field")}<Input value={draft.key} placeholder="id" onChange={(e) => patch({ key: e.target.value })} /><span className="text-[11px] text-muted">{t("The row field whose value becomes the record id; the same id edits the existing record.")}</span></label>
         <div className="grid gap-2">
           <div className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2 text-[11px] font-medium text-muted"><span>{t("Row field")}</span><span>{t("Object field")}</span><span>{t("Convert")}</span><span /></div>
-          {(draft.mapping ?? []).map((m, i) => <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2">
+          {(draft.mapping ?? []).map((m, i) => {
+            const field = writable.find(field => field.name === m.to);
+            const constraints = target?.constraints?.filter(rule => rule.fields.includes(m.to)) ?? [];
+            return <div key={i} role="group" aria-label={t("Field mapping {number}", { number: i + 1 })} className="grid gap-2">
+            <div className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2">
             <Input aria-label={t("Row field")} value={m.from} placeholder="sku" onChange={(e) => setMapping((draft.mapping ?? []).map((x, j) => j === i ? { ...x, from: e.target.value } : x))} />
-            <Select aria-label={t("Object field")} value={m.to} onChange={(e) => setMapping((draft.mapping ?? []).map((x, j) => j === i ? { ...x, to: e.target.value } : x))}><option value="">{t("Choose a field")}</option>{writable.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select>
+            <Select aria-label={t("Object field")} value={m.to} onChange={(e) => setMapping((draft.mapping ?? []).map((x, j) => j === i ? { ...x, to: e.target.value } : x))}><option value="">{t("Choose a field")}</option>{m.to && !field && <option value={m.to}>{m.to} · {t("Unavailable field")}</option>}{writable.map((field) => <option key={field.name} value={field.name}>{field.title}</option>)}</Select>
             <Select aria-label={t("Convert")} value={m.convert ?? ""} onChange={(e) => setMapping((draft.mapping ?? []).map((x, j) => j === i ? { ...x, convert: e.target.value } : x))}>{conversions.map((c) => <option key={c} value={c}>{c ? t(c) : t("as is")}</option>)}</Select>
             <Button size="sm" variant="ghost" onClick={() => setMapping((draft.mapping ?? []).filter((_, j) => j !== i))}>{t("Remove")}</Button>
-          </div>)}
+            </div>
+            {field && <div className="grid gap-1 text-xs"><PropertyList columns={3} items={[
+              [t("Field type"), t(field.type)], [t("Required"), field.required ? t("Yes") : t("No")],
+              [t("Reference object"), field.ref ? entities.find(entity => entity.type === field.ref)?.title ?? field.ref : t("None")],
+            ]} />{field.choices?.length ? <p className="text-muted">{t("Allowed values")}: {field.choices.join(" · ")}</p> : null}
+              {(field.stereotypes?.length || field.stereotype) && <p className="text-muted">{t("Enterprise element types")}: {(field.stereotypes ?? [field.stereotype!]).join(" · ")}</p>}
+              {constraints.length > 0 && <ul className="grid gap-1" aria-label={t("Business constraints")}>{constraints.map(rule => <li key={rule.name}><span className="font-medium">{rule.name}</span> · {t(rule.kind)}{rule.scope ? ` · ${rule.scope}` : ""}{rule.message ? ` · ${rule.message}` : ""}</li>)}</ul>}
+              {targetDraft && transfer && host.can("build.object.edit") && <Button size="sm" variant="ghost" className="w-fit" onClick={() => editTarget(m.to)}>{t("Edit field definition")}</Button>}
+            </div>}
+            {m.to && !field && <p role="alert" className="text-xs text-danger">{t("The mapped field is unavailable or read only. Choose a writable target field.")}</p>}
+          </div>; })}
           <div><Button size="sm" disabled={!draft.object} onClick={() => setMapping([...(draft.mapping ?? []), { from: "", to: writable.find((f) => !(draft.mapping ?? []).some((m) => m.to === f.name))?.name ?? "", convert: "" }])}>{t("Add mapping")}</Button></div>
         </div></>}
       </Panel>

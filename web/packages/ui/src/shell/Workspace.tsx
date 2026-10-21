@@ -394,7 +394,12 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     setInspection(undefined);
     const revision = ++incomingRevision.current;
     if (switching.current) { queuedOpen.current = { route, options }; return; }
-    const target = routeScope.current?.(route);
+    const call = route.params?.call ? transfers.current.read(route.params.call, keyOf(route)) : undefined;
+    const origin = call ? api.getPanel(call.from) : undefined;
+    const originRoute = (origin?.params as { route?: Route } | undefined)?.route;
+    // A called editor is part of its caller's task. It still has its own real
+    // panel and unsaved owners; it does not switch or replace the caller's app.
+    const target = routeScope.current?.(originRoute ?? route);
     if (target !== undefined && target !== scope.current) {
       const previous = (api.activePanel?.params as { route?: Route } | undefined)?.route;
       if (previous) history.replaceState(null, "", routeToHash(previous)); // a cancelled hash/back navigation must not leave a false URL
@@ -529,8 +534,13 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       const call = ticket ? transfers.current.read(ticket, api.id) : undefined;
       const returned = (value: unknown) => {
         if (!ticket) return;
-        const origin = transfers.current.finish(ticket, api.id, value);
-        if (origin && dock.current?.getPanel(origin)) { dock.current.getPanel(origin)!.api.setActive(); closePanel(api.id); }
+        unsaved.ask([api.id], () => {
+          const origin = transfers.current.finish(ticket, api.id, value);
+          if (origin && dock.current?.getPanel(origin)) {
+            dock.current.getPanel(origin)!.api.setActive();
+            dock.current.getPanel(api.id)?.api.close();
+          }
+        });
       };
       const [visible, setVisible] = useState(api.isVisible);
       useEffect(() => {
@@ -565,8 +575,11 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       setActiveRoute(route && routeKey(route));
       if (!switching.current) {
         history.replaceState(null, "", route ? routeToHash(route) : "#/");
-        if (route) followed.current?.(route); else emptied.current?.();
-        if (route) visit.current(route, api.activePanel?.title ?? route.view);
+        const call = route?.params?.call ? transfers.current.read(route.params.call, api.activePanel!.id) : undefined;
+        const origin = call ? api.getPanel(call.from) : undefined;
+        const originRoute = (origin?.params as { route?: Route } | undefined)?.route;
+        if (route) followed.current?.(originRoute ?? route); else emptied.current?.();
+        if (route && !call) visit.current(route, api.activePanel?.title ?? route.view);
 
         saveLayout(scope.current);
         if (scope.current !== undefined) saveLayout(undefined);

@@ -1,4 +1,25 @@
-import {expect,fresh,runtime,shots,stableReadRevision,test} from './kit';
+import {expect,fresh,pageUIProfile,runtime,shots,stableReadRevision,test} from './kit';
+
+test('a retained query binding stays visible after a newer version is published',async({page,builder,editor})=>{
+  const object=await builder.object({title:'Retained collection',fields:[{name:'name',title:'Name',type:'text'}]});
+  const queryID=fresh('QUERY'),name=fresh('retained').replace(/[^a-z0-9]/gi,'').toLowerCase();
+  await builder.decide('build.query.create',{type:'build.query',id:queryID},{name,title:'Original collection',description:'A retained authorized record collection',object:object.type,limit:20,sort:['id'],domain:[]});
+  await builder.decide('build.query.publish',{type:'build.query',id:queryID},{});
+  const first=(await builder.definitions()).find(d=>d.ref.kind==='query'&&d.ref.name===name)!;
+  await builder.decide('build.query.edit',{type:'build.query',id:queryID},{title:'Current collection',limit:30});
+  await builder.decide('build.query.publish',{type:'build.query',id:queryID},{});
+  const set={query:{ref:first.ref,sourceVersion:first.version}};
+  const draft=await builder.page({title:'Original query binding',object:object.type,sections:[{id:'initial',widget:'table',configVersion:1,title:'Retained rows',model:{type:object.type,set}}]});
+  await editor.open(builder,draft.id);
+  await editor.select('Retained rows');
+  await editor.inspector.getByRole('tab',{name:'Data',exact:true}).click();
+  const model=editor.inspector.getByLabel('Model binding',{exact:true}),selection=model.getByRole('combobox',{name:'Declared candidate collection',exact:true});
+  await expect(selection.locator('option:checked')).toHaveText(`build/${name} · v${first.version}`);
+  await expect(model.getByRole('status').filter({hasText:`build/${name}`})).toContainText('Retained query definition');
+  await model.getByRole('combobox',{name:'Partial visibility',exact:true}).selectOption('mark');
+  await editor.save();
+  await expect.poll(async()=>(await builder.record('build.page',draft.id)).sections[0].model.set).toEqual(set);
+});
 
 test('a model selector and start action share one capability rule',async({page,builder,operator,editor},testInfo)=>{
   test.setTimeout(120_000);
@@ -64,7 +85,7 @@ test('legacy sections save as model bindings and a declared multi-hop field rend
   const migrated=await builder.record('build.page',draft.id);
   expect(migrated.sections[0].object).toBeUndefined();
   expect(migrated.sections[0].fields).toBeUndefined();
-  expect(migrated.document.uiProfile).toBe('platform.page.v2.110');
+  expect(migrated.document.uiProfile).toBe(pageUIProfile);
   await editor.release();
   await tab.reload();
   await expect(tab.getByRole('cell',{name:'Order A',exact:true})).toBeVisible();

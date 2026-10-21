@@ -74,7 +74,7 @@ for (const fixture of [
       const note = page.getByRole("group", { name: "Test step 1", exact: true }).getByRole("textbox", { name: "Note", exact: true });
       await testTab.click();
       await expect(note).toHaveValue("SYNTHETIC");
-      await page.getByRole("tab", { name: "Problems", exact: true }).click();
+      await page.getByRole("tab", { name: /^Problems(?: \d+)?$/ }).click();
       await testTab.click();
       await expect(note).toHaveValue("SYNTHETIC");
       await page.getByRole("button", { name: "Close dock", exact: true }).click();
@@ -130,9 +130,90 @@ for (const fixture of [
         expect(binding.release).toBe(candidate);
         await task.getByRole("button", { name: fixture.answer, exact: true }).click();
         await operator.open(inbox, `/record?type=${type}&id=${real}`);
-        await expect(inbox.getByText(fixture.state, { exact: true }).first()).toBeVisible();
+        await expect(inbox.getByRole("definition").filter({ hasText: new RegExp(`^${fixture.state}$`) })).toBeVisible();
         expect([403, 404]).toContain((await request.get(`/v1/records/build.process/${id}`, { headers: operator.headers })).status());
       } finally { await context.close(); }
     });
   });
 }
+
+test.describe("flow condition editing", () => {
+  test.use({ baseURL: "http://127.0.0.1:18496" });
+  test("nested condition connections and problem locations survive source edits and undo", async ({ page, request }) => {
+    const builder = new Builder(request, "manager");
+    const id = fresh("FLOW"), name = fresh("conditions").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    const condition = { op: "all", terms: [
+      { op: "eq", left: { source: "step", step: "calculate", path: ["score"] }, right: { source: "literal", value: 3 } },
+      { op: "not", terms: [{ op: "exists", left: { source: "step", step: "calculate", path: ["blocked"] } }] },
+    ] };
+    await builder.decide("build.process.create", { type: "build.process", id }, {
+      name, title: "Condition references", manual: true,
+      inputSchema: { type: "object", properties: { score: { type: "integer" }, blocked: { type: "boolean" } }, required: ["score", "blocked"] },
+      input: { score: 3, blocked: false },
+      steps: [
+        { name: "calculate", title: "Calculate score", kind: "transform", next: "eligible", inputs: { score: { source: "input", path: ["score"] }, blocked: { source: "input", path: ["blocked"] } } },
+        { name: "eligible", title: "Eligible score", kind: "branch", condition, cases: { true: "done", false: "done" } },
+        { name: "done", title: "Review complete", kind: "end", value: { source: "literal", value: "done" } },
+      ],
+    });
+    await builder.open(page, `/flow?id=${id}`);
+    const editor = page.getByRole("region", { name: "Editor", exact: true });
+    const source = editor.getByRole("textbox", { name: "Configuration source", exact: true });
+    const original = JSON.parse(await source.inputValue());
+    await editor.getByRole("button", { name: "Visual", exact: true }).click();
+    const canvas = page.getByRole("region", { name: "Flow map", exact: true });
+    const firstEdge = canvas.getByTestId("rf__edge-eligible:binding:condition.terms.0.left");
+    const nestedEdge = canvas.getByTestId("rf__edge-eligible:binding:condition.terms.1.terms.0.left");
+    const expectNestedEdgeDrawn = async () => {
+      // A horizontal SVG edge has zero geometric height, so Playwright calls
+      // its group hidden even though its nonzero-width stroke is rendered.
+      await expect.poll(() => nestedEdge.locator("path.react-flow__edge-path").evaluate((node) => {
+        const path = node as SVGPathElement, box = path.getBoundingClientRect(), style = getComputedStyle(path);
+        return path.getTotalLength() > 0 && Math.max(box.width, box.height) > 0 && style.visibility === "visible" &&
+          style.stroke !== "none" && Number.parseFloat(style.strokeWidth) > 0;
+      })).toBe(true);
+    };
+    await expect(firstEdge).toBeVisible();
+    await expectNestedEdgeDrawn();
+    await expect(canvas.getByLabel("Input port: Condition 1 · Left value, integer", { exact: true })).toBeVisible();
+    await expect(canvas.getByLabel("Input port: Condition 2.1 · Left value, boolean", { exact: true })).toBeVisible();
+    await expect(canvas.getByLabel("Output port: score, integer", { exact: true })).toBeVisible();
+    await expect(canvas.getByLabel("Output port: blocked, boolean", { exact: true })).toBeVisible();
+
+    // Keep the original nested references while introducing a control error in this draft.
+    await editor.getByRole("button", { name: "Source editor", exact: true }).click();
+    const changed = structuredClone(original);
+    changed.steps[1].cases.false = "missing";
+    await source.fill(JSON.stringify(changed, null, 2));
+    await editor.getByRole("button", { name: "Visual", exact: true }).click();
+    const structure = page.getByRole("region", { name: "Flow structure", exact: true });
+    await structure.getByRole("button", { name: "Review complete", exact: true }).click();
+    await page.getByRole("button", { name: "Close inspector panel", exact: true }).click();
+    await page.getByRole("tab", { name: /^Problems(?: \d+)?$/ }).click();
+    const problems = page.getByRole("tabpanel", { name: /^Problems(?: \d+)?$/ });
+    await problems.getByRole("button").filter({ hasText: "A connected step is missing." }).click();
+    const properties = page.getByRole("region", { name: "Workflow properties", exact: true });
+    await properties.getByRole("tab", { name: "Settings", exact: true }).click();
+    await expect(properties.getByRole("textbox", { name: "Step name", exact: true })).toHaveValue("eligible");
+
+    // The native compiler's node-qualified error locates the same original step.
+    await page.getByRole("button", { name: "Close inspector panel", exact: true }).click();
+    await page.getByRole("button", { name: "Validate", exact: true }).click();
+    await problems.getByRole("button").filter({ hasText: "Node eligible:" }).click();
+    await properties.getByRole("tab", { name: "Settings", exact: true }).click();
+    await expect(properties.getByRole("textbox", { name: "Step name", exact: true })).toHaveValue("eligible");
+
+    const history = page.locator("header").filter({ has: page.getByRole("heading", { name: "Condition references", exact: true }) });
+    await history.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(problems.getByRole("button").filter({ hasText: "A connected step is missing." })).toHaveCount(0);
+    await expect(firstEdge).toBeVisible();
+    await expectNestedEdgeDrawn();
+    await editor.getByRole("button", { name: "Source editor", exact: true }).click();
+    expect(JSON.parse(await source.inputValue()).steps[1]).toEqual(original.steps[1]);
+    expect(JSON.parse(await source.inputValue()).steps[1].condition).toEqual(condition);
+    await editor.getByRole("button", { name: "Visual", exact: true }).click();
+    await page.getByRole("button", { name: "Validate", exact: true }).click();
+    await expect(problems.getByText("The native compiler accepted this draft.", { exact: true })).toBeVisible();
+    expect((await builder.record("build.process", id)).steps[1].condition).toEqual(condition);
+  });
+});

@@ -13,7 +13,7 @@ import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "..
 // everything again when the object is published.
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost, useReadQuery } from "@platform/app";
 import {
-  Button, Card, Checkbox, ContentTabs, DataTable, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, type WorkbenchProblem,
+  Button, Card, Checkbox, ContentTabs, DataTable, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, useViewCall, type WorkbenchProblem,
   type FlowEdge, type FlowNode, type FlowCatalog,
 } from "@platform/ui";
 import { Boxes, Link2, Plus, Trash2, Zap } from "lucide-react";
@@ -35,6 +35,9 @@ const objectSections = [
 ] as const;
 type Tab = typeof objectSections[number]["id"];
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
+  const call = useViewCall();
+  const callInput = call?.input;
+  const returnLabel = callInput && typeof callInput === "object" && "returnLabel" in callInput && typeof callInput.returnLabel === "string" ? callInput.returnLabel : t("Return");
   const [chosen, setChosen] = useState<Chosen>();
   const draft = useObjectDraft(id, () => setChosen(undefined));
   const { object, process, dirty, busy, blocked, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
@@ -64,7 +67,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
   const field = chosen?.kind === "field" ? process.fields[chosen.at] : undefined;
-  const problems: WorkbenchProblem[] = [...mixedNames(process).map((name) => ({ id: `mixed:${name}`, severity: "warning" as const, text: t("\"{name}\" mixes two languages. Write it in one; the other languages are set in Control Panel → Languages and words.", { name }) })), ...issues.map((message, i) => ({ id: `issue:${i}`, text: message, locate: () => { const at = process.actions.findIndex((a) => message.startsWith(`${a.title || a.name}:`)); if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } } }))];
+  const problems: WorkbenchProblem[] = [...mixedNames(process).map((name) => ({ id: `mixed:${name}`, severity: "warning" as const, text: t("\"{name}\" mixes two languages. Write it in one; the other languages are set in Control Panel → Languages and words.", { name }) })), ...issues.map((message, i) => ({ id: `issue:${i}`, text: message, locate: () => { const at = process.actions.findIndex((a) => message.startsWith(`${a.title || a.name}:`)); if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } else if (message.startsWith(`${t("Creation transaction")}:`)) setTab("properties"); } }))];
   const choose = (next: Chosen, section?: Tab) => { setChosen(next); if (section) setTab(section); };
   const addField = () => { change({ ...process, fields: [...process.fields, { name: nameOf("field", process.fields.map((f) => f.name)), title: t("Field"), type: "text" }] }); choose({ kind: "field", at: process.fields.length }, "properties"); };
   const addAccess = () => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); choose({ kind: "access", at: process.access.length }, "permissions"); };
@@ -159,7 +162,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   return <Workbench storageKey="object-type" crumbs={[{ label: t("Object types"), onClick: () => open({ view: "object-type" }) }]} title={object.title}
     status={<DraftStatus state={object.state} problems={issues.length} />} saving={savingState(dirty, busy, refused)}
     history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => { session.undo(); setChosen(undefined); }, redo: () => { session.redo(); setChosen(undefined); } }}
-    actions={<ResourceControls type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "object-type", params: { id } }} />}
+    actions={<>{call?.returnValue && <Button disabled={busy} variant="ghost" onClick={() => call.returnValue?.(undefined)}>{returnLabel}</Button>}<ResourceControls type="build.object" record={object} dirty={dirty} busy={busy} invalid={issues.length > 0} onSave={() => void perform(save)} onReview={() => void perform(review)} onInstall={() => void perform(publish)} onCancel={discardChanges} route={{ view: "object-type", params: { id } }} /></>}
     right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}

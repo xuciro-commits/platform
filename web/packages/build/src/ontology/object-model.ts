@@ -1,6 +1,7 @@
 // The object type's authoring model (ADR-0044、ADR-0047§6): what a
 // `build.object` record holds, and the early authoring checks the editors show
 // before the host's authoritative publication check.
+import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { recordPaths } from "./record-paths";
 import { stateInputValid, ruleInputValid } from "./process-rules";
 import type { Api } from "@platform/kernel";
@@ -76,6 +77,7 @@ export function actionIssues(action: Action, process: Process, _parent: string, 
   if (!stateInputValid(action, process.states)) issues.push(t("Choose a required state input with choices from this object's lifecycle."));
   if ((action.inputs ?? []).some(input => !ruleInputValid(input, entities))) issues.push(t("Reference inputs need an original object; text minimum length must be an integer from 0 to 4096."));
   if (!action.from.length) issues.push(t("Choose at least one starting state."));
+  if (action.transaction) issues.push(...transactionIssues(action.transaction).map(issue => transactionIssueText(issue, t)));
   if (action.transaction && !action.transaction.steps.length) issues.push(t("Add at least one transaction step."));
   return issues;
 }

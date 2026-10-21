@@ -8,7 +8,7 @@ import { ResourceList } from "../editor/ResourceList";
 import {FlowImportDialog} from "../workshop/module-import/FlowImportDialog";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import {DraftInputs} from "../session/DraftSession";
-import { removeWorkflowSteps, renameWorkflowStep, replaceReferences } from "./workflow-edit";
+import { removeWorkflowSteps, renameWorkflowStep, replaceReferences, workflowBindings, withWorkflowBinding } from "./workflow-edit";
 import {workflowRunMatches} from "./workflow-session";
 import { useProcessDraft } from "./process-draft";
 // Logic Studio edits the one build.process definition. Its native Flow owner
@@ -24,7 +24,7 @@ import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor } from "./workflow-binding";
 import { schemaIssue } from "../shared/value-schema";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
-import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
+import { bindingPortLabel, capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
   type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
@@ -99,8 +99,8 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
   }
   // Bindings made in the inspector still have a real socket, even when their
   // field is deeper than the compact top-level preview shown by default.
-  for (const item of draft.steps) for (const value of [...Object.values(item.inputs ?? {}), ...[item.value, item.target, item.collection].filter((binding): binding is Binding => !!binding)]) {
-    if (value.source !== "step" || value.step !== step.name) continue;
+  for (const item of draft.steps) for (const { binding: value } of workflowBindings(item)) {
+    if (!value || value.source !== "step" || value.step !== step.name) continue;
     const path = value.path ?? [], id = dataPort(path);
     if (!outputs.some((port) => port.id === id)) outputs.push({ id, label: path.join(".") || t("Result"), type: pathSchema(schema, path)?.type ?? "object", channel: "data" });
   }
@@ -110,6 +110,9 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
   if (step.kind === "ai" || step.kind === "action") inputs.push({ id: "binding:target", label: t("Record ID"), type: "string", channel: "data", limit: 1 });
   if (step.kind === "foreach") inputs.push({ id: "binding:collection", label: t("Collection"), type: "array", channel: "data", limit: 1 });
   if (["transform", "end", "join", "continue", "switch", "while"].includes(step.kind)) inputs.push({ id: "binding:value", label: t("Value"), type: "json", channel: "data", limit: 1 });
+  for (const { port, binding } of workflowBindings(step)) if (port.startsWith("binding:condition")) {
+    inputs.push({ id: port, label: bindingPortLabel(port), type: binding ? bindingSchema(binding, draft, capabilities, new Set([step.name]))?.type ?? "json" : "json", channel: "data", limit: 1 });
+  }
   for (const name of fields) {
     const parameter = capability?.parameters?.find((field) => field.name === name);
     const type = capability?.input?.properties?.[name]?.type ?? (parameter ? parameterSchema(parameter)?.type ?? "json" : undefined) ?? (step.inputs?.[name] ? bindingSchema(step.inputs[name], draft, capabilities, new Set([step.name]))?.type : undefined) ?? "json";
@@ -158,11 +161,7 @@ export function FlowEditor({ id }: { id: string }) {
   const retained=useQueries({queries:retainedQueries.map(path=>({queryKey:[client.connection.token,client.connection.tenant,path],queryFn:()=>client.get<Capability>(path),retry:false}))});
   const capabilities = [...catalogQuery.data,...retained.flatMap(q=>q.data&&!q.isError?[q.data]:[])];
   const objects = model.entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states }));
-  const diagnostics = useMemo(() => {
-    const result = workflowDiagnostics(draft);
-    if (validation) for (const issue of validation.issues) if (issue.node) (result[issue.node] ??= []).push({ message: issue.message, severity: "error" });
-    return result;
-  }, [draft, validation]);
+  const diagnostics = useMemo(() => workflowDiagnostics(draft, validation), [draft, validation]);
   const kinds = useMemo(() => draft.steps.map((step) => nodeKind(step, draft, capabilities)), [draft, capabilities]);
   const catalog: FlowCatalog = [...catalogQuery.data.map(definitionKind), ...kinds];
   const edges = [...controlEdges(draft), ...dataEdges(draft)];
@@ -210,7 +209,7 @@ export function FlowEditor({ id }: { id: string }) {
           if (path) steps = steps.map((item) => {
             if (item.name !== context.target!.node) return item;
             const binding: Binding = { source: "step", step: step.name, path };
-            return context.target!.port.startsWith("binding:") ? { ...item, [context.target!.port.slice(8)]: binding } : { ...item, inputs: { ...item.inputs, [context.target!.port.slice(6)]: binding } };
+            return withWorkflowBinding(item, context.target!.port, binding);
           });
         }
       }
@@ -233,15 +232,12 @@ export function FlowEditor({ id }: { id: string }) {
     if ((connection.targetHandle?.startsWith("input:") || connection.targetHandle?.startsWith("binding:")) && connection.sourceHandle) {
       const path = portPath(connection.sourceHandle); if (!path) return;
       const handle = connection.targetHandle, binding: Binding = { source: "step", step: connection.source, path };
-      change((current) => ({ ...current, steps: current.steps.map((step) => step.name !== connection.target ? step : handle.startsWith("binding:")
-        ? { ...step, [handle.slice(8)]: binding, ...(step.kind === "compute" && handle === "binding:value" ? { inputs: undefined } : {}) }
-        : { ...step, inputs: { ...step.inputs, [handle.slice(6)]: binding } }) }));
+      change((current) => ({ ...current, steps: current.steps.map((step) => step.name !== connection.target ? step : { ...withWorkflowBinding(step, handle, binding), ...(step.kind === "compute" && handle === "binding:value" ? { inputs: undefined } : {}) }) }));
     } else if (connection.sourceHandle) change((current) => ({ ...current, steps: current.steps.map((step) => step.name === connection.source ? withPath(step, connection.sourceHandle!, connection.target) : step) }));
   };
   const disconnect = (removed: FlowEdge[]) => change((current) => ({ ...current, steps: current.steps.map((step) => removed.reduce((item, edge) => {
     if (edge.channel === "data" && edge.target === item.name) {
-      if (edge.targetPort.startsWith("binding:")) return { ...item, [edge.targetPort.slice(8)]: undefined };
-      const inputs = { ...item.inputs }; delete inputs[edge.targetPort.slice(6)]; return { ...item, inputs };
+      return withWorkflowBinding(item, edge.targetPort, undefined);
     }
     return edge.source === item.name ? withPath(item, edge.sourcePort, "") : item;
   }, step)) }));
@@ -292,8 +288,8 @@ export function FlowEditor({ id }: { id: string }) {
   if (role("build") !== "builder") return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{t("Only a builder can edit flows.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{query.isError ? t("The flow could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const problems: WorkbenchProblem[] = [
-    ...Object.entries(inputProblems).filter(([, problem]) => problem).map(([key, problem]) => ({ id: `form:${key}`, text: problem, subject: key })),
-    ...(validation && !validation.valid ? validation.issues.map((issue, i) => ({ id: `compile:${i}`, text: issue.message })) : []),
+    ...Object.entries(inputProblems).filter(([, problem]) => problem).map(([key, problem]) => ({ id: `form:${key}`, text: problem, subject: key, locate: session.inputs.values[key]?.reveal })),
+    ...Object.entries(diagnostics).flatMap(([node, issues]) => issues.map((issue, index) => ({ id: `flow:${node}:${index}`, text: t(issue.message), severity: issue.severity, subject: node || undefined, locate: node && draft.steps.some((step) => step.name === node) ? () => setChosen(node) : undefined }))),
     ...(error ? [{ id: "error", text: error }] : []),
     ...(!synchronized ? [{ id: "sync", severity: "warning" as const, text: t("The current flow revision differs from this editing session. Reload before running or reviewing a release.") }] : []),
     ...(catalogQuery.isError ? [{ id: "catalog", text: t("The capability library could not be loaded."), locate: () => void catalogQuery.refetch() }] : []),

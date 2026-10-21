@@ -53,6 +53,7 @@ test("a builder edits one transaction and approval commits its records, balance,
       name: related, title: "Related draft item", fields: [{ name: "quantity", title: "Draft quantity", type: "decimal" }],
     });
     await builder.open(page, `/action-type?id=${object.id}&action=receive`);
+    await page.getByRole("button", { name: "Visual", exact: true }).click();
     await page.getByRole("region", { name: "Action structure", exact: true }).getByRole("button", { name: /^Transaction(?: \d+)?$/ }).click();
     await expect(page.getByRole("combobox", { name: "Transaction writeback", exact: true })).toHaveValue(writeback);
     // Related drafts are editable before any separate publication.
@@ -63,10 +64,39 @@ test("a builder edits one transaction and approval commits its records, balance,
     await creation.getByRole("button", { name: "Add field assignment", exact: true }).click();
     await expect(creation.getByRole("combobox", { name: "Record field", exact: true })).toHaveValue("quantity");
     await creation.getByRole("button", { name: "Remove transaction step", exact: true }).click();
+    const steps = page.getByRole("group", { name: /^Transaction step \d+$/ });
+    // Renaming the producer edits its typed consumers, while a move keeps
+    // invalid references visible until their original order is restored.
+    await steps.nth(0).getByRole("textbox", { name: "Step name", exact: true }).fill("document");
+    await steps.nth(0).getByRole("button", { name: "Move step down", exact: true }).click();
+    await expect(page.getByText('Step "receive" uses "step.document" before that result is available in this scope.', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await steps.nth(1).getByRole("button", { name: "Move step up", exact: true }).click();
+    // Unapplied expression text belongs to the object draft, including when
+    // its section is unmounted and its step is subsequently reordered.
+    const postingAmount = () => page.getByText("Posting amount", { exact: true }).locator("..");
+    await postingAmount().getByRole("button", { name: "Expression source", exact: true }).click();
+    const invalidExpression = '{ "op":';
+    await postingAmount().getByRole("textbox", { name: "Expression source", exact: true }).fill(invalidExpression);
+    await postingAmount().getByRole("button", { name: "Apply checked expression", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    const actionStructure = page.getByRole("region", { name: "Action structure", exact: true });
+    await actionStructure.getByRole("button", { name: "Overview", exact: true }).click();
+    await actionStructure.getByRole("button", { name: /^Transaction(?: \d+)?$/ }).click();
+    await expect(postingAmount().getByRole("textbox", { name: "Expression source", exact: true })).toHaveValue(invalidExpression);
+    await steps.nth(2).getByRole("button", { name: "Move step down", exact: true }).click();
+    await expect(postingAmount().getByRole("textbox", { name: "Expression source", exact: true })).toHaveValue(invalidExpression);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await postingAmount().getByRole("button", { name: "Discard", exact: true }).click();
+    await steps.nth(3).getByRole("button", { name: "Move step up", exact: true }).click();
     // The typed editor below is the same expression used for publication.
     await page.getByRole("textbox", { name: "Step name", exact: true }).last().fill("warehouse");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect.poll(async () => (await builder.record("build.object", object.id)).actions[0].transaction.steps.at(-1).name).toBe("warehouse");
+    const saved = (await builder.record("build.object", object.id)).actions[0].transaction;
+    expect(saved.steps[0].name).toBe("document");
+    expect(saved.steps[1].changes[0].field).toBe("number");
+    expect(saved.steps[1].changes[0].expr?.ref ?? saved.steps[1].changes[0].from).toBe("step.document");
     await expect(page.getByText("Saved", { exact: true }).first()).toBeVisible();
     await shots(page, page.locator("body"), "business-transaction-editor", info);
     await builder.activate(await builder.candidate(object.id));

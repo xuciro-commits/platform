@@ -35,6 +35,8 @@ Connection/Source/Dataset/Pipeline 的定义已由 ADR-0037、ADR-0046 纳入原
 
 ### 3. 构建器
 
+Source 映射显示原目标字段的类型、必填、引用、枚举和对象约束，明确区分已保存模型草稿与运行模型。Builder 可从映射转到原对象字段编辑器，再返回未保存的 Source；两边沿各自原草稿与关闭确认，不复制字段模型或另设导航。Integrator 仅读运行模型，不发起草稿请求，也不消费先前 Builder 缓存；已不可见的原对象或字段保留标识并说明不可用，不自动清除映射。
+
 Ontology › **Connections**（列表 + 编辑器：种类、地址、密钥名、私网、Check、最近检查）；Data source 编辑器增加 Connection 选择与 profile 分支字段（实体/表、过滤、增量列、cursor 与 Reset）。
 
 ## 做减法

@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { DockviewApi, IDockviewReactProps } from "dockview-react";
 import { toast } from "sonner";
-import { Workspace, useUnsavedChanges, useWorkspace, type View } from "./Workspace";
+import { Workspace, useUnsavedChanges, useWorkspace, useViewCall, type View } from "./Workspace";
 import { InputDraftProvider, useDraftInput } from "../fields/draft";
 import { routeKey, type Route } from "./route";
 import { setLanguage } from "../i18n";
@@ -49,13 +49,18 @@ function Draft({ id }: { id: string }) {
   </div>;
 }
 function Entry({ title }: { title: string }) { api = useWorkspace(); return <h1>{title}</h1>; }
+function CalledEditor() {
+  const call = useViewCall();
+  return <InputDraftProvider isolated scope="external"><Draft id="external" /><button onClick={() => call?.returnValue?.("done")}>Return to caller</button></InputDraftProvider>;
+}
 const views: View[] = [
   { id: "flow", title: (params) => `Flow ${params.id ?? "list"}`, render: (params) => <InputDraftProvider isolated scope={params.id}><Draft id={params.id ?? "list"} /></InputDraftProvider> },
   { id: "knowledge", title: () => "Documents", render: () => <Entry title="Documents" /> },
+  { id: "external-editor", title: () => "External editor", render: () => <CalledEditor /> },
   { id: "home", title: () => "Home", render: () => <Entry title="Home" /> },
   { id: "project", documentKey: p => p.id ?? "", title: () => "Application Studio", render: p => <Entry title={`Project ${p.id} ${p.area}`} /> },
 ];
-const scopeOf = (route: Route) => route.view === "flow" ? "build" : route.view === "knowledge" ? "knowledge" : undefined;
+const scopeOf = (route: Route) => route.view === "flow" ? "build" : ["knowledge", "external-editor"].includes(route.view) ? "knowledge" : undefined;
 const apps = [
   { id: "build", title: "Builder", category: "build", home: { view: "flow", params: { id: "A" } } },
   { id: "knowledge", title: "Knowledge", category: "business", home: { view: "knowledge" } },
@@ -101,6 +106,32 @@ test("inspection preserves the active task and explicit comparison creates a spl
   await screen.findByLabelText("Draft B");
   expect(observed.dock!.groups).toHaveLength(2);
   expect((input as HTMLInputElement).value).toBe("keep A");
+});
+
+test("a called editor keeps its caller's application and confirms its own unsaved return", async () => {
+  const source = await start(), returned = vi.fn();
+  fireEvent.change(source, { target: { value: "unsaved source" } });
+  const raw = screen.getByLabelText("Raw timeout A");
+  fireEvent.change(raw, { target: { value: "unfinished" } });
+  act(() => api.transfer!("", { view: "external-editor" }, undefined, returned));
+  const target = await screen.findByLabelText("Draft external");
+  expect(api.applications!.current).toBe("build");
+  expect(observed.dock!.panels).toHaveLength(2);
+  expect(screen.queryByText("Discard changes")).toBeNull();
+  fireEvent.change(target, { target: { value: "unsaved target" } });
+  fireEvent.click(screen.getByRole("button", { name: "Return to caller" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
+  expect(returned).not.toHaveBeenCalled();
+  expect((target as HTMLInputElement).value).toBe("unsaved target");
+  fireEvent.click(screen.getByRole("button", { name: "Return to caller" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Discard changes" }));
+  await waitFor(() => expect(observed.dock!.panels).toHaveLength(1));
+  expect(returned).toHaveBeenCalledWith("done");
+  expect((source as HTMLInputElement).value).toBe("unsaved source");
+  expect((raw as HTMLInputElement).value).toBe("unfinished");
+  expect(location.hash).toBe("#/flow?id=A");
+  expect(discard).toHaveBeenCalledWith("external");
+  expect(discard).not.toHaveBeenCalledWith("A");
 });
 
 test("a late save only follows its original active document, including when the source stays visible beside it", async () => {

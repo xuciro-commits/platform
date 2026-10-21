@@ -1,3 +1,4 @@
+import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { sourceFieldInput } from "@platform/app";
 // One draft session over a `build.object` record, shared by the object type
 // workbench and the action type workbench (ADR-0047§6): both edit the same
@@ -43,7 +44,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
     && (savedObjects.has(entity.type) || definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type)));
   const issuesOf = (name: string) => { const a = process.actions.find((x) => x.name === name); return a ? actionIssues(a, process, parent, targets, entities) : []; };
-  const issues = [...conversionError ? [conversionError] : [], ...process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`))];
+  const issues = [...conversionError ? [conversionError] : [], ...(process.createTransaction ? transactionIssues(process.createTransaction).map(issue => `${t("Creation transaction")}: ${transactionIssueText(issue, t)}`) : []), ...process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`))];
   const change = (next: Process) => {
     if(lock.current || conversionError)return;
     // Inspector rows have no serialized UI ids. Move their buffers with the

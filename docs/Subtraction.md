@@ -46,6 +46,7 @@ apps/crm、csm、erp、hcm、mes、pms 仍有有效业务与历史责任。ERP �
 | 定义编辑器各自管理保存/修订/丢弃，包括告警与决策表 | build/session/definition-draft.ts；共享已接受修订与应用成员重试，字段、载荷、发布诊断和关系迁移仍归原功能 |
 | 三处直接记录捕获与重复任务快照编码 | accepted_rows.captureDirectRows 与 stateOfTask；锁、排序、前驱、历史内容及错误语义保留，callback 只读取指定记录 |
 | 页面变量访问与作用域的重复清单 | Section.variablePorts/variableReferences 与原组件检查；嵌入、观测及权限例外保留 |
+| ExpressionEditor 的组件局部源码与错误状态、Flow 独立条件引用扫描 | 原 useDraftInput/原 Process 草稿与绑定命令；输入、撤销、保存、版本及历史执行保留 |
 | ERP 六处创建表单、Dialog/Sheet 生命周期、管理页第二套宿主接口 | 原 useNewRecord/DeclaredActionForm、OverlayFrame、useHost；ID、输入、焦点、隐藏草稿和权限保留 |
 
 工具扫描后已删除七个无调用私有函数（jsonPayload、matching、closeTask、observe、probe1、setSource、policies）和四个私有别名；实际历史恢复、Wasm 入口及公开适配接口保留。控制视图首次创建与保存点共用 newControlView，原前驱映像及各暂存所有者不变，重复装配由两份减为一份。前端仅删除无消费者的 skins/schemes、旧转导出和四个无用类型别名，其余内部值/类型只取消 export、保留实现；测试成员初始化继续建立原单位关系。

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Api } from "@platform/kernel";
 import { checkRule, initializeRules, type RuleSchema } from "@platform/app/rules";
-import { Button, Checkbox, Input, Select, Textarea, t, type EntityInfo } from "@platform/ui";
+import { Button, Checkbox, Input, Select, Textarea, t, useDraftInput, useInputDrafts, type EntityInfo } from "@platform/ui";
 import { ModelFieldPicker } from "../model-editor/ModelFieldPicker";
 
 export type ExpressionChoice = { value: string; label: string; type: string; ref?: string };
@@ -43,50 +43,60 @@ function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: 
 
 /** Edits the ADR-0040 tree. Validation calls the original Go compiler in Wasm;
  * execution and record/collection authorization remain with original owners. */
-export function ExpressionEditor({ value, onChange, choices = [], lookup, windows, kind = "boolean" }: {
+export function ExpressionEditor({ value, onChange, choices = [], lookup, windows, kind = "boolean", draftKey = "expression" }: {
   value: Api.Expr;
   onChange: (expr: Api.Expr) => void;
   choices?: ExpressionChoice[];
   lookup?: (type: string) => EntityInfo | undefined;
   windows?: RuleSchema["windows"];
   kind?: string;
+  draftKey?: string;
 }) {
-  const [error, setError] = useState("");
+  const source = JSON.stringify(value, null, 2), input = useDraftInput(draftKey, source, true), buffers = useInputDrafts();
+  const latest = useRef({ text: input.text, source, path: input.path, onChange }); latest.current = { text: input.text, source, path: input.path, onChange };
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [advanced, setAdvanced] = useState(false);
-  const [raw, setRaw] = useState("");
+  const unapplied = input.text !== source;
   useEffect(() => {
     let active = true;
+    buffers?.pending(1);
     void initializeRules().then(() => {
+      if (!active || latest.current.text !== source) return;
       try {
         checkRule(value, schemaFor(value, choices, lookup, windows));
-        if (active) setError("");
+        if (value.kind !== kind) throw Error(t("Expression result type differs."));
+        input.clear();
       } catch (error) {
-        if (active) setError(error instanceof Error ? error.message : t("Expression type check failed."));
+        input.write(source, error instanceof Error ? error.message : t("Expression type check failed."));
       }
-    }, () => {
-      if (active) setError(t("Rule runtime is unavailable."));
-    });
+    }, () => { if (active && latest.current.text === source) input.write(source, t("Rule runtime is unavailable.")); })
+      .finally(() => buffers?.pending(-1));
     return () => { active = false; };
-  }, [JSON.stringify(value), JSON.stringify(choices), JSON.stringify(windows)]);
+  }, [source, JSON.stringify(choices), JSON.stringify(windows), kind]);
 
-  const applySource = () => {
+  const applySource = async () => {
+    const raw = input.text, path = input.path;
+    const current = () => mounted.current && latest.current.text === raw && latest.current.source === source && latest.current.path === path;
+    buffers?.pending(1);
     try {
+      await initializeRules();
       const expression = JSON.parse(raw) as Api.Expr;
       checkRule(expression, schemaFor(expression, choices, lookup, windows));
       if (expression.kind !== kind) throw Error(t("Expression result type differs."));
-      onChange(expression);
-      setError("");
+      if (!current()) return;
+      input.clear(); latest.current.onChange(expression);
     } catch (error) {
-      setError(error instanceof Error ? error.message : t("Expression type check failed."));
-    }
+      if (current()) input.write(raw, error instanceof Error ? error.message : t("Expression type check failed."));
+    } finally { buffers?.pending(-1); }
   };
   return <div className="grid min-w-0 gap-2 text-xs" aria-label={t("Rule expression editor")}>
-    <ExpressionNode value={value} onChange={onChange} choices={choices} lookup={lookup} windows={windows} kind={kind} depth={0} />
-    {error && <p role="alert" className="break-words text-danger">{error}</p>}
-    <Button size="sm" onClick={() => { setAdvanced(!advanced); setRaw(JSON.stringify(value, null, 2)); }}>{t("Expression source")}</Button>
-    {advanced && <>
-      <Textarea aria-label={t("Expression source")} value={raw} onChange={event => setRaw(event.target.value)} rows={7} />
-      <Button size="sm" onClick={applySource}>{t("Apply checked expression")}</Button>
+    <fieldset disabled={unapplied} className="min-w-0 border-0 p-0"><ExpressionNode value={value} onChange={expression => { input.clear(); onChange(expression); }} choices={choices} lookup={lookup} windows={windows} kind={kind} depth={0} /></fieldset>
+    {input.problem && <p role="alert" className="break-words text-danger">{input.problem}</p>}
+    <Button size="sm" onClick={() => setAdvanced(!advanced)}>{t("Expression source")}</Button>
+    {(advanced || unapplied) && <>
+      <Textarea aria-label={t("Expression source")} data-draft-key={input.path} aria-invalid={!!input.problem} value={input.text} onChange={event => input.write(event.target.value, t("Apply source before saving."))} rows={7} />
+      <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => void applySource()}>{t("Apply checked expression")}</Button>{unapplied && <Button size="sm" variant="ghost" onClick={input.clear}>{t("Discard")}</Button>}</div>
     </>}
   </div>;
 }

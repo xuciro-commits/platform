@@ -24,7 +24,7 @@ export function authoringObject(record: AuthoringObject, installed?: EntityInfo)
     fields: [
       ...fields.map((field): Api.FieldInfo => ({
         name: field.name, title: field.title, type: field.type as Api.FieldInfo["type"],
-        ref: field.ref, inverse: field.inverse, required: field.required,
+        ref: field.ref, inverse: field.inverse, required: field.required, stereotype: field.stereotype, stereotypes: field.stereotypes,
         readOnly: field.readOnly || !!(field.formula || field.formulaExpr || field.aliasOf) || record.versionPins?.some(pin => pin.version === field.name), aliasOf: field.aliasOf,
         property: field.property, aiInput: field.aiInput, sourceType: field.sourceType as Api.FieldInfo["sourceType"],
         search: field.search, read: field.read, write: field.write,
@@ -45,7 +45,11 @@ export function authoringObject(record: AuthoringObject, installed?: EntityInfo)
 
 export function useAuthoringModel() {
   const host = useHost();
-  const drafts = useRecordInventory<ObjectRecord & { archived?: boolean }>("build.object");
+  const builder = host.role("build") === "builder";
+  const query = useRecordInventory<ObjectRecord & { archived?: boolean }>("build.object", 1000, builder);
+  // A disabled query can still return cached builder data. Do not expose that
+  // answer to another role, including consumers of the returned draft inventory.
+  const drafts = { ...query, data: builder ? query.data : undefined, isError: builder && query.isError };
   const entities = new Map(host.entities.map(entity => [entity.type, entity]));
   const actions = new Map<string, AuthoringAction>(host.catalog.map(action => [action.schema, action]));
   for (const draft of drafts.data?.records ?? []) {
@@ -68,13 +72,15 @@ export function useAuthoringModel() {
 /** Draft actions replace their object's installed actions for editing only.
  * All other blocks retain their original published source and version. */
 export function useAuthoringCapabilities<T extends Api.CapabilityDescriptor = Api.CapabilityDescriptor>() {
+  const builder = useHost().role("build") === "builder";
   const catalog = useReadQuery<T[]>("/v1/capabilities");
-  const actions = useReadQuery<T[]>("/v1/build/drafts/actions");
-  const targets = new Set((actions.data ?? []).map(action => action.target));
+  const actions = useReadQuery<T[]>("/v1/build/drafts/actions", undefined, builder);
+  const drafts = builder ? actions.data ?? [] : [];
+  const targets = new Set(drafts.map(action => action.target));
   return {
-    data: [...(catalog.data ?? []).filter(capability => capability.kind !== "action" || !capability.target || !targets.has(capability.target)), ...(actions.data ?? [])],
-    isLoading: catalog.isLoading || actions.isLoading,
-    isError: catalog.isError || actions.isError,
-    refetch: () => Promise.all([catalog.refetch(), actions.refetch()]),
+    data: [...(catalog.data ?? []).filter(capability => capability.kind !== "action" || !capability.target || !targets.has(capability.target)), ...drafts],
+    isLoading: catalog.isLoading || builder && actions.isLoading,
+    isError: catalog.isError || builder && actions.isError,
+    refetch: () => Promise.all([catalog.refetch(), ...(builder ? [actions.refetch()] : [])]),
   };
 }

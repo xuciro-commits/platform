@@ -1,3 +1,4 @@
+import { workflowBindings } from "./workflow-edit";
 import type { Api } from "@platform/kernel";
 import { t, type FlowEdge, type FlowDiagnostic, type FlowNodeClass, type Tone } from "@platform/ui";
 
@@ -75,11 +76,15 @@ function stepPaths(step: WorkflowStep): { port: string; title: string; target: s
 export function controlEdges(draft: WorkflowDraft): FlowEdge[] {
   return draft.steps.flatMap((step) => stepPaths(step).map((path) => ({ id: `${step.name}:${path.port}`, source: step.name, sourcePort: path.port, target: path.target, targetPort: "in", label: path.title, channel: "control" as const, tone: path.port === "error" ? "danger" as const : undefined })));
 }
+export function bindingPortLabel(port: string): string {
+  if (!port.startsWith("binding:condition")) return port.slice(port.indexOf(":") + 1);
+  const indices = [...port.matchAll(/\.terms\.(\d+)/g)].map((item) => Number(item[1]) + 1);
+  const side = t(port.endsWith(".left") ? "Left value" : "Right value");
+  return indices.length ? `${t("Condition {n}", { n: indices.join(".") })} · ${side}` : `${t("Condition")} · ${side}`;
+}
 export function dataEdges(draft: WorkflowDraft): FlowEdge[] {
-  return draft.steps.flatMap((step) => [...Object.entries(step.inputs ?? {}).map(([name, binding]) => ({ name: `input:${name}`, binding })),
-    ...(["value", "target", "collection"] as const).flatMap((name) => step[name] ? [{ name: `binding:${name}`, binding: step[name]! }] : [])]
-    .flatMap(({ name, binding }) => binding.source === "step" && binding.step
-    ? [{ id: `${step.name}:${name}`, source: binding.step, sourcePort: dataPort(binding.path ?? []), target: step.name, targetPort: name, channel: "data" as const, label: name.slice(name.indexOf(":") + 1) }]
+  return draft.steps.flatMap((step) => workflowBindings(step).flatMap(({ port, binding }) => binding?.source === "step" && binding.step
+    ? [{ id: `${step.name}:${port}`, source: binding.step, sourcePort: dataPort(binding.path ?? []), target: step.name, targetPort: port, channel: "data" as const, label: bindingPortLabel(port) }]
     : []));
 }
 export function withPath(step: WorkflowStep, port: string, target: string): WorkflowStep {
@@ -117,7 +122,7 @@ export function initialStep(capability: Capability, steps: WorkflowStep[]): Work
   if (step.kind === "end" || step.kind === "join") Object.assign(step, { value: { source: "input" } });
   return step;
 }
-export function workflowDiagnostics(draft: WorkflowDraft): Record<string, FlowDiagnostic[]> {
+export function workflowDiagnostics(draft: WorkflowDraft, validation?: { issues: { node?: string; message: string }[] }): Record<string, FlowDiagnostic[]> {
   const issues: Record<string, FlowDiagnostic[]> = {};
   const add = (step: string, message: string, severity: "error" | "warning" = "error") => (issues[step] ??= []).push({ message, severity });
   const names = new Set(draft.steps.map((step) => step.name));
@@ -136,6 +141,7 @@ export function workflowDiagnostics(draft: WorkflowDraft): Record<string, FlowDi
   const visit = (name: string) => { if (reached.has(name)) return; reached.add(name); const step = draft.steps.find((item) => item.name === name); if (step) stepPaths(step).forEach((path) => visit(path.target)); };
   if (draft.steps[0]) visit(draft.steps[0].name);
   for (const step of draft.steps) if (!reached.has(step.name)) add(step.name, "This step is disconnected from the entry.", "warning");
+  for (const issue of validation?.issues ?? []) (issues[issue.node ?? ""] ??= []).push({ message: issue.message, severity: "error" });
   return issues;
 }
 

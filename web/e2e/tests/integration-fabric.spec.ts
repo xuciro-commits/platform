@@ -33,6 +33,7 @@ for (const fixture of [
         // Connect and clean real external rows through the Data Connection editors.
         await page.addInitScript(() => localStorage.setItem("platform.language", "en"));
         await builder.open(page, "/dataset?id=new");
+        await page.locator('[data-structured-editor^="build.dataset:new:"]').getByRole("button", { name: "Visual", exact: true }).click();
         await page.getByLabel("Dataset name", { exact: true }).fill(name);
         await page.getByLabel("Dataset title", { exact: true }).fill("Raw integration rows");
         await page.getByRole("button", { name: "Save dataset", exact: true }).click();
@@ -44,6 +45,7 @@ for (const fixture of [
         await builder.decide("build.connection.check", { type: "build.connection", id: conn }, {});
         await expect.poll(async () => (await record("build.connection", conn))?.state, { timeout: 15_000 }).toBe("ready");
         await builder.open(page, "/data-source?id=new");
+        await page.locator('[data-structured-editor^="build.source:new:"]').getByRole("button", { name: "Visual", exact: true }).click();
         await page.getByLabel("Source name", { exact: true }).fill(`${name}source`);
         await page.getByLabel("Source title", { exact: true }).fill("External rows");
         await page.getByRole("combobox", { name: /^Connection/ }).selectOption(conn);
@@ -53,6 +55,7 @@ for (const fixture of [
         await expect.poll(async () => (await record("build.dataset", raw))?.version, { timeout: 15_000 }).toBe(1);
         await expect(page.getByRole("tab", { name: /^Data sources(?: ·|$)/ })).toHaveCount(1);
         await builder.open(page, "/pipeline?id=new");
+        await page.locator('[data-structured-editor^="build.pipeline:new:"]').getByRole("button", { name: "Visual", exact: true }).click();
         await page.getByLabel("Pipeline name", { exact: true }).fill(`${name}pipe`);
         await page.getByLabel("Pipeline title", { exact: true }).fill("Clean external rows");
         await page.getByRole("combobox", { name: /^Input dataset/ }).selectOption(raw);
@@ -78,9 +81,11 @@ for (const fixture of [
         await expect(page.getByText(/3 rows · 1 written · 2 quarantined/)).toBeVisible();
         if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("pipeline.png"), fullPage: true });
         await builder.open(page, `/dataset?id=${clean}`);
+        await page.locator(`[data-structured-editor^="build.dataset:${clean}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
         await expect(page.getByText("A", { exact: true }).last()).toBeVisible();
         await expect(page.getByRole("group", { name: "Dependency diagram", exact: true })).toHaveAttribute("aria-busy", "false");
         await page.getByRole("region",{name:"Declared dependencies",exact:true}).getByText("Clean external rows",{exact:true}).dblclick();
+        await page.locator(`[data-structured-editor^="build.pipeline:${pipe}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
         await expect(page.getByRole("textbox", { name: "Pipeline name", exact: true })).toHaveValue(`${name}pipe`);
 
         // The object is the integration pipeline's target. The whole delivery
@@ -106,6 +111,7 @@ for (const fixture of [
         const land = fresh("PIPE");
         await builder.decide("build.pipeline.create", { type: "build.pipeline", id: land }, { name: `${name}land`, title: "Land receiving records", input: clean, steps: [{ kind: "rename", from: "sku", to: "item" }] });
         await builder.open(page, `/pipeline?id=${land}`);
+        await page.locator(`[data-structured-editor^="build.pipeline:${land}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
         await page.getByRole("combobox", { name: "Write to", exact: true }).selectOption("object");
         await page.getByRole("combobox", { name: /^Output object/ }).selectOption(type);
         await page.getByRole("textbox", { name: /^Record id column/ }).fill("id");
@@ -115,6 +121,7 @@ for (const fixture of [
         expect(await record(type, receipt)).toMatchObject({ item: "A", qty: 3, state: "open" });
         await builder.decide("build.writeback.create", { type: "build.writeback", id: wb }, { name: `${name}wb`, title: "Receipt delivery", object: type, on: "receive", connection: conn, path: "receipts", result: [{ from: "MaterialDocument", to: "docno" }] });
         await builder.open(page, `/writeback?id=${wb}`);
+        await page.locator(`[data-structured-editor^="build.writeback:${wb}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
         await page.getByRole("button", { name: "Publish", exact: true }).click();
         await expect.poll(async () => (await record("build.writeback", wb))?.state).toBe("published");
 
@@ -153,6 +160,7 @@ for (const fixture of [
         }, true);
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
         await builder.open(page, `/writeback?id=${wb}`);
+        await page.locator(`[data-structured-editor^="build.writeback:${wb}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
 
         const context = await browser.newContext({ baseURL: fixture.baseURL, locale: "en-US" });
         const member = await (await request.get("/v1/me", { headers: operator.headers })).json();
@@ -198,6 +206,7 @@ for (const fixture of [
           });
           await builder.decide(`${reference.type}.create`, { type: reference.type, id: receipt }, { code: "REF", name: "Duplicate identity" });
           await builder.open(page, "/query?id=new");
+          await page.locator('[data-structured-editor^="build.query:new:"]').getByRole("button", { name: "Visual", exact: true }).click();
           await page.getByRole("textbox", { name: "Query name", exact: true }).fill(`${name}lookup`);
           await page.getByRole("textbox", { name: "Query title", exact: true }).fill("Receiving lookup");
           await page.getByRole("textbox", { name: "Query description", exact: true }).fill("Typed interface selection");
@@ -208,6 +217,7 @@ for (const fixture of [
           const queryID = new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("id")!;
           await editor.release(undefined,false,"Review release");
           await builder.open(page, `/query?id=${queryID}`);
+          await page.locator(`[data-structured-editor^="build.query:${queryID}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
           await page.getByRole("combobox", { name: "Query result record", exact: true }).fill(receipt);
           await expect(page.getByRole("option").filter({ hasText: `Integration receipt · ${receipt}` })).toBeVisible();
           await page.getByRole("option").filter({ hasText: `Reference receipt · ${receipt}` }).click();

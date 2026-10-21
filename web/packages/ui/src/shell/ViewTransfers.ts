@@ -6,7 +6,7 @@ export class ViewTransfers {
     const id = crypto.randomUUID(); this.calls.set(id, { from, to: "", input, result }); return id;
   }
   bind(id: string, to: string) { const call = this.calls.get(id); if (call) call.to = to; }
-  read(id: string, to: string) { const call = this.calls.get(id); return call?.to === to ? { input: call.input } : undefined; }
+  read(id: string, to: string) { const call = this.calls.get(id); return call?.to === to ? { input: call.input, from: call.from } : undefined; }
   finish(id: string, to: string, value: unknown) {
     const call = this.calls.get(id); if (!call || call.to !== to) return;
     this.calls.delete(id); call.result(value); return call.from;

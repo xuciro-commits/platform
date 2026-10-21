@@ -1,12 +1,13 @@
 import type { Api } from "@platform/kernel";
-import { useHost, useProvidedCapabilities, useRecordInventory } from "@platform/app";
+import { useHost, useReadQuery, useProvidedCapabilities, useRecordInventory } from "@platform/app";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { ContextHelp, Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, t, type EntityInfo } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, Disclosure, Input, InputDraftProvider, Panel, Select, Textarea, t, useInputDrafts, type EntityInfo } from "@platform/ui";
 import { useState } from "react";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 import { nameOf, type Input_, type Process } from "./object-model";
 import { recordPaths } from "./record-paths";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
+import { renameTransactionStep, transactionIssues, transactionIssueText } from "./transaction-edit";
 
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 const labels: Record<string, string> = { create: "Create record", update: "Update record", archive: "Archive record", link: "Link records", unlink: "Unlink records", sequence: "Take next number", post: "Post to a balance", journal: "Request journal entry", effect: "Request external write", work: "Create or close work", call: "Read a pure capability", "for-each": "For each record" };
@@ -15,6 +16,7 @@ const resultChoice = (step: Api.TxnStep): ExpressionChoice[] => step.kind === "c
 type EditorContext = {
   subject: string; actionName?: string; process: Process; inputs: Input_[]; choices: ExpressionChoice[]; objects: EntityInfo[];
   lookup: (type: string) => EntityInfo | undefined; roles: string[]; definitions: Api.Definition[];
+  rename: (path: number[], after: string) => void;
   pure: Api.ProvidedCapability[]; writes: { id: string; name: string; title: string; object: string; on: string; state: string }[];
 };
 
@@ -29,14 +31,21 @@ export function TransactionEditor({ value, onChange, process, inputs = [], roles
   entities.set(subject, authoringObject({ ...process, name: subject.slice("build.".length), title: authoring.entity(subject)?.title ?? subject }, authoring.entity(subject)));
   const lookup = (type: string): EntityInfo | undefined => entities.get(type) ?? authoring.entity(type);
   const choices: ExpressionChoice[] = [{ value: "input.$subject", label: t("Subject record ID"), type: "reference", ref: subject }, { value: "caller.id", label: t("The person taking it"), type: "text" }, ...lookup(subject)!.fields.map(field => ({ value: field.name, label: t("This record: {name}", { name: field.title }), type: expressionKind(field.type), ref: field.ref })), ...inputs.map(input => ({ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: expressionKind(input.type), ref: input.ref }))];
-  const context: EditorContext = { subject, actionName: process.actions.find(action => action.transaction === value)?.name, process, inputs, choices, lookup, roles, objects: [lookup(subject)!, ...entities.values()].filter((entity, index) => entity.app === subject.split(".")[0] && (index === 0 || entity.type !== subject)), definitions: host.definitions, pure: capabilities.data ?? [], writes: writes.data?.records ?? [] };
-  return <Panel title={t("Transaction steps")} className="grid min-w-0 gap-3">
+  const context: EditorContext = { subject, actionName: process.actions.find(action => action.transaction === value)?.name, process, inputs, choices, lookup, roles, objects: [lookup(subject)!, ...entities.values()].filter((entity, index) => entity.app === subject.split(".")[0] && (index === 0 || entity.type !== subject)), definitions: host.definitions, rename: (path, after) => onChange(renameTransactionStep(value, path, after)), pure: capabilities.data ?? [], writes: writes.data?.records ?? [] };
+  const issues = transactionIssues(value);
+  const actionIndex = process.actions.findIndex(action => action.transaction === value);
+  return <InputDraftProvider scope={actionIndex >= 0 ? JSON.stringify({ kind: "action", at: actionIndex }) : "creation-transaction"}><Panel data-transaction-editor title={t("Transaction steps")} className="grid min-w-0 gap-3">
     <ContextHelp title={t("Transaction steps")}><p className="text-sm text-muted">{t("Records and numbers are saved together. Journal requests, external writes and tasks run after the transaction is accepted.")}</p></ContextHelp>
     <Checkbox checked={!!value.guard} onChange={enabled => onChange({ ...value, guard: enabled ? literalExpression("boolean") : undefined, message: enabled ? value.message : undefined })}>{t("Require a transaction guard")}</Checkbox>
-    {value.guard && <div className="grid gap-2 rounded border border-border p-3"><ExpressionEditor value={value.guard} choices={choices} lookup={lookup} onChange={guard => onChange({ ...value, guard })} /><label className={fieldClass}>{t("Message when the transaction guard fails")}<Input value={value.message ?? ""} onChange={event => onChange({ ...value, message: event.target.value })} /></label></div>}
+    {value.guard && <div className="grid gap-2 rounded border border-border p-3"><ExpressionEditor draftKey="transaction-guard" value={value.guard} choices={choices} lookup={lookup} onChange={guard => onChange({ ...value, guard })} /><label className={fieldClass}>{t("Message when the transaction guard fails")}<Input value={value.message ?? ""} onChange={event => onChange({ ...value, message: event.target.value })} /></label></div>}
+    {issues.length > 0 && <ul role="alert" className="grid gap-1 text-xs text-danger">{issues.map((issue, at) => <li key={at}><Button size="sm" variant="ghost" className="h-auto justify-start whitespace-normal text-left underline" onClick={event => {
+      const panel = event.currentTarget.closest("[data-transaction-editor]");
+      const step = [...panel?.querySelectorAll<HTMLElement>("[data-transaction-step]") ?? []].find(node => node.dataset.transactionStep === issue.path.join("."));
+      step?.scrollIntoView({ block: "nearest" }); step?.focus();
+    }}>{transactionIssueText(issue, t)}</Button></li>)}</ul>}
     <StepList steps={value.steps} onChange={steps => onChange({ ...value, steps })} context={context} />
     <Disclosure summary={t("Transaction source")}><label className={fieldClass}>{t("Transaction definition")}<Textarea parse="json" rows={18} value={JSON.stringify(value, null, 2)} onChange={event => onChange(JSON.parse(event.target.value))} /></label></Disclosure>
-  </Panel>;
+  </Panel></InputDraftProvider>;
 }
 
 function initialStep(kind: string, name: string, context: EditorContext, item?: string): Api.TxnStep {
@@ -54,22 +63,35 @@ function initialStep(kind: string, name: string, context: EditorContext, item?: 
   return step;
 }
 
-function StepList({ steps, onChange, context, before = [], item }: { steps: Api.TxnStep[]; onChange: (steps: Api.TxnStep[]) => void; context: EditorContext; before?: Api.TxnStep[]; item?: string }) {
-  const [kind, setKind] = useState("update");
+function StepList({ steps, onChange, context, before = [], item, path = [] }: { steps: Api.TxnStep[]; onChange: (steps: Api.TxnStep[]) => void; context: EditorContext; before?: Api.TxnStep[]; item?: string; path?: number[] }) {
+  const [kind, setKind] = useState("update"), buffers = useInputDrafts();
+  const change = (next: Api.TxnStep[]) => {
+    const prefix = `${buffers?.scope ?? ""}/transaction-step:`;
+    const moves = Object.entries(buffers?.values ?? {}).flatMap(([key, value]) => {
+      if (!key.startsWith(prefix)) return [];
+      const match = /^(\d+)(\/.*)?$/.exec(key.slice(prefix.length));
+      if (!match) return [];
+      const at = Number(match[1]), index = next.indexOf(steps[at]!);
+      return [{ key, next: index < 0 ? undefined : `${prefix}${index}${match[2] ?? ""}`, value }];
+    });
+    for (const move of moves) buffers?.set(move.key);
+    for (const move of moves) if (move.next) buffers?.set(move.next, move.value);
+    onChange(next);
+  };
   const replace = (at: number, step: Api.TxnStep) => onChange(steps.map((entry, index) => index === at ? step : entry));
-  const move = (index: number, delta: number) => { const next = [...steps], [step] = next.splice(index, 1); next.splice(index + delta, 0, step!); onChange(next); };
+  const move = (index: number, delta: number) => { const next = [...steps], [step] = next.splice(index, 1); next.splice(index + delta, 0, step!); change(next); };
   return <div className="grid min-w-0 gap-3">
     {!steps.length && <p className="text-xs text-muted">{t("Add the steps that make up this business operation.")}</p>}
-    {steps.map((step, index) => <InputDraftProvider key={index} scope={`transaction-step:${index}`}><div className="grid min-w-0 gap-3 rounded-md border border-border p-3" role="group" aria-label={t("Transaction step {n}", { n: index + 1 })}>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2"><strong className="text-sm">{index + 1}. {t(labels[step.kind] ?? step.kind)}</strong><div className="flex gap-1"><Button size="sm" variant="ghost" aria-label={t("Move step up")} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp /></Button><Button size="sm" variant="ghost" aria-label={t("Move step down")} disabled={index === steps.length - 1} onClick={() => move(index, 1)}><ArrowDown /></Button><Button size="sm" variant="ghost" aria-label={t("Remove transaction step")} onClick={() => onChange(steps.filter((_, at) => at !== index))}><Trash2 /></Button></div></div>
-      <div className="grid gap-2 sm:grid-cols-2"><label className={fieldClass}>{t("Step name")}<Input value={step.name} onChange={event => replace(index, { ...step, name: event.target.value })} /></label><label className={fieldClass}>{t("Step kind")}<Select value={step.kind} onChange={event => replace(index, { ...initialStep(event.target.value, step.name, context, item), when: step.when, refusals: step.refusals })}>{Object.entries(labels).filter(([kind]) => !item || kind !== "for-each").map(([kind, label]) => <option key={kind} value={kind}>{t(label)}</option>)}</Select></label></div>
-      <StepEditor step={step} onChange={next => replace(index, next)} context={context} previous={[...before, ...steps.slice(0, index)]} item={item} />
+    {steps.map((step, index) => <InputDraftProvider key={index} scope={`transaction-step:${index}`}><div className="grid min-w-0 gap-3 rounded-md border border-border p-3" role="group" tabIndex={-1} data-transaction-step={[...path, index].join(".")} aria-label={t("Transaction step {n}", { n: index + 1 })}>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2"><strong className="text-sm">{index + 1}. {t(labels[step.kind] ?? step.kind)}</strong><div className="flex gap-1"><Button size="sm" variant="ghost" aria-label={t("Move step up")} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp /></Button><Button size="sm" variant="ghost" aria-label={t("Move step down")} disabled={index === steps.length - 1} onClick={() => move(index, 1)}><ArrowDown /></Button><Button size="sm" variant="ghost" aria-label={t("Remove transaction step")} onClick={() => change(steps.filter((_, at) => at !== index))}><Trash2 /></Button></div></div>
+      <div className="grid gap-2 sm:grid-cols-2"><label className={fieldClass}>{t("Step name")}<Input value={step.name} onChange={event => context.rename([...path, index], event.target.value)} /></label><label className={fieldClass}>{t("Step kind")}<Select value={step.kind} onChange={event => replace(index, { ...initialStep(event.target.value, step.name, context, item), when: step.when, refusals: step.refusals })}>{Object.entries(labels).filter(([kind]) => !item || kind !== "for-each").map(([kind, label]) => <option key={kind} value={kind}>{t(label)}</option>)}</Select></label></div>
+      <StepEditor step={step} onChange={next => replace(index, next)} context={context} previous={[...before, ...steps.slice(0, index)]} item={item} path={[...path, index]} />
     </div></InputDraftProvider>)}
     <div className="flex flex-wrap gap-2"><Select aria-label={t("New transaction step kind")} value={kind} onChange={event => setKind(event.target.value)}>{Object.entries(labels).filter(([kind]) => !item || kind !== "for-each").map(([kind, label]) => <option key={kind} value={kind}>{t(label)}</option>)}</Select><Button size="sm" disabled={steps.length >= 256} onClick={() => onChange([...steps, initialStep(kind, nameOf(kind, [...before, ...steps].map(step => step.name)), context, item)])}><Plus />{t("Add transaction step")}</Button></div>
   </div>;
 }
 
-function StepEditor({ step, onChange, context, previous, item }: { step: Api.TxnStep; onChange: (step: Api.TxnStep) => void; context: EditorContext; previous: Api.TxnStep[]; item?: string }) {
+function StepEditor({ step, onChange, context, previous, item, path }: { step: Api.TxnStep; onChange: (step: Api.TxnStep) => void; context: EditorContext; previous: Api.TxnStep[]; item?: string; path: number[] }) {
   const patch = (change: Partial<Api.TxnStep>) => onChange({ ...step, ...change });
   const target = step.target?.type ? step.target : { type: context.subject, id: "$subject" };
   const row = item ? context.lookup(item) : undefined;
@@ -89,8 +111,8 @@ function StepEditor({ step, onChange, context, previous, item }: { step: Api.Txn
     </>}
     {step.post && <>
       <label className={fieldClass}>{t("Balance field")}<Select value={step.post.field} onChange={event => patch({ post: { ...step.post!, field: event.target.value } })}><option value="">{t("Choose a numeric field")}</option>{fields.filter(field => ["integer", "decimal", "money"].includes(field.type)).map(field => <option key={field.name} value={field.name}>{field.title}</option>)}</Select></label>
-      <fieldset className="grid gap-2"><legend className="text-xs font-medium">{t("Balance identity fields")}</legend><Assignments value={step.post.match} onChange={match => patch({ post: { ...step.post!, match } })} fields={fields.filter(field => field.name !== step.post!.field)} choices={choices} context={context} /></fieldset>
-      <fieldset className="grid gap-2"><legend className="text-xs font-medium">{t("Posting amount")}</legend><ExpressionEditor value={step.post.amount} kind={step.post.amount.kind} choices={choices} lookup={context.lookup} onChange={amount => patch({ post: { ...step.post!, amount } })} /></fieldset>
+      <fieldset className="grid gap-2"><legend className="text-xs font-medium">{t("Balance identity fields")}</legend><Assignments scope="post-match" value={step.post.match} onChange={match => patch({ post: { ...step.post!, match } })} fields={fields.filter(field => field.name !== step.post!.field)} choices={choices} context={context} /></fieldset>
+      <fieldset className="grid gap-2"><legend className="text-xs font-medium">{t("Posting amount")}</legend><ExpressionEditor draftKey="posting-amount" value={step.post.amount} kind={step.post.amount.kind} choices={choices} lookup={context.lookup} onChange={amount => patch({ post: { ...step.post!, amount } })} /></fieldset>
       <div className="flex flex-wrap gap-3"><Checkbox checked={!!step.post.subtract} onChange={subtract => patch({ post: { ...step.post!, subtract } })}>{t("Subtract from the balance")}</Checkbox><Checkbox checked={!!step.post.floor} onChange={floor => patch({ post: { ...step.post!, floor } })}>{t("Refuse a negative balance")}</Checkbox></div>
     </>}
     {step.journal && <>
@@ -103,9 +125,9 @@ function StepEditor({ step, onChange, context, previous, item }: { step: Api.Txn
       </> : <>
       {(["text", "currency"] as const).map(key => <OptionalExpression key={key} label={{ text: "Entry text", currency: "Journal currency" }[key]} kind="text" value={step.journal![key]} onChange={expression => patch({ journal: { ...step.journal!, [key]: expression } })} choices={choices} context={context} />)}
       {step.journal.lines.map((line, index) => <fieldset key={index} className="grid min-w-0 gap-2 rounded border border-border p-3"><legend className="text-xs">{t("Journal line {n}", { n: index + 1 })}</legend>
-        <label className="text-xs font-medium">{t("Account")}</label><ExpressionEditor value={line.account} kind="text" choices={choices} lookup={context.lookup} onChange={account => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, account } : entry) } })} />
+        <label className="text-xs font-medium">{t("Account")}</label><ExpressionEditor draftKey={`journal:${index}:account`} value={line.account} kind="text" choices={choices} lookup={context.lookup} onChange={account => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, account } : entry) } })} />
         <Select aria-label={t("Debit or credit")} value={line.credit ? "credit" : "debit"} onChange={event => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, debit: event.target.value === "debit" ? line.credit ?? literalExpression("integer") : undefined, credit: event.target.value === "credit" ? line.debit ?? literalExpression("integer") : undefined } : entry) } })}><option value="debit">{t("Debit")}</option><option value="credit">{t("Credit")}</option></Select>
-        <ExpressionEditor value={line.debit ?? line.credit ?? literalExpression("integer")} kind={(line.debit ?? line.credit)?.kind ?? "integer"} choices={choices} lookup={context.lookup} onChange={amount => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, [line.credit ? "credit" : "debit"]: amount } : entry) } })} />
+        <ExpressionEditor draftKey={`journal:${index}:amount`} value={line.debit ?? line.credit ?? literalExpression("integer")} kind={(line.debit ?? line.credit)?.kind ?? "integer"} choices={choices} lookup={context.lookup} onChange={amount => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, [line.credit ? "credit" : "debit"]: amount } : entry) } })} />
         <Disclosure summary={t("Journal line details")}>{(["text", "object", "partner"] as const).map(key => <OptionalExpression key={key} label={{ text: "Line text", object: "Business reference", partner: "Partner" }[key]} kind="text" value={line[key]} onChange={expression => patch({ journal: { ...step.journal!, lines: step.journal!.lines.map((entry, at) => at === index ? { ...entry, [key]: expression } : entry) } })} choices={choices} context={context} />)}</Disclosure>
         <Button size="sm" variant="ghost" className="w-fit" onClick={() => patch({ journal: { ...step.journal!, lines: step.journal!.lines.filter((_, at) => at !== index) } })}>{t("Remove line")}</Button>
       </fieldset>)}<Button size="sm" className="w-fit" onClick={() => patch({ journal: { ...step.journal!, lines: [...step.journal!.lines, { account: literalExpression("text"), debit: literalExpression("integer") }] } })}>{t("Add a line")}</Button>
@@ -114,7 +136,7 @@ function StepEditor({ step, onChange, context, previous, item }: { step: Api.Txn
     {step.effect && <>
       <label className={fieldClass}>{t("Transaction writeback")}<Select value={context.writes.find(write => write.id === step.effect!.writeback || write.name === step.effect!.writeback)?.id ?? step.effect.writeback} onChange={event => patch({ effect: { ...step.effect!, writeback: event.target.value } })}><option value="">{t("Choose a transaction writeback")}</option>{context.writes.filter(write => write.state === "published" && write.on === "transaction" && write.object === target.type).map(write => <option key={write.id} value={write.id}>{write.title}</option>)}</Select></label>
       <p className="text-xs text-muted">{t("Only explicit transaction writebacks are offered. Delivery starts after acceptance and may be retried with the same key.")}</p>
-      <Assignments value={step.effect.payload ?? []} onChange={payload => patch({ effect: { ...step.effect!, payload } })} choices={choices} context={context} />
+      <Assignments scope="effect-payload" value={step.effect.payload ?? []} onChange={payload => patch({ effect: { ...step.effect!, payload } })} choices={choices} context={context} />
     </>}
     {step.work && <>
       <label className={fieldClass}>{t("Task title")}<Input value={step.work.title} onChange={event => patch({ work: { ...step.work!, title: event.target.value } })} /></label>
@@ -127,10 +149,10 @@ function StepEditor({ step, onChange, context, previous, item }: { step: Api.Txn
     {step.forEach && <>
       <label className={fieldClass}>{t("Ordered record set")}<Select value={step.forEach.set} onChange={event => patch({ forEach: { ...step.forEach!, set: event.target.value } })}><option value="">{t("Choose a declared record set")}</option>{context.process.sets?.map(set => <option key={set.name} value={set.name}>{set.name} · {context.lookup(set.object)?.title ?? set.object}</option>)}</Select></label>
       <p className="text-xs text-muted">{t("The original set order is retained. Child steps can use the current item; nested iteration is unavailable.")}</p>
-      <StepList steps={step.forEach.steps} onChange={steps => patch({ forEach: { ...step.forEach!, steps } })} context={context} before={previous} item={context.process.sets?.find(set => set.name === step.forEach!.set)?.object ?? context.subject} />
+      <StepList path={path} steps={step.forEach.steps} onChange={steps => patch({ forEach: { ...step.forEach!, steps } })} context={context} before={previous} item={context.process.sets?.find(set => set.name === step.forEach!.set)?.object ?? context.subject} />
     </>}
     <Checkbox checked={!!step.when} onChange={enabled => patch({ when: enabled ? literalExpression("boolean") : undefined })}>{t("Run this step only when")}</Checkbox>
-    {step.when && <><ExpressionEditor value={step.when} choices={choices} lookup={context.lookup} onChange={when => patch({ when })} /><p className="text-xs text-muted">{t("A false step condition skips this step. Use the transaction guard to refuse the entire operation.")}</p></>}
+    {step.when && <><ExpressionEditor draftKey="step-condition" value={step.when} choices={choices} lookup={context.lookup} onChange={when => patch({ when })} /><p className="text-xs text-muted">{t("A false step condition skips this step. Use the transaction guard to refuse the entire operation.")}</p></>}
   </>;
 }
 
@@ -141,31 +163,48 @@ function RecordTarget({ value, onChange, context, previous, item }: { value: Api
   return <div className="grid min-w-0 gap-2"><label className={fieldClass}>{t("Record to change")}<Select value={selected} onChange={event => onChange({ type: value.type, ...event.target.value.startsWith("via:") ? { via: event.target.value.slice(4) } : { id: event.target.value === "fixed" ? "" : event.target.value } })}>{options.map(option => <option key={option.value} value={option.value}>{option.title}</option>)}<option value="fixed">{t("A specific record ID")}</option></Select></label>{selected === "fixed" && <label className={fieldClass}>{t("Record ID")}<Input value={value.id ?? ""} onChange={event => onChange({ type: value.type, id: event.target.value })} /></label>}</div>;
 }
 
-function Assignments({ value, onChange, fields, choices, context }: { value: Api.TxnSet[]; onChange: (value: Api.TxnSet[]) => void; fields?: Api.FieldInfo[]; choices: ExpressionChoice[]; context: EditorContext }) {
-  return <div className="grid min-w-0 gap-2">{value.map((assignment, index) => {
+function Assignments({ value, onChange, fields, choices, context, scope = "assignments" }: { value: Api.TxnSet[]; onChange: (value: Api.TxnSet[]) => void; fields?: Api.FieldInfo[]; choices: ExpressionChoice[]; context: EditorContext; scope?: string }) {
+  const buffers = useInputDrafts();
+  const remove = (index: number) => {
+    const prefix = `${buffers?.scope ?? ""}/${scope}/assignment:`;
+    const moves = Object.entries(buffers?.values ?? {}).flatMap(([key, draft]) => {
+      if (!key.startsWith(prefix)) return [];
+      const at = Number(key.slice(prefix.length));
+      if (!Number.isInteger(at) || at < index) return [];
+      return [{ key, next: at === index ? undefined : `${prefix}${at - 1}`, draft }];
+    });
+    for (const move of moves) buffers?.set(move.key);
+    for (const move of moves) if (move.next) buffers?.set(move.next, move.draft);
+    onChange(value.filter((_, at) => at !== index));
+  };
+  return <InputDraftProvider scope={scope}><div className="grid min-w-0 gap-2">{value.map((assignment, index) => {
     const field = fields?.find(field => field.name === assignment.field), kind = expressionKind(field?.type ?? assignment.expr?.kind ?? "text");
     return <div key={index} className="grid min-w-0 gap-2 rounded border border-border p-2">
       <label className={fieldClass}>{t(fields ? "Record field" : "Parameter name")}{fields ? <Select value={assignment.field} onChange={event => { const field = fields.find(field => field.name === event.target.value); onChange(value.map((entry, at) => at === index ? { field: event.target.value, expr: literalExpression(expressionKind(field?.type ?? "text")) } : entry)); }}><option value="">{t("Choose a field")}</option>{fields.filter(field => field.name === assignment.field || !value.some(other => other.field === field.name)).map(field => <option key={field.name} value={field.name}>{field.title}{field.required ? " *" : ""}</option>)}</Select> : <Input value={assignment.field} onChange={event => onChange(value.map((entry, at) => at === index ? { ...entry, field: event.target.value } : entry))} />}</label>
-      {field?.choices?.length ? <label className={fieldClass}>{t("State or input value")}<Select value={assignment.expr?.ref ?? String(assignment.expr?.lit?.value ?? "")} onChange={event => onChange(value.map((entry, at) => at === index ? { field: entry.field, expr: event.target.value.startsWith("input.") ? { op: "", kind, ref: event.target.value } : { op: "", kind, lit: { value: event.target.value } } } : entry))}><option value="">{t("Choose a value")}</option>{field.choices.map(value => <option key={value} value={value}>{value}</option>)}{context.inputs.filter(input => input.type === "choice" && input.required && input.choices?.split(",").every(value => field.choices!.includes(value.trim()))).map(input => <option key={input.name} value={`input.${input.name}`}>{t("Input: {name}", { name: input.title })}</option>)}</Select></label> : <ExpressionEditor value={assignment.expr ?? literalExpression(kind)} kind={kind} choices={choices} lookup={context.lookup} onChange={expr => onChange(value.map((entry, at) => at === index ? { field: entry.field, expr } : entry))} />}
-      <Button size="sm" variant="ghost" className="w-fit" onClick={() => onChange(value.filter((_, at) => at !== index))}>{t("Remove assignment")}</Button>
+      {field?.choices?.length ? <label className={fieldClass}>{t("State or input value")}<Select value={assignment.expr?.ref ?? String(assignment.expr?.lit?.value ?? "")} onChange={event => onChange(value.map((entry, at) => at === index ? { field: entry.field, expr: event.target.value.startsWith("input.") ? { op: "", kind, ref: event.target.value } : { op: "", kind, lit: { value: event.target.value } } } : entry))}><option value="">{t("Choose a value")}</option>{field.choices.map(value => <option key={value} value={value}>{value}</option>)}{context.inputs.filter(input => input.type === "choice" && input.required && input.choices?.split(",").every(value => field.choices!.includes(value.trim()))).map(input => <option key={input.name} value={`input.${input.name}`}>{t("Input: {name}", { name: input.title })}</option>)}</Select></label> : <ExpressionEditor draftKey={`assignment:${index}`} value={assignment.expr ?? literalExpression(kind)} kind={kind} choices={choices} lookup={context.lookup} onChange={expr => onChange(value.map((entry, at) => at === index ? { field: entry.field, expr } : entry))} />}
+      <Button size="sm" variant="ghost" className="w-fit" onClick={() => remove(index)}>{t("Remove assignment")}</Button>
     </div>;
-  })}<Button size="sm" className="w-fit" disabled={fields !== undefined && !fields.some(field => !value.some(assignment => assignment.field === field.name))} onClick={() => { const field = fields?.find(field => !value.some(assignment => assignment.field === field.name)); onChange([...value, { field: field?.name ?? "", expr: literalExpression(expressionKind(field?.type ?? "text")) }]); }}>{t("Add field assignment")}</Button></div>;
+  })}<Button size="sm" className="w-fit" disabled={fields !== undefined && !fields.some(field => !value.some(assignment => assignment.field === field.name))} onClick={() => { const field = fields?.find(field => !value.some(assignment => assignment.field === field.name)); onChange([...value, { field: field?.name ?? "", expr: literalExpression(expressionKind(field?.type ?? "text")) }]); }}>{t("Add field assignment")}</Button></div></InputDraftProvider>;
 }
 
 function OptionalExpression({ label, value, kind, onChange, choices, context }: { label: string; value?: Api.Expr; kind: string; onChange: (value?: Api.Expr) => void; choices: ExpressionChoice[]; context: EditorContext }) {
-  return <fieldset className="grid min-w-0 gap-2"><Checkbox checked={!!value} onChange={enabled => onChange(enabled ? literalExpression(kind) : undefined)}>{t(label)}</Checkbox>{value && <ExpressionEditor value={value} kind={kind} choices={choices} lookup={context.lookup} onChange={onChange} />}</fieldset>;
+  return <fieldset className="grid min-w-0 gap-2"><Checkbox checked={!!value} onChange={enabled => onChange(enabled ? literalExpression(kind) : undefined)}>{t(label)}</Checkbox>{value && <ExpressionEditor draftKey={`optional:${label}`} value={value} kind={kind} choices={choices} lookup={context.lookup} onChange={onChange} />}</fieldset>;
 }
 
 function PureCallEditor({ value, onChange, choices, context }: { value: Api.TxnCall; onChange: (value: Api.TxnCall) => void; choices: ExpressionChoice[]; context: EditorContext }) {
   const selected = context.pure.find(capability => capability.ref.app === value.ref.app && capability.ref.name === value.ref.name);
+  const retained = useReadQuery<Api.CapabilityDescriptor>(`/v1/capabilities/${encodeURIComponent(value.ref.app)}/query/${encodeURIComponent(value.ref.name)}?version=${value.version}`, undefined, !!value.ref.app && !!value.ref.name);
+  const described = retained.data;
   const outputs: { path: string[]; kind: string; title: string }[] = [];
   const leaves = (schema: Api.ValueSchema, path: string[] = []) => { if (schema.type === "object") Object.entries(schema.properties ?? {}).forEach(([name, child]) => leaves(child, [...path, name])); else if (["string", "boolean", "integer", "number"].includes(schema.type)) outputs.push({ path, kind: expressionKind(schema.type), title: path.join(".") || t("Entire result") }); };
-  if (selected) leaves(selected.capability.outputs);
+  if (described?.output) leaves(described.output);
   return <>
-    <label className={fieldClass}>{t("Pure read capability")}<Select value={selected ? `${selected.ref.app}:${selected.ref.name}` : ""} onChange={event => { const capability = context.pure.find(capability => `${capability.ref.app}:${capability.ref.name}` === event.target.value); if (capability) onChange({ ref: capability.ref, version: Number(/\.query-(\d+)$/.exec(capability.version)?.[1] ?? 0), view: "snapshot", inputs: [], resultType: { kind: "text" } }); }}><option value="">{t("Choose a pure query")}</option>{context.pure.map(capability => <option key={`${capability.ref.app}:${capability.ref.name}`} value={`${capability.ref.app}:${capability.ref.name}`}>{capability.ref.app} · {capability.ref.name}</option>)}</Select></label>
+    <label className={fieldClass}>{t("Pure read capability")}<Select value={value.ref.app && value.ref.name ? `${value.ref.app}:${value.ref.name}` : ""} onChange={event => { const capability = context.pure.find(capability => `${capability.ref.app}:${capability.ref.name}` === event.target.value); if (capability) onChange({ ref: capability.ref, version: Number(/\.query-(\d+)$/.exec(capability.version)?.[1] ?? 0), view: "snapshot", inputs: [], resultType: { kind: "text" } }); }}><option value="">{t("Choose a pure query")}</option>{!selected && value.ref.name && <option value={`${value.ref.app}:${value.ref.name}`}>{value.ref.app} · {value.ref.name}</option>}{context.pure.map(capability => <option key={`${capability.ref.app}:${capability.ref.name}`} value={`${capability.ref.app}:${capability.ref.name}`}>{capability.ref.app} · {capability.ref.name}</option>)}</Select></label>
     <div className="grid gap-2 sm:grid-cols-2"><label className={fieldClass}>{t("Capability version")}<Input type="number" min={0} value={value.version} onChange={event => onChange({ ...value, version: Number(event.target.value) })} /></label><label className={fieldClass}>{t("Read view")}<Select value={value.view} onChange={event => onChange({ ...value, view: event.target.value })}><option value="snapshot">{t("Transaction start snapshot")}</option><option value="current">{t("Results of preceding steps")}</option></Select></label></div>
     <p className="text-xs text-muted">{t("Only pure reads are available. Snapshot reads the records as they were when the transaction started. Preceding results include earlier changes in this transaction.")}</p>
-    <Assignments value={value.inputs ?? []} onChange={inputs => onChange({ ...value, inputs })} fields={selected ? (selected.capability.parameters?.map(field => ({ name: field.name, title: field.description || field.name, type: expressionKind(field.type), required: field.required, choices: field.choices, ref: field.ref })) ?? Object.entries(selected.capability.inputs.properties ?? {}).map(([name, schema]) => ({ name, title: schema.description || name, type: expressionKind(schema.type), required: selected.capability.inputs.required?.includes(name), choices: schema.enum }))) as Api.FieldInfo[] : undefined} choices={choices} context={context} />
-    <label className={fieldClass}>{t("Retained result value")}<Select value={JSON.stringify(value.resultPath ?? [])} onChange={event => { const output = outputs.find(output => JSON.stringify(output.path) === event.target.value); if (output) onChange({ ...value, resultPath: output.path, resultType: { kind: output.kind } }); }}><option value="">{t("Choose a scalar result")}</option>{outputs.map(output => <option key={JSON.stringify(output.path)} value={JSON.stringify(output.path)}>{output.title} · {t(output.kind)}</option>)}</Select></label>
+    {retained.isLoading && <p className="text-xs text-muted">{t("Loading…")}</p>}
+    {retained.isError && <p role="alert" className="text-xs text-danger">{t("The retained query version could not be loaded. Its inputs and result stay unchanged.")}</p>}
+    <fieldset disabled={!described} className="min-w-0 border-0 p-0"><Assignments scope="call-inputs" value={value.inputs ?? []} onChange={inputs => onChange({ ...value, inputs })} fields={described ? (described.parameters?.map(field => ({ name: field.name, title: field.description || field.name, type: expressionKind(field.type), required: field.required, choices: field.choices, ref: field.ref })) ?? Object.entries(described.input?.properties ?? {}).map(([name, schema]) => ({ name, title: schema.description || name, type: expressionKind(schema.type), required: described.input?.required?.includes(name), choices: schema.enum }))) as Api.FieldInfo[] : undefined} choices={choices} context={context} /></fieldset>
+    <label className={fieldClass}>{t("Retained result value")}<Select disabled={!described} value={JSON.stringify(value.resultPath ?? [])} onChange={event => { const output = outputs.find(output => JSON.stringify(output.path) === event.target.value); if (output) onChange({ ...value, resultPath: output.path, resultType: { kind: output.kind } }); }}><option value="">{t("Choose a scalar result")}</option>{!outputs.some(output => JSON.stringify(output.path) === JSON.stringify(value.resultPath ?? [])) && <option value={JSON.stringify(value.resultPath ?? [])}>{(value.resultPath ?? []).join(".") || t("Entire result")} · {t(value.resultType.kind)}</option>}{outputs.map(output => <option key={JSON.stringify(output.path)} value={JSON.stringify(output.path)}>{output.title} · {t(output.kind)}</option>)}</Select></label>
   </>;
 }
