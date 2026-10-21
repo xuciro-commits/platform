@@ -10,8 +10,6 @@
 |---|---|---|---|
 | **X2 构建工作台** | `compile.ts` 854 行仍混合变量规划、绑定、widget 编译；`workshop/editor.tsx` 718 行仍混合草稿与渲染 | 编译/诊断不依赖 React；编辑器只有一份草稿/撤销状态；预算不增加 | `compile.test.mjs`、build 类型检查与测试 |
 | **X4 宿主 owner 分组** | 配额、设置、序列、上传、取消已归 `internal/tenantstate`；根包仍有 418 个文件，接受、记录、发布、协议协调尚未完成迁移 | 独立状态与纯规则归内部 owner；根包只保留 Tenant 组合和跨 owner 原子协调；边界检查不放宽 | `doc.go`、`boundaries.sh`、`escapes.sh`、Go 编译与相关测试 |
-| **X7 前端性能** | 记录表全量重渲、`useRead` 轮询粒度、画布布局重算尚未测量和处理 | 代表性负载有前后数据；无测量不声称改善 | `ui/records`、`graph/*/layout` |
-| **X8 交付验证** | PostgreSQL 整块恢复和酒店/制造双宿主演练未完成 | 真实 PostgreSQL 恢复、重放、两宿主升级通过并保留原数据卷 | ADR-0010、ADR-0060、ADR-0064 §8 |
 
 预算当前锁定：Go 138,485 行/690 文件，TS/TSX 56,795 行/637 文件；上限只能下降。拆职责产生的 import/export 必须由同批删除抵消。
 
