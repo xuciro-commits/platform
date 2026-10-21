@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"platformkernel/kernel"
 	"platformserver/journal"
 	"platformserver/platform"
 )
@@ -92,6 +93,10 @@ func (t *Tenant) nearestKnowledge(model string, query []float32, reader *platfor
 }
 
 func (t *Tenant) currentPassageReadable(c *chunk, reader *platform.Member, app string, now time.Time) bool {
+	out, _ := recordRead(t, context.Background(), func() (bool, *kernel.Error) { return t.currentPassageReadableInLane(c, reader, app, now), nil })
+	return out
+}
+func (t *Tenant) currentPassageReadableInLane(c *chunk, reader *platform.Member, app string, now time.Time) bool {
 	t.index.mu.Lock()
 	gone := c.gone
 	t.index.mu.Unlock()
@@ -140,5 +145,5 @@ func (t *Tenant) currentPassageReadable(c *chunk, reader *platform.Member, app s
 	if reader != nil {
 		m = *reader
 	}
-	return t.Readable(m, c.scope, now)
+	return t.readable(m, c.scope, now)
 }

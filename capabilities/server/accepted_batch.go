@@ -392,7 +392,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	answer := new(pb.ChangeRecord)
 	_ = protojson.Unmarshal(result.Receipt, answer)
 	input, _ := resultformat.BatchSubmission(result, answer)
-	if len(result.Submission) > 0 || len(result.Business) > 0 || strings.HasPrefix(input.GetCorrelationId(), "correction:") {
+	if result.HasSavedAnswer(input) {
 		t.committed.saveAnswer(key, raw)
 	}
 	return true, nil

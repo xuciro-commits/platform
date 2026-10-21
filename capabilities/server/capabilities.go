@@ -1,17 +1,26 @@
 package platformserver
 
 import (
+	"context"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 // Capabilities derives the Block palette from the same permission-filtered
 // owner definitions used by pages. It owns no storage or business execution.
 func (t *Tenant) Capabilities(m platform.Member) []platform.CapabilityDescriptor {
+	answer, _ := recordRead(t, context.Background(), func() ([]platform.CapabilityDescriptor, *kernel.Error) {
+		return t.capabilities(m), nil
+	})
+	return answer
+}
+
+func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor {
 	if t.admits(m) != nil {
 		return []platform.CapabilityDescriptor{}
 	}

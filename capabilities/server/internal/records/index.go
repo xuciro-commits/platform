@@ -167,3 +167,20 @@ func (s Index[V]) All() iter.Seq2[string, V] {
 		walk(s.root)
 	}
 }
+
+// after skips entire index branches preceding an ID page.
+func (s Index[V]) after(key string) iter.Seq2[string, V] {
+	return func(yield func(string, V) bool) {
+		var walk func(*indexNode[V]) bool
+		walk = func(n *indexNode[V]) bool {
+			if n == nil {
+				return true
+			}
+			if n.key <= key {
+				return walk(n.right)
+			}
+			return walk(n.left) && yield(n.key, n.value) && walk(n.right)
+		}
+		walk(s.root)
+	}
+}

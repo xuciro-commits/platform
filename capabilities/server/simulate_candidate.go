@@ -500,7 +500,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		}) || step.ID == "" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A clock step needs a r.candidate object and record ID")
 		}
-		_, refusal = r.sandbox.RecordOf(actor, step.Type, step.ID, r.now)
+		_, refusal = r.sandbox.recordOf(actor, step.Type, step.ID, r.now)
 	} else {
 		action := r.sandbox.owner["action:"+step.Action]
 		business := slices.ContainsFunc(r.candidate.Assets, func(asset platform.ReleaseAsset) bool {
@@ -545,7 +545,7 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 		r.passed = r.passed && matched
 	}
 	if r.sandbox.ai != nil {
-		page, problem := r.sandbox.Records(actor, construction.FunctionCallType, platform.Query{Limit: 100}, r.now)
+		page, problem := r.sandbox.recordsRead(actor, construction.FunctionCallType, platform.Query{Limit: 100}, r.now)
 		if problem == nil {
 			for _, record := range page.Records {
 				result.Functions = append(result.Functions, record.(construction.FunctionRun))
@@ -577,14 +577,14 @@ func (r *candidateRun) step(i int, step SimulationStep) *kernel.Error {
 
 	}
 	if r.sandbox.app(platform.FlowApp) != nil {
-		page, _ := r.sandbox.Records(actor, platform.FlowInstanceType, platform.Query{Limit: 100}, r.now)
+		page, _ := r.sandbox.recordsRead(actor, platform.FlowInstanceType, platform.Query{Limit: 100}, r.now)
 		for _, record := range page.Records {
 			raw, _ := json.Marshal(record)
 			var instance platform.FlowInstance
 			_ = json.Unmarshal(raw, &instance)
 			result.Flows = append(result.Flows, SimulatedFlow{ID: instance.ID, Flow: instance.Flow, Version: instance.Version, Dependencies: instance.Dependencies, Release: instance.Release, State: instance.State, Tokens: instance.Tokens, Trace: instance.Trace, Outputs: instance.Outputs})
 		}
-		if inbox, err := r.sandbox.Read(actor, "inbox"); err == nil {
+		if inbox, err := r.sandbox.read(actor, "inbox"); err == nil {
 			result.Tasks = inbox.([]platform.WorkTask)
 		}
 	}
@@ -606,7 +606,7 @@ func (r *candidateRun) visibleChanges(actor platform.Member) []SimulatedChange {
 		}
 		offset := 0
 		for {
-			page, err := r.sandbox.Records(actor, asset.Ref.Name, platform.Query{Limit: 500, Offset: offset, Archived: true, Sort: []string{"id"}}, r.now)
+			page, err := r.sandbox.recordsRead(actor, asset.Ref.Name, platform.Query{Limit: 500, Offset: offset, Archived: true, Sort: []string{"id"}}, r.now)
 			if err != nil {
 				break
 			}

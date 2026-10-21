@@ -83,6 +83,13 @@ func snapshot(t *Tenant) string {
 }
 
 func checkedSnapshot(t *Tenant) (string, error) {
+	if t.currentReadScopes {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if err := t.recordReadRefusal(); err != nil {
+			return "", err
+		}
+	}
 	at := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC) // effect bodies are kept: nothing is 30 days old
 	connectors := []any{}
 	for _, c := range t.Connectors(at) {
@@ -121,16 +128,18 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	for _, p := range t.Protocols() {
 		bindings = append(bindings, []string{p.ID, p.Bound})
 	}
-	t.records.mu.Lock()
 	recordView := map[string]any{}
-	for typ, et := range t.records.types {
-		rows := map[string]any{}
-		for id, r := range et.rows.All() {
-			rows[id] = []any{r.Value.Interface(), r.RecordHistory()}
+	func() {
+		t.records.mu.Lock()
+		defer t.records.mu.Unlock()
+		for typ, et := range t.records.types {
+			rows := map[string]any{}
+			for id, r := range et.rows.All() {
+				rows[id] = []any{r.Value.Interface(), r.RecordHistory()}
+			}
+			recordView[typ] = rows
 		}
-		recordView[typ] = rows
-	}
-	t.records.mu.Unlock()
+	}()
 	// Include the installed catalog: matching record bytes alone do not prove
 	// that a recovered publication offers the same pages and actions.
 	definitions, err := t.ownedAssetDefinitions(t.definitions)

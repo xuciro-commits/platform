@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"slices"
 	"strconv"
 
@@ -10,6 +11,12 @@ import (
 )
 
 func (t *Tenant) DescribeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *kernel.Error) {
+	return recordRead(t, context.Background(), func() (platform.CapabilityDescriptor, *kernel.Error) {
+		return t.describeCapability(m, ref, version)
+	})
+}
+
+func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *kernel.Error) {
 	if refusal := t.admits(m); refusal != nil {
 		return platform.CapabilityDescriptor{}, refusal
 	}
@@ -19,7 +26,7 @@ func (t *Tenant) DescribeCapability(m platform.Member, ref platform.AssetRef, ve
 		}
 		return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained capability is unavailable to this member")
 	}
-	for _, descriptor := range t.Capabilities(m) {
+	for _, descriptor := range t.capabilities(m) {
 		if descriptor.Ref == ref {
 			return descriptor, nil
 		}

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -13,6 +14,12 @@ import (
 // failures. The durable journal resolves ambiguous commits under the original
 // identity; an unresolved commit stops only this tenant's generation.
 func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
+	if t.quarantined() {
+		return nil, fmt.Errorf("tenant %s is stopped", t.ID)
+	}
+	if t.recordReadError != nil {
+		return nil, t.recordReadError
+	}
 	if t.AcceptResult != nil {
 		before := int64(0)
 		if t.runtimePosition != nil {
@@ -48,8 +55,15 @@ func (t *Tenant) recordsAcceptedResults() bool { return t.AcceptResult != nil ||
 // The tenant writer lock covers acceptance, application and this transition.
 func (t *Tenant) acceptedResultApplied() {
 	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
 	if t.records.currentPosition != nil {
 		t.records.appliedPosition = t.records.currentPosition()
+	}
+	if t.currentReadScopes {
+		t.records.useCurrentRows()
+	}
+	t.records.mu.Unlock()
+	if t.currentReadScopes {
+		t.closeRecordRead()
+		t.openRecordRead(context.Background())
 	}
 }

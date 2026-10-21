@@ -120,7 +120,7 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 	if et.uniqueIndexes[rule.Name].Keys.Get(key).Len() != 3 {
 		t.Fatal("new parent missed old child")
 	}
-	et.setRows(et.rows)
+	et.setRows(et.rows.Overlay())
 	if len(et.uniqueIndexes) != 0 {
 		t.Fatal("bulk retained obsolete roots")
 	}

@@ -140,7 +140,7 @@ func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.C
 	}
 	et := s.types[info.Type]
 	if s.historyStore != nil {
-		storage, ok := s.historyStore.(journal.UniqueState)
+		storage, ok := s.stateReader().(journal.UniqueState)
 		if !ok {
 			panic("record storage does not provide derived unique keys")
 		}

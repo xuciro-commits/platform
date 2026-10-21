@@ -128,7 +128,7 @@ func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assi
 func (runtime) Probing() bool { return false }
 
 func (r runtime) Readable(c platform.Caller, ref string) bool {
-	return r.t.Readable(c.Member, ref, time.Now())
+	return r.t.readable(c.Member, ref, time.Now())
 }
 
 func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {

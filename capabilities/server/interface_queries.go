@@ -102,7 +102,7 @@ func visibleInterfaceQuery(q platform.NamedQuery, entities map[string]platform.E
 
 // InterfaceRecords uses current implementers; published named queries use
 // their frozen list through the same reader below.
-func (t *Tenant) InterfaceRecords(m platform.Member, name string, query platform.Query, now time.Time) (InterfaceRecordPage, *kernel.Error) {
+func (t *Tenant) interfaceRecordsRead(m platform.Member, name string, query platform.Query, now time.Time) (InterfaceRecordPage, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return InterfaceRecordPage{}, err
 	}

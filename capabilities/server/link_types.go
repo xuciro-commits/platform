@@ -120,12 +120,12 @@ func (t *Tenant) linkTraversalDomain(m platform.Member, typ string, edge platfor
 		return platform.Raw(domain), nil
 	}
 	if edge.Direction == "forward" {
-		if _, err := t.RecordOf(m, link.Parent.Name, edge.ID, now); err != nil {
+		if _, err := t.recordOf(m, link.Parent.Name, edge.ID, now); err != nil {
 			return nil, notFound
 		}
 		domain = append(domain, []any{link.Via, "=", edge.ID})
 	} else {
-		view, err := t.RecordOf(m, link.Child.Name, edge.ID, now)
+		view, err := t.recordOf(m, link.Child.Name, edge.ID, now)
 		if err != nil {
 			return nil, notFound
 		}
@@ -138,7 +138,7 @@ func (t *Tenant) linkTraversalDomain(m platform.Member, typ string, edge platfor
 			return nil, notFound
 		}
 		if parent != "" {
-			if _, err := t.RecordOf(m, link.Parent.Name, parent, now); err != nil {
+			if _, err := t.recordOf(m, link.Parent.Name, parent, now); err != nil {
 				return nil, notFound
 			}
 		}
@@ -146,7 +146,7 @@ func (t *Tenant) linkTraversalDomain(m platform.Member, typ string, edge platfor
 	}
 	return platform.Raw(domain), nil
 }
-func (t *Tenant) TraverseLink(m platform.Member, binding platform.AssetBinding, direction, id string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Tenant) traverseLinkRead(m platform.Member, binding platform.AssetBinding, direction, id string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	link := t.visibleLink(m, binding)
 	if link == nil {
 		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Link type or start record is unavailable")
@@ -156,5 +156,5 @@ func (t *Tenant) TraverseLink(m platform.Member, binding platform.AssetBinding, 
 		typ = link.Parent.Name
 	}
 	q.Traversal = &platform.LinkTraversal{Binding: binding, Direction: direction, ID: id}
-	return t.Records(m, typ, q, now)
+	return t.recordsRead(m, typ, q, now)
 }

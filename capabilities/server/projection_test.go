@@ -15,25 +15,37 @@ func TestProjectionChangedIDsAndHistorySuffix(t *testing.T) {
 		decide(t, tenant, "ana", "stock", "stock.item.create", "stock.item", id, map[string]any{"name": id, "qty": 1}, at)
 	}
 	projection := &Projection{tenant: tenant}
-	rows, changes, ends := projection.rows("stock.item", nil)
+	rows, changes, ends, err := projection.rows(context.Background(), "stock.item", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(rows) != 2 || len(changes) != 2 {
 		t.Fatalf("initial projection: %d rows, %d changes", len(rows), len(changes))
 	}
 	projection.recordHistory(ends)
 	decide(t, tenant, "ana", "stock", "stock.item.edit", "stock.item", "I2", map[string]any{"qty": 2}, at.Add(time.Second))
 	ids := map[string]bool{"I2": true, "absent": true}
-	rows, changes, ends = projection.rows("stock.item", ids)
+	rows, changes, ends, err = projection.rows(context.Background(), "stock.item", ids)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(rows) != 1 || rows[0][0] != "I2" || len(changes) != 1 || changes[0][0] != "I2" || changes[0][1] != 1 {
 		t.Fatalf("changed projection sent unchanged rows or old history: %v %v", rows, changes)
 	}
 	// A failed database batch does not advance history; its retry sends the same
 	// suffix. Only the successful batch records the confirmed prefix.
-	_, retried, _ := projection.rows("stock.item", ids)
+	_, retried, _, err := projection.rows(context.Background(), "stock.item", ids)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(retried) != 1 || retried[0][1] != 1 {
 		t.Fatal("reading a batch consumed history before a successful write")
 	}
 	projection.recordHistory(ends)
-	_, changes, _ = projection.rows("stock.item", ids)
+	_, changes, _, err = projection.rows(context.Background(), "stock.item", ids)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(changes) != 0 {
 		t.Fatal("successful history was sent again")
 	}
@@ -104,7 +116,10 @@ func TestPostgresProjectionRetainsTablesAndAppendsHistory(t *testing.T) {
 	// The SQL-backed row can fetch precisely the new suffix, without loading
 	// older record history again during each projection flush.
 	decide(t, tenant, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": 3}, at.Add(2*time.Second))
-	_, changes, _ := projection.rows("stock.item", map[string]bool{"I1": true})
+	_, changes, _, err := projection.rows(ctx, "stock.item", map[string]bool{"I1": true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(changes) != 1 || changes[0][1] != 2 {
 		t.Fatalf("SQL-backed projection did not read its suffix: %v", changes)
 	}

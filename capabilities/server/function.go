@@ -98,34 +98,42 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if refusal := authorizationRefusal(decision); refusal != nil {
 		return platform.FunctionCall{}, platform.Effect{}, refusal
 	}
-	store.mu.Lock()
-	et := store.types[f.Object]
-	if et == nil {
-		store.mu.Unlock()
-		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
-	}
-	row := et.rows.Get(source)
-	if row == nil || records.Header(row.Value).Archived || !t.readableIn(store, member, sourceRef, at) {
-		store.mu.Unlock()
-		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
-	}
-	input := map[string]any{}
-	for _, name := range f.Fields {
-		field, found := et.info.Field(name)
-		if !found || field.AIInput != nil && !*field.AIInput {
-			store.mu.Unlock()
-			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
+	var sourceRevision uint32
+	var sourceValues map[string]json.RawMessage
+	var raw []byte
+	var historySources []string
+	var conversationErr error
+	if refusal := func() *kernel.Error {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		et := store.types[f.Object]
+		if et == nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
 		}
-		input[name] = row.Value.FieldByIndex(field.Index).Interface()
+		row := et.rows.Get(source)
+		if row == nil || records.Header(row.Value).Archived || !t.readableIn(store, member, sourceRef, at) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
+		}
+		input := map[string]any{}
+		for _, name := range f.Fields {
+			field, found := et.info.Field(name)
+			if !found || field.AIInput != nil && !*field.AIInput {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
+			}
+			input[name] = row.Value.FieldByIndex(field.Index).Interface()
+		}
+		sourceRevision = records.Header(row.Value).Revision
+		sourceValues = map[string]json.RawMessage{}
+		for field, value := range input {
+			sourceValues[field] = platform.Raw(value)
+		}
+		payload, preparedSources, preparedErr := t.functionConversation(store, member, request, f, owner, sourceRef, definition, version, input)
+		historySources, conversationErr = preparedSources, preparedErr
+		raw, err = json.Marshal(payload)
+		return nil
+	}(); refusal != nil {
+		return platform.FunctionCall{}, platform.Effect{}, refusal
 	}
-	sourceRevision := records.Header(row.Value).Revision
-	sourceValues := map[string]json.RawMessage{}
-	for field, value := range input {
-		sourceValues[field] = platform.Raw(value)
-	}
-	payload, historySources, conversationErr := t.functionConversation(store, member, request, f, owner, sourceRef, definition, version, input)
-	raw, err := json.Marshal(payload)
-	store.mu.Unlock()
 	if conversationErr != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, conversationErr.Error())
 	}
@@ -188,14 +196,17 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	if !t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: binding.Call.Sources, Definition: definition}).Allow {
 		return false
 	}
-	t.records.mu.Lock()
-	sourceTypeInfo := t.records.types[sourceType]
+	var sourceTypeInfo *entityType
 	var sourcePresent bool
-	if sourceTypeInfo != nil {
-		row := sourceTypeInfo.rows.Get(sourceID)
-		sourcePresent = row != nil && !records.Header(row.Value).Archived
-	}
-	t.records.mu.Unlock()
+	func() {
+		t.records.mu.Lock()
+		defer t.records.mu.Unlock()
+		sourceTypeInfo = t.records.types[sourceType]
+		if sourceTypeInfo != nil {
+			row := sourceTypeInfo.rows.Get(sourceID)
+			sourcePresent = row != nil && !records.Header(row.Value).Archived
+		}
+	}()
 	if !sourcePresent {
 		return false
 	}

@@ -124,13 +124,16 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		if id == "" {
 			continue
 		}
-		d.records.mu.Lock()
-		source := d.records.types[field.Ref]
+		var source *entityType
 		var selected *records.Row
-		if source != nil {
-			selected = source.rows.Get(id)
-		}
-		d.records.mu.Unlock()
+		func() {
+			d.records.mu.Lock()
+			defer d.records.mu.Unlock()
+			source = d.records.types[field.Ref]
+			if source != nil {
+				selected = source.rows.Get(id)
+			}
+		}()
 		if source == nil || source.info.Versioning == nil {
 			continue
 		}

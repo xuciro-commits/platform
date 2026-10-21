@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +45,17 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	for n := 2; n <= 5; n++ {
 		decide(t, live, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": n}, at.Add(time.Duration(n)*time.Second))
 	}
+	oldView, err := j.BeginStateRead(ctx, id, j.Position(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer oldView.Close()
+	live.mu.Lock()
+	previousView := live.records.readView
+	live.records.bindReadView(oldView)
 	row := live.records.types["stock.item"].rows.Get("I1")
+	live.records.bindReadView(previousView)
+	live.mu.Unlock()
 	if row.History != nil || row.LoadHistory == nil || len(row.RecordHistory()) != 5 {
 		t.Fatal("complete record history remained resident or was lost")
 	}
@@ -96,8 +107,11 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if err = j.Pool().QueryRow(ctx, `select history_count from runtime_records where tenant=$1 and type='stock.item' and id='I1'`, id).Scan(&n); err != nil || n != 5 {
 		t.Fatalf("failed transaction changed history: %d %v", n, err)
 	}
-	// Commit without applying to the old working set, then recover. The old row
-	// retains its own prefix while the restarted tenant reads the new current row.
+	// Keep the original operation's read view while its accepted append loses
+	// the answer. Retry that key within the same writer operation; another
+	// operation cannot manufacture an older SQL view after this commit.
+	retryMember := memberOf(t, live, "ana")
+	live.mu.Lock()
 	raw, err := j.AppendAccepted(ctx, id, entry, identity.Key, identity.Hash)
 	if err != nil {
 		t.Fatal(err)
@@ -108,10 +122,12 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if len(live.committed.answer("stock/"+next.GetSubmission().GetIdempotencyKey())) != 0 {
 		t.Fatal("unapplied SQL answer bypassed the original result application")
 	}
-	if got, refusal := live.Submit(memberOf(t, live, "ana"), next.GetSubmission(), at.Add(time.Minute)); refusal != nil || !proto.Equal(got, next) {
+	if got, refusal := live.submitAccepted(live.app("stock"), retryMember, next.GetSubmission(), at.Add(time.Minute), false); refusal != nil || !proto.Equal(got, next) {
 		t.Fatalf("unknown-outcome retry did not apply its original result: %v", refusal)
 	}
-	if qty := live.records.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Qty; qty != 6 || j.Position(id) != position+1 {
+	qty := live.records.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Qty
+	live.mu.Unlock()
+	if qty != 6 || j.Position(id) != position+1 {
 		t.Fatalf("unknown-outcome retry returned without applying or appended twice: %d", qty)
 	}
 	restored := compose()
@@ -119,10 +135,14 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if err = deployment.restoreTenants(ctx, j, "build-b", []*Tenant{restored}, map[string]int64{}, map[string]bool{}); err != nil || restored.quarantined() {
 		t.Fatalf("restore failed: %v %v", err, restored.fault.Load())
 	}
-	current := restored.records.types["stock.item"].rows.Get("I1")
-	if current.History != nil || len(current.RecordHistory()) != 6 || current.Value.Interface().(Item).Qty != 6 {
-		t.Fatal("restart did not load committed current/history")
-	}
+	func() {
+		restored.mu.Lock()
+		defer restored.mu.Unlock()
+		current := restored.records.types["stock.item"].rows.Get("I1")
+		if current.History != nil || len(current.RecordHistory()) != 6 || current.Value.Interface().(Item).Qty != 6 {
+			t.Fatal("restart did not load committed current/history")
+		}
+	}()
 	if saved, err := j.AppendAccepted(ctx, id, entry, identity.Key, identity.Hash); err != nil || !sameStoredJSON(saved, raw) || j.Position(id) != position+1 {
 		t.Fatal("unknown-outcome retry appended again")
 	}
@@ -171,7 +191,7 @@ func TestPostgresRuntimeStateRetainedSuffix(t *testing.T) {
 	if dsn == "" {
 		t.Skip("PLATFORM_TEST_DATABASE not set")
 	}
-	for _, scenario := range []string{"recover", "damaged-prefix", "bad-delta", "legacy-input"} {
+	for _, scenario := range []string{"recover", "damaged-prefix", "bad-delta", "legacy-input", "sql-checkpoint-recover", "sql-checkpoint-damaged-prefix"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
 			id := fmt.Sprintf("runtime-suffix-%s-%d", scenario, time.Now().UnixNano())
@@ -192,6 +212,12 @@ func TestPostgresRuntimeStateRetainedSuffix(t *testing.T) {
 			decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "one", "qty": 1}, at)
 			if err = live.migrateRuntimeState(ctx, j); err != nil {
 				t.Fatal(err)
+			}
+			if strings.HasPrefix(scenario, "sql-checkpoint-") {
+				if _, err = live.checkpointRuntime(ctx, j, "suffix-build"); err != nil {
+					t.Fatal(err)
+				}
+				scenario = strings.TrimPrefix(scenario, "sql-checkpoint-")
 			}
 			prefixPosition := j.Position(id)
 			state, _, err := live.Snapshot(func() int64 { return prefixPosition })

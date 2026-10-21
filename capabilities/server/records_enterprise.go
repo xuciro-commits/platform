@@ -41,7 +41,7 @@ type EnterpriseReferenceGroup struct {
 // The modeler's "Used by" asks this instead of querying one field at a time
 // (ADR-0031 D4): a reference inside a line is found, a page says how many it
 // left out, and a type the member may not read is not mentioned.
-func (t *Tenant) EnterpriseReferences(m platform.Member, element string, offset, limit int, now time.Time) ([]EnterpriseReferenceGroup, *kernel.Error) {
+func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, offset, limit int, now time.Time) ([]EnterpriseReferenceGroup, *kernel.Error) {
 	if element == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A reference read names the element")
 	}
@@ -72,14 +72,18 @@ func (t *Tenant) EnterpriseReferences(m platform.Member, element string, offset,
 			continue // the member may not read this type
 		}
 		_, hidden := viewOf(m, et)
-		s.mu.Lock()
-		rows := make([]reflect.Value, 0, et.rows.Len())
-		for _, r := range et.rows.All() {
-			if visible == nil || visible(r.Value) { // nil: the member's roles read the whole type
-				rows = append(rows, r.Value)
+		var rows []reflect.Value
+		func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			rows = make([]reflect.Value, 0, et.rows.Len())
+			for _, r := range et.rows.All() {
+				if visible == nil || visible(r.Value) { // nil: the member's roles read the whole type
+					rows = append(rows, r.Value)
+				}
 			}
-		}
-		s.mu.Unlock()
+
+		}()
 		slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(records.Header(a).ID, records.Header(b).ID) })
 		byPath := map[string]*EnterpriseReferenceGroup{}
 		var order []string

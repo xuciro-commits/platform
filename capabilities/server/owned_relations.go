@@ -86,32 +86,34 @@ func (t *Tenant) ownedRelationTargets(store *recordStore, c platform.Caller, lin
 	if _, err := t.readRecordFrom(store, c, object, id, at); err != nil {
 		return nil, false, err
 	}
-	store.mu.Lock()
-	et := store.types[platform.OwnedRelationType(link.Child.App)]
 	refs := []string{}
-	if et != nil {
-		for _, row := range et.rows.All() {
-			if records.Header(row.Value).Archived {
-				continue
-			}
-			var value struct {
-				Binding, Parent, Child string
-				Migration              bool
-			}
-			_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &value)
-			if value.Migration || value.Binding != link.Name {
-				continue
-			}
-			from, to := value.Parent, value.Child
-			if direction == "reverse" {
-				from, to = to, from
-			}
-			if from == object+"/"+id {
-				refs = append(refs, to)
+	func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		et := store.types[platform.OwnedRelationType(link.Child.App)]
+		if et != nil {
+			for _, row := range et.rows.All() {
+				if records.Header(row.Value).Archived {
+					continue
+				}
+				var value struct {
+					Binding, Parent, Child string
+					Migration              bool
+				}
+				_ = json.Unmarshal(platform.Raw(row.Value.Interface()), &value)
+				if value.Migration || value.Binding != link.Name {
+					continue
+				}
+				from, to := value.Parent, value.Child
+				if direction == "reverse" {
+					from, to = to, from
+				}
+				if from == object+"/"+id {
+					refs = append(refs, to)
+				}
 			}
 		}
-	}
-	store.mu.Unlock()
+	}()
 	ids, partial := []string{}, false
 	for _, ref := range refs {
 		typ, id, ok := strings.Cut(ref, "/")

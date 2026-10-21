@@ -153,3 +153,21 @@ func DecodeRelease(raw []byte) (Release, error) {
 	}
 	return saved, nil
 }
+
+// InstallationRecord reads the address omitted by the original format-2/3
+// Build writer. Those formats used the publication type plus the image's ID;
+// the owner still decodes and validates the complete installation on recovery.
+func (saved Release) InstallationRecord(installation ReleaseInstallation) (string, error) {
+	if installation.Record != "" {
+		return installation.Record, nil
+	}
+	if saved.Version != 2 && saved.Version != 3 {
+		return "", fmt.Errorf("release installation record is absent")
+	}
+	typ, ok := strings.CutSuffix(installation.Schema, ".publish")
+	var record platform.Record
+	if !ok || typ == "" || json.Unmarshal(installation.Image, &record) != nil || record.ID == "" {
+		return "", fmt.Errorf("legacy installation record is invalid")
+	}
+	return typ + "/" + record.ID, nil
+}

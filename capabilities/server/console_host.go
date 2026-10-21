@@ -49,7 +49,7 @@ func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.E
 	case "effects":
 		return h.t.Effects(time.Now()), nil
 	case "health":
-		return h.t.Health(time.Now()), nil
+		return h.t.health(time.Now()), nil
 	case "personal-reads":
 		return h.t.PersonalReads(), nil
 	case "permissions":

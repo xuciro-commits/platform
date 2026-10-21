@@ -65,19 +65,22 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 			result.HasRestrictedUsage = true
 		}
 	}
-	store.mu.Lock()
-	types := make([]*entityType, 0, len(store.types))
+	var types []*entityType
 	rows := map[string][]*records.Row{}
-	for _, et := range store.types {
-		if len(historicalPaths[et.info.Type]) == 0 {
-			continue
+	func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		types = make([]*entityType, 0, len(store.types))
+		for _, et := range store.types {
+			if len(historicalPaths[et.info.Type]) == 0 {
+				continue
+			}
+			types = append(types, et)
+			for _, r := range et.rows.All() {
+				rows[et.info.Type] = append(rows[et.info.Type], r)
+			}
 		}
-		types = append(types, et)
-		for _, r := range et.rows.All() {
-			rows[et.info.Type] = append(rows[et.info.Type], r)
-		}
-	}
-	store.mu.Unlock()
+	}()
 	for _, et := range types {
 		for _, r := range rows[et.info.Type] {
 			paths := records.MatchingRefsWithAccess(et.info.Fields, "", r.Value, id, nil, true)
@@ -89,7 +92,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 			visible := false
 			title, field := "", ""
 			if details {
-				if view, err := t.RecordOf(c.Member, et.info.Type, records.Header(r.Value).ID, now); err == nil {
+				if view, err := t.recordOf(c.Member, et.info.Type, records.Header(r.Value).ID, now); err == nil {
 					value := reflect.ValueOf(view.Record)
 					if value.Kind() == reflect.Pointer {
 						value = value.Elem()
@@ -132,7 +135,7 @@ func (t *Tenant) checkEnterpriseUsage(c platform.Caller, store *recordStore, id,
 	return nil
 }
 
-func (t *Tenant) EnterpriseUsage(m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *kernel.Error) {
+func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return EnterpriseUsage{}, err
 	}

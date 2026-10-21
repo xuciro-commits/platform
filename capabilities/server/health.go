@@ -37,11 +37,17 @@ type QueueHealth struct {
 
 // Health is the tenant's health at now.
 func (t *Tenant) Health(now time.Time) TenantHealth {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.health(now)
+}
+
+func (t *Tenant) health(now time.Time) TenantHealth {
 	if fault := t.fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
 			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []Breaker{}}
 	}
-	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.Deferred(now), Breakers: t.Breakers(now)}
+	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.deferred(now), Breakers: t.Breakers(now)}
 	if h.Deferred == nil {
 		h.Deferred = []string{}
 	}

@@ -205,17 +205,19 @@ func (d *stagedDecision) bindPrivateFacts(l *platform.Ledger) {
 }
 
 func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
-	d.records.mu.Lock()
-	et := d.records.of(c, reflect.TypeOf(entity))
 	var before *records.Row
 	var info platform.EntityInfo
 	var ref string
-	if et != nil {
-		info = et.info
-		id := records.Header(records.Copy(et.info.Go, entity)).ID
-		before, ref = et.rows.Get(id), et.info.Type+"/"+id
-	}
-	d.records.mu.Unlock()
+	func() {
+		d.records.mu.Lock()
+		defer d.records.mu.Unlock()
+		et := d.records.of(c, reflect.TypeOf(entity))
+		if et != nil {
+			info = et.info
+			id := records.Header(records.Copy(et.info.Go, entity)).ID
+			before, ref = et.rows.Get(id), et.info.Type+"/"+id
+		}
+	}()
 	prepared, err := d.prepareBusinessRecord(c, entity, d.at)
 	if err == nil {
 		err = d.records.put(c, r, prepared)
@@ -233,12 +235,14 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		d.failure = err
 	}
 	if err == nil {
-		d.records.mu.Lock()
-		et := d.records.of(c, reflect.TypeOf(entity))
-		id := records.Header(records.Copy(et.info.Go, entity)).ID
-		ref := et.info.Type + "/" + id
-		history := et.rows.Get(id).HistoryLength()
-		d.records.mu.Unlock()
+		var history int
+		func() {
+			d.records.mu.Lock()
+			defer d.records.mu.Unlock()
+			et := d.records.of(c, reflect.TypeOf(entity))
+			id := records.Header(records.Copy(et.info.Go, entity)).ID
+			history = et.rows.Get(id).HistoryLength()
+		}()
 		if origin := d.callbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
 			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&
 			r.GetSubmission().GetSchema().GetName() != "" && r.GetRecordedTime().AsTime().Equal(d.at) {
@@ -276,14 +280,16 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 	if publisher, ok := d.tenant.app(c.App).(platform.AcceptedPublisher); ok &&
 		slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
 		ref := record.GetSubmission().GetTarget()
-		d.records.mu.Lock()
-		et := d.records.types[ref.GetType()]
 		var raw []byte
 		var err error
-		if et != nil && et.rows.Get(ref.GetId()) != nil {
-			raw, err = json.Marshal(et.rows.Get(ref.GetId()).Value.Interface())
-		}
-		d.records.mu.Unlock()
+		func() {
+			d.records.mu.Lock()
+			defer d.records.mu.Unlock()
+			et := d.records.types[ref.GetType()]
+			if et != nil && et.rows.Get(ref.GetId()) != nil {
+				raw, err = json.Marshal(et.rows.Get(ref.GetId()).Value.Interface())
+			}
+		}()
 		if len(raw) == 0 || err != nil || publisher.ValidateAcceptedPublication(schema, raw) != nil {
 			unsupportedStagedEffect()
 		}

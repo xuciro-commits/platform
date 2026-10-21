@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -317,5 +318,54 @@ func TestIntegrationDatasetLegacyReplayKeepsOriginalImage(t *testing.T) {
 	kept, ok := restored.Held(construction.DatasetVersionType + "/DATASET@2")
 	if !ok || kept.(construction.DatasetVersion).Request != request.GetIdempotencyKey() {
 		t.Fatal("pure result application lost the saved request identity")
+	}
+}
+
+func TestPostgresIntegrationPreparationUsesCurrentReadScope(t *testing.T) {
+	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
+	if dsn == "" {
+		t.Skip("PLATFORM_TEST_DATABASE not set")
+	}
+	ctx := context.Background()
+	id := fmt.Sprintf("integration-prepare-%d", time.Now().UnixNano())
+	j, err := OpenJournal(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer forgetJournal(t, j, id)
+	live := builderTenant(t, id)
+	if _, err = j.Entries(ctx, id, 0); err != nil {
+		t.Fatal(err)
+	}
+	live.attachJournal(ctx, j)
+	typ := publishObject(t, live, "builder", "OBJECT", map[string]any{"name": "intake", "title": "Intake", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}, txnAt)
+	decide(t, live, "builder", construction.ID, typ+".create", typ, "R1", map[string]any{"note": "Existing"}, txnAt)
+	if err = live.migrateRuntimeState(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	decide(t, live, "builder", construction.ID, "build.source.create", construction.SourceType, "SOURCE", map[string]any{"name": "feed", "title": "Feed", "url": "https://feed.example/rows", "object": typ, "key": "id", "mapping": []construction.SourceField{{From: "value", To: "note"}}}, txnAt)
+	decide(t, live, "builder", construction.ID, "build.source.publish", construction.SourceType, "SOURCE", map[string]any{}, txnAt)
+	live.Outbound = func(*http.Request, bool) (*http.Response, error) {
+		if live.records.readView != nil {
+			t.Fatal("Source I/O retained its preparation read view")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`[{"id":"R1","value":"Updated"}]`))}, nil
+	}
+	live.PullSources(txnAt)
+	view, problem := live.RecordOf(memberOf(t, live, "builder"), construction.SourceType, "SOURCE", txnAt)
+	if problem != nil {
+		t.Fatal(problem)
+	}
+	source := view.Record.(construction.Source)
+	if source.Last == nil || source.Last.Applied != 1 || source.Last.Error != "" {
+		t.Fatalf("SQL Source did not execute: %+v", source.Last)
+	}
+	rows := []construction.SourceRow{{ID: "R1"}, {ID: "R2"}}
+	merged, refusal := live.prepareRows(memberOf(t, live, "builder"), typ, "feed", rows, txnAt)
+	if refusal != nil || merged != 0 || rows[0].Verb != ".edit" || rows[1].Verb != ".create" {
+		t.Fatal("preparation did not read current SQL rows", rows, merged, refusal)
+	}
+	if live.records.readView != nil || live.records.types[typ].rows.Stored() != 0 {
+		t.Fatal("preparation retained a SQL view or current row")
 	}
 }

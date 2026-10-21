@@ -61,7 +61,7 @@ func (s *recordStore) validateChangedLinkConstraintsLocked() error {
 		for _, id := range changed[link.Child.Name] {
 			if value := et.rows.Get(id); value != nil {
 				target := value.Value.FieldByIndex(field.Index).String()
-				if target != "" && et.referenceIndex(field).Get(target).IDs.Len() > 1 {
+				if target != "" && et.referenceBucket(field, target).IDs.Len() > 1 {
 					return fmt.Errorf("%s", linkCardinalityFailure)
 				}
 			}
@@ -94,7 +94,7 @@ func (s *recordStore) validateChangedLinkConstraintsLocked() error {
 		}
 		for _, id := range changed[link.Parent.Name] {
 			row := parent.rows.Get(id)
-			if (row == nil || row.Value.Field(0).Interface().(platform.Record).Archived) && child.referenceIndex(field).Get(id).Active > 0 {
+			if (row == nil || row.Value.Field(0).Interface().(platform.Record).Archived) && child.referenceBucket(field, id).Active > 0 {
 				return fmt.Errorf("%s", linkArchiveFailure)
 			}
 		}
@@ -182,7 +182,7 @@ func (s *recordStore) checkLinkWriteLocked(et *entityType, value reflect.Value) 
 		if parent == "" {
 			continue
 		}
-		bucket := et.referenceIndex(f).Get(parent).IDs
+		bucket := et.referenceBucket(f, parent).IDs
 		allowed := 0
 		if bucket.Has(id) {
 			allowed = 1

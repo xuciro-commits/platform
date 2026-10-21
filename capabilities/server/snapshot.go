@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -10,6 +11,7 @@ import (
 	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/host"
 	"platformserver/internal/records"
+	"platformserver/journal"
 	"reflect"
 	"slices"
 	"strings"
@@ -24,7 +26,8 @@ import (
 )
 
 // A snapshot is a tenant's state at a journal position (ADR-0024): what the
-// host keeps (records and their history, owned work, connectors, notices,
+// host keeps (portable records/history or a fixed SQL record archive, owned
+// work, connectors, notices,
 // settings, endpoints and effects, bindings, the audit) and each app's own,
 // through platform.Snapshotter. Restored into a tenant composed as at start-up,
 // then given the entries after that position, it equals a full replay;
@@ -32,6 +35,7 @@ import (
 // the journal stays the truth. Explicit host/owner formats and the native
 // composition decide compatibility; the build digest is diagnostic metadata.
 type tenantState struct {
+	Runtime             *runtimeSnapshot                            `json:"runtime,omitempty"`
 	Checkpoint          *snapshotCheckpoint                         `json:"checkpoint,omitempty"`
 	DecisionDefinitions map[string]*resultformat.DecisionDefinition `json:"decisionDefinitions,omitempty"`
 	SubmissionSchemas   map[string]platform.SchemaVersion           `json:"submissionSchemas,omitempty"`
@@ -77,6 +81,7 @@ type tenantState struct {
 }
 
 const tenantSnapshotFormat = "platform.tenant.v1"
+const tenantSQLSnapshotFormat = "platform.tenant.sql.v1"
 
 var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })
 
@@ -149,22 +154,61 @@ func (t *Tenant) snapshotKey(code string) (string, error) {
 	return acceptance.Digest(compatibility)
 }
 
+// runtimeSnapshotKey keeps an owner-only SQL checkpoint outside the portable
+// namespace. Undeclared owners still require the exact binary key as before.
+func (t *Tenant) runtimeSnapshotKey(code string) (string, error) {
+	compatibility, err := t.snapshotCompatibility()
+	if err != nil {
+		return "", err
+	}
+	exact := compatibility.Host == ""
+	compatibility.Host = tenantSQLSnapshotFormat
+	if exact {
+		return acceptance.Digest(struct {
+			Compatibility snapshotCompatibility
+			Build         string
+		}{compatibility, code})
+	}
+	return acceptance.Digest(compatibility)
+}
+
+func (t *Tenant) snapshotStorageKey(code string, raw []byte) (string, error) {
+	runtime, err := runtimeCheckpoint(raw)
+	if err != nil {
+		return "", err
+	}
+	if runtime != nil {
+		return t.runtimeSnapshotKey(code)
+	}
+	return t.snapshotKey(code)
+}
+
 func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
 	var header struct {
 		Checkpoint *snapshotCheckpoint `json:"checkpoint"`
+		Runtime    *runtimeSnapshot    `json:"runtime"`
 	}
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return err
 	}
-	if header.Checkpoint == nil { // legacy snapshots are selected by exact code
+	if header.Checkpoint == nil && header.Runtime == nil {
 		return nil
-	}
+	} // legacy exact-code snapshot
 	compatibility, err := t.snapshotCompatibility()
 	if err != nil {
 		return err
 	}
 	saved := header.Checkpoint
-	if saved.Tenant != t.ID || saved.Position != position || compatibility.Host == "" || !reflect.DeepEqual(saved.snapshotCompatibility, compatibility) {
+	if header.Runtime != nil {
+		if saved == nil || header.Runtime.Format != runtimeSnapshotFormat || header.Runtime.Position != position {
+			return fmt.Errorf("tenant %s: SQL checkpoint format or position differs", t.ID)
+		}
+		if compatibility.Host == "" && saved.Build != snapshotBuild() {
+			return fmt.Errorf("tenant %s: undeclared owner requires its original checkpoint build", t.ID)
+		}
+		compatibility.Host = tenantSQLSnapshotFormat
+	}
+	if saved == nil || saved.Tenant != t.ID || saved.Position != position || compatibility.Host == "" || !reflect.DeepEqual(saved.snapshotCompatibility, compatibility) {
 		return fmt.Errorf("tenant %s: checkpoint format, composition or position differs", t.ID)
 	}
 	return nil
@@ -198,7 +242,35 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 	if err != nil {
 		return nil, 0, err
 	}
-	s, rows, seq, err := t.capture(position)
+	var read journal.StateReadView
+	var ownsRead bool
+	defer func() {
+		if read != nil && ownsRead {
+			_ = read.Close()
+		}
+	}()
+	s, rows, seq, err := t.capture(position, true, func() (func(), error) {
+		if t.records.readView != nil {
+			read = t.records.readView
+			if t.currentReadScopes {
+				ownsRead = true
+				return t.detachSnapshotRead, nil
+			}
+			return nil, nil // the recovery caller owns this archive view
+		}
+		views, ok := t.records.historyStore.(journal.StateReadViews)
+		if !ok {
+			return nil, nil
+		}
+		var err error
+		read, err = views.BeginStateRead(context.Background(), t.ID, t.records.appliedPosition)
+		if err != nil {
+			return nil, err
+		}
+		ownsRead = true
+		t.records.bindReadView(read)
+		return t.detachSnapshotRead, nil
+	})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -225,8 +297,84 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 	return raw, seq, err
 }
 
+// A captured row can read history while it is encoded after the tenant lock
+// is released. Transfer that view to the snapshot instead of opening a second
+// connection; the lane resumes its ordinary storage readers before unlocking.
+func (t *Tenant) detachSnapshotRead() {
+	t.records.bindReadView(nil)
+	if store, ok := t.records.historyStore.(acceptedStateReader); ok && t.records.currentPosition != nil {
+		t.installRuntimeHistory(store, t.records.currentPosition)
+	}
+}
+
+// runtimeSnapshot identifies the SQL records belonging to an owner checkpoint.
+// Portable Snapshot exports retain complete rows; deployment checkpoints keep
+// the same owner state without copying the complete SQL record set.
+const runtimeSnapshotFormat = "platform.sql-checkpoint.v1"
+
+type runtimeSnapshot struct {
+	Format   string              `json:"format"`
+	Position int64               `json:"position"`
+	Records  journal.StateDigest `json:"records"`
+}
+
+func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessage, int64, error) {
+	views, ok := j.(journal.StateReadViews)
+	if !ok || t.records.historyStore == nil {
+		return t.Snapshot(func() int64 { return j.Position(t.ID) })
+	}
+	compatibility, err := t.snapshotCompatibility()
+	if err != nil {
+		return nil, 0, err
+	}
+	var view journal.StateReadView
+	var viewErr error
+	var ownsRead bool
+	s, _, seq, err := t.capture(func() int64 {
+		position := j.Position(t.ID)
+		if t.records.readView != nil {
+			view = t.records.readView
+			if view.Position() != position {
+				viewErr = fmt.Errorf("tenant %s: SQL snapshot view position differs", t.ID)
+			}
+			if t.currentReadScopes {
+				ownsRead = true
+				t.detachSnapshotRead()
+			}
+		} else {
+			view, viewErr = views.BeginStateRead(ctx, t.ID, position)
+			ownsRead = true
+		}
+		return position
+	}, false, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	if viewErr != nil {
+		if view != nil && ownsRead {
+			_ = view.Close()
+		}
+		return nil, 0, viewErr
+	}
+	if view == nil {
+		return nil, 0, fmt.Errorf("tenant %s: SQL snapshot read view unavailable", t.ID)
+	}
+	if ownsRead {
+		defer view.Close()
+	}
+	digest, err := view.Checkpoint(ctx, t.ID)
+	if err != nil {
+		return nil, 0, err
+	}
+	s.Runtime = &runtimeSnapshot{Format: runtimeSnapshotFormat, Position: seq, Records: digest}
+	compatibility.Host = tenantSQLSnapshotFormat
+	s.Checkpoint = &snapshotCheckpoint{snapshotCompatibility: compatibility, Tenant: t.ID, Position: seq, Build: snapshotBuild()}
+	raw, err := json.Marshal(s)
+	return raw, seq, err
+}
+
 // capture takes everything but the records' encoding under the tenant's locks.
-func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*records.Row, int64, error) {
+func (t *Tenant) capture(position func() int64, includeRows bool, prepare func() (func(), error)) (tenantState, map[string][]*records.Row, int64, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
@@ -234,6 +382,15 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*reco
 	}
 	if len(t.events) > 0 {
 		return tenantState{}, nil, 0, fmt.Errorf("tenant %s: events pending", t.ID)
+	}
+	if prepare != nil {
+		cleanup, err := prepare()
+		if err != nil {
+			return tenantState{}, nil, 0, err
+		}
+		if cleanup != nil {
+			defer cleanup()
+		}
 	}
 	s := tenantState{Apps: map[string]json.RawMessage{}, Records: map[string][]recordState{}, Bindings: map[string]string{}, Queues: map[string][]string{}}
 	for _, a := range t.apps {
@@ -248,16 +405,22 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*reco
 		s.Apps[a.Manifest().ID] = raw
 	}
 	rows := map[string][]*records.Row{}
-	t.records.mu.Lock()
-	for typ, et := range t.records.types {
-		rows[typ] = make([]*records.Row, 0, et.rows.Len())
-		for _, value := range et.rows.All() {
-			rows[typ] = append(rows[typ], value)
-		}
+	if includeRows {
+		func() {
+			t.records.mu.Lock()
+			defer t.records.mu.Unlock()
+			for typ, et := range t.records.types {
+				rows[typ] = make([]*records.Row, 0, et.rows.Len())
+				for _, value := range et.rows.All() {
+					rows[typ] = append(rows[typ], value)
+				}
+			}
+		}()
 	}
-	t.records.mu.Unlock()
 	t.audit.snapshot(&s)
-	t.committed.snapshot(&s)
+	if includeRows {
+		t.committed.snapshot(&s)
+	}
 	t.releases.snapshot(&s)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
@@ -350,6 +513,9 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return err
 	}
+	if s.Runtime != nil && (s.Runtime.Format != runtimeSnapshotFormat || len(s.Records) != 0 || t.records.historyStore == nil || t.records.readView == nil || t.records.readView.Position() != s.Runtime.Position) {
+		return fmt.Errorf("tenant %s: SQL checkpoint requires its matching runtime store", t.ID)
+	}
 	if s.Checkpoint != nil {
 		if err := t.checkSnapshotCheckpoint(raw, s.Checkpoint.Position); err != nil {
 			return err
@@ -411,7 +577,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 // snapshot's published assets or held records need them, then restores the
 // records of the types they install (ADR-0048).
 func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordState) error {
-	needsDefinitions := len(held) > 0
+	needsDefinitions := len(held) > 0 || s.Runtime != nil
 	for typ, kind := range map[string]platform.AssetKind{construction.PropertyTypeType: platform.AssetPropertyType, construction.LinkTypeType: platform.AssetLinkType, construction.QueryType: platform.AssetQuery, construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.ProcessType: platform.AssetFlow, construction.FunctionType: platform.AssetFunction, construction.CodeType: platform.AssetCompute, construction.TableType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
 			var meta struct {
@@ -556,7 +722,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		result, receipt, err := resultformat.DecodeBatch(raw)
 		sub, subErr := resultformat.BatchSubmission(result, receipt)
 		if err != nil || subErr != nil || result.Tenant != t.ID ||
-			(len(result.Submission) == 0 && len(result.Business) == 0 && !strings.HasPrefix(sub.GetCorrelationId(), "correction:")) || key != result.App+"/"+sub.GetIdempotencyKey() {
+			!result.HasSavedAnswer(sub) || key != result.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
 		}
 		owner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.App)

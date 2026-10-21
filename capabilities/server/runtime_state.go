@@ -7,9 +7,10 @@ import (
 	"maps"
 	"platformserver/internal/acceptance"
 	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/internal/aistate"
 	"platformserver/internal/records"
-	"reflect"
 	"slices"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -29,25 +30,33 @@ func acceptedStorageDelta(raw []byte) (journal.StateDelta, error) {
 	for _, key := range b.changeOrder {
 		changes = append(changes, b.changes[key])
 	}
-	return journal.StateDelta{Records: slices.Collect(maps.Values(b.records)), Changes: changes, Values: slices.Collect(maps.Values(b.values)), Unique: slices.Collect(maps.Values(b.unique)), LegacyUnique: b.legacyUnique}, nil
+	return journal.StateDelta{Records: slices.Collect(maps.Values(b.records)), Replacements: b.replacements, Changes: changes, Values: slices.Collect(maps.Values(b.values)), ValueUpdates: b.valueUpdates, Unique: slices.Collect(maps.Values(b.unique)), LegacyUnique: b.legacyUnique}, nil
 }
 
 type storageDeltaBuilder struct {
 	records      map[string]journal.StateRecord
+	replacements []journal.StateReplacement
 	changes      map[string]journal.StateChange
 	changeOrder  []string
 	values       map[string]journal.StateValue
+	valueUpdates []journal.StateValueUpdate
 	unique       map[string]journal.StateUnique
 	legacyUnique bool
 }
 
 func (b *storageDeltaBuilder) value(owner, key string, image any) {
+	// A later complete owner image already includes preceding observations.
+	b.valueUpdates = slices.DeleteFunc(b.valueUpdates, func(update journal.StateValueUpdate) bool { return update.Owner == owner && update.Key == key })
 	raw, err := json.Marshal(image)
 	if err != nil {
 		panic(err)
 	}
 	b.values[owner+"/"+key] = journal.StateValue{Owner: owner, Key: key, Image: raw}
 }
+func (b *storageDeltaBuilder) meter(usage platform.AIUsage) {
+	b.valueUpdates = append(b.valueUpdates, journal.StateValueUpdate{Owner: "app-state", Key: platform.AIApp, Apply: func(raw json.RawMessage) (json.RawMessage, error) { return aistate.ApplyUsageState(raw, usage) }})
+}
+
 func (b *storageDeltaBuilder) record(r records.Image, base int) error {
 	image, err := json.Marshal(recordState{Value: r.Value, Format: r.Format, Projection: r.Projection, Extraction: r.Extraction})
 	if err != nil {
@@ -160,6 +169,9 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 			b.value("work", "kernel", result.Work)
 		}
 		b.value("effect", result.After.ID, result.After)
+		if result.Usage != nil {
+			b.meter(*result.Usage)
+		}
 		return nil
 	case "work-result":
 		result, err := decodeAcceptedWork(raw)
@@ -233,10 +245,22 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 			return err
 		}
 		b.value("answer", "release:"+result.Key, raw)
+		if err := b.plan(resultformat.ChangePlan{Changes: result.Bootstrap}); err != nil {
+			return err
+		}
 		for _, installation := range result.Installations {
 			b.value("installation", installation.Schema+"/"+installation.Record, installation)
+			record, recordErr := result.InstallationRecord(installation)
+			if recordErr != nil {
+				return recordErr
+			}
+			typ, id, ok := strings.Cut(record, "/")
+			if !ok {
+				return fmt.Errorf("installation record identity differs")
+			}
+			b.replacements = append(b.replacements, journal.StateReplacement{Type: typ, ID: id, Before: installation.Before, Value: installation.Image})
 		}
-		return b.plan(resultformat.ChangePlan{Changes: result.Bootstrap})
+		return nil
 	case "operation-claim":
 		result, err := decodeOperationClaim(raw)
 		if err != nil {
@@ -250,12 +274,21 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		return b.plan(resultformat.ChangePlan{Changes: result.Changes})
+		if err := b.plan(resultformat.ChangePlan{Changes: result.Changes}); err != nil {
+			return err
+		}
+		if result.UsageBefore != "" {
+			b.meter(result.Step.Usage)
+		}
+		return nil
 	case "host-result":
 		_, err := decodeAcceptedHostControl(raw)
 		return err
 	case "usage-result":
-		_, err := resultformat.DecodeUsage(raw)
+		result, err := resultformat.DecodeUsage(raw)
+		if err == nil {
+			b.meter(result.Usage)
+		}
 		return err
 	default:
 		result, _, err := resultformat.DecodeRecord(raw)
@@ -291,6 +324,27 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	if err != nil {
 		return err
 	}
+	if upgrade, ok := j.(journal.RuntimeStateUpgrade); ok {
+		needed, upgradeErr := upgrade.StateNeedsUpgrade(ctx, t.ID)
+		if upgradeErr != nil {
+			return upgradeErr
+		}
+		if needed {
+			position := j.Position(t.ID)
+			if prefix != nil {
+				position = prefix.Position
+			}
+			images, values, readErr := legacyStatePreimages(ctx, j, t.ID, position)
+			if readErr != nil {
+				return readErr
+			}
+			if prefix != nil {
+				prefix.Delta.LegacyImages, prefix.Delta.LegacyValues = images, values
+			} else {
+				d.LegacyImages, d.LegacyValues = images, values
+			}
+		}
+	}
 	if prefix != nil {
 		recovery, ok := j.(journal.RuntimeStateRecovery)
 		if !ok {
@@ -302,55 +356,23 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	} else if err := store.InitializeState(ctx, t.ID, j.Position(t.ID), d); err != nil {
 		return err
 	}
-	// Load committed current images rather than retaining the reconstruction as
-	// a second authority. Definitions have already installed their original types.
-	t.records.mu.Lock()
-	for typ, et := range t.records.types {
-		for id, r := range et.rows.All() {
-			raw, err := store.StateRecord(ctx, t.ID, typ, id)
-			if err != nil {
-				t.records.mu.Unlock()
-				return err
-			}
-			var image recordState
-			if err = json.Unmarshal(raw, &image); err != nil {
-				t.records.mu.Unlock()
-				return err
-			}
-			actual, _ := r.Image()
-			if !sameStoredJSON(actual, image.Value) {
-				t.records.mu.Unlock()
-				return fmt.Errorf("SQL current image differs: %s/%s", typ, id)
-			}
-			decoded, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, t.records.readRelease, image.Format)
-			if err != nil {
-				t.records.mu.Unlock()
-				return err
-			}
-			value := reflect.New(et.info.Go).Elem()
-			if err = json.Unmarshal(decoded, value.Addr().Interface()); err != nil {
-				t.records.mu.Unlock()
-				return err
-			}
-			records.EmptyLists(value)
-			count := r.HistoryLength()
-			head, err := r.HistoryDigest()
-			if err != nil {
-				t.records.mu.Unlock()
-				return err
-			}
-			current := &records.Row{Value: value, Format: image.Format, HistoryCount: count, HistoryHead: head, Projection: image.Projection, Extraction: image.Extraction}
-			current.RetainOriginal(image.Value)
-			t.records.attachHistory(et, id, current, store, t.ID)
-		}
-	}
-	for _, et := range t.records.types {
-		et.uniqueIndexes = nil
-	}
-	t.records.historyStore, t.records.tenant = store, t.ID
-	t.records.appliedPosition = j.Position(t.ID)
-	t.records.currentPosition = func() int64 { return j.Position(t.ID) }
-	t.records.mu.Unlock()
+	// The migration compared every original image and history at this position.
+	// Keep SQL as the current-record source instead of decoding a second copy.
+	t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
+	t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
+	t.enableCurrentReadScopes()
+	return nil
+}
+
+type acceptedStateReader interface {
+	acceptedValueReader
+	StateChanges(context.Context, string, string, string, string, int) ([][]byte, error)
+}
+
+// The snapshot archive and the current SQL view share the original history
+// readers. During tail recovery the archive remains the fixed prefix while
+// accepted application adds its original, privately held replacements.
+func (t *Tenant) installRuntimeHistory(store acceptedStateReader, position func() int64) {
 	for _, a := range t.apps {
 		a.AcceptedLedger().UseChangeArchive(changeArchive{store, t.ID, a.Manifest().ID})
 		if owner, ok := a.(platform.AcceptedHistoryApp); ok {
@@ -360,36 +382,50 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 			})
 		}
 	}
-	t.committed.useStorage(store, t.ID, func() int64 { return j.Position(t.ID) })
-	return nil
+	t.committed.useStorage(store, t.ID, position)
+}
+
+// installRuntimeRecords is called only after migration or recovery established
+// agreement with the durable SQL position. Fetched rows stay in the request's
+// private work set rather than a second tenant-wide current-state authority.
+func (t *Tenant) installRuntimeRecords(store journal.RuntimeState, position func() int64) {
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	t.records.historyStore, t.records.tenant = store, t.ID
+	t.records.appliedPosition = position()
+	t.records.currentPosition = position
+	t.records.useCurrentRows()
 }
 
 // The tenant lock fixes definitions and all owner state at the same replay position.
 func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 	d := journal.StateDelta{}
-	t.records.mu.Lock()
-	for typ, et := range t.records.types {
-		for id, r := range et.rows.All() {
-			image, err := r.Image()
-			if err != nil {
-				t.records.mu.Unlock()
-				return journal.StateDelta{}, err
+	if err := func() error {
+		t.records.mu.Lock()
+		defer t.records.mu.Unlock()
+		for typ, et := range t.records.types {
+			for id, r := range et.rows.All() {
+				image, err := r.Image()
+				if err != nil {
+					return err
+				}
+				state := recordState{Value: image, Format: r.Format, Projection: r.Projection, Extraction: r.Extraction}
+				head, err := r.HistoryDigest()
+				if err != nil {
+					return err
+				}
+				rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1, HistoryHead: head}
+				for _, h := range r.RecordHistory() {
+					rr.History = append(rr.History, jsonOf(h))
+				}
+				d.Records = append(d.Records, rr)
+				d.Unique = append(d.Unique, journal.StateUnique{Type: typ, ID: id, Keys: t.records.uniqueKeys(typ, id)})
 			}
-			state := recordState{Value: image, Format: r.Format, Projection: r.Projection, Extraction: r.Extraction}
-			head, err := r.HistoryDigest()
-			if err != nil {
-				t.records.mu.Unlock()
-				return journal.StateDelta{}, err
-			}
-			rr := journal.StateRecord{Type: typ, ID: id, Image: jsonOf(state), HistoryBase: -1, HistoryHead: head}
-			for _, h := range r.RecordHistory() {
-				rr.History = append(rr.History, jsonOf(h))
-			}
-			d.Records = append(d.Records, rr)
-			d.Unique = append(d.Unique, journal.StateUnique{Type: typ, ID: id, Keys: t.records.uniqueKeys(typ, id)})
 		}
+		return nil
+	}(); err != nil {
+		return journal.StateDelta{}, err
 	}
-	t.records.mu.Unlock()
 	for _, a := range t.apps {
 		for index, r := range a.AcceptedLedger().RecordsFor(t.ID) {
 			image, err := proto.MarshalOptions{Deterministic: true}.Marshal(r)
@@ -422,7 +458,7 @@ func sameStoredJSON(a, b json.RawMessage) bool {
 }
 
 type changeArchive struct {
-	store       journal.RuntimeState
+	store       acceptedStateReader
 	tenant, app string
 }
 
@@ -456,4 +492,49 @@ func (a changeArchive) Accepted(tenant, key string, through int) *pb.ChangeRecor
 }
 func (a changeArchive) Contains(tenant, id string, through int) bool {
 	return len(a.read(tenant, "", id, through)) > 0
+}
+
+// Only the historical SQL projection requires these original preimages. New
+// writes carry their installation replacement in the same sealed storage delta.
+func legacyStatePreimages(ctx context.Context, j Journals, tenant string, through int64) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
+	entries, err := j.Entries(ctx, tenant, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	initialAI, err := json.Marshal(aistate.State{})
+	if err != nil {
+		return nil, nil, err
+	}
+	values := map[string]json.RawMessage{"app-state/" + platform.AIApp: initialAI}
+	ordinary := map[string]json.RawMessage{}
+	installed := map[string]json.RawMessage{}
+	for index, entry := range entries {
+		if int64(index+1) > through {
+			break
+		}
+		if entry.Kind != "accepted-result" {
+			continue
+		}
+		delta, err := acceptedStorageDelta(entry.Body)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, value := range delta.Values {
+			if value.Owner == "app-state" && value.Key == platform.AIApp {
+				values[value.Owner+"/"+value.Key] = value.Image
+			}
+		}
+		for _, record := range delta.Records {
+			key := record.Type + "/" + record.ID
+			ordinary[key] = record.Image
+			delete(installed, key)
+		}
+		for _, replacement := range delta.Replacements {
+			key := replacement.Type + "/" + replacement.ID
+			if image := ordinary[key]; len(image) != 0 {
+				installed[key] = image
+			}
+		}
+	}
+	return installed, values, nil
 }

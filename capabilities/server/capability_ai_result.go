@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -13,6 +14,12 @@ import (
 // ReadCapabilityAI projects the original Build call for native function users
 // who do not hold an editor role. It never bypasses source or member checks.
 func (t *Tenant) ReadCapabilityAI(m platform.Member, id string, now time.Time) (platform.OperationResult, *kernel.Error) {
+	return recordRead(t, context.Background(), func() (platform.OperationResult, *kernel.Error) {
+		return t.readCapabilityAI(m, id, now)
+	})
+}
+
+func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (platform.OperationResult, *kernel.Error) {
 	answer := platform.OperationResult{ID: id}
 	if refusal := t.admits(m); refusal != nil {
 		return answer, refusal

@@ -291,7 +291,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 		if json.Unmarshal([]byte(effect.Body), &binding) != nil || binding.Build != nil {
 			continue
 		}
-		result, err := t.ReadOperation(m, effect.ID)
+		result, err := t.operationResult(platform.NewCaller(runtime{t}, m, PlatformApp, false, false), effect.ID)
 		if err != nil {
 			continue
 		}
@@ -381,7 +381,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 			appendRun(run)
 		}
 	}
-	if value, err := t.Read(m, "effects"); err == nil {
+	if value, err := t.read(m, "effects"); err == nil {
 		if effects, ok := value.([]platform.Effect); ok {
 			for _, effect := range effects {
 				if effect.Endpoint == resultformat.OperationEndpoint {
@@ -409,7 +409,7 @@ func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offse
 			}
 		}
 	}
-	if value, err := t.Read(m, "work"); err == nil {
+	if value, err := t.read(m, "work"); err == nil {
 		if tasks, ok := value.([]Task); ok {
 			owners := map[string]bool{}
 			for resource := range union {

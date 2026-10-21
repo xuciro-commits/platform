@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/acceptance"
@@ -151,5 +152,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted operation intent is unavailable")
 }
 func (t *Tenant) ReadOperation(member platform.Member, id string) (platform.OperationResult, *kernel.Error) {
-	return t.operationResult(platform.NewCaller(runtime{t}, member, PlatformApp, false, false), id)
+	return recordRead(t, context.Background(), func() (platform.OperationResult, *kernel.Error) {
+		return t.operationResult(platform.NewCaller(runtime{t}, member, PlatformApp, false, false), id)
+	})
 }

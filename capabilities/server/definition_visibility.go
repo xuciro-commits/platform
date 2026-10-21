@@ -149,7 +149,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Agent == nil || !m.Active() || len(m.RolesIn(def.Ref.App)) == 0 && !m.Holds(AgentApp, AgentAdmin) {
 				continue
 			}
-			if def.Source == "builder" && (def.OwnerRecord == "" || !t.Readable(m, def.OwnerRecord, time.Now())) {
+			if def.Source == "builder" && (def.OwnerRecord == "" || !t.readable(m, def.OwnerRecord, time.Now())) {
 				continue
 			}
 			if !slices.Contains(m.RolesIn(def.Ref.App), "builder") {
@@ -235,7 +235,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {
 				continue
 			}
-			if _, visibleName := info.Field("name"); !visibleName || !t.Readable(m, def.OwnerRecord, time.Now()) {
+			if _, visibleName := info.Field("name"); !visibleName || !t.readable(m, def.OwnerRecord, time.Now()) {
 				continue
 			}
 		case platform.AssetPage:

@@ -55,6 +55,9 @@ type Postgres struct {
 	identify Identify
 	mu       sync.Mutex
 	pool     *pgxpool.Pool
+	// Fixed read transactions must not occupy the connections acceptance
+	// needs while the same operation still owns its read view.
+	readPool *pgxpool.Pool
 	next     map[string]int64
 	locks    map[string]*sync.Mutex // one per tenant: appends of a tenant are in order
 }
@@ -129,7 +132,12 @@ func OpenPostgres(ctx context.Context, url string, identify Identify) (*Postgres
 		pool.Close()
 		return nil, err
 	}
-	return &Postgres{identify: identify, pool: pool, next: map[string]int64{}, locks: map[string]*sync.Mutex{}}, nil
+	readPool, err := pgxpool.NewWithConfig(ctx, pool.Config())
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return &Postgres{identify: identify, pool: pool, readPool: readPool, next: map[string]int64{}, locks: map[string]*sync.Mutex{}}, nil
 }
 
 // Hosts sharing a database may start together. PostgreSQL's IF NOT EXISTS
@@ -518,7 +526,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	return committed, nil
 }
 
-func (j *Postgres) Close() { j.pool.Close() }
+func (j *Postgres) Close() { j.readPool.Close(); j.pool.Close() }
 
 // The journal's database also keeps what is derived outside the journal
 // (ADR-0009): passages' vectors and model calls' transcripts. Losing either

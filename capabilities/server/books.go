@@ -39,7 +39,7 @@ func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
 				continue
 			}
 			record := map[string]any{}
-			if held, ok := t.Held(typ + "/" + s.GetTarget().GetId()); ok {
+			if held, ok := t.held(typ + "/" + s.GetTarget().GetId()); ok {
 				raw, _ := json.Marshal(held)
 				json.Unmarshal(raw, &record)
 			}
@@ -154,20 +154,22 @@ func (t *Tenant) bookBody(entry map[string]any, typ, id, reverses string) string
 		return construction.EntryBody(entry)
 	}
 	change := ""
-	t.records.mu.Lock()
-	if et := t.records.types[typ]; et != nil {
-		if row := et.rows.Get(id); row != nil {
-			history := row.RecordHistory()
-			for i := len(history) - 1; i >= 0; i-- {
-				h := history[i]
-				if h.Schema == typ+"."+reverses {
-					change = h.Change
-					break
+	func() {
+		t.records.mu.Lock()
+		defer t.records.mu.Unlock()
+		if et := t.records.types[typ]; et != nil {
+			if row := et.rows.Get(id); row != nil {
+				history := row.RecordHistory()
+				for i := len(history) - 1; i >= 0; i-- {
+					h := history[i]
+					if h.Schema == typ+"."+reverses {
+						change = h.Change
+						break
+					}
 				}
 			}
 		}
-	}
-	t.records.mu.Unlock()
+	}()
 	if change == "" {
 		return `{}`
 	}

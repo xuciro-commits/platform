@@ -146,7 +146,7 @@ func BenchmarkFinalConstraintScan(b *testing.B) {
 					b.Fatal(err)
 				}
 				store := newRecordStore()
-				store.types[info.Type] = &entityType{info: info, rows: index}
+				store.types[info.Type] = &entityType{info: info, rows: records.MemoryRows(index)}
 				store.types[unrelated.Type] = &entityType{info: unrelated}
 				store.types[unrelated.Type].setRow("NOTE", &records.Row{Value: reflect.ValueOf(&note{Record: platform.Record{ID: "NOTE", Revision: 1}, Text: "before"}).Elem()})
 				tenant := &Tenant{records: store}

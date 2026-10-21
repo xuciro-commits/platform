@@ -255,17 +255,18 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 			}
 		}
 	}
-	if !held {
-		store.mu.Lock()
-	}
-	et := store.types[q.Type]
+	var et *entityType
 	var current *records.Row
-	if et != nil {
-		current = et.rows.Get(q.Record)
-	}
-	if !held {
-		store.mu.Unlock()
-	}
+	func() {
+		if !held {
+			store.mu.Lock()
+			defer store.mu.Unlock()
+		}
+		et = store.types[q.Type]
+		if et != nil {
+			current = et.rows.Get(q.Record)
+		}
+	}()
 	if q.Action == "" {
 		if et != nil {
 			request.Subject.App = et.info.App
@@ -365,22 +366,22 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 	}
 	if q.From != "" {
 		ref, field, _ := strings.Cut(q.From, "#")
-		if !held {
-			store.mu.Lock()
-		}
-		typ, id, _ := strings.Cut(ref, "/")
-		fields := []string{}
-		if field != "" {
-			fields = append(fields, field)
-		}
 		readable := false
-		if depth < 16 && !cycle {
-			source := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: typ, Record: id, Fields: fields}, at, true, depth+1, walk)
-			readable = source.Allow && len(source.Withheld) == 0
-		}
-		if !held {
-			store.mu.Unlock()
-		}
+		func() {
+			if !held {
+				store.mu.Lock()
+				defer store.mu.Unlock()
+			}
+			typ, id, _ := strings.Cut(ref, "/")
+			fields := []string{}
+			if field != "" {
+				fields = append(fields, field)
+			}
+			if depth < 16 && !cycle {
+				source := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: typ, Record: id, Fields: fields}, at, true, depth+1, walk)
+				readable = source.Allow && len(source.Withheld) == 0
+			}
+		}()
 		context.Derived = authz.Gate{Allowed: readable, Reason: "The original source is outside the caller's permissions"}
 	}
 	if q.Kind == "export" && t.restricted(q.Type) {

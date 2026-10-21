@@ -238,6 +238,10 @@ func (t *Tenant) spend(app string, now time.Time) { t.quota.spend(app, now) }
 func (t *Tenant) Deferred(now time.Time) []string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	return t.deferred(now)
+}
+
+func (t *Tenant) deferred(now time.Time) []string {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	var out []string

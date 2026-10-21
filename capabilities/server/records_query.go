@@ -19,27 +19,33 @@ func (s *recordStore) find(et *entityType, q platform.Query, visible func(reflec
 	if err != nil {
 		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	out, refusal := s.matchingQuery(et, q, visible)
-	if refusal != nil {
+	collector := order.Page(q.Offset, q.Limit)
+	if refusal := s.visitMatching(et, q, visible, collector.Add); refusal != nil {
 		return nil, 0, refusal
 	}
-	page, total := order.Window(out, q.Offset, q.Limit)
+	page, total := collector.Result()
 	return page, total, nil
 }
 
 func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {
+	var out []reflect.Value
+	refusal := s.visitMatching(et, q, visible, func(value reflect.Value) { out = append(out, value) })
+	return out, refusal
+}
+
+func (s *recordStore) visitMatching(et *entityType, q platform.Query, visible func(reflect.Value) bool, accept func(reflect.Value)) *kernel.Error {
+
 	if err := q.CheckSet(); err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	match, err := records.CompileSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set})
 	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	effective, refusal := s.effectivePredicate(et, q)
 	if refusal != nil {
-		return nil, refusal
+		return refusal
 	}
-	var out []reflect.Value
 	visit := func(r *records.Row) {
 		if r == nil {
 			return
@@ -48,24 +54,46 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 		if !q.Archived && records.Header(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match(v) {
 			return
 		}
-		out = append(out, v)
+		accept(v)
 	}
 	if s.historyStore != nil {
 		var filters []journal.StateFilter
 		// SQL retains the original image, while the owner may have renamed or
 		// transformed its fields. Filter the converted values below instead.
-		if len(et.info.RecordImages) == 0 {
+		if !et.retainedProjection && len(et.info.RecordImages) == 0 {
 			filters = sqlRecordFilters(et.info, q.Domain)
 		}
-		seen := map[string]bool{}
+		if et.retainedProjection {
+			// Record identity is unchanged by aliases or historical field projections.
+			for _, filter := range sqlRecordFilters(et.info, q.Domain) {
+				if len(filter.Path) == 2 && filter.Path[0] == "value" && filter.Path[1] == "id" {
+					filters = append(filters, filter)
+				}
+			}
+		}
+		pending := map[string]bool{}
+		// During checkpoint recovery the fixed SQL archive predates accepted
+		// tail writes promoted into the root overlay. They must participate in
+		// owner inventories even when their IDs do not exist in that archive.
+		for id := range et.rows.Overlay().All() {
+			pending[id] = true
+		}
+		for overlay := s; overlay != nil; overlay = overlay.parent {
+			for ref := range overlay.writes {
+				typ, id, ok := strings.Cut(ref, "/")
+				if ok && typ == et.info.Type {
+					pending[id] = true
+				}
+			}
+		}
 		after := ""
 		for {
-			ids, readErr := s.historyStore.StateCandidates(context.Background(), s.tenant, et.info.Type, filters, after, 256, s.appliedPosition)
+			ids, readErr := s.stateReader().StateCandidates(context.Background(), s.tenant, et.info.Type, filters, after, 256, s.appliedPosition)
 			if readErr != nil {
 				panic(fmt.Errorf("record candidates: %w", readErr))
 			}
 			for _, id := range ids {
-				seen[id] = true
+				delete(pending, id)
 				visit(et.rows.Get(id))
 			}
 			if len(ids) < 256 {
@@ -75,14 +103,8 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 		}
 		// Private writes may newly match a condition their committed predecessor
 		// did not. Include this decision's overlay before applying the same rules.
-		for overlay := s; overlay != nil; overlay = overlay.parent {
-			for ref := range overlay.writes {
-				typ, id, ok := strings.Cut(ref, "/")
-				if ok && typ == et.info.Type && !seen[id] {
-					seen[id] = true
-					visit(et.rows.Get(id))
-				}
-			}
+		for id := range pending {
+			visit(et.rows.Get(id))
 		}
 	} else if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
 		for _, id := range ids {
@@ -94,7 +116,7 @@ func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible fu
 		}
 	}
 
-	return out, nil
+	return nil
 }
 
 // RecordPage is a page of records and how many match in all.
@@ -105,7 +127,7 @@ type RecordPage struct {
 }
 
 // Records serves a member's query over a type, within the member's scope.
-func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Tenant) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	return t.recordsFrom(t.records, m, typ, q, now)
 }
 

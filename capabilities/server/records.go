@@ -15,6 +15,7 @@ import (
 
 type recordStore struct {
 	historyStore    journal.RuntimeState
+	readView        journal.StateReadView
 	appliedPosition int64
 	currentPosition func() int64
 	tenant          string
@@ -51,22 +52,26 @@ func (t *Tenant) Changed(e platform.Event) []string {
 }
 
 // Held is a record by "<type>/<id>", as its app holds it, for the platform's own apps.
-func (t *Tenant) Held(ref string) (any, bool) {
+func (t *Tenant) held(ref string) (any, bool) {
 	typ, id, _ := strings.Cut(ref, "/")
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	et := t.records.types[typ]
-	if et == nil || et.rows.Get(id) == nil {
+	if et == nil {
 		return nil, false
 	}
-	return records.Copy(et.info.Go, et.rows.Get(id).Value.Interface()).Interface(), true
+	row := et.rows.Get(id)
+	if row == nil {
+		return nil, false
+	}
+	return records.Copy(et.info.Go, row.Value.Interface()).Interface(), true
 }
 
 type entityType struct {
 	store         *recordStore
 	uniqueIndexes map[string]records.UniqueIndex
 	info          platform.EntityInfo
-	rows          records.Index[*records.Row]
+	rows          records.Rows
 	// Derived indexes share the same immutable rows. Writes update only built
 	// reference buckets; schema replacement discards them with its type image.
 	referenceIndexes map[string]records.References
@@ -74,7 +79,8 @@ type entityType struct {
 	// knowledge says a record of this type may become knowledge: it declares a
 	// knowledge field, it is a knowledge document, or it is a file that may be
 	// attached to one (ADR-0009).
-	knowledge bool
+	knowledge          bool
+	retainedProjection bool // query fields are interpreted through an older owner shape
 }
 
 // Public response names remain stable; internal consumers use the records owner.
@@ -98,11 +104,14 @@ func (s *recordStore) forkRecords() *recordStore {
 
 func (s *recordStore) forkRecordsLocked() *recordStore {
 	s.prepareUniqueIndexes()
-	draft := &recordStore{historyStore: s.historyStore, tenant: s.tenant, appliedPosition: s.appliedPosition, currentPosition: s.currentPosition, readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{historyStore: s.historyStore, readView: s.readView, tenant: s.tenant, appliedPosition: s.appliedPosition, currentPosition: s.currentPosition, readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
 	for typ, et := range s.types {
-		copied := &entityType{store: draft, uniqueIndexes: maps.Clone(et.uniqueIndexes), info: et.info, knowledge: et.knowledge, rows: et.rows, referenceIndexes: maps.Clone(et.referenceIndexes), fullImage: s.parent != nil && et.fullImage}
+		copied := &entityType{store: draft, uniqueIndexes: maps.Clone(et.uniqueIndexes), info: et.info, knowledge: et.knowledge, rows: et.rows, referenceIndexes: maps.Clone(et.referenceIndexes), fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection}
+		if copied.rows.Sourced() {
+			copied.rows = copied.rows.Rebind(&currentRows{store: draft, typ: typ})
+		}
 		draft.types[typ] = copied
 		draft.byGo[et.info.Go] = copied
 	}
@@ -131,6 +140,9 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	s.types, s.byGo = draft.types, draft.byGo
 	for _, et := range s.types {
 		et.store = s
+		if et.rows.Sourced() {
+			et.rows = et.rows.Rebind(&currentRows{store: s, typ: et.info.Type})
+		}
 	}
 	if s.parent == nil {
 		for _, et := range s.types {

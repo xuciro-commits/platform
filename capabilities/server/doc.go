@@ -29,7 +29,11 @@
 // and internal/enterprise; UAF runtime data is generated before the build.
 // Record images, immutable history segments, recent changes, indexes and pure
 // field/scope/query compilation live in internal/records. Host recordStore owns authorized
-// storage access, private decision coordination and accepted application.
+// storage access, private decision coordination and accepted application. SQL
+// Rows use a lane-owned repeatable-read source and immutable private overlays;
+// accepted application clears overlays before admitting the next read view.
+// SQL owner checkpoints restore through their fixed archive plus accepted tail;
+// portable snapshots and legacy reconstruction keep their original obligations.
 // Construction owns pure object/process compilation and declaration/member
 // projections; original owners supply narrow read roles and execute results.
 // Accepted canonical encoding and strict decoding live in internal/acceptance.
@@ -38,6 +42,8 @@
 // their owner-specific checks and use those same shared values and decoders.
 // Agent prompt/history compilation, observation bounds and budget arithmetic
 // live in internal/agents, which receives only already-authorized values.
+// internal/aistate owns the unchanged AI state format and pure usage updates;
+// the AI app keeps live reservations while SQL consumes the same saved rules.
 // Runtime code imports no compiled apps. Public DTOs retain
 // the original host API schema names and journal encodings.
 //

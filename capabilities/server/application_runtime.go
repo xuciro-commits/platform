@@ -256,7 +256,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		owners[binding.Ref.App] = true
 		for _, receipt := range owner.AcceptedLedger().RecordsFor(t.ID) {
 			sub := receipt.GetSubmission()
-			if sub == nil || !model[sub.GetTarget().GetType()] || sub.GetPrincipalId() != m.ID && !t.Readable(m, target(sub), now) {
+			if sub == nil || !model[sub.GetTarget().GetType()] || sub.GetPrincipalId() != m.ID && !t.readable(m, target(sub), now) {
 				continue
 			}
 			accepted[binding.Ref.App+"/"+receipt.GetChangeId()] = true
@@ -266,7 +266,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 	codeCounts := map[string]RefusalCodeCount{}
 	for _, refusal := range t.committed.allRefusals() {
 		var sub pb.Submission
-		if protojson.Unmarshal(refusal.Submission, &sub) != nil || !model[sub.GetTarget().GetType()] || sub.GetPrincipalId() != m.ID && !t.Readable(m, target(&sub), now) {
+		if protojson.Unmarshal(refusal.Submission, &sub) != nil || !model[sub.GetTarget().GetType()] || sub.GetPrincipalId() != m.ID && !t.readable(m, target(&sub), now) {
 			continue
 		}
 		out.Monitoring.Refused++
@@ -283,7 +283,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 			out.Monitoring.ConstraintFailures++
 		}
 	}
-	for _, raw := range t.committed.allAnswers() {
+	for _, raw := range storedValues(&t.committed, "answer", t.committed.answers, "business") {
 		var header struct{ Kind string }
 		if json.Unmarshal(raw, &header) != nil || header.Kind != "record-batch" {
 			continue
@@ -294,7 +294,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		}
 		for _, fact := range result.Business {
 			typ, _, _ := strings.Cut(fact.Subject, "/")
-			if !model[typ] || fact.Member != m.ID && !t.Readable(m, fact.Subject, now) {
+			if !model[typ] || fact.Member != m.ID && !t.readable(m, fact.Subject, now) {
 				continue
 			}
 			out.Monitoring.BusinessRefusals++
@@ -317,7 +317,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 	if count := out.Monitoring.Accepted + out.Monitoring.Refused; count > 0 {
 		out.Monitoring.RefusalRate = float64(out.Monitoring.Refused) / float64(count)
 	}
-	for key, raw := range t.committed.allAnswers() {
+	for key, raw := range storedValues(&t.committed, "answer", t.committed.answers, "active") {
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
@@ -401,7 +401,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		if binding.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		page, refusal := t.Records(m, binding.Ref.Name, platform.Query{Limit: 1}, now)
+		page, refusal := t.recordsRead(m, binding.Ref.Name, platform.Query{Limit: 1}, now)
 		if refusal != nil {
 			out.State = "degraded"
 			continue
@@ -463,7 +463,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 	}) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record is outside this application")
 	}
-	view, refusal := t.RecordOf(m, typ, id, now)
+	view, refusal := t.recordOf(m, typ, id, now)
 	if refusal != nil {
 		return out, refusal
 	}

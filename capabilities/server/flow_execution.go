@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/internal/acceptance"
+	"platformserver/journal"
 	"reflect"
 	"slices"
 	"time"
@@ -27,16 +28,17 @@ type flowExecutionRuntime struct {
 	release string
 	shapes  map[string]platform.EntityInfo
 	assets  []platform.ReleaseAsset
-	// Cache only neutral decoded rows. Every protected read still evaluates
-	// current membership/field grants through the original reader below.
+	// Retain only source and definition identities. Row conversion is lazy,
+	// and every protected read still checks current membership and field grants.
 	readStore   *recordStore
 	readSource  *recordStore
 	readOrigins map[string]retainedReadOrigin
+	readSQLView journal.StateReadView
 }
 
 type retainedReadOrigin struct {
 	typ  *entityType
-	rows records.Index[*records.Row]
+	rows records.Rows
 }
 
 func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding host.FlowBinding) (host.FlowHost, error) {
@@ -246,9 +248,48 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
 }
 
+// A retained shape reads the same immutable current collection. Only rows
+// actually requested by its original owner are converted; errors remain
+// migration refusals rather than being mistaken for missing records.
+type retainedRows struct {
+	runtime       *flowExecutionRuntime
+	current, info platform.EntityInfo
+	rows          records.Rows
+}
+
+func (s *retainedRows) IDs(after string, limit int) []string { return s.rows.IDs(after, limit) }
+func (s *retainedRows) Get(id string) *records.Row {
+	row := s.rows.Get(id)
+	if row == nil {
+		return nil
+	}
+	value, refusal := s.runtime.retainedRow(s.current, s.info, row)
+	if refusal != nil {
+		panic(retainedReadRefusal{refusal})
+	}
+	return value
+}
+
+type retainedReadRefusal struct{ refusal *kernel.Error }
+
+// RowSource has no error result. Catch only its typed owner refusal at the
+// retained runtime API; storage failures keep their original failure path.
+func (r *flowExecutionRuntime) recoverRetainedRead(refusal **kernel.Error) {
+	if failure := recover(); failure != nil {
+		saved, ok := failure.(retainedReadRefusal)
+		if !ok {
+			panic(failure)
+		}
+		r.FailDecision(saved.refusal)
+		if refusal != nil {
+			*refusal = saved.refusal
+		}
+	}
+}
+
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 	r.records.mu.Lock()
-	valid := r.readSource == r.records && r.readStore != nil
+	valid := r.readSource == r.records && r.readStore != nil && r.readSQLView == r.records.readView
 	for typ, et := range r.records.types {
 		origin, exists := r.readOrigins[typ]
 		if !exists || origin.typ != et || origin.rows != et.rows {
@@ -273,23 +314,12 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 			if current == nil {
 				return nil, migrationRefusal(fmt.Errorf("retained object %s has no current storage", typ))
 			}
-			entries := make([]records.Entry[*records.Row], 0, current.rows.Len())
-			for id, value := range current.rows.All() {
-				decoded, refusal := r.retainedRow(current.info, info, value)
-				if refusal != nil {
-					return nil, refusal
-				}
-				entries = append(entries, records.Entry[*records.Row]{Key: id, Value: decoded})
-			}
-			rows, err := records.From(entries)
-			if err != nil {
-				return nil, migrationRefusal(err)
-			}
+			source := &retainedRows{runtime: r, current: current.info, info: info, rows: origins[typ].rows}
 			delete(store.byGo, current.info.Go)
-			store.types[typ] = &entityType{store: store, info: info, rows: rows, knowledge: current.knowledge}
+			store.types[typ] = &entityType{store: store, info: info, rows: records.SourceRows(source), knowledge: current.knowledge, retainedProjection: true}
 			store.byGo[info.Go] = store.types[typ]
 		}
-		r.readSource, r.readStore, r.readOrigins = r.records, store, origins
+		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.records, store, origins, store.readView
 	}
 	return (hostView{t: r.view}).installationView(store), nil
 }
@@ -299,14 +329,16 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 		if info.Go != typ || info.App != c.App {
 			continue
 		}
-		r.records.mu.Lock()
-		current := r.records.types[name]
 		var value *records.Row
 		var stored platform.EntityInfo
-		if current != nil {
-			value, stored = current.rows.Get(id), current.info
-		}
-		r.records.mu.Unlock()
+		func() {
+			r.records.mu.Lock()
+			defer r.records.mu.Unlock()
+			current := r.records.types[name]
+			if current != nil {
+				value, stored = current.rows.Get(id), current.info
+			}
+		}()
 		if value == nil {
 			return nil, false
 		}
@@ -319,14 +351,16 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 	}
 	return r.records.get(c, typ, id)
 }
-func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) *kernel.Error {
+func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) (refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	view, err := r.readView()
 	if err != nil {
 		return err
 	}
 	return view.records.check(c, entity, r.at)
 }
-func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platform.Query) ([]any, int, *kernel.Error) {
+func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platform.Query) (out []any, total int, refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	view, err := r.readView()
 	if err != nil {
 		return nil, 0, err
@@ -335,7 +369,8 @@ func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platf
 	d.records = view.records
 	return d.Find(c, typ, q)
 }
-func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	if refusal := authorizationRefusal(r.stagedDecision.Authorize(c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at)); refusal != nil {
 		return nil, refusal
 	}
@@ -365,7 +400,8 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 	raw, marshalErr := json.Marshal(fields)
 	return raw, migrationRefusal(marshalErr)
 }
-func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *kernel.Error) {
+func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (output json.RawMessage, refs []string, refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	view, err := r.readView()
 	if err != nil {
 		return nil, nil, err
@@ -376,28 +412,32 @@ func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string,
 	})
 }
 
-func (r *flowExecutionRuntime) ReadQuery(c platform.Caller, app, name string, input json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
+func (r *flowExecutionRuntime) ReadQuery(c platform.Caller, app, name string, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	view, err := r.readView()
 	if err != nil {
 		return nil, err
 	}
 	return view.readQueryFrom(view.records, c, app, name, input, at)
 }
-func (r *flowExecutionRuntime) ReadQueryVersion(c platform.Caller, app, name string, version int, input json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
+func (r *flowExecutionRuntime) ReadQueryVersion(c platform.Caller, app, name string, version int, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	view, err := r.readView()
 	if err != nil {
 		return nil, err
 	}
 	return view.readQueryVersionFrom(view.records, c, app, name, version, input, at)
 }
-func (r *flowExecutionRuntime) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
+func (r *flowExecutionRuntime) ReadRuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, at time.Time) (output json.RawMessage, refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	view, err := r.readView()
 	if err != nil {
 		return nil, err
 	}
 	return view.readRuleQueryFrom(view.records, c, set, input, at)
 }
-func (r *flowExecutionRuntime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+func (r *flowExecutionRuntime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (output platform.RecordSetResult, refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: object, Record: id}
 	if refusal := authorizationRefusal(r.stagedDecision.Authorize(c, question, at)); refusal != nil {
 		return platform.RecordSetResult{}, refusal
@@ -408,19 +448,21 @@ func (r *flowExecutionRuntime) ReadRecordSet(c platform.Caller, object, id, name
 	}
 	return view.readRecordSetFrom(view.records, c, object, id, name, at)
 }
-func (r *flowExecutionRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) platform.AuthzDecision {
+func (r *flowExecutionRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, at time.Time) (decision platform.AuthzDecision) {
+	defer r.recoverRetainedRead(nil)
 	view, err := r.readView()
 	if err != nil {
 		r.FailDecision(err)
 		return platform.AuthzDecision{}
 	}
 	c.Member = r.tenant.authorizationMember(c.Member)
-	decision := view.authorizeFrom(view.records, c, q, at, false)
+	decision = view.authorizeFrom(view.records, c, q, at, false)
 	r.RecordAuthorization(c, q, decision)
 	return decision
 }
 
 func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, entity any) (refusal *kernel.Error) {
+	defer r.recoverRetainedRead(&refusal)
 	defer func() {
 		if refusal != nil {
 			r.FailDecision(refusal)

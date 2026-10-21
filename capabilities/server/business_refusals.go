@@ -133,13 +133,15 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 			return
 		}
 		own := sub.GetPrincipalId() == m.ID
-		readable := t.Readable(m, target(sub), at)
+		readable := t.readable(m, target(sub), at)
 		exists := false
-		t.records.mu.Lock()
-		if et := t.records.types[typ]; et != nil {
-			exists = et.rows.Get(id) != nil
-		}
-		t.records.mu.Unlock()
+		func() {
+			t.records.mu.Lock()
+			defer t.records.mu.Unlock()
+			if et := t.records.types[typ]; et != nil {
+				exists = et.rows.Get(id) != nil
+			}
+		}()
 		if exists && !readable || !exists && !own {
 			return
 		}
@@ -178,7 +180,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		}
 		add(&sub, e)
 	}
-	for _, raw := range t.committed.allAnswers() {
+	for _, raw := range storedValues(&t.committed, "answer", t.committed.answers, "business") {
 		var kind struct{ Kind string }
 		if json.Unmarshal(raw, &kind) != nil || kind.Kind != "record-batch" {
 			continue
@@ -234,17 +236,21 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 
 func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefusalFact, at time.Time) platform.BusinessRefusalFact {
 	f = resultformat.CloneBusinessFact(f)
-	if f.Record != "" && !t.Readable(m, f.Record, at) {
+	if f.Record != "" && !t.readable(m, f.Record, at) {
 		f.Record = ""
 	}
-	if f.Route != nil && f.Route.ID != "" && !t.Readable(m, f.Route.Type+"/"+f.Route.ID, at) {
+	if f.Route != nil && f.Route.ID != "" && !t.readable(m, f.Route.Type+"/"+f.Route.ID, at) {
 		f.Route = nil
 	}
 	typ, id, _ := strings.Cut(f.Subject, "/")
-	t.records.mu.Lock()
-	et := t.records.types[typ]
-	readable := et != nil && et.rows.Get(id) != nil && t.readableIn(t.records, m, f.Subject, at)
-	t.records.mu.Unlock()
+	var readable bool
+	var et *entityType
+	func() {
+		t.records.mu.Lock()
+		defer t.records.mu.Unlock()
+		et = t.records.types[typ]
+		readable = et != nil && et.rows.Get(id) != nil && t.readableIn(t.records, m, f.Subject, at)
+	}()
 	if !readable {
 		f.Original = nil
 		f.Inputs = nil

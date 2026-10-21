@@ -113,26 +113,40 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 	if len(req.Messages) == 0 {
 		return ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}, nil
 	}
-	if m.Agent && t.suspended(m.ID) {
-		return ChatAnswer{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID), nil
-	}
-	model, pv, err := t.ai.Callable(m, req.Model)
-	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
-		return ChatAnswer{}, err, nil
-	}
-	c := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
-	decision := t.authorizeNative(c, "model:"+req.Model, "action", []string{platform.AnyMember}, err == nil)
-	if refusal := authorizationRefusal(decision); refusal != nil {
+	var model platform.AIModel
+	var pv platform.AIProvider
+	var preparationFailure *AIError
+	_, refusal := recordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+		if m.Agent && t.suspended(m.ID) {
+			return struct{}{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
+		}
+		var err *kernel.Error
+		model, pv, err = t.ai.Callable(m, req.Model)
+		if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+			return struct{}{}, err
+		}
+		c := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
+		decision := t.authorizeNative(c, "model:"+req.Model, "action", []string{platform.AnyMember}, err == nil)
+		if refusal := authorizationRefusal(decision); refusal != nil {
+			return struct{}{}, refusal
+		}
+		if err != nil {
+			return struct{}{}, err
+		}
+		if !t.breakers.allow("ai:"+pv.ID, now) {
+			preparationFailure = &AIError{Status: http.StatusServiceUnavailable, Detail: "the provider " + pv.ID + " failed repeatedly; its calls wait until it answers again"}
+			return struct{}{}, nil
+		}
+		if why := t.reserve(m, model, now); why != "" {
+			preparationFailure = &AIError{Status: http.StatusTooManyRequests, Detail: why, Quota: true}
+		}
+		return struct{}{}, nil
+	})
+	if refusal != nil {
 		return ChatAnswer{}, refusal, nil
 	}
-	if err != nil {
-		return ChatAnswer{}, err, nil
-	}
-	if !t.breakers.allow("ai:"+pv.ID, now) {
-		return ChatAnswer{}, nil, &AIError{Status: http.StatusServiceUnavailable, Detail: "the provider " + pv.ID + " failed repeatedly; its calls wait until it answers again"}
-	}
-	if why := t.reserve(m, model, now); why != "" {
-		return ChatAnswer{}, nil, &AIError{Status: http.StatusTooManyRequests, Detail: why, Quota: true}
+	if preparationFailure != nil {
+		return ChatAnswer{}, nil, preparationFailure
 	}
 	if len(delta) > 0 {
 		req.Delta = delta[0]

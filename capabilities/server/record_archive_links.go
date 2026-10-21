@@ -43,7 +43,7 @@ func (s *recordStore) checkArchiveWriteLocked(et *entityType, value reflect.Valu
 			return fail()
 		}
 		if et.info.Type == l.Parent.Name && rec.Archived {
-			bucket := child.referenceIndex(f).Get(rec.ID)
+			bucket := child.referenceBucket(f, rec.ID)
 			allowed := 0
 			if et.info.Type == child.info.Type && bucket.IDs.Get(rec.ID) {
 				allowed = 1 // prospective self is archived

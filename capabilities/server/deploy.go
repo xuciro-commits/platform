@@ -181,13 +181,27 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 				return fmt.Errorf("read SQL state position %s: %w", t.ID, err)
 			}
 		}
+		legacyState := false
+		if upgrade, ok := j.(journal.RuntimeStateUpgrade); ok {
+			var err error
+			legacyState, err = upgrade.StateNeedsUpgrade(ctx, t.ID)
+			if err != nil {
+				return fmt.Errorf("read SQL state format %s: %w", t.ID, err)
+			}
+		}
 		var after int64
-		if d.SnapshotEvery > 0 {
-			key, err := t.snapshotKey(code)
+		if d.SnapshotEvery > 0 && !legacyState {
+			key, err := t.runtimeSnapshotKey(code)
 			if err != nil {
 				return fmt.Errorf("snapshot format %s: %w", t.ID, err)
 			}
 			seq, state, ok, err := j.Snapshot(ctx, t.ID, key)
+			if err == nil && !ok {
+				key, err = t.snapshotKey(code)
+				if err == nil {
+					seq, state, ok, err = j.Snapshot(ctx, t.ID, key)
+				}
+			}
 			if err == nil && !ok && key != code {
 				seq, state, ok, err = j.Snapshot(ctx, t.ID, code)
 			}
@@ -205,11 +219,46 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 					continue
 				}
-				if err := t.recoverSnapshot(state, seq); err != nil {
-					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				runtime, runtimeErr := runtimeCheckpoint(state)
+				if runtimeErr != nil {
+					t.quarantine(runtimeErr)
 					continue
 				}
-				after = seq
+				if runtime != nil {
+					// A retained older writer may have appended accepted results
+					// after SQL stopped advancing. Reconstruct that legacy prefix
+					// independently below; never apply latest SQL as its past.
+					if _, err := j.Entries(ctx, t.ID, seq); err != nil {
+						if !errors.Is(err, errTenantJournal) {
+							return fmt.Errorf("read journal %s: %w", t.ID, err)
+						}
+						t.quarantine(err)
+						log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+						continue
+					}
+					if j.Position(t.ID) == statePosition {
+						if err := t.restoreRuntimeSnapshot(ctx, j, state, seq, statePosition, recoveryStarted); err != nil {
+							t.quarantine(fmt.Errorf("SQL checkpoint recovery: %w", err))
+							log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+							continue
+						}
+						latest, err := t.checkpointRuntime(ctx, j, code)
+						if err != nil {
+							t.quarantine(fmt.Errorf("SQL checkpoint save: %w", err))
+							log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+							continue
+						}
+						restored[t.ID], fresh[t.ID] = latest, false
+						log.Printf("restored %s from the snapshot at %d, then replayed %d entries with SQL records on demand", t.ID, seq, statePosition-seq)
+						continue
+					}
+				} else {
+					if err := t.recoverSnapshot(state, seq); err != nil {
+						log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+						continue
+					}
+					after = seq
+				}
 			}
 			restored[t.ID] = after
 		}
@@ -280,6 +329,18 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			continue
 		}
 		t.attachJournal(ctx, j)
+		// Upgrade the original full-row checkpoint once before serving. An
+		// unchanged tenant at the prior saved position must not load every row
+		// again merely because its periodic snapshotter has no new entries.
+		if _, ok := j.(journal.StateSnapshotStorage); ok && d.SnapshotEvery > 0 {
+			seq, err := t.checkpointRuntime(ctx, j, code)
+			if err != nil {
+				t.quarantine(fmt.Errorf("SQL checkpoint save: %w", err))
+				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				continue
+			}
+			restored[t.ID] = seq
+		}
 	}
 	return nil
 }
@@ -575,10 +636,9 @@ func Schedule(tenants []*Tenant, now time.Time, size int, within time.Duration) 
 	}
 }
 
-// snapshotter saves a tenant's snapshot once the journal has grown by every
-// entries and by a tenth since the last one (decisions wait while a snapshot
-// captures the state, about a second at a million records, so a large tenant
-// takes them rarely), and at shutdown when it grew at all.
+// snapshotter saves after the configured growth and a tenth of the previous
+// position, and at shutdown when anything changed. SQL snapshots capture owner
+// state and archive records inside PostgreSQL rather than collecting Go rows.
 type snapshotter struct {
 	journal Journals
 	code    string
@@ -598,15 +658,15 @@ func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
 		return
 	}
 	started := time.Now()
-	state, seq, err := t.Snapshot(func() int64 { return s.journal.Position(t.ID) })
+	state, seq, err := t.snapshotRuntime(ctx, s.journal)
 	if t.quarantined() {
 		return
 	}
 	if err == nil {
 		var key string
-		key, err = t.snapshotKey(s.code)
+		key, err = t.snapshotStorageKey(s.code, state)
 		if err == nil {
-			err = s.journal.SaveSnapshot(ctx, t.ID, seq, key, state)
+			err = saveRuntimeSnapshot(ctx, s.journal, t.ID, seq, key, state)
 		}
 	}
 	if err != nil {

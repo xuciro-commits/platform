@@ -68,25 +68,26 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		len(d.events[0].Changed) != 1 || d.events[0].Changed[0] != ref {
 		return nil, fmt.Errorf("decision has other record or event effects")
 	}
-	d.records.mu.Lock()
-	et := d.records.types[typ]
-	if et == nil || et.info.App != app || et.rows.Get(id) == nil {
-		d.records.mu.Unlock()
-		return nil, fmt.Errorf("decision has no declared record image")
-	}
-	if et.rows.Get(id).Projection != nil {
-		d.records.mu.Unlock()
-		return nil, fmt.Errorf("versioned migration row requires the complete record batch")
-	}
-	var prior *records.Row
-	if old := d.records.parent.types[typ]; old != nil {
-		prior = old.rows.Get(id)
-	}
-	image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
-	if err == nil {
-		image.Predecessor, err = records.Predecessor(typ, id, prior)
-	}
-	d.records.mu.Unlock()
+	image, err := func() (records.Image, error) {
+		d.records.mu.Lock()
+		defer d.records.mu.Unlock()
+		et := d.records.types[typ]
+		if et == nil || et.info.App != app || et.rows.Get(id) == nil {
+			return records.Image{}, fmt.Errorf("decision has no declared record image")
+		}
+		if et.rows.Get(id).Projection != nil {
+			return records.Image{}, fmt.Errorf("versioned migration row requires the complete record batch")
+		}
+		var prior *records.Row
+		if old := d.records.parent.types[typ]; old != nil {
+			prior = old.rows.Get(id)
+		}
+		image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
+		if err == nil {
+			image.Predecessor, err = records.Predecessor(typ, id, prior)
+		}
+		return image, err
+	}()
 	if err != nil {
 		return nil, err
 	}

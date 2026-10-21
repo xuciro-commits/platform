@@ -511,9 +511,9 @@ func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section pl
 			var refusal *kernel.Error
 			if set != nil && set.Query != nil {
 				of := request.Records[set.RecordVariable].ID
-				rows, refusal = t.RunQueryWindow(c.Member, set.Query.Ref.App, set.Query.Ref.Name, of, set.Query.SourceVersion, query, at)
+				rows, refusal = t.queryWindowRead(c.Member, set.Query.Ref.App, set.Query.Ref.Name, of, set.Query.SourceVersion, query, at)
 			} else {
-				rows, refusal = t.Records(c.Member, model.Type, query, at)
+				rows, refusal = t.recordsRead(c.Member, model.Type, query, at)
 			}
 			if refusal != nil {
 				return nil, false, nil, refusal

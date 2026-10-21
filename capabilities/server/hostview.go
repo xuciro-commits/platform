@@ -380,7 +380,7 @@ func (h hostView) BindInterfaceQuery(q platform.NamedQuery, drafts ...platform.E
 }
 
 func (h hostView) Readable(m platform.Member, ref string, now time.Time) bool {
-	return h.t.Readable(m, ref, now)
+	return h.t.readable(m, ref, now)
 }
 
 func (h hostView) Stored(tenant, hash string) bool {
@@ -391,7 +391,7 @@ func (h hostView) Record(ref string) (any, bool) {
 	if h.decision != nil {
 		return (&Tenant{records: h.decision.records}).Held(ref)
 	}
-	return h.t.Held(ref)
+	return h.t.held(ref)
 }
 
 func (h hostView) BuildProcesses() host.ProcessDefinitions { return h.Processes() }

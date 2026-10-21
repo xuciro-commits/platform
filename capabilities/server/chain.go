@@ -40,16 +40,16 @@ type Chain struct {
 }
 
 // ChainOf is the chain of ref, an agent run or a flow instance, as m may read it.
-func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {
+func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {
 	typ, id, _ := strings.Cut(ref, "/")
 	if typ != RunType && typ != platform.FlowInstanceType {
 		return Chain{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if _, err := t.RecordOf(m, typ, id, now); err != nil {
+	if _, err := t.recordOf(m, typ, id, now); err != nil {
 		return Chain{}, err
 	}
 	instance := func(id string) (platform.FlowInstance, bool) {
-		v, err := t.RecordOf(m, platform.FlowInstanceType, id, now)
+		v, err := t.recordOf(m, platform.FlowInstanceType, id, now)
 		if err != nil {
 			return platform.FlowInstance{}, false
 		}
@@ -58,7 +58,7 @@ func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *
 	}
 	find := func(typ, field, value string) []any {
 		domain, _ := json.Marshal([]any{[]any{field, "=", value}})
-		page, err := t.Records(m, typ, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 50, Archived: true}, now)
+		page, err := t.recordsRead(m, typ, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 50, Archived: true}, now)
 		if err != nil {
 			return nil
 		}
@@ -78,7 +78,7 @@ func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *
 	// Up to the first flow: a run's flow, an instance's parents.
 	top := ""
 	if typ == RunType {
-		v, _ := t.RecordOf(m, RunType, id, now)
+		v, _ := t.recordOf(m, RunType, id, now)
 		run := v.Record.(AgentRunRecord)
 		if run.Flow == "" {
 			t.chainRun(m, run, add, link, now)

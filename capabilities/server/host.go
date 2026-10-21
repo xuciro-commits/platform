@@ -41,6 +41,8 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
+	currentReadScopes  bool
+	recordReadError    error
 	startupSnapshot    *snapshotCompatibility
 	runtimePosition    func() int64
 	snapshotPosition   int64 // last captured/restored checkpoint; zero-position diagnostics preserve it
@@ -67,7 +69,7 @@ type Tenant struct {
 	index         index          // passages cut from documents and knowledge fields
 	i18n          translator     // says declarations and messages in a language (ADR-0005)
 	agentRun      string         // the run whose agent is submitting, under mu: its effects name it
-	mu            sync.Mutex
+	mu            tenantLane
 	streamMu      sync.Mutex                  // one outside-lane source intake pass per tenant
 	flowArtifacts flowArtifactGC              // transient preparation/collection exclusion; no authoritative state
 	fault         atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
@@ -324,8 +326,10 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb
 // submitDiagnosed captures one invocation, including its original durable refusal.
 func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
-	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) { issues = found })
-	return record, err, t.readableFieldIssues(m, issues, now)
+	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) {
+		issues = t.readableFieldIssues(m, found, now)
+	})
+	return record, err, issues
 }
 
 func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue), contentVersion ...string) (record *pb.ChangeRecord, err *kernel.Error) {
@@ -351,8 +355,8 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.quarantined() {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	if refusal := t.recordReadRefusal(); refusal != nil {
+		return nil, refusal
 	}
 	if retired {
 		key := a.Manifest().ID + "/" + s.GetIdempotencyKey()
@@ -678,6 +682,11 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if refusal := t.recordReadRefusal(); refusal != nil {
+		return nil, refusal
+	}
 	a := t.owner["input:"+name]
 	if a == nil {
 		return nil, unknown()
@@ -685,11 +694,6 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	if refusal := authorizationRefusal(t.authorizeEntry(m, a.Manifest().ID, "input:"+name, "action", now)); refusal != nil {
 		t.refused(m.ID, name, refusal, now)
 		return nil, refusal
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.quarantined() {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
@@ -712,12 +716,23 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 // Read serves a named read of the app that declares it, to members holding a
 // role in that app or to everyone when the manifest says so; the app may refuse further.
 func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
+	if name == "health" && t.quarantined() {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		return t.read(m, name)
+	}
+	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.read(m, name) })
+}
+func (t *Tenant) read(m platform.Member, name string) (any, *kernel.Error) {
 	return t.readFrom(m, t.owner["read:"+name], name)
 }
 
 // ReadFrom keeps a composed form's reads on the action's declared owner.
 // Authorization and result projection stay on Read's path.
 func (t *Tenant) ReadFrom(m platform.Member, app, name string) (any, *kernel.Error) {
+	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.readFromApp(m, app, name) })
+}
+func (t *Tenant) readFromApp(m platform.Member, app, name string) (any, *kernel.Error) {
 	a := t.app(app)
 	if a == nil || !slices.Contains(a.Manifest().Reads, name) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

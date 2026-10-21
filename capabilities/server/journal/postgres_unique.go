@@ -47,9 +47,20 @@ func (j *Postgres) StateUnique(ctx context.Context, tenant, typ, rule, key strin
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	ids, err := stateUnique(ctx, tx, tenant, typ, rule, key, applied)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func stateUnique(ctx context.Context, db stateQueries, tenant, typ, rule, key string, applied int64) ([]string, error) {
 	var position int64
 	var version *int
-	if err = tx.QueryRow(ctx, `select t.seq,f.version from runtime_tenants t left join runtime_unique_formats f on f.tenant=t.tenant where t.tenant=$1`, tenant).Scan(&position, &version); err != nil {
+	if err := db.QueryRow(ctx, `select t.seq,f.version from runtime_tenants t left join runtime_unique_formats f on f.tenant=t.tenant where t.tenant=$1`, tenant).Scan(&position, &version); err != nil {
 		return nil, err
 	}
 	if version == nil || *version != uniqueStateVersion {
@@ -59,7 +70,7 @@ func (j *Postgres) StateUnique(ctx context.Context, tenant, typ, rule, key strin
 		return nil, fmt.Errorf("tenant %s unique state is at %d, applied at %d", tenant, position, applied)
 	}
 	digest := sha256.Sum256([]byte(key))
-	rows, err := tx.Query(ctx, `select id from runtime_unique where tenant=$1 and type=$2 and rule=$3 and key_hash=$4 and key=$5 order by id`, tenant, typ, rule, digest[:], key)
+	rows, err := db.Query(ctx, `select id from runtime_unique where tenant=$1 and type=$2 and rule=$3 and key_hash=$4 and key=$5 order by id`, tenant, typ, rule, digest[:], key)
 	if err != nil {
 		return nil, err
 	}
@@ -75,9 +86,6 @@ func (j *Postgres) StateUnique(ctx context.Context, tenant, typ, rule, key strin
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return nil, err
-	}
-	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 	return ids, nil

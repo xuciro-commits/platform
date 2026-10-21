@@ -48,32 +48,34 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 		raw json.RawMessage
 	}
 	var bodies []retainedBody
-	store.mu.Lock()
-	for _, et := range store.types {
-		fields(et.info.Type, et.info.Fields, nil)
-	}
-	if objects := store.types[construction.ObjectType]; objects != nil {
-		for _, row := range objects.rows.All() {
-			typ := construction.TypeOf(businessField(objects.info, row.Value, "name"))
-			if published := businessField(objects.info, row.Value, "published"); published != "" {
-				bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
-			}
-			for _, change := range row.RecordHistory() {
-				for _, field := range change.Fields {
-					if field.Field != "published" {
-						continue
-					}
-					for _, raw := range []json.RawMessage{field.Before, field.After} {
-						var published string
-						if json.Unmarshal(raw, &published) == nil && published != "" {
-							bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
+	func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for _, et := range store.types {
+			fields(et.info.Type, et.info.Fields, nil)
+		}
+		if objects := store.types[construction.ObjectType]; objects != nil {
+			for _, row := range objects.rows.All() {
+				typ := construction.TypeOf(businessField(objects.info, row.Value, "name"))
+				if published := businessField(objects.info, row.Value, "published"); published != "" {
+					bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
+				}
+				for _, change := range row.RecordHistory() {
+					for _, field := range change.Fields {
+						if field.Field != "published" {
+							continue
+						}
+						for _, raw := range []json.RawMessage{field.Before, field.After} {
+							var published string
+							if json.Unmarshal(raw, &published) == nil && published != "" {
+								bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
+							}
 						}
 					}
 				}
 			}
 		}
-	}
-	store.mu.Unlock()
+	}()
 	for _, raw := range t.releases.candidates {
 		var release struct {
 			Assets []platform.ReleaseAsset `json:"assets"`

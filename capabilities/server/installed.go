@@ -87,7 +87,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if err := s.migrationDefinitionLocked(info); err != nil {
 		return err
 	}
-	et := &entityType{store: s, info: info, rows: records.Index[*records.Row]{}, knowledge: records.KnowledgeBearing(info)}
+	et := &entityType{store: s, info: info, rows: records.Rows{}, knowledge: records.KnowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
@@ -121,6 +121,10 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		}
 		et.setRows(index)
 		delete(s.byGo, before.info.Go)
+	} else if s.historyStore != nil && s.readView != nil {
+		// An owner-only SQL checkpoint restores dynamic declarations after native
+		// types. Their accepted rows already belong to the same fixed read view.
+		et.rows = records.SourceRows(&currentRows{store: s, typ: info.Type})
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et
 	s.generation++

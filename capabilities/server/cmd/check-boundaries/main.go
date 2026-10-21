@@ -118,6 +118,7 @@ func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...st
 			report(imported, "owner contract depends on implementation "+name)
 		}
 		pure := strings.HasPrefix(path, "capabilities/server/internal/construction/") ||
+			strings.HasPrefix(path, "capabilities/server/internal/aistate/") ||
 			strings.HasPrefix(path, "capabilities/server/internal/agents/") ||
 			strings.HasPrefix(path, "capabilities/server/internal/records/") ||
 			strings.HasPrefix(path, "capabilities/server/internal/acceptance/") ||

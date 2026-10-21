@@ -53,12 +53,15 @@ func (t *Tenant) relationMigrationPlan(store *recordStore, c platform.Caller, bi
 	if !slices.ContainsFunc(link.Roles, func(role string) bool { return slices.Contains(c.RolesHere(), role) }) {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The caller cannot migrate this relationship")
 	}
-	store.mu.Lock()
-	et := store.types[platform.OwnedRelationType(c.App)]
-	if et != nil {
-		plan.Migrated = relationImage(et.rows.Get(relationMigrationID(binding.Ref))).Migration
-	}
-	store.mu.Unlock()
+	var et *entityType
+	func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		et = store.types[platform.OwnedRelationType(c.App)]
+		if et != nil {
+			plan.Migrated = relationImage(et.rows.Get(relationMigrationID(binding.Ref))).Migration
+		}
+	}()
 	if et == nil {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Relationship owner has not declared its relation records")
 	}
@@ -81,9 +84,12 @@ func (t *Tenant) relationMigrationPlan(store *recordStore, c platform.Caller, bi
 		if !(from == link.Parent.Name && to == link.Child.Name || to == link.Parent.Name && from == link.Child.Name) {
 			continue
 		}
-		store.mu.Lock()
-		readable := t.readableIn(store, c.Member, legacy.From, at) && t.readableIn(store, c.Member, legacy.To, at)
-		store.mu.Unlock()
+		var readable bool
+		func() {
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			readable = t.readableIn(store, c.Member, legacy.From, at) && t.readableIn(store, c.Member, legacy.To, at)
+		}()
 		if !readable {
 			plan.Partial = true
 			continue

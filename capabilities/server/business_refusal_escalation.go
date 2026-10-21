@@ -43,12 +43,12 @@ func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Ti
 		seen[identity] = true
 		groups[g] = append(groups[g], event{key: key, fact: fact})
 	}
-	for key, r := range d.tenant.committed.allRefusals() {
+	for key, r := range storedValues(&d.tenant.committed, "refusal", d.tenant.committed.refusals, "business") {
 		if r.Business != nil {
 			add(key, *r.Business)
 		}
 	}
-	for key, raw := range d.tenant.committed.allAnswers() {
+	for key, raw := range storedValues(&d.tenant.committed, "answer", d.tenant.committed.answers, "business") {
 		var envelope struct{ Kind string }
 		if json.Unmarshal(raw, &envelope) != nil || envelope.Kind != "record-batch" {
 			continue

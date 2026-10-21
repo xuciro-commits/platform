@@ -238,6 +238,12 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	return result, receipt, nil
 }
 
+// HasSavedAnswer distinguishes a reply to an original request from an ordinary
+// batch whose receipt already carries that request in its owner's ledger.
+func (result Batch) HasSavedAnswer(submission *pb.Submission) bool {
+	return len(result.Submission) > 0 || len(result.Business) > 0 || strings.HasPrefix(submission.GetCorrelationId(), "correction:")
+}
+
 func BatchSubmission(result Batch, receipt *pb.ChangeRecord) (*pb.Submission, error) {
 	if len(result.Submission) == 0 {
 		return receipt.GetSubmission(), nil

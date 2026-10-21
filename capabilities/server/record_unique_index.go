@@ -47,10 +47,14 @@ func (s *recordStore) uniqueKey(info platform.EntityInfo, rule platform.Constrai
 				break
 			}
 			parent := s.types[field.Ref]
-			if parent == nil || parent.info.App != info.App || parent.rows.Get(x.String()) == nil {
+			if parent == nil || parent.info.App != info.App {
 				return "", fmt.Errorf("unique scope reference is unavailable")
 			}
-			current, currentType = parent.rows.Get(x.String()).Value, parent.info
+			record := parent.rows.Get(x.String())
+			if record == nil {
+				return "", fmt.Errorf("unique scope reference is unavailable")
+			}
+			current, currentType = record.Value, parent.info
 		}
 	}
 	raw, err := json.Marshal(values)
@@ -134,9 +138,8 @@ func (s *recordStore) scopeDependents(info platform.EntityInfo, rule platform.Co
 			ids.Set(changedID, true)
 			for j := len(edges) - 1; j >= 0; j-- {
 				var parents records.Index[bool]
-				index := edges[j].source.referenceIndex(edges[j].field)
 				for target := range ids.All() {
-					for id := range index.Get(target).IDs.All() {
+					for id := range edges[j].source.referenceBucket(edges[j].field, target).IDs.All() {
 						parents.Set(id, true)
 					}
 				}

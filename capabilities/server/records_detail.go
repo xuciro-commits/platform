@@ -42,7 +42,7 @@ type Related struct {
 	Total    int    `json:"total"`
 }
 
-func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
+func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
 	m = t.authorizationMember(m)
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	if err := t.admits(m); err != nil {
@@ -59,10 +59,14 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	if err != nil {
 		return RecordView{}, err
 	}
-	s.mu.Lock()
-	r := et.rows.Get(id)
-	readable := r != nil && (visible == nil || visible(r.Value))
-	s.mu.Unlock()
+	var r *records.Row
+	var readable bool
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		r = et.rows.Get(id)
+		readable = r != nil && (visible == nil || visible(r.Value))
+	}()
 	if !readable {
 		return RecordView{}, notFound
 	}
@@ -82,7 +86,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	if c := t.app(platform.RelationsApp); c != nil && typ != platform.CommentType && typ != platform.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
+		if page, err := t.recordsRead(m, platform.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
 			view.Comments = t.narrowed(m, page.Records, now, false).([]any)
 		}
 		if f, ok := platform.Get[platform.RecordFollow](t.automation(platform.RelationsApp, false), platform.FollowID(m.ID, typ+"/"+id)); ok && !f.Archived {
@@ -93,25 +97,25 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	t.readPersonal(m, seen, []string{id}, now)
 	if typ != platform.FileType && t.app(platform.FileApp) != nil {
 		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.FileType, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 100}, now); err == nil {
+		if page, err := t.recordsRead(m, platform.FileType, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 100}, now); err == nil {
 			view.Files = page.Records
 		}
 	}
 	if t.procs != nil {
 		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.FlowInstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
+		if page, err := t.recordsRead(m, platform.FlowInstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
 			view.Processes = page.Records
 		}
 	}
 	if typ != platform.WorkTaskType && t.app(platform.WorkApp) != nil {
 		domain, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}, []any{"state", "=", "open"}})
-		if page, err := t.Records(m, platform.WorkTaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now); err == nil {
+		if page, err := t.recordsRead(m, platform.WorkTaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now); err == nil {
 			view.Tasks = page.Records
 		}
 	}
 	if typ != platform.WorkApprovalType && t.app(platform.WorkApp) != nil {
 		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		if page, err := t.Records(m, platform.WorkApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now); err == nil {
+		if page, err := t.recordsRead(m, platform.WorkApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now); err == nil {
 			view.Approvals = page.Records
 		}
 	}
@@ -138,7 +142,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 				continue
 			}
 			domain, _ := json.Marshal([]any{[]any{f.Name, "=", id}})
-			page, err := t.Records(m, other.info.Type, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20}, now)
+			page, err := t.recordsRead(m, other.info.Type, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20}, now)
 			if err != nil {
 				continue // the member may not read that type
 			}
@@ -162,7 +166,7 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 	for _, e := range c.Links(entity) {
 		typ, id, _ := strings.Cut(e, "/")
 		domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-		page, err := t.Records(m, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
+		page, err := t.recordsRead(m, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
 		if err != nil || len(page.Records) == 0 {
 			continue
 		}

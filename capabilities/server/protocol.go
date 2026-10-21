@@ -281,7 +281,7 @@ func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *kernel.E
 	if !declared || !slices.Contains(b.provision.Protocol.Reads, read) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return t.Read(m, name)
+	return t.read(m, name)
 }
 
 func (t *Tenant) authorityOf(dataClass string) string {

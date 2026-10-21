@@ -139,6 +139,8 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 // execution keeps the catalog bound to its retained release.
 func (t *Tenant) submitSchemaDiagnosed(member platform.Member, sub *pb.Submission, content string, at time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
-	record, refusal := t.submit(member, sub, at, func(_ *kernel.Error, found []platform.FieldIssue) { issues = found }, strings.TrimSpace(content))
-	return record, refusal, t.readableFieldIssues(member, issues, at)
+	record, refusal := t.submit(member, sub, at, func(_ *kernel.Error, found []platform.FieldIssue) {
+		issues = t.readableFieldIssues(member, found, at)
+	}, strings.TrimSpace(content))
+	return record, refusal, issues
 }

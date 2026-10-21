@@ -15,7 +15,7 @@ func viewOf(m platform.Member, et *entityType) (*entityType, []platform.FieldInf
 	if len(hidden) == 0 {
 		return et, nil
 	}
-	return &entityType{info: info, rows: et.rows}, hidden
+	return &entityType{info: info, rows: et.rows, retainedProjection: et.retainedProjection}, hidden
 }
 
 // Entities are the entity types m may read: those of apps m holds a role in.
@@ -62,7 +62,7 @@ func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, n
 }
 
 // Readable reports whether m may read the record ref ("<type>/<id>").
-func (t *Tenant) Readable(m platform.Member, ref string, now time.Time) bool {
+func (t *Tenant) readable(m platform.Member, ref string, now time.Time) bool {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	return t.readableLocked(m, ref, now)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"platformkernel/kernel"
 	"platformserver/internal/records"
 	"reflect"
 	"regexp"
@@ -223,7 +224,10 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 		if err != nil {
 			return nil, err
 		}
-		rows, changes, ends := p.rows(info.Type, nil)
+		rows, changes, ends, err := p.rows(ctx, info.Type, nil)
+		if err != nil {
+			return nil, err
+		}
 		for ref, end := range ends {
 			history[ref] = end
 		}
@@ -274,7 +278,23 @@ func (p *Projection) touch(typ, id string) {
 
 // rows reads exactly the changed IDs (or all records on rebuild), and only
 // history after the prefix confirmed by a successful database write.
-func (p *Projection) rows(typ string, ids map[string]bool) (rows [][]any, changes [][]any, ends map[string]int) {
+type projectionRows struct {
+	rows, changes [][]any
+	ends          map[string]int
+}
+
+func (p *Projection) rows(ctx context.Context, typ string, ids map[string]bool) ([][]any, [][]any, map[string]int, error) {
+	out, refusal := recordRead(p.tenant, ctx, func() (projectionRows, *kernel.Error) {
+		rows, changes, ends := p.readRows(typ, ids)
+		return projectionRows{rows, changes, ends}, nil
+	})
+	if refusal != nil {
+		return nil, nil, nil, refusal
+	}
+	return out.rows, out.changes, out.ends, nil
+}
+
+func (p *Projection) readRows(typ string, ids map[string]bool) (rows [][]any, changes [][]any, ends map[string]int) {
 	p.mu.Lock()
 	written := make(map[string]int, len(ids))
 	if ids == nil {
@@ -338,7 +358,7 @@ func (p *Projection) recordHistory(ends map[string]int) {
 
 // Flush writes the records changed since the last flush; the host calls it
 // every second, after the decisions that changed them are committed.
-func (p *Projection) Flush(ctx context.Context) error {
+func (p *Projection) Flush(ctx context.Context) (err error) {
 	p.mu.Lock()
 	dirty := p.dirty
 	p.dirty = map[string]map[string]bool{}
@@ -346,6 +366,21 @@ func (p *Projection) Flush(ctx context.Context) error {
 	if len(dirty) == 0 {
 		return nil
 	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		for typ, ids := range dirty {
+			if p.dirty[typ] == nil {
+				p.dirty[typ] = map[string]bool{}
+			}
+			for id := range ids {
+				p.dirty[typ][id] = true
+			}
+		}
+	}()
 	batch := &pgx.Batch{}
 	history := map[string]int{}
 	for typ, ids := range dirty {
@@ -354,7 +389,10 @@ func (p *Projection) Flush(ctx context.Context) error {
 		info := s.types[typ].info
 		s.mu.Unlock()
 		upsert, change := p.writeSQL(info)
-		rows, changes, ends := p.rows(typ, ids)
+		rows, changes, ends, readErr := p.rows(ctx, typ, ids)
+		if readErr != nil {
+			return readErr
+		}
 		for ref, end := range ends {
 			history[ref] = end
 		}
@@ -366,16 +404,6 @@ func (p *Projection) Flush(ctx context.Context) error {
 		}
 	}
 	if err := p.pool.SendBatch(ctx, batch).Close(); err != nil {
-		p.mu.Lock() // try these again with the next flush
-		for typ, ids := range dirty {
-			for id := range ids {
-				if p.dirty[typ] == nil {
-					p.dirty[typ] = map[string]bool{}
-				}
-				p.dirty[typ][id] = true
-			}
-		}
-		p.mu.Unlock()
 		return err
 	}
 	p.recordHistory(history)

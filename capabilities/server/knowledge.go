@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"platformkernel/kernel"
 	"platformserver/internal/records"
 	"platformserver/journal"
 	"platformserver/platform"
@@ -145,7 +146,7 @@ func (t *Tenant) sources() []source {
 	t.records.mu.Unlock()
 	for _, et := range types {
 		for offset := 0; ; offset += 500 {
-			page, err := t.Records(t.host(), et.info.Type, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
+			page, err := t.recordsRead(t.host(), et.info.Type, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
 			if err != nil {
 				break
 			}
@@ -216,13 +217,16 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 				}
 			}
 		default:
-			t.records.mu.Lock()
-			et := t.records.types[typ]
+			var et *entityType
 			var v reflect.Value
-			if et != nil && et.rows.Get(id) != nil {
-				v = et.rows.Get(id).Value
-			}
-			t.records.mu.Unlock()
+			func() {
+				t.records.mu.Lock()
+				defer t.records.mu.Unlock()
+				et = t.records.types[typ]
+				if et != nil && et.rows.Get(id) != nil {
+					v = et.rows.Get(id).Value
+				}
+			}()
 			if et == nil || !v.IsValid() || v.FieldByName("Record").Interface().(platform.Record).Archived {
 				continue
 			}
@@ -236,6 +240,9 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []source {
 // that only the records the store marked dirty are cut again (ADR-0009 14b).
 // A search over an unchanged tenant does no work at all, whatever its size.
 func (t *Tenant) sync() {
+	_, _ = recordRead(t, context.Background(), func() (struct{}, *kernel.Error) { t.syncRecords(); return struct{}{}, nil })
+}
+func (t *Tenant) syncRecords() {
 	k := &t.index
 	k.mu.Lock()
 	walked := k.walked
@@ -475,17 +482,20 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 	if reader != nil {
 		m = *reader
 	}
-	allowed := map[string]bool{}
-	for _, c := range candidates {
-		visible, known := allowed[c.scope]
-		if !known {
-			visible = c.scope == "" || t.Readable(m, c.scope, now)
-			allowed[c.scope] = visible
+	_, _ = recordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+		allowed := map[string]bool{}
+		for _, c := range candidates {
+			visible, known := allowed[c.scope]
+			if !known {
+				visible = c.scope == "" || t.readable(m, c.scope, now)
+				allowed[c.scope] = visible
+			}
+			if visible {
+				all = append(all, c)
+			}
 		}
-		if visible {
-			all = append(all, c)
-		}
-	}
+		return struct{}{}, nil
+	})
 	if len(all) == 0 && (model == "" || !databaseSearch) {
 		return out
 	}
@@ -549,12 +559,15 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 		}
 		fuse(cos)
 	}
-	for c, r := range ranks {
-		if !t.currentPassageReadable(c, reader, app, now) {
-			continue
+	_, _ = recordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
+		for c, r := range ranks {
+			if !t.currentPassageReadableInLane(c, reader, app, now) {
+				continue
+			}
+			out = append(out, Passage{Document: c.doc, Title: c.title, Chunk: c.n, Text: c.text, Score: math.Round(r*10000) / 10000})
 		}
-		out = append(out, Passage{Document: c.doc, Title: c.title, Chunk: c.n, Text: c.text, Score: math.Round(r*10000) / 10000})
-	}
+		return struct{}{}, nil
+	})
 	slices.SortStableFunc(out, func(a, b Passage) int {
 		if a.Score != b.Score {
 			return cmpFloat(b.Score, a.Score)

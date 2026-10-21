@@ -3,6 +3,7 @@ package platformserver
 import (
 	"context"
 	"encoding/json"
+	"platformkernel/kernel"
 	"platformserver/internal/acceptance"
 	"strings"
 	"time"
@@ -29,43 +30,45 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 		publisher  string
 		scopes     []string
 	}
-	var sources []scheduled
-	t.mu.Lock()
-	definitions, err := t.ownedAssetDefinitions(t.definitions)
-	if err != nil {
-		t.mu.Unlock()
-		return
-	}
-	for _, definition := range definitions {
-		if definition.Observation == nil || !definition.Observation.Scheduled || definition.OwnerRecord == "" || !t.observationSourceActive(definition.OwnerRecord) {
-			continue
+	sources, _ := coordinatedRecordRead(t, context.Background(), func() ([]scheduled, *kernel.Error) {
+		var sources []scheduled
+		definitions, err := t.ownedAssetDefinitions(t.definitions)
+		if err != nil {
+			return nil, nil
 		}
-		typ, id, valid := strings.Cut(definition.OwnerRecord, "/")
-		if !valid {
-			continue
-		}
-		t.records.mu.Lock()
-		owner := t.records.types[typ]
-		row := owner.rows.Get(id)
-		publisher := ""
-		var scopes []string
-		if row != nil {
-			publisher = businessField(owner.info, row.Value, "publisher")
-			var value struct {
-				Scopes string `json:"publisherScopes"`
+		for _, definition := range definitions {
+			if definition.Observation == nil || !definition.Observation.Scheduled || definition.OwnerRecord == "" || !t.observationSourceActive(definition.OwnerRecord) {
+				continue
 			}
-			if json.Unmarshal(platform.Raw(row.Value.Interface()), &value) == nil {
-				if value.Scopes != "" && json.Unmarshal([]byte(value.Scopes), &scopes) != nil {
-					publisher = ""
+			typ, id, valid := strings.Cut(definition.OwnerRecord, "/")
+			if !valid {
+				continue
+			}
+			publisher := ""
+			var scopes []string
+			func() {
+				t.records.mu.Lock()
+				defer t.records.mu.Unlock()
+				owner := t.records.types[typ]
+				row := owner.rows.Get(id)
+				if row != nil {
+					publisher = businessField(owner.info, row.Value, "publisher")
+					var value struct {
+						Scopes string `json:"publisherScopes"`
+					}
+					if json.Unmarshal(platform.Raw(row.Value.Interface()), &value) == nil {
+						if value.Scopes != "" && json.Unmarshal([]byte(value.Scopes), &scopes) != nil {
+							publisher = ""
+						}
+					}
 				}
+			}()
+			if publisher != "" {
+				sources = append(sources, scheduled{definition.Ref, definition.Version, *definition.Observation, publisher, scopes})
 			}
 		}
-		t.records.mu.Unlock()
-		if publisher != "" {
-			sources = append(sources, scheduled{definition.Ref, definition.Version, *definition.Observation, publisher, scopes})
-		}
-	}
-	t.mu.Unlock()
+		return sources, nil
+	})
 	for _, source := range sources {
 		member, found := t.Member(source.publisher)
 		if !found {

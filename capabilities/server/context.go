@@ -64,12 +64,12 @@ func (t *Tenant) appReader(app string) *platform.Member {
 	return &platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{app: platform.AnyMember}}
 }
 
-func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {
+func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {
 	if reader == nil || reader.Tenant != t.ID {
 		return ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	m := *reader
-	view, err := t.RecordOf(m, typ, id, now)
+	view, err := t.recordOf(m, typ, id, now)
 	if err != nil {
 		return ContextView{}, err
 	}
@@ -97,14 +97,14 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 	}
 	if t.linker != nil {
 		for _, ref := range t.linker.Links(t.caller(m, t.linker.(platform.App), false), typ+"/"+id) {
-			if t.Readable(m, ref, now) {
+			if t.readable(m, ref, now) {
 				out.Links = append(out.Links, ref)
 			}
 		}
 	}
 	if t.procs != nil {
 		key, _ := json.Marshal([]any{[]any{"key", "=", id}})
-		instances, err := t.Records(m, platform.FlowInstanceType, platform.Query{Domain: key, Sort: []string{"id"}}, now)
+		instances, err := t.recordsRead(m, platform.FlowInstanceType, platform.Query{Domain: key, Sort: []string{"id"}}, now)
 		if err == nil {
 			for _, record := range instances.Records {
 				x := record.(platform.FlowInstance)
@@ -118,7 +118,7 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 	}
 	if t.tasks != nil {
 		about, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}})
-		tasks, err := t.Records(m, platform.WorkTaskType, platform.Query{Domain: about, Sort: []string{"id"}}, now)
+		tasks, err := t.recordsRead(m, platform.WorkTaskType, platform.Query{Domain: about, Sort: []string{"id"}}, now)
 		if err == nil {
 			for _, record := range tasks.Records {
 				x := record.(platform.WorkTask)
@@ -139,7 +139,7 @@ type Hit struct {
 // Search finds records of every type the reader may read by text: the global
 // search of the workspace and an agent's search tool. Without a reader it
 // finds nothing (ADR-0008).
-func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit {
+func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []Hit {
 	if reader == nil || reader.Tenant != t.ID {
 		return nil
 	}
@@ -156,7 +156,7 @@ func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit 
 		if rest, named := t.names(info, q); named { // "open opportunities" searches opportunities for "open" (ADR-0005 D1)
 			query.Search = rest
 		}
-		page, err := t.Records(m, info.Type, query, now)
+		page, err := t.recordsRead(m, info.Type, query, now)
 		if err != nil {
 			continue
 		}

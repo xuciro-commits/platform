@@ -372,11 +372,6 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		out.Detail = "Invalid accepted operation input"
 		return out
 	}
-	member, ok := t.Member(b.Member)
-	if !ok || member.Tenant != t.ID {
-		out.Detail = "Operation member is no longer authorised"
-		return out
-	}
 	start := time.Now()
 	timeout := 180 * time.Second
 	if b.Build == nil {
@@ -385,9 +380,25 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	t.mu.Lock()
+	member, ok := t.Member(b.Member)
+	if !ok || member.Tenant != t.ID {
+		t.mu.Unlock()
+		out.Detail = "Operation member is no longer authorised"
+		return out
+	}
+	if t.recordReadRefusal() != nil {
+		t.mu.Unlock()
+		out.Detail = "Operation access could not be read"
+		return out
+	}
 	if !t.operationCurrent(x.ID, x.Generation) {
 		t.mu.Unlock()
 		out.Detail = "Operation was cancelled"
+		return out
+	}
+	if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, now)); refusal != nil {
+		t.mu.Unlock()
+		out.Detail = refusal.Message
 		return out
 	}
 	t.cancels.add(x.ID, cancel)
@@ -396,10 +407,6 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {
-		if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, now)); refusal != nil {
-			out.Detail = refusal.Message
-			return out
-		}
 		compiler := t.Compiler
 		if compiler == nil {
 			compiler = EnvironmentCompiler()
@@ -429,10 +436,6 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		definition, _ := acceptance.Digest([]any{x.App, op, b.Call.Version})
 		if op.Check() != nil || hash != b.Call.InputHash || definition != b.Call.Definition {
 			out.Detail = "Operation definition or permission differs"
-			return out
-		}
-		if refusal := authorizationRefusal(t.operationAuthorization(member, x.App, b, now)); refusal != nil {
-			out.Detail = refusal.Message
 			return out
 		}
 		inputs := b.Inputs
@@ -467,19 +470,29 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			}
 		}
 		if op.Rules != nil {
-			for _, set := range op.Rules.Reads.Collections {
-				query, _, ok := t.memberQueryVersion(member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
-				if !ok || query.Object != set.Object {
-					out.Detail = "Rule collection permission was revoked"
-					return out
+			why, refusal := recordRead(t, ctx, func() (string, *kernel.Error) {
+				for _, set := range op.Rules.Reads.Collections {
+					query, _, ok := t.memberQueryVersion(member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
+					if !ok || query.Object != set.Object {
+						return "Rule collection permission was revoked", nil
+					}
+					info, _ := t.entity(set.Object)
+					if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App)) != platform.ScopeTenant {
+						return "Complete collection permission was revoked", nil
+					}
 				}
-				info, _ := t.entity(set.Object)
-				if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App)) != platform.ScopeTenant {
-					out.Detail = "Complete collection permission was revoked"
-					return out
-				}
+				return "", nil
+			})
+			if refusal != nil {
+				out.Detail = "Operation collection access could not be read"
+				return out
+			}
+			if why != "" {
+				out.Detail = why
+				return out
 			}
 		}
+
 		if op.Rules != nil {
 			if b.RuleFacts == nil {
 				err = fmt.Errorf("Rule facts are not bound")

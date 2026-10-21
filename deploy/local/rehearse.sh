@@ -83,7 +83,7 @@ submit() { # token key schema target-type target-id payload [expected-revision]
   local body who binding family
   local server=${SERVER:-$MANUFACTURING}
   local headers=(-H "Authorization: Bearer $1" -H 'Content-Type: application/json')
-  who=$(curl -s -H "Authorization: Bearer $1" "$server/v1/me" | jq -r .principalId)
+  who=$(curl -sf -H "Authorization: Bearer $1" "$server/v1/me" | jq -er '.principalId | select(type == "string" and length > 0)') || fail "submission identity unavailable for $3"
   binding=$(curl -sf -H "Authorization: Bearer $1" "$server/v1/actions" | jq -c --arg schema "$3" '[.[] | select(.schema == $schema) | .schemaVersion][0] // null')
   family=$(jq -r '.family // 1' <<<"$binding")
   if [[ $binding != null ]]; then
@@ -591,7 +591,7 @@ agent() { (cd ../../apps/mes/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MANUFACTURING" -oidc-token "$IDP/oidc/token" "$@"); }
 catalog=$(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") or startswith("files.") or IN("platform.link", "platform.unlink", "platform.note", "platform.comment.add", "platform.follow.add", "platform.follow.remove") | not)]')
-[[ $catalog == '["platform.profile.update","platform.member.delegate","platform.token.issue","platform.token.revoke","platform.notification.read","platform.operation.call","build.function-call.start","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog: $catalog"
+[[ $catalog == '["platform.profile.update","platform.member.delegate","platform.token.issue","platform.token.revoke","platform.notification.read","platform.operation.call","build.function-call.start","build.function-call.review","build.confirmation.review","build.dispatch.review","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog: $catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"

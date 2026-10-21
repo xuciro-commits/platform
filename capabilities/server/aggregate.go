@@ -345,7 +345,7 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 
 // Aggregate serves a member's aggregate over a type, within the member's
 // scope: it never counts a record the member could not list.
-func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now time.Time) (Aggregate, *kernel.Error) {
+func (t *Tenant) aggregateRead(m platform.Member, typ string, q AggregateQuery, now time.Time) (Aggregate, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return Aggregate{}, err
 	}
@@ -430,7 +430,7 @@ func (t *Tenant) aggregateView(member platform.Member, et *entityType) *entityTy
 	if fields := t.narrowable(et); len(fields) > 0 {
 		info := view.info
 		info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(field platform.FieldInfo) bool { return slices.Contains(fields, field.Name) })
-		view = &entityType{info: info, rows: view.rows}
+		view = &entityType{info: info, rows: view.rows, retainedProjection: view.retainedProjection}
 	}
 	return view
 }

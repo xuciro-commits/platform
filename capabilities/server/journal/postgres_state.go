@@ -27,7 +27,12 @@ var stateSchema = []string{
 	`create table if not exists runtime_results (tenant text not null, app text not null, scope text not null, key text not null, hash text not null, seq bigint not null, body bytea not null, primary key(tenant,app,scope,key))`,
 }
 
-func init() { stateSchema = append(stateSchema, uniqueStateSchema...) }
+func init() {
+	stateSchema = append(stateSchema, uniqueStateSchema...)
+	stateSchema = append(stateSchema, stateSnapshotSchema...)
+	stateSchema = append(stateSchema, valueSelectionSchema...)
+	stateSchema = append(stateSchema, `alter table runtime_tenants add column if not exists format integer not null default 1`)
+}
 
 // InitializeState runs before this tenant accepts writes. The SQL position and
 // every image/history entry are compared at the same retained journal position;
@@ -59,13 +64,16 @@ func (j *Postgres) InitializeState(ctx context.Context, tenant string, position 
    select tenant,app,`+acceptedScopeSQL+`,coalesce(body->>'key',body#>>'{submission,idempotencyKey}',body#>>'{receipt,submission,idempotencyKey}'),body->>'requestHash',seq,convert_to(body::text,'UTF8') from journal where tenant=$1 and kind='accepted-result'`, tenant); err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, `insert into runtime_tenants (tenant,seq) values ($1,$2)`, tenant, position); err != nil {
+		if _, err = tx.Exec(ctx, `insert into runtime_tenants (tenant,seq,format) values ($1,$2,3)`, tenant, position); err != nil {
 			return err
 		}
 	} else if err != nil {
 		return err
 	} else if saved != position {
 		return fmt.Errorf("tenant %s SQL state is at %d, journal at %d", tenant, saved, position)
+	}
+	if err = j.upgradeStateInstallations(ctx, tx, tenant, position, delta); err != nil {
+		return err
 	}
 	if err = j.compareState(ctx, tx, tenant, position, delta); err != nil {
 		return err
@@ -106,6 +114,9 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 		return err
 	}
 	if saved == position {
+		if err = j.upgradeStateInstallations(ctx, tx, tenant, position, full); err != nil {
+			return err
+		}
 		if err = j.compareState(ctx, tx, tenant, position, full); err != nil {
 			return err
 		}
@@ -113,6 +124,9 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 	}
 	if saved != prefix.Position || saved < 0 || saved >= position {
 		return fmt.Errorf("tenant %s SQL recovery predecessor differs: %d/%d/%d", tenant, saved, prefix.Position, position)
+	}
+	if err = j.upgradeStateInstallations(ctx, tx, tenant, prefix.Position, prefix.Delta); err != nil {
+		return err
 	}
 	if err = j.compareState(ctx, tx, tenant, prefix.Position, prefix.Delta); err != nil {
 		return fmt.Errorf("SQL recovery prefix: %w", err)
@@ -201,10 +215,11 @@ func (j *Postgres) compareStateImage(ctx context.Context, tx pgx.Tx, tenant stri
 		var equal bool
 		var n int
 		var storedHead string
-		if err := tx.QueryRow(ctx, `select query=$4::jsonb,history_count,history_head from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID, []byte(r.Image)).Scan(&equal, &n, &storedHead); err != nil {
+		var original []byte
+		if err := tx.QueryRow(ctx, `select query=$4::jsonb,history_count,history_head,image from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID, []byte(r.Image)).Scan(&equal, &n, &storedHead, &original); err != nil {
 			return err
 		}
-		if !equal || n != len(r.History) {
+		if !equal || !sameJSON(original, r.Image) || n != len(r.History) {
 			return fmt.Errorf("tenant %s state differs for %s/%s", tenant, r.Type, r.ID)
 		}
 		rows, err := tx.Query(ctx, `select pos, query from runtime_history where tenant=$1 and type=$2 and id=$3 order by pos`, tenant, r.Type, r.ID)
@@ -364,6 +379,19 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			return err
 		}
 	}
+	for _, replacement := range d.Replacements {
+		var image []byte
+		if err := tx.QueryRow(ctx, `select image from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, replacement.Type, replacement.ID).Scan(&image); err != nil {
+			return err
+		}
+		replaced, err := ReplaceStateRecordValue(image, replacement)
+		if err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `update runtime_records set image=$4,query=$5::jsonb,seq=$6 where tenant=$1 and type=$2 and id=$3`, tenant, replacement.Type, replacement.ID, []byte(replaced), string(replaced), position); err != nil {
+			return err
+		}
+	}
 	for _, c := range d.Changes {
 		if c.Index == 0 {
 			if err := tx.QueryRow(ctx, `select coalesce(max(num),0)+1 from runtime_changes where tenant=$1 and app=$2`, tenant, c.App).Scan(&c.Index); err != nil {
@@ -379,19 +407,45 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			return err
 		}
 	}
+	for _, update := range d.ValueUpdates {
+		var image []byte
+		if err := tx.QueryRow(ctx, `select image from runtime_values where tenant=$1 and owner=$2 and key=$3`, tenant, update.Owner, update.Key).Scan(&image); err != nil {
+			return err
+		}
+		updated, err := update.Apply(image)
+		if err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `update runtime_values set image=$4,query=$5::jsonb,seq=$6 where tenant=$1 and owner=$2 and key=$3`, tenant, update.Owner, update.Key, []byte(updated), string(updated), position); err != nil {
+			return err
+		}
+	}
 	return j.writeUnique(ctx, tx, tenant, position, d.Unique)
 }
 
 func (j *Postgres) StateRecord(ctx context.Context, tenant, typ, id string) (json.RawMessage, error) {
-	var raw []byte
-	err := j.pool.QueryRow(ctx, `select image from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, typ, id).Scan(&raw)
+	return stateRecord(ctx, j.pool, tenant, typ, id)
+}
+
+func stateRecord(ctx context.Context, db stateQueries, tenant, typ, id string) (json.RawMessage, error) {
+	current, err := stateCurrent(ctx, db, tenant, typ, id)
+	return current.Image, err
+}
+
+func stateCurrent(ctx context.Context, db stateQueries, tenant, typ, id string) (StateCurrent, error) {
+	var current StateCurrent
+	err := db.QueryRow(ctx, `select image,history_count,history_head,seq from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, typ, id).Scan(&current.Image, &current.HistoryCount, &current.HistoryHead, &current.Position)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
-	return raw, err
+	return current, err
 }
 func (j *Postgres) StateHistory(ctx context.Context, tenant, typ, id string, after, through int) ([]json.RawMessage, error) {
-	rows, err := j.pool.Query(ctx, `select pos,image from runtime_history where tenant=$1 and type=$2 and id=$3 and pos>=$4 and pos<$5 order by pos`, tenant, typ, id, after, through)
+	return stateHistory(ctx, j.pool, tenant, typ, id, after, through)
+}
+
+func stateHistory(ctx context.Context, db stateQueries, tenant, typ, id string, after, through int) ([]json.RawMessage, error) {
+	rows, err := db.Query(ctx, `select pos,image from runtime_history where tenant=$1 and type=$2 and id=$3 and pos>=$4 and pos<$5 order by pos`, tenant, typ, id, after, through)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +468,11 @@ func (j *Postgres) StateHistory(ctx context.Context, tenant, typ, id string, aft
 	return out, err
 }
 func (j *Postgres) StateChanges(ctx context.Context, tenant, app, key, id string, through int) ([][]byte, error) {
-	rows, err := j.pool.Query(ctx, `select image from runtime_changes where tenant=$1 and app=$2 and num<=$3 and ($4='' or key=$4) and ($5='' or id=$5) order by num`, tenant, app, through, key, id)
+	return stateChanges(ctx, j.pool, tenant, app, key, id, through)
+}
+
+func stateChanges(ctx context.Context, db stateQueries, tenant, app, key, id string, through int) ([][]byte, error) {
+	rows, err := db.Query(ctx, `select image from runtime_changes where tenant=$1 and app=$2 and num<=$3 and ($4='' or key=$4) and ($5='' or id=$5) order by num`, tenant, app, through, key, id)
 	if err != nil {
 		return nil, err
 	}
@@ -430,15 +488,23 @@ func (j *Postgres) StateChanges(ctx context.Context, tenant, app, key, id string
 	return out, rows.Err()
 }
 func (j *Postgres) StateValue(ctx context.Context, tenant, owner, key string, through int64) (json.RawMessage, error) {
+	return stateValue(ctx, j.pool, tenant, owner, key, through)
+}
+
+func stateValue(ctx context.Context, db stateQueries, tenant, owner, key string, through int64) (json.RawMessage, error) {
 	var raw []byte
-	err := j.pool.QueryRow(ctx, `select image from runtime_values where tenant=$1 and owner=$2 and key=$3 and ($4<0 or seq<=$4)`, tenant, owner, key, through).Scan(&raw)
+	err := db.QueryRow(ctx, `select image from runtime_values where tenant=$1 and owner=$2 and key=$3 and ($4<0 or seq<=$4)`, tenant, owner, key, through).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
 	return raw, err
 }
 func (j *Postgres) StateValues(ctx context.Context, tenant, owner string, through int64) (map[string]json.RawMessage, error) {
-	rows, err := j.pool.Query(ctx, `select key,image from runtime_values where tenant=$1 and owner=$2 and ($3<0 or seq<=$3)`, tenant, owner, through)
+	return stateValues(ctx, j.pool, tenant, owner, through)
+}
+
+func stateValues(ctx context.Context, db stateQueries, tenant, owner string, through int64) (map[string]json.RawMessage, error) {
+	rows, err := db.Query(ctx, `select key,image from runtime_values where tenant=$1 and owner=$2 and ($3<0 or seq<=$3)`, tenant, owner, through)
 	if err != nil {
 		return nil, err
 	}
@@ -459,6 +525,10 @@ func (j *Postgres) StateValues(ctx context.Context, tenant, owner string, throug
 // set's applied position stays a candidate regardless of its future value;
 // the owner reads its immutable applied image and filters that image instead.
 func (j *Postgres) StateCandidates(ctx context.Context, tenant, typ string, filters []StateFilter, after string, limit int, applied int64) ([]string, error) {
+	return stateCandidates(ctx, j.pool, tenant, typ, filters, after, limit, applied)
+}
+
+func stateCandidates(ctx context.Context, db stateQueries, tenant, typ string, filters []StateFilter, after string, limit int, applied int64) ([]string, error) {
 	args := []any{tenant, typ, after, limit, applied}
 	conditions := []string{}
 	for _, f := range filters {
@@ -494,7 +564,9 @@ func (j *Postgres) StateCandidates(ctx context.Context, tenant, typ string, filt
 	if len(conditions) > 0 {
 		where = strings.Join(conditions, " and ")
 	}
-	rows, err := j.pool.Query(ctx, `select id from runtime_records where tenant=$1 and type=$2 and id>$3 and (`+where+` or seq>$5 or query ? 'projection') order by id limit $4`, args...)
+	// A negative applied position denotes a fixed transaction snapshot. Its
+	// candidates use that snapshot's values, with projection rows kept broad.
+	rows, err := db.Query(ctx, `select id from runtime_records where tenant=$1 and type=$2 and id>$3 and (`+where+` or ($5::bigint >= 0 and seq>$5) or query ? 'projection') order by id limit $4`, args...)
 	if err != nil {
 		return nil, err
 	}

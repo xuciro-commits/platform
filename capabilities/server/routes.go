@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"net/http"
+	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -54,8 +55,21 @@ func (rt *routes) authorized(route Route, app string, roles []string, f func(htt
 		if r.Method == http.MethodGet {
 			kind = "read"
 		}
-		c := platform.NewCaller(runtime{t}, m, app, false, false)
-		decision := t.authorizeNative(c, route.Pattern, kind, roles, true)
+		authorize := func() (platform.AuthzDecision, *kernel.Error) {
+			c := platform.NewCaller(runtime{t}, m, app, false, false)
+			return t.authorizeNative(c, route.Pattern, kind, roles, true), nil
+		}
+		var decision platform.AuthzDecision
+		var err *kernel.Error
+		if t.quarantined() {
+			decision, err = authorize()
+		} else {
+			decision, err = recordRead(t, r.Context(), authorize)
+		}
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
 		if refusal := authorizationRefusal(decision); refusal != nil {
 			Reply(w, nil, t.i18n.said(refusal, t.Language(m, r)))
 			return
@@ -64,10 +78,22 @@ func (rt *routes) authorized(route Route, app string, roles []string, f func(htt
 	})
 }
 
-func (rt *routes) metadata(route Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
+func (rt *routes) recordRead(route Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
 	rt.handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		f(w, r, m, t)
+		// Health remains available while recovery has stopped ordinary data
+		// reads. Its original owner reports isolation without loading rows.
+		if t.quarantined() && r.Method == http.MethodGet && r.URL.Path == "/v1/health" {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			f(w, r, m, t)
+			return
+		}
+		_, err := coordinatedRecordRead(t, r.Context(), func() (struct{}, *kernel.Error) { f(w, r, m, t); return struct{}{}, nil })
+		if err != nil {
+			Reply(w, nil, err)
+		}
 	})
+}
+func (rt *routes) metadata(route Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
+	rt.recordRead(route, f)
 }

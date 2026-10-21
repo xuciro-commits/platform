@@ -187,7 +187,7 @@ func sign(x float64) float64 {
 
 // Export writes the records of typ m's query finds as CSV: the ID and every
 // field m may read, lines aside.
-func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
+func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
 	m = t.authorizationMember(m)
 	if err := t.admits(m); err != nil {
 		return nil, err
@@ -215,7 +215,7 @@ func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now tim
 	w.Write(header)
 	q.Offset, q.Limit = 0, 500
 	for {
-		page, err := t.Records(m, typ, q, now)
+		page, err := t.recordsRead(m, typ, q, now)
 		if err != nil {
 			return nil, err
 		}

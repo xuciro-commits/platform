@@ -55,26 +55,81 @@ func (order SortOrder) Compare(a, b []any) int {
 	return 0
 }
 
-// Window sorts already-authorized matching rows, then selects their page.
-func (order SortOrder) Window(rows []reflect.Value, offset, limit int) ([]reflect.Value, int) {
-	keys := make([][]any, len(rows))
-	index := make([]int, len(rows))
-	for i, value := range rows {
-		keys[i] = order.Keys(value)
-		index[i] = i
-	}
-	slices.SortFunc(index, func(a, b int) int { return order.Compare(keys[a], keys[b]) })
-	total := len(rows)
-	start := min(max(offset, 0), total)
-	end := total
+// SortedPage keeps only the requested prefix while counting all authorized
+// matches. Unlimited owner queries retain their explicitly requested result.
+type SortedPage struct {
+	order                      SortOrder
+	offset, limit, keep, total int
+	rows                       []sortedRow
+}
+type sortedRow struct {
+	value reflect.Value
+	keys  []any
+}
+
+func (order SortOrder) Page(offset, limit int) *SortedPage {
+	page := &SortedPage{order: order, offset: max(offset, 0), limit: limit}
 	if limit > 0 {
-		end = min(start+limit, total)
+		page.keep = int(^uint(0) >> 1)
+		if page.offset <= page.keep-limit {
+			page.keep = page.offset + limit
+		}
 	}
-	page := make([]reflect.Value, 0, end-start)
-	for _, i := range index[start:end] {
-		page = append(page, rows[i])
+	return page
+}
+
+func (p *SortedPage) Add(value reflect.Value) {
+	p.total++
+	row := sortedRow{value: value, keys: p.order.Keys(value)}
+	if p.keep == 0 {
+		p.rows = append(p.rows, row)
+		return
 	}
-	return page, total
+	if len(p.rows) < p.keep {
+		p.rows = append(p.rows, row)
+		for i := len(p.rows) - 1; i > 0; {
+			parent := (i - 1) / 2
+			if p.order.Compare(p.rows[i].keys, p.rows[parent].keys) <= 0 {
+				break
+			}
+			p.rows[i], p.rows[parent] = p.rows[parent], p.rows[i]
+			i = parent
+		}
+		return
+	}
+	if p.order.Compare(row.keys, p.rows[0].keys) >= 0 {
+		return
+	}
+	p.rows[0] = row
+	for i := 0; ; {
+		child := i*2 + 1
+		if child >= len(p.rows) {
+			break
+		}
+		if right := child + 1; right < len(p.rows) && p.order.Compare(p.rows[right].keys, p.rows[child].keys) > 0 {
+			child = right
+		}
+		if p.order.Compare(p.rows[child].keys, p.rows[i].keys) <= 0 {
+			break
+		}
+		p.rows[i], p.rows[child] = p.rows[child], p.rows[i]
+		i = child
+	}
+}
+
+func (p *SortedPage) Result() ([]reflect.Value, int) {
+	slices.SortFunc(p.rows, func(a, b sortedRow) int { return p.order.Compare(a.keys, b.keys) })
+	start := min(p.offset, len(p.rows))
+	end := len(p.rows)
+	if p.limit > 0 {
+		end = start + min(p.limit, end-start)
+	}
+	out := make([]reflect.Value, 0, end-start)
+	for _, row := range p.rows[start:end] {
+		out = append(out, row.value)
+	}
+	p.rows = nil
+	return out, p.total
 }
 
 // One predicate evaluates all source sets against one authorized row. Every

@@ -138,7 +138,12 @@ func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 						run.Error = "The input is " + run.Marking + " now; name who reads " + p.OutputObject + "'s fields " + strings.Join(open, ", ") + " first, or lower the marking"
 					} else {
 						plan.Rows = p.ObjectRows(kept)
-						run.Merged = t.prepareRows(member, p.OutputObject, p.Name, plan.Rows, now)
+						var refusal *kernel.Error
+						run.Merged, refusal = t.prepareRows(member, p.OutputObject, p.Name, plan.Rows, now)
+						if refusal != nil {
+							log.Printf("pipeline row preparation unavailable: %v", refusal)
+							return
+						}
 						plan.Data = nil
 					}
 				}

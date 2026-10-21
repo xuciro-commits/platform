@@ -11,10 +11,23 @@ type StateDelta struct {
 	// LegacyUnique identifies an old result without owner-supplied key changes.
 	// Only verified retained-suffix recovery may rebuild those derived keys.
 	LegacyUnique bool
+	// LegacyImages contains only original accepted record images whose later
+	// installations the first SQL writer did not project into current records.
+	LegacyImages map[string]json.RawMessage
+	LegacyValues map[string]json.RawMessage
 	Unique       []StateUnique
 	Records      []StateRecord
+	Replacements []StateReplacement
 	Changes      []StateChange
 	Values       []StateValue
+	ValueUpdates []StateValueUpdate
+}
+
+// StateReplacement is a sealed metadata installation: only its value changes;
+// the existing history, image format and projections remain unchanged.
+type StateReplacement struct {
+	Type, ID, Before string
+	Value            json.RawMessage
 }
 
 type StateRecord struct {
@@ -32,6 +45,14 @@ type StateChange struct {
 	Image        []byte
 }
 
+// StateValueUpdate is an owner-provided pure projection of a saved observation
+// onto its opaque state. It runs after the result's complete value replacements.
+// No live owner, permission decision or outside request is reachable here.
+type StateValueUpdate struct {
+	Owner, Key string
+	Apply      func(json.RawMessage) (json.RawMessage, error)
+}
+
 type StateValue struct {
 	Owner, Key string
 	Image      json.RawMessage
@@ -47,6 +68,40 @@ type RuntimeState interface {
 	StateChanges(context.Context, string, string, string, string, int) ([][]byte, error)
 	StateValue(context.Context, string, string, string, int64) (json.RawMessage, error)
 	StateValues(context.Context, string, string, int64) (map[string]json.RawMessage, error)
+}
+
+// StateCurrent preserves the original image and its incremental history header.
+// Position is the commit that last replaced this row, not the read-view position.
+type StateCurrent struct {
+	Image        json.RawMessage
+	HistoryCount int
+	HistoryHead  string
+	Position     int64
+}
+
+// StateReadViews fixes SQL records, histories, owner values and derived keys to
+// the tenant position already applied by the host coordinator.
+type StateReadViews interface {
+	BeginStateRead(context.Context, string, int64) (StateReadView, error)
+}
+
+type StateDigest struct {
+	Records int64  `json:"records"`
+	Digest  string `json:"digest"`
+}
+
+type StateReadView interface {
+	Checkpoint(context.Context, string) (StateDigest, error)
+	Position() int64
+	Close() error
+	StateCurrent(context.Context, string, string, string) (StateCurrent, error)
+	StateRecord(context.Context, string, string, string) (json.RawMessage, error)
+	StateCandidates(context.Context, string, string, []StateFilter, string, int, int64) ([]string, error)
+	StateHistory(context.Context, string, string, string, int, int) ([]json.RawMessage, error)
+	StateChanges(context.Context, string, string, string, string, int) ([][]byte, error)
+	StateValue(context.Context, string, string, string, int64) (json.RawMessage, error)
+	StateValues(context.Context, string, string, int64) (map[string]json.RawMessage, error)
+	StateUnique(context.Context, string, string, string, string, int64) ([]string, error)
 }
 
 // StateFilter only reduces the candidate IDs an owner examines. The original
@@ -83,4 +138,10 @@ type StateUnique struct {
 // Reads require the same position as the owner's applied private read view.
 type UniqueState interface {
 	StateUnique(context.Context, string, string, string, string, int64) ([]string, error)
+}
+
+// RuntimeStateUpgrade identifies the one-time conversion of the first SQL
+// projection. Conversion compares its original accepted preimages before writes.
+type RuntimeStateUpgrade interface {
+	StateNeedsUpgrade(context.Context, string) (bool, error)
 }

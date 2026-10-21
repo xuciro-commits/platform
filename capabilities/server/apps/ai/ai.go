@@ -13,6 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/aistate"
 	"platformserver/platform"
 )
 
@@ -61,8 +62,6 @@ type Limit = platform.AILimit
 // Usage is one call's meter reading.
 type Usage = platform.AIUsage
 
-const usageKept = 5000
-
 type AI struct {
 	mu        sync.Mutex
 	providers []Provider
@@ -108,26 +107,19 @@ func New(tenant string) *AI {
 }
 
 // Snapshot and Restore: providers, models and usage (ADR-0024).
-type aiState struct {
-	Providers []Provider       `json:"providers"`
-	Models    []Model          `json:"models"`
-	Limits    map[string]Limit `json:"limits,omitempty"`
-	Usage     []Usage          `json:"usage"`
-	Daily     map[string]int   `json:"daily,omitempty"`
-}
 
 func (a *AI) SnapshotFormat() string { return "ai.state.v1" }
 
 func (a *AI) Snapshot() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.ledger.SnapshotWith(aiState{a.providers, a.models, a.limits, a.usage, a.daily})
+	return a.ledger.SnapshotWith(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily})
 }
 
 func (a *AI) Restore(raw json.RawMessage) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	var s aiState
+	var s aistate.State
 	if err := a.ledger.RestoreWith(raw, &s); err != nil {
 		return err
 	}
@@ -282,21 +274,9 @@ func (a *AI) allows(m platform.Member, x Model) bool {
 func (a *AI) Meter(u Usage) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.usage = append(a.usage, u)
-	if len(a.usage) > usageKept {
-		a.usage = a.usage[len(a.usage)-usageKept:]
-	}
-	day := u.At.UTC().Format(time.DateOnly)
-	if _, today := a.daily[day+"|"+u.Member]; !today { // a new day: keep only it and the one before
-		yesterday := u.At.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
-		for k := range a.daily {
-			if !strings.HasPrefix(k, day) && !strings.HasPrefix(k, yesterday) {
-				delete(a.daily, k)
-			}
-		}
-	}
-	a.daily[day+"|"+u.Member] += u.Input + u.Output
-	a.daily[day+"|model:"+u.Model] += u.Input + u.Output
+	state := aistate.State{Usage: a.usage, Daily: a.daily}
+	state.Meter(u)
+	a.usage, a.daily = state.Usage, state.Daily
 	a.recent[u.Member] = append(slices.DeleteFunc(a.recent[u.Member], func(t time.Time) bool { return u.At.Sub(t) >= time.Minute }), u.At)
 	// The call this usage belongs to is no longer in flight: its booking is
 	// released by the meter reading that replaces it, in the same lock.

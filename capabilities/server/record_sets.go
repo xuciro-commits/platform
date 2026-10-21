@@ -191,39 +191,44 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	view, hidden := viewOf(c.Member, et)
 	// Selection, filtering, ordering and paging use one captured private store.
 	// Read grants and derived-source checks still come from the original owner.
-	store.mu.Lock()
-	query := businessQuery(et.info, platform.Query{Domain: platform.Raw(domain), BusinessTime: set.BusinessTime}, c.Member, at)
-	raw, queryErr := store.matchingQuery(et, query, nil)
-	values, visibleErr := store.matchingQuery(view, query, visible)
-	if queryErr != nil || visibleErr != nil {
-		store.mu.Unlock()
-		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection membership is unavailable")
-	}
-	result.Partial = result.Partial || len(raw) != len(values)
 	decisions := map[string]platform.AuthzDecision{}
-	walk := newAuthorizationWalk()
-	question.Type = set.Object
-	for _, value := range raw {
-		question.Record = records.Header(value).ID
-		decision := t.authorizeDepth(store, c, question, at, true, 0, walk)
-		if !decision.Allow && result.Authorization.Filtered == nil {
-			result.Authorization.Filtered = &decision
+	var rows []any
+	if refusal := func() *kernel.Error {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		query := businessQuery(et.info, platform.Query{Domain: platform.Raw(domain), BusinessTime: set.BusinessTime}, c.Member, at)
+		raw, queryErr := store.matchingQuery(et, query, nil)
+		values, visibleErr := store.matchingQuery(view, query, visible)
+		if queryErr != nil || visibleErr != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection membership is unavailable")
 		}
-		if decision.Allow {
-			decisions[question.Record] = decision
+		result.Partial = result.Partial || len(raw) != len(values)
+		walk := newAuthorizationWalk()
+		question.Type = set.Object
+		for _, value := range raw {
+			question.Record = records.Header(value).ID
+			decision := t.authorizeDepth(store, c, question, at, true, 0, walk)
+			if !decision.Allow && result.Authorization.Filtered == nil {
+				result.Authorization.Filtered = &decision
+			}
+			if decision.Allow {
+				decisions[question.Record] = decision
+			}
 		}
+		narrower := t.narrowerIn(store, c.Member, at, true)
+		rows = make([]any, 0, len(values))
+		for _, value := range values {
+			v := records.Mask(et.info, value, hidden)
+			if et.info.HasReadSources() || len(et.info.VersionPins) > 0 {
+				narrowed, _ := narrower.derive(et, reflect.ValueOf(v))
+				v = narrowed.Interface()
+			}
+			rows = append(rows, v)
+		}
+		return nil
+	}(); refusal != nil {
+		return result, refusal
 	}
-	narrower := t.narrowerIn(store, c.Member, at, true)
-	rows := make([]any, 0, len(values))
-	for _, value := range values {
-		v := records.Mask(et.info, value, hidden)
-		if et.info.HasReadSources() || len(et.info.VersionPins) > 0 {
-			narrowed, _ := narrower.derive(et, reflect.ValueOf(v))
-			v = narrowed.Interface()
-		}
-		rows = append(rows, v)
-	}
-	store.mu.Unlock()
 	ruleLookup := func(typ string) (platform.EntityInfo, bool) {
 		other, ok := lookup(typ)
 		return platform.ConstraintEntity(other), ok

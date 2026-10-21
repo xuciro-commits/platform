@@ -101,7 +101,7 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture constructio
 	if !ok || kind != construction.FunctionCallType {
 		return false, fmt.Errorf("fixture reply is not a builder function call")
 	}
-	view, refusal := t.RecordOf(actor, kind, id, now)
+	view, refusal := t.recordOf(actor, kind, id, now)
 	if refusal != nil {
 		return false, nil
 	}

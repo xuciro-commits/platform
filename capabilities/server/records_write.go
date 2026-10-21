@@ -32,7 +32,7 @@ func (s *recordStore) declare(a platform.App) error {
 		if s.types[e.Type] != nil || s.byGo[info.Go] != nil {
 			return fmt.Errorf("entity %s is declared twice", e.Type)
 		}
-		et := &entityType{store: s, info: info, rows: records.Index[*records.Row]{}, knowledge: records.KnowledgeBearing(info)}
+		et := &entityType{store: s, info: info, rows: records.Rows{}, knowledge: records.KnowledgeBearing(info)}
 		s.types[e.Type], s.byGo[info.Go] = et, et
 		s.generation++
 	}
@@ -111,10 +111,14 @@ func (s *recordStore) get(c platform.Caller, t reflect.Type, id string) (any, bo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	et := s.of(c, t)
-	if et == nil || et.rows.Get(id) == nil {
+	if et == nil {
 		return nil, false
 	}
-	return records.Copy(t, et.rows.Get(id).Value.Interface()).Interface(), true
+	row := et.rows.Get(id)
+	if row == nil {
+		return nil, false
+	}
+	return records.Copy(t, row.Value.Interface()).Interface(), true
 }
 
 func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kernel.Error {

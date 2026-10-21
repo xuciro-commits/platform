@@ -1,14 +1,12 @@
 package ai
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
 	"maps"
 	"slices"
 	"time"
 
+	"platformserver/internal/aistate"
 	"platformserver/platform"
 )
 
@@ -38,52 +36,20 @@ func cloneCalls(source map[string][]time.Time) map[string][]time.Time {
 func (a *AI) AcceptedState() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return json.Marshal(aiState{a.providers, a.models, a.limits, a.usage, a.daily})
+	return json.Marshal(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily})
 }
 
 func (*AI) ValidateAcceptedState(raw json.RawMessage) error {
-	var state aiState
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&state); err != nil {
-		return err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return fmt.Errorf("accepted AI state has trailing data")
-	}
-	providers, models := map[string]bool{}, map[string]bool{}
-	for _, provider := range state.Providers {
-		if provider.ID == "" || providers[provider.ID] {
-			return fmt.Errorf("accepted AI state has an invalid provider")
-		}
-		providers[provider.ID] = true
-	}
-	for _, model := range state.Models {
-		if !providers[model.Provider] || model.Model == "" || models[model.Name()] ||
-			model.Access != "everyone" && model.Access != "users" || model.DailyTokens < 0 {
-			return fmt.Errorf("accepted AI state has an invalid model")
-		}
-		models[model.Name()] = true
-	}
-	for member, limit := range state.Limits {
-		if member == "" || member != limit.Member || limit.DailyTokens < 0 || limit.PerMinute < 0 {
-			return fmt.Errorf("accepted AI state has an invalid limit")
-		}
-	}
-	if len(state.Usage) > usageKept {
-		return fmt.Errorf("accepted AI state exceeds retained usage")
-	}
-	return nil
+	_, err := aistate.Decode(raw)
+	return err
 }
 
 func (a *AI) ApplyAcceptedState(raw json.RawMessage) error {
-	if err := a.ValidateAcceptedState(raw); err != nil {
+	state, err := aistate.Decode(raw)
+	if err != nil {
 		return err
 	}
-	var state aiState
-	if err := json.Unmarshal(raw, &state); err != nil {
-		return err
-	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.providers, a.models, a.limits = state.Providers, state.Models, state.Limits

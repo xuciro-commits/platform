@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	journalstore "platformserver/journal"
 	"platformserver/platform"
 )
 
@@ -38,6 +39,18 @@ func TestSnapshotRestoreFormatsAndLegacyEligibility(t *testing.T) {
 			}
 			ctx := context.Background()
 			deployment := Deployment{SnapshotEvery: 1}
+			_, sqlCheckpoint := journal.(journalstore.StateSnapshotStorage)
+			countBins := func(tenant *Tenant) int {
+				tenant.mu.Lock()
+				defer tenant.mu.Unlock()
+				return tenant.records.types["stock.bin"].rows.Len()
+			}
+			expectedSaved := func(original int64) int64 {
+				if sqlCheckpoint {
+					return journal.Position(id)
+				}
+				return original
+			}
 			start := func(tenant *Tenant, build string) int64 {
 				t.Helper()
 				restored := map[string]int64{}
@@ -66,14 +79,23 @@ func TestSnapshotRestoreFormatsAndLegacyEligibility(t *testing.T) {
 			}
 			decide(t, live, "clerk", "stock", "stock.bin.create", "stock.bin", "B2", map[string]any{"code": "two"}, at.Add(time.Second))
 			restored := compose("stock.ledger.v1", "1")
-			if after := start(restored, "build-b"); after != seq || restored.records.types["stock.bin"].rows.Len() != 2 {
+			if after := start(restored, "build-b"); after != expectedSaved(seq) || countBins(restored) != 2 {
 				t.Fatalf("compatible build did not restore checkpoint plus suffix: %d", after)
 			}
 			for _, incompatible := range []*Tenant{compose("stock.ledger.v2", "1"), compose("stock.ledger.v1", "2")} {
-				if err := incompatible.Restore(state); err == nil || incompatible.records.types["stock.bin"].rows.Len() != 0 {
+				if err := incompatible.Restore(state); err == nil || countBins(incompatible) != 0 {
 					t.Fatal("incompatible owner or composition changed the fresh state")
 				}
-				if after := start(incompatible, "build-b"); after != 0 || incompatible.records.types["stock.bin"].rows.Len() != 2 {
+				if sqlCheckpoint {
+					key, err := incompatible.runtimeSnapshotKey("build-b")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, _, found, err := journal.Snapshot(ctx, id, key); err != nil || found {
+						t.Fatal("incompatible owner or composition selected a SQL owner checkpoint")
+					}
+				}
+				if after := start(incompatible, "build-b"); after != expectedSaved(0) || countBins(incompatible) != 2 {
 					t.Fatalf("incompatible format did not replay the retained journal: %d", after)
 				}
 			}

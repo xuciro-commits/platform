@@ -1,10 +1,13 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 
 	"platformserver/internal/records"
+	"platformserver/journal"
 	"platformserver/platform"
 )
 
@@ -25,17 +28,67 @@ func (et *entityType) referenceIndex(field platform.FieldInfo) records.Reference
 	if err != nil {
 		panic(err) // The installed record index already guarantees unique IDs.
 	}
-	if et.referenceIndexes == nil {
+	if !et.rows.Sourced() && et.referenceIndexes == nil {
 		et.referenceIndexes = map[string]records.References{}
 	}
-	et.referenceIndexes[field.Name] = index
+	if !et.rows.Sourced() {
+		et.referenceIndexes[field.Name] = index
+	}
 	return index
+}
+
+// referenceBucket loads only actual matches in SQL mode. The immutable memory
+// mode keeps its incremental buckets; SQL mode keeps no second resident index.
+func (et *entityType) referenceBucket(field platform.FieldInfo, target string) records.Bucket {
+	if !et.rows.Sourced() || et.retainedProjection {
+		return et.referenceIndex(field).Get(target)
+	}
+	s := et.store
+	filters := []journal.StateFilter{{Path: []string{"value", field.Name}, Values: []string{target}}}
+	if len(et.info.RecordImages) > 0 {
+		filters = nil
+	}
+	var bucket records.Bucket
+	seen := map[string]bool{}
+	visit := func(id string) {
+		if seen[id] {
+			return
+		}
+		seen[id] = true
+		row := et.rows.Get(id)
+		if row == nil || row.Value.FieldByIndex(field.Index).String() != target {
+			return
+		}
+		active := !records.Header(row.Value).Archived
+		bucket.IDs.Set(id, active)
+		if active {
+			bucket.Active++
+		}
+	}
+	after := ""
+	for {
+		ids, err := s.readView.StateCandidates(context.Background(), s.tenant, et.info.Type, filters, after, 256, s.appliedPosition)
+		if err != nil {
+			panic(fmt.Errorf("record references: %w", err))
+		}
+		for _, id := range ids {
+			visit(id)
+		}
+		if len(ids) < 256 {
+			break
+		}
+		after = ids[len(ids)-1]
+	}
+	for id := range et.rows.Overlay().All() {
+		visit(id)
+	}
+	return bucket
 }
 
 // All replacements, including pure accepted-result application, use this
 // type owner. No decision rules run here; only derived lookup buckets change.
 func (et *entityType) setRows(rows records.Index[*records.Row]) {
-	et.rows, et.referenceIndexes, et.uniqueIndexes, et.fullImage = rows, nil, nil, true
+	et.rows, et.referenceIndexes, et.uniqueIndexes, et.fullImage = records.MemoryRows(rows), nil, nil, true
 	if et.store != nil {
 		// A schema/full-image replacement may change every referenced scope.
 		// Bulk recovery may rebuild; ordinary setRow keeps its existing roots.
@@ -109,7 +162,7 @@ func (s *recordStore) indexedRecordCandidates(et *entityType, q platform.Query) 
 		if source == nil {
 			continue
 		}
-		bucket := source.referenceIndex(info).Get(target)
+		bucket := source.referenceBucket(info, target)
 		ids := make([]string, 0, bucket.IDs.Len())
 		for id := range bucket.IDs.All() {
 			ids = append(ids, id)

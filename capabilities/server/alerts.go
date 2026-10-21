@@ -35,7 +35,7 @@ func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
 	if !ok {
 		return
 	}
-	held, ok := t.Held(typ + "/" + s.GetTarget().GetId())
+	held, ok := t.held(typ + "/" + s.GetTarget().GetId())
 	if !ok {
 		return
 	}

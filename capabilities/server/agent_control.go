@@ -60,7 +60,7 @@ func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ R
 
 // suspended says whether member is an agent an administrator switched off.
 func (t *Tenant) suspended(member string) bool {
-	v, ok := t.Held(SwitchType + "/" + member)
+	v, ok := t.held(SwitchType + "/" + member)
 	return ok && v.(Switch).Suspended
 }
 

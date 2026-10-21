@@ -128,7 +128,7 @@ func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, n
 	}) {
 		typ, id, _ := strings.Cut(ref, "/")
 		domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-		page, err := view.Records(member, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
+		page, err := view.recordsRead(member, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
 		if err != nil || len(page.Records) == 0 {
 			continue
 		}

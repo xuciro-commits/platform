@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -29,40 +30,21 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 	if _, err := platform.DecodeValue(q.Inputs, 64<<10); err != nil {
 		return bad(err.Error())
 	}
-	var selected *platform.CapabilityDescriptor
-	if q.Version > 0 {
-		if descriptor, ok := t.retainedCapability(m, q.Ref, q.Version); ok {
-			selected = &descriptor
-		}
+	prepared, refusal := recordRead(t, context.Background(), func() (capabilityPreparation, *kernel.Error) {
+		return t.prepareCapability(m, q, now)
+	})
+	if refusal != nil {
+		return answer, refusal
 	}
-	for _, descriptor := range t.Capabilities(m) {
-		if selected == nil && q.Version == 0 && descriptor.Ref == q.Ref {
-			selected = &descriptor
-			break
-		}
-	}
-	if selected == nil {
-		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Capability is unavailable to this member")
-	}
+	selected := prepared.descriptor
 	switch selected.Kind {
 	case "query":
-		if selected.Source == "tenant" && q.Version == 0 || q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
-			return bad("Query takes only its declared inputs")
-		}
-		caller := platform.NewCaller(runtime{t}, m, q.Ref.App, false, false)
-		result, err := caller.ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
-		answer.State, answer.Result = "completed", result
-		return answer, err
+		answer.State, answer.Result = "completed", prepared.query
+		return answer, nil
 	case "action":
-		if q.Version != 0 || q.Target == "" || len(q.Sources) != 0 {
-			return bad("Action requires its target and canonical payload")
-		}
 		payload := q.Inputs
 		if len(q.Bindings) > 0 || q.Record != "" {
-			bound, _, refusal := t.bindCapabilityInputs(m, q, now)
-			if refusal != nil {
-				return answer, refusal
-			}
+			bound := prepared.inputs
 			var inputs, values map[string]json.RawMessage
 			if json.Unmarshal(q.Inputs, &inputs) != nil || inputs == nil || json.Unmarshal(bound, &values) != nil {
 				return bad("Bound action inputs need an object payload")
@@ -91,13 +73,7 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 		}
 		return answer, nil
 	case "compute":
-		if q.Target != "" || q.ExpectedRevision != nil {
-			return bad("Compute takes typed inputs and protected source references")
-		}
-		inputs, sources, refusal := t.bindCapabilityInputs(m, q, now)
-		if refusal != nil {
-			return answer, refusal
-		}
+		inputs, sources := prepared.inputs, prepared.sources
 		call, err := t.InvokeOperation(m, platform.OperationRequest{App: q.Ref.App, Name: q.Ref.Name, Version: q.Version, Key: q.Key, Inputs: inputs, Sources: sources}, now)
 		answer.State, answer.Call = "pending", call.ID
 		return answer, err
@@ -122,4 +98,53 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 	default:
 		return bad("This descriptor is a design control, not a callable capability")
 	}
+}
+
+// Selection and source bindings share one definition/record view. The owner
+// entry point runs after that read ends, retaining its own current checks and
+// lock-free input preparation or external work.
+type capabilityPreparation struct {
+	descriptor platform.CapabilityDescriptor
+	inputs     json.RawMessage
+	sources    []string
+	query      json.RawMessage
+}
+
+func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (capabilityPreparation, *kernel.Error) {
+	out := capabilityPreparation{}
+	selected := false
+	if q.Version > 0 {
+		out.descriptor, selected = t.retainedCapability(m, q.Ref, q.Version)
+	} else {
+		for _, descriptor := range t.capabilities(m) {
+			if descriptor.Ref == q.Ref {
+				out.descriptor, selected = descriptor, true
+				break
+			}
+		}
+	}
+	if !selected {
+		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Capability is unavailable to this member")
+	}
+	if out.descriptor.Kind == "query" {
+		if out.descriptor.Source == "tenant" && q.Version == 0 || q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
+			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Query takes only its declared inputs")
+		}
+		caller := platform.NewCaller(runtime{t}, m, q.Ref.App, false, false)
+		var refusal *kernel.Error
+		out.query, refusal = caller.ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
+		return out, refusal
+	}
+	if out.descriptor.Kind == "action" && (q.Version != 0 || q.Target == "" || len(q.Sources) != 0) {
+		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Action requires its target and canonical payload")
+	}
+	if out.descriptor.Kind == "compute" && (q.Target != "" || q.ExpectedRevision != nil) {
+		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Compute takes typed inputs and protected source references")
+	}
+	if out.descriptor.Kind == "compute" || out.descriptor.Kind == "action" && (len(q.Bindings) > 0 || q.Record != "") {
+		var refusal *kernel.Error
+		out.inputs, out.sources, refusal = t.bindCapabilityInputs(m, q, now)
+		return out, refusal
+	}
+	return out, nil
 }

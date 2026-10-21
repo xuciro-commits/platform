@@ -90,16 +90,18 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 				return nil, err
 			}
 			ownerRecord := ""
-			t.records.mu.Lock()
-			if recordView := t.records.types[asset.Ref.App+".agent"]; recordView != nil {
-				for id, row := range recordView.rows.All() {
-					if businessField(recordView.info, row.Value, "name") == asset.Ref.Name && !records.Header(row.Value).Archived {
-						ownerRecord = recordView.info.Type + "/" + id
-						break
+			func() {
+				t.records.mu.Lock()
+				defer t.records.mu.Unlock()
+				if recordView := t.records.types[asset.Ref.App+".agent"]; recordView != nil {
+					for id, row := range recordView.rows.All() {
+						if businessField(recordView.info, row.Value, "name") == asset.Ref.Name && !records.Header(row.Value).Archived {
+							ownerRecord = recordView.info.Type + "/" + id
+							break
+						}
 					}
 				}
-			}
-			t.records.mu.Unlock()
+			}()
 			definition.OwnerRecord = ownerRecord
 			base = append(base, definition)
 		}
@@ -110,47 +112,50 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 	}
 	var images []image
 	var datasetDefinitions []platform.Definition
-	t.records.mu.Lock()
-	for typ, et := range t.records.types {
-		published, hasPublished := et.info.Go.FieldByName("Published")
-		version, hasVersion := et.info.Go.FieldByName("DefinitionVersion")
-		if !hasPublished || !hasVersion || published.Type.Kind() != reflect.String || version.Type.Kind() != reflect.Int {
-			continue // other metadata retains its original installed index
-		}
-		if _, ok := t.app(et.info.App).(platform.AssetLifecycleOwner); !ok {
-			continue
-		}
-		for id, row := range et.rows.All() {
-			if records.Header(row.Value).Archived {
+	if err := func() error {
+		t.records.mu.Lock()
+		defer t.records.mu.Unlock()
+		for typ, et := range t.records.types {
+			published, hasPublished := et.info.Go.FieldByName("Published")
+			version, hasVersion := et.info.Go.FieldByName("DefinitionVersion")
+			if !hasPublished || !hasVersion || published.Type.Kind() != reflect.String || version.Type.Kind() != reflect.Int {
+				continue // other metadata retains its original installed index
+			}
+			if _, ok := t.app(et.info.App).(platform.AssetLifecycleOwner); !ok {
 				continue
 			}
-			ordinal := row.Value.FieldByIndex(version.Index).Int()
-			raw := row.Value.FieldByIndex(published.Index).String()
-			if ordinal == 0 && raw == "" {
-				// A dataset is usable from its original create/load path, without
-				// a publish action. Project only the descriptor its owner already
-				// offers; runtime rows and other unsealed drafts stay out.
-				if typ == et.info.App+".dataset" {
-					ref := platform.AssetRef{App: et.info.App, Kind: platform.AssetDataset, Name: businessField(et.info, row.Value, "name")}
-					if asset, exists := datasets[ref]; exists {
-						datasetDefinitions = append(datasetDefinitions, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: typ + "/" + id})
-					}
+			for id, row := range et.rows.All() {
+				if records.Header(row.Value).Archived {
+					continue
 				}
-				continue // an unpublished legacy/development configuration
+				ordinal := row.Value.FieldByIndex(version.Index).Int()
+				raw := row.Value.FieldByIndex(published.Index).String()
+				if ordinal == 0 && raw == "" {
+					// A dataset is usable from its original create/load path, without
+					// a publish action. Project only the descriptor its owner already
+					// offers; runtime rows and other unsealed drafts stay out.
+					if typ == et.info.App+".dataset" {
+						ref := platform.AssetRef{App: et.info.App, Kind: platform.AssetDataset, Name: businessField(et.info, row.Value, "name")}
+						if asset, exists := datasets[ref]; exists {
+							datasetDefinitions = append(datasetDefinitions, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: typ + "/" + id})
+						}
+					}
+					continue // an unpublished legacy/development configuration
+				}
+				if ordinal < 1 || raw == "" {
+					return fmt.Errorf("owned metadata %s/%s has no valid publication", typ, id)
+				}
+				body, err := row.Image()
+				if err != nil {
+					return err
+				}
+				images = append(images, image{et.info.App, typ + ".publish", typ + "/" + id, slices.Clone(body)})
 			}
-			if ordinal < 1 || raw == "" {
-				t.records.mu.Unlock()
-				return nil, fmt.Errorf("owned metadata %s/%s has no valid publication", typ, id)
-			}
-			body, err := row.Image()
-			if err != nil {
-				t.records.mu.Unlock()
-				return nil, err
-			}
-			images = append(images, image{et.info.App, typ + ".publish", typ + "/" + id, slices.Clone(body)})
 		}
+		return nil
+	}(); err != nil {
+		return nil, err
 	}
-	t.records.mu.Unlock()
 	out := slices.DeleteFunc(slices.Clone(base), func(def platform.Definition) bool { return def.Source != "code" && t.ownedMetadataKind(def.Ref) })
 	out = append(out, datasetDefinitions...)
 	if len(images) == 0 {

@@ -34,18 +34,30 @@ func (t *Tenant) PullSources(now time.Time) {
 	if t.quarantined() {
 		return
 	}
-	t.mu.Lock()
-	sources, _, _ := platform.Find[construction.Source](t.automation(construction.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
-	t.mu.Unlock()
-	owner := t.app(construction.ID).(host.IntegrationDefinitions)
-	for _, s := range sources {
-		s, err := owner.ExecutionSource(s)
+	sources, refusal := coordinatedRecordRead(t, context.Background(), func() ([]construction.Source, *kernel.Error) {
+		found, _, err := platform.Find[construction.Source](t.automation(construction.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 		if err != nil {
-			log.Printf("source definition refused: %v", err)
-			continue
+			return nil, err
 		}
-		if s.Due(now) {
-			t.pullSource(s, now)
+		owner := t.app(construction.ID).(host.IntegrationDefinitions)
+		var fixed []construction.Source
+		for _, source := range found {
+			source, err := owner.ExecutionSource(source)
+			if err != nil {
+				log.Printf("source definition refused: %v", err)
+				continue
+			}
+			fixed = append(fixed, source)
+		}
+		return fixed, nil
+	})
+	if refusal != nil {
+		log.Printf("source preparation unavailable: %v", refusal)
+		return
+	}
+	for _, source := range sources {
+		if source.Due(now) {
+			t.pullSource(source, now)
 		}
 	}
 	t.ReconcileConfirmations(now)
@@ -164,8 +176,13 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 	} else if raw, err := t.readSource(s); err != nil {
 		pull.Error = err.Error()
 	} else {
+		marking, refusal := recordRead(t, context.Background(), func() (string, *kernel.Error) { return t.connectionMarking(s.Connection), nil })
+		if refusal != nil {
+			log.Printf("source connection state unavailable: %v", refusal)
+			return
+		}
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
-		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: t.connectionMarking(s.Connection)}
+		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking}
 		plan.Type, plan.ID = construction.SourceType, s.ID
 		if s.Dataset != "" {
 			if len(raw) > 0 || s.Cursor == "" {
@@ -180,7 +197,12 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 			pull.Error = err.Error()
 		} else {
 			plan.Rows = rows
-			pull.Merged = t.prepareRows(member, s.Object, s.Name, plan.Rows, now)
+			var refusal *kernel.Error
+			pull.Merged, refusal = t.prepareRows(member, s.Object, s.Name, plan.Rows, now)
+			if refusal != nil {
+				log.Printf("source row preparation unavailable: %v", refusal)
+				return
+			}
 		}
 		if pull.Error == "" {
 			execution, err := t.prepareIntegration(member, s.Revision, now, plan)
@@ -226,30 +248,32 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 }
 
 // prepareRows fixes matching and create/edit selection before accepting the input.
-func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []construction.SourceRow, now time.Time) int {
-	merged := 0
-	if resolver := t.resolver(member, object, producer, now); resolver != nil {
+func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []construction.SourceRow, now time.Time) (int, *kernel.Error) {
+	return recordRead(t, context.Background(), func() (int, *kernel.Error) {
+		merged := 0
+		if resolver := t.resolver(member, object, producer, now); resolver != nil {
+			for i := range rows {
+				resolver.Resolve(&rows[i])
+			}
+			merged = resolver.Merged
+		}
+		t.records.mu.Lock()
+		defer t.records.mu.Unlock()
+		et := t.records.types[object]
+		seen := map[string]bool{}
 		for i := range rows {
-			resolver.Resolve(&rows[i])
+			row := &rows[i]
+			row.Key = fmt.Sprintf("row:%d", i)
+			row.Verb = ".create"
+			if seen[row.ID] || et != nil && et.rows.Get(row.ID) != nil {
+				row.Verb = ".edit"
+			}
+			if row.Error == "" {
+				seen[row.ID] = true
+			}
 		}
-		merged = resolver.Merged
-	}
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
-	et := t.records.types[object]
-	seen := map[string]bool{}
-	for i := range rows {
-		row := &rows[i]
-		row.Key = fmt.Sprintf("row:%d", i)
-		row.Verb = ".create"
-		if seen[row.ID] || et != nil && et.rows.Get(row.ID) != nil {
-			row.Verb = ".edit"
-		}
-		if row.Error == "" {
-			seen[row.ID] = true
-		}
-	}
-	return merged
+		return merged, nil
+	})
 }
 
 // integrationRefused distinguishes a saved business refusal from an append
@@ -326,7 +350,7 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 	}
 	var records []map[string]any
 	for offset := 0; ; offset += 500 {
-		page, err := t.Records(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
+		page, err := t.recordsRead(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
 		if err != nil {
 			break
 		}

@@ -50,7 +50,7 @@ for (const fixture of fixtures) {
           return reports.records.find((report) => report.candidate === preview.candidateId)?.state;
         }).toBe("passed");
         await page.getByRole("button", { name: "Refresh evaluation reports" }).click();
-        await expect(page.getByRole("status").filter({ hasText: "Report state: passed" })).toBeVisible();
+        await expect(page.getByRole("status").filter({ hasText: /Report state\s*passed/ })).toBeVisible();
         await page.getByRole("button", { name: "Activate release" }).click();
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
         const active = await (await request.get("/v1/releases/active", { headers })).json() as { id: string };
@@ -132,30 +132,33 @@ for (const fixture of fixtures) {
       expect(release).toMatch(/^sha256-v1:/);
       await page.goto(`/#/page?app=build&kind=page&name=advicepage${fixture.suffix}`);
       const sourceRow = page.getByRole("table").first().getByRole("row").filter({ hasText: source });
-      const refreshAdvice = page.getByRole("button", { name: "Refresh advice", exact: true });
-      const adviceHeading = page.getByText(`advice${fixture.suffix} · Version 1`, { exact: true });
+      const requestAnalysis = page.getByRole("button", { name: "Request original analysis", exact: true });
+      const adviceHistory = page.getByRole("region", { name: "Function call history", exact: true });
       await expect(sourceRow).toBeVisible();
-      await expect(adviceHeading).toBeVisible();
-      if (!(await refreshAdvice.isVisible())) await sourceRow.click();
-      await expect(refreshAdvice).toBeVisible();
-      if (phase === "before") await page.getByRole("button", { name: "Request advice" }).click();
+      if (!(await requestAnalysis.isVisible())) await sourceRow.click();
+      await expect(requestAnalysis).toBeVisible();
+      await expect(adviceHistory).toBeVisible();
+      if (phase === "before") {
+        await requestAnalysis.click();
+      }
       await expect.poll(async () => {
         const calls = await (await request.get("/v1/records/build.function-call?limit=500", { headers })).json() as {
           records: { source: string; release: string; version: number; state: string; costReported: boolean }[];
         };
         return calls.records.filter((call) => call.source === `${fixture.type}/${source}` && call.release === release &&
           call.version === 1 && call.state === "ready" && call.costReported).length;
-      }).toBe(2);
+      }, { timeout: 20_000 }).toBe(2);
+      if (phase === "before") await expect(page.getByText("Original AI result", { exact: true })).toBeVisible();
       await page.reload();
       // The original page session restores selection on reload. Clicking the
       // same row again toggles it off; select only when it was not restored.
       await expect(sourceRow).toBeVisible();
-      await expect(adviceHeading).toBeVisible();
-      if (!(await refreshAdvice.isVisible())) await sourceRow.click();
-      await expect(refreshAdvice).toBeVisible();
-      await refreshAdvice.click();
-      const advicePanel = adviceHeading.locator("..");
-      await advicePanel.getByRole("table").first().getByRole("row").filter({ hasText: `${fixture.type}/${source}` }).last().click();
+      if (!(await requestAnalysis.isVisible())) await sourceRow.click();
+      await expect(requestAnalysis).toBeVisible();
+      const callRow = adviceHistory.getByRole("row").filter({ hasText: `${fixture.type}/${source}` }).last();
+      await expect(callRow).toContainText(`advice${fixture.suffix}`);
+      await expect(callRow.getByRole("cell", { name: "1", exact: true })).toBeVisible();
+      await callRow.click();
       await expect(page.getByText("Measured model call")).toBeVisible();
       await expect(page.getByText("$0.010000")).toBeVisible();
       const instance = await (await request.get(instanceURL, { headers })).json() as { record: { release: string; version: number; state: string } };

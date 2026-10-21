@@ -116,7 +116,7 @@ func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time
 	if !ok {
 		return nil, platform.FlowInstance{}, current, unknown()
 	}
-	v, refusal := t.RecordOf(current, platform.FlowInstanceType, id, now)
+	v, refusal := t.recordOf(current, platform.FlowInstanceType, id, now)
 	if refusal != nil {
 		return nil, platform.FlowInstance{}, current, refusal
 	}
@@ -267,7 +267,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			return record, err, true
 		}
 	}
-	view, err := t.RecordOf(m, "flow.dead-letter", sub.GetTarget().GetId(), now)
+	view, err := t.recordOf(m, "flow.dead-letter", sub.GetTarget().GetId(), now)
 	if err != nil {
 		t.mu.Unlock()
 		return nil, err, true
@@ -523,7 +523,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	if intake == nil {
 		return refuse("The Flow has no controlled source intake")
 	}
-	view, err := t.RecordOf(m, construction.SourceType, intake.SourceRecord, now)
+	view, err := t.recordOf(m, construction.SourceType, intake.SourceRecord, now)
 	if err != nil {
 		return refuse("The Flow source is not readable")
 	}
@@ -538,7 +538,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	if !ok || !source.Stream || source.State != "published" || source.Name != name || source.Since == "" || source.Profile != "table" {
 		return refuse("The Flow source must be a published incremental stream source")
 	}
-	view, err = t.RecordOf(m, construction.ConnectionType, source.Connection, now)
+	view, err = t.recordOf(m, construction.ConnectionType, source.Connection, now)
 	if err != nil {
 		return refuse("The Flow connection is not readable")
 	}

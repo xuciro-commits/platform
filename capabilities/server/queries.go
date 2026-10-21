@@ -22,13 +22,13 @@ func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
 // RunQuery runs one declared query as m (ADR-0047 21c): its fixed conditions,
 // and the record it is run for through its reference. It is the member's own
 // read of the object, so a page and an agent tool see exactly what m may.
-func (t *Tenant) RunQuery(m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Tenant) queryRead(m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
 	return t.runQueryFrom(t.records, m, app, name, of, now)
 }
 
 // RunQueryWindow retains the declaration's conditions/sort and published
 // version while letting a reader search and page within its bounded window.
-func (t *Tenant) RunQueryWindow(m platform.Member, app, name, of, version string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	var declared *platform.NamedQuery
 	for _, d := range t.Definitions(m) {
 		if d.Ref != (platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}) {
