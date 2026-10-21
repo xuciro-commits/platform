@@ -86,10 +86,13 @@ echo "ok   principals come from Rauthy (demo tokens and forged claims refused)"
 echo "ok   health: the processes are alive; the plant's administrator reads its tenant's health"
 
 submit() { # token key schema target-type target-id payload [expected-revision]
-  local body who binding family
+  local body who binding family identity identity_status
   local server=${SERVER:-$MANUFACTURING}
   local headers=(-H "Authorization: Bearer $1" -H 'Content-Type: application/json')
-  who=$(curl -sf -H "Authorization: Bearer $1" "$server/v1/me" | jq -er '.principalId | select(type == "string" and length > 0)') || fail "submission identity unavailable for $3"
+  identity=$(curl -sS -w $'\n%{http_code}' -H "Authorization: Bearer $1" "$server/v1/me") || fail "submission identity transport failed for $3 ($4/$5)"
+  identity_status=${identity##*$'\n'}
+  [[ $identity_status == 200 ]] || fail "submission identity HTTP $identity_status for $3 ($4/$5)"
+  who=$(jq -er '.principalId | select(type == "string" and length > 0)' <<<"${identity%$'\n'*}") || fail "submission identity missing in HTTP 200 for $3 ($4/$5)"
   binding=$(curl -sf -H "Authorization: Bearer $1" "$server/v1/actions" | jq -c --arg schema "$3" '[.[] | select(.schema == $schema) | .schemaVersion][0] // null')
   family=$(jq -r '.family // 1' <<<"$binding")
   if [[ $binding != null ]]; then
