@@ -39,7 +39,7 @@ func TestNoticeStaticTextProfilesAndBudgets(t *testing.T) {
 		cfg := *s.Notice
 		copy.Notice = &cfg
 		change(&copy)
-		if d.checkNotice(copy) == nil {
+		if copy.checkWidgetConfiguration() == nil && d.checkNotice(copy) == nil {
 			t.Fatal("invalid note accepted", copy)
 		}
 	}

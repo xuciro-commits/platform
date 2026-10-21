@@ -11,9 +11,6 @@ func collaborationWidget(widget string) bool {
 
 func (d *PageDocument) checkCollaboration(s Section) error {
 	if !collaborationWidget(s.Widget) {
-		if s.CommentDraftVariable != "" || s.FileVariable != "" || s.PdfPageVariable != "" {
-			return fmt.Errorf("collaboration bindings need their widget")
-		}
 		return nil
 	}
 	v := d.Variables[s.RecordVariable]

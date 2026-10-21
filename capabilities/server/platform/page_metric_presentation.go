@@ -29,7 +29,7 @@ func (d *PageDocument) checkMetricPresentation(s Section) error {
 		return fmt.Errorf("metric annotation needs a bounded static note and renderer profile")
 	}
 	c := pageWidgets.Runtime.MetricPresentation
-	if s.Widget != "metric" || !PageUIProfileSupports(d.UIProfile, c.RequiredUIProfile) || len(v.Prefix) > c.MaxUnitBytes || len(v.Suffix) > c.MaxUnitBytes || !slices.Contains(c.Formatters, v.Formatter) || !slices.Contains(c.Variants, v.Variant) || !slices.Contains(c.Tones, v.Tone) {
+	if !PageUIProfileSupports(d.UIProfile, c.RequiredUIProfile) || len(v.Prefix) > c.MaxUnitBytes || len(v.Suffix) > c.MaxUnitBytes || !slices.Contains(c.Formatters, v.Formatter) || !slices.Contains(c.Variants, v.Variant) || !slices.Contains(c.Tones, v.Tone) {
 		return fmt.Errorf("metric presentation needs its widget, profile and bounded supported display")
 	}
 	return nil

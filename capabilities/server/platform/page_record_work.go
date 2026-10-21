@@ -14,12 +14,6 @@ type PageActionTable struct {
 }
 
 func (d *PageDocument) checkRecordWork(s Section) error {
-	if s.Widget != "action-table" && s.ActionTable != nil {
-		return fmt.Errorf("action table configuration needs its widget")
-	}
-	if s.Widget != "notepad" && s.NotepadVariable != "" {
-		return fmt.Errorf("notepad variable needs its widget")
-	}
 	if s.Widget == "notepad" {
 		v := d.Variables[s.NotepadVariable]
 		if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordWork.RequiredUIProfile) || v.Type != "string" || v.Mode != "state" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || s.CollectionVariable != "" || s.RecordVariable != "" || s.Selection != "" || len(s.Fields) > 0 || len(s.Actions) > 0 {

@@ -39,7 +39,7 @@ func TestScatterOriginalWindowAndSelectionContract(t *testing.T) {
 	d.Queries["read"] = old
 	other := s
 	other.Widget = "record-chart"
-	if d.checkScatter(other) == nil {
+	if other.checkWidgetConfiguration() == nil {
 		t.Fatal("config on another widget accepted")
 	}
 	info := EntityInfo{Fields: []FieldInfo{{Name: "x", Type: "integer"}, {Name: "y", Type: "decimal"}, {Name: "state", Type: "choice"}, {Name: "title", Type: "text"}}}

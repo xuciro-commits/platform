@@ -38,9 +38,6 @@ func (d *PageDocument) collectionBuilderInput(id, owner string, object AssetRef,
 }
 func (d *PageDocument) checkCollectionBuilder(s Section, sections []Section) error {
 	if s.Widget != "collection-builder" {
-		if s.CollectionBuilder != nil || s.CollectionOutputVariable != "" {
-			return fmt.Errorf("collection builder configuration needs its widget")
-		}
 		return nil
 	}
 	if s.CollectionBuilder == nil || len(s.CollectionBuilder.Fields) < 1 || len(s.CollectionBuilder.Fields) > 32 || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.88") {

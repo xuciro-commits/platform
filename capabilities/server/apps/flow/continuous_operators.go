@@ -265,7 +265,7 @@ func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batc
 			var measured map[string]float64
 			if a.Kernel == "wasm:f32-window-stats" {
 				var err error
-				measured, err = windowF32Stats(values, a.Above)
+				measured, err = windowF32Stats(values, a.Above, cancelled)
 				if err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 				}

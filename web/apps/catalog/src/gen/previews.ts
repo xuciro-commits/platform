@@ -39,7 +39,6 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "scenario/page-studio": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.PageStudioExample })),
   "scenario/query-studio": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.QueryStudioExample })),
   "scenario/record-handling": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.RecordHandlingExample })),
-  "scenario/workshop-import": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.WorkshopImportExample })),
   "ui/ai-result": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.AIResultExample })),
   "ui/application-header": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ApplicationHeaderExample })),
   "ui/approval-inbox": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ApprovalInboxExample })),

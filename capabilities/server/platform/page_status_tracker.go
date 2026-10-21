@@ -13,9 +13,6 @@ type PageStatusTracker struct {
 
 func (d *PageDocument) checkStatusTracker(s Section) error {
 	if s.Widget != "status-tracker" {
-		if s.StatusTracker != nil {
-			return fmt.Errorf("status tracker configuration needs its widget")
-		}
 		return nil
 	}
 	limits := pageWidgets.Runtime.StatusTracker
@@ -23,7 +20,7 @@ func (d *PageDocument) checkStatusTracker(s Section) error {
 	if s.Model != nil && value == nil {
 		return nil
 	} // the model-aware schema check resolves lifecycle defaults
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || value == nil || value.Field == "" || len(value.Stages) == 0 && s.Model == nil || len(value.Stages) > limits.MaxStages || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Query.Name != "" || s.Relation != "" {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || value == nil || value.Field == "" || len(value.Stages) == 0 && s.Model == nil || len(value.Stages) > limits.MaxStages {
 		return fmt.Errorf("status tracker needs its profile and bounded original states")
 	}
 	seen := map[string]bool{}

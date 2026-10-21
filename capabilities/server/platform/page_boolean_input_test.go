@@ -63,7 +63,7 @@ func TestBooleanInputOriginalStateProfileAndEmptyLabel(t *testing.T) {
 	}
 	s.BooleanLabel = nil
 	s.Widget = "text"
-	if d.checkBooleanInput(s) == nil {
+	if s.checkWidgetConfiguration() == nil {
 		t.Fatal("binding escaped widget")
 	}
 }

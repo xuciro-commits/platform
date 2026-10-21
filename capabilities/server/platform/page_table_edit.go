@@ -10,7 +10,7 @@ func (d *PageDocument) checkTableEdit(s Section) error {
 		return nil
 	}
 	edit := s.InlineEdit
-	if s.Widget != "table" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.31") || edit.Action.Check() != nil || edit.Action.Kind != AssetAction || len(edit.Fields) == 0 || len(edit.Fields) > pageWidgets.Runtime.TableEditing.MaxFields {
+	if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.31") || edit.Action.Check() != nil || edit.Action.Kind != AssetAction || len(edit.Fields) == 0 || len(edit.Fields) > pageWidgets.Runtime.TableEditing.MaxFields {
 		return fmt.Errorf("inline table editing needs v2.31, a table, original action and bounded fields")
 	}
 	seen := map[string]bool{}

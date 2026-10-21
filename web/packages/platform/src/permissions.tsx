@@ -4,6 +4,7 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { PropertyList, ContextHelp, Button, Form, Checkbox, DataTable, type ColumnDef, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Member } from "./shared";
 
@@ -45,7 +46,7 @@ function AppMatrix({ app }: { app: AppPermissions }) {
 
 // Ask the engine why: a member, a permission, the verdict with its rule.
 function Explain({ catalog }: { catalog: AppPermissions[] }) {
-	const { client } = useHost();
+	const { client, source } = useHost();
   const members = useRead<Member[]>("/v1/members").data ?? [];
   const permissions = Array.from(new Set(catalog.flatMap((a) => a.roles.flatMap((r) => r.actions.map((x) => x.id))))).sort();
   const [member, setMember] = useState("");
@@ -55,7 +56,10 @@ function Explain({ catalog }: { catalog: AppPermissions[] }) {
   const [fields, setFields] = useState("");
   const [kind, setKind] = useState<Api.AuthzRequest["kind"]>("read");
   const [asked, setAsked] = useState<string | null>(null);
-  const answer = useRead<Explanation | Api.Verdict>(asked ?? "/v1/authz/explain", undefined, asked !== null);
+  // Record explanations are explicit POST diagnostics, not live query leases.
+  // A metadata change still obtains a fresh answer under current permissions.
+  const answer = useQuery({ queryKey: [client.connection.token, client.connection.tenant, source.scope, "authorization-explanation", asked],
+    queryFn: () => client.get<Explanation | Api.Verdict>(asked!, true), enabled: asked !== null });
   const explanation = answer.data && "verdict" in answer.data ? answer.data : undefined;
   const v = explanation?.verdict ?? (answer.data && "allow" in answer.data ? answer.data : undefined);
   const names: Record<string, string> = { tenant: "Tenant isolation", principal: "Principal validity", deny: "Explicit deny", verb: "Operation grant", row: "Row scope", fields: "Field permissions", derived: "Source closure", markings: "Data markings", allow: "Final allow" };

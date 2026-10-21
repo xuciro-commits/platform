@@ -6,13 +6,11 @@ import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // one application, five workspaces and builder-named concepts.
 // Membership, edits, candidates and runtime keep their original owners.
-import { ApplicationRuns, ApplicationRuntimePanel, pageUIProfile, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
+import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { WorkshopApplicationImport } from "../workshop/module-import/WorkshopApplicationImport";
-import type { ApplicationImportDependency } from "../workshop/module-import/application-import";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
 import { publishedResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
@@ -24,7 +22,7 @@ export type Project = Api.Application & { id: string; revision: number; state: s
 import { kindIcon } from "./resource-icons";
 import { useProjectResources, type OwnedResource } from "./resource-inventory";
 export type { OwnedResource } from "./resource-inventory";
-import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioRoute } from "./studio-model";
+import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioResourceGroups, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
 import { StudioGuide } from "./studio-guide";
 import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
@@ -35,7 +33,7 @@ import { ExtensionSettings } from "./ExtensionSettings";
 export function ProjectsList() {
   const { role, me, definitions } = useHost();
   const { open } = useWorkspace();
-  const projects = useRecordInventory<Project>("build.app");
+  const projects = useRecordInventory<Project>("build.app", 1000, role("build") === "builder");
   const installedApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   // A builder role held only through projects (#141): the Studio opens, edits stay within the assets they name.
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
@@ -96,22 +94,24 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
 }
 
 function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string }) {
-  const activeArea = studioArea(area);
-  const { client, decide, role, definitions, me } = useHost();
+  const activeArea = studioArea(area, initialSelected?.split("/")[1]);
+  const { client, decide, role, definitions } = useHost();
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
   const builder = role("build") === "builder";
   const savedChanges = useSavedDraftChanges(id, undefined, builder);
-  const { inventories, owned, available, shared, loading } = useProjectResources(project);
-  const resourcesUnavailable = owned.some(resource => !resource.installed && inventories[resource.kind.kind]?.isError);
+
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
   type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
   const emptyProject = !!project && !project.pages?.length && !project.resources?.length;
-  const initialTab = initialSection === "runs" ? "runs" : initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "verify" ? "release" : "resources";
+  const initialTab = initialSection === "runs" ? "runs" : initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "release" ? "release" : "resources";
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
+  // Add existing is global: changing workspace only filters the displayed tree.
+  const { inventories, owned, available, shared, loading } = useProjectResources(project, "build", builder);
+  const resourcesUnavailable = owned.some(resource => !resource.installed && inventories[resource.kind.kind]?.isError);
   const visibleView = useViewVisible();
   const setTab = (tab: Section) => { selectTab(tab); setVisited(old => old.includes(tab) ? old : [...old, tab]); };
   useEffect(() => {
@@ -123,13 +123,10 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const [sourceApplied, setSourceApplied] = useState(false);
   const [settings, setSettings] = useState<Partial<Api.Application> & { title: string; name: string; description: string; icon: string; profile: Api.ApplicationProfile; entry: string; replacements: NonNullable<Api.Application["replacements"]> }>();
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
-  const [importing, setImporting] = useState(false);
-  const [importedDependencies, setImportedDependencies] = useState<ApplicationImportDependency[]>([]);
   const [createdResource, setCreatedResource] = useState<{ kind: ResourceKindInfo; target: { type: string; id: string } }>();
   const [pendingPatch, setPendingPatch] = useState<{ changes: Partial<Api.Application>; revision?: number; settings: boolean }>();
   const pendingRef = useRef(pendingPatch); pendingRef.current = pendingPatch;
   const latestProject = useRef(project); latestProject.current = project;
-  const importRequest = useRef<{ changes: Partial<Api.Application>; revision: number; dependencies: ApplicationImportDependency[] } | undefined>(undefined);
   // Settings follow the record until this editor types into them (`edited`);
   // only typed changes are saved, and only the fields that differ. Comparing
   // a stale local copy against a record that another editor moved on would
@@ -202,7 +199,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (confirmed) { baseline.current = undefined; setEdited(false); markSaved(); }
     return confirmed;
   };
-  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !sourceApplied && !pendingPatch && !createdResource && !importing, busy: saving, save: saveSettings });
+  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !sourceApplied && !pendingPatch && !createdResource, busy: saving, save: saveSettings });
   const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord) => projectResourceChange(current, resourceRef(kind, record.name));
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     setCreatedResource({ kind, target });
@@ -231,7 +228,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (await patch(changes, current.revision)) setSelected(undefined);
   };
   const unpublished = savedChanges.data?.changes ?? [];
-  const releaseSelection = [...new Map([...unpublished.map(change => ({ kind: draftChangeKind(change), id: change.id })), ...importedDependencies].map(choice => [JSON.stringify([choice.kind, choice.id]), choice])).values()];
+  const releaseSelection = [...new Map(unpublished.map(change => ({ kind: draftChangeKind(change), id: change.id })).map(choice => [JSON.stringify([choice.kind, choice.id]), choice])).values()];
   // Prepare Verify once from the same saved changes as Publish. Later reads
   // must not replace an in-progress or unconfirmed release selection.
   const verificationSelection = useRef<typeof releaseSelection | undefined>(undefined);
@@ -248,7 +245,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const statusOf = (item: OwnedResource) => item.record ? (item.record.state === "published" ? undefined : t("draft")) : item.installed ? t("published") : item.missing ? t("missing") : undefined;
   const tree = <div className="grid min-w-0 content-start">
     <div className="p-2"><Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} value={filter} onChange={event => setFilter(event.target.value)} /></div>
-    {conceptTree(project, visible).map(group => <PanelSection key={group.id} title={group.title}>
+    {(tab === "concepts" ? conceptTree(project, visible) : studioResourceGroups(project, activeArea, visible)).map(group => <PanelSection key={group.id} title={group.title}>
       {group.items.map(item => <StructureRow key={refKey(item.ref)} icon={kindIcon[item.kind.kind]} label={item.title} selected={selectedKey === refKey(item.ref)} meta={statusOf(item)} onClick={() => setSelected(refKey(item.ref))} />)}
     </PanelSection>)}
     {!visible.length && <p className="p-3 text-xs text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
@@ -262,7 +259,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && installed?.application && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => { importRequest.current = undefined; setImporting(true); }}>{t("Import Workshop module")}</Button>}
         {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
         {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={saving || dirty || !!pendingPatch || !!createdResource} onChange={(event) => {
           let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
@@ -293,7 +289,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           <div className="flex gap-2"><Button disabled={saving || dirty} onClick={() => void addCreated(createdResource.kind, createdResource.target)}>{t("Retry adding created resource")}</Button>
             <Button variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => setCreatedResource(undefined))}>{t("Keep resource without project membership")}</Button></div></div>}
         <div role="tablist" aria-label={t("Project sections")} className="flex flex-wrap gap-1 border-b border-border px-3 py-1">
-          {(["resources", ...(activeArea === "verify" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => <Button variant="ghost" size="sm" key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
+          {(["resources", ...(activeArea === "release" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => <Button variant="ghost" size="sm" key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
         </div>
         {tab === "resources" && <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-xs">
           <strong>{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
@@ -346,7 +342,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             <div role="region" aria-label={t("Application progress")} className="rounded-md border border-border p-3 text-xs">
               <div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-semibold">{t("Application progress")}</h3><ContextHelp title={t("Application progress")}>{t("The release owner checks model completeness, rules and page bindings before delivery.")}</ContextHelp></div>
               <PropertyList columns={2} items={[[t("Models"), owned.filter(item => item.ref.kind === "object").length], [t("Pages"), owned.filter(item => item.ref.kind === "page").length], [t("Saved changes"), unpublished.length], [t("Missing assets"), problems.length]]} />
-              <Button size="sm" className="mt-2" onClick={() => open(studioRoute(id, "verify", selected))}>{t("Verify application")}</Button>
+              <Button size="sm" className="mt-2" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
             </div>
             <div className="rounded-md border border-border p-3 text-xs text-muted">
               <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold text-muted">{t("Release")}</h3><ContextHelp title={t("Release")}>{installed ? t("A published version is in the Applications portal. Saved edits remain drafts until the next release.") : t("Not published yet. Publish reviews every draft in this project and activates them together.")}</ContextHelp></div>
@@ -415,32 +411,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         </fieldset></StructuredEditor>}
       </div>
     </Workbench>
-    {installed?.application && <WorkshopApplicationImport key={JSON.stringify([project.id, me])} open={importing} onClose={() => setImporting(false)} application={{ ref: installed.ref, sourceVersion: installed.version }}
-      onReviewMembership={async () => {
-        if (pendingRef.current || lock.current) { setError(t("An earlier application update is unconfirmed. Retry its original payload before changing membership.")); return false; }
-        if (dirty) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
-        const fresh = await query.refetch();
-        if (!fresh.isSuccess || !fresh.data?.record) return false;
-        latestProject.current = fresh.data.record;
-        // Only this explicit operator choice can adopt a new revision after
-        // refusal. Background updates cannot replace the original request.
-        importRequest.current = undefined;
-        return true;
-      }}
-      onPrepared={async ({ pages, header, dependencies }) => {
-        if (!importRequest.current) {
-          const current = latestProject.current;
-          if (!current) return false;
-          importRequest.current = {
-            changes: { pages: [...pages, ...(current.pages ?? []).filter(name => !pages.includes(name))], ...(header ? { header, uiProfile: pageUIProfile } : {}) },
-            revision: current.revision, dependencies: structuredClone(dependencies),
-          };
-        }
-        const submitted = importRequest.current;
-        const confirmed = await patch(submitted.changes, submitted.revision);
-        if (confirmed) { setImportedDependencies(submitted.dependencies); importRequest.current = undefined; }
-        return confirmed;
-      }} />}
   </>;
 }
 

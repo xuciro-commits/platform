@@ -6163,7 +6163,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.10"
+          "requiredUIProfile": "platform.page.v2.10",
+          "scopeRule": "local"
         },
         {
           "id": "filter",
@@ -6453,7 +6454,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.19"
+          "requiredUIProfile": "platform.page.v2.19",
+          "scopeRule": "local"
         },
         {
           "id": "filter",
@@ -6562,7 +6564,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.19"
+          "requiredUIProfile": "platform.page.v2.19",
+          "scopeRule": "local"
         },
         {
           "id": "filter",
@@ -6707,7 +6710,9 @@ export const pageUIManifest = {
       "authoringFields": [
         "collectionVariable",
         "configVersion",
+        "facets",
         "fields",
+        "filterSearchVariable",
         "filterVariable",
         "id",
         "model",
@@ -6726,7 +6731,9 @@ export const pageUIManifest = {
       "componentID": "filter",
       "configVersion": 1,
       "configurationFields": [
+        "facets",
         "fields",
+        "filterSearchVariable",
         "model",
         "object"
       ],
@@ -6739,7 +6746,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.30"
+          "requiredUIProfile": "platform.page.v2.30",
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {
@@ -7234,7 +7242,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.23"
+          "requiredUIProfile": "platform.page.v2.23",
+          "scopeRule": "local"
         },
         {
           "id": "filter",
@@ -7333,7 +7342,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.25"
+          "requiredUIProfile": "platform.page.v2.25",
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {
@@ -7439,7 +7449,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.26"
+          "requiredUIProfile": "platform.page.v2.26",
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {
@@ -7878,13 +7889,30 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.41"
+          "requiredUIProfile": "platform.page.v2.41",
+          "required": true,
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         },
         {
           "id": "count",
           "bindingField": "countVariable",
           "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.41"
+          "requiredUIProfile": "platform.page.v2.41",
+          "scopeRule": "local",
+          "required": true,
+          "modes": [
+            "aggregate"
+          ],
+          "source": "count",
+          "sameOwner": "collectionVariable"
         }
       ],
       "layoutPreferences": {
@@ -7961,12 +7989,42 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "cardLabel",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        },
+        {
+          "path": "fields",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference",
+            "integer",
+            "decimal",
+            "money",
+            "date",
+            "datetime",
+            "boolean"
+          ],
+          "optional": true,
+          "distinct": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.10"
+          "requiredUIProfile": "platform.page.v2.10",
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {
@@ -8062,12 +8120,49 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "recordChart.xField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference",
+            "integer",
+            "decimal",
+            "boolean",
+            "date",
+            "datetime"
+          ],
+          "allowID": true
+        },
+        {
+          "path": "recordChart.yField",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.43"
+          "requiredUIProfile": "platform.page.v2.43",
+          "required": true,
+          "plan": {
+            "ordered": true
+          },
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -8161,12 +8256,50 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "recordEvents.timeField",
+          "kinds": [
+            "date",
+            "datetime"
+          ]
+        },
+        {
+          "path": "recordEvents.titleField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        },
+        {
+          "path": "recordEvents.severityField",
+          "kinds": [
+            "choice"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.45"
+          "requiredUIProfile": "platform.page.v2.45",
+          "required": true,
+          "plan": {
+            "ordered": true
+          },
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -8287,12 +8420,44 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "recordCalendar.dateField",
+          "kinds": [
+            "date",
+            "datetime"
+          ]
+        },
+        {
+          "path": "recordCalendar.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.46"
+          "requiredUIProfile": "platform.page.v2.46",
+          "required": true,
+          "plan": {
+            "ordered": true
+          },
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -8386,12 +8551,57 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "recordGantt.startField",
+          "kinds": [
+            "date",
+            "datetime"
+          ]
+        },
+        {
+          "path": "recordGantt.endField",
+          "kinds": [
+            "date",
+            "datetime"
+          ]
+        },
+        {
+          "path": "recordGantt.titleField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        },
+        {
+          "path": "recordGantt.statusField",
+          "kinds": [
+            "choice"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.47"
+          "requiredUIProfile": "platform.page.v2.47",
+          "required": true,
+          "plan": {
+            "ordered": true
+          },
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -8521,13 +8731,16 @@ export const pageUIManifest = {
           "id": "value",
           "bindingField": "progressValueVariable",
           "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.48"
+          "requiredUIProfile": "platform.page.v2.48",
+          "required": true,
+          "scopeRule": "accessible"
         },
         {
           "id": "total",
           "bindingField": "progressTotalVariable",
           "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.48"
+          "requiredUIProfile": "platform.page.v2.48",
+          "scopeRule": "accessible"
         }
       ],
       "layoutPreferences": {
@@ -8590,7 +8803,9 @@ export const pageUIManifest = {
           "id": "value",
           "bindingField": "gaugeValueVariable",
           "type": "number",
-          "requiredUIProfile": "platform.page.v2.49"
+          "requiredUIProfile": "platform.page.v2.49",
+          "required": true,
+          "scopeRule": "accessible"
         }
       ],
       "layoutPreferences": {
@@ -8668,18 +8883,44 @@ export const pageUIManifest = {
         "width": "full"
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "summaryField",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.50"
+          "requiredUIProfile": "platform.page.v2.50",
+          "required": true,
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         },
         {
           "id": "statistics",
           "bindingField": "statisticsVariable",
           "type": "statistics",
-          "requiredUIProfile": "platform.page.v2.50"
+          "requiredUIProfile": "platform.page.v2.50",
+          "scopeRule": "local",
+          "required": true,
+          "modes": [
+            "aggregate"
+          ],
+          "source": "statistics",
+          "sameOwner": "collectionVariable"
         }
       ],
       "layoutPreferences": {
@@ -8757,12 +8998,41 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "leaderboard.valueField",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        },
+        {
+          "path": "leaderboard.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.51"
+          "requiredUIProfile": "platform.page.v2.51",
+          "required": true,
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -8875,7 +9145,16 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.52",
-          "stateWritable": true
+          "stateWritable": true,
+          "required": true,
+          "modes": [
+            "state"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "scopeRule": "local"
         },
         {
           "id": "max",
@@ -8883,7 +9162,28 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.52",
-          "stateWritable": true
+          "stateWritable": true,
+          "required": true,
+          "modes": [
+            "state"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "sameOwner": "rangeMinVariable",
+          "scopeRule": "local"
+        }
+      ],
+      "portGroups": [
+        {
+          "fields": [
+            "rangeMinVariable",
+            "rangeMaxVariable"
+          ],
+          "min": 2,
+          "max": 2,
+          "distinct": true
         }
       ],
       "propsSchema": {
@@ -8952,7 +9252,16 @@ export const pageUIManifest = {
           "type": "boolean",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.53",
-          "stateWritable": true
+          "stateWritable": true,
+          "required": true,
+          "modes": [
+            "state"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "scopeRule": "local"
         }
       ],
       "propsSchema": {
@@ -9035,7 +9344,8 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.55",
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "local"
         },
         {
           "id": "selection",
@@ -9043,7 +9353,8 @@ export const pageUIManifest = {
           "type": "string-set",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.56",
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "local"
         }
       ],
       "propsSchema": {
@@ -9113,7 +9424,16 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.57",
-          "stateWritable": true
+          "stateWritable": true,
+          "required": true,
+          "modes": [
+            "state"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "scopeRule": "local"
         }
       ],
       "propsSchema": {
@@ -9183,12 +9503,25 @@ export const pageUIManifest = {
         "width": "full"
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "recordPicker.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.58"
+          "requiredUIProfile": "platform.page.v2.58",
+          "scopeRule": "local"
         },
         {
           "id": "enabled",
@@ -9216,7 +9549,8 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.64",
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "accessible"
         }
       ],
       "propsSchema": {
@@ -9267,7 +9601,13 @@ export const pageUIManifest = {
           "id": "value",
           "bindingField": "alertValueVariable",
           "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.60"
+          "requiredUIProfile": "platform.page.v2.60",
+          "required": true,
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {
@@ -9552,12 +9892,31 @@ export const pageUIManifest = {
         "width": "full"
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "group",
+          "kinds": [
+            "text",
+            "choice"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "records",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.67"
+          "requiredUIProfile": "platform.page.v2.67",
+          "required": true,
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -9626,12 +9985,31 @@ export const pageUIManifest = {
         "width": "full"
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "histogram.field",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "records",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.68"
+          "requiredUIProfile": "platform.page.v2.68",
+          "required": true,
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -9706,12 +10084,59 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "scatter.xField",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        },
+        {
+          "path": "scatter.yField",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        },
+        {
+          "path": "scatter.colorField",
+          "kinds": [
+            "text",
+            "choice"
+          ]
+        },
+        {
+          "path": "scatter.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.69"
+          "requiredUIProfile": "platform.page.v2.69",
+          "required": true,
+          "plan": {
+            "ordered": true,
+            "maxLimit": 100
+          },
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -9819,12 +10244,38 @@ export const pageUIManifest = {
         "columnGroup": ""
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "group",
+          "kinds": [
+            "text",
+            "choice"
+          ]
+        },
+        {
+          "path": "columnGroup",
+          "kinds": [
+            "text",
+            "choice"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.70"
+          "requiredUIProfile": "platform.page.v2.70",
+          "scopeRule": "local",
+          "required": true,
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -9846,7 +10297,12 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.70",
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "local",
+          "modes": [
+            "state"
+          ],
+          "sameOwner": "collectionVariable"
         },
         {
           "id": "rowSet",
@@ -9854,7 +10310,12 @@ export const pageUIManifest = {
           "type": "string-set",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.70",
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "local",
+          "modes": [
+            "state"
+          ],
+          "sameOwner": "collectionVariable"
         },
         {
           "id": "columnValue",
@@ -9862,7 +10323,12 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.70",
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "local",
+          "modes": [
+            "state"
+          ],
+          "sameOwner": "collectionVariable"
         },
         {
           "id": "columnSet",
@@ -9870,7 +10336,41 @@ export const pageUIManifest = {
           "type": "string-set",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.70",
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "local",
+          "modes": [
+            "state"
+          ],
+          "sameOwner": "collectionVariable"
+        }
+      ],
+      "portGroups": [
+        {
+          "fields": [
+            "rowValueVariable",
+            "rowSetVariable"
+          ],
+          "min": 0,
+          "max": 1
+        },
+        {
+          "fields": [
+            "columnValueVariable",
+            "columnSetVariable"
+          ],
+          "min": 0,
+          "max": 1
+        },
+        {
+          "fields": [
+            "rowValueVariable",
+            "rowSetVariable",
+            "columnValueVariable",
+            "columnSetVariable"
+          ],
+          "min": 0,
+          "max": 4,
+          "distinct": true
         }
       ],
       "propsSchema": {
@@ -9941,12 +10441,31 @@ export const pageUIManifest = {
         "width": "full"
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "group",
+          "kinds": [
+            "text",
+            "choice"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "records",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.71"
+          "requiredUIProfile": "platform.page.v2.71",
+          "required": true,
+          "scopeRule": "local",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -9969,7 +10488,12 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.71",
-          "stateWritable": true
+          "stateWritable": true,
+          "modes": [
+            "state"
+          ],
+          "sameOwner": "collectionVariable",
+          "scopeRule": "local"
         },
         {
           "id": "groupSet",
@@ -9977,7 +10501,22 @@ export const pageUIManifest = {
           "type": "string-set",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.71",
-          "stateWritable": true
+          "stateWritable": true,
+          "modes": [
+            "state"
+          ],
+          "sameOwner": "collectionVariable",
+          "scopeRule": "local"
+        }
+      ],
+      "portGroups": [
+        {
+          "fields": [
+            "groupValueVariable",
+            "groupSetVariable"
+          ],
+          "min": 0,
+          "max": 1
         }
       ],
       "propsSchema": {
@@ -10034,24 +10573,48 @@ export const pageUIManifest = {
         "sparkline": {}
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "sparkline.field",
+          "kinds": [
+            "integer",
+            "decimal"
+          ],
+          "when": "collectionVariable"
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.72"
+          "requiredUIProfile": "platform.page.v2.72",
+          "scopeRule": "local",
+          "required": false
         },
         {
           "id": "sparklineDecimal",
           "bindingField": "sparklineDecimalVariable",
           "type": "decimal",
-          "requiredUIProfile": "platform.page.v2.72"
+          "requiredUIProfile": "platform.page.v2.72",
+          "required": false,
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "scopeRule": "local"
         },
         {
           "id": "sparklineNumber",
           "bindingField": "sparklineNumberVariable",
           "type": "number",
-          "requiredUIProfile": "platform.page.v2.72"
+          "requiredUIProfile": "platform.page.v2.72",
+          "required": false,
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {
@@ -10067,6 +10630,16 @@ export const pageUIManifest = {
         "hidden": "retain"
       },
       "outputPorts": [],
+      "portGroups": [
+        {
+          "fields": [
+            "sparklineDecimalVariable",
+            "sparklineNumberVariable"
+          ],
+          "min": 1,
+          "max": 1
+        }
+      ],
       "propsSchema": {
         "type": "object",
         "properties": {
@@ -10107,6 +10680,7 @@ export const pageUIManifest = {
     {
       "authoringFields": [
         "configVersion",
+        "fields",
         "id",
         "model",
         "object",
@@ -10124,6 +10698,7 @@ export const pageUIManifest = {
       "componentID": "record-card",
       "configVersion": 1,
       "configurationFields": [
+        "fields",
         "model",
         "object"
       ],
@@ -10135,6 +10710,35 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "recordCard.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        },
+        {
+          "path": "fields",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference",
+            "integer",
+            "decimal",
+            "money",
+            "date",
+            "datetime",
+            "boolean"
+          ],
+          "optional": true,
+          "distinct": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "record",
@@ -10247,6 +10851,35 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "recordComparison.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        },
+        {
+          "path": "fields",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference",
+            "integer",
+            "decimal",
+            "money",
+            "date",
+            "datetime",
+            "boolean"
+          ],
+          "optional": true,
+          "distinct": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "records",
@@ -10329,12 +10962,31 @@ export const pageUIManifest = {
         "width": "full"
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "group",
+          "kinds": [
+            "text",
+            "choice"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "records",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.75"
+          "requiredUIProfile": "platform.page.v2.75",
+          "required": true,
+          "scopeRule": "exact",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         },
         {
           "id": "enabled",
@@ -10363,7 +11015,21 @@ export const pageUIManifest = {
           "type": "string",
           "writable": true,
           "requiredUIProfile": "platform.page.v2.75",
-          "stateWritable": true
+          "stateWritable": true,
+          "modes": [
+            "state"
+          ],
+          "sameOwner": "collectionVariable",
+          "scopeRule": "local"
+        }
+      ],
+      "portGroups": [
+        {
+          "fields": [
+            "groupValueVariable"
+          ],
+          "min": 0,
+          "max": 1
         }
       ],
       "propsSchema": {
@@ -10949,7 +11615,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.78"
+          "requiredUIProfile": "platform.page.v2.78",
+          "scopeRule": "local"
         },
         {
           "id": "context",
@@ -11080,12 +11747,32 @@ export const pageUIManifest = {
         "width": "full"
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "resourceList.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        },
+        {
+          "path": "resourceList.statusField",
+          "kinds": [
+            "choice",
+            "text"
+          ]
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.79"
+          "requiredUIProfile": "platform.page.v2.79",
+          "scopeRule": "exact"
         },
         {
           "id": "enabled",
@@ -11381,7 +12068,17 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.80"
+          "requiredUIProfile": "platform.page.v2.80",
+          "required": true,
+          "scopeRule": "exact",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         },
         {
           "id": "x",
@@ -11389,7 +12086,8 @@ export const pageUIManifest = {
           "type": "string",
           "requiredUIProfile": "platform.page.v2.80",
           "writable": true,
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "exact"
         },
         {
           "id": "y",
@@ -11397,21 +12095,24 @@ export const pageUIManifest = {
           "type": "string",
           "requiredUIProfile": "platform.page.v2.80",
           "writable": true,
-          "stateWritable": true
+          "stateWritable": true,
+          "scopeRule": "exact"
         },
         {
           "id": "count",
           "bindingField": "analysisCountVariable",
           "type": "decimal",
           "requiredUIProfile": "platform.page.v2.80",
-          "writable": false
+          "writable": false,
+          "scopeRule": "exact"
         },
         {
           "id": "mean",
           "bindingField": "analysisMeanVariable",
           "type": "number",
           "requiredUIProfile": "platform.page.v2.80",
-          "writable": false
+          "writable": false,
+          "scopeRule": "exact"
         }
       ],
       "layoutPreferences": {
@@ -11489,7 +12190,17 @@ export const pageUIManifest = {
           "bindingField": "collectionVariable",
           "type": "object-set",
           "requiredUIProfile": "platform.page.v2.81",
-          "writable": false
+          "writable": false,
+          "required": true,
+          "scopeRule": "exact",
+          "modes": [
+            "resource"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "source": "plan"
         }
       ],
       "layoutPreferences": {
@@ -11554,7 +12265,16 @@ export const pageUIManifest = {
           "type": "string",
           "requiredUIProfile": "platform.page.v2.81",
           "writable": true,
-          "stateWritable": true
+          "stateWritable": true,
+          "required": true,
+          "modes": [
+            "state"
+          ],
+          "scopes": [
+            "page",
+            "overlay"
+          ],
+          "scopeRule": "exact"
         }
       ],
       "layoutPreferences": {
@@ -11635,7 +12355,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.82"
+          "requiredUIProfile": "platform.page.v2.82",
+          "scopeRule": "local"
         },
         {
           "id": "record",
@@ -11843,7 +12564,10 @@ export const pageUIManifest = {
       "authoringFields": [
         "ai",
         "configVersion",
+        "function",
         "id",
+        "model",
+        "object",
         "recordVariable",
         "title",
         "widget",
@@ -11854,7 +12578,10 @@ export const pageUIManifest = {
       "componentID": "ai-assistant",
       "configVersion": 1,
       "configurationFields": [
-        "ai"
+        "ai",
+        "function",
+        "model",
+        "object"
       ],
       "defaults": {
         "width": "full"
@@ -11939,12 +12666,47 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none",
+      "fieldRoles": [
+        {
+          "path": "map.latitudeField",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        },
+        {
+          "path": "map.longitudeField",
+          "kinds": [
+            "integer",
+            "decimal"
+          ]
+        },
+        {
+          "path": "map.colorField",
+          "kinds": [
+            "text",
+            "choice"
+          ],
+          "optional": true
+        },
+        {
+          "path": "map.labelField",
+          "kinds": [
+            "text",
+            "longtext",
+            "choice",
+            "reference"
+          ],
+          "allowID": true
+        }
+      ],
       "inputPorts": [
         {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.87"
+          "requiredUIProfile": "platform.page.v2.87",
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {
@@ -12334,7 +13096,8 @@ export const pageUIManifest = {
           "id": "collection",
           "bindingField": "collectionVariable",
           "type": "object-set",
-          "requiredUIProfile": "platform.page.v2.88"
+          "requiredUIProfile": "platform.page.v2.88",
+          "scopeRule": "local"
         }
       ],
       "layoutPreferences": {

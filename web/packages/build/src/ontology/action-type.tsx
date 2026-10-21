@@ -98,7 +98,7 @@ export function ActionTypeEditor({ id, action: initial }: { id: string; action?:
   const [name, setName] = useState(initial);
   const [section, setSection] = useState<Section>("overview");
   useEffect(() => { if (initial) setName(initial); }, [initial]);
-  if (!object) return <Workbench storageKey="action-type" title={t("Action type")}><WorkbenchMessage>{draft.failed ? t("The object type could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
+  if (!object || !draft.ready) return <Workbench storageKey="action-type" title={t("Action type")}><WorkbenchMessage>{draft.failed ? t("The object type could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const at = process.actions.findIndex(action => action.name === name), action = process.actions[at];
   const patch = (next: Partial<Action>) => { if (at >= 0) change({ ...process, actions: process.actions.map((action, index) => index === at ? { ...action, ...next } : action) }); };
   const addAction = () => {

@@ -2,9 +2,9 @@
 
 只放当前要交付的工作。完成即移除；被替代的条目删除，不留记录。为什么做归 [Intent](Intent.md)，系统结构归 [Architecture](Architecture.md)，行为约定归 [OpenSpec 模块规范](../openspec/README.md)，工作方式归 [AGENTS](../AGENTS.md)。OpenSpec change 只分解已授权的一块工作，不另排项目优先级。
 
-## 1. 交付尾项：完整部署验证
+## 1. 页面契约与统一构建台
 
-下一次统一交付节点跑一次完整 `make rehearse`（容器 PostgreSQL / RustFS / 两行业宿主）。旧界面操作与接口绑定地址已修正，但中断或部分通过不记为整项通过。
+当前收尾归 [OpenSpec change](../openspec/changes/simplify-page-contract-and-studio/proposal.md)：提交后按原脚本更新酒店 `8495` 与制造 `8490`，核对实际版本、健康和页面资源并保留原数据卷、密钥与租户配置。局部任务只在该 change 中维护。
 
 ## 2. 楼宇供暖与既有平台整理
 

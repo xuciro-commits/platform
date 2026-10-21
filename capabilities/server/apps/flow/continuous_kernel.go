@@ -2,78 +2,68 @@ package flow
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"math"
 	"time"
-
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/api"
 )
 
-// This is the supplied Workshop telemetry kernel, with its original packed
-// f32 ABI. It is fixed trusted platform code, not an uploaded tenant module.
-// Regenerate the binary from kernel/telemetry_stats.wat using wat2wasm.
-//
-//go:embed kernel/telemetry_stats.wasm
-var telemetryStatsKernel []byte
-
-// Compile the one fixed kernel during serialized package initialization. The
-// vendored compiler lazily caches its version without synchronization; allowing
-// the first eight runtimes to initialize it concurrently races. This also avoids
-// recompiling identical trusted bytes for every partition. Only immutable code
-// is shared: every worker below still owns a runtime, instance and memory.
-var telemetryRuntimeConfig = func() wazero.RuntimeConfig {
-	config := wazero.NewRuntimeConfig().WithMemoryLimitPages(128).WithCloseOnContextDone(true).WithCompilationCache(wazero.NewCompilationCache())
-	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, config)
-	defer runtime.Close(ctx)
-	if _, err := runtime.CompileModule(ctx, telemetryStatsKernel); err != nil {
-		panic(fmt.Sprintf("fixed telemetry kernel cannot be compiled: %v", err))
-	}
-	return config
-}()
-
-// windowF32Stats runs only on the outside preparation lane. Each worker owns
-// its bounded memory; cancellation/timeout closes the module. Errors refuse
-// the whole prepared batch rather than switching to a different numeric rule.
-func windowF32Stats(values []float64, threshold float64) (map[string]float64, error) {
+// windowF32Stats preserves the fixed kernel's packed f32 input/output contract:
+// round readings and threshold to f32, sum in order in f64, then round outputs.
+// It runs on the outside preparation lane and shares its worker cancellation.
+func windowF32Stats(values []float64, threshold float64, cancelled func() bool) (map[string]float64, error) {
 	if len(values) > 1_000_000 || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
 		return nil, fmt.Errorf("invalid telemetry kernel input bound")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	runtime := wazero.NewRuntimeWithConfig(ctx, telemetryRuntimeConfig)
-	defer runtime.Close(ctx)
-	module, err := runtime.Instantiate(ctx, telemetryStatsKernel)
-	if err != nil {
-		return nil, fmt.Errorf("telemetry kernel: %w", err)
-	}
-	memory := module.Memory()
-	inputBytes := uint32(len(values)) * 4
-	output := ((inputBytes+65535)/65536)*65536 + 64
-	pages := (output + 20 + 65535) / 65536
-	if current := memory.Size() / 65536; pages > current {
-		if _, ok := memory.Grow(pages - current); !ok {
-			return nil, fmt.Errorf("telemetry kernel memory budget exceeded")
+	deadline := time.Now().Add(2 * time.Second)
+	check := func() error {
+		if cancelled() {
+			return fmt.Errorf("telemetry kernel execution: %w", context.Canceled)
 		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("telemetry kernel execution: %w", context.DeadlineExceeded)
+		}
+		return nil
 	}
+	cutoff := float32(threshold)
+	sum, mean, above := 0.0, 0.0, 0
+	lo, hi := float32(math.MaxFloat32), -float32(math.MaxFloat32)
 	for i, value := range values {
+		if i%1024 == 0 {
+			if err := check(); err != nil {
+				return nil, err
+			}
+		}
 		v := float32(value)
-		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) || !memory.WriteUint32Le(uint32(i)*4, math.Float32bits(v)) {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
 			return nil, fmt.Errorf("telemetry reading cannot be represented as finite f32")
 		}
+		sum += float64(v)
+		if v < lo {
+			lo = v
+		}
+		if v > hi {
+			hi = v
+		}
+		if v > cutoff {
+			above++
+		}
 	}
-	if _, err := module.ExportedFunction("stats").Call(ctx, 0, uint64(len(values)), api.EncodeF32(float32(threshold)), uint64(output)); err != nil {
-		return nil, fmt.Errorf("telemetry kernel execution: %w", err)
+	if err := check(); err != nil {
+		return nil, err
+	}
+	if len(values) == 0 {
+		lo, hi = 0, 0
+	} else {
+		mean = sum / float64(len(values))
 	}
 	result := map[string]float64{"count": float64(len(values))}
-	for i, name := range []string{"sum", "mean", "min", "max", "above"} {
-		value, ok := memory.ReadFloat32Le(output + uint32(i)*4)
-		if !ok || math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+	outputs := [...]float32{float32(sum), float32(mean), lo, hi, float32(above)}
+	for i, name := range [...]string{"sum", "mean", "min", "max", "above"} {
+		value := float64(outputs[i])
+		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return nil, fmt.Errorf("telemetry kernel produced an invalid %s", name)
 		}
-		result[name] = float64(value)
+		result[name] = value
 	}
 	return result, nil
 }

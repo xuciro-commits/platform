@@ -32,7 +32,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
   }));
   const visible = candidates.filter(item => matches(item) || item.ref.kind === "object" && targets.has(item.ref.app + "/" + item.ref.name));
   const groups = studioResourceGroups(project, area, visible);
-  const row = (item: OwnedResource) => <StructureRow key={refKey(item.ref)} icon={kindIcon[item.kind.kind]} label={<span className="whitespace-normal break-words" title={item.ref.name}>{item.title}</span>} selected={active === refKey(item.ref)} meta={item.missing ? t("missing") : item.record?.state === "draft" ? t("draft") : undefined} onClick={() => open(assetRoute(item.ref, owned, host.definitions, id))} />;
+  const row = (item: OwnedResource) => <StructureRow key={refKey(item.ref)} icon={kindIcon[item.kind.kind]} label={<span className="whitespace-normal break-words" title={item.ref.name}>{item.title}</span>} selected={active === refKey(item.ref)} meta={item.missing ? t("missing") : item.record?.state === "draft" ? t("draft") : undefined} onClick={() => { const target = assetRoute(item.ref, owned, host.definitions, id); open(area === "logic" && item.ref.kind === "object" ? { ...target, params: { ...target.params, tab: "lifecycle" } } : target); }} />;
   return <div role="region" aria-label={t("Application assets")} className="pb-3">
     <h2 className="break-words px-2 pb-3 pt-1 text-sm font-semibold">{project.title || project.name}</h2>
     <div role="navigation" aria-label={t("Application workspaces")} className="mb-3 grid gap-1">
@@ -41,6 +41,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
     <Input type="search" aria-label={t("Filter assets in this workspace")} placeholder={t("Filter assets in this workspace")} value={filter} onChange={event => setFilter(event.target.value)} className="h-7 text-xs" />
     {unavailable && <p role="alert" className="p-2 text-xs text-danger">{t("Some application assets are unreadable.")}</p>}
     <p className="px-2 pb-1 pt-3 text-[11px] text-muted">{t("{count} assets in this workspace", { count: matching.length })}</p>
+
     {groups.map((group, index) => {
       const actions = studioActionGroups(group.items, host.definitions);
       return <AssetGroup key={id + ":" + area + ":" + group.id} title={group.id.startsWith("concept:") ? group.title : t(group.title)} count={group.items.length} active={active} containsActive={group.items.some(item => refKey(item.ref) === active)} searching={!!search} initiallyOpen={index === 0 || group.items.length <= 8}>

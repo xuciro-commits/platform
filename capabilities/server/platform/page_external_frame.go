@@ -42,12 +42,9 @@ func ValidPageExternalFrame(c PageExternalFrame) bool {
 
 func (d *PageDocument) checkExternalFrame(s Section) error {
 	if s.Widget != "external-frame" {
-		if s.ExternalFrame != nil {
-			return fmt.Errorf("external frame needs its widget")
-		}
 		return nil
 	}
-	if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.84") || s.ExternalFrame == nil || !ValidPageExternalFrame(*s.ExternalFrame) || s.Embedding != nil || s.Object != (AssetRef{}) || s.RecordVariable != "" || s.CollectionVariable != "" || s.Query != (AssetRef{}) || s.Operation != nil || s.Function != nil || len(s.Fields) > 0 || len(s.Actions) > 0 || len(s.Inputs) > 0 || s.Selection != "" {
+	if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.84") || s.ExternalFrame == nil || !ValidPageExternalFrame(*s.ExternalFrame) || s.Embedding != nil || s.Object != (AssetRef{}) || s.Query != (AssetRef{}) {
 		return fmt.Errorf("external frame needs a fixed HTTPS origin without platform bindings")
 	}
 	return nil

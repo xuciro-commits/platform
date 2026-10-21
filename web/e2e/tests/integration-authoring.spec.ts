@@ -19,6 +19,7 @@ test("a pipeline trials unsaved expectations without publishing or writing outpu
     pipeline: await builder.record("build.pipeline", pipeline), definitions: await operator.definitions(),
   };
   await builder.open(page, `/pipeline?id=${pipeline}`);
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await page.getByRole("button", { name: "Add expectation", exact: true }).click();
   await page.getByPlaceholder("column", { exact: true }).fill("sku");
   await page.route("**/v1/pipelines/preview", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { message: "Pipeline trial refused" } }) }));
@@ -69,15 +70,16 @@ test("an application assembles integration drafts over a saved model before join
     });
     const application = await builder.application({ title: "Integration drafting application", resources: [{ app: "build", kind: "object", name: type }] });
     const original = await operator.definitions();
-    await builder.open(page, `/project?id=${application.id}&area=assemble`);
+    await builder.open(page, `/project?id=${application.id}&area=integration`);
     const create = async (label: string) => {
       await page.getByRole("button", { name: "New", exact: true }).click();
       await page.getByRole("menuitem", { name: label, exact: true }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
+      await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
     };
     const back = async () => {
       await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Integration drafting application", exact: true }).click();
-      await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Assemble", exact: true }).click();
+      await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Integration", exact: true }).click();
     };
     const savedID = async (save: string) => {
       await page.getByRole("button", { name: save, exact: true }).click();
@@ -182,7 +184,7 @@ test("an application assembles integration drafts over a saved model before join
     await builder.open(page, `/connection?id=${connection}&application=${application.id}`);
     await page.getByRole("button", { name: "Check", exact: true }).click();
     await expect.poll(async () => (await builder.record("build.connection", connection)).state, { timeout: 15_000 }).toBe("ready");
-    await builder.open(page, `/project?id=${application.id}&area=verify`);
+    await builder.open(page, `/project?id=${application.id}&area=release`);
     const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
     await verify.getByRole("button", { name: "Add the drafts of Integration drafting application", exact: true }).click();
     await verify.getByRole("button", { name: "Check joint candidate", exact: true }).click();

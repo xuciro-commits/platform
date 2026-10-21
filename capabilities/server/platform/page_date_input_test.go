@@ -81,7 +81,7 @@ func TestOffsetDatetimeProfileAndExclusiveConditions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, invalid := range []Section{{PageWidgetConfig: PageWidgetConfig{DateVariable: "time", DateKind: "datetime"}, Widget: "date-input"}, {PageWidgetConfig: PageWidgetConfig{DateVariable: "time", DateKind: "datetime", DateOffset: "-00:00"}, Widget: "date-input"}, {PageWidgetConfig: PageWidgetConfig{DateVariable: "time", DateOffset: "Z"}, Widget: "date-input"}, {PageWidgetConfig: PageWidgetConfig{DateKind: "datetime", DateOffset: "Z"}, Widget: "text"}} {
-		if d.checkDateInput(invalid) == nil {
+		if invalid.checkWidgetConfiguration() == nil && d.checkDateInput(invalid) == nil {
 			t.Fatal("invalid datetime configuration accepted", invalid)
 		}
 	}

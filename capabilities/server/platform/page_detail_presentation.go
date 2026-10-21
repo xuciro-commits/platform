@@ -17,7 +17,7 @@ func (d *PageDocument) checkDetailPresentation(s Section) error {
 		return nil
 	}
 	limits := pageWidgets.Runtime.DetailPresentation
-	if s.Widget != "detail" || !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || s.DetailPresentation.Columns < 1 || s.DetailPresentation.Columns > limits.MaxColumns {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || s.DetailPresentation.Columns < 1 || s.DetailPresentation.Columns > limits.MaxColumns {
 		return fmt.Errorf("detail presentation needs its supported profile and bounded columns")
 	}
 	if (s.DetailPresentation.Barcode != "" || s.DetailPresentation.Print) && !PageUIProfileSupports(d.UIProfile, limits.BarcodeRequiredUIProfile) {
@@ -29,7 +29,7 @@ func (d *PageDocument) checkDetailPresentation(s Section) error {
 // CheckDetailBarcode refuses a barcode over a field the record has not, or
 // one that is not text: a barcode encodes a code, not a number or a date.
 func (s Section) CheckDetailBarcode(info EntityInfo) error {
-	if s.Widget != "detail" || s.DetailPresentation == nil || s.DetailPresentation.Barcode == "" {
+	if s.DetailPresentation == nil || s.DetailPresentation.Barcode == "" {
 		return nil
 	}
 	if s.DetailPresentation.Barcode != "id" {

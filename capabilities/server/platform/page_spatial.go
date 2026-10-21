@@ -103,9 +103,6 @@ func (c PageSceneConfig) Check() error {
 }
 func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 func (d *PageDocument) checkSpatial(s Section) error {
-	if s.Widget != "record-map" && s.Map != nil || s.Widget != "scene-3d" && (s.Scene != nil || s.SceneSampleCollectionVariable != "" || s.SceneSampleVariable != "" || s.ScenePartVariable != "") {
-		return fmt.Errorf("spatial configuration needs its widget")
-	}
 	if !slices.Contains([]string{"record-map", "image-annotation", "scene-3d"}, s.Widget) {
 		return nil
 	}
@@ -175,25 +172,7 @@ func (s Section) CheckMap(info EntityInfo) error {
 	if s.Widget != "record-map" {
 		return nil
 	}
-	if s.Map == nil {
-		return fmt.Errorf("map fields are missing")
-	}
-	for _, name := range []string{s.Map.LatitudeField, s.Map.LongitudeField} {
-		f, ok := info.Field(name)
-		if !ok || !slices.Contains([]string{"integer", "decimal"}, f.Type) {
-			return fmt.Errorf("map coordinates need visible original numeric fields")
-		}
-	}
-	if s.Map.ColorField != "" {
-		f, ok := info.Field(s.Map.ColorField)
-		if !ok || !slices.Contains([]string{"text", "choice"}, f.Type) {
-			return fmt.Errorf("map color needs visible text or choice")
-		}
-	}
-	if !visibleContextField(info, s.Map.LabelField, true) {
-		return fmt.Errorf("map title needs visible original text or ID")
-	}
-	return nil
+	return s.checkWidgetFieldRoles(info)
 }
 func (p Page) CheckSceneBinding(s Section, lookup func(AssetRef) (EntityInfo, bool)) error {
 	if s.Widget != "scene-3d" {

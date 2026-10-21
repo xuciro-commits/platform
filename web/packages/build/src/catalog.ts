@@ -5,10 +5,6 @@ const template = pageTemplates.find((item) => item.id === "build/record-handling
 export const entries: CatalogEntry[] = [
  {id:"scenario/page-studio",owner:"@pkg/build",name:"Page design workbench",summary:"Edit the original page draft with layout gestures, scoped commands, inspectors and undo history.",layer:5,authority:"example",maturity:"recommended",scope:"platform",uses:["reference"],source:"web/packages/build/src/workshop/editor.tsx",example:"PageStudioExample",dependencies:["ui/canvas-editor","app/composed-page"],tags:["studio","editor","layout"],constraints:["The local example uses the production PageEditor with synthetic records. Host writes, save and publication are refused in Catalog."]},
   {
-    id:"scenario/workshop-import",owner:"@pkg/build",name:"Workshop module migration",summary:"Map a bounded source page into the original V2 draft with explicit bindings, source preservation and blocking diagnostics.",layer:5,authority:"example",maturity:"recommended",scope:"platform",uses:["reference"],tags:["import","workshop","migration","studio","registry"],source:"web/packages/build/src/workshop/module-import/compile.ts",example:"WorkshopImportExample",dependencies:["app/composed-page","app/record-actions"],widgets:["table","detail","inline-action","text","input","button"],
-    constraints:["The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.","The local example compiles synthetic source data without a host. Import applies only an undoable page draft; save, permissions and release validation stay with their original owners.","Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes."],
-  },
-  {
     id: "scenario/query-studio", owner: "@pkg/build", name: "Reusable query workbench", summary: "Author fixed record conditions and retain explicit query versions for shared page plans.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["query", "version", "resources", "studio"],
     source: "web/packages/build/src/ontology/query.tsx", example: "QueryStudioExample", dependencies: ["ui/panels", "app/record-actions"],
@@ -48,4 +44,4 @@ export const entries: CatalogEntry[] = [
     constraints: ["The local example demonstrates a payload and result flow in the flow workbench; it does not execute a process.", "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."],
   },
 ];
-export const api = ["default", "contributions"];
+export const api = ["default"];

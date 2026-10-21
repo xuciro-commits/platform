@@ -28,30 +28,43 @@ import { useAuthoringModel } from "./authoring-model";
 import { ExpressionEditor } from "../editor/ExpressionEditor";
 
 /** The objects of this organisation: open one to give it states and actions. */
-const objectSections = [
-  { id: "overview", title: "Overview" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "actions", title: "Actions" }, { id: "protocols", title: "Protocols" },
-  { id: "versions", title: "Business versions" }, { id: "constraints", title: "Business constraints" }, { id: "sets", title: "Record sets" },
-  { id: "lifecycle", title: "Lifecycle" }, { id: "permissions", title: "Permissions" }, { id: "data", title: "Data" }, { id: "preview", title: "Preview" },
+const objectGroups = [
+  { id: "structure", title: "Object structure", sections: [{ id: "overview", title: "Overview" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "sets", title: "Record sets" }] },
+  { id: "behavior", title: "Behavior", sections: [{ id: "lifecycle", title: "Lifecycle" }, { id: "actions", title: "Actions" }] },
+  { id: "rules", title: "Rules and access", sections: [{ id: "constraints", title: "Business constraints" }, { id: "versions", title: "Business versions" }, { id: "protocols", title: "Protocols" }, { id: "permissions", title: "Permissions" }] },
+  { id: "data", title: "Data and preview", sections: [{ id: "data", title: "Data" }, { id: "preview", title: "Preview" }] },
 ] as const;
+type ObjectArea = typeof objectGroups[number]["id"];
+const objectSections = objectGroups.flatMap(group => [...group.sections]);
 type Tab = typeof objectSections[number]["id"];
+const sectionForLegacyTab: Record<Tab, ObjectArea> = {
+  overview: "structure", properties: "structure", links: "structure", sets: "structure",
+  lifecycle: "behavior", actions: "behavior",
+  constraints: "rules", versions: "rules", protocols: "rules", permissions: "rules",
+  data: "data", preview: "data",
+};
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const call = useViewCall();
   const callInput = call?.input;
   const returnLabel = callInput && typeof callInput === "object" && "returnLabel" in callInput && typeof callInput.returnLabel === "string" ? callInput.returnLabel : t("Return");
   const [chosen, setChosen] = useState<Chosen>();
   const draft = useObjectDraft(id, () => setChosen(undefined));
-  const { object, process, dirty, busy, blocked, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
+  const { object, ready, process, dirty, busy, blocked, refused, change, issues, parent, entities, session, discardChanges, open } = draft;
   const initiallyChosen = useRef("");
   const [tab, setTab] = useState<Tab>(objectSections.find(section => section.id === initialTab)?.id ?? "overview");
   useEffect(() => {
-    const key = `${id}:${initialField ?? ""}:${initialAction ?? ""}:${initialAccess ?? false}`;
-    if (!object || initiallyChosen.current === key) return;
+    const key = JSON.stringify([id, initialField, initialAction, initialAccess, initialTab]);
+    if (!ready || initiallyChosen.current === key) return;
     initiallyChosen.current = key;
-    if (initialField) { const at = object.fields.findIndex((field) => field.name === initialField); if (at >= 0) { setChosen({ kind: "field", at }); setTab("properties"); } }
-    else if (initialAction) { const at = object.actions?.findIndex((action) => action.name === initialAction) ?? -1; if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } }
-    else if (initialAccess && object.access?.length) { setChosen({ kind: "access", at: 0 }); setTab("permissions"); }
-  }, [object, id, initialField, initialAction, initialAccess]);
-  if (!object) return <Workbench storageKey="object-type" title={t("Object type")}><WorkbenchMessage>{draft.failed ? t("The object type could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
+    if (!initialField && !initialAction && !initialAccess && !initialTab) return;
+    const section = objectSections.find(section => section.id === initialTab);
+    setChosen(undefined);
+    setTab(section?.id ?? "overview");
+    if (initialField) { const at = process.fields.findIndex((field) => field.name === initialField); if (at >= 0) { setChosen({ kind: "field", at }); setTab("properties"); } }
+    else if (initialAction) { const at = process.actions.findIndex((action) => action.name === initialAction); if (at >= 0) { setChosen({ kind: "action", at }); setTab("actions"); } }
+    else if (initialAccess && process.access.length) { setChosen({ kind: "access", at: 0 }); setTab("permissions"); }
+  }, [ready, id, initialField, initialAction, initialAccess, initialTab, process.fields, process.actions, process.access]);
+  if (!object || !ready) return <Workbench storageKey="object-type" title={t("Object type")}><WorkbenchMessage>{draft.failed ? t("The object type could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const addState = () => {
     const title = process.states.length === 0 ? t("New") : t("State {n}", { n: process.states.length + 1 });
     change({ ...process, states: [...process.states, { name: nameOf("state", process.states.map((s) => s.name)), title, tone: "info" }] });
@@ -166,8 +179,10 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     right={{ label: t("Object inspector"),scope:JSON.stringify(chosen),locate:path=>{const scope=path?.split("/").find(part=>part.startsWith("{"));setChosen(scope?JSON.parse(scope) as Chosen:chosen);}, content: <fieldset disabled={blocked} className="contents">{inspector}</fieldset> }}
     dock={{ label: t("Object dock"), tabs: [{ id: "problems", title: t("Problems"), badge: issues.length, content: <ProblemList problems={problems} empty={t("No problems. The object type can be published.")} /> }] }}>
     {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {refused}</Panel>}
-    <StructuredEditor initialMode="source" {...draft.structured}><ContentTabs compact wrap label={t("Object sections")} value={tab} onChange={value => setTab(value as Tab)} items={objectSections.map(section => ({
-      id: section.id, title: t(section.title), content: <fieldset disabled={busy || blocked} className="flex h-full min-h-0 min-w-0 flex-col">{main[section.id]}</fieldset>,
+    <StructuredEditor initialMode="source" {...draft.structured}><ContentTabs compact wrap label={t("Object areas")} value={sectionForLegacyTab[tab]} onChange={value => { const group = objectGroups.find(group => group.id === value); if (group) setTab(group.sections[0].id); }} items={objectGroups.map(group => ({
+      id: group.id, title: t(group.title), content: <ContentTabs compact wrap label={t("Object sections")} value={group.sections.some(section => section.id === tab) ? tab : group.sections[0].id} onChange={value => setTab(value as Tab)} items={group.sections.map(section => ({
+        id: section.id, title: t(section.title), content: <fieldset disabled={busy || blocked} className="flex h-full min-h-0 min-w-0 flex-col">{main[section.id]}</fieldset>,
+      }))} />,
     }))} /></StructuredEditor>
   </Workbench>;
 }

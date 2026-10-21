@@ -11,12 +11,9 @@ type PageRecordList struct {
 
 func (d *PageDocument) checkRecordList(s Section) error {
 	if s.Widget != "record-list" {
-		if s.RecordList != nil {
-			return fmt.Errorf("record list configuration needs its widget")
-		}
 		return nil
 	}
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) || s.RecordList == nil || !slices.Contains(pageWidgets.Runtime.RecordList.Layouts, s.RecordList.Layout) || s.CollectionVariable == "" || len(s.Fields) > pageWidgets.Runtime.RecordList.MaxFields || len(s.Actions) > 0 {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) || s.RecordList == nil || !slices.Contains(pageWidgets.Runtime.RecordList.Layouts, s.RecordList.Layout) || s.CollectionVariable == "" || len(s.Fields) > pageWidgets.Runtime.RecordList.MaxFields {
 		return fmt.Errorf("record list needs its profile, bounded fields, layout and original window")
 	}
 	if err := d.checkSharedRecordOutput(s); err != nil {
@@ -38,11 +35,5 @@ func (s Section) CheckRecordList(info EntityInfo) error {
 	if s.Widget != "record-list" {
 		return nil
 	}
-	if !visibleContextField(info, s.CardLabel, true) {
-		return fmt.Errorf("record list title needs a visible text field")
-	}
-	if !recordScalarFields(info, s.Fields) {
-		return fmt.Errorf("record list summary needs unique visible scalar fields")
-	}
-	return nil
+	return s.checkWidgetFieldRoles(info)
 }

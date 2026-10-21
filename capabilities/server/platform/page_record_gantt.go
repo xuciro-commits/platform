@@ -24,15 +24,14 @@ func ValidGanttRange(start, end string) bool {
 }
 func (d *PageDocument) checkRecordGantt(s Section) error {
 	if s.Widget != "record-gantt" {
-		if s.RecordGantt != nil {
-			return fmt.Errorf("gantt configuration needs its widget")
-		}
 		return nil
 	}
-	v := d.Variables[s.CollectionVariable]
+	if err := d.checkDeclaredWidgetPorts(s, pageWidget(s.Widget)); err != nil {
+		return err
+	}
 	g := s.RecordGantt
 	limits := pageWidgets.Runtime.RecordGantt
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || g == nil || !ValidGanttRange(g.RangeStart, g.RangeEnd) || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(d.Queries[v.Source.Query].Sort) == 0 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Selection != "" {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || g == nil || !ValidGanttRange(g.RangeStart, g.RangeEnd) {
 		return fmt.Errorf("record gantt needs its profile, fixed range and ordered original window")
 	}
 	seen := map[string]bool{}
@@ -51,20 +50,11 @@ func (s Section) CheckRecordGantt(info EntityInfo) error {
 	if s.Widget != "record-gantt" {
 		return nil
 	}
+	if err := s.checkWidgetFieldRoles(info); err != nil {
+		return err
+	}
 	g := s.RecordGantt
-	if g == nil {
-		return fmt.Errorf("gantt configuration is missing")
-	}
-	for _, name := range []string{g.StartField, g.EndField} {
-		f, ok := info.Field(name)
-		if !ok || !slices.Contains([]string{"date", "datetime"}, f.Type) {
-			return fmt.Errorf("gantt needs original visible business start and end fields")
-		}
-	}
-	status, statusOK := info.Field(g.StatusField)
-	if !visibleContextField(info, g.TitleField, true) || !statusOK || status.Type != "choice" {
-		return fmt.Errorf("gantt needs original visible title and choice status")
-	}
+	status, _ := info.Field(g.StatusField)
 	for _, tone := range g.Tones {
 		if !slices.Contains(status.Choices, tone.Value) {
 			return fmt.Errorf("gantt tone does not name an original status value")

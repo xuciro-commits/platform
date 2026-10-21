@@ -38,7 +38,7 @@ func TestSeparatorStaticLabelsProfilesAndBudgets(t *testing.T) {
 		c := *s.Separator
 		copy.Separator = &c
 		change(&copy)
-		if d.checkSeparator(copy) == nil {
+		if copy.checkWidgetConfiguration() == nil && d.checkSeparator(copy) == nil {
 			t.Fatal("invalid separator accepted", copy)
 		}
 	}

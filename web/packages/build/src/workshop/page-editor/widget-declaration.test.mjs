@@ -16,11 +16,15 @@ const {widgetDeclarationIssues}=await import('./widget-declaration.ts');
 const section=(widget,values={})=>({widget,configVersion:1,...values});
 const issues=(...sections)=>widgetDeclarationIssues({sections});
 
-test('the original scene layers and mappings share the closed manifest schema',()=>{
- const page=JSON.parse(readFileSync(new URL('../../../../../../capabilities/server/apps/build/testdata/default-telemetry.json',import.meta.url)));
- const scene=page.sections.find(section=>section.widget==='scene-3d');
+test('a native scene section uses the closed widget manifest schema without changing its business declaration',()=>{
+ const scene=section('scene-3d',{
+  id:'scene',object:'build.asset',recordVariable:'active',fileVariable:'modelFile',scenePartVariable:'part',sceneSampleCollectionVariable:'samples',
+  scene:{background:'dark',showGrid:true,quality:'balanced',sampleTimeField:'at',sampleAssetField:'asset',layers:[{id:'equipment',name:'Equipment',nodes:['Pump'],visible:true,opacity:1,wireframe:false,color:'#334455'}],mappings:[{id:'temperature',node:'Pump',source:'sample',field:'temperature',mode:'position',axis:'x',inputMin:0,inputMax:100,outputMin:0,outputMax:1,enabled:true}]},
+ });
+ const before=structuredClone(scene);
  assert.ok(scene.scene.layers.length>0&&scene.scene.mappings.length>0);
  assert.deepEqual(issues(scene),[]);
+ assert.deepEqual(scene,before);
  const invalid=structuredClone(scene);invalid.scene.layers[0].unregistered=true;
  assert.match(issues(invalid)[0].message,/Unknown field: unregistered/);
 });

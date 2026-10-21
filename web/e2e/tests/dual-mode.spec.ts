@@ -1,4 +1,4 @@
-import { expect, fresh, pageUIProfile, shots, slug, test } from "./kit";
+import { expect, fresh, pageUIProfile, selectObjectSection, shots, slug, test } from "./kit";
 
 test.use({ actionTimeout: 15_000 });
 
@@ -264,7 +264,7 @@ test("object, relationship, action, flow and page source return to the original 
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   expect(writes).toBe(0);
   expect((await builder.record("build.object", model.id)).revision).toBe(objectRevision);
-  await page.getByRole("tablist", { name: "Object sections", exact: true }).getByRole("tab", { name: "Properties", exact: true }).click();
+  await selectObjectSection(page, "Properties");
   await expect(page.getByRole("row").filter({ hasText: "Source-authored note" })).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(async () => (await builder.record("build.object", model.id)).fields[0].title).toBe("Source-authored note");

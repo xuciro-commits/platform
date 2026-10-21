@@ -31,7 +31,7 @@ func TestAlertUsesOriginalDecimalPortAndBoundedConfiguration(t *testing.T) {
 		cfg := *s.AlertBanner
 		copy.AlertBanner = &cfg
 		cfg.Threshold = threshold
-		if d.checkAlertBanner(copy) == nil {
+		if copy.checkWidgetConfiguration() == nil && d.checkAlertBanner(copy) == nil {
 			t.Fatal("invalid threshold accepted", threshold)
 		}
 	}
@@ -40,7 +40,7 @@ func TestAlertUsesOriginalDecimalPortAndBoundedConfiguration(t *testing.T) {
 		cfg := *s.AlertBanner
 		copy.AlertBanner = &cfg
 		change(&copy)
-		if d.checkAlertBanner(copy) == nil {
+		if copy.checkWidgetConfiguration() == nil && d.checkAlertBanner(copy) == nil {
 			t.Fatal("invalid alert accepted", copy)
 		}
 	}
@@ -73,7 +73,7 @@ func TestAlertCannotConsumeAnotherOverlayValue(t *testing.T) {
 	root.Children = append(root.Children, s.ID)
 	d.Nodes[d.Root] = root
 	p.Sections = append(p.Sections, s)
-	if err := d.Check(p.Sections); err == nil || !strings.Contains(err.Error(), "alert cannot escape") {
+	if err := d.Check(p.Sections); err == nil || !strings.Contains(err.Error(), "alertValueVariable escapes its presentation owner") {
 		t.Fatal("cross-overlay alert did not fail at its original scope boundary", err)
 	}
 	root.Children = root.Children[:len(root.Children)-1]

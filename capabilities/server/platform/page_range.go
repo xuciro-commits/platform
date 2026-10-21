@@ -18,18 +18,14 @@ type PageRangeInput struct {
 
 func (d *PageDocument) checkRangeInput(s Section) error {
 	if s.Widget != "range-input" {
-		if s.RangeInput != nil || s.RangeMinVariable != "" || s.RangeMaxVariable != "" {
-			return fmt.Errorf("range bindings need their widget")
-		}
 		return nil
 	}
-	r := s.RangeInput
-	if r == nil || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RangeInput.RequiredUIProfile) || s.RangeMinVariable == "" || s.RangeMaxVariable == "" || s.RangeMinVariable == s.RangeMaxVariable || len(r.Label) > 1024 || len(r.Unit) > 64 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
-		return fmt.Errorf("range needs two distinct string states and bounded presentation")
+	if err := d.checkDeclaredWidgetPorts(s, pageWidget(s.Widget)); err != nil {
+		return err
 	}
-	lower, upper := d.Variables[s.RangeMinVariable], d.Variables[s.RangeMaxVariable]
-	if lower.Mode != "state" || upper.Mode != "state" || lower.Type != "string" || upper.Type != "string" || lower.Scope != upper.Scope || lower.Owner != upper.Owner || lower.Scope != "page" && lower.Scope != "overlay" {
-		return fmt.Errorf("range drafts must share their original page or overlay state owner")
+	r := s.RangeInput
+	if r == nil || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RangeInput.RequiredUIProfile) || len(r.Label) > 1024 || len(r.Unit) > 64 {
+		return fmt.Errorf("range needs two distinct string states and bounded presentation")
 	}
 	min, e1 := ParseDecimal(r.Min)
 	max, e2 := ParseDecimal(r.Max)

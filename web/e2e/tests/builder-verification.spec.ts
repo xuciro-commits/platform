@@ -1,4 +1,4 @@
-import { expect, fresh, slug, shots, test } from "./kit";
+import { expect, fresh, selectObjectSection, slug, shots, test } from "./kit";
 
 test("an unpublished application trials synthetic samples across controlled members and saves its scenario", async ({ page, builder, operator }, info) => {
   test.setTimeout(120_000);
@@ -18,7 +18,7 @@ test("an unpublished application trials synthetic samples across controlled memb
   });
   const original = await builder.record("build.object", objectId);
   expect(original.published ?? "").toBe("");
-  await builder.open(page, `/project?id=${application.id}&area=verify`);
+  await builder.open(page, `/project?id=${application.id}&area=release`);
   const workspace = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await expect(workspace.getByRole("heading", { name: "Draft trial", exact: true })).toBeVisible();
 
@@ -69,7 +69,7 @@ test("an unpublished application trials synthetic samples across controlled memb
   await page.unroute(submissions);
 
   await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Trial operations", exact: true }).click();
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Verify", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Release", exact: true }).click();
   await page.getByRole("tab", { name: "Verification and delivery", exact: true }).click();
   await workspace.getByRole("checkbox", { name: "Include in application releases", exact: true }).uncheck();
   await workspace.getByRole("region", { name: "Application samples", exact: true }).getByRole("combobox", { name: "Sample set", exact: true }).selectOption(sampleName);
@@ -192,20 +192,19 @@ test("a builder authors a draft state-triggered flow and trials it without publi
   await expect(page.getByRole("heading", { name: "Trial task", exact: true }).first()).toBeVisible();
   const objects = await builder.read<{ records: { id: string; name: string }[] }>("records/build.object?limit=1000");
   const objectID = objects.records.find(record => record.name === objectName)!.id;
-  const objectSections = page.getByRole("tablist", { name: "Object sections", exact: true });
   const objectInspector = page.getByRole("region", { name: "Object inspector", exact: true });
-  await objectSections.getByRole("tab", { name: "Properties", exact: true }).click();
+  await selectObjectSection(page, "Properties");
   await page.getByRole("button", { name: "Add a property", exact: true }).click();
   await objectInspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Task label");
   await objectInspector.getByRole("textbox", { name: "Name", exact: true }).fill("label");
-  await objectSections.getByRole("tab", { name: "Lifecycle", exact: true }).click();
+  await selectObjectSection(page, "Lifecycle");
   await page.getByRole("button", { name: "Add a state", exact: true }).click();
   await objectInspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Open");
   await objectInspector.getByRole("textbox", { name: "Name", exact: true }).fill("open");
   await page.getByRole("button", { name: "Add a state", exact: true }).click();
   await objectInspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Done");
   await objectInspector.getByRole("textbox", { name: "Name", exact: true }).fill("done");
-  await objectSections.getByRole("tab", { name: "Actions", exact: true }).click();
+  await selectObjectSection(page, "Actions");
   await page.getByRole("button", { name: "Add an action", exact: true }).click();
   await objectInspector.getByRole("button", { name: "Open action type", exact: true }).click();
   await page.getByRole("textbox", { name: "What people call it", exact: true }).fill("Complete trial task");
@@ -243,7 +242,7 @@ test("a builder authors a draft state-triggered flow and trials it without publi
   const validationResponse = await validation;
   expect(await validationResponse.json()).toMatchObject({ valid: true });
 
-  await builder.open(page, `/project?id=${application.id}&area=behavior`);
+  await builder.open(page, `/project?id=${application.id}&area=logic`);
   await page.getByRole("combobox", { name: "Add existing resource", exact: true }).selectOption(JSON.stringify({ kind: "flow", id: flowID }));
   await expect.poll(async () => (await builder.record("build.app", application.id)).resources).toContainEqual({ app: "build", kind: "flow", name: `build.${flowName}` });
   const originalObject = await builder.record("build.object", objectID);
@@ -253,7 +252,7 @@ test("a builder authors a draft state-triggered flow and trials it without publi
   const originalDefinitions = await operator.definitions<any>();
   expect(originalDefinitions.some(definition => definition.ref.name === type || definition.ref.name === `build.${flowName}`)).toBe(false);
 
-  await builder.open(page, `/project?id=${application.id}&area=verify`);
+  await builder.open(page, `/project?id=${application.id}&area=release`);
   const workspace = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "Business test plan", exact: true }).click();

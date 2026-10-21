@@ -11,9 +11,6 @@ type PageRecordComparison struct {
 
 func (d *PageDocument) checkRecordComparison(s Section) error {
 	if s.Widget != "record-comparison" {
-		if s.RecordComparison != nil {
-			return fmt.Errorf("record comparison configuration needs its widget")
-		}
 		return nil
 	}
 	c := s.RecordComparison
@@ -21,7 +18,7 @@ func (d *PageDocument) checkRecordComparison(s Section) error {
 	limits := pageWidgets.Runtime.RecordComparison
 	local := v.Mode == "resource" && v.Source != nil && v.Source.Kind == "records" && slices.Contains([]string{"page", "overlay"}, v.Scope)
 	shared := PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordSelection.SharedUIProfile) && v.Mode == "shared" && v.Scope == "application" && v.Source != nil && v.Source.Kind == "application" && v.Source.Object != nil
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.LabelField == "" || len(c.LabelField) > 256 || v.Type != "record-set" || !(local || shared) || len(s.Fields) < limits.MinFields || len(s.Fields) > limits.MaxFields || len(s.Actions) > 0 || s.Selection != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.RecordVariable != "" || s.CollectionVariable != "" || s.ParentSelection != "" || s.Relation != "" || s.Query.Name != "" || s.InlineEdit != nil {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.LabelField == "" || len(c.LabelField) > 256 || v.Type != "record-set" || !(local || shared) || len(s.Fields) < limits.MinFields || len(s.Fields) > limits.MaxFields {
 		return fmt.Errorf("record comparison needs its original record-set resource, title and bounded properties")
 	}
 	seen := map[string]bool{}
@@ -41,13 +38,7 @@ func (s Section) CheckRecordComparison(info EntityInfo) error {
 	if s.RecordComparison == nil || len(s.Fields) < pageWidgets.Runtime.RecordComparison.MinFields || len(s.Fields) > pageWidgets.Runtime.RecordComparison.MaxFields {
 		return fmt.Errorf("record comparison configuration is missing")
 	}
-	if !visibleContextField(info, s.RecordComparison.LabelField, true) {
-		return fmt.Errorf("record comparison title needs a visible original text field or ID")
-	}
-	if !recordScalarFields(info, s.Fields) {
-		return fmt.Errorf("record comparison properties need unique visible scalar fields")
-	}
-	return nil
+	return s.checkWidgetFieldRoles(info)
 }
 
 // RecordSetVariableObject preserves the original table's complete object

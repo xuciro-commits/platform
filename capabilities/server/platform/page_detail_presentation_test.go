@@ -16,7 +16,7 @@ func TestDetailPresentationProfileAndBounds(t *testing.T) {
 		}
 	}
 	s.Widget = "table"
-	if d.checkDetailPresentation(s) == nil {
+	if s.checkWidgetConfiguration() == nil {
 		t.Fatal("table accepted detail presentation")
 	}
 	s.Widget = "detail"

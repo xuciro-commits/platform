@@ -96,9 +96,7 @@ func validExplorationBinding(b AssetBinding) bool {
 	return b.Ref.Check() == nil && b.SourceVersion != "" && len(b.SourceVersion) <= 256
 }
 func (d *PageDocument) checkExploration(s Section) error {
-	if s.ResourceList != nil && s.Widget != "resource-list" || s.AssetDirectory != nil && s.Widget != "asset-directory" || s.GraphExplorer != nil && s.Widget != "graph-explorer" || s.VertexGraph != nil && s.Widget != "vertex-graph" {
-		return fmt.Errorf("exploration configuration needs its original widget")
-	}
+
 	if !explorationWidget(s.Widget) {
 		return nil
 	}
@@ -212,14 +210,11 @@ func (s Section) CheckResourceList(info EntityInfo) error {
 	if s.Widget != "resource-list" {
 		return nil
 	}
+	if err := s.checkWidgetFieldRoles(info); err != nil {
+		return err
+	}
 	r := s.ResourceList
-	if r == nil || !visibleContextField(info, r.LabelField, true) {
-		return fmt.Errorf("resource list title needs a visible original field or ID")
-	}
-	status, ok := info.Field(r.StatusField)
-	if !ok || !slices.Contains([]string{"choice", "text"}, status.Type) {
-		return fmt.Errorf("resource status needs its original visible choice or text field")
-	}
+	status, _ := info.Field(r.StatusField)
 	for _, tone := range r.StatusTones {
 		if status.Type == "choice" && !slices.Contains(status.Choices, tone.Value) {
 			return fmt.Errorf("resource tone does not name an original status choice")
@@ -227,6 +222,7 @@ func (s Section) CheckResourceList(info EntityInfo) error {
 	}
 	return nil
 }
+
 func (p Page) RecordOutputObject(section, port, variable string) AssetRef {
 	if port == "" {
 		return AssetRef{}

@@ -1,4 +1,4 @@
-import { expect, pageUIProfile, shots, slug, test } from "./kit";
+import { expect, pageUIProfile, selectObjectSection, shots, slug, test } from "./kit";
 
 test("an application authors related drafts and a template before its first release", async ({ page, builder, operator, editor }, testInfo) => {
   test.setTimeout(180_000);
@@ -6,7 +6,6 @@ test("an application authors related drafts and a template before its first rele
   const parentName = slug("customer"), childName = slug("visit"), pageName = slug("visitdesk");
   const parentType = `build.${parentName}`, childType = `build.${childName}`;
   const projectSections = page.getByRole("tablist", { name: "Project sections", exact: true });
-  const objectSections = page.getByRole("tablist", { name: "Object sections", exact: true });
   const objectInspector = page.getByRole("region", { name: "Object inspector", exact: true });
   const context = page.getByRole("navigation", { name: "Application context", exact: true });
 
@@ -25,13 +24,13 @@ test("an application authors related drafts and a template before its first rele
     return objects.records.find(record => record.name === name)!.id;
   };
   const addTextProperty = async (name: string, title: string) => {
-    await objectSections.getByRole("tab", { name: "Properties", exact: true }).click();
+    await selectObjectSection(page, "Properties");
     await page.getByRole("button", { name: "Add a property", exact: true }).click();
     await objectInspector.getByRole("textbox", { name: "What people call it", exact: true }).fill(title);
     await objectInspector.getByRole("textbox", { name: "Name", exact: true }).fill(name);
   };
   const allowOperators = async () => {
-    await objectSections.getByRole("tab", { name: "Permissions", exact: true }).click();
+    await selectObjectSection(page, "Permissions");
     await page.getByRole("button", { name: "Add a role", exact: true }).click();
     await objectInspector.getByRole("combobox", { name: "Role", exact: true }).selectOption("user");
     await page.getByRole("combobox", { name: "user · Read", exact: true }).selectOption("all");
@@ -51,14 +50,15 @@ test("an application authors related drafts and a template before its first rele
   await objectInspector.getByRole("combobox", { name: "Type", exact: true }).selectOption("reference");
   await objectInspector.getByRole("combobox", { name: "Reference object", exact: true }).selectOption(parentType);
   await objectInspector.getByRole("textbox", { name: "Seen from there as", exact: true }).fill("visits");
-  await objectSections.getByRole("tab", { name: "Lifecycle", exact: true }).click();
+  await selectObjectSection(page, "Lifecycle");
   await page.getByRole("button", { name: "Add a state", exact: true }).click();
   await objectInspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Open");
   await objectInspector.getByRole("textbox", { name: "Name", exact: true }).fill("open");
   await allowOperators();
-  await objectSections.getByRole("tab", { name: "Actions", exact: true }).click();
+  await selectObjectSection(page, "Actions");
   await page.getByRole("button", { name: "Add an action", exact: true }).click();
   await objectInspector.getByRole("button", { name: "Open action type", exact: true }).click();
+  await page.getByRole("region", { name: "Action type", exact: true }).getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await page.getByRole("textbox", { name: "What people call it", exact: true }).fill("Mark reviewed");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("reviewed");
   const actionStructure = page.getByRole("region", { name: "Action structure", exact: true });
@@ -98,7 +98,7 @@ test("an application authors related drafts and a template before its first rele
   const navigation = page.getByRole("navigation", { name: "Main", exact: true });
   const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
   if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
-  await navigation.getByRole("button", { name: "Verify", exact: true }).click();
+  await navigation.getByRole("button", { name: "Release", exact: true }).click();
   const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await verify.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
   await verify.getByRole("button", { name: "Check joint candidate", exact: true }).click();
@@ -128,7 +128,7 @@ test("an application authors related drafts and a template before its first rele
   await model.getByLabel("Declared model path", { exact: true }).last().getByRole("combobox", { name: "Model field", exact: true }).selectOption("followup");
   await expect(model.getByRole("status")).toHaveText("This binding includes saved model changes. Publish the model and page together before reading these fields in preview.");
   await editor.save();
-  await expect.poll(async () => (await builder.record("build.page", pageID)).sections.find((section: any) => section.widget === "table").model.fields.some((field: any) => field.name === "followup")).toBe(true);
+  await expect.poll(async () => (await builder.record("build.page", pageID)).sections.find((section: any) => section.widget === "table")?.model?.fields?.some((field: any) => field.name === "followup")).toBe(true);
   await editor.tree.getByRole("button", { name: "Page settings", exact: true }).click();
   await editor.inspector.getByRole("tab", { name: "Variables", exact: false }).click();
   await editor.inspector.getByRole("button", { name: "Add variable", exact: true }).click();

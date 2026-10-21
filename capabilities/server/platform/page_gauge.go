@@ -14,13 +14,13 @@ type PageGauge struct {
 
 func (d *PageDocument) checkGauge(s Section) error {
 	if s.Widget != "gauge" {
-		if s.Gauge != nil || s.GaugeValueVariable != "" {
-			return fmt.Errorf("gauge bindings need their widget")
-		}
 		return nil
 	}
+	if err := d.checkDeclaredWidgetPorts(s, pageWidget(s.Widget)); err != nil {
+		return err
+	}
 	g := s.Gauge
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) || g == nil || s.GaugeValueVariable == "" || d.Variables[s.GaugeValueVariable].Type != "number" || g.Max <= 0 || math.IsNaN(g.Max) || math.IsInf(g.Max, 0) || g.WarnAt != nil && (math.IsNaN(*g.WarnAt) || math.IsInf(*g.WarnAt, 0)) || len(g.Label) > 1024 || len(g.Suffix) > 64 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Gauge.RequiredUIProfile) || g == nil || g.Max <= 0 || math.IsNaN(g.Max) || math.IsInf(g.Max, 0) || g.WarnAt != nil && (math.IsNaN(*g.WarnAt) || math.IsInf(*g.WarnAt, 0)) || len(g.Label) > 1024 || len(g.Suffix) > 64 {
 		return fmt.Errorf("gauge needs its number port, positive finite maximum and bounded presentation")
 	}
 	return nil

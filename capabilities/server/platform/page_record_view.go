@@ -11,9 +11,6 @@ type PageRecordView struct {
 
 func (d *PageDocument) checkRecordView(s Section) error {
 	if s.Widget != "record-view" {
-		if s.RecordView != nil {
-			return fmt.Errorf("record view configuration needs its widget")
-		}
 		return nil
 	}
 	limits := pageWidgets.Runtime.RecordView

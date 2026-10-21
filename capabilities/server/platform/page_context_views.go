@@ -45,9 +45,6 @@ func (s Section) ContextViewVariables() []string {
 	return ids
 }
 func (d *PageDocument) checkContextViews(s Section) error {
-	if s.Breadcrumb != nil && s.Widget != "breadcrumb" || s.Avatar != nil && s.Widget != "avatar-stack" || s.Image != nil && s.Widget != "static-image" {
-		return fmt.Errorf("context presentation configuration needs its original widget")
-	}
 	if !contextView(s.Widget) {
 		return nil
 	}

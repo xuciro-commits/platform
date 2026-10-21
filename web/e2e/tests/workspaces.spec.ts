@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { expect, fresh, pageUIProfile, shots, test } from "./kit";
+import { expect, fresh, pageUIProfile, selectObjectSection, shots, test } from "./kit";
 import { switchWorkspace } from "./host";
+
+test.use({ actionTimeout: 10_000 });
 
 test("Builder keeps its complete menus, original object and action editors, and application workspaces", async ({ page, builder }, testInfo) => {
   test.setTimeout(60_000);
@@ -17,10 +19,10 @@ test("Builder keeps its complete menus, original object and action editors, and 
   const showNavigation = async () => { if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click(); };
   const navigation = page.getByRole("navigation", { name: "Main", exact: true });
   await expect(navigation).toBeVisible();
-  for (const group of ["Applications", "Ontology", "Logic", "Functions", "Verify", "Releases"]) {
+  for (const group of ["Applications", "Model", "Logic", "Interface", "Integration", "Release"]) {
     await expect(navigation.getByText(group, { exact: true })).toBeVisible();
   }
-  for (const entry of ["All applications", "Object types", "Action types", "Relationships", "Shared properties", "Queries", "Modules", "Templates", "Automations", "Flows", "AI functions", "Code functions", "Decision tables", "Alert rules", "Sample sets", "Business test plans", "Evaluation sets", "Changes", "Release review", "Release history"]) {
+  for (const entry of ["All applications", "Object types", "Link types", "Shared properties", "Queries", "Pages", "Templates", "Object behavior", "Logic flows", "Automations", "AI functions", "Code functions", "Decision tables", "Agents", "Alert rules", "Connections", "Observation sources", "Data sources", "Datasets", "Pipelines", "Matching rules", "Writebacks", "Integration health", "Sample sets", "Business test plans", "Evaluation sets", "Changes", "Release review", "Release history"]) {
     await expect(navigation.getByRole("button", { name: entry, exact: true })).toBeVisible();
   }
   await shots(page, navigation, "builder-menus", testInfo, showNavigation);
@@ -31,7 +33,7 @@ test("Builder keeps its complete menus, original object and action editors, and 
   await page.getByRole("row").filter({ hasText: object.type }).click();
   await page.getByRole("button", { name: "Edit object", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`[?&]id=${object.id}(?:&|$)`));
-  await page.getByRole("tablist", { name: "Object sections", exact: true }).getByRole("tab", { name: "Properties", exact: true }).click();
+  await selectObjectSection(page, "Properties");
   await page.getByRole("row").filter({ hasText: "Item name" }).click();
   const propertyTitle = page.getByRole("region", { name: "Object inspector", exact: true }).getByRole("textbox", { name: "What people call it", exact: true });
   await expect(propertyTitle).toBeEnabled();
@@ -39,10 +41,11 @@ test("Builder keeps its complete menus, original object and action editors, and 
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(async () => (await builder.record("build.object", object.id)).fields.find((field: any) => field.name === "name")?.title).toBe("Menu-edited item name");
 
-  await navigation.getByRole("button", { name: "Action types", exact: true }).click();
+  await navigation.getByRole("button", { name: "Object behavior", exact: true }).click();
   await page.getByRole("treeitem", { name: new RegExp(`^${actionTitle}\\b`) }).click();
   await expect(page).toHaveURL(new RegExp(`[?&]id=${object.id}(?:&|$)`));
   await expect(page).toHaveURL(/[?&]action=complete(?:&|$)/);
+  await page.getByRole("region", { name: "Action type", exact: true }).getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await expect(page.getByRole("region", { name: "Action structure", exact: true }).getByRole("button", { name: "Overview", exact: true })).toBeVisible();
   const actionName = page.getByRole("textbox", { name: "What people call it", exact: true });
   await expect(actionName).toBeEnabled();
@@ -53,11 +56,11 @@ test("Builder keeps its complete menus, original object and action editors, and 
 
   await builder.open(page, `/project?id=${application.id}`);
   const workspaces = navigation.getByRole("navigation", { name: "Application workspaces", exact: true });
-  for (const area of ["Model", "Behavior", "Interface", "Assemble", "Verify"]) {
+  for (const area of ["Model", "Logic", "Interface", "Integration", "Release"]) {
     await expect(workspaces.getByRole("button", { name: area, exact: true })).toBeVisible();
   }
-  await workspaces.getByRole("button", { name: "Behavior", exact: true }).click();
-  await expect(workspaces.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
+  await workspaces.getByRole("button", { name: "Logic", exact: true }).click();
+  await expect(workspaces.getByRole("button", { name: "Logic", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
 test("system definitions are opt-in across lists and keep native references and tenant drafts separate", async ({ page, builder }, testInfo) => {
@@ -109,7 +112,7 @@ test("system definitions are opt-in across lists and keep native references and 
   await expect(page.getByText("Native definitions are maintained by their code owner. This workbench provides read-only inspection.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit object", exact: true })).toHaveCount(0);
 
-  await navigation.getByRole("button", { name: "Relationships", exact: true }).click();
+  await navigation.getByRole("button", { name: "Link types", exact: true }).click();
   await expect(checkbox).toBeChecked();
   await pmsReference.click();
   await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/object-type", object: "pms.reservation", tab: "links" });
@@ -139,7 +142,7 @@ test("system definitions are opt-in across lists and keep native references and 
   await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/definition", app: "crm", kind: "function", name: "record-advice" });
   await expect(page.getByRole("region", { name: "Published resource", exact: true })).toContainText("This published definition is read only.");
 
-  await navigation.getByRole("button", { name: "Flows", exact: true }).click();
+  await navigation.getByRole("button", { name: "Logic flows", exact: true }).click();
   const flows = page.getByRole("region", { name: "Flows", exact: true });
   await expect(flows.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
   const flowReferences = flows.getByRole("region", { name: "System definitions", exact: true });
@@ -154,7 +157,7 @@ test("system definitions are opt-in across lists and keep native references and 
   await expect(page.getByRole("row").filter({ hasText: "crm.opportunity" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Show system definitions", exact: true }).uncheck();
   await expect(page.getByRole("row").filter({ hasText: "crm.opportunity" })).toHaveCount(0);
-  await navigation.getByRole("button", { name: "Action types", exact: true }).click();
+  await navigation.getByRole("button", { name: "Object behavior", exact: true }).click();
   const publishedActions = page.getByRole("region", { name: "Published action definitions", exact: true });
   const nativeActionKey = [nativeAction.ref.app, nativeAction.ref.kind, nativeAction.ref.name].join("/");
   await publishedActions.getByRole("textbox", { name: "Search", exact: true }).fill(nativeActionKey);
@@ -170,7 +173,7 @@ test("system definitions are opt-in across lists and keep native references and 
   await expect(queries.getByRole("checkbox", { name: "Show system definitions", exact: true })).not.toBeChecked();
   await expect(queryReferences).toHaveCount(0);
   await expect(queries.getByRole("treeitem").filter({ hasText: queryTitle }).last()).toBeVisible();
-  await navigation.getByRole("button", { name: "Relationships", exact: true }).click();
+  await navigation.getByRole("button", { name: "Link types", exact: true }).click();
   await expect(checkbox).not.toBeChecked();
   await expect(references).toHaveCount(0);
   expect((await builder.record("build.query", queryID)).state).toBe("draft");
@@ -207,14 +210,17 @@ test("platform apps expose their own primary functions and keep one menu owner",
     for (const label of labels) await expect(navigation.getByRole("button", { name: label, exact: true })).toBeVisible();
   };
   await choose("Builder");
-  await entries(["Object types", "Action types", "Sample sets", "Business test plans", "Evaluation sets"]);
-  for (const label of ["Connections", "Agent definitions", "Object Explorer", "Asset Library"]) {
+  await entries(["Object types", "Object behavior", "Connections", "Agents", "Sample sets", "Business test plans", "Evaluation sets"]);
+  for (const label of ["Object Explorer", "Asset Library"]) {
     await expect(navigation.getByRole("button", { name: label, exact: true })).toHaveCount(0);
   }
 
   await choose("Data Connection");
   await expect(navigation.getByRole("button", { name: savedTitle, exact: true })).toHaveCount(0);
-  await entries(["Connections", "Connectors", "Endpoints", "Observation sources", "Data sources", "Datasets", "Pipelines", "Matching rules", "Writebacks", "Observations", "Lineage", "Outbound effects", "Integration health"]);
+  await entries(["Connectors", "Endpoints", "Observations", "Lineage", "Outbound effects"]);
+  for (const label of ["Connections", "Observation sources", "Data sources", "Datasets", "Pipelines", "Matching rules", "Writebacks", "Integration health"]) {
+    await expect(navigation.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+  }
   await navigation.getByRole("button", { name: "Endpoints", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Endpoints", exact: true })).toBeVisible();
   await navigation.getByRole("button", { name: "Lineage", exact: true }).click();
@@ -222,7 +228,8 @@ test("platform apps expose their own primary functions and keep one menu owner",
   await shots(page, navigation, "data-menus", testInfo, async () => { if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click(); });
 
   await choose("Agents");
-  await entries(["Agent definitions", "Agents", "Agent runs", "Agent memories", "Evaluations", "Assistant"]);
+  await entries(["Agents", "Agent runs", "Agent memories", "Evaluations", "Assistant"]);
+  await expect(navigation.getByRole("button", { name: "Agent definitions", exact: true })).toHaveCount(0);
   await navigation.getByRole("button", { name: "Agent memories", exact: true }).click();
   await expect(page).toHaveURL(/#\/agent-memories$/);
   await choose("AI assistance");
@@ -310,6 +317,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(page.getByRole("button", { name: `The page “${pageName}” is under two groups: “Receiving” and “Receiving”.`, exact: true })).toBeVisible();
   for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Remove group", exact: true }).first().click();
   await expect.poll(async () => (await builder.record("build.app", appID)).groups ?? []).toEqual([]);
+  await expect(page.getByRole("button", { name: "Reload current module", exact: true })).toBeEnabled();
 
   // Native PMS and Knowledge remain task-owned, not builder-only aliases.
   await builder.open(page, "/home");
@@ -411,9 +419,10 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
 
   // Resource controls share one archive operation and keep discarded edits local.
-  await builder.open(page, `/project?id=${appID}&area=behavior`);
+  await builder.open(page, `/project?id=${appID}&area=logic`);
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   const cancelledRuleName = `cancelled${suffix}`;
   await page.getByRole("textbox", { name: "Rule name", exact: true }).fill(cancelledRuleName);
   await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Cancelled receiving alert");
@@ -425,9 +434,10 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   const cancelledRules = await builder.read<{ records: { name: string }[] }>("records/build.alertrule?limit=1000");
   expect(cancelledRules.records.some(rule => rule.name === cancelledRuleName)).toBe(false);
 
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Behavior", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Logic", exact: true }).click();
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   const ruleName = `receivingalert${suffix}`;
   await page.getByRole("textbox", { name: "Rule name", exact: true }).fill(ruleName);
   await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Receiving alert");
@@ -442,6 +452,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   const ruleID = rules.records.find(rule => rule.name === ruleName)!.id;
   await expect(page).toHaveURL(new RegExp(`[?&]id=${ruleID}(?:&|$)`));
   const savedRule = await builder.record("build.alertrule", ruleID);
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await page.getByRole("textbox", { name: "Rule title", exact: true }).fill("Unsaved receiving alert");
   await page.getByRole("button", { name: "Publish options", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Archive…", exact: true })).toBeDisabled();
@@ -473,7 +484,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await switchWorkspace(page, "Runs");
   await expect(nav.getByRole("button", { name: "Workflow runs", exact: true })).toBeVisible();
   await switchWorkspace(page, "Builder");
-  await nav.getByRole("button", { name: "Verify", exact: true }).click();
+  await nav.getByRole("button", { name: "Release", exact: true }).click();
   await expect(page.getByRole("region", { name: "Verification and delivery", exact: true })).toBeVisible();
   if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("tenant-operations.png"), fullPage: true });
 
@@ -505,12 +516,18 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
     const recordID = fresh("RECEIPT");
     await operator.decide(`${object.type}.create`, { type: object.type, id: recordID }, { number: "IN-M1" });
     await expect(business.getByRole("row").filter({ hasText: "IN-M1" })).toBeVisible();
+    const otherRecordID = fresh("RECEIPT");
+    await operator.decide(`${object.type}.create`, { type: object.type, id: otherRecordID }, { number: "OTHER-M1" });
+    await expect(business.getByRole("row").filter({ hasText: "OTHER-M1" })).toBeVisible();
     await business.getByRole("textbox", { name: "Search", exact: true }).fill("IN-M1");
+    await expect(business.getByRole("row").filter({ hasText: "OTHER-M1" })).toHaveCount(0);
     const exported = business.waitForEvent("download", { timeout: 10_000 });
     await business.getByRole("button", { name: "Export CSV", exact: true }).click();
     const csv = await readFile((await (await exported).path())!, "utf8");
     expect(csv).toContain(recordID);
     expect(csv).toContain("IN-M1");
+    expect(csv).not.toContain(otherRecordID);
+    expect(csv).not.toContain("OTHER-M1");
     await business.reload();
     await expect(business.getByRole("heading", { name: "Receiving workspace", exact: true })).toBeVisible();
     await expect(operator.decide("build.object.edit", { type: "build.object", id: object.id }, { title: "Unauthorized" })).rejects.toThrow(/POLICY_DENIED/);

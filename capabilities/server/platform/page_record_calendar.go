@@ -3,7 +3,6 @@ package platform
 import (
 	"fmt"
 	"regexp"
-	"slices"
 )
 
 type PageRecordCalendar struct {
@@ -19,13 +18,12 @@ func ValidCalendarMonth(month string) bool {
 }
 func (d *PageDocument) checkRecordCalendar(s Section) error {
 	if s.Widget != "record-calendar" {
-		if s.RecordCalendar != nil {
-			return fmt.Errorf("calendar configuration needs its widget")
-		}
 		return nil
 	}
-	v := d.Variables[s.CollectionVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordCalendar.RequiredUIProfile) || s.RecordCalendar == nil || !ValidCalendarMonth(s.RecordCalendar.InitialMonth) || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(d.Queries[v.Source.Query].Sort) == 0 || len(s.Fields) > 0 || len(s.Actions) > 0 {
+	if err := d.checkDeclaredWidgetPorts(s, pageWidget(s.Widget)); err != nil {
+		return err
+	}
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordCalendar.RequiredUIProfile) || s.RecordCalendar == nil || !ValidCalendarMonth(s.RecordCalendar.InitialMonth) {
 		return fmt.Errorf("record calendar needs its profile, initial month and ordered original window")
 	}
 	return nil
@@ -34,13 +32,5 @@ func (s Section) CheckRecordCalendar(info EntityInfo) error {
 	if s.Widget != "record-calendar" {
 		return nil
 	}
-	if s.RecordCalendar == nil {
-		return fmt.Errorf("calendar configuration is missing")
-	}
-	c := s.RecordCalendar
-	date, ok := info.Field(c.DateField)
-	if !ok || !slices.Contains([]string{"date", "datetime"}, date.Type) || !visibleContextField(info, c.LabelField, true) {
-		return fmt.Errorf("calendar needs original visible business date and title fields")
-	}
-	return nil
+	return s.checkWidgetFieldRoles(info)
 }

@@ -16,14 +16,11 @@ type PageChoiceInput struct {
 
 func (d *PageDocument) checkChoiceInput(s Section) error {
 	if s.Widget != "choice-input" {
-		if s.ChoiceVariable != "" || s.ChoiceSetVariable != "" || s.ChoiceInput != nil {
-			return fmt.Errorf("choice input bindings need their widget")
-		}
 		return nil
 	}
 	c := s.ChoiceInput
 	limits := pageWidgets.Runtime.ChoiceInput
-	if c == nil || !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || !slices.Contains(limits.Variants, c.Variant) || c.Options == nil || len(c.Options) > limits.MaxOptions || c.Label != nil && len(*c.Label) > 1024 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if c == nil || !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || !slices.Contains(limits.Variants, c.Variant) || c.Options == nil || len(c.Options) > limits.MaxOptions || c.Label != nil && len(*c.Label) > 1024 {
 		return fmt.Errorf("choice input needs scoped text state, bounded static options and a supported presentation")
 	}
 	indexed := c.Variant == "steps" || c.Variant == "tabs"

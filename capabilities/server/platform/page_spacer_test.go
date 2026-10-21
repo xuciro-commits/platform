@@ -41,7 +41,7 @@ func TestSpacerFiniteSizesZeroAndOriginalLayoutBudget(t *testing.T) {
 		c := *s.Spacer
 		copy.Spacer = &c
 		change(&copy)
-		if d.checkSpacer(copy) == nil {
+		if copy.checkWidgetConfiguration() == nil && d.checkSpacer(copy) == nil {
 			t.Fatal("invalid spacer configuration accepted", copy)
 		}
 	}

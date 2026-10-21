@@ -1,4 +1,4 @@
-import { expect, fresh, shots, slug, test } from "./kit";
+import { expect, fresh, selectObjectSection, shots, slug, test } from "./kit";
 
 test("an object provides a versioned protocol through its original actions and release", async ({ page, builder, request }, info) => {
   test.setTimeout(150_000);
@@ -10,7 +10,6 @@ test("an object provides a versioned protocol through its original actions and r
   });
   const [record] = await builder.records(object.type, [{ note: "Awaiting completion" }]);
   const original = await builder.record(object.type, record!);
-  const sections = page.getByRole("tablist", { name: "Object sections", exact: true });
   await builder.open(page, `/object-type?id=${object.id}&tab=protocols`);
   await page.getByRole("button", { name: "Add protocol", exact: true }).click();
   const binding = page.getByRole("group", { name: "Protocol binding 1", exact: true });
@@ -31,13 +30,13 @@ test("an object provides a versioned protocol through its original actions and r
   expect((await builder.read<{ id: string }[]>("protocols")).some(item => item.id === `${protocol}/2`)).toBe(false);
   expect(await builder.record(object.type, record!)).toEqual(original);
 
-  await sections.getByRole("tab", { name: "Properties", exact: true }).click();
+  await selectObjectSection(page, "Properties");
   await page.getByRole("row").filter({ hasText: "Order note" }).click();
   await page.getByRole("region", { name: "Object inspector", exact: true }).getByRole("textbox", { name: "What people call it", exact: true }).fill("Work note");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(async () => (await builder.record("build.object", object.id)).fields[0].title).toBe("Work note");
   expect((await builder.record("build.object", object.id)).protocols).toEqual(expected);
-  await sections.getByRole("tab", { name: "Protocols", exact: true }).click();
+  await selectObjectSection(page, "Protocols");
   await expect(binding.getByRole("combobox", { name: "Object action for release", exact: true })).toHaveValue("complete");
   await shots(page, page.locator("body"), "object-protocol-bindings", info);
 
@@ -74,7 +73,7 @@ test("an object provides a versioned protocol through its original actions and r
   const pinned = (await builder.record("build.object", object.id)).protocols;
   expect(pinned[0].contract.Version).toBe(2);
   expect(pinned[0].actions.release).toBe("complete");
-  await sections.getByRole("tab", { name: "Properties", exact: true }).click();
+  await selectObjectSection(page, "Properties");
   await page.getByRole("row").filter({ hasText: "Work note" }).click();
   await page.getByRole("region", { name: "Object inspector", exact: true }).getByRole("textbox", { name: "What people call it", exact: true }).fill("Dispatch note");
   await page.getByRole("button", { name: "Save", exact: true }).click();

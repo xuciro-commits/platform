@@ -28,19 +28,21 @@ type pageModelPort struct {
 }
 
 type pageWidgetContract struct {
-	ModelPorts          []pageModelPort   `json:"modelPorts,omitempty"`
-	ConfigurationFields []string          `json:"configurationFields,omitempty"`
-	ComponentID         string            `json:"componentID"`
-	ConfigVersion       int               `json:"configVersion"`
-	RequiredUIProfile   string            `json:"requiredUIProfile"`
-	SelectionMode       string            `json:"selectionMode"`
-	BindingKinds        []string          `json:"bindingKinds"`
-	PropsSchema         ValueSchema       `json:"propsSchema"`
-	Defaults            map[string]any    `json:"defaults"`
-	InputPorts          []pageWidgetPort  `json:"inputPorts"`
-	OutputPorts         []pageWidgetPort  `json:"outputPorts"`
-	Events              []pageWidgetEvent `json:"events"`
-	Slots               []pageWidgetSlot  `json:"slots"`
+	FieldRoles          []pageWidgetFieldRole `json:"fieldRoles,omitempty"`
+	PortGroups          []pageWidgetPortGroup `json:"portGroups,omitempty"`
+	ModelPorts          []pageModelPort       `json:"modelPorts,omitempty"`
+	ConfigurationFields []string              `json:"configurationFields,omitempty"`
+	ComponentID         string                `json:"componentID"`
+	ConfigVersion       int                   `json:"configVersion"`
+	RequiredUIProfile   string                `json:"requiredUIProfile"`
+	SelectionMode       string                `json:"selectionMode"`
+	BindingKinds        []string              `json:"bindingKinds"`
+	PropsSchema         ValueSchema           `json:"propsSchema"`
+	Defaults            map[string]any        `json:"defaults"`
+	InputPorts          []pageWidgetPort      `json:"inputPorts"`
+	OutputPorts         []pageWidgetPort      `json:"outputPorts"`
+	Events              []pageWidgetEvent     `json:"events"`
+	Slots               []pageWidgetSlot      `json:"slots"`
 	LayoutPreferences   struct {
 		Frame string `json:"frame"`
 	} `json:"layoutPreferences"`
@@ -73,12 +75,38 @@ func widgetSlot(widget, id string) *pageWidgetSlot {
 }
 
 type pageWidgetPort struct {
-	ID                string `json:"id"`
-	BindingField      string `json:"bindingField"`
-	Type              string `json:"type"`
-	RequiredUIProfile string `json:"requiredUIProfile"`
-	Writable          bool   `json:"writable"`
-	StateWritable     bool   `json:"stateWritable,omitempty"`
+	Required          bool            `json:"required,omitempty"`
+	Modes             []string        `json:"modes,omitempty"`
+	Scopes            []string        `json:"scopes,omitempty"`
+	Source            string          `json:"source,omitempty"`
+	SameOwner         string          `json:"sameOwner,omitempty"`
+	ScopeRule         string          `json:"scopeRule,omitempty"`
+	Plan              *pageWidgetPlan `json:"plan,omitempty"`
+	ID                string          `json:"id"`
+	BindingField      string          `json:"bindingField"`
+	Type              string          `json:"type"`
+	RequiredUIProfile string          `json:"requiredUIProfile"`
+	Writable          bool            `json:"writable"`
+	StateWritable     bool            `json:"stateWritable,omitempty"`
+}
+
+type pageWidgetPlan struct {
+	Ordered  bool `json:"ordered,omitempty"`
+	MaxLimit int  `json:"maxLimit,omitempty"`
+}
+type pageWidgetPortGroup struct {
+	Fields   []string `json:"fields"`
+	Min      int      `json:"min"`
+	Max      int      `json:"max"`
+	Distinct bool     `json:"distinct,omitempty"`
+}
+type pageWidgetFieldRole struct {
+	Path     string   `json:"path"`
+	Kinds    []string `json:"kinds"`
+	Optional bool     `json:"optional,omitempty"`
+	AllowID  bool     `json:"allowID,omitempty"`
+	When     string   `json:"when,omitempty"`
+	Distinct bool     `json:"distinct,omitempty"`
 }
 type pageWidgetEvent struct {
 	RequiredUIProfile string `json:"requiredUIProfile,omitempty"`
@@ -337,27 +365,11 @@ func sectionJSONField(typ reflect.Type, path []string) (reflect.Type, bool) {
 }
 
 func sectionJSONText(value reflect.Value, path []string) string {
-	if value.Kind() == reflect.Pointer {
-		if value.IsNil() {
-			return ""
-		}
-		value = value.Elem()
+	field := sectionJSONValue(value, path)
+	if !field.IsValid() {
+		return ""
 	}
-	if len(path) == 0 {
-		return value.String()
-	}
-	for i := 0; i < value.NumField(); i++ {
-		field := value.Type().Field(i)
-		if field.Anonymous {
-			if _, ok := sectionJSONField(field.Type, path); ok {
-				return sectionJSONText(value.Field(i), path)
-			}
-		}
-		if strings.Split(field.Tag.Get("json"), ",")[0] == path[0] {
-			return sectionJSONText(value.Field(i), path[1:])
-		}
-	}
-	return ""
+	return field.String()
 }
 
 // The same Section references drive member visibility and port validation.
@@ -382,6 +394,11 @@ func (s Section) variableReferences() []string {
 }
 
 func (d *PageDocument) checkWidgetPorts(s Section) error {
+	if w := pageWidget(s.Widget); w != nil {
+		if err := d.checkDeclaredWidgetPorts(s, w); err != nil {
+			return err
+		}
+	}
 	if s.ChartVariant != "" && (s.Widget != "chart" || s.Mark != "arc" || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.ChartPresentation.RequiredUIProfile) || !slices.Contains(pageWidgets.Runtime.ChartPresentation.Variants, s.ChartVariant)) {
 		return fmt.Errorf("chart variant needs its pie profile and mark")
 	}
@@ -439,20 +456,18 @@ func checkPageWidget(section Section) error {
 		if section.ConfigVersion != widget.ConfigVersion {
 			return fmt.Errorf("widget %s config version %d is unsupported", section.Widget, section.ConfigVersion)
 		}
-		// Only presentation properties are validated here. Asset references,
-		// selections, queries and actions retain their original host owners.
+		// The manifest owns configured fields and presentation properties.
+		// Asset, selection, query and action semantics retain their host owners.
 		rawSection, _ := json.Marshal(section)
 		var values map[string]json.RawMessage
 		_ = json.Unmarshal(rawSection, &values)
+		if err := section.checkWidgetConfiguration(); err != nil {
+			return err
+		}
 		props := map[string]json.RawMessage{}
-		for _, contract := range pageWidgets.Widgets {
-			for key := range contract.PropsSchema.Properties {
-				if value, present := values[key]; present {
-					if _, declared := widget.PropsSchema.Properties[key]; !declared {
-						return fmt.Errorf("widget %s does not declare property %s", section.Widget, key)
-					}
-					props[key] = value
-				}
+		for key := range widget.PropsSchema.Properties {
+			if value, present := values[key]; present {
+				props[key] = value
 			}
 		}
 		raw, _ := json.Marshal(props)
@@ -464,28 +479,19 @@ func checkPageWidget(section Section) error {
 // CheckSectionFields applies the same original-field rules to installed pages
 // and frozen release descriptors. Binding and action owners check their own edges.
 func (p Page) CheckSectionFields(s Section, info EntityInfo) error {
+	if err := s.checkWidgetFieldRoles(info); err != nil {
+		return err
+	}
 	for _, check := range []func(EntityInfo) error{
 		s.CheckTimeline,
 		func(info EntityInfo) error { return p.CheckKanban(s, info) },
 		s.CheckStatusTracker,
 		s.CheckMetricPresentation,
-		s.CheckRecordList,
 		s.CheckHeatmap,
-		s.CheckScatter,
-		s.CheckMap,
-		s.CheckRecordChart,
-		s.CheckRecordEvents,
-		s.CheckRecordPicker,
-		s.CheckLeaderboard,
-		s.CheckHistogram,
-		s.CheckRecordCard,
-		s.CheckRecordComparison,
-		s.CheckSparkline,
 		s.CheckTerms,
-		s.CheckCollectionAnalysis,
-		s.CheckSummary,
+		s.CheckRecordEvents,
 		s.CheckRecordGantt,
-		s.CheckRecordCalendar,
+		s.CheckCollectionAnalysis,
 	} {
 		if err := check(info); err != nil {
 			return err

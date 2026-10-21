@@ -22,8 +22,8 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
   const installedApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   const title = application?.title || installedApps.data?.find(app => app.id === ref.app)?.title || ref.app;
   const { owned, unavailable } = useProjectResources(application, ref.app, false);
-  const activeArea = studioArea(area);
-  const inventory = useRecordInventory<Project>("build.app");
+  const activeArea = studioArea(area, selected?.split("/")[1]);
+  const inventory = useRecordInventory<Project>("build.app", 1000, host.role("build") === "builder");
   const extensions = (inventory.data?.records ?? []).filter(project => !project.archived && project.extends && refKey(project.extends) === refKey(ref));
   const [targetID, setTargetID] = useState("");
   const target = extensions.find(project => project.id === targetID) ?? extensions[0];
@@ -110,7 +110,7 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
         {!extensions.length && <p className="text-sm text-muted">{t("No extensions yet. Create one to add pages and business behavior.")}</p>}
         <ul className="divide-y divide-border">{extensions.map(item => <li key={item.id}><Button variant="row" className="flex w-full justify-between p-2" onClick={() => open({ view: "project", params: { id: item.id, area: activeArea } })}><span>{item.title || item.name}</span><span className="text-xs text-muted">{t(item.state === "published" ? "Published" : "Draft")}</span></Button></li>)}</ul>
       </PanelSection>
-      {application && activeArea === "verify" && <ApplicationRuntimePanel owner={ref.app} name={ref.name} />}
+      {application && activeArea === "release" && <ApplicationRuntimePanel owner={ref.app} name={ref.name} />}
     </div>
     {createExtension.dialog}{createPage.dialog}
   </Workbench>;

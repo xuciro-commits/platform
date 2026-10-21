@@ -21,16 +21,13 @@ func (s Section) AIVariables() []string {
 }
 func (d *PageDocument) checkAI(s Section) error {
 	if s.Widget != "ai-assistant" {
-		if s.AI != nil {
-			return fmt.Errorf("AI configuration needs its original widget")
-		}
 		return nil
 	}
 	c := s.AI
 	v := d.Variables[s.RecordVariable]
 	shared := d.sharedAIRecord(s.RecordVariable)
 	local := v.Type == "record" && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope)
-	if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.86") || c == nil || !slices.Contains([]string{"analyst", "generated", "chatbot"}, c.Kind) || s.Function == nil || s.Function.Ref.Check() != nil || s.Function.Ref.Kind != AssetFunction || s.Function.SourceVersion == "" || !(local || shared) || s.Selection != "" || s.CollectionVariable != "" || len(s.Actions) > 0 || len(s.Fields) > 0 || s.Operation != nil || len(s.Inputs) > 0 || s.Query != (AssetRef{}) || s.Relation != "" || s.ParentSelection != "" {
+	if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.86") || c == nil || !slices.Contains([]string{"analyst", "generated", "chatbot"}, c.Kind) || s.Function == nil || s.Function.Ref.Check() != nil || s.Function.Ref.Kind != AssetFunction || s.Function.SourceVersion == "" || !(local || shared) || s.Query != (AssetRef{}) {
 		return fmt.Errorf("AI view needs a fixed function and original confirmed record resource")
 	}
 	if c.Kind != "chatbot" {

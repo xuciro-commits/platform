@@ -46,14 +46,14 @@ test("editor view distinguishes object and flow records with the same ID", () =>
   const assembly = studioContext({ view: "flow", params: { id: "SAME" } }, [object, flow, page], []);
   assert.equal(assembly.selected, flow);
   assert.deepEqual(assembly.ref, flow.ref);
-  assert.equal(assembly.area, "assemble");
+  assert.equal(assembly.area, "logic");
 });
 
 test("action editor selects its owning object and derives the original action reference", () => {
   const context = studioContext({ view: "action-type", params: { id: "SAME", action: "approve", application: "APP" } }, resources, []);
   assert.equal(context.selected, object);
   assert.deepEqual(context.ref, { app: "build", kind: "action", name: "build.order.approve" });
-  assert.equal(context.area, "behavior");
+  assert.equal(context.area, "logic");
 });
 
 test("automation keeps its asset in both process editors and a flow release review", () => {
@@ -62,11 +62,11 @@ test("automation keeps its asset in both process editors and a flow release revi
     const context = studioContext({ view, params: { id: "SAME", application: "APP" } }, [object, automation], []);
     assert.equal(context.selected, automation);
     assert.deepEqual(context.ref, automation.ref);
-    assert.equal(context.area, "assemble");
+    assert.equal(context.area, "logic");
   }
   const review = studioContext({ view: "release-review", params: { id: "SAME", kind: "flow", application: "APP" } }, [object, automation], []);
   assert.equal(review.selected, automation);
-  assert.deepEqual(studioRoute("APP", review.area, refKey(review.selected.ref)), { view: "project", params: { id: "APP", area: "verify", asset: refKey(automation.ref) } });
+  assert.deepEqual(studioRoute("APP", review.area, refKey(review.selected.ref)), { view: "project", params: { id: "APP", area: "release", asset: refKey(automation.ref) } });
 });
 
 test("definition and page preview resolve the same complete owner reference", () => {
@@ -81,27 +81,27 @@ test("definition and page preview resolve the same complete owner reference", ()
 });
 
 test("project asset selection retains its explicit workspace area", () => {
-  const route = studioRoute("APP", "behavior", refKey(object.ref));
+  const route = studioRoute("APP", "logic", refKey(object.ref));
   const context = studioContext(route, resources, []);
   assert.equal(studioApplicationID(route), "APP");
   assert.equal(context.selected, object);
   assert.deepEqual(context.ref, object.ref);
-  assert.equal(context.area, "behavior");
+  assert.equal(context.area, "logic");
 });
 
 test("release review returns the original asset to Verify instead of its editing area", () => {
   const route = { view: "release-review", params: { id: "SAME", kind: "object", application: "APP" } };
   const context = studioContext(route, resources, []);
   assert.equal(context.selected, object);
-  assert.equal(context.area, "verify");
+  assert.equal(context.area, "release");
   const back = studioRoute(studioApplicationID(route), context.area, refKey(context.selected.ref));
-  assert.deepEqual(back, { view: "project", params: { id: "APP", area: "verify", asset: refKey(object.ref) } });
+  assert.deepEqual(back, { view: "project", params: { id: "APP", area: "release", asset: refKey(object.ref) } });
   const returned = studioContext(back, resources, []);
   assert.equal(returned.selected, object);
-  assert.equal(returned.area, "verify");
+  assert.equal(returned.area, "release");
   const history = studioContext({ view: "release-history", params: { application: "APP" } }, resources, []);
   assert.equal(history.selected, undefined);
-  assert.deepEqual(studioRoute("APP", history.area), { view: "project", params: { id: "APP", area: "verify" } });
+  assert.deepEqual(studioRoute("APP", history.area), { view: "project", params: { id: "APP", area: "release" } });
 });
 
 test("decision table release review resolves its canonical compute reference", () => {
@@ -110,18 +110,18 @@ test("decision table release review resolves its canonical compute reference", (
   const context = studioContext({ view: "release-review", params: { id: "SAME", kind: "compute", application: "APP" } }, [object, table], []);
   assert.equal(context.selected, table);
   assert.deepEqual(context.ref, table.ref);
-  assert.equal(context.area, "verify");
+  assert.equal(context.area, "release");
 });
 
 test("application test-plan route retains its selected asset in Verify", () => {
   const kind = resourceKinds.find(kind => kind.kind === "test-plan");
   const plan = { kind, record: { id: "PLAN", name: "shipping" }, ref: resourceRef(kind, "shipping"), title: "Shipping", installed: false, missing: false };
   const route = assetRoute(plan.ref, [plan], [], "APP");
-  assert.deepEqual(route, { view: "project", params: { id: "APP", area: "verify", plan: "PLAN" } });
+  assert.deepEqual(route, { view: "project", params: { id: "APP", area: "release", plan: "PLAN" } });
   const context = studioContext(route, [object, plan], []);
   assert.equal(context.selected, plan);
   assert.deepEqual(context.ref, plan.ref);
-  assert.equal(context.area, "verify");
+  assert.equal(context.area, "release");
 });
 
 test("published observation opens and returns with its complete owner reference", () => {
@@ -133,8 +133,8 @@ test("published observation opens and returns with its complete owner reference"
   const context = studioContext(route, [observation], [wrongOwner, definition]);
   assert.equal(context.selected, observation);
   assert.equal(context.ref, definition.ref);
-  assert.equal(context.area, "assemble");
-  assert.deepEqual(studioRoute("APP", context.area, refKey(context.selected.ref)), { view: "project", params: { id: "APP", area: "assemble", asset: "other/observation/temperature" } });
+  assert.equal(context.area, "integration");
+  assert.deepEqual(studioRoute("APP", context.area, refKey(context.selected.ref)), { view: "project", params: { id: "APP", area: "integration", asset: "other/observation/temperature" } });
 });
 
 test("workspace groups use business categories and preserve custom concept titles", () => {
@@ -151,8 +151,8 @@ test("workspace groups use business categories and preserve custom concept title
   ]);
   const interfaceGroups = studioResourceGroups(application, "interface", all.filter(item => resourceInArea(item, "interface")));
   assert.deepEqual(interfaceGroups.map(group => [group.id, group.title, group.items]), [["concept:fulfilment", "订单交付 / Fulfilment", [page]]]);
-  const assemblyGroups = studioResourceGroups(application, "assemble", all.filter(item => resourceInArea(item, "assemble")));
-  assert.deepEqual(assemblyGroups.map(group => [group.id, group.items]), [["automation", [flow]]]);
+  const assemblyGroups = studioResourceGroups(application, "logic", all.filter(item => resourceInArea(item, "logic")));
+  assert.deepEqual(assemblyGroups.map(group => [group.id, group.items]), [["concept:fulfilment", [object]], ["actions", [otherObject]], ["automation", [flow]]]);
 });
 
 test("actions group by declared target and complete owner while unmatched actions stay visible", () => {
@@ -184,23 +184,23 @@ test("actions group by declared target and complete owner while unmatched action
 
 test("editor and read-only routes choose the right workspace without a selected draft", () => {
   for (const [route, area] of [
-    [{ view: "project", params: { area: "verify" } }, "verify"],
+    [{ view: "project", params: { area: "release" } }, "release"],
     [{ view: "project", params: { area: "unknown" } }, "model"],
     [{ view: "module" }, "interface"],
     [{ view: "page-preview" }, "interface"],
     [{ view: "definition", params: { kind: "page" } }, "interface"],
     [{ view: "definition", params: { kind: "query" } }, "model"],
-    [{ view: "definition", params: { kind: "action" } }, "behavior"],
-    [{ view: "definition", params: { kind: "compute" } }, "behavior"],
-    [{ view: "definition", params: { kind: "protocol" } }, "assemble"],
-    [{ view: "action-type" }, "behavior"],
-    [{ view: "decision-table" }, "behavior"],
+    [{ view: "definition", params: { kind: "action" } }, "logic"],
+    [{ view: "definition", params: { kind: "compute" } }, "logic"],
+    [{ view: "definition", params: { kind: "protocol" } }, "integration"],
+    [{ view: "action-type" }, "logic"],
+    [{ view: "decision-table" }, "logic"],
     [{ view: "link-type" }, "model"],
-    [{ view: "observations" }, "assemble"],
-    [{ view: "flow" }, "assemble"],
-    [{ view: "release-review", params: { kind: "object" } }, "verify"],
-    [{ view: "release-history" }, "verify"],
-    [{ view: "test-plan" }, "verify"],
+    [{ view: "observations" }, "integration"],
+    [{ view: "flow" }, "logic"],
+    [{ view: "release-review", params: { kind: "object" } }, "release"],
+    [{ view: "release-history" }, "release"],
+    [{ view: "test-plan" }, "release"],
     [undefined, "model"],
   ]) assert.equal(studioAreaForRoute(route), area, JSON.stringify(route));
 });

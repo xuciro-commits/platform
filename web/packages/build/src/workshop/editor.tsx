@@ -21,12 +21,12 @@ import { recordPaths } from "../ontology/record-paths";
 // Application Studio page design. Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageUIProfile, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
 import {
   ActionMenu, Button, CanvasEditor, CanvasRegion, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
-import { Copy, Clipboard, Columns2, Download, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
+import { Copy, Clipboard, Columns2, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModuleTree, type ModuleContext } from "./ModuleWorkbench";
 import type { Route } from "@platform/ui";
@@ -48,7 +48,6 @@ import {LayoutProperties,LayoutSizing} from "./page-editor/LayoutProperties";
 import { useDraftSession } from "../session/DraftSession";
 import {copyLayout,copyLayoutIssue,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
 import {previewSection,type AuthoringSection,type PageDraft} from "./page-editor/draft";
-import {ModuleImportDialog,type ImportPackage} from "./module-import/ModuleImportDialog";
 
 type Api = NonNullable<Definition["page"]>;
 /** The page as its record holds it: what the builder edits and submits. */
@@ -103,13 +102,11 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const page = savedPage ? { ...savedPage, ...session.draft } : undefined;
   const [clipboardNotice,setClipboardNotice]=useState<{scope:string;error?:boolean;text:string}>();
   const clipboardScope=JSON.stringify([id,source.scope]);
-  useEffect(()=>{setClipboardNotice(undefined);setImportPackage(undefined);setImporting(false);setCompatibilityOpen(false);},[clipboardScope]);
+  useEffect(()=>{setClipboardNotice(undefined);setCompatibilityOpen(false);},[clipboardScope]);
   const { sections, document, selections, title, description } = session.draft;
   const { dirty } = session;
   const [selection, select] = useState<StudioSelection>({ kind: "page" });
-  const [importing,setImporting]=useState(false);
   const [compatibilityOpen,setCompatibilityOpen]=useState(false);
-  const [importPackage,setImportPackage]=useState<{scope:string;pack:ImportPackage}>();
   const [leftTab, setLeftTab] = useState("layers"), [preview, setPreview] = useState(false);
   const [leftOpen, setLeftOpen] = useState<boolean>();
   const [inspectorTab, setInspectorTab] = useState<Record<string, string>>({});
@@ -139,7 +136,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
     const next = typeof update === "function" ? update(old) : { ...old, ...update };
     // Profile changes are explicit reviewed commands; ordinary editing retains
     // the original profile even when a layout helper returns the latest one.
-    const document=key==="module-import"?next.document:{...next.document,uiProfile:old.document.uiProfile};
+    const document={...next.document,uiProfile:old.document.uiProfile};
     const sections=next.sections.map(section=>{
       if(section.composite)return materializeModelSection(canonicalModelSection(section),authoringEntity,true);
       if(!section.model)return section;
@@ -344,7 +341,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       actions={<>
         <Button size="sm" variant={preview ? "primary" : "ghost"} aria-pressed={preview} onClick={() => { setPreview(!preview); select({ kind: "page" }); }}><Play />{t("Preview")}</Button>
         <ActionMenu label={t("More page commands")} icon={<MoreHorizontal />} commands={[
-          { id: "import", label: t("Import Workshop module…"), icon: <Download />, disabled: busy, run: () => setImporting(true) },
           { id: "compatibility", label: t("Review page compatibility…"), disabled: busy, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
         ]} />
@@ -387,7 +383,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       ] }}>
       {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
-      {importing && <ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope === clipboardScope ? importPackage.pack : undefined} object={page.object} profile={pageUIProfile} onClose={() => setImporting(false)} onApply={(draft, pack) => { setImportPackage({ scope: clipboardScope, pack }); edit(draft, "module-import"); select({ kind: "page" }); setRefused(undefined); }} />}
       {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setRefused(undefined); }} />}
       <StructuredEditor initialMode="source" validate={widgetDeclarationIssues} expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue({ ...session.draft, sections: sections.map(canonicalModelSection) }, declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...emptyDraft(), ...next }) as PageDraft); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
         <CanvasEditor model={canvasModel(document, sections, { ...Object.fromEntries(Object.entries(widgetTitles).map(([id, title]) => [id, title()])), rows: t("Rows"), columns: t("Columns"), tabs: t("Tabs"), flow: t("Flow layout"), toolbar: t("Toolbar"), loop: t("Loop") })} selected={preview ? undefined : nodeID} revision={session.draft} zoom={zoom / 100} disabled={busy || incompatible || preview}

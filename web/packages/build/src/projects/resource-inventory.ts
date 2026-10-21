@@ -1,4 +1,4 @@
-import { definitionPresentation, useDefinitions, useRecordInventory } from "@platform/app";
+import { definitionPresentation, useDefinitions, useHost, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { useMemo } from "react";
 import { kindOfType, matchesResourceKind, publishedResourceKind, refKey, resourceKinds, resourceRef, type ResourceKindInfo, type ResourceRecord } from "./resources";
@@ -10,11 +10,12 @@ const inventoryTypes = [...new Set(resourceKinds.map(kind => kind.type))];
 /** Inventories of every resource type, keyed by kind, resolved to the records a project names — and to
  * what the host has installed, so a published resource without a tenant draft is never called missing. */
 export function useProjectResources(project?: Pick<import("@platform/kernel").Api.Application, "pages" | "resources" | "concepts">, owner = "build", editable = true, options: { enabledKinds?: readonly string[] } = {}) {
+  const { role } = useHost();
   const enabledKinds = options.enabledKinds;
   const kindEnabled = (kind: ResourceKindInfo) => !enabledKinds || enabledKinds.includes(kind.ref ?? kind.kind);
   const definitionQuery = useDefinitions();
   const definitions = definitionQuery.data ?? [];
-  const readDrafts = !!project && owner === "build" && editable;
+  const readDrafts = !!project && owner === "build" && editable && role("build") === "builder";
   const byType = Object.fromEntries(inventoryTypes.map(type => [type, useRecordInventory<ResourceRecord>(type, 1000, readDrafts && resourceKinds.some(kind => kind.type === type && kindEnabled(kind)))]));
   const inventories = Object.fromEntries(resourceKinds.map(kind => [kind.kind, byType[kind.type]!]));
   const records = useMemo(() => !readDrafts ? [] : resourceKinds.flatMap(kind => (inventories[kind.kind]?.data?.records ?? [])

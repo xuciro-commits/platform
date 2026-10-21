@@ -35,9 +35,9 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     setRefused(undefined); reset.current?.();
   }, busy);
   useEffect(() => {
-    if (!object || dirty || busy || loaded.current === `${object.id}:${object.revision}`) return;
+    if (!object || !loaded.current && query.isFetching || query.isPlaceholderData || dirty || busy || loaded.current === `${object.id}:${object.revision}`) return;
     baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;
-  }, [object, dirty, busy, session.load]);
+  }, [object, query.isFetching, query.isPlaceholderData, dirty, busy, session.load]);
 
   const parent = object ? `build.${object.name}` : "";
   const savedObjects = new Set((drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => `build.${draft.name}`));
@@ -116,5 +116,5 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const trialObject = (next: Process) => trial("build.object.edit", { type: "build.object", id }, objectChanges(next, baseline.current), baseRevision.current);
   const structured = { expectedRevision: baseRevision.current, fieldInput: sourceFieldInput, value: { ...process }, onChange: (next: Record<string, unknown>) => change(fromSource(next)), fields, scope: `build.object:${id}:${source.scope}`, disabled: busy || !!conversionError,
     onTrial: (next: Record<string, unknown>) => trialObject(fromSource(next)) };
-  return { object, structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
+  return { object, ready: loaded.current.startsWith(`${id}:`), structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
 }

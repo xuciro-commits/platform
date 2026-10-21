@@ -10,11 +10,12 @@ test("an application authors AI functions, agents and evaluation sets over saved
   });
   const application = await builder.application({ title: "AI drafting application", resources: [{ app: "build", kind: "object", name: type }] });
   const original = await operator.definitions();
-  await builder.open(page, `/project?id=${application.id}&area=assemble`);
+  await builder.open(page, `/project?id=${application.id}&area=logic`);
   const create = async (name: string) => {
     await page.getByRole("button", { name: "New", exact: true }).click();
     await page.getByRole("menuitem", { name, exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   };
   await create("AI function");
   const stages = page.getByRole("region", { name: "Function stages", exact: true });
@@ -54,7 +55,7 @@ test("an application authors AI functions, agents and evaluation sets over saved
   await page.unroute("**/v1/submissions");
 
   await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "AI drafting application", exact: true }).click();
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Assemble", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Logic", exact: true }).click();
   await create("Agent");
   await page.getByRole("textbox", { name: "Agent name", exact: true }).fill(agentName);
   await page.getByRole("textbox", { name: "Agent title", exact: true }).fill("Review saved notes");
@@ -78,7 +79,7 @@ test("an application authors AI functions, agents and evaluation sets over saved
   await expect(page.getByRole("tab", { name: "Agents · Review saved notes", exact: true })).toHaveCount(0);
   await page.unroute(`**/v1/records/build.app/${application.id}`);
 
-  await builder.open(page, `/project?id=${application.id}&area=verify`);
+  await builder.open(page, `/project?id=${application.id}&area=release`);
   await create("Evaluation set");
   await expect(page.getByRole("combobox", { name: "Candidate kind", exact: true })).toHaveValue("function");
   await page.getByRole("combobox", { name: "Saved function draft", exact: true }).selectOption(fn.id);
@@ -92,7 +93,7 @@ test("an application authors AI functions, agents and evaluation sets over saved
   await expect.poll(async () => (await builder.record("build.app", application.id)).resources).toContainEqual({ app: "build", kind: "evaluation-set", name: evaluationName });
   await shots(page, page.locator("body"), "application-ai-drafts", info);
   await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "AI drafting application", exact: true }).click();
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Verify", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Release", exact: true }).click();
   const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await verify.getByRole("button", { name: "Add the drafts of AI drafting application", exact: true }).click();
   await verify.getByRole("button", { name: "Check joint candidate", exact: true }).click();

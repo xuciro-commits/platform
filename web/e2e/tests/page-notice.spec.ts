@@ -1,83 +1,105 @@
-import { expect, runtime, sampleModule, shots, slug, test } from "./kit";
+import { expect, pageUIProfile, runtime, shots, slug, test } from "./kit";
 
-test("Workshop list and board imports retain independent card fields and the original move action", async ({ page, builder, editor }, info) => {
+test("list and board editors retain independent card fields and the original move action", async ({ page, builder, editor }, info) => {
   const { type } = await builder.object({
-    name: slug("importcards"), title: "Imported card records",
+    name: slug("cards"), title: "Card records",
     fields: [{ name: "name", title: "Name", type: "text" }, { name: "detail", title: "Detail", type: "text" }, { name: "quantity", title: "Quantity", type: "integer" }],
     states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
     actions: [{ name: "move", title: "Move original record", from: ["open", "done"], toInput: "status", roles: ["builder", "user"], inputs: [{ name: "status", title: "Destination state", type: "choice", choices: "open,done", required: true }] }],
   });
-  const m = sampleModule();
-  m.variables = m.variables.filter((variable: any) => variable.id === "notes");
-  m.widgets = {
-    cards: { id: "cards", name: "Imported cards", type: "ObjectList", config: { objectSetVarId: "notes", layout: "grid" } },
-    board: { id: "board", name: "Imported board", type: "KanbanBoard", config: { objectSetVarId: "notes", groupBy: "status", actionId: "updateAssetStatus", actionParam: "status" } },
-  };
-  m.sections = { root: { id: "root", name: "Imported collections", layout: "rows", children: [{ kind: "widget", id: "cards" }, { kind: "widget", id: "board" }] } };
-  const { id } = await builder.page({ title: "Imported card mappings", object: type });
-  await editor.open(builder, id);
-  await editor.importModule(m, async dialog => {
-    await dialog.getByRole("combobox", { name: "Map object Asset", exact: true }).selectOption(type);
-    await dialog.getByRole("combobox", { name: "Map field Asset.status", exact: true }).selectOption("state");
-    const cards = dialog.getByRole("group", { name: "Map record cards Imported cards", exact: true });
-    await cards.getByRole("combobox", { name: "Card title field", exact: true }).selectOption("name");
-    await cards.getByRole("group", { name: "Card summary fields", exact: true }).getByRole("button", { name: "Detail", exact: true }).click();
-    const board = dialog.getByRole("group", { name: "Map board Imported board", exact: true });
-    const move = board.getByRole("group", { name: "Map original board move actions", exact: true }).getByRole("button", { name: /^Move original record →/ });
-    await move.click();
-    await board.getByRole("combobox", { name: "Card title field", exact: true }).selectOption("detail");
-    await board.getByRole("group", { name: "Card summary fields", exact: true }).getByRole("button", { name: "Quantity", exact: true }).click();
-    await expect(move).toHaveAttribute("aria-pressed", "true");
-    await expect(cards.getByRole("combobox", { name: "Card title field", exact: true })).toHaveValue("name");
-    await expect(cards.getByRole("group", { name: "Card summary fields", exact: true }).getByRole("button", { name: "Detail", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await shots(page, dialog, "import-list-board-mappings", info);
+  const { id } = await builder.page({
+    title: "Independent card fields", object: type,
+    sections: [
+      { id: "cards", widget: "record-list", configVersion: 1, title: "Record cards", cardLabel: "id", collectionVariable: "records", recordList: { layout: "grid" } },
+      { id: "board", widget: "kanban", configVersion: 1, title: "Record board", cardLabel: "id", collectionVariable: "records" },
+    ],
+    document: {
+      formatVersion: 2, uiProfile: pageUIProfile, root: "root",
+      nodes: {
+        root: { kind: "rows", children: ["cards", "board"] },
+        cards: { kind: "widget", section: "cards" },
+        board: { kind: "widget", section: "board" },
+      },
+      variables: { records: { scope: "page", type: "object-set", mode: "resource", source: { kind: "plan", query: "records" } } },
+      queries: { records: { object: { app: "build", kind: "object", name: type }, limit: 50, sort: ["id"] } },
+    },
   });
-  const saved = await editor.saveUntil(builder, id, "kanban", 1);
-  expect(saved.sections.find((section: any) => section.widget === "record-list")).toMatchObject({ model: { type, fields: [{ name: "detail" }, { name: "name", slot: "cardLabel" }] }, recordList: { layout: "grid" } });
-  expect(saved.sections.find((section: any) => section.widget === "kanban")).toMatchObject({ model: { type, fields: [{ name: "quantity" }, { name: "detail", slot: "cardLabel" }] }, actions: [`${type}.move`] });
+  await editor.open(builder, id);
+  await editor.select("Record cards");
+  const title = editor.inspector.getByRole("combobox", { name: "Card title field", exact: true });
+  const summaries = editor.inspector.getByRole("group", { name: "Card summary fields", exact: true });
+  await title.selectOption("name");
+  await summaries.getByRole("button", { name: "Detail", exact: true }).click();
+  await editor.select("Record board");
+  await title.selectOption("detail");
+  await summaries.getByRole("button", { name: "Quantity", exact: true }).click();
+  const move = editor.inspector.getByRole("group", { name: "Allowed move actions", exact: true }).getByRole("button", { name: /^Move original record →/ });
+  await move.click();
+  await expect(move).toHaveAttribute("aria-pressed", "true");
+  await editor.select("Record cards");
+  await expect(title).toHaveValue("name");
+  await expect(summaries.getByRole("button", { name: "Detail", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await shots(page, page.locator("body"), "list-board-card-fields", info);
+  await editor.save();
+  await expect.poll(async () => (await builder.record("build.page", id)).sections.find((section: any) => section.widget === "kanban")?.actions).toEqual([`${type}.move`]);
+  const saved = await builder.record("build.page", id);
+  expect(saved.sections.find((section: any) => section.widget === "record-list")).toMatchObject({ model: { type, fields: [{ name: "name", slot: "cardLabel" }, { name: "detail" }] }, recordList: { layout: "grid" } });
+  expect(saved.sections.find((section: any) => section.widget === "kanban")).toMatchObject({ model: { type, fields: [{ name: "detail", slot: "cardLabel" }, { name: "quantity" }] }, actions: [`${type}.move`] });
 });
 
-// A Callout imported from Workshop becomes a notice: its text is literal (no
-// markup, no templating), its title is optional, and a released page keeps
-// the frozen copy while the draft moves on. Overlay notices gate independently.
+// Notice text is literal (no markup, no templating), its title is optional,
+// and a released page keeps the frozen copy while the draft moves on.
+// Overlay notices gate independently.
 test("notices freeze literal text and optional titles; page and overlay gates stay independent", async ({ page, builder, operator, editor }, info) => {
   test.setTimeout(90_000);
   const { type } = await builder.object({ name: slug("notes"), title: "Instruction records", fields: [{ name: "name", title: "Name", type: "text" }] });
   const literal = "Review <img src=x> and {value} literally.\n**Markdown stays text.**";
 
-  const m = sampleModule();
-  const note = (id: string, name: string, title: string | undefined, text: string, intent: string) => ({ id, name, type: "Callout", config: { ...(title === undefined ? {} : { title }), text, intent } });
-  const toggle = (id: string, name: string, variableId: string) => ({ id, name, type: "ToggleSwitch", config: { variableId, label: name } });
-  const button = (id: string, label: string, kind: string) => ({ id, name: label, type: "SingleButton", config: { label, eventActions: [{ kind, overlayId: "panel" }] } });
-  m.variables = [
-    { id: "show", name: "Show instructions", type: "boolean", definitionKind: "static", staticValue: true },
-    { id: "localShow", name: "Show local instructions", type: "boolean", definitionKind: "static", staticValue: true },
-  ];
-  m.widgets = {
-    main: note("main", "Operator instructions", "Before starting", literal, "primary"),
-    success: note("success", "Completion note", undefined, "Completed safely.", "success"),
-    warning: note("warning", "Warning note", "", "Review the current record.", "warning"),
-    danger: note("danger", "Danger note", "Stop", "Wait for authorization.", "danger"),
-    gate: toggle("gate", "Show instructions", "show"),
-    local: note("local", "Local instructions", "Local note", "Use the original drawer workflow.", "primary"),
-    localGate: toggle("localGate", "Show local instructions", "localShow"),
-    trigger: button("trigger", "Open instructions", "openOverlay"),
-    close: button("close", "Close instructions", "closeOverlay"),
-  };
-  const widgets = (ids: string[]) => ids.map((id) => ({ kind: "widget", id }));
-  m.sections = {
-    root: { id: "root", name: "Root", layout: "rows", children: [...widgets(["gate"]), { kind: "section", id: "mainWrapper" }, ...widgets(["success", "warning", "danger", "trigger"])] },
-    mainWrapper: { id: "mainWrapper", name: "Conditional instructions", layout: "rows", visibleVariableId: "show", children: widgets(["main"]) },
-    panel: { id: "panel", name: "Panel", layout: "rows", children: [...widgets(["localGate"]), { kind: "section", id: "localWrapper" }, ...widgets(["close"])] },
-    localWrapper: { id: "localWrapper", name: "Conditional local instructions", layout: "rows", visibleVariableId: "localShow", children: widgets(["local"]) },
-  };
-  m.overlays = [{ id: "panel", name: "Instruction panel", kind: "drawer", rootSectionId: "panel" }];
-
-  const { id, name } = await builder.page({ title: "Imported instructions", object: type });
+  const { id, name } = await builder.page({
+    title: "Operator instructions", object: type,
+    sections: [
+      { id: "main", widget: "notice", configVersion: 1, title: "Operator instructions", notice: { title: "Before starting", message: literal, tone: "info" } },
+      { id: "success", widget: "notice", configVersion: 1, title: "Completion note", notice: { message: "Completed safely.", tone: "success" } },
+      { id: "warning", widget: "notice", configVersion: 1, title: "Warning note", notice: { title: "", message: "Review the current record.", tone: "warning" } },
+      { id: "danger", widget: "notice", configVersion: 1, title: "Danger note", notice: { title: "Stop", message: "Wait for authorization.", tone: "danger" } },
+      { id: "gate", widget: "boolean-input", configVersion: 1, title: "Show instructions", booleanVariable: "show", booleanLabel: "Show instructions" },
+      { id: "local", widget: "notice", configVersion: 1, title: "Local instructions", notice: { title: "Local note", message: "Use the original drawer workflow.", tone: "info" } },
+      { id: "localGate", widget: "boolean-input", configVersion: 1, title: "Show local instructions", booleanVariable: "localShow", booleanLabel: "Show local instructions" },
+      { id: "trigger", widget: "button-group", configVersion: 1, title: "Open instructions", buttons: [{ id: "open", title: "Open instructions", variant: "primary" }] },
+      { id: "close", widget: "button-group", configVersion: 1, title: "Close instructions", buttons: [{ id: "close", title: "Close instructions" }] },
+    ],
+    document: {
+      formatVersion: 2, uiProfile: pageUIProfile, root: "root",
+      nodes: {
+        root: { kind: "rows", children: ["gate", "mainWrapper", "success", "warning", "danger", "trigger"] },
+        mainWrapper: { kind: "rows", title: "Conditional instructions", visibleWhen: "show", children: ["main"] },
+        panelRoot: { kind: "rows", children: ["localGate", "localWrapper", "close"] },
+        localWrapper: { kind: "rows", title: "Conditional local instructions", visibleWhen: "localShow", children: ["local"] },
+        main: { kind: "widget", section: "main" },
+        success: { kind: "widget", section: "success" },
+        warning: { kind: "widget", section: "warning" },
+        danger: { kind: "widget", section: "danger" },
+        gate: { kind: "widget", section: "gate" },
+        local: { kind: "widget", section: "local" },
+        localGate: { kind: "widget", section: "localGate" },
+        trigger: { kind: "widget", section: "trigger" },
+        close: { kind: "widget", section: "close" },
+      },
+      variables: {
+        show: { scope: "page", type: "boolean", mode: "state", initial: true },
+        localShow: { scope: "overlay", owner: "panel", type: "boolean", mode: "state", initial: true },
+        panelOpen: { scope: "page", type: "boolean", mode: "state", initial: false },
+      },
+      overlays: { panel: { kind: "drawer", title: "Instruction panel", root: "panelRoot", openVariable: "panelOpen" } },
+      events: [
+        { source: "trigger", control: "open", event: "click", effects: [{ kind: "set", target: "panelOpen", value: true }] },
+        { source: "close", control: "close", event: "click", effects: [{ kind: "set", target: "panelOpen", value: false }] },
+      ],
+    },
+  });
   await editor.open(builder, id);
-  await editor.importModule(m);
 
-  // The inspector shows the imported notice; an over-long text blocks saving.
+  // The inspector shows the native notice; an over-long text blocks saving.
   await editor.select("Operator instructions");
   await expect(editor.inspector.getByRole("textbox", { name: "Notice title", exact: true })).toHaveValue("Before starting");
   await expect(editor.inspector.getByRole("combobox", { name: "Notice tone", exact: true })).toHaveValue("info");

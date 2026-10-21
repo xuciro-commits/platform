@@ -72,9 +72,6 @@ func (p Page) ObservationObject(s Section) AssetRef {
 }
 func (d *PageDocument) checkObservation(s Section, sections []Section) error {
 	if s.Widget != "observation" {
-		if s.hasObservationConfiguration() {
-			return fmt.Errorf("observation configuration needs its widget")
-		}
 		return nil
 	}
 	c, v := s.Observation, d.Variables[s.CollectionVariable]

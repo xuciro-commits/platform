@@ -70,7 +70,7 @@ test("a builder creates heating drafts from an installed package and an operator
   await builder.decide("ai.provider.add", { type: "ai.provider", id: "heating" }, { kind: "local", baseUrl: `${services}/v1`, wire: "openai" }, "ai");
   await builder.decide("ai.model.enable", { type: "ai.model", id: "heating/health" }, { access: "users" }, "ai");
 
-  await builder.open(page, `/project?id=${application.applicationID}&area=verify`);
+  await builder.open(page, `/project?id=${application.applicationID}&area=release`);
   const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
   const dependencyRead = page.waitForResponse(response => new URL(response.url()).pathname === "/v1/releases/drafts/referenced" && response.request().method() === "POST");
   await verify.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();

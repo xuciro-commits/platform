@@ -11,13 +11,10 @@ type PageRecordLink struct {
 
 func (d *PageDocument) checkRecordLinks(s Section) error {
 	if s.Widget != "record-links" {
-		if len(s.RecordLinks) != 0 {
-			return fmt.Errorf("record links need their widget")
-		}
 		return nil
 	}
 	limits := pageWidgets.Runtime.RecordLinks
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || len(s.RecordLinks) == 0 || len(s.RecordLinks) > limits.MaxGroups || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Query.Name != "" || s.Relation != "" {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || len(s.RecordLinks) == 0 || len(s.RecordLinks) > limits.MaxGroups {
 		return fmt.Errorf("record links need their profile and bounded explicit groups")
 	}
 	seen := map[string]bool{}

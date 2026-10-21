@@ -77,3 +77,21 @@ func TestFrozenAnalysisWidgetsCheckOriginalFieldSchemas(t *testing.T) {
 		})
 	}
 }
+
+func TestFrozenAnalysisWidgetsRejectReservedGroupFields(t *testing.T) {
+	ref := AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}
+	lookup := map[AssetRef]ReleaseAsset{ref: {Ref: ref, Body: Raw(EntityInfo{Type: ref.Name, Fields: []FieldInfo{
+		{Name: "state", Type: "text"}, {Name: "count", Type: "text"}, {Name: "bucket:day", Type: "text"},
+	}})}}
+	for _, section := range []Section{
+		{Widget: "heatmap", Group: "state", ColumnGroup: "count", Measure: "count"},
+		{Widget: "term-counts", Group: "count"},
+		{Widget: "treemap", Group: "bucket:day"},
+		{Widget: "tag-counts", Group: "count"},
+	} {
+		p := Page{Object: ref, Document: &PageDocument{}, Sections: []Section{section}}
+		if checkFrozenQueries(p, lookup) == nil {
+			t.Fatalf("frozen %s accepted reserved original field %s/%s", section.Widget, section.Group, section.ColumnGroup)
+		}
+	}
+}

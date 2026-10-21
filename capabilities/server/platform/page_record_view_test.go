@@ -21,7 +21,7 @@ func TestRecordViewProfileAndTabs(t *testing.T) {
 	}
 	d.UIProfile = PageUIProfile()
 	s.Widget = "detail"
-	if d.checkRecordView(s) == nil {
+	if s.checkWidgetConfiguration() == nil {
 		t.Fatal("another widget accepted record view config")
 	}
 }

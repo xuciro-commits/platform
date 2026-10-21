@@ -149,18 +149,14 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 		var local []string
 		switch {
-		case explorationWidget(section.Widget):
+		case explorationWidget(section.Widget) && section.Widget != "resource-list":
 			local = append([]string{}, section.ExplorationVariables()...)
-		case section.Widget == "action-table" || section.RecordList != nil && section.RecordList.Layout == "tiles":
+		case section.RecordList != nil && section.RecordList.Layout == "tiles":
 			local = []string{section.CollectionVariable}
-		case section.Widget == "notepad":
-			local = []string{section.NotepadVariable}
 		case section.Widget == "scene-3d":
 			local = section.SpatialVariables()
 		case section.Widget == "ai-assistant":
 			local = append([]string{}, section.AIVariables()...)
-		case section.Widget == "collection-analysis":
-			local = section.AnalysisVariables()
 		case contextView(section.Widget):
 			local = section.ContextViewVariables()
 		}
@@ -205,68 +201,17 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		if section.Widget == "record-card" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("record card does not enter a loop")
 		}
-		for _, id := range []string{section.SparklineDecimalVariable, section.SparklineNumberVariable} {
-			if !accessible(id, "", sectionOverlays[section.ID]) || section.Widget == "sparkline-kpi" && sectionOwners[section.ID] != "" {
-				return fmt.Errorf("sparkline KPI needs its original page or overlay owner")
-			}
-		}
-		for _, id := range []string{section.GroupValueVariable, section.GroupSetVariable} {
-			if !accessible(id, "", sectionOverlays[section.ID]) || (section.Widget == "treemap" || section.Widget == "tag-counts") && sectionOwners[section.ID] != "" {
-				return fmt.Errorf("treemap filter needs its original page or overlay owner")
-			}
-		}
-		if section.Widget == "tag-counts" {
-			v := d.Variables[section.CollectionVariable]
-			if v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
-				return fmt.Errorf("tag counts need the original collection's page or overlay owner")
-			}
-		}
-		for _, id := range []string{section.RowValueVariable, section.RowSetVariable, section.ColumnValueVariable, section.ColumnSetVariable} {
-			if !accessible(id, "", sectionOverlays[section.ID]) || section.Widget == "heatmap" && sectionOwners[section.ID] != "" {
-				return fmt.Errorf("heatmap filter needs its original page or overlay owner")
-			}
-		}
-		if !accessible(section.PickerValueVariable, "", sectionOverlays[section.ID]) {
-			return fmt.Errorf("picker ID state cannot escape its scope")
-		}
-		if !accessible(section.AlertValueVariable, "", sectionOverlays[section.ID]) || section.Widget == "alert-banner" && sectionOwners[section.ID] != "" {
-			return fmt.Errorf("alert cannot escape its scope or enter a loop")
-		}
-		if !accessible(section.DateVariable, "", sectionOverlays[section.ID]) || section.Widget == "date-input" && sectionOwners[section.ID] != "" {
-			return fmt.Errorf("date input cannot escape its scope or enter a loop")
-		}
 		if c := section.ChoiceInput; c != nil && (c.Variant == "steps" || c.Variant == "tabs") {
 			v := d.Variables[section.ChoiceVariable]
 			if v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
 				return fmt.Errorf("indexed choice needs its original page or overlay owner")
 			}
 		}
-		if !accessible(section.ChoiceSetVariable, "", sectionOverlays[section.ID]) || !accessible(section.ChoiceVariable, "", sectionOverlays[section.ID]) || section.Widget == "choice-input" && sectionOwners[section.ID] != "" {
-			return fmt.Errorf("choice input cannot escape its scope or enter a loop")
+		if err := d.checkWidgetPortScopes(section, sectionOwners[section.ID], sectionOverlays[section.ID]); err != nil {
+			return err
 		}
-		if !accessible(section.BooleanVariable, "", sectionOverlays[section.ID]) || section.Widget == "boolean-input" && sectionOwners[section.ID] != "" {
-			return fmt.Errorf("boolean input cannot escape its scope or enter a loop")
-		}
-		if !accessible(section.RangeMinVariable, "", sectionOverlays[section.ID]) || !accessible(section.RangeMaxVariable, "", sectionOverlays[section.ID]) || section.Widget == "range-input" && sectionOwners[section.ID] != "" {
-			return fmt.Errorf("range drafts cannot escape their scope or enter a loop")
-		}
-		if !accessible(section.StatisticsVariable, "", sectionOverlays[section.ID]) || section.Widget == "summary-stats" && sectionOwners[section.ID] != "" {
-			return fmt.Errorf("summary cannot escape its scope or enter a loop")
-		}
-		if !accessible(section.GaugeValueVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) {
-			return fmt.Errorf("gauge scalar cannot escape its scope")
-		}
-		if !accessible(section.ProgressValueVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) || !accessible(section.ProgressTotalVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) {
-			return fmt.Errorf("progress scalar cannot escape its scope")
-		}
-		if !accessible(section.CountVariable, "", sectionOverlays[section.ID]) || section.Widget == "collection-title" && sectionOwners[section.ID] != "" {
-			return fmt.Errorf("collection count cannot escape its scope or enter a loop")
-		}
-		if !accessible(section.CollectionOutputVariable, "", sectionOverlays[section.ID]) || section.Widget == "collection-builder" && (sectionOwners[section.ID] != "" || d.Variables[section.CollectionOutputVariable].Owner != sectionOverlays[section.ID]) {
+		if section.Widget == "collection-builder" && (sectionOwners[section.ID] != "" || !accessible(section.CollectionOutputVariable, "", sectionOverlays[section.ID]) || d.Variables[section.CollectionOutputVariable].Owner != sectionOverlays[section.ID]) {
 			return fmt.Errorf("collection builder output needs its exact owner")
-		}
-		if !accessible(section.CollectionVariable, "", sectionOverlays[section.ID]) {
-			return fmt.Errorf("page section %s window escapes its overlay scope", section.ID)
 		}
 		if section.SelectionSetVariable != "" && (!accessible(section.SelectionSetVariable, "", sectionOverlays[section.ID]) || sectionOwners[section.ID] != "") {
 			return fmt.Errorf("record selection set escapes its local table scope")

@@ -1,4 +1,4 @@
-import { expect, slug, test, shots } from "./kit";
+import { expect, selectObjectSection, slug, test, shots } from "./kit";
 
 test("installed native applications open without drafts and accept an explicitly published extension", async ({ page, builder }, info) => {
   const definitions = await builder.definitions<any>();
@@ -37,11 +37,11 @@ test("installed native applications open without drafts and accept an explicitly
   const builderApp = definitions.find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === "build");
   const action = definitions.find(item => item.ref.kind === "action" && item.action?.target && builderApp.application.resources.some(ref => ref.app === item.ref.app && ref.kind === item.ref.kind && ref.name === item.ref.name));
   const target = definitions.find(item => item.ref.app === action.ref.app && item.ref.kind === "object" && item.ref.name === action.action.target);
-  await builder.open(page, "/project?id=installed/build/build&area=behavior");
+  await builder.open(page, "/project?id=installed/build/build&area=logic");
   const assets = page.getByRole("region", { name: "Application assets", exact: true });
   const actionGroup = assets.getByRole("button", { name: "Actions for " + target.entity.title, exact: true });
   await expect(actionGroup).toHaveAttribute("aria-expanded", "false");
-  const group = assets.getByRole("button", { name: /^Objects and actions/ });
+  const group = assets.getByRole("button", { name: /^Object behavior/ });
   await group.click();
   await expect(group).toHaveAttribute("aria-expanded", "false");
   const filter = assets.getByRole("searchbox", { name: "Filter assets in this workspace", exact: true });
@@ -98,13 +98,20 @@ test("one application retains drafts across five workspaces and delivers grouped
   const definition = (record: any) => Object.fromEntries(Object.entries(record).filter(([key]) => !["id", "name", "revision", "created", "changed"].includes(key)));
   expect(definition(guided)).toEqual(definition(manual));
 
-  const objectSections = page.getByRole("tablist", { name: "Object sections", exact: true });
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
-  await objectSections.getByRole("tab", { name: "Properties", exact: true }).click();
+  await selectObjectSection(page, "Properties");
   await page.getByRole("button", { name: "Add a property", exact: true }).click();
   const inspector = page.getByRole("region", { name: "Object inspector", exact: true });
   await inspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Service note");
   await inspector.getByRole("textbox", { name: "Name", exact: true }).fill("note");
+  await expect(page.getByRole("tablist", { name: "Object areas", exact: true }).getByRole("tab")).toHaveCount(4);
+  // Retained section links relocate the same object document without losing
+  // its unsaved field or replacing the application's draft session.
+  await builder.open(page, `/object-type?id=${objectID}&application=${application.id}&tab=protocols`);
+  await expect(page.getByRole("tablist", { name: "Object areas", exact: true }).getByRole("tab", { name: "Rules and access", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tablist", { name: "Object sections", exact: true }).getByRole("tab", { name: "Protocols", exact: true })).toHaveAttribute("aria-selected", "true");
+  await builder.open(page, `/object-type?id=${objectID}&application=${application.id}&field=note`);
+  await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
   const navigation = page.getByRole("navigation", { name: "Main", exact: true });
   const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
   if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
@@ -115,14 +122,15 @@ test("one application retains drafts across five workspaces and delivers grouped
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
-  await objectSections.getByRole("tab", { name: "Properties", exact: true }).press("ArrowRight");
+  const { sections: objectSections, tab: propertiesTab } = await selectObjectSection(page, "Properties");
+  await propertiesTab.press("ArrowRight");
   await expect(objectSections.getByRole("tab", { name: "Links", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
-  await objectSections.getByRole("tab", { name: "Lifecycle", exact: true }).click();
+  await selectObjectSection(page, "Lifecycle");
   await page.getByRole("button", { name: "Add a state", exact: true }).click();
   await inspector.getByRole("textbox", { name: "What people call it", exact: true }).fill("Open");
   await inspector.getByRole("textbox", { name: "Name", exact: true }).fill("open");
-  await objectSections.getByRole("tab", { name: "Actions", exact: true }).click();
+  await selectObjectSection(page, "Actions");
   await page.getByRole("button", { name: "Add an action", exact: true }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(async () => (await builder.record("build.object", objectID)).actions?.length).toBe(1);
@@ -130,11 +138,11 @@ test("one application retains drafts across five workspaces and delivers grouped
 
   // Object properties and permissions use the shared table; inline edits
   // still save the same object draft and the application matrix reads it.
-  await objectSections.getByRole("tab", { name: "Properties", exact: true }).click();
+  await selectObjectSection(page, "Properties");
   await page.getByRole("row").filter({ hasText: "Service note" }).click();
   await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
   await shots(page, page.locator("body"), "object-properties", testInfo);
-  await objectSections.getByRole("tab", { name: "Permissions", exact: true }).click();
+  await selectObjectSection(page, "Permissions");
   await page.getByRole("button", { name: "Add a role", exact: true }).click();
   await inspector.getByRole("combobox", { name: "Role", exact: true }).selectOption("user");
   await page.getByRole("combobox", { name: "user · Read", exact: true }).selectOption("all");
@@ -196,7 +204,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   await context.getByRole("button", { name: "Service application", exact: true }).click();
   await expect(assets.getByRole("button", { name: /^Service desk/ })).toHaveAttribute("aria-pressed", "true");
 
-  await navigation.getByRole("button", { name: "Verify", exact: true }).click();
+  await navigation.getByRole("button", { name: "Release", exact: true }).click();
   await expect(page.getByRole("tab", { name: /^Application Studio/ })).toHaveCount(1);
   const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await verify.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
@@ -231,7 +239,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   await builder.decide("build.process.create", { type: "build.process", id: automaticID }, {
     name: slug("automaticflow"), title: "Inventory automation", kind: "automation", object: `build.${objectName}`, when: "open", steps: [{ name: "done", kind: "end" }],
   });
-  await builder.open(page, `/project?id=${application.id}&area=assemble`);
+  await builder.open(page, `/project?id=${application.id}&area=integration`);
   const existing = page.getByRole("combobox", { name: "Add existing resource", exact: true });
   const manualChoice = JSON.stringify({ kind: "flow", id: manualFlowID }), automaticChoice = JSON.stringify({ kind: "automation", id: automaticID });
   await expect(existing.locator("option").filter({ hasText: "Inventory manual flow" })).toHaveCount(1);
@@ -241,6 +249,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   await existing.selectOption(manualChoice);
   await expect(existing).toBeEnabled();
   await existing.selectOption(automaticChoice);
+  await navigation.getByRole("button", { name: "Logic", exact: true }).click();
   const inventoryAssets = navigation.getByRole("region", { name: "Application assets", exact: true });
   await expect(inventoryAssets.getByRole("button", { name: /^Inventory manual flow/ })).toHaveCount(1);
   await expect(inventoryAssets.getByRole("button", { name: /^Inventory automation/ })).toHaveCount(1);
@@ -265,7 +274,7 @@ test("decision tables and alerts remain application members through editing and 
   });
   const alertName = slug("lowtemperature");
   const application = await builder.application({ title: "Heating control", resources: [{ app: "build", kind: "object", name: object.type }] });
-  await builder.open(page, `/project?id=${application.id}&area=behavior`);
+  await builder.open(page, `/project?id=${application.id}&area=logic`);
   const add = page.getByRole("combobox", { name: "Add existing resource", exact: true });
   await add.selectOption(JSON.stringify({ kind: "table", id: tableID }));
   await expect.poll(async () => (await builder.record("build.app", application.id)).resources?.length).toBe(2);
@@ -333,7 +342,7 @@ test("decision tables and alerts remain application members through editing and 
   await assets.getByRole("button", { name: /^Heating decision/ }).click();
   await expect(page.getByRole("heading", { name: "Heating decision", exact: true }).first()).toBeVisible();
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
-  await expect(navigation.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("button", { name: "Logic", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(assets.getByRole("heading", { name: "Heating control", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Application context", exact: true })
     .getByRole("button", { name: "Heating control", exact: true })).toBeVisible();
@@ -420,7 +429,7 @@ test("decision tables and alerts remain application members through editing and 
   await expect(page.getByRole("heading", { name: "Low temperature", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Heating control", exact: true })).toBeVisible();
 
-  await navigation.getByRole("button", { name: "Verify", exact: true }).click();
+  await navigation.getByRole("button", { name: "Release", exact: true }).click();
   const verify = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await verify.getByRole("button", { name: "Add the drafts it depends on", exact: true }).click();
   await expect(verify.getByRole("list", { name: "Joint selection", exact: true }).getByText(tableID, { exact: true })).toHaveCount(1);

@@ -27,13 +27,10 @@ func (s Section) AnalysisVariables() []string {
 }
 func (d *PageDocument) checkCollectionAnalysis(s Section) error {
 	if s.Widget != "collection-analysis" {
-		if s.Analysis != nil || s.AnalysisXVariable != "" || s.AnalysisYVariable != "" || s.AnalysisCountVariable != "" || s.AnalysisMeanVariable != "" {
-			return fmt.Errorf("analysis bindings need their widget")
-		}
 		return nil
 	}
 	c, v := s.Analysis, d.Variables[s.CollectionVariable]
-	if c == nil || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.CollectionAnalysis.RequiredUIProfile) || v.Type != "object-set" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || s.Selection != "" || s.RecordVariable != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.FilterVariable != "" || s.ParentSelection != "" || s.Relation != "" || s.Query != (AssetRef{}) || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Operation != nil || s.Function != nil || s.InlineEdit != nil || len(s.Inputs) > 0 {
+	if c == nil || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.CollectionAnalysis.RequiredUIProfile) || v.Type != "object-set" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || s.FilterVariable != "" || s.Query != (AssetRef{}) {
 		return fmt.Errorf("analysis needs its original plan and read-only configuration")
 	}
 	q, ok := d.Queries[v.Source.Query]

@@ -11,7 +11,7 @@ test("shared published resources retain their owners through application discove
   const resources = [{ definition: action, title: action.action.title }, { definition: fn, title: fn.function.title }, { definition: flow, title: flow.flow.title }];
   const missing = { app: "build", kind: "action", name: slug("unavailable") };
   const application = await builder.application({ title: "Shared service resources", resources: [missing] });
-  await builder.open(page, `/project?id=${application.id}&area=behavior&asset=${encodeURIComponent(`${missing.app}/${missing.kind}/${missing.name}`)}`);
+  await builder.open(page, `/project?id=${application.id}&area=logic&asset=${encodeURIComponent(`${missing.app}/${missing.kind}/${missing.name}`)}`);
   await expect(page.getByText(`${missing.name} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.`, { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create it", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Remove from project", exact: true }).click();
@@ -25,7 +25,7 @@ test("shared published resources retain their owners through application discove
     const navigation = page.getByRole("navigation", { name: "Main", exact: true });
     const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
     if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
-    await navigation.getByRole("button", { name: resource.definition.ref.kind === "action" ? "Behavior" : "Assemble", exact: true }).click();
+    await navigation.getByRole("button", { name: "Logic", exact: true }).click();
     await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: new RegExp(`^${resource.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) }).click();
     await expect(page.getByRole("heading", { name: resource.title, exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Published resource", exact: true })).toBeVisible();
@@ -35,7 +35,7 @@ test("shared published resources retain their owners through application discove
     await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Shared service resources", exact: true }).click();
   }
 
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Verify", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Release", exact: true }).click();
   const review = page.getByRole("region", { name: "Verification and delivery", exact: true });
   await review.getByRole("button", { name: "Check joint candidate", exact: true }).click();
   await review.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
@@ -63,7 +63,7 @@ test("saved application changes include published drafts and use the original jo
   await expect(jointSelection).toContainText(application.id);
   await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Change discovery app", exact: true }).click();
   await page.getByRole("button", { name: /^Changes/ }).click();
-  await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Verify", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Release", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("cell", { name: "Change discovery app", exact: true })).toBeVisible();
   await page.getByRole("cell", { name: "Change discovery object updated", exact: true }).click();
   const differences = page.getByRole("region", { name: "Saved definition differences", exact: true });

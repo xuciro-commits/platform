@@ -6,13 +6,11 @@
 import type { AppUI } from "@platform/app";
 
 type PackageLoad = { default: AppUI; contributions?: AppUI[] };
-export type Package = { serves: string[]; role?: string; public?: boolean; load: () => Promise<PackageLoad> };
+export type Package = { serves: string[]; roles?: string[]; public?: boolean; load: () => Promise<PackageLoad> };
 
 export const packages: Package[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
-  { serves: ["build"], role: "builder", load: () => import("@pkg/build") },
-  { serves: ["build"], role: "integrator", load: () => import("@pkg/build") },
-  { serves: ["build"], role: "publisher", load: () => import("@pkg/build") },
+  { serves: ["build"], roles: ["builder", "integrator", "publisher"], load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },
   { serves: ["hcm"], load: () => import("@pkg/hcm") },
@@ -26,5 +24,5 @@ export const packages: Package[] = [
 /** Package availability, rather than every role value, determines loading. */
 export function availablePackages(apps: readonly string[], roles: Readonly<Record<string, string>>): Package[] {
   const held = new Set(apps);
-  return packages.filter((p) => p.public || p.serves.some((id) => held.has(id) && (!p.role || roles[id] === p.role)));
+  return packages.filter((p) => p.public || p.serves.some((id) => held.has(id) && (!p.roles || p.roles.includes(roles[id] ?? ""))));
 }

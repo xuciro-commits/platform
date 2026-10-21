@@ -18,13 +18,12 @@ type PageRecordEvents struct {
 
 func (d *PageDocument) checkRecordEvents(s Section) error {
 	if s.Widget != "record-events" {
-		if s.RecordEvents != nil {
-			return fmt.Errorf("event configuration needs its widget")
-		}
 		return nil
 	}
-	v := d.Variables[s.CollectionVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordEvents.RequiredUIProfile) || s.RecordEvents == nil || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(d.Queries[v.Source.Query].Sort) == 0 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Selection != "" {
+	if err := d.checkDeclaredWidgetPorts(s, pageWidget(s.Widget)); err != nil {
+		return err
+	}
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordEvents.RequiredUIProfile) || s.RecordEvents == nil {
 		return fmt.Errorf("record events need their profile and ordered original plan window")
 	}
 	seen := map[string]bool{}
@@ -46,15 +45,11 @@ func (s Section) CheckRecordEvents(info EntityInfo) error {
 	if s.RecordEvents == nil {
 		return fmt.Errorf("event configuration is missing")
 	}
+	if err := s.checkWidgetFieldRoles(info); err != nil {
+		return err
+	}
 	e := s.RecordEvents
-	time, ok := info.Field(e.TimeField)
-	if !ok || !slices.Contains([]string{"date", "datetime"}, time.Type) {
-		return fmt.Errorf("events need an original visible business time field")
-	}
-	severity, severityOK := info.Field(e.SeverityField)
-	if !visibleContextField(info, e.TitleField, true) || !severityOK || severity.Type != "choice" {
-		return fmt.Errorf("events need visible titles and choice severity")
-	}
+	severity, _ := info.Field(e.SeverityField)
 	for _, tone := range e.Tones {
 		if !slices.Contains(severity.Choices, tone.Value) {
 			return fmt.Errorf("event tone does not name an original severity value")

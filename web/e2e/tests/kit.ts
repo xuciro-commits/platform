@@ -4,11 +4,28 @@
 // runtime. A spec reads as the route a person would walk; the kit is the
 // hands. Members are the development host's seats: a builder (`manager`) and
 // an operator (`desk`).
-import { readFileSync } from "node:fs";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 import { decide, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision } from "./host";
 
 export { expect, fresh, pageUIProfile, retainActionCatalog, stableReadRevision };
+
+const objectAreaForSection = {
+  Overview: "Object structure", Properties: "Object structure", Links: "Object structure", "Record sets": "Object structure",
+  Lifecycle: "Behavior", Actions: "Behavior",
+  "Business constraints": "Rules and access", "Business versions": "Rules and access", Protocols: "Rules and access", Permissions: "Rules and access",
+  Data: "Data and preview", Preview: "Data and preview",
+} as const;
+
+/** Selects an object section through its visible four-area navigation. */
+export async function selectObjectSection(page: Page, section: keyof typeof objectAreaForSection) {
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
+  const area = page.getByRole("tablist", { name: "Object areas", exact: true }).getByRole("tab", { name: objectAreaForSection[section], exact: true });
+  if (await area.getAttribute("aria-selected") !== "true") await area.click();
+  const sections = page.getByRole("tablist", { name: "Object sections", exact: true });
+  const tab = sections.getByRole("tab", { name: section, exact: true });
+  if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
+  return { sections, tab };
+}
 
 export function protocolVersion(): string {
   const version = process.env.PROTOCOL_VERSION;
@@ -22,11 +39,6 @@ const APP = "build";
 
 /** A short lowercase name usable as an object or page name. */
 export const slug = (prefix: string) => fresh(prefix).replace(/[^a-z0-9]/gi, "").toLowerCase();
-
-/** The sample Workshop module the import dialog understands, fresh each call. */
-export function sampleModule(): any {
-  return JSON.parse(readFileSync(new URL("../../packages/build/src/workshop/module-import/sample.workshop.json", import.meta.url), "utf8"));
-}
 
 /** The host as one member: decisions over the API, records read back. */
 export class Member {
@@ -83,7 +95,7 @@ export class Builder extends Member {
     for (const row of rows) { const id = fresh(prefix); await this.decide(`${type}.create`, { type, id }, row); ids.push(id); }
     return ids;
   }
-  /** A page draft with one placeholder section, ready for the editor or an import. */
+  /** A native page draft with supplied sections or one editor placeholder. */
   async page(spec: { name?: string; title: string; object?: string; sections?: unknown[]; document?: unknown }): Promise<{ id: string; name: string }> {
     const name = spec.name ?? slug("page"), id = fresh("PAGE");
     await this.decide("build.page.create", { type: "build.page", id }, {
@@ -119,16 +131,6 @@ export class Editor {
   async visual() {
     const mode = this.page.locator('[data-structured-editor^="build.page:"]').getByRole("group", { name: "Editing mode", exact: true });
     await mode.getByRole("button", { name: "Visual", exact: true }).click();
-  }
-  /** Imports a Workshop module through the dialog; `map` chooses object/field/metric targets. */
-  async importModule(module: unknown, map?: (dialog: ReturnType<Page["getByRole"]>) => Promise<void>) {
-    await this.page.getByRole("button", { name: "More page commands", exact: true }).click();
-    await this.page.getByRole("menuitem", { name: "Import Workshop module…", exact: true }).click();
-    const dialog = this.page.getByRole("dialog", { name: "Import Workshop module", exact: true });
-    await dialog.getByRole("textbox", { name: "Source module JSON", exact: true }).fill(JSON.stringify(module));
-    await map?.(dialog);
-    await dialog.getByRole("checkbox").check();
-    await dialog.getByRole("button", { name: "Apply imported page draft", exact: true }).click();
   }
   async select(widgetTitle: string) {
     await this.visual();

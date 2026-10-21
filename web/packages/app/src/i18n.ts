@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Tokens": "Token",
+  "Workflow": "流程",
+  "Model": "模型",
+  "Accepted": "已接受",
+  "Cost": "费用",
+  "Calls": "调用次数",
+  "Credentials": "凭据",
+  "Scope": "范围",
+  "Extensions": "扩展",
   "Enterprise model": "企业模型",
   "Time": "时间",
   "Attempt": "尝试",

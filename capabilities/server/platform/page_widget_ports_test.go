@@ -32,6 +32,26 @@ func TestManifestWidgetFieldsPreserveFlatSections(t *testing.T) {
 	}
 }
 
+func TestWidgetConfigurationPreservesEmptyValuesAndExplicitPointers(t *testing.T) {
+	section := Section{Widget: "heading", ConfigVersion: 1, Text: "Instructions", Fields: []string{}, Actions: []AssetRef{}}
+	if err := checkPageWidget(section); err != nil {
+		t.Fatalf("zero references and empty collections are not configured: %v", err)
+	}
+	for _, configure := range []func(*Section){
+		func(s *Section) { s.Object = AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"} },
+		func(s *Section) { s.RecordVariable = "record" },
+		func(s *Section) { s.Fields = []string{"name"} },
+		func(s *Section) { s.RecordCalendar = &PageRecordCalendar{} },
+		func(s *Section) { s.Actions = []AssetRef{{App: "sample", Kind: AssetAction, Name: "execute"}} },
+	} {
+		s := section
+		configure(&s)
+		if checkPageWidget(s) == nil {
+			t.Fatalf("heading accepted another widget's explicit configuration: %+v", s)
+		}
+	}
+}
+
 func TestFrozenDocumentlessSectionsPreserveRetainedFields(t *testing.T) {
 	for _, section := range []Section{
 		{Widget: "text", Text: "Retained page"},

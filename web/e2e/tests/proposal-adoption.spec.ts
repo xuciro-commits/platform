@@ -131,7 +131,7 @@ test("a builder assembles proposal review and a person adopts through the origin
     await expect(page.getByRole("region", { name: "Proposal review", exact: true }).getByText("adopted", { exact: true })).toBeVisible();
     await expect(page.getByRole("region",{name:"Proposal review",exact:true}).getByRole("status")).toHaveCount(0);
     await shots(page, page.getByRole("region", { name: "Proposal review", exact: true }), "adopted-proposal", info);
-    await builder.open(page, `/project?id=${application.id}&area=verify`);
+    await builder.open(page, `/project?id=${application.id}&area=release`);
     await page.getByText("AI placement and evaluations", { exact: true }).click();
     await expect(page.getByText("Business proposal", { exact: false }).first()).toBeVisible();
     await expect(page.getByText(/1 calls · 10 input tokens · 6 output tokens/)).toBeVisible();

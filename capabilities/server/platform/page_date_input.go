@@ -29,16 +29,15 @@ func TimestampValid(value string) bool {
 
 func (d *PageDocument) checkDateInput(s Section) error {
 	if s.Widget != "date-input" {
-		if s.DateVariable != "" || s.DateLabel != nil || s.DateKind != "" || s.DateOffset != "" {
-			return fmt.Errorf("date bindings need their widget")
-		}
 		return nil
+	}
+	if err := d.checkDeclaredWidgetPorts(s, pageWidget(s.Widget)); err != nil {
+		return err
 	}
 	if s.DateKind != "" && s.DateKind != "date" && s.DateKind != "datetime" || s.DateKind == "datetime" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.DateInput.DateTimeRequiredUIProfile) || !TimestampOffsetValid(s.DateOffset)) || s.DateKind != "datetime" && s.DateOffset != "" {
 		return fmt.Errorf("datetime input needs its profile and explicit offset; civil date cannot carry an offset")
 	}
-	v := d.Variables[s.DateVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.DateInput.RequiredUIProfile) || s.DateVariable == "" || v.Type != "string" || v.Mode != "state" || v.Scope != "page" && v.Scope != "overlay" || s.DateLabel != nil && len(*s.DateLabel) > 1024 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.DateInput.RequiredUIProfile) || s.DateVariable == "" || s.DateLabel != nil && len(*s.DateLabel) > 1024 {
 		return fmt.Errorf("date input needs original scoped text state and bounded label")
 	}
 	return nil

@@ -21,16 +21,16 @@ func (c PageLeaderboard) Sort() []string {
 }
 func (d *PageDocument) checkLeaderboard(s Section) error {
 	if s.Widget != "record-leaderboard" {
-		if s.Leaderboard != nil {
-			return fmt.Errorf("leaderboard configuration needs its widget")
-		}
 		return nil
+	}
+	if err := d.checkDeclaredWidgetPorts(s, pageWidget(s.Widget)); err != nil {
+		return err
 	}
 	if err := d.checkSharedRecordOutput(s); err != nil {
 		return err
 	}
 	c, v := s.Leaderboard, d.Variables[s.CollectionVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Leaderboard.RequiredUIProfile) || c == nil || c.Limit < 1 || c.Limit > pageWidgets.Runtime.Leaderboard.MaxRanks || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > 0 || len(s.Actions) > 0 {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Leaderboard.RequiredUIProfile) || c == nil || c.Limit < 1 || c.Limit > pageWidgets.Runtime.Leaderboard.MaxRanks {
 		return fmt.Errorf("leaderboard needs its bounded original ranking window")
 	}
 	q := d.Queries[v.Source.Query]
@@ -43,15 +43,7 @@ func (s Section) CheckLeaderboard(info EntityInfo) error {
 	if s.Widget != "record-leaderboard" {
 		return nil
 	}
-	if s.Leaderboard == nil {
-		return fmt.Errorf("leaderboard fields are missing")
-	}
-	c := s.Leaderboard
-	f, ok := info.Field(c.ValueField)
-	if !ok || !slices.Contains([]string{"integer", "decimal"}, f.Type) || !visibleContextField(info, c.LabelField, true) {
-		return fmt.Errorf("leaderboard needs original visible numeric and title fields")
-	}
-	return nil
+	return s.checkWidgetFieldRoles(info)
 }
 func (p Page) CheckLeaderboardQuery(id string, named *Definition) error {
 	if p.Document == nil {

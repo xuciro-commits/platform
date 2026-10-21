@@ -12,16 +12,13 @@ type PageRecordPicker struct {
 
 func (d *PageDocument) checkRecordPicker(s Section) error {
 	if s.Widget != "record-picker" {
-		if s.RecordPicker != nil || s.PickerValueVariable != "" {
-			return fmt.Errorf("record picker configuration needs its widget")
-		}
 		return nil
 	}
 	if s.Model != nil {
 		if !PageUIProfileSupports(d.UIProfile, PageModelProfile) {
 			return fmt.Errorf("model selector requires its model binding profile")
 		}
-		if len(s.Fields) > 0 || len(s.Actions) > 0 || s.SelectionVariable != "" {
+		if len(s.Fields) > 0 {
 			return fmt.Errorf("model selector retains its original selection output")
 		}
 		if s.PickerValueVariable != "" {
@@ -33,7 +30,7 @@ func (d *PageDocument) checkRecordPicker(s Section) error {
 		return nil
 	}
 	v := d.Variables[s.CollectionVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordPicker.RequiredUIProfile) || s.RecordPicker == nil || s.RecordPicker.Label != nil && len(*s.RecordPicker.Label) > 1024 || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > 0 || len(s.Actions) > 0 || s.SelectionVariable != "" {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordPicker.RequiredUIProfile) || s.RecordPicker == nil || s.RecordPicker.Label != nil && len(*s.RecordPicker.Label) > 1024 || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) {
 		return fmt.Errorf("record picker needs an original scoped query window and bounded label")
 	}
 	if s.PickerValueVariable != "" {
@@ -48,18 +45,15 @@ func (d *PageDocument) checkRecordPicker(s Section) error {
 	}
 	return nil
 }
+
+// CheckRecordPicker retains the public caller while field rules live in the manifest.
 func (s Section) CheckRecordPicker(info EntityInfo) error {
 	if s.Widget != "record-picker" {
 		return nil
 	}
-	if s.RecordPicker == nil {
-		return fmt.Errorf("record picker fields are missing")
-	}
-	if !visibleContextField(info, s.RecordPicker.LabelField, true) {
-		return fmt.Errorf("record picker title needs an original visible text field")
-	}
-	return nil
+	return s.checkWidgetFieldRoles(info)
 }
+
 func (p Page) CheckRecordPickerQuery(id string, named *Definition) error {
 	if p.Document == nil {
 		return nil

@@ -14,9 +14,6 @@ type PageButton struct {
 
 func (d *PageDocument) checkButtonGroup(s Section) error {
 	if s.Widget != "button-group" {
-		if len(s.Buttons) > 0 {
-			return fmt.Errorf("button controls need their group widget")
-		}
 		return nil
 	}
 	limits := pageWidgets.Runtime.ButtonGroup

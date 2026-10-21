@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:4fd0ec85d2aae381",
+  "revision": "sha256:cdbd1ec586f3cb12",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2440,45 +2440,6 @@
         "Studio requires an object and visible fields. Saved draft objects and actions can be bound before joint publication; execution uses the original permissions.",
         "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.",
         "Template identity and revision are recorded in the editable page description as informative provenance."
-      ]
-    },
-    {
-      "id": "scenario/workshop-import",
-      "owner": "@pkg/build",
-      "name": "Workshop module migration",
-      "summary": "Map a bounded source page into the original V2 draft with explicit bindings, source preservation and blocking diagnostics.",
-      "layer": 5,
-      "authority": "example",
-      "maturity": "recommended",
-      "scope": "platform",
-      "uses": [
-        "reference"
-      ],
-      "tags": [
-        "import",
-        "workshop",
-        "migration",
-        "studio",
-        "registry"
-      ],
-      "source": "web/packages/build/src/workshop/module-import/compile.ts",
-      "example": "WorkshopImportExample",
-      "dependencies": [
-        "app/composed-page",
-        "app/record-actions"
-      ],
-      "widgets": [
-        "table",
-        "detail",
-        "inline-action",
-        "text",
-        "input",
-        "button"
-      ],
-      "constraints": [
-        "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.",
-        "The local example compiles synthetic source data without a host. Import applies only an undoable page draft; save, permissions and release validation stay with their original owners.",
-        "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes."
       ]
     },
     {
@@ -12332,7 +12293,6 @@
       "Display declared record states and caller-allowed transitions.": "展示已声明的记录状态与调用方允许的跃迁。",
       "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
       "Display the original public image URL, caption and cover height through the browser image element.": "通过浏览器图片元素展示原公开图片地址、说明及覆盖高度。",
-      "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes.": "离开编辑器前请下载原 JSON 和映射报告。报告在当前编辑作用域内保留，关闭或切换成员时清理。",
       "Draw an ordered path a person or a run took, in BPMN shapes, without a catalog to author against.": "以 BPMN 形状画出人或运行走过的有序路径，无需一份可编写的节点目录。",
       "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
       "Edit caller-owned search text and show the actual readable object scope.": "编辑调用方拥有的搜索文本，并显示实际可读对象范围。",
@@ -12399,7 +12359,6 @@
       "List selection is shared by details and actions. The object contract and current member’s read scope remain authoritative.": "详情和动作共享列表选择；对象契约和当前成员的读取范围仍为准。",
       "Loading": "加载中",
       "Logic design workbench": "逻辑设计工作台",
-      "Map a bounded source page into the original V2 draft with explicit bindings, source preservation and blocking diagnostics.": "使用显式绑定、来源保留及阻塞诊断，将限定范围的源页面映射为原生 V2 草稿。",
       "Map actual domain or kernel states to a label and one of five tones.": "将真实领域或内核状态映射为标签与五种语义色调之一。",
       "Markdown display and editor": "Markdown 展示与编辑器",
       "Master-detail interaction": "列表详情交互",
@@ -12571,7 +12530,6 @@
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Tenant reference selection": "租户引用选择",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
-      "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
       "The bounded path and original traversal reader grant no extra record access. Counts retain original totals; typed output ports keep heterogeneous records separate.": "有界路径和原遍历读取器不授予额外记录访问权限；计数保留原总数，带类型输出端口保持异构记录独立。",
       "The caller confirms every original record and supplies permission-filtered metadata. Values are compared by their declared scalar types; presentation performs no reads or writes and never truncates the selection.": "调用方确认每条原记录并提供权限裁剪元数据；值按声明的标量类型对比，展示不读写记录且不截断选择。",
       "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
@@ -12635,7 +12593,6 @@
       "The canvas owns interaction; its caller owns step semantics, connection rules and persistence. Layout coordinates never decide execution order.": "画布负责交互；调用方负责步骤语义、连线规则与持久化。布局坐标永远不决定执行次序。",
       "The document owner validates finite sizes against the original layout budget. Zero is preserved; the region is hidden from accessibility and is not a focus target.": "文档拥有者按原布局预算验证有限尺寸。零值保留，空白不进入无障碍内容或焦点。",
       "The host resolves and authorizes the graph; the client only draws the returned descriptors. Runtime observations remain in original diagnostics.": "宿主解析依赖图并检查权限；客户端只绘制返回的描述。运行观测保留在原诊断中。",
-      "The local example compiles synthetic source data without a host. Import applies only an undoable page draft; save, permissions and release validation stay with their original owners.": "本地示例在无宿主环境转换合成来源。导入仅应用可撤销的页面草稿，保存、权限和发布验证仍由原归属方管理。",
       "The local example demonstrates a payload and result flow in the flow workbench; it does not execute a process.": "本地示例在流程工作台中演示载荷与结果流；它不会执行流程。",
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
       "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
@@ -12674,7 +12631,6 @@
       "Visual and source editor": "可视化与源码编辑器",
       "WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used.": "需要WebGL2。调用方提供确认资产和附件；样本映射需要实际资产引用。不使用模拟数据、默认资产或外部模型资源。",
       "Workbench": "工作台",
-      "Workshop module migration": "Workshop 模块迁移",
       "Workshop module workbench": "Workshop 模块工作台",
       "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
       "completed": "已完成",
@@ -12788,10 +12744,6 @@
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/ObservationImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
       "web/packages/build/src/workshop/page-editor/CompositeBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
@@ -12958,7 +12910,6 @@
       "web/packages/app/src/widgets/TermCounts.tsx",
       "web/packages/app/src/widgets/WorkViews.tsx",
       "web/packages/build/src/automate/workflow.tsx",
-      "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/editor/ResourceList.tsx",
       "web/packages/build/src/editor/SystemDefinitions.tsx",
       "web/packages/build/src/functions/agent.tsx",
@@ -12995,9 +12946,6 @@
       "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
@@ -13152,7 +13100,6 @@
       "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/releases/test-inputs.tsx",
-      "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
@@ -13295,17 +13242,6 @@
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/module-import/AIImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/ApplicationImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/BuilderImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/ComputationImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/EmbeddingImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/ObservationImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/SpatialImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/UnusedImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/CompositeBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
@@ -13449,8 +13385,6 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
-      "web/packages/build/src/workshop/module-import/ApplicationImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/CompositeBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
@@ -13508,8 +13442,6 @@
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/pages/sections.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
-      "web/packages/build/src/workshop/module-import/FlowImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
       "web/packages/csm/src/index.tsx",
       "web/packages/mes/src/index.tsx",
@@ -13596,6 +13528,7 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/functions/decision-table.tsx",
       "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/index.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/connection.tsx",
@@ -13854,7 +13787,6 @@
       "web/packages/app/src/widgets/EmbeddedPage.tsx",
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx"
     ],
     "ui/layout-region": [
@@ -14143,9 +14075,6 @@
       "web/packages/build/src/ontology/observation.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/module-import/BuilderImportFields.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/UnusedImportFields.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/CollectionAnalysisInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/CollectionBuilderInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/ContextInspectors.tsx",
@@ -14170,8 +14099,6 @@
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/module-import/ModuleImportDialog.tsx",
-      "web/packages/build/src/workshop/module-import/WorkshopApplicationImport.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/workshop/page-editor/ModelBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
@@ -14600,7 +14527,6 @@
     "@pkg/build": {
       "source": "web/packages/build/src/index.tsx",
       "symbols": [
-        "contributions",
         "default"
       ],
       "types": []

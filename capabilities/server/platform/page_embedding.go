@@ -44,16 +44,13 @@ func (p Page) EmbeddingBindings() []PageEmbedding {
 }
 func (d *PageDocument) checkEmbedding(s Section) error {
 	if s.Widget != "embedded-page" {
-		if s.Embedding != nil {
-			return fmt.Errorf("page embedding needs its widget")
-		}
 		return nil
 	}
 	e := s.Embedding
 	if e != nil && e.ReadOnly && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.84") {
 		return fmt.Errorf("read-only embedding needs v2.84")
 	}
-	if e == nil || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.83") || !slices.Contains([]string{"module", "custom", "dashboard"}, e.Kind) || e.Page.Ref.Check() != nil || e.Page.Ref.Kind != AssetPage || e.Page.SourceVersion == "" || CheckPageContentVersion(e.ContentVersion) != nil || e.InterfaceVersion < 0 || len(e.Inputs) > 16 || len(e.Results) > 16 || s.Object != (AssetRef{}) || s.RecordVariable != "" || s.CollectionVariable != "" || s.Query != (AssetRef{}) || s.Operation != nil || s.Function != nil || len(s.Fields) > 0 || len(s.Actions) > 0 || len(s.Inputs) > 0 || s.Selection != "" || s.FilterVariable != "" || s.ParentSelection != "" || s.Relation != "" {
+	if e == nil || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.83") || !slices.Contains([]string{"module", "custom", "dashboard"}, e.Kind) || e.Page.Ref.Check() != nil || e.Page.Ref.Kind != AssetPage || e.Page.SourceVersion == "" || CheckPageContentVersion(e.ContentVersion) != nil || e.InterfaceVersion < 0 || len(e.Inputs) > 16 || len(e.Results) > 16 || s.Object != (AssetRef{}) || s.Query != (AssetRef{}) || s.FilterVariable != "" {
 		return fmt.Errorf("embedding needs exact original page content and finite typed bindings")
 	}
 	for id, v := range e.Inputs {

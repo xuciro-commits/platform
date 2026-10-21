@@ -59,7 +59,7 @@ export const refKey = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}
 /** The route that edits a resource record inside a project. */
 export function resourceRoute(kind: ResourceKindInfo, id: string, project?: string): Route {
   if (kind.kind === "page") return { view: "module", params: { ...(project ? { id: project, application: project } : {}), page: id } };
-  if (kind.kind === "test-plan" && project) return { view: "project", params: { id: project, area: "verify", plan: id } };
+  if (kind.kind === "test-plan" && project) return { view: "project", params: { id: project, area: "release", plan: id } };
   return { view: kind.view, params: { id, ...(project ? { application: project } : {}) } };
 }
 

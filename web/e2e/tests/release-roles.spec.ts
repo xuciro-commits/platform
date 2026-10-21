@@ -2,6 +2,7 @@ import { expect, test } from "./kit";
 import { decide, fresh, open } from "./host";
 
 test("publisher reviews and activates sealed bytes while auditor can only inspect governance", async ({ page, request }) => {
+  test.setTimeout(90_000);
   const suffix = fresh("roles").toLowerCase();
   const publisher = `${suffix}-publisher`, auditor = `${suffix}-auditor`;
   const pubToken = `user:${publisher}@test`, audToken = `user:${auditor}@test`;
@@ -16,7 +17,8 @@ test("publisher reviews and activates sealed bytes while auditor can only inspec
   });
   await open(page, "manager", `/release-review?kind=object&id=${objectID}`);
   await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
-  const id = await page.getByText("Draft candidate:").locator("code").innerText();
+  await page.getByRole("button", { name: "Candidate identity", exact: true }).click();
+  const id = await page.getByRole("term").filter({ hasText: /^Draft candidate$/ }).locator("xpath=following-sibling::dd").locator("code").innerText();
   await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await expect(page.getByText("Candidate saved; not active for operators.", { exact: false })).toBeVisible();
   await decide(request, "manager", "build", "build.object.edit", { type: "build.object", id: objectID }, { title: "Changed after sealing" });
@@ -39,6 +41,7 @@ test("publisher reviews and activates sealed bytes while auditor can only inspec
   await expect(pub.getByText("Release active for operators.", { exact: false })).toBeVisible();
   expect(draftReads).toEqual([]);
   await expect(decide(request, pubToken, "build", "build.object.edit", { type: "build.object", id: objectID }, { title: "Forbidden" })).rejects.toThrow(/POLICY_DENIED/);
+  await pub.close();
 
   const aud = await page.context().newPage();
   await open(aud, audToken, "/members?surface=tenant");
@@ -47,10 +50,10 @@ test("publisher reviews and activates sealed bytes while auditor can only inspec
   await aud.getByText(publisher, { exact: true }).click();
   await expect(aud.getByText("publisher", { exact: true })).toBeVisible();
   await expect(aud.getByRole("combobox", { name: /Role in/ })).toHaveCount(0);
-  await aud.goto("/#/apps?surface=tenant");
+  await open(aud, audToken, "/apps?surface=tenant");
   await expect(aud.getByRole("heading", { name: "Packages", exact: true })).toBeVisible();
   await expect(aud.getByText("No packages: the host offers no index and nothing is installed.", { exact: true })).toBeVisible();
-  await aud.goto("/#/audit?surface=tenant");
+  await open(aud, audToken, "/audit?surface=tenant");
   await expect(aud.getByRole("heading", { name: "Audit", exact: true })).toBeVisible();
   await expect(decide(request, audToken, "platform", "platform.member.grant", { type: "platform.member", id: publisher }, { app: "build", role: "builder" })).rejects.toThrow(/POLICY_DENIED/);
   expect((await request.get("/v1/releases/candidates?limit=1", { headers: { Authorization: `Bearer ${audToken}` } })).status()).toBe(403);

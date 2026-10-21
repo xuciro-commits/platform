@@ -39,7 +39,7 @@ web/
   packages/ui        @platform/ui    共享 UI Kit
   packages/app       @platform/app   前端应用 API
   packages/kernel    @platform/kernel 契约类型（src/gen/host.ts 生成）
-  packages/build     构建者应用（Ontology/Workshop/Automate/AI/Code/Projects/Releases）
+  packages/build     统一构建台（Model/Logic/Interface/Integration/Release）
   packages/platform  治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
   packages/<app>     各参考应用的界面
   e2e                Playwright 路线，spec 只经 tests/kit.ts
@@ -111,9 +111,9 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 - 当前权限同样约束历史、字段、查询/导出、AI 来源、错误详情与派生数据；保留旧定义或旧证据不保留已经撤销的读取资格。自动执行在锁外等待后也要复核当前权限。
 - 新接受结果恢复只应用已保存映像与原答复，不重新执行业务规则、授权、模型或外部请求。`replay.go` 仍有旧 `submission`/原输入等历史分支，按原归属方代码和原语义读取；这是明确保留的兼容责任，不接受新普通业务，也不能将其宣称为已封存结果的纯应用或在恢复中重发外部请求。
 
-工作区为每个宿主提供一个 Web 入口，原生应用和租户发布的应用共用门户、导航、记录读取与动作权限。Builder 在 Ontology、Workshop、Automate、AI/Code 和应用工作区编辑受控草稿；Integrator 使用 Data Connection 的连接、来源、数据集、管道和回写；治理与运行状态在 Control Panel、Runs、Agents 和 Host Console。是否能读草稿、运行模型或历史内容仍由当前成员权限决定。
+工作区为每个宿主提供一个 Web 入口，原生应用和租户发布的应用共用门户、导航、记录读取与动作权限。Build 在 Model、Logic、Interface、Integration、Release 五个工作域编辑受控草稿，`studio-model.ts` 的同一分类驱动菜单、应用资产树、创建和路由定位；Integrator 只进入原获权的 Integration 编辑范围。Data Connection 保留连接器与端点运维、观测和血缘，治理与运行状态仍在 Control Panel、Runs、Agents 和 Host Console。是否能读草稿、运行模型或历史内容仍由当前成员权限决定。
 
-可视化和源码编辑同一份草稿，保留撤销、未应用输入和保存冲突；简单自动化不能表示的合法流程转到原 Flow 编辑器，不通过简化保存丢失高级字段。页面公共属性与检查使用现有 Widget 清单，专用检查器只保留真实的绑定和专业交互，不建立另一套 Schema 或画布。
+可视化和源码编辑同一份草稿，保留撤销、未应用输入和保存冲突；简单自动化不能表示的合法流程转到原 Flow 编辑器，不通过简化保存丢失高级字段。对象编辑沿同一草稿分成结构、行为、规则与访问、数据与预览四个主区，旧区段链接定位原内容。页面公共属性、配置归属、端口模式与作用域、常见计划窗口及实体字段角色使用现有 Widget 清单，专用检查器保留真实的绑定和跨资产语义，不建立另一套 Schema 或画布。页面和应用复用使用原生定义与受控包；旧 Workshop 私有 JSON 迁入器已退出。
 
 ## 7. 职责归属
 
