@@ -401,7 +401,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		if binding.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		page, refusal := t.recordsRead(m, binding.Ref.Name, platform.Query{Limit: 1}, now)
+		page, refusal := t.Records(m, binding.Ref.Name, platform.Query{Limit: 1}, now)
 		if refusal != nil {
 			out.State = "degraded"
 			continue
@@ -463,7 +463,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 	}) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record is outside this application")
 	}
-	view, refusal := t.recordOf(m, typ, id, now)
+	view, refusal := t.RecordOf(m, typ, id, now)
 	if refusal != nil {
 		return out, refusal
 	}

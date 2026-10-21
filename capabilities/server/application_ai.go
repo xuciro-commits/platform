@@ -145,7 +145,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 }
 
 func (t *Tenant) applicationAIUsage(m platform.Member, application platform.AssetRef, items []ApplicationAI) []ApplicationAI {
-	value, problem := t.read(m, "ai-usage")
+	value, problem := t.Read(m, "ai-usage")
 	if problem != nil {
 		return items
 	}
