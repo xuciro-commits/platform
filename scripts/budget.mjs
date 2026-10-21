@@ -66,6 +66,9 @@ for (const path of goFiles) {
   byDir.set(dir, (byDir.get(dir) ?? 0) + 1);
 }
 const handWritten = webSources.filter((path) => !path.endsWith(".d.ts"));
+// Go 手写生产代码：排除测试与生成物（.pb.go、gen/）。后端减量只在这里计，
+// 测试与生成物单列，避免"删断言"或"删生成文件"冒充减量。
+const goProduction = walk(ROOT, (path) => path.endsWith(".go") && !path.endsWith("_test.go") && !path.endsWith(".pb.go") && !path.includes(`${sep}gen${sep}`));
 const largestOf = (paths) => paths.reduce((best, path) => (lines(path) > (best.lines ?? 0) ? { path, lines: lines(path) } : best), { path: "", lines: 0 });
 const largestGo = largestOf(goFiles);
 const largestTs = largestOf(handWritten);
@@ -87,6 +90,8 @@ const metrics = {
   "code.largestGo": { value: largestGo.lines, of: `最长 Go 文件：${relative(ROOT, largestGo.path)}` },
   "code.largestTs": { value: largestTs.lines, of: `最长手写 TS：${relative(ROOT, largestTs.path)}` },
   "code.fullestPackage": { value: fullestDir[1], of: `文件最多的 Go 目录：${relative(ROOT, fullestDir[0])}` },
+  "code.goProduction": { value: goProduction.reduce((total, path) => total + lines(path), 0), of: "手写 Go 生产代码行" },
+  "code.goFiles": { value: goProduction.length, of: "手写 Go 生产文件" },
 };
 
 if (UPDATE) {

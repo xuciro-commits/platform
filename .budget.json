@@ -12,5 +12,7 @@
   "ui.views": 105,
   "code.largestGo": 1343,
   "code.largestTs": 3974,
-  "code.fullestPackage": 423
+  "code.fullestPackage": 423,
+  "code.goProduction": 138529,
+  "code.goFiles": 694
 }

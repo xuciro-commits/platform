@@ -14,14 +14,15 @@
 | **X2 构建者工作台分职责** | `web/packages/build/src/workshop/module-import/compile.ts` 882 行、`workshop/editor.tsx` 718 行混合解析、映射、诊断与渲染 | 编译与诊断可单测，不经 React；编辑器的草稿/撤销仍只有一份 | `compile.test.mjs` 已存在，可作回归基线 |
 | **X3 外壳与记录视图** | `ui/shell/Workspace.tsx` 935 行（Rail、页签、布局持久化、命令面板、未保存保护）；`ui/records/Records.tsx` 865 行 | 每个职责一个模块；`Workspace.test.tsx`（377 行）不改断言即通过 | 现有测试即 oracle |
 | **X4 宿主平铺包分组** | `capabilities/server` 423 个文件同层（10 万行） | 按协调职责分组（接受、记录、发布、运行、协议），先搬再改；`boundaries.sh` 与 `escapes.sh` 不变松 | `doc.go` 的组件地图即目标分组 |
-| **X5 别名与转发层退出** | `apps/build/public.go` 249 行纯别名；宿主内 `internal/*` 单层再导出 | 消费者直连唯一模型，`public.go` 只保留真实公开面 | 先统计包外引用面 |
 | **X6 死代码与死词条** | 已删 526 条无引用词条（本轮）；剩余短词条需与动态 `t(变量)` 现场逐一核对 | 删除前给出该词条的唯一可达路径或确认不可达 | 本轮脚本口径：21+ 字符且全仓无字面量 |
 | **X7 前端性能** | 首页排序已改预计算名次；其余热点：记录表全量重渲、`useRead` 轮询粒度、画布布局重算 | 有前后测量才声称改善，否则写"未测量" | `ui/records`、`graph/*/layout` |
 | **X8 E 的交付验证** | PostgreSQL 按需工作集代码已实现，完整交付验证未完成 | 真实 PG 上的整块恢复与两宿主演练 | ADR-0063、ADR-0064 §8 |
 
 X1 与 X6 有用户可见收益，优先；X2–X4 是结构性减量主体；X8 是既有承诺，不能被新块挤掉。
 
-**已知环境限制（不因此漏做）**：本仓 Go 模块需要 `go.opentelemetry.io` 等域名，Arena 沙箱只能访问 GitHub/npm/PyPI，因此 `go build` 仅在 `internal/acceptance` 可跑。Go 侧减量必须以 CI 或本地集成代理的编译结果为准，未编译的删除不得计为完成。
+**X5 已移出（2026-10-20，后端同批）**：`apps/build/public.go` 249 → 23 行。原文件 122 条别名里，只有 13 个名字被模块外的 `solutions/*` 读取（`AppType`、`ID`、`ObjectType`、`PageType`、`Builder`、`User`、`SchemaPublish`、`SchemaRelease`、`SchemaHandOver`、`SchemaFunctionCall`、`TestPlan`、`TestPlanType`、`TestStep`），其余 109 条在本仓无任何引用；模块内 255 个文件本来就直接用 `internal/construction`。同批修掉两个后端实际缺陷：`tenantLane` 在 `submit` 持有期间被回调读重入会自锁（`TestAcceptedRelationGraphIsPrivateUntilCommit` 因此在 main 上挂满 10 分钟），以及 `joint_draft_test.go` 把"一次流程运行 = 一行 `flow.instance`"写死（实际一次运行留下根实例与步骤实例，共 3 行）。预算新增 `code.goProduction`（138,529 行）与 `code.goFiles`（694 个），后端从此只能变小。
+
+**Go 侧在本沙箱可完整验证**（此前"只能编译 `internal/acceptance`"的限制已解除）：`.build/sandbox-go/go.work` 用 65 条 `replace` 指向 `.build/sandbox-go/replace/*` 的 GitHub 源码包，配 `GOPROXY=off` 后 `go build ./...`、`go vet ./...` 在 12 个模块（capabilities、contract、6 个 apps、2 个 protocols、2 个 solutions）上全部通过，`go test -count=1 ./...` 在 capabilities（根包 516 个测试，1,464 s）、两个 solutions 与 crm/csm/erp/hcm 通过；`pms` 7 个、`mes` 1 个用例在 main 上即失败（与本轮改动无关，`git stash` 后同样复现），未计入通过。该目录只在本机存在，不进 Git；Go 侧删除仍以这三条命令的结果为准。
 
 ## 保留交付：MES 工单旧界面退出
 

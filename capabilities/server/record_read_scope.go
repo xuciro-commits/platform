@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	goruntime "runtime"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -13,26 +17,71 @@ import (
 	"platformserver/platform"
 )
 
-// tenantLane is still a non-reentrant writer lock. A coordinated operation
-// owns one SQL snapshot until it leaves the lane; nested calls use the private
-// read methods rather than acquiring the public entry point again.
+// tenantLane is the one lane through which a tenant's read snapshots and
+// writes pass. It is held for as long as an operation owns the SQL snapshot.
+// A read issued from inside that window - an acceptance callback going through
+// the public entry point - must observe the position the lane already
+// established instead of waiting for the lock it holds itself, so the lane
+// records its owning goroutine and lets that goroutine re-enter it. Nested
+// reads never open or close the snapshot: pre-commit visibility is the
+// contract the acceptance callback is checking.
 type tenantLane struct {
 	lock   sync.Mutex
+	owner  atomic.Uint64
 	tenant *Tenant
 }
 
 func (l *tenantLane) Lock() { l.lockContext(context.Background()) }
+
 func (l *tenantLane) lockContext(ctx context.Context) {
 	l.lock.Lock()
+	l.owner.Store(goroutineID())
 	if l.tenant != nil {
 		l.tenant.openRecordRead(ctx)
 	}
 }
+
+// lockRead acquires the lane for one read and returns its release. A goroutine
+// that already holds the lane keeps the open snapshot and gets a no-op release.
+func (l *tenantLane) lockRead(ctx context.Context) func() {
+	if !l.lock.TryLock() {
+		if l.owner.Load() == goroutineID() {
+			return func() {}
+		}
+		l.lock.Lock()
+		l.owner.Store(goroutineID())
+		if l.tenant != nil {
+			l.tenant.openRecordRead(ctx)
+		}
+		return l.Unlock
+	}
+	l.owner.Store(goroutineID())
+	if l.tenant != nil {
+		l.tenant.openRecordRead(ctx)
+	}
+	return l.Unlock
+}
+
 func (l *tenantLane) Unlock() {
+	l.owner.Store(0)
 	if l.tenant != nil {
 		l.tenant.closeRecordRead()
 	}
 	l.lock.Unlock()
+}
+
+// goroutineID identifies the lane's re-entrant caller. Reads take the
+// uncontended fast path without calling it.
+func goroutineID() uint64 {
+	var buf [64]byte
+	n := goruntime.Stack(buf[:], false)
+	text := strings.TrimPrefix(string(buf[:n]), "goroutine ")
+	if space := strings.IndexByte(text, ' '); space > 0 {
+		if id, err := strconv.ParseUint(text[:space], 10, 64); err == nil {
+			return id
+		}
+	}
+	return 0
 }
 
 func (t *Tenant) enableCurrentReadScopes() {
@@ -91,8 +140,8 @@ func recordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.E
 	return coordinatedRecordRead(t, ctx, read)
 }
 func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	t.mu.lockContext(ctx)
-	defer t.mu.Unlock()
+	release := t.mu.lockRead(ctx)
+	defer release()
 	defer func() {
 		if failure := recover(); failure != nil {
 			if err, ok := failure.(error); ok {

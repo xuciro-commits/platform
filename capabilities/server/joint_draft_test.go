@@ -288,6 +288,13 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	if !ok {
 		t.Fatal("original flow instance is unavailable")
 	}
+	// One logical flow run owns its root instance plus the step instances it
+	// spawns, so the boundary is measured from what the run actually left
+	// behind instead of assuming a single row.
+	before, refusal := source.ApplicationRuntimeOf(member, root, at.Add(time.Second))
+	if refusal != nil || before.Runs < 1 {
+		t.Fatalf("run inventory before the boundary: %+v %v", before, refusal)
+	}
 	source.records.mu.Lock()
 	for i := 0; i < 10001; i++ {
 		copy := instance
@@ -298,8 +305,9 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	}
 	source.records.mu.Unlock()
 	scale, refusal := source.ApplicationRuntimeOf(member, root, at.Add(time.Second))
-	if refusal != nil || scale.Runs != 10002 || !slices.ContainsFunc(scale.Warnings, func(warning ApplicationWarning) bool {
-		return warning.Kind == "runs" && warning.Actual == 10002 && warning.Expected == 1
+	total := before.Runs + 10001
+	if refusal != nil || scale.Runs != total || !slices.ContainsFunc(scale.Warnings, func(warning ApplicationWarning) bool {
+		return warning.Kind == "runs" && warning.Actual == int64(total) && warning.Expected == 1
 	}) {
 		t.Fatalf("run inventory silently lost its scale warning: %+v %v", scale, refusal)
 	}
