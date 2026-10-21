@@ -19,8 +19,8 @@ import (
 
 // Platform operations (ADR-0027): work the host owns (event deliveries and
 // scheduled jobs, K9), the tenant's connectors (K8), notifications and typed app
-// settings. Everything the host runs on its own is an input: it is journaled
-// and a replay runs it again through the same code (ADR-0010).
+// settings. Business results are accepted before application; only legacy
+// input entries re-execute during replay (ADR-0010). Empty job polls stay local.
 
 const (
 	workBurst = 100 // attempts per app in one Work call
@@ -54,7 +54,10 @@ type Task struct {
 	since        int                     // attempts before the last manual retry: each retry gets a full schedule
 	event        *caused
 	job          platform.Job
+	nextRun      time.Time // transient polling deadline; not part of the accepted predecessor
 }
+
+func (task *Task) due(now time.Time) bool { return !task.Due.After(now) && !task.nextRun.After(now) }
 
 // enqueue publishes accepted event plans to their subscribers. Nested
 // requests are decided privately before acceptance; legacy replay reads their
@@ -193,7 +196,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 	}
 	t.quota.next(n)
 	for _, j := range t.work.jobs {
-		if !j.Due.After(now) && took < budget && !t.overQuota(j.App, now) {
+		if j.due(now) && took < budget && !t.overQuota(j.App, now) {
 			t.run(j, now, false)
 			t.spend(j.App, now)
 			took++
@@ -226,7 +229,7 @@ func (t *Tenant) pending(now time.Time) bool {
 			return true
 		}
 	}
-	return slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return !j.Due.After(now) && !t.overQuota(j.App, now) })
+	return slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return j.due(now) && !t.overQuota(j.App, now) })
 }
 
 // overQuota reports whether app has used its attempts of the minute (Tenant.Quota).
@@ -247,7 +250,7 @@ func (t *Tenant) deferred(now time.Time) []string {
 	var out []string
 	for _, a := range t.apps {
 		id := a.Manifest().ID
-		if t.overQuota(id, now) && (ready(t.work.queued(id), now) != nil || slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return j.App == id && !j.Due.After(now) })) {
+		if t.overQuota(id, now) && (ready(t.work.queued(id), now) != nil || slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return j.App == id && j.due(now) })) {
 			out = append(out, id)
 		}
 	}
@@ -313,7 +316,13 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 // run runs a job once; it is journaled when it decided or notified something.
 func (t *Tenant) run(task *Task, now time.Time, replaying bool) string {
 	if !replaying {
-		return t.acceptWork(task, now)
+		outcome := t.acceptWork(task, now)
+		// Empty polls and failed appends must wait for the next interval too.
+		// This deadline is local; accepted task/K9 history only tracks results.
+		t.opsMu.Lock()
+		task.nextRun = now.Add(task.job.Every)
+		t.opsMu.Unlock()
+		return outcome
 	}
 	generation, _, _ := t.works.Start(task.ID, "host")
 	outcome := "ok"

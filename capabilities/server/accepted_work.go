@@ -118,11 +118,6 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 	result.After = *task
 	result.After.Attempts, result.After.Last, result.After.Error = int(generation), now, ""
 	if task.Kind == "job" {
-		bindings, err := t.bindApplications(platform.AssetRef{App: task.App, Kind: platform.AssetApp, Name: task.App}, "", "", task.App)
-		if err != nil {
-			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-		}
-		result.After.Applications = bindings
 		result.After.Due = now.Add(task.job.Every)
 		if result.Outcome != "ok" {
 			result.After.Error = result.Outcome
@@ -164,6 +159,19 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		}
 	}
 	result.Unique = draft.savedUniqueChanges()
+	if task.Kind == "job" && result.Outcome == "ok" && len(result.Changes) == 0 &&
+		result.Notices == nil && len(result.Intents) == 0 && len(result.States) == 0 && result.Control == nil && len(result.Unique) == 0 {
+		// Polling without a business result is not an accepted K9 generation.
+		// Leave the journaled predecessor intact for the next real result.
+		return result.Outcome
+	}
+	if task.Kind == "job" {
+		bindings, err := t.bindApplications(platform.AssetRef{App: task.App, Kind: platform.AssetApp, Name: task.App}, "", "", task.App)
+		if err != nil {
+			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+		}
+		result.After.Applications = bindings
+	}
 	result.Digest, err = digestAcceptedWork(result)
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()

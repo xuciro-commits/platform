@@ -148,17 +148,14 @@ func TestOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Settings are typed; an idle job still accepts its K9 generation and next due time.
+	// Settings are typed; an idle job advances only its local polling deadline.
 	if err := decide(ana, SchemaSettingSet, SettingType, "p/limit", `{"value":"many"}`); code(err) != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("an integer setting took text: %v", err)
 	}
 	entries := len(journal)
 	tn.Work(now)
-	if len(journal) != entries+1 {
-		t.Fatal("an idle job did not accept its scheduling result")
-	}
-	if result, err := decodeAcceptedWork(journal[entries].Body); err != nil || result.Outcome != "ok" || len(result.Changes) != 0 || result.Notices != nil {
-		t.Fatalf("idle job introduced business changes: %v", err)
+	if len(journal) != entries {
+		t.Fatal("an idle job wrote a scheduling-only result")
 	}
 	if err := decide(ana, SchemaSettingSet, SettingType, "p/limit", `{"value":"3"}`); err != nil {
 		t.Fatal(err)
@@ -181,8 +178,8 @@ func TestOperations(t *testing.T) {
 			workResults++
 		}
 	}
-	if workResults != 3 {
-		t.Fatalf("idle and notifying jobs need one result per generation, got %d", workResults)
+	if workResults != 1 {
+		t.Fatalf("only the notifying job should write a result, got %d", workResults)
 	}
 	if s := tn.Settings(); len(s) != 2 || s[1].App != "p" || s[1].Settings[0].Value != "3" { // the platform's own, then the app's
 		t.Fatalf("settings %+v", s)

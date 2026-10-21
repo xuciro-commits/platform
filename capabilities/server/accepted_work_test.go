@@ -13,6 +13,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/build"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -25,6 +27,7 @@ type workDocument struct {
 type resultWorker struct {
 	ledger *platform.Ledger
 	calls  int
+	polls  int
 	reject bool
 	emit   bool
 	idle   bool
@@ -86,6 +89,7 @@ func (w *resultWorker) write(c platform.Caller, id string, at time.Time) *kernel
 	return err
 }
 func (w *resultWorker) Run(c platform.Caller, _ string, at time.Time) *kernel.Error {
+	w.polls++
 	if w.idle {
 		return nil
 	}
@@ -112,10 +116,67 @@ func resultWorkTenant(t *testing.T, id string) *Tenant {
 	return tn
 }
 
+type stateOnlyJob struct{ *statefulStock }
+
+func (s *stateOnlyJob) Manifest() platform.Manifest {
+	m := s.statefulStock.Manifest()
+	m.Jobs = []platform.Job{{Name: "state", Title: "Update private state", Every: time.Hour}}
+	return m
+}
+
+func (s *stateOnlyJob) ForkAcceptedState() (platform.App, error) {
+	copy := *s.statefulStock
+	return &stateOnlyJob{&copy}, nil
+}
+
+func (s *stateOnlyJob) Run(platform.Caller, string, time.Time) *kernel.Error {
+	s.accepted++
+	return nil
+}
+
+func TestAcceptedWorkKeepsStateOnlyJobResult(t *testing.T) {
+	const id = "state-only-job"
+	compose := func() *Tenant {
+		return composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &stateOnlyJob{&statefulStock{stock: newStock(id)}})
+	}
+	live := compose()
+	owner := live.app("stock").(*stateOnlyJob)
+	var entries []Entry
+	fail := true
+	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		if owner.accepted != 0 {
+			t.Fatal("private job state escaped before append")
+		}
+		if fail {
+			return nil, errors.New("injected append failure")
+		}
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	at := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	live.Work(at)
+	if owner.accepted != 0 || len(entries) != 0 {
+		t.Fatal("failed append applied private job state")
+	}
+	fail = false
+	live.Work(at.Add(time.Hour))
+	if owner.accepted != 1 || len(entries) != 1 {
+		t.Fatalf("state-only job was discarded as idle: state=%d entries=%d", owner.accepted, len(entries))
+	}
+	saved, err := decodeAcceptedWork(entries[0].Body)
+	if err != nil || len(saved.Changes) != 0 || len(saved.States) != 1 {
+		t.Fatalf("state-only work result differs: %+v %v", saved.States, err)
+	}
+	recovered := compose()
+	if err := recovered.Replay(entries); err != nil || recovered.app("stock").(*stateOnlyJob).accepted != 1 {
+		t.Fatalf("state-only job did not recover: %v", err)
+	}
+	CheckReplay(t, live, entries, compose)
+}
+
 func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) {
 	newTenant := func() *Tenant {
 		tn := resultWorkTenant(t, "legacy-job-binding")
-		tn.app("worker").(*resultWorker).idle = true
 		return tn
 	}
 	live := newTenant()
@@ -132,8 +193,10 @@ func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) 
 				return nil, err
 			}
 			// An older writer had no application field. Its original digest
-			// and predecessor still pass the ordinary recovery checks.
+			// and empty polling result still pass recovery unchanged.
 			result.After.Applications = nil
+			result.Changes, result.Notices, result.Intents = nil, nil, nil
+			result.States, result.Control, result.Unique = nil, nil, nil
 			result.Digest, err = digestAcceptedWork(result)
 			if err != nil {
 				return nil, err
@@ -172,25 +235,115 @@ func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) 
 	}
 }
 
-func TestAcceptedIdleWorkDoesNotInvalidateBusinessData(t *testing.T) {
+func TestAcceptedIdleWorkDoesNotWriteWakeOrAdvanceHistory(t *testing.T) {
 	live := resultWorkTenant(t, "idle-work")
-	live.app("worker").(*resultWorker).idle = true
-	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
-	seq, data, _ := live.changeState()
-	for _, task := range live.work.jobs {
-		if task.App != "worker" {
-			continue
-		}
-		live.mu.Lock()
-		outcome := live.attempt(task, time.Now(), false)
-		live.mu.Unlock()
-		after, nextData, _ := live.changeState()
-		if outcome != "ok" || after != seq+1 || nextData != data {
-			t.Fatalf("idle work invalidated data: outcome=%s seq=%d/%d data=%d/%d", outcome, seq, after, data, nextData)
-		}
-		return
+	worker := live.app("worker").(*resultWorker)
+	worker.idle = true
+	live.AcceptResult = func(Entry, string, string) ([]byte, error) {
+		t.Fatal("idle job reached the journal")
+		return nil, nil
 	}
-	t.Fatal("worker job missing")
+	before := snapshot(live)
+	seq, data, wake := live.changeState()
+	at := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	live.Work(at)
+	live.Work(at.Add(time.Hour - time.Nanosecond))
+	if worker.polls != 1 {
+		t.Fatalf("idle job polled again before its interval: %d", worker.polls)
+	}
+	live.Work(at.Add(time.Hour))
+	after, nextData, _ := live.changeState()
+	if worker.polls != 2 || after != seq || nextData != data || snapshot(live) != before {
+		t.Fatalf("idle work changed accepted state: polls=%d seq=%d/%d data=%d/%d", worker.polls, seq, after, data, nextData)
+	}
+	select {
+	case <-wake:
+		t.Fatal("idle job woke change followers")
+	default:
+	}
+	if job := live.work.all(live.apps)[0]; !job.Due.Equal(at.Add(2*time.Hour)) || job.Attempts != 0 || !job.Last.IsZero() {
+		t.Fatalf("idle polling was not shown separately from accepted attempts: %+v", job)
+	}
+	if len(live.works.All()) != 0 {
+		t.Fatal("idle polling created a K9 generation")
+	}
+	retryAt := at.Add(time.Hour + time.Minute)
+	live.mu.Lock()
+	retried := live.retry(live.work.jobs[0].ID, retryAt)
+	live.mu.Unlock()
+	live.Work(retryAt)
+	if !retried || worker.polls != 3 {
+		t.Fatal("manual retry did not clear the transient polling deadline")
+	}
+}
+
+func TestAcceptedWorkReplaysAfterIdlePollsAndFailedAppend(t *testing.T) {
+	live := resultWorkTenant(t, "idle-replay")
+	worker := live.app("worker").(*resultWorker)
+	worker.idle = true
+	var entries []Entry
+	fail := false
+	attempts := 0
+	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		attempts++
+		if fail {
+			return nil, errors.New("injected append failure")
+		}
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	at := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	live.Work(at)
+	worker.idle, fail = false, true
+	live.Work(at.Add(time.Hour))
+	if attempts != 1 || len(entries) != 0 || live.work.jobs[0].Attempts != 0 || live.quarantined() {
+		t.Fatalf("failed append retried immediately or advanced history: attempts=%d task=%+v", attempts, live.work.jobs[0])
+	}
+	fail = false
+	live.Work(at.Add(2 * time.Hour))
+	worker.idle = true
+	live.Work(at.Add(3 * time.Hour))
+	worker.idle = false
+	live.Work(at.Add(4 * time.Hour))
+	if attempts != 3 || live.work.jobs[0].Attempts != 2 {
+		t.Fatalf("accepted generations counted empty or failed polls: attempts=%d task=%+v", attempts, live.work.jobs[0])
+	}
+	CheckReplay(t, live, entries, func() *Tenant { return resultWorkTenant(t, live.ID) })
+	// Restoring a snapshot drops transient deadlines, but retains the exact
+	// accepted predecessor for the next journaled result.
+	restored := resultWorkTenant(t, live.ID)
+	saved, _, err := live.Snapshot(func() int64 { return int64(len(entries)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restored.Restore(saved); err != nil {
+		t.Fatal(err)
+	}
+	last := len(entries)
+	live.Work(at.Add(5 * time.Hour))
+	if err := restored.Replay(entries[last:]); err != nil || snapshot(restored) != snapshot(live) {
+		t.Fatalf("snapshot plus accepted suffix differs after idle polling: %v", err)
+	}
+}
+
+func TestAcceptedPlatformJobsDoNotJournalEmptyPolls(t *testing.T) {
+	id := "idle-platform-jobs"
+	live := composeTenant(t, id, []Seat{seatOf("ana")}, build.New(id), flow.New(id), work.New(id))
+	if len(live.work.jobs) != 6 {
+		t.Fatalf("expected all platform jobs, got %d", len(live.work.jobs))
+	}
+	live.AcceptResult = func(Entry, string, string) ([]byte, error) {
+		t.Fatal("empty platform job reached the journal")
+		return nil, nil
+	}
+	before := snapshot(live)
+	at := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	for i := range 3 {
+		live.Work(at.Add(time.Duration(i) * time.Second))
+	}
+	if live.quarantined() || snapshot(live) != before {
+		t.Fatal("empty platform jobs changed accepted state")
+	}
 }
 
 func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) {

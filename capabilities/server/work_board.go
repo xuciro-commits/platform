@@ -68,6 +68,7 @@ func (b *workBoard) retry(id string, now time.Time) bool {
 	}
 	if j := findTask(b.jobs, id); j != nil {
 		j.Due = now
+		j.nextRun = time.Time{}
 		return true
 	}
 	return false
@@ -77,7 +78,11 @@ func (b *workBoard) retry(id string, now time.Time) bool {
 func (b *workBoard) all(apps []platform.App) []Task {
 	out := []Task{}
 	for _, j := range b.jobs {
-		out = append(out, *j)
+		job := *j
+		if job.nextRun.After(job.Due) {
+			job.Due = job.nextRun
+		}
+		out = append(out, job)
 	}
 	for _, a := range apps {
 		for _, q := range b.queues[a.Manifest().ID] {
