@@ -92,6 +92,8 @@ const metrics = {
   "code.fullestPackage": { value: fullestDir[1], of: `文件最多的 Go 目录：${relative(ROOT, fullestDir[0])}` },
   "code.goProduction": { value: goProduction.reduce((total, path) => total + lines(path), 0), of: "手写 Go 生产代码行" },
   "code.goFiles": { value: goProduction.length, of: "手写 Go 生产文件" },
+  "code.tsProduction": { value: handWritten.reduce((total, path) => total + lines(path), 0), of: "手写 TS/TSX 生产代码行" },
+  "code.tsFiles": { value: handWritten.length, of: "手写 TS/TSX 生产文件" },
 };
 
 if (UPDATE) {

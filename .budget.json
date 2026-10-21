@@ -14,5 +14,7 @@
   "code.largestTs": 3974,
   "code.fullestPackage": 423,
   "code.goProduction": 138529,
-  "code.goFiles": 694
+  "code.goFiles": 694,
+  "code.tsProduction": 56974,
+  "code.tsFiles": 637
 }

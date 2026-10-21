@@ -342,7 +342,7 @@ A 的正确性修复不与大规模目录移动混合提交。E 依赖 C/D 的�
 |---|---|---|
 | 文档 | `docs.adr`、`docs.adrLines`、`docs.longestAdr`、`docs.statusLine`、`docs.topLevel`、`docs.lines` | 份数、总行数、最长一份、最长状态行、顶层文档数 |
 | 入口 | `ui.definitions`、`ui.apps`、`ui.navItems`、`ui.navItemsMax`、`ui.views` | `defineApp` 定义数、不同应用 id 数、菜单项总数与单应用最大值、视图总数 |
-| 代码 | `code.largestGo`、`code.largestTs`、`code.fullestPackage`、`code.goProduction`、`code.goFiles` | 最长 Go 文件、最长手写 TS、最拥挤目录、手写 Go 生产行/文件（不含测试与生成物） |
+| 代码 | `code.largestGo`、`code.largestTs`、`code.fullestPackage`、`code.goProduction`、`code.goFiles`、`code.tsProduction`、`code.tsFiles` | 最长 Go 文件、最长手写 TS、最拥挤目录、手写 Go/TS 生产行数与文件数（不含测试与生成物） |
 
 规则：
 
@@ -353,16 +353,16 @@ A 的正确性修复不与大规模目录移动混合提交。E 依赖 C/D 的�
 
 ### 9.2 已确认的起点（2026-10-21）
 
-`docs.adr` 64 · `docs.adrLines` 9,691 · 最长 ADR 1,257 行（ADR-0015，历史）· 最长状态行 353 字 · Go 生产 138,529 行 / 694 文件 · `ui.definitions` 21 · `ui.apps` 18 · `ui.navItems` 132（`build` 32）· `ui.views` 105 · 最长 Go 文件 1,343 行 · 文件最多的 Go 目录 423 个文件（`capabilities/server`）。
+`docs.adr` 64 · 最长 ADR 1,257 行（ADR-0015）· 状态行 353 字 · Go 生产 138,529 行 / 694 文件 · TS 生产 56,974 行 · `ui.definitions` 21 · `ui.apps` 18 · `ui.navItems` 132（`build` 32）· `ui.views` 105 · 最长 Go 文件 1,343 行 · 文件最多的 Go 目录 423 个文件（`capabilities/server`）。
 
-数字说明问题：**18 个门户入口、132 个菜单项、105 个视图**，而产品只有一条主线。同批删掉门户第三套分类（`projections`）与首页重复的应用清单。
+数字说明：**18 个门户入口、132 个菜单项、105 个视图**，产品只有一条主线。同批删掉门户第三套分类（`projections`）与首页重复的应用清单
 
 ### 9.3 本节的删除条件
 
 当下列任一情况成立时，本节被取代而不是继续加规则：
 
 - 预算连续两次整块交付都靠删东西自然下降，不再需要上调任何上限；
-- 入口数降到个位数，`ui.navItemsMax` 降到 12 以下——此时问题已从"控制增长"变成"保持简单"，规则可以并入 ADR-0018；
+- 入口数降到个位数、`ui.navItemsMax` 降到 12 以下，规则并入 ADR-0018；
 - 预算长期不通过却无人处理——那说明它已经退化成又一份没人读的文档，应当删除而不是修补。
 
 ## 10. XXXL 重构大纲（当前主线的总纲）
