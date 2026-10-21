@@ -22,7 +22,13 @@ IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTU
 backup=$(mktemp -d)
 cleanup() {
   local result=$?
-  (( result == 0 )) || echo "Rehearsal stopped at script line ${BASH_LINENO[0]}" >&2
+  if (( result != 0 )); then
+    echo "Rehearsal stopped at script line ${BASH_LINENO[0]}" >&2
+    # Keep handler panic locations even when a Python request failed before
+    # fail() could run. Exclude request bodies, headers and environment values.
+    compose logs --no-color manufacturing-server hospitality-server 2>/dev/null |
+      grep -E 'http: panic serving|panic:|\.go:[0-9]+|platformserver[/.(]' | tail -60 >&2 || true
+  fi
   trap - EXIT
   compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$backup"

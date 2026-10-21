@@ -95,8 +95,15 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		if before.info.Versioning != nil && !reflect.DeepEqual(before.info.Versioning, info.Versioning) || len(before.info.VersionPins) > 0 && !reflect.DeepEqual(before.info.VersionPins, info.VersionPins) {
 			return fmt.Errorf("published business versioning and pin bindings are retained")
 		}
-		entries := make([]records.Entry[*records.Row], 0, before.rows.Len())
-		for id, r := range before.rows.All() {
+		rows := before.rows
+		if rows.Sourced() && s.historyStore != nil && !before.retainedProjection {
+			// Migrated SQL bytes may already have the target shape while this
+			// private installation still catalogs the source declaration. Read
+			// them using the target, then perform the same strict conversion.
+			rows = rows.Rebind(&currentRows{store: s, typ: info.Type, info: &info})
+		}
+		entries := make([]records.Entry[*records.Row], 0, rows.Len())
+		for id, r := range rows.All() {
 			raw, err := r.Image()
 			if err != nil {
 				return err

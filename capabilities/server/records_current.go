@@ -8,6 +8,7 @@ import (
 
 	"platformserver/internal/records"
 	"platformserver/journal"
+	"platformserver/platform"
 )
 
 // currentRows resolves committed records through the coordinator's fixed SQL
@@ -16,6 +17,9 @@ import (
 type currentRows struct {
 	store *recordStore
 	typ   string
+	// A declaration replacement decodes persisted values against its target
+	// shape before publishing that shape in the store catalog.
+	info *platform.EntityInfo
 }
 
 func (r *currentRows) view() journal.StateReadView {
@@ -38,12 +42,15 @@ func (r *currentRows) Get(id string) *records.Row {
 	if err := json.Unmarshal(current.Image, &image); err != nil {
 		panic(err)
 	}
-	et := r.store.types[r.typ]
-	decoded, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, r.store.readRelease, image.Format)
+	info := r.store.types[r.typ].info
+	if r.info != nil {
+		info = *r.info
+	}
+	decoded, err := records.DecodeFormattedImage(info, image.Value, image.Projection, r.store.readRelease, image.Format)
 	if err != nil {
 		panic(err)
 	}
-	value := reflect.New(et.info.Go).Elem()
+	value := reflect.New(info.Go).Elem()
 	if err := json.Unmarshal(decoded, value.Addr().Interface()); err != nil {
 		panic(err)
 	}
