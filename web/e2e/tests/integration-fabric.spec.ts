@@ -76,6 +76,7 @@ for (const fixture of [
         await expect.poll(async () => (await record("build.dataset", clean))?.version, { timeout: 15_000 }).toBe(1);
         await expect(page.getByRole("tab", { name: /^Pipelines(?: ·|$)/ })).toHaveCount(1);
         const pipe = new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("id")!;
+        await page.locator(`[data-structured-editor^="build.pipeline:${pipe}:"]`).getByRole("button", { name: "Visual", exact: true }).click();
         await expect.poll(async () => (await record("build.pipeline", pipe)).last).toMatchObject({ rows: 3, written: 1, quarantined: 2 });
         expect((await record("build.datasetversion", `${clean}@1`)).data).toEqual([{ id: "IN-A", sku: "A", qty: 3 }]);
         await expect(page.getByText(/3 rows · 1 written · 2 quarantined/)).toBeVisible();
