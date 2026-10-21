@@ -3,9 +3,9 @@
 // no backend role; their runtime reads/actions still use the original host.
 // Packages contribute to functional applications (ADR-0018 §3.3); editors
 // and runtime views can join one application while retaining their owners.
-import type { AppUI } from "@platform/app";
+import type { AppExtension, AppUI } from "@platform/app";
 
-type PackageLoad = { default: AppUI; contributions?: AppUI[] };
+type PackageLoad = { default: AppUI; contributions?: (AppUI | AppExtension)[] };
 export type Package = { serves: string[]; role?: string; public?: boolean; load: () => Promise<PackageLoad> };
 
 export const packages: Package[] = [

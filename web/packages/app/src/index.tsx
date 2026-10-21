@@ -288,7 +288,14 @@ function AppInputBody({children}:{children:ReactNode}) {
   const inputs=useInputDrafts();
   return <><InputProblems/><DraftInputs.Provider value={inputs&&{...inputs,problemsShown:true}}><fieldset disabled={inputs?.busy} className="contents">{children}</fieldset></DraftInputs.Provider></>;
 }
-export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(view=>({...view,render:params=><AppInputView scope={`${app.id}/${view.id}/${params.id??""}/${params.page??""}`}>{view.render(params)}</AppInputView>}))});
+const scopedViews = (id: string, views: View[]): View[] => views.map(view=>({...view,render:params=><AppInputView scope={`${id}/${view.id}/${params.id??""}/${params.page??""}`}>{view.render(params)}</AppInputView>}));
+export const defineApp = (app: AppUI): AppUI => ({...app,views:scopedViews(app.id,app.views)});
+
+/** Views another package adds to an app whose identity it does not own (ADR-0018 §13.3). The
+ *  id, title, icon and portal entry stay with the package whose `defineApp` declares the app. */
+export type AppExtension = Pick<AppUI, "serves" | "for" | "views" | "nav" | "home" | "opens"> & { extends: string };
+export const extendApp = (id: string, extension: Omit<AppExtension, "extends">): AppExtension =>
+  ({...extension, extends: id, views: scopedViews(id, extension.views)});
 
 // Generated pages (ADR-0046), for any app's entity types.
 

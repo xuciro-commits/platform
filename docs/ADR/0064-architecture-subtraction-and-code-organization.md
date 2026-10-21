@@ -340,7 +340,7 @@ A 的正确性修复不与大规模目录移动混合提交。E 依赖 C/D 的�
 
 | 分组 | 指标 | 说明 |
 |---|---|---|
-| 文档 | `docs.adr`、`docs.adrLines`、`docs.longestAdr`、`docs.statusLine`、`docs.topLevel`、`docs.lines` | 份数、总行数、最长一份、最长状态行、顶层文档数 |
+| 文档 | `docs.adr`、`docs.adrChars`、`docs.longestAdr`、`docs.statusLine`、`docs.topLevel`、`docs.chars` | 份数、总字数、最长一份、最长状态行、顶层文档数 |
 | 入口 | `ui.definitions`、`ui.apps`、`ui.navItems`、`ui.navItemsMax`、`ui.views` | `defineApp` 定义数、不同应用 id 数、菜单项总数与单应用最大值、视图总数 |
 | 代码 | `code.largestGo`、`code.largestTs`、`code.fullestPackage`、`code.goProduction`、`code.goFiles`、`code.tsProduction`、`code.tsFiles` | 最长 Go 文件、最长手写 TS、最拥挤目录、手写 Go/TS 生产行数与文件数（不含测试与生成物） |
 
@@ -353,7 +353,7 @@ A 的正确性修复不与大规模目录移动混合提交。E 依赖 C/D 的�
 
 ### 9.2 已确认的起点（2026-10-21）
 
-`docs.adr` 64 · 最长 ADR 1,257 行（ADR-0018）· 状态行 353 字 · Go 生产 138,529 行 / 694 文件 · TS 生产 56,974 行 · `ui.definitions` 21 · `ui.apps` 18 · `ui.navItems` 132（`build` 32）· `ui.views` 105 · 最长 Go 文件 1,343 行 · 文件最多的 Go 目录 423 个文件（`capabilities/server`）。
+起点（2026-10-21，64 份 ADR）已被超过，现行上限按下调后的实测值：37 份 ADR · Go 生产 138,529 行 · TS 生产 56,950 行 · `ui.definitions` 19 · `ui.apps` 18 · `ui.navItems` 118 · `ui.views` 94 · 最长 Go 1,343 行 · 最拥挤目录 423 个文件。
 
 数字说明：**18 个门户入口、132 个菜单项、105 个视图**，产品只有一条主线。同批删掉门户第三套分类（`projections`）与首页重复的应用清单
 
@@ -379,7 +379,7 @@ A 的正确性修复不与大规模目录移动混合提交。E 依赖 C/D 的�
 
 | 优先级 | 形态 | 本仓证据 | 处理 |
 |---|---|---|---|
-| 1 | **同一能力两处实现** | `data-connection`、`agents` 各有两个 `defineApp`；21 个定义对 18 个应用 | 一个应用一处身份，另一包只加视图 |
+| 1 | **同一能力两处实现** | `data-connection`、`agents` 曾各有两个 `defineApp`；21 个定义对 18 个应用（已并为 19 对 18） | 一个应用一处身份，另一包只加视图 |
 | 2 | **同一职责三个入口** | 应用分类曾有：首页两网格 + 门户筛选层（已删） | 一份分类，一处渲染 |
 | 3 | **巨文件承担多职责** | `Workspace.tsx` 935、`compile.ts` 882、`Records.tsx` 865、`enterprise/index.tsx` 857 | 按职责切，按测试守 |
 | 4 | **平铺巨包** | `capabilities/server` 423 个文件同层 | 按协调职责分组，不按文件类型 |

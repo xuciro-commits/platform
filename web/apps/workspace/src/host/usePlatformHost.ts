@@ -29,7 +29,7 @@ export type PlatformHost = {
   hostAdmin: boolean;
 };
 
-export function usePlatformHost({ client, token, tenant, me, ready, apps }: { client: EdgeClient; token: string; tenant: string; me?: Me; ready: boolean; apps?: (AppUI & { serves?: string[] })[] }): PlatformHost {
+export function usePlatformHost({ client, token, tenant, me, ready, apps }: { client: EdgeClient; token: string; tenant: string; me?: Me; ready: boolean; apps?: (AppUI & { serves: string[] })[] }): PlatformHost {
   const queries = useQueryClient();
   const read = <T,>(path: string, refetchInterval: number | false = false, options: { retry?: false } = {}) => {
     const query = useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready, ...options });
@@ -158,7 +158,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow-instance"]]);
     for (const app of apps ?? []) {
       for (const [type, view] of Object.entries(app.opens ?? {})) {
-        const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
+        const own = app.serves.some((id) => type.startsWith(`${id}.`));
         if (own || protocols.some((p) => p.id.startsWith(`${type}/`) && p.bound === app.id)) opens.set(type, view);
       }
     }

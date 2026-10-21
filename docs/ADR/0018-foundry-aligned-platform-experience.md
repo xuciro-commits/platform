@@ -302,15 +302,15 @@ Shell 采用“顶栏切换大应用 → 左侧当前应用菜单 → 中央工�
 
 ### 共享 UI 与字段语义
 
-Web 使用 pnpm、React/TypeScript/Vite；`@platform/ui` 统一组件与交互，基于 Radix、Tailwind tokens、TanStack 表格/虚拟化、原表单与 Dockview。应用不得另造表格/表单/面板；复杂页面仍用类型化代码或已注册组件的受控页面定义，不逆向解析任意 React 树。共享控件归平台，使用和领域配置归应用；不依赖 Blueprint 源码。旧 Gallery 已由 ADR-0014 的资产库替代，不恢复独立展示应用。
+Web 使用 pnpm、React/TypeScript/Vite；`@platform/ui` 统一组件与交互，基于 Radix、Tailwind tokens、TanStack 表格/虚拟化、原表单与 Dockview。应用不得另造表格、表单或面板；复杂页面仍用类型化代码或受控页面定义。共享控件归平台，使用和领域配置归应用；不依赖 Blueprint 源码。旧 Gallery 已由 ADR-0014 的资产库替代，不恢复独立展示应用。
 
-字段定义统一决定显示、编辑、校验、排序、过滤、搜索与引用导航，`columnsFor`、RecordForm/EntityForm 和单元格编辑复用它；表单输入与操作会话现行边界归 ADR-0048。加载、空、失败/重试、冲突、只读和键盘导航同属共享组件责任。虚拟滚动和历史测试不等于十万条真实数据的性能或负责人完整视觉/移动体验确认。
+字段定义统一决定显示、编辑、校验、排序、过滤、搜索与引用导航，表单与单元格编辑复用它；表单输入与操作会话现行边界归 ADR-0048。加载、空、失败、冲突、只读与键盘导航同属共享组件责任。虚拟滚动和历史测试不等于十万条真实数据的性能或负责人完整视觉/移动体验确认。
 
 ### 外观的 scheme 与 skin
 
-`useTheme()` 持有两个独立轴：`data-theme=light/dark`（未设跟随系统）与 `data-skin=industrial`（未设标准），同存 `platform.appearance`，Shell 的 Appearance 菜单只改根属性，不重挂组件、不建第二组件库。工业皮肤位于 `themes/industrial.css`，覆盖 tokens 并用稳定 `data-ui` / `data-variant` 挂钩处理按钮、字段、卡片、状态与外框，不依赖 Tailwind 类名。
+`useTheme()` 持有两个独立轴：`data-theme=light/dark`（未设跟随系统）与 `data-skin=industrial`（未设标准），同存 `platform.appearance`，Shell 的 Appearance 菜单只改根属性，不重挂组件、不建第二组件库。工业皮肤位于 `themes/industrial.css`，覆盖 tokens 并用稳定 `data-ui` / `data-variant` 挂钩处理按钮、字段、卡片与状态。
 
-工业视觉用紧凑数字、清晰边界/下压按钮、凹入字段、实色状态灯及琥珀焦点；primary/danger 保持语义色。CSS 仅用颜色、边框、零模糊小阴影及小渐变，按压只 transform；不加入 blur/filter/backdrop-filter、图片、动画或布局属性过渡。维护组件时保留 data-ui 挂钩。RetroButton 仍是可单独使用的原组件，皮肤不依赖它；低成本 CSS 设计不代替面板设备上的性能实测。
+工业视觉用紧凑数字、清晰边界/下压按钮、凹入字段、实色状态灯及琥珀焦点；primary/danger 保持语义色。CSS 仅用颜色、边框、零模糊小阴影及小渐变，按压只 transform；不加入 blur/filter/backdrop-filter、图片、动画或布局属性过渡。维护组件时保留 data-ui 挂钩。低成本 CSS 不代替面板设备上的性能实测。
 
 ## 13. 并入的体验结构决定（原 0015 / 0016 / 0019）
 
@@ -427,12 +427,14 @@ K4/K5 的动作权威、同宿主日志提交单元与远端权威不是一个�
 
 ### 13.3 页签、面板与工作区规则（原 0019 §2–§3）
 
+一个应用的身份（id、标题、图标、门户入口）只由拥有它的包声明一次；其他包用 `extendApp` 只追加视图、菜单、`opens` 与自己的可见性，不再第二次 `defineApp`（ADR-0064 §10 优先级 1）。
+
 ### 2. 决策
 
 ### D1 Shell 页签按应用分组
 
 - `Workspace` 的 dockview 布局以 `storageKey:${applicationId}` 记忆；切换应用时**保存当前应用布局、载入目标应用布局**（没有就打开 home）。Shell 自己的页面（Home、门户、通知、收件箱、搜索、助手、Object Explorer、Lineage）属于一个固定的 `shell` 组，在任何应用里都能打开，但不进入应用的页签记忆。
-- 页签右键菜单（`TabMenu`）：**关闭 · 关闭其他 · 关闭右侧 · 关闭全部 · 在旁边打开 · 弹出到新窗口**。Window 菜单保留同一套命令加"切到页签…"列表。
+- 页签右键菜单（`TabMenu`）：**关闭 · 关闭其他 · 关闭右侧 · 关闭全部 · 在旁边打开 · 弹出到新窗口**。Window 菜单保留同一套命令。
 - 删除"Float tab"与悬浮组（`addFloatingGroup`、`dockFloating`、`window: "float"`）。`open(route, { window: "beside" })` 在当前组右侧分栏打开（已有分栏则加入）；`"popout"` 不变。
 - 有未保存草稿的页签在批量关闭时仍走 `unsaved.ask`，一次询问列出全部。
 

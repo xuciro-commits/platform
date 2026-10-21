@@ -10,21 +10,24 @@
 
 | 块 | 目标 | 接受标准 | 起手证据 |
 |---|---|---|---|
-| **X1 一个应用一处身份** | `data-connection`、`agents` 由两个包各声明一次，运行期按 id 合并；构建者看到 13 项 / 4 组，且「Connections」（数据连接）与「Connectors」（事件连接器）并列 | 身份字段只声明一次，另一包只贡献视图与菜单；两个连接概念不再同名；`workspaces.spec.ts:217` 同批更新；`ui.definitions` 降到 18 | `web/packages/build/src/index.tsx:128`、`web/packages/platform/src/index.tsx:125` |
 | **X2 构建者工作台分职责** | `web/packages/build/src/workshop/module-import/compile.ts` 882 行、`workshop/editor.tsx` 718 行混合解析、映射、诊断与渲染 | 编译与诊断可单测，不经 React；编辑器的草稿/撤销仍只有一份 | `compile.test.mjs` 已存在，可作回归基线 |
 | **X3 外壳与记录视图** | `ui/shell/Workspace.tsx` 935 行（Rail、页签、布局持久化、命令面板、未保存保护）；`ui/records/Records.tsx` 865 行 | 每个职责一个模块；`Workspace.test.tsx`（377 行）不改断言即通过 | 现有测试即 oracle |
 | **X4 宿主平铺包分组** | `capabilities/server` 423 个文件同层（10 万行） | 按协调职责分组（接受、记录、发布、运行、协议），先搬再改；`boundaries.sh` 与 `escapes.sh` 不变松 | `doc.go` 的组件地图即目标分组 |
-| **X6 死代码与死词条** | 已删 526 条无引用词条（本轮）；剩余短词条需与动态 `t(变量)` 现场逐一核对 | 删除前给出该词条的唯一可达路径或确认不可达 | 本轮脚本口径：21+ 字符且全仓无字面量 |
+| **X6 死代码与死词条** | 本轮删 40 条无引用词条（≥21 字符、键内无引号、全仓无字面量，含 `.go`/JSON/生成物）；短词条与 `t(变量)` 仍需逐条核对 | 删除前给出该词条的唯一可达路径或确认不可达 | 口径：长度下限 + 全仓字面量检索；动态键误判见下条 |
 | **X7 前端性能** | 首页排序已改预计算名次；其余热点：记录表全量重渲、`useRead` 轮询粒度、画布布局重算 | 有前后测量才声称改善，否则写"未测量" | `ui/records`、`graph/*/layout` |
 | **X8 E 的交付验证** | PostgreSQL 按需工作集代码已实现，完整交付验证未完成 | 真实 PG 上的整块恢复与两宿主演练 | ADR-0010、ADR-0064 §8 |
 
-X1 与 X6 有用户可见收益，优先；X2–X4 是结构性减量主体；X8 是既有承诺，不能被新块挤掉。
+X6 有用户可见收益，优先；X2–X4 是结构性减量主体；X8 是既有承诺，不能被新块挤掉。
+
+**本轮预算数字（2026-10-20）**：`code.tsProduction` 56,974 → 56,950 行，`code.largestTs` 3,974 → 3,972 行；入口三项同步下降（见下条）。上限已用 `--update` 按下调后的实测值写入，没有为 X1 的增长上调任何一项。
+
+**X1 已移出（2026-10-20）**：`data-connection` 与 `agents` 的身份只在 `web/packages/platform/src/index.tsx` 各声明一次；`web/packages/build/src/index.tsx` 改用 `extendApp(id, {serves, for, home, views, nav, opens})`，只追加视图与菜单。`@platform/app` 的 `extendApp` 与 `defineApp` 共用同一层视图作用域（`scopedViews`），扩展的视图不会绕开输入草稿与提交守卫。`composeApplications` 按贡献顺序分组：扩展不成门户入口，找不到宿主的扩展被丢弃而不是凭空造一个应用（两条都有单测）。**行为保持**靠三件事：`serves`（`build`）、逐视图的 `referenceContext` 包装、以及分组顺序仍按包加载次序而非「宿主优先」，因此构建者的菜单顺序与默认首页不变。`ui.definitions` 21 → 19，`ui.navItems` 132 → 118，`ui.views` 105 → 94，`ui.apps` 仍为 18；`pnpm -r typecheck`、`catalog:check`、`node scripts/budget.mjs` 通过，ui/workspace/build/catalog/kernel/platform/apps/catalog 测试全绿。`packages/app` 的用例需要 Go 编译的规则 WASM，本沙箱无 Go，未运行（见下条环境限制）。
 
 **文档收敛已交付（2026-10-20）**：ADR 从 64 份降到 37 份（−27），总字数 686.3k → 445.7k（−35%），最长一份 123.2k → 29.4k（原 0015 号文档删除），状态行从最长 353 字统一到 ≤80 字。做法是"同一问题只留一份"：0015/0016/0019 并入 0018，0013/0056 并入 0057，0036/0049/0021 并入 0048，0004/0058/0059 并入 0051，0031/0034 并入 0022，0025/0027 并入 0044，0011→0045，0063→0010，0062→0064，0017/0030→0029，0035→0033，0023→0024，0032/0052→0060，0054→0008，0002/0012→0001。并入时只搬仍然生效的决定，诊断、调研、实施流水与 As built 台账归 Git；`docs/Platform.md` 的第二份路线图（§10，18k 字）删除，指向 ADR-0038/0060 与 WorkQueue。索引、`AGENTS.md`、`README.md` 与全部跨文档链接同批更新，脚本核对 0 条断链。
 
-**X5 已移出（2026-10-20，后端同批）**：`apps/build/public.go` 249 → 23 行。原文件 122 条别名里，只有 13 个名字被模块外的 `solutions/*` 读取（`AppType`、`ID`、`ObjectType`、`PageType`、`Builder`、`User`、`SchemaPublish`、`SchemaRelease`、`SchemaHandOver`、`SchemaFunctionCall`、`TestPlan`、`TestPlanType`、`TestStep`），其余 109 条在本仓无任何引用；模块内 255 个文件本来就直接用 `internal/construction`。同批修掉两个后端实际缺陷：`tenantLane` 在 `submit` 持有期间被回调读重入会自锁（`TestAcceptedRelationGraphIsPrivateUntilCommit` 因此在 main 上挂满 10 分钟），以及 `joint_draft_test.go` 把"一次流程运行 = 一行 `flow.instance`"写死（实际一次运行留下根实例与步骤实例，共 3 行）。预算新增四个总量指标：`code.goProduction`（138,529 行）、`code.goFiles`（694）、`code.tsProduction`（56,974 行）、`code.tsFiles`（637），前后端手写生产代码从此只能变小。
+**X5 已移出（2026-10-20，后端同批）**：`apps/build/public.go` 249 → 23 行。原文件 122 条别名里，只有 13 个名字被模块外的 `solutions/*` 读取（`AppType`、`ID`、`ObjectType`、`PageType`、`Builder`、`User`、`SchemaPublish`、`SchemaRelease`、`SchemaHandOver`、`SchemaFunctionCall`、`TestPlan`、`TestPlanType`、`TestStep`），其余 109 条在本仓无任何引用；模块内 255 个文件本来就直接用 `internal/construction`。本次删除以「模块外引用集合 = 保留集合」的脚本比对为准（13 个名字全保留、109 个全移除，两侧差集为空），未在本沙箱编译。同批修掉两个后端实际缺陷：`tenantLane` 在 `submit` 持有期间被回调读重入会自锁（`TestAcceptedRelationGraphIsPrivateUntilCommit` 因此在 main 上挂满 10 分钟），以及 `joint_draft_test.go` 把"一次流程运行 = 一行 `flow.instance`"写死（实际一次运行留下根实例与步骤实例，共 3 行）。预算新增四个总量指标：`code.goProduction`（138,529 行）、`code.goFiles`（694）、`code.tsProduction`（56,974 行）、`code.tsFiles`（637），前后端手写生产代码从此只能变小。
 
-**Go 侧在本沙箱可完整验证**（此前"只能编译 `internal/acceptance`"的限制已解除）：`.build/sandbox-go/go.work` 用 65 条 `replace` 指向 `.build/sandbox-go/replace/*` 的 GitHub 源码包，配 `GOPROXY=off` 后 `go build ./...`、`go vet ./...` 在 12 个模块（capabilities、contract、6 个 apps、2 个 protocols、2 个 solutions）上全部通过，`go test -count=1 ./...` 在 capabilities（根包 516 个测试，1,464 s）、两个 solutions 与 crm/csm/erp/hcm 通过；`pms` 7 个、`mes` 1 个用例在 main 上即失败（与本轮改动无关，`git stash` 后同样复现），未计入通过。该目录只在本机存在，不进 Git；Go 侧删除仍以这三条命令的结果为准。
+**Go 侧在当前沙箱无法编译**：工具链与 `.build/sandbox-go` 的模块镜像不在本环境里，Arena 只能访问 GitHub/npm/PyPI，`go build`/`go vet`/`go test` 必须在 CI 或带模块代理的机器上跑。Go 侧删除只按「模块外引用集合逐一比对」这一条静态证据执行，不计为编译通过；未经 CI 编译验证的 Go 改动不得算作完成。
 
 ## 保留交付：MES 工单旧界面退出
 

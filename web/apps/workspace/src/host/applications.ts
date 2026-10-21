@@ -1,33 +1,42 @@
-import type { ApplicationUIInfo, AppUI, Definition, Host } from "@platform/app";
+import type { ApplicationUIInfo, AppExtension, AppUI, Definition, Host } from "@platform/app";
 import type { NavSection, Route } from "@platform/ui";
 
+/** What a package contributes: an app it owns, or views it adds to one it does not. */
+export type AppContribution = AppUI | AppExtension;
+
 /** Trusted UI packages can contribute to one functional app without adding
- * another portal entry or changing the backend that owns its resources. */
-export type ComposedApplication = AppUI & { homeFor: (host: Host) => AppUI["home"] };
-export function composeApplications(contributions: readonly AppUI[]): ComposedApplication[] {
-  const groups = new Map<string, AppUI[]>();
-  for (const app of contributions) groups.set(app.id, [...groups.get(app.id) ?? [], app]);
-  return [...groups.values()].map<ComposedApplication>(sources => {
-    const primary = sources[0]!;
-    return {
-      ...primary,
-      serves: [...new Set(sources.flatMap(app => app.serves ?? [app.id]))],
-      views: sources.flatMap(app => app.views),
-      opens: Object.assign({}, ...sources.map(app => app.opens)),
-      homeFor: member => (sources.find(app => !app.for || app.for(member)) ?? primary).home,
-      for: member => sources.some(app => !app.for || app.for(member)),
+ * another portal entry or changing the backend that owns its resources. One
+ * package declares the identity; the rest extend it (ADR-0018 §13.3). */
+export type ComposedApplication = AppUI & { serves: string[]; homeFor: (host: Host) => AppUI["home"] };
+export function composeApplications(contributions: readonly AppContribution[]): ComposedApplication[] {
+  const owners = new Map(contributions.flatMap(item => "extends" in item ? [] : [[item.id, item] as const]));
+  const members = new Map<string, AppContribution[]>();
+  for (const item of contributions) {
+    const id = "extends" in item ? item.extends : item.id;
+    members.set(id, [...members.get(id) ?? [], item]);
+  }
+  return [...members].flatMap<ComposedApplication>(([id, sources]) => {
+    const owner = owners.get(id);
+    if (!owner) return []; // an extension never invents the app it extends
+    return [{
+      ...owner,
+      serves: [...new Set([...(owner.serves ?? [id]), ...sources.flatMap(source => source.serves ?? [])])],
+      views: sources.flatMap(source => source.views),
+      opens: Object.assign({}, ...sources.map(source => source.opens)),
+      homeFor: member => (sources.find(source => !source.for || source.for(member))?.home ?? owner.home),
+      for: member => sources.some(source => !source.for || source.for(member)),
       nav: (member, route) => {
         const sections = new Map<string, NavSection>();
-        for (const app of sources) {
-          if (app.for && !app.for(member)) continue;
-          for (const section of app.nav(member, route)) {
+        for (const source of sources) {
+          if (source.for && !source.for(member)) continue;
+          for (const section of source.nav?.(member, route) ?? []) {
             const previous = sections.get(section.label);
             sections.set(section.label, { ...section, items: [...previous?.items ?? [], ...section.items] });
           }
         }
         return [...sections.values()];
       },
-    };
+    }];
   });
 }
 
@@ -131,7 +140,7 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
 }
 
 /** Inspect only loaded contributions and the navigation their original owner exposes. */
-export function applicationUIInfo(contributions: readonly AppUI[], host: Host): ApplicationUIInfo[] {
+export function applicationUIInfo(contributions: readonly AppContribution[], host: Host): ApplicationUIInfo[] {
   return composeApplications(contributions.filter(app => !app.for || app.for(host))).map(app => ({
     id: app.id, title: app.title, serves: app.serves ?? [app.id], home: app.homeFor(host), sections: app.nav(host),
     views: app.views.map(view => ({ id: view.id, title: view.title({}) })), opens: { ...app.opens },

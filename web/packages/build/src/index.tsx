@@ -1,7 +1,7 @@
 import { ApplicationSampleAsset } from "./releases/samples";
 // ADR-0047: direct builder menus and application context share the original editors.
 import "./i18n";
-import { defineApp, type Host } from "@platform/app";
+import { defineApp, extendApp, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
 import { ObjectTypeEditor } from "./ontology/process";
 import { ActionTypeEditor, ActionTypes } from "./ontology/action-type";
@@ -129,12 +129,12 @@ export default defineApp({
   },
 });
 
-/** The same integration editors contribute to their single workspace app. */
-const dataConnection = defineApp({
-  id: "data-connection", serves: ["build"], category: "ontology", title: t("Data Connection"), icon: <Database />,
-  description: t("Connect data sources, prepare datasets and monitor integrations."),
-  for: host => builder(host) || integrator(host),
-  home: { view: "connection" }, referenceContext,
+// The integration and agent editors add views to the applications the platform
+// package declares (ADR-0018 §13.3): one identity per app, no second portal
+// entry, and the builder's own navigation inside it.
+const dataConnection = extendApp("data-connection", {
+  serves: ["build"], for: host => builder(host) || integrator(host),
+  home: { view: "connection" },
   views: contextualViews([
   { id: "connection", title: () => t("Connections"), render: p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections /> },
   { id: "observation-source", title: () => t("Observation sources"), render: p => p.id ? <ObservationSourceEditor key={p.id} id={p.id} /> : <ObservationSources /> },
@@ -162,11 +162,9 @@ const dataConnection = defineApp({
   ],
 });
 
-/** Definition authoring joins the existing Agents app; runs retain their owner. */
-const agents = defineApp({
-  id: "agents", serves: ["build"], category: "build", title: t("Agents"), icon: <Bot />,
-  description: t("Define agents and their allowed actions."),
-  for: builder, home: { view: "agent" }, referenceContext,
+// Agent definitions join the Agents app the platform package declares; runs keep their owner.
+const agents = extendApp("agents", {
+  serves: ["build"], for: builder, home: { view: "agent" },
   views: contextualViews([
   { id: "agent", title: () => t("Agents"), render: p => p.id ? <AgentEditor key={p.id} id={p.id} /> : <Agents /> },
   ]),

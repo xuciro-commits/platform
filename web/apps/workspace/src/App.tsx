@@ -5,7 +5,7 @@
 // through defineApp. This file is the composition root: the session (who), the
 // host (what they may read and decide) and the shell (where it is shown).
 import "./i18n";
-import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@platform/app";
+import { ApplicationSessionsProvider, HostContext, type AppExtension, type AppUI, type Me } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
@@ -73,7 +73,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [client, identityScope, me?.preferred]);
 
   // --- Packages: the code applications this member's roles unlock.
-  const [loadedPackages, setLoadedPackages] = useState<{ scope: string; groups: { source: Package; apps: (AppUI & { serves?: string[] })[] }[] }>();
+  const [loadedPackages, setLoadedPackages] = useState<{ scope: string; groups: { source: Package; apps: (AppUI | AppExtension)[] }[] }>();
   // Keep still-authorized packages mounted while new ones load. Filtering is
   // synchronous, so withdrawn packages or another identity never linger.
   const loadedApps = useMemo(() => loadedPackages && loadedPackages.scope === identityScope
@@ -89,8 +89,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [packageScope]);
 
   // --- Host: reads, decisions and the record source every view shares.
-  const { host, metadataReady, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
+  // Composition comes first: one entry per app id, extensions folded in, so
+  // the host reads exactly the apps the portal shows (ADR-0018 §13.3).
   const apps = useMemo(() => loadedApps ? composeApplications(loadedApps) : undefined, [loadedApps]);
+  const { host, metadataReady, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps });
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
   const definitions = host?.definitions ?? [];

@@ -66,8 +66,6 @@ register("zh-CN", {
   "Processing": "处理",
   "Monitoring": "监控",
   "Agent definitions": "智能体定义",
-  "Connect data sources, prepare datasets and monitor integrations.": "连接数据源、准备数据集并监控集成。",
-  "Define agents and their allowed actions.": "定义智能体及其允许执行的动作。",
   "Choose an application to prepare its sample records.": "选择应用，准备其样本记录。",
   "Choose an application": "选择应用",
   "The applications could not be loaded.": "无法加载应用。",

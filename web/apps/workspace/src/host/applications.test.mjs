@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applicationEntry, applicationUIInfo, composeApplications, extendApplications, pageApplication, resolveApplicationRoute } from './applications.ts';
 
-test('one functional app combines original views and menu groups while preserving role-specific homes', () => {
+test('one package declares an app identity; another only adds views and menu groups to it', () => {
   const connection = { view: 'connection' }, connector = { view: 'integrations' };
   const editor = { id: 'connection', render: () => 'original editor' };
   const runtime = { id: 'integrations', render: () => 'original connectors' };
@@ -12,13 +12,13 @@ test('one functional app combines original views and menu groups while preservin
     nav: () => [{ label: 'Connections', items: [{ label: 'Connections', route: connection }] }],
   };
   const administration = {
-    id: 'data-connection', serves: ['platform'], title: 'Data Connection', home: connector,
+    extends: 'data-connection', serves: ['platform'], home: connector,
     for: host => host.roles.includes('admin'), views: [runtime],
     nav: () => [{ label: 'Connections', items: [{ label: 'Connectors', route: connector }] }],
   };
-  const [app] = composeApplications([authoring, administration]);
+  const [app, ...rest] = composeApplications([authoring, administration]);
   const builder = { roles: ['builder'] }, admin = { roles: ['admin'] }, both = { roles: ['builder', 'admin'] };
-  assert.equal(composeApplications([authoring, administration]).length, 1);
+  assert.equal(rest.length, 0, 'an extension never becomes a portal entry of its own');
   assert.deepEqual(app.serves, ['build', 'platform']);
   assert.equal(app.views[0], editor);
   assert.equal(app.views[1], runtime);
@@ -30,6 +30,11 @@ test('one functional app combines original views and menu groups while preservin
   assert.equal(app.nav(both).length, 1);
   assert.deepEqual(app.nav(both)[0].items.map(item => item.route), [connection, connector]);
   assert.deepEqual(app.opens, authoring.opens);
+});
+
+test('an extension without the app that owns its identity is dropped rather than inventing one', () => {
+  const orphan = { extends: 'data-connection', views: [{ id: 'connection', render: () => 'editor' }] };
+  assert.deepEqual(composeApplications([orphan]), []);
 });
 
 const native = (id = 'mes', serves = [id]) => ({

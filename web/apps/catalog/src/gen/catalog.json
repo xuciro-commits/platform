@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:40eeb81d0eb1f69f",
+  "revision": "sha256:eaa0c298f9bc3de9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -14516,6 +14516,7 @@
         "createWidgetRegistry",
         "defineApp",
         "definitionPresentation",
+        "extendApp",
         "findDefinition",
         "interfaceQueryForSection",
         "isComposed",
@@ -14557,6 +14558,7 @@
         "AgentInfo",
         "AgentRun",
         "AppEntry",
+        "AppExtension",
         "AppUI",
         "ApplicationUIInfo",
         "AssetRef",
