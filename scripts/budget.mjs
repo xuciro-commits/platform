@@ -40,7 +40,8 @@ const k = (value) => `${(value / 1000).toFixed(1)}k 字`;
 // --- 文档：总量、最长的一份、最长的一行状态 --------------------------------
 const adrDir = join(ROOT, "docs/ADR");
 const adrs = readdirSync(adrDir).filter((name) => name.endsWith(".md") && name !== "README.md").map((name) => join(adrDir, name));
-const allDocs = walk(join(ROOT, "docs"), (path) => path.endsWith(".md"));
+// WorkQueue 是施工队列，按当天的工作进出，不是知识库；不计入文档预算。
+const allDocs = walk(join(ROOT, "docs"), (path) => path.endsWith(".md") && !path.endsWith(join("docs", "WorkQueue.md")));
 const statusLine = (path) => {
   const line = readFileSync(path, "utf8").split("\n").find((text) => /^状态[:：]/.test(text)) ?? "";
   return line.length;
