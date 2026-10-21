@@ -18,7 +18,9 @@ if docker volume ls -q 2>/dev/null | grep -qx 'platform-rehearsal_pgdata' && doc
   echo "FAIL: a platform-rehearsal project is already running; stop it first (docker compose -p platform-rehearsal down -v)" >&2
   exit 1
 fi
-IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTURING_PORT HOSPITALITY=http://localhost:$HOSPITALITY_PORT SINK=http://localhost:$SINK_PORT
+# Compose publishes these API ports on IPv4 loopback. The OIDC issuer keeps
+# its configured public name; CLI business requests use the bound address.
+IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://127.0.0.1:$MANUFACTURING_PORT HOSPITALITY=http://127.0.0.1:$HOSPITALITY_PORT SINK=http://127.0.0.1:$SINK_PORT
 backup=$(mktemp -d)
 cleanup() {
   local result=$?
