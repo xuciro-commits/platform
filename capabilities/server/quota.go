@@ -2,8 +2,8 @@ package platformserver
 
 import "time"
 
-// quota paces owned work: each app may make Tenant.Quota attempts per minute
-// (ADR-0007 D3), and the apps take turns being served first. Volatile; used
+// quota paces owned work: each app may make Tenant.Quota attempts per minute,
+// and the apps take turns being served first. Volatile; used
 // only by the runner under the tenant's main lock.
 type quota struct {
 	used map[string]usedMinute // attempts per app in the current minute

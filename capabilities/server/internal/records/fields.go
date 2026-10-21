@@ -207,7 +207,7 @@ func RecordLabel(info platform.EntityInfo, value any, id string) string {
 
 // KnowledgeBearing says a record of this type may become a knowledge passage:
 // a knowledge field of its own, the knowledge app's document, or a file that
-// may be attached to either (ADR-0009). The index re-cuts only these.
+// may be attached to either. The index re-cuts only these.
 func KnowledgeBearing(info platform.EntityInfo) bool {
 	return info.Type == platform.KnowledgeDocumentType || info.Type == platform.FileType || info.KnowledgeFiles ||
 		slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge })

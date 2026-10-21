@@ -19,7 +19,7 @@ RUN apk add --no-cache tzdata
 ARG PLATFORM_REVISION
 LABEL org.opencontainers.image.revision=$PLATFORM_REVISION
 COPY --from=build /manufacturing-server /usr/local/bin/manufacturing-server
-# The workspace (ADR-0019), built beforehand: pnpm --dir web/apps/workspace build
+# The workspace, built beforehand: pnpm --dir web/apps/workspace build
 COPY web/apps/workspace/dist /web
 USER nobody
 ENTRYPOINT ["manufacturing-server"]

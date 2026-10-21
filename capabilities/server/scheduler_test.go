@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0007 10a: owned work in rounds — ordering by key, fairness between
+// owned work in rounds — ordering by key, fairness between
 // tenants, and quotas that defer.
 func TestScheduler(t *testing.T) {
 	start := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)

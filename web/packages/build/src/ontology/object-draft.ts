@@ -1,7 +1,7 @@
 import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { sourceFieldInput } from "@platform/app";
 // One draft session over a `build.object` record, shared by the object type
-// workbench and the action type workbench (ADR-0047§6): both edit the same
+// workbench and the action type workbench: both edit the same
 // record through its own action, explicitly save it and publish it; the host checks
 // everything again at publication.
 import { useActionTrial, useHost, useReadQuery } from "@platform/app";

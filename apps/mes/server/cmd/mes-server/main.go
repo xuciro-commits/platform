@@ -1,8 +1,5 @@
-// Command mes-server runs the MES alone on a development host (docs/Apps.md
-// step 6; ADR-0016) for one demo plant: shop orders released by its own
-// supervisors, with no ERP, so nothing is confirmed. With -web the host serves
-// the workspace's build; the development tokens supervisor, operator-l1,
-// operator-l2, quality-1, quality-2, gateway-l1 and assistant-l1 sign in.
+// Command mes-server runs MES on a development host. With -web it serves
+// the workspace build using the configured development identities.
 package main
 
 import (
@@ -36,10 +33,10 @@ var demo = []platformserver.Seat{
 	agent(seat("assistant-l1", "agent-l1", mes.Assistant, "L1")),
 }
 
-// agent marks an AI agent: what it causes that cannot be recalled waits for a person (ADR-0004 D6).
+// agent marks an AI agent: what it causes that cannot be recalled waits for a person.
 func agent(s platformserver.Seat) platformserver.Seat { s.Agent = true; return s }
 
-// seat signs in as subject and belongs to units of the site structure (ADR-0022).
+// seat signs in as subject and belongs to units of the site structure.
 func seat(subject, id string, role mes.Role, units ...string) platformserver.Seat {
 	s := platformserver.Seat{Subjects: []string{subject}, Member: platform.Member{ID: id, Roles: map[string]string{"mes": string(role)}}}
 	if subject == "supervisor" {
@@ -55,7 +52,7 @@ func seat(subject, id string, role mes.Role, units ...string) platformserver.Sea
 
 func main() {
 	deployment := platformserver.Flags("127.0.0.1:8499")
-	disable := flag.String("disable", "", "comma-separated capabilities to deactivate (ADR-0057)")
+	disable := flag.String("disable", "", "comma-separated capabilities to deactivate")
 	flag.Parse()
 	development := demo
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {

@@ -35,7 +35,7 @@ func (h *Host) routesCore(rt *routes) {
 			}
 			followChanges(w, r, t)
 		})
-	rt.authorized(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause (ADR-0010)",
+	rt.authorized(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause",
 		Answer: TenantHealth{}}, PlatformApp, []string{Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if h.Recover == nil {
 			w.WriteHeader(http.StatusNotImplemented)
@@ -72,7 +72,7 @@ func (h *Host) routesCore(rt *routes) {
 		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))
 		Reply(w, record, t.i18n.said(err, t.Language(m, r)), localized...)
 	})
-	rt.authorized(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors; ADR-0027)", Answer: Explanation{},
+	rt.authorized(Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: Explanation{},
 		Query: []Param{{"member", "the member to ask about"}, {"permission", "an action's schema, or <app>:read:<name>"}}}, PlatformApp, []string{Admin, Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
 		if err != nil {
@@ -93,16 +93,16 @@ func (h *Host) routesCore(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, decision)
 	})
-	rt.recordRead(Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked (ADR-0028 §5)", Answer: []Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked", Answer: []Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Sessions(m.ID, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), h.Now()))
 	})
-	rt.handle(Route{Pattern: "POST /v1/sessions/end-others", Summary: "End every session of the caller but this one: the host refuses those credentials from now on (ADR-0028 §5)", Answer: map[string]int{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "POST /v1/sessions/end-others", Summary: "End every session of the caller but this one: the host refuses those credentials from now on", Answer: map[string]int{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, map[string]int{"ended": consoleOf(t).EndOtherSessions(m.ID, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), h.Now())})
 	})
-	rt.recordRead(Route{Pattern: "GET /v1/tokens", Summary: "The caller's personal tokens, never their secrets (ADR-0028 §5)", Answer: []TokenView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(Route{Pattern: "GET /v1/tokens", Summary: "The caller's personal tokens, never their secrets", Answer: []TokenView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Tokens(m.ID, h.Now()))
 	})
-	rt.recordRead(Route{Pattern: "GET /v1/tokens/{id}/secret", Summary: "The secret of a token the caller just issued, once (ADR-0028 §5)", Answer: map[string]string{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(Route{Pattern: "GET /v1/tokens/{id}/secret", Summary: "The secret of a token the caller just issued, once", Answer: map[string]string{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		secret, ok := consoleOf(t).Minted(r.PathValue("id"), m.ID, time.Now())
 		if !ok {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND})

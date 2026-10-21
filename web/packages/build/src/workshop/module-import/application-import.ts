@@ -36,7 +36,7 @@ export function importedPageWrites(report:ApplicationImportReport):ImportPageWri
  return JSON.parse(JSON.stringify(report.pages.map(({destination,report:r})=>({destination,payload:{name:destination.name,object:destination.object,...r.draft!}}))));
 }
 /** A saved object draft the imported pages bind to: the application's joint
- * candidate installs it with them (ADR-0011). */
+ * candidate installs it with them. */
 export type ImportDraftObject={id:string;name:string;title?:string};
 export type ApplicationImportDependency={kind:'object';id:string;name:string;title?:string};
 /** The pre-release dependencies of the imported pages, in destination order and
@@ -71,7 +71,7 @@ export type ImportSaveIO={
  active:()=>boolean;
  read:(id:string)=>Promise<ImportedPageRecord|undefined>;
  pending:(id:string)=>boolean;
- /** Whether this tenant still publishes a page on its own (ADR-0011b/D6):
+ /** Whether this tenant still publishes a page on its own (/D6):
   * the development and import profiles do; a delivery tenant saves the drafts
   * and the application's joint candidate carries them. */
  directInstall:boolean;

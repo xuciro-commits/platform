@@ -2,7 +2,7 @@
 // models, object graphs, lineage, execution chains, a record's neighbourhood. The
 // owner supplies nodes with icons and edges with meaning; the canvas owns zoom, pan,
 // fit, minimap, layouts, dragging, linking and dropping, so no view draws its own
-// boxes again (ADR-0022, ADR-0031, ADR-0033).
+// boxes again.
 import { ConnectionMode, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow } from "@xyflow/react";
 import { ArrowDownFromLine, ArrowLeftFromLine, ArrowRightFromLine, ArrowUpFromLine, ChevronDown, ChevronUp, Grid3x3, Maximize, Orbit, Waves } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -40,7 +40,7 @@ export type RelationCanvasProps = {
   onLink?: (source: string, target: string) => void;
   onDrop?: (payload: string, at: CanvasPosition) => void;
   /** The reader's own arrangement is kept on this device for this drawing
-   * (ADR-0035): even a read-only view may be dragged, and the arrangement
+   *: even a read-only view may be dragged, and the arrangement
    * survives a reload until the reader chooses a layout again. */
   storeKey?: string;
 };
@@ -68,7 +68,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const hierarchy = useMemo(() => relationHierarchy(nodes.map((n) => n.id), relations), [nodes, relations]);
 
   // The reader's stored arrangement joins whatever the owner gives and wins over
-  // it until the reader chooses a layout again (ADR-0035).
+  // it until the reader chooses a layout again.
   const [stored, setStored] = useState<Record<string, CanvasPosition>>(() => (storeKey ? readCanvasPositions(storeKey) : undefined) ?? {});
   useEffect(() => { setStored((storeKey ? readCanvasPositions(storeKey) : undefined) ?? {}); }, [storeKey]);
   const known = useMemo(() => (storeKey ? { ...positions, ...stored } : { ...positions }), [positions, stored, storeKey]);
@@ -107,7 +107,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey]);
 
   // Every line is routed from the boxes as they stand, on every move: a drag, a
-  // layout and a saved view all draw the same lines (ADR-0035).
+  // layout and a saved view all draw the same lines.
   const flowEdges = useMemo<RelationLineEdge[]>(() => {
     const boxes: Record<string, Rect> = {};
     for (const n of flowNodes) { const size = n.measured?.width && n.measured.height ? n.measured as { width: number; height: number } : sizeOf(n.data); boxes[n.id] = { x: n.position.x, y: n.position.y, width: size.width, height: size.height }; }

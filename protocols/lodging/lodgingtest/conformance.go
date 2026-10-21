@@ -17,7 +17,7 @@ import (
 
 // Conformance checks that a tenant's provider of the lodging protocol behaves as the
 // protocol says. The tenant must run the platform's Relations; member must be
-// allowed to reserve, change and cancel with the provider (ADR-0006).
+// allowed to reserve, change and cancel with the provider.
 func Conformance(t *testing.T, tenant *platformserver.Tenant, member platform.Member, roomType string) {
 	t.Helper()
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
@@ -63,7 +63,7 @@ func Conformance(t *testing.T, tenant *platformserver.Tenant, member platform.Me
 	if b, _ := booking("LB-1"); b.Status != lodging.Canceled {
 		t.Fatalf("booking after cancel: %+v", b)
 	}
-	// Holds (ADR-0006 D3): held until a date, then confirmed or released; the
+	// Holds: held until a date, then confirmed or released; the
 	// provider releases a hold whose last day has passed.
 	hold := func(until string) map[string]string {
 		return map[string]string{"roomType": roomType, "checkIn": "2026-12-01", "checkOut": "2026-12-02", "guest": "Group", "until": until}

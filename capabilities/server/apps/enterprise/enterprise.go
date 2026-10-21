@@ -1,9 +1,9 @@
-// Package enterprise is the platform's enterprise modeling layer (ADR-0022):
+// Package enterprise is the platform's enterprise modeling layer:
 // each tenant's model of its own enterprise — organisations, people, posts,
 // capabilities, locations, resources, projects, goals and how they relate —
 // typed by the OMG UAF profile the host embeds, drawn in views, seeded by
-// scale, and answered to every app through host.Directory. It took over the
-// org app of ADR-0022; the "organization" read and the OrgSeed format remain
+// scale, and answered to every app through host.Directory. It replaced the
+// org app; the "organization" read and the OrgSeed format remain
 // as its Personnel-domain projection.
 package enterprise
 
@@ -53,7 +53,7 @@ const (
 	ReadPatterns       = "enterprise-patterns"  // the pattern catalogue with previews
 	SchemaPatternApply = "enterprise.pattern.apply"
 	SchemaSliceImport  = "enterprise.slice.import"
-	SchemaSliceSync    = enterprisemodel.SchemaSliceSync // ADR-0022: a pipeline lands an external system's slice, diffed
+	SchemaSliceSync    = enterprisemodel.SchemaSliceSync // a pipeline lands an external system's slice, diffed
 
 	// Admin stewards the model (the org app's role, kept so seats carry over).
 	Admin = "admin"
@@ -68,7 +68,7 @@ type Enterprise struct {
 }
 
 // declarations is the enterprise action catalog in full — the write contract
-// the host enforces and the generated SDK types (ADR-0034 D3): one source for
+// the host enforces and the generated SDK types: one source for
 // the ledger and for every consumer outside this package.
 func declarations() []platform.Action {
 	admin := []string{Admin}
@@ -145,16 +145,16 @@ func declarations() []platform.Action {
 	return append(actions, change)
 }
 
-// New is a tenant's enterprise app, starting from an ADR-0022 seed (which an
+// New is a tenant's enterprise app, starting from an  seed (which an
 // industry package or the development seats give) lifted into the model. Its
 // ledger is declared from declarations(), the single source of the write
-// contract the generated SDK also reads (ADR-0034).
+// contract the generated SDK also reads.
 func New(tenant string, seed platform.OrgSeed) *Enterprise {
 	catalog := platform.NewCatalog(declarations()...)
 	return &Enterprise{tenant: tenant, model: enterprisemodel.FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
 }
 
-// Snapshot and Restore: the model as decisions left it (ADR-0024).
+// Snapshot and Restore: the model as decisions left it.
 func (e *Enterprise) SnapshotFormat() string { return "enterprise.model.v1" }
 
 func (e *Enterprise) Snapshot() (json.RawMessage, error) {
@@ -176,7 +176,7 @@ func (e *Enterprise) Manifest() platform.Manifest {
 		ReadSources: map[string]string{ReadOrganization: "record", ReadModel: "record", ReadMetamodel: "record", ReadPublished: "record", ReadPatterns: "record"}}
 }
 
-// memberOffboard is the console's decision that a member left (ADR-0028 §4):
+// memberOffboard is the console's decision that a member left:
 // the model answers by ending their memberships that day, as its own
 // decisions, so the person's tenure reads Until and nothing is deleted.
 const memberOffboard = "platform.member.offboard"
@@ -484,7 +484,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				case r.Stereotype == Placement && r.Kind != "" && m.KindOf(r.Kind) == nil:
 					return nil, invalid("{kind} is not a relationship kind of this model", r.Kind)
 				}
-				// The same contract as Relate (ADR-0031 D2): a slice or a sync
+				// The same contract as Relate: a slice or a sync
 				// cannot write a pair the profile refuses.
 				src, dst := m.ElementOf(r.Source), m.ElementOf(r.Target)
 				if st, ok := stereotypes[r.Source]; ok {
@@ -780,7 +780,7 @@ func checkProperties(mm *uaf.Metamodel, stereotype string, values map[string]any
 	props := mm.Properties(stereotype)
 	for name, v := range values {
 		if _, bag := v.(map[string]any); bag && strings.HasPrefix(name, "source:") {
-			continue // an external system's own attributes, kept under its name (ADR-0022)
+			continue // an external system's own attributes, kept under its name
 		}
 		i := slices.IndexFunc(props, func(p uaf.Property) bool { return p.Name == name })
 		if i < 0 {
@@ -850,7 +850,7 @@ func (e *Enterprise) Holders(kind, unit, role string, day platform.Date) []strin
 
 // Calendar is the working calendar of party on day: that of its primary
 // organisation, else of any of its organisations, found up any kind; else the
-// tenant's first; else Monday to Friday (ADR-0038).
+// tenant's first; else Monday to Friday.
 func (e *Enterprise) Calendar(party string, day platform.Date) platform.Calendar {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -905,7 +905,7 @@ type PatternInfo = enterprisemodel.PatternInfo
 
 type Metamodel = enterprisemodel.Metamodel
 
-// Element and Related serve host.Directory for the apps (ADR-0022 D3).
+// Element and Related serve host.Directory for the apps.
 func (e *Enterprise) Element(id string, day platform.Date) (platform.ElementInfo, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

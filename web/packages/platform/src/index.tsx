@@ -1,5 +1,5 @@
 // The platform package contributes the applications a tenant is governed and
-// operated with (ADR-0016 M1, ADR-0018 §3.3): Control Panel (people, access,
+// operated with (M1): Control Panel (people, access,
 // packages, settings, audit), Runs (automation and workflow runs), Data
 // Connection (connectors and webhooks), Agents, AI assistance, Knowledge, and
 // the Host Console for host administrators. One package, several entries in the
@@ -85,7 +85,7 @@ export const controlPanel = defineApp({
   surface: "tenant",
   category: "govern",
   description: t("Members, organisation, installed packages, settings and the audit trail."),
-  for: () => true, // every member has an account here (ADR-0028); the rest of the panel follows their roles
+  for: () => true, // every member has an account here; the rest of the panel follows their roles
   title: t("Control Panel"),
   icon: <SlidersHorizontal />,
   home: { view: "control-panel" },

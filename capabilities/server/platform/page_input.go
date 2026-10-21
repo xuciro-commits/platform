@@ -7,7 +7,7 @@ func (d *PageDocument) checkInputPresentation(s Section) error {
 		return nil
 	}
 	// A scan input is a search input read by a barcode scanner or camera
-	// (ADR-0038): the same text state drives the same query search.
+	//the same text state drives the same query search.
 	required := pageWidgets.Runtime.Input.SearchRequiredUIProfile
 	if s.InputKind == "scan" {
 		required = pageWidgets.Runtime.Input.ScanRequiredUIProfile

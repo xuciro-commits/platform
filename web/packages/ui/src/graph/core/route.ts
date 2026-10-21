@@ -1,4 +1,4 @@
-// Lines between boxes that stay where the boxes are (ADR-0035). Every line is
+// Lines between boxes that stay where the boxes are. Every line is
 // drawn from the drawing as it stands — a layout, a reader's drag, a saved view
 // all route the same way — so no line is ever left over from an arrangement the
 // boxes have since left. A line joins the middles of the two sides that face

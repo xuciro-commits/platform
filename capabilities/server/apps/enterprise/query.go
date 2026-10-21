@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-// The query and resolve halves of the ref/query contracts (ADR-0034 D1, D2):
+// The query and resolve halves of the ref/query contracts:
 // typed reads over the one model, projected to what a consumer needs — never
 // the whole graph. The host serves them as GET /v1/enterprise-query and
 // /v1/enterprise-resolve; the generated SDK (SDK()) wraps both.
@@ -27,7 +27,7 @@ func project(e enterprisemodel.Element, today platform.Date) enterprisemodel.Ent
 		Legal: e.Legal, From: e.From, Until: e.Until, Periods: slices.Clone(e.Periods), Closed: !e.ActiveOn(today)}
 }
 
-// Query answers the typed read (ADR-0034 D1): stereotypes is an OR-filter
+// Query answers the typed read: stereotypes is an OR-filter
 // (empty: every stereotype), kind an exact match, q a case-insensitive
 // substring of id/name/shortName/kind, alive a day whose live set to take
 // ("all": no window, closed and future included), limit a bounded page (the
@@ -77,7 +77,7 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 	return out, nil
 }
 
-// Resolve answers the ref contract's read side (ADR-0034 D2): the projection
+// Resolve answers the ref contract's read side: the projection
 // of each named id, closed elements included and marked, unknown ids skipped —
 // a stored reference always reads. At most 100 ids per call keep the answer
 // bounded; empty resolves to nothing.

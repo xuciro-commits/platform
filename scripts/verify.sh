@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The named verification steps the Makefile composes (ADR-0029): each writes
+# The named verification steps the Makefile composes: each writes
 # its log to .build/verify/<step>.log and prints one line. Run steps by name:
 #   scripts/verify.sh contract formal format capabilities composition web-check mes
 # `make check`, `make verify`, `make rehearse` choose the layer; this script is
@@ -22,7 +22,7 @@ step() {
   fi
 }
 
-# The kernel is domain-neutral: no domain vocabulary in the contract (Platform.md §4).
+# The kernel is domain-neutral: no domain vocabulary in the contract (contract/spec).
 vocabulary() {
   ! grep -rniE '\b(music|track|album|artist|playlist|song|lyric|subsonic|openverse|hotel|room|reservation|guest)s?\b' \
       contract --exclude-dir=.build --exclude-dir=.lake --exclude-dir=gen
@@ -60,7 +60,7 @@ web_check() {
 web() {
   local web_failures=${#failed[@]}
   web_check
-  # docs/Testing.md's routes in a browser against a development host (web/e2e, F-35; needs Go and Chrome or Playwright's Chromium)
+  # The web/e2e routes against development hosts (needs Go and Chrome or Playwright Chromium)
   if ((${#failed[@]} == web_failures)); then
     step web-routes bash -c 'cd web && pnpm --filter @platform/e2e e2e'
   else
@@ -79,7 +79,7 @@ capabilities() {
 }
 
 # The scaffold (cmd/new-app) writes an app whose tests pass, in a scratch copy
-# of the repository's layout, so docs/Apps.md's first step always works.
+# of the repository's layout, so the documented new-app command produces a usable starting point.
 scaffold() {
   local root=.build/scaffold
   rm -rf "$root" && mkdir -p "$root" && ln -s ../../contract ../../capabilities "$root"/ &&
@@ -91,7 +91,7 @@ mes() {
   step mes-server check_module apps/mes/server
 }
 
-# Apps know no other app; they meet through protocols (ADR-0006); and no
+# Apps know no other app; they meet through protocols; and no
 # escape hatch appears without being listed.
 composition_static() {
   step app-boundaries scripts/boundaries.sh

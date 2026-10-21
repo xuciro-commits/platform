@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// sequences are the number counters (ADR-0026): the host's, keyed by
+// sequences are the number counters: the host's, keyed by
 // "<app>/<sequence>/<year>", taken only in accepted decisions, rebuilt by
 // replay and kept by snapshots. Their own lock: reads run inside other apps'
 // submissions.

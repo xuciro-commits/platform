@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// languages translate the app's titles and descriptions (ADR-0005).
+// languages translate the app's titles and descriptions.
 //
 //go:embed i18n
 var languageFiles embed.FS
@@ -22,7 +22,7 @@ var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 // Memory is the smallest lodging provider: any room type, no capacity. It is the
 // protocol's reference implementation and the second provider that shows a
-// consumer needs no change when the provider does (ADR-0006). Its stays are
+// consumer needs no change when the provider does. Its stays are
 // records of the host, like any app's (#129): a record page lists them.
 type Memory struct {
 	mu     sync.Mutex
@@ -63,7 +63,7 @@ func NewMemory(tenant string) *Memory {
 	return &Memory{ledger: platform.NewLedger(tenant, "memstay", platform.NewCatalog(actions...), StayType)}
 }
 
-// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
+// Snapshot and Restore: its records are the host's; the ledger is its own.
 func (m *Memory) Snapshot() (json.RawMessage, error) { return m.ledger.Snapshot() }
 func (m *Memory) AcceptedLedger() *platform.Ledger   { return m.ledger }
 func (m *Memory) SnapshotFormat() string             { return "platform.ledger.v1" }

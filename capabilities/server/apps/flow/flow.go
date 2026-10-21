@@ -16,12 +16,12 @@ import (
 	"platformserver/platform"
 )
 
-// Package flow is the platform's flow app, on the app API and internal/host
-// (ADR-0016). It runs the flows apps declare (ADR-0007). An instance is a record
+// Package flow is the platform's flow app, on the app API and internal/host.
+// It runs the flows apps declare. An instance is a record
 // of it; every step it takes is one of its decisions, made inside the owned
 // work that caused it (a delivery of an event, or its timer job), so replay
 // takes it again. Acts are submitted as the declaring app's automation
-// principal; people are asked through that app's tasks (ADR-0007).
+// principal; people are asked through that app's tasks.
 const (
 	ID                        = platform.FlowApp
 	InstanceType              = platform.FlowInstanceType
@@ -56,7 +56,7 @@ type LoopFrame = platform.FlowLoopFrame
 // UndoEntry is a completed act's compensation, built when it completed.
 type UndoEntry = platform.FlowUndoEntry
 
-// TraceLine is why the instance moved (ADR-0007).
+// TraceLine is why the instance moved.
 type TraceLine = platform.FlowTraceLine
 
 type flowDef struct {
@@ -177,8 +177,8 @@ func (f *Flows) Declare(a platform.App) error {
 }
 
 // Install registers a flow an app composed at runtime — a process a tenant
-// defined (ADR-0048, #132) — as its next version: running instances keep the
-// version they started on (ADR-0007).
+// defined (#132) — as its next version: running instances keep the
+// version they started on.
 func (f *Flows) Install(a platform.App, fl platform.Flow) error {
 	d, err := f.check(a.Manifest(), fl)
 	if err != nil {
@@ -374,7 +374,7 @@ func (f *Flows) def(id string, version int) *flowDef {
 }
 
 // Check refuses a tenant whose running instances need a flow version its code
-// no longer declares (ADR-0007): the host starts only when every running
+// no longer declares: the host starts only when every running
 // instance can go on.
 // Versions are those new instances took during the input being handled, then forgotten.
 func (f *Flows) Versions() map[string]int {
@@ -492,7 +492,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 	s := e.Record.GetSubmission()
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		latest, _ := f.latest(id)
-		if latest.Start.Type != "" { // a record's state (ADR-0038): once per record, when a decision first brings it there
+		if latest.Start.Type != "" { // a record's state: once per record, when a decision first brings it there
 			for _, ref := range e.Changed {
 				key, ok := strings.CutPrefix(ref, latest.Start.Type+"/")
 				if !ok {
@@ -685,7 +685,7 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 func flowDefinitionOf(d *flowDef) FlowDefinition {
 	id := d.app + "." + d.Name
 	v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: append([]string{}, d.Start.On...), Steps: []FlowStep{}}
-	if d.Start.Type != "" { // started by a record's state, not an event (ADR-0038)
+	if d.Start.Type != "" { // started by a record's state, not an event
 		v.Start = append(v.Start, "state of "+d.Start.Type)
 	}
 	if d.Start.Continuous {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Demo data for the local hospitality host (deploy/local, OIDC on): customers, an
 # opportunity with a stay booked through the lodging protocol, and enough
-# reservations for a night to be oversold, so the manager is notified (ADR-0027).
+# reservations for a night to be oversold, so the manager is notified.
 # Every entry is an ordinary decision with a fixed key: running it again changes nothing.
 set -euo pipefail
 IDP=${IDP:-http://localhost:8480/auth/v1} HOSPITALITY=${HOSPITALITY:-http://localhost:8495}

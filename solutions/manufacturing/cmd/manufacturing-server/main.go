@@ -1,5 +1,5 @@
 // Command manufacturing-server runs the plant solution — the MES and its books meeting
-// through production.orders/1 (ADR-0026) — for one demo plant. The books are
+// through production.orders/1 — for one demo plant. The books are
 // the ERP app, seeded with its chart, the month open and the plant's products
 // when the journal is empty; with -erp external they are the adapter to an ERP
 // outside, whose planned orders the service account "erp" delivers. Without
@@ -48,7 +48,7 @@ func main() {
 		supervisor[app] = role
 	}
 	assistant := manufacturing.Seat("assistant-l1", "agent-l1", seat(mes.Assistant), "L1")
-	assistant.Agent = true // what it causes that cannot be recalled waits for a person (ADR-0004 D6)
+	assistant.Agent = true // what it causes that cannot be recalled waits for a person
 	development := []platformserver.Seat{
 		manufacturing.Seat("supervisor", "sup-1", supervisor, "plant-sz"),
 		manufacturing.Seat("accountant", "acc-1", map[string]string{erp.ID: erp.Accountant}),

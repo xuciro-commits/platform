@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Languages are an app's translations (ADR-0005 D2, D3): for each language
+// Languages are an app's translations: for each language
 // ("zh-CN"), the English text of its titles and descriptions mapped to their
 // translation. English is the source and the fallback, so an app is
 // translated one text at a time without renaming anything.

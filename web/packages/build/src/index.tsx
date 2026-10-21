@@ -1,5 +1,5 @@
 import { ApplicationSampleAsset } from "./releases/samples";
-// ADR-0047: direct builder menus and application context share the original editors.
+// direct builder menus and application context share the original editors.
 import "./i18n";
 import { defineApp, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
@@ -38,7 +38,7 @@ import { studioApplicationID } from "./projects/studio-model";
 import { Activity, Bell, Bot, Boxes, Braces, ClipboardCheck, Database, Fingerprint, FlaskConical, FolderKanban, GitMerge, Hammer, History, Layers, LayoutList, LayoutTemplate, Link2, PackageCheck, Plug, Search, Send, Sparkles, Table2, Tags, Workflow, Zap } from "lucide-react";
 
 const builder = (host: Host) => host.role("build") === "builder";
-// An integrator connects, maps and runs integrations without designing objects or pages (ADR-0025).
+// An integrator connects, maps and runs integrations without designing objects or pages.
 const integrator = (host: Host) => host.role("build") === "integrator";
 const editorViews: View[] = [
   { id: "projects", title: () => t("Applications"), render: () => <ProjectsList /> },

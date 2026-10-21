@@ -9,7 +9,7 @@ import (
 )
 
 // Saving and restoring what the Go logs hold, for a host's snapshot at a
-// journal position (docs/ADR/0019 D6). This adds no semantics: a restored log
+// journal position. This adds no semantics: a restored log
 // answers exactly as the log it was saved from, and the host checks that a
 // snapshot plus the entries after it equals a full replay.
 

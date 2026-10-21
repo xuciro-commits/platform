@@ -9,7 +9,7 @@ import { diagnose } from "./diagnostics";
 import { useEffect, useRef, useState } from "react";
 import { MigrationWorkbench } from "./migration";
 
-// One selected saved draft in a joint candidate (ADR-0011). The selection is
+// One selected saved draft in a joint candidate. The selection is
 // what the builder checked; the server recomputes the candidate from it.
 export type JointChoice = { kind: ReleaseKind; id: string };
 const ownerDraft = (choice: JointChoice): JointChoice => ({ ...choice, kind: choice.kind === "table" ? "compute" : choice.kind });
@@ -27,7 +27,7 @@ const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] 
 
 export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app" | "migration";
 /** Decode incoming candidate selections without silently discarding a bad
- * joint closure and delivering only its application root (ADR-0011). */
+ * joint closure and delivering only its application root. */
 export function releaseDraftsSelection(value: string | undefined, kinds: readonly string[]): { drafts: JointChoice[]; error?: string } {
   if (!value) return { drafts: [] };
   const invalid = () => ({ drafts: [], error: "The release selection is invalid or exceeds its budget. Reopen review from the application." });
@@ -141,7 +141,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const eligiblePlans = [...localPlans, ...assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "evaluation-set" && !localPlans.some(plan => plan.name === asset.ref.name)).map(asset => ({id:asset.ref.name,title:asset.ref.name}))];
   const report = reports.isError ? undefined : reports.data?.records.find((item) => item.id === reportID);
   // The application a release review was opened from is the natural root of a
-  // joint selection (ADR-0011): its pages come before its own draft.
+  // joint selection: its pages come before its own draft.
   const passedFunctions = (reports.isError ? [] : reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
   const agentNames = (review?.included ?? []).filter(ref => ref.app === "build" && ref.kind === "agent").map(ref => ref.name);
   const evaluated = functionNames.every((name) => passedFunctions.includes(name)) && agentNames.every(name => candidateAI.some(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name && item.evaluations.some(report => report.candidate === savedID && report.state === "passed")));

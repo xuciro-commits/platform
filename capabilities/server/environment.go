@@ -17,7 +17,7 @@ import (
 )
 
 // Candidate physical isolation, cross-environment promotion and real data
-// migration (ADR-0016 §11, ordered by the owner on 2026-10-05).
+// migration (ordered by the owner on 2026-10-05).
 //
 // Isolation: a saved release candidate is written once into the tenant's file
 // store as a sealed artifact, addressed by its content digest. What is sealed
@@ -28,12 +28,12 @@ import (
 // Promotion: an environment is another tenant this host serves. Promotion moves
 // a sealed candidate from one tenant to another through the target's own
 // release result — the same decode, digest, installation and activation path a
-// local save uses (ADR-0011) — after checking that the target hosts every app
+// local save uses — after checking that the target hosts every app
 // the candidate's assets belong to. Nothing is copied by hand and no second
 // deployment state exists.
 //
-// Migration: real records move with the platform's own import/export
-// (ADR-0038). An export writes what a member of the source may read; the
+// Migration: real records move with the platform's own import/export.
+// An export writes what a member of the source may read; the
 // import submits each row through the target's generated actions as a member of
 // the target, keyed by the file's hash and the row, so a migration run twice
 // repeats nothing. Types the target does not host refuse the whole run up front.

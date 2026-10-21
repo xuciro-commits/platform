@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Switch the two local solution hosts between Air/Vite and Compose (ADR-0029)."""
+"""Switch the two local solution hosts between Air/Vite and Compose."""
 import json
 import os
 from pathlib import Path

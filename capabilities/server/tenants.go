@@ -17,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-// A host's tenants are configured, not compiled in (ADR-0027 §2.2): the
+// A host's tenants are configured, not compiled in: the
 // -tenants file lists every tenant with its seats and the settings it starts
 // with, and the host console adds one at run time from a template. The host
 // binary still decides which apps a tenant runs (its Rebuild); the file and

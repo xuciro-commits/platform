@@ -23,7 +23,7 @@ import (
 
 // Entry is one durable tenant input or accepted result. Legacy entries replay
 // the application code; accepted-result entries apply saved record and intent
-// bytes without rerunning the original business decision (ADR-0010).
+// bytes without rerunning the original business decision.
 type Entry struct {
 	App       string          `json:"app"`
 	Kind      string          `json:"kind"`
@@ -31,7 +31,7 @@ type Entry struct {
 	Body      json.RawMessage `json:"body"`
 	At        time.Time       `json:"at"`
 	// Versions are the flow versions instances started with while the entry was
-	// handled (ADR-0007): replay starts them on the same ones, whatever the
+	// handled: replay starts them on the same ones, whatever the
 	// code declares since.
 	Versions map[string]int `json:"versions,omitempty"`
 }
@@ -340,7 +340,7 @@ func (j *Postgres) Snapshot(ctx context.Context, tenant, code string) (int64, []
 }
 
 // Append adds an entry to a tenant's journal. The order is per tenant, so
-// tenants append side by side, each under its own lock (F-34, ADR-0007 D7).
+// tenants append side by side, each under its own lock (F-34).
 func (j *Postgres) Append(ctx context.Context, tenant string, e Entry) error {
 	j.mu.Lock()
 	lock := j.locks[tenant]
@@ -529,7 +529,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 func (j *Postgres) Close() { j.readPool.Close(); j.pool.Close() }
 
 // The journal's database also keeps what is derived outside the journal
-// (ADR-0009): passages' vectors and model calls' transcripts. Losing either
+//passages' vectors and model calls' transcripts. Losing either
 // loses no truth, so failures are logged, not fatal.
 
 func (j *Postgres) Vectors(tenant, model string, hashes []string) map[string][]float32 {

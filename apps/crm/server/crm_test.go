@@ -59,11 +59,11 @@ func TestOpportunityOwnership(t *testing.T) {
 		{submit("lead", SchemaClose, OpportunityType, "O-1", "6", map[string]string{"outcome": "won"}), "ok"},
 		{submit("ana", SchemaClose, OpportunityType, "O-1", "7", map[string]string{"outcome": "lost"}), "ERROR_CODE_CONFLICT"},
 		{submit("desk", SchemaAccount, AccountType, "Y", "8", map[string]string{"name": "Y", "kind": "person"}), "ERROR_CODE_POLICY_DENIED"},
-		// Generated edit and archive (ADR-0046): only editable fields change.
+		// Generated edit and archive: only editable fields change.
 		{submit("ana", "crm.account.edit", AccountType, "ACME", "9", map[string]string{"name": "Acme Corp"}), "ok"},
 		{submit("ana", "crm.account.edit", AccountType, "ACME", "10", map[string]string{"id": "OTHER"}), "ERROR_CODE_INVALID_ARGUMENT"},
 		{submit("ana", "crm.account.archive", AccountType, "ACME", "11", map[string]string{}), "ok"},
-		// From outside (ADR-0016): a web form's service account captures an account through the same action.
+		// From outside: a web form's service account captures an account through the same action.
 		{submit("webform", SchemaAccount, AccountType, "WEB-1", "12", map[string]string{"name": "Harbour Travel", "kind": "company"}), "ok"},
 		{submit("webform", SchemaAccount, AccountType, "WEB-1", "12", map[string]string{"name": "Harbour Travel", "kind": "company"}), "ok"}, // resent: the same decision
 	} {

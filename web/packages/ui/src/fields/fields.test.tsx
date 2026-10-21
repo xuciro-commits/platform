@@ -121,7 +121,7 @@ test("schema forms explain common validation errors and preserve explicit busine
 });
 
 // Words a person types, with no list to choose from: the editor of a tags field
-// that carries labels, field names or keywords (ADR-0048's page composer).
+// that carries labels, field names or keywords ('s page composer).
 test("a tags field takes words a person types and gives them back", () => {
   const free = field.tags({ label: "Fields in the list" });
   const onChange = vi.fn();

@@ -14,7 +14,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// The host tests' kit (docs/Testing.md "测试规范"). A test composes a tenant
+// The host tests' kit (see AGENTS.md). A test composes a tenant
 // with the seats it needs, then speaks to it as a member through decide /
 // refuse; it does not build pb.Submission by hand or keep its own idempotency
 // counter. New tests use the kit; old closures move onto it when their file

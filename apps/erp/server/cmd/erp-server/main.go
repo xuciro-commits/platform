@@ -1,7 +1,5 @@
-// Command erp-server runs the ERP app on a development host (docs/Apps.md
-// step 6) with a demo chart of accounts and the current month open. With -web
-// the host serves the workspace's build; the development tokens "controller",
-// "accountant" and "buyer" sign in.
+// Command erp-server runs ERP on a development host. With -web it serves
+// the workspace build using the configured development identities.
 package main
 
 import (

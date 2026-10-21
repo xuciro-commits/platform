@@ -33,14 +33,14 @@ type recordStore struct {
 	baseGeneration uint64
 	writes         map[string]bool
 	sealed         bool
-	// touched, when set, hears of each record put, under mu (the PostgreSQL projection, ADR-0024).
+	// touched, when set, hears of each record put, under mu (the PostgreSQL projection).
 	touched func(typ, id string)
 	// dirty are the records of knowledge-bearing types put since the index last
 	// read it, under mu: knowledge is cut again for those records alone, not by
-	// walking the tenant at every search (ADR-0009 14b, #130).
+	// walking the tenant at every search (#130).
 	dirty records.Index[bool]
 	// changed are the records each recent decision put ("<app>/<change>" →
-	// "<type>/<id>"), for flows started by a record's state (ADR-0038).
+	// "<type>/<id>"), for flows started by a record's state.
 	recentChanges records.RecentChanges
 }
 
@@ -78,7 +78,7 @@ type entityType struct {
 	fullImage        bool // private schema/bulk replacement needs full admission once
 	// knowledge says a record of this type may become knowledge: it declares a
 	// knowledge field, it is a knowledge document, or it is a file that may be
-	// attached to one (ADR-0009).
+	// attached to one.
 	knowledge          bool
 	retainedProjection bool // query fields are interpreted through an older owner shape
 }

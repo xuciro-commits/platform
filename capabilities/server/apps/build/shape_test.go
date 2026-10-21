@@ -8,7 +8,7 @@ import (
 )
 
 // An interface no app declares, and an extension without its base field,
-// are refused while the object is still a draft (ADR-0020 A2, A3).
+// are refused while the object is still a draft (A2, A3).
 func TestCheckShape(t *testing.T) {
 	b := &Build{}
 	o := construction.Object{Name: "vendor", Title: "Vendor", Fields: []construction.Field{{Name: "code", Type: "text", Search: true}}, Implements: []string{"core.coded"}}

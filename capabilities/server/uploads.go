@@ -6,7 +6,7 @@ import (
 )
 
 // uploads are the file hashes uploaded and when, until a record attaches them
-// or the sweep removes them (volatile, ADR-0038).
+// or the sweep removes them (volatile).
 type uploads struct {
 	mu sync.Mutex
 	at map[string]time.Time

@@ -1,11 +1,11 @@
-// Settings: AI providers, the playground and usage (ADR-0008).
+// Settings: AI providers, the playground and usage.
 import { useHost, MemberSelect, useReadQuery as useRead } from "@platform/app";
 import { PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
 
-// AI providers (ADR-0008): providers and models are decisions of the ai app;
+// AI providers: providers and models are decisions of the ai app;
 // catalogs are read live from each provider; calls go through the host, which
 // meters them. Keys stay in the secret store; only their names appear here.
 
@@ -130,7 +130,7 @@ export function AIPlayground() {
   const send = async () => {
     setBusy(true);
     const messages = [...(system ? [{ role: "system", content: system }] : []), { role: "user", content: prompt }];
-    // The answer streams in as it comes (ADR-0008 D2); a refusal (access, a limit) comes whole.
+    // The answer streams in as it comes; a refusal (access, a limit) comes whole.
     const turn: { prompt: string; answer?: string; error?: string; usage?: Usage } = { prompt, answer: "" };
     const show = () => setTurns([{ ...turn }, ...turns]);
     show();
@@ -203,7 +203,7 @@ export function AIUsage() {
 
 type Limit = { member: string; dailyTokens?: number; perMinute?: number };
 
-// A member's, agent's or app's own limits (ADR-0008 D1), for the ai app's
+// A member's, agent's or app's own limits, for the ai app's
 // administrators: in place of the defaults in App settings → AI.
 function AILimits() {
   const { decide } = useHost();

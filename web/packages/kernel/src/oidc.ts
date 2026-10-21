@@ -1,4 +1,4 @@
-// Browser sign-in with an OpenID provider (docs/ADR/0007): the authorization
+// Browser sign-in with an OpenID provider : the authorization
 // code flow with PKCE (RFC 7636) that public clients use. The provider proves who
 // the user is; the platform server verifies the access token and looks the user
 // up in the tenant's directory. Tokens live in sessionStorage (one tab, one user).

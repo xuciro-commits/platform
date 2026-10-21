@@ -11,7 +11,7 @@ import {importDependencies,importedPageWrites,saveImportedPages,type Application
 type PageRecord=ImportedPageRecord&{name:string;object:string;title:string;archived?:boolean};
 type FieldType=EntityInfo["fields"][number]["type"];
 type ObjectRecord={id:string;name:string;title?:string;archived?:boolean;published?:string;fields?:{name:string;title?:string;type:FieldType;choices?:string[];ref?:string;inverse?:string}[]};
-/** An object that is saved as a draft and not installed: ADR-0011 delivers it
+/** An object that is saved as a draft and not installed:  delivers it
  * with the application release instead of demanding it be published first. */
 type PreReleaseObject={name:string;title:string;entity:EntityInfo;dependency:ImportDraftObject};
 const messages:Record<string,string>={

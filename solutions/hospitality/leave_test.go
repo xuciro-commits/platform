@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0038: an approval due in two working days of the requester's
+// an approval due in two working days of the requester's
 // calendar. The office closes for National Day week and weekends; the front
 // office works every day.
 func TestWorkingDays(t *testing.T) {
@@ -62,7 +62,7 @@ func TestWorkingDays(t *testing.T) {
 	}
 }
 
-// ADR-0038 11b, 11e: field security across views, search, history, aggregates and exports;
+// Field security across views, search, history, aggregates and exports;
 // personal data auditing for HR; delegation of approvals when a manager is on leave.
 func TestFieldSecurity(t *testing.T) {
 	seat := func(id string, roles map[string]string, units ...platform.Membership) platformserver.Seat {

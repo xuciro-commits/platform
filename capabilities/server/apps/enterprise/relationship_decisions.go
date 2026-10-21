@@ -49,7 +49,7 @@ func decideRelationship(m *enterprisemodel.Model, mm *uaf.Metamodel, id string, 
 		return nil, invalid("Choose a member for the relationship")
 	}
 	// The ends the standard names, and the profile's own rules, in one
-	// place (ADR-0031 D2): a pair the contract refuses never enters the
+	// place: a pair the contract refuses never enters the
 	// model, and the refusal names the rule it breaks.
 	sourceEnd := source
 	if sourceEnd == nil && strings.HasPrefix(p.Source, "member:") {

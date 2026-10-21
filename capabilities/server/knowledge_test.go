@@ -18,7 +18,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0009 3a: documents and apps' knowledge fields are found by words and by
+// documents and apps' knowledge fields are found by words and by
 // meaning, only by those who may read them; an agent's search is journaled
 // with its step and cited, replay neither searches nor embeds, and every model
 // call's transcript is kept outside the journal.

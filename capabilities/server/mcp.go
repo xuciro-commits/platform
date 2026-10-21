@@ -21,7 +21,7 @@ func supportedMCPVersion(version string) bool {
 	return version == mcpProtocolVersion || version == "2025-03-26"
 }
 
-// MCP serves a member's catalog as Model Context Protocol tools (ADR-0006): each
+// MCP serves a member's catalog as Model Context Protocol tools: each
 // action it may call is a tool, and each read it may use is a "read_<name>" tool.
 // External agents (Claude Code, other MCP clients) discover and act with the
 // member's own grants through the same submission path as every other caller.

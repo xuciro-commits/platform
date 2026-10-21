@@ -18,7 +18,7 @@ import (
 	"platformserver/platform"
 )
 
-// Packages and contributions (ADR-0016 §10.3, §11; ordered 2026-10-05).
+// Packages and contributions (ordered 2026-10-05).
 //
 // A package declares its identity, immutable version, the capabilities and
 // contributions it brings, its required dependencies, its namespace and its

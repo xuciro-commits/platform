@@ -1,5 +1,5 @@
-// Package knowledge is the platform's knowledge app (ADR-0009), on the app API
-// and internal/host (ADR-0016): documents people upload for agents and
+// Package knowledge is the platform's knowledge app, on the app API
+// and internal/host: documents people upload for agents and
 // members to find, and the tenant's glossary. The host searches them, with
 // the fields apps declare as knowledge (knowledge.go in the host).
 package knowledge

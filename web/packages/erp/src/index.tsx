@@ -1,4 +1,4 @@
-// The ERP's UI (ADR-0026): journal entries drafted with their lines and posted
+// The ERP's UI: journal entries drafted with their lines and posted
 // from their page, the chart of accounts, periods, postings and the trial
 // balance; purchase orders placed, received and billed from their page,
 // partners, products, stock moves and what is on hand; production orders

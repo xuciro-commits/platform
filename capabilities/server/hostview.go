@@ -16,9 +16,9 @@ import (
 	"platformserver/platform"
 )
 
-// hostView is the tenant as its own apps see it (internal/host.Host, ADR-0016).
+// hostView is the tenant as its own apps see it (internal/host.Host).
 // hostView is the tenant as one of its own apps sees it; app is that app, for
-// what it declares at runtime (ADR-0048).
+// what it declares at runtime.
 type hostView struct {
 	t        *Tenant
 	app      platform.App
@@ -47,7 +47,7 @@ func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *ke
 	return page.Records, nil
 }
 
-// Install declares an entity this app composed at runtime (ADR-0048).
+// Install declares an entity this app composed at runtime.
 func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -323,7 +323,7 @@ func (h hostView) Runs() host.Runs {
 	return h.t.agents
 }
 
-// InstallPage offers a page composed in this tenant (ADR-0048).
+// InstallPage offers a page composed in this tenant.
 func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -336,7 +336,7 @@ func (h hostView) ValidateInstallPage(p platform.Page) error {
 	return h.installationDraft().InstallPage(h.app, p)
 }
 
-// InstallApplication offers an application handed over in this tenant (ADR-0046).
+// InstallApplication offers an application handed over in this tenant.
 func (h hostView) InstallApplication(c platform.Caller, a platform.Application) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -361,7 +361,7 @@ func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
 
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
-// Interfaces are the shapes declared across the tenant's apps (ADR-0020 A2).
+// Interfaces are the shapes declared across the tenant's apps (A2).
 func (h hostView) Interfaces() []platform.Interface {
 	manifests := make([]platform.Manifest, len(h.t.apps))
 	for k, a := range h.t.apps {

@@ -26,7 +26,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
     outputs: snapshot ? controlEdges(snapshot).filter((edge) => edge.source === item.name).map((edge) => ({ id: edge.sourcePort, label: edge.label ?? t("Next"), type: "flow" })) : [{ id: "next", label: t("Next"), type: "flow" }] }));
   const edges = snapshot ? controlEdges(snapshot) : nativeSteps.flatMap((item) => item.next.map((next, i) => ({ id: `${item.name}:${i}`, source: item.name, sourcePort: "next", target: next, targetPort: "in" })));
   // The canvas's own arrangement decides where a step sits when the snapshot
-  // holds no layout of its own (ADR-0035): one layout brain, declared sizes included.
+  // holds no layout of its own: one layout brain, declared sizes included.
   const positions = useFlowArrangement(sourceSteps.map((item) => ({ id: item.name, kind: item.name, label: item.title || item.name, position: { x: 0, y: 0 } })), edges, "right", catalog);
   const nodes: FlowNode[] = sourceSteps.map((item) => {
     const token = shown?.tokens?.find((token) => token.step === item.name);

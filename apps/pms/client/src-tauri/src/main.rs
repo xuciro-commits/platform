@@ -146,7 +146,7 @@ fn snapshot(&self) -> Value {
         json!({"key": e.submission.idempotency_key, "state": e.state, "schema": e.submission.schema.name,
                "reservation": e.submission.target.id, "payload": payload, "outcome": e.outcome})
     }).collect();
-    // Records of the hotel's entity types (ADR-0046): the reservations and the room types a manager maintains.
+    // Records of the hotel's entity types: the reservations and the room types a manager maintains.
     let records = |path: &str| if app.token.is_empty() { Ok(Value::Null) } else { app.get(path).map(|page| page["records"].clone()) };
     let reservations = records("/v1/records/pms.reservation?sort=checkIn,id&archived=true&limit=500");
     let room_types = records("/v1/records/pms.room-type?sort=name");

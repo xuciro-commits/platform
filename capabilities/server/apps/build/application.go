@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// An application someone hands to the people it was built for (ADR-0046): a
+// An application someone hands to the people it was built for: a
 // name, an icon and the pages it holds. It grants nothing — each page is
 // offered to whoever may read what it shows — and the workspace turns it into
 // an entry in the launcher beside the apps that came as code.

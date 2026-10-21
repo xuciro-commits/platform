@@ -2,18 +2,18 @@
 // an icon per stereotype and kind (SAP/ArchiMate-style pictograms), placement
 // edges as the tree, the other relationships as plain links. The modeler owns
 // the positions and the decisions. Stereotype icons come from the host profile
-// (ADR-0033); kinds stay here as icon names, drawn by the kit's one glyph.
+//; kinds stay here as icon names, drawn by the kit's one glyph.
 import { IconGlyph, RelationCanvas, t, type CanvasAction, type RelationEdge, type RelationNode } from "@platform/ui";
 import { byHierarchy, FILLS_POST, hierarchyParent, MEMBERSHIP, type Element, type Relationship } from "./model";
 
 export type Positions = Record<string, [number, number]>;
 export const STEREOTYPE_DROP = "application/x-uaf-stereotype";
 
-/** A record pinned on a view beside the element it names (ADR-0031 D3): the
+/** A record pinned on a view beside the element it names: the
  * drawing then holds the apps that work with the model, not only the model. */
 export type CanvasPin = { id: string; label: string; caption?: string; detail?: string; anchor: string; anchorName?: string };
 
-/** The glyph each kind takes — data, not elements (ADR-0033). A plant is
+/** The glyph each kind takes — data, not elements. A plant is
  * still not a committee; the lookup is just a table the kit can draw. */
 const kindIcons: Record<string, string> = {
   group: "landmark", holding: "landmark", company: "building-2", subsidiary: "building-2", "business unit": "layers", "business group": "layers", division: "layers", region: "globe",
@@ -25,12 +25,12 @@ const kindIcons: Record<string, string> = {
 };
 /** The fallback when the host's profile names no icon: the plain box. */
 const DEFAULT_ICON = "boxes";
-/** What each stereotype shows when it has no icon of its own (ADR-0033: the
+/** What each stereotype shows when it has no icon of its own (: the
  * tone table is presentation vocabulary, so it stays with the view). */
 const tones: Record<string, string> = { ActualOrganization: "info", ActualPost: "neutral", ActualPerson: "success", ActualLocation: "warning", ActualResource: "neutral", ActualProject: "info", Capability: "success", EnterpriseGoal: "danger" };
 
 /** The icon an element draws under: its kind, then the stereotype's icon as the
- * host's profile declared it (ADR-0033), then the plain box. */
+ * host's profile declared it, then the plain box. */
 export const elementIconName = (el: Pick<Element, "stereotype" | "kind">, icon?: (stereotype: string) => string | undefined): string =>
   (el.kind && kindIcons[el.kind.toLowerCase()]) ?? icon?.(el.stereotype) ?? DEFAULT_ICON;
 
@@ -38,14 +38,14 @@ export function Canvas({ elements, relationships, pins = [], positions, onPrepar
   propertyLinks?: { id: string; source: string; target: string; label: string }[];
   viewId: string; elements: Element[]; relationships: Relationship[]; pins?: CanvasPin[]; positions: Positions; selected?: string; linking: boolean; admin: boolean;
   label: (r: Relationship) => string; title: (stereotype: string) => string;
-  /** The host profile's icon for a stereotype (ADR-0033); absent means none. */
+  /** The host profile's icon for a stereotype; absent means none. */
   icon?: (stereotype: string) => string | undefined;
   onPositions: (next: Positions) => void; onSelect: (id?: string) => void;
   onDrop: (stereotype: string, at: [number, number]) => void; onLink: (source: string, target: string) => void;
   /** What the details panel shows for an element: UAF type, kind, validity, where it sits. */
   onPrepared?: (positions: Record<string, [number, number]>) => void;
   facts: (el: Element) => { label: string; value: string }[];
-  /** Operations on the selected element and the selected relationship (ADR-0031). */
+  /** Operations on the selected element and the selected relationship. */
   nodeActions: (id: string) => CanvasAction[]; edgeActions: (id: string) => CanvasAction[];
   onReconnect: (id: string, source: string, target: string) => void;
 }) {

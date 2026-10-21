@@ -13,9 +13,9 @@ import (
 	"platformserver/platform"
 )
 
-// The books (ADR-0026): a builder action that declares a Journal makes the
+// The books: a builder action that declares a Journal makes the
 // host land one balanced entry in core after the decision is accepted. It is
-// an ADR-0004 effect on the "core:books" endpoint - in order, retried while
+// an  effect on the "core:books" endpoint - in order, retried while
 // no period is open for it, delivered once per decision - so the general
 // ledger lags the business by a tick and never disagrees with it.
 
@@ -48,7 +48,7 @@ func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
 			at := e.Record.GetRecordedTime().AsTime()
 			today := at.UTC().Format(time.DateOnly)
 			if who, ok := t.member(s.GetPrincipalId()); ok {
-				today = who.Today(at) // the posting date is the decider's day (ADR-0028 §3)
+				today = who.Today(at) // the posting date is the decider's day
 			}
 			entry, err := journal.Entry(e.Record.GetChangeId(), record, inputs, s.GetPrincipalId(), at, today)
 			if err != nil {

@@ -15,7 +15,7 @@ import (
 )
 
 // Simulation is what a submission would change if it were taken now, decided
-// in a private staged decision that is then discarded (ADR-0047 21d): no
+// in a private staged decision that is then discarded: no
 // journal entry, no record, notice, effect or delivery leaves it.
 type Simulation struct {
 	Issues          []platform.FieldIssue      `json:"issues,omitempty"`

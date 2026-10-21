@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// JournalPost (ADR-0026) is what a decision books: lines whose accounts and
+// JournalPost is what a decision books: lines whose accounts and
 // amounts come from the action's inputs, the record (record.<field>) or
 // literals (=1403, =0). Debits and credits must balance when evaluated; the
 // host lands the entry through core, which puts it in the open period of its
@@ -52,7 +52,7 @@ func (a Action) Reversal(of Action) ([]Post, *JournalPost) {
 // Entry evaluates the declaration against the decision: the record after the
 // action and the inputs given. The id is the decision's change id, so a
 // replay lands the same entry once.
-// today is the decider's local date (ADR-0028).
+// today is the decider's local date.
 func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[string]any, me string, now time.Time, today string) (map[string]any, error) {
 	source := func(from string) any {
 		switch {

@@ -1,4 +1,4 @@
-// "Open in…" (ADR-0018 §3.4): from any record or object type, the other places
+// "Open in…": from any record or object type, the other places
 // the platform shows the same thing — its records in the Object Explorer, its
 // definition in the Ontology, the pages composed over it, its lineage. Only
 // routes to views this member's applications contribute are offered; the

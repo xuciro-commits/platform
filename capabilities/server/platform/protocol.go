@@ -10,7 +10,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// Protocol is a named, versioned interface apps provide and consume (ADR-0006):
+// Protocol is a named, versioned interface apps provide and consume:
 // actions (payload fields and meaning), reads (result shape, by convention the
 // protocol package's types) and events. Consumers depend on a protocol, never on
 // the app that provides it.
@@ -123,7 +123,7 @@ type ProviderResult struct {
 // Probe asks the tenant's provider, in a decision's rules, whether it would
 // accept a protocol action from the member now: its policy and rules run, and
 // nothing is recorded or applied. NOT_FOUND says no provider is bound. In a
-// replay it holds, as it did, when a provider is bound. Rules never change another app (ADR-0006 D1):
+// replay it holds, as it did, when a provider is bound. Rules never change another app:
 // what they need of one is a Request, made once the decision is accepted.
 func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *kernel.Error {
 	if c.rt == nil {
@@ -132,11 +132,11 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 	return c.rt.Probe(c, protocol, action, id, Raw(payload), now)
 }
 
-// Request is a protocol action an accepted decision asks of the tenant's provider
-// (ADR-0006 D2). The host submits it after the decision, as the member, and
+// Request is a protocol action an accepted decision asks of the tenant's provider.
+// The host submits it after the decision, as the member, and
 // submits the provider's Answer to the app's Reply action on the decision's target.
 //
-// A request of a model (ADR-0008 D3) names no protocol: Model is
+// A request of a model names no protocol: Model is
 // "<provider>/<model>", or empty for the tenant's model for apps resolved when
 // the decision is accepted (later settings cannot change it); Payload is a
 // Prompt; Target is what the answer is about. The host asks the model after
@@ -173,7 +173,7 @@ type Answer struct {
 	Code    string `json:"code,omitempty"`   // the refusal's code
 	Reason  string `json:"reason,omitempty"` // why, as the provider said it (F-23): a person reads it at the consumer
 	Ref     string `json:"ref,omitempty"`    // "<type>/<id>" of the provider's record
-	Text    string `json:"text,omitempty"`   // a model's answer (ADR-0008 D3)
+	Text    string `json:"text,omitempty"`   // a model's answer
 	// Model effect callbacks alone supply these measurements. A missing meter
 	// is distinct from a measured zero; providers may omit tokens or price.
 	Metered        bool    `json:"metered,omitempty"`

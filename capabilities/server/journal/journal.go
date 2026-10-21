@@ -10,15 +10,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Journals is a tenant journal a host runs on: PostgreSQL on the delivery path
-// (ADR-0024), or one local file on the lightweight one (ADR-0017 D2). Both keep
+// Journals is a tenant journal a host runs on: PostgreSQL on the delivery path,
+// or one local file on the lightweight one. Both keep
 // the same semantics — entries in order per tenant, appends expect the read
 // position, an accepted result is committed once under its idempotency key,
 // snapshots carry an explicit restore-compatibility key (or a legacy code
 // digest) — and both carry the derived store
 // (vectors and transcripts), which lives wherever the journal lives.
 // Store keeps the derived state the journal owns besides entries: embedding
-// vectors and model calls' transcripts (ADR-0009, D8). The PostgreSQL
+// vectors and model calls' transcripts. The PostgreSQL
 // journal implements it; without one the host keeps both in memory.
 type Store interface {
 	Vectors(tenant, model string, hashes []string) map[string][]float32
@@ -28,7 +28,7 @@ type Store interface {
 	PurgeTranscripts(tenant string, before time.Time)
 }
 
-// Transcript is one model call kept for review (ADR-0009).
+// Transcript is one model call kept for review.
 type Transcript struct {
 	Tenant  string          `json:"-"`
 	At      time.Time       `json:"at"`
@@ -79,7 +79,7 @@ type Journals interface {
 }
 
 // pool is the PostgreSQL pool behind a journal, for the reads only the delivery
-// path has (the projection for outside tools, ADR-0024). A local file
+// path has (the projection for outside tools). A local file
 // journal has none; the deployment refuses what needs one.
 func Pool(j Journals) (*pgxpool.Pool, bool) {
 	pg, ok := j.(*Postgres)

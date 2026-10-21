@@ -6,7 +6,7 @@ import { flowShape, notationOf, type FlowBoundary, type FlowNodeClass, type Flow
 
 /** A flow canvas draws one process: ordered activities joined through typed ports.
  * The owner says what a step means and whether connecting two of them is allowed;
- * the canvas says how it looks and how a person drives it (ADR-0033). */
+ * the canvas says how it looks and how a person drives it. */
 
 export type FlowPort = {
   id: string; label: string; type: string; limit?: number;
@@ -18,7 +18,7 @@ export type FlowPort = {
 export type FlowNodeKind = {
   id: string; title: string; description?: string;
   /** What this kind of node is: the class decides its glyph, its default BPMN
-   * notation and the palette group it falls into (ADR-0033). An id outside the
+   * notation and the palette group it falls into. An id outside the
    * class table still works — it draws as a plain task. */
   class?: FlowNodeClass;
   /** Where this kind sits in the palette, when the owner groups finer than its class. */
@@ -50,7 +50,7 @@ export type FlowNode = {
   /** Events attached to the activity: the timeout it may hit, the error it may
    * escape through. They are markers on the border, not steps of their own. */
   boundary?: FlowBoundary[];
-  /** The lane responsible for this step: who or what does it (ADR-0033). */
+  /** The lane responsible for this step: who or what does it. */
   lane?: string;
 };
 

@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0007 10b: work on the outside runs side by side, a failing destination
+// work on the outside runs side by side, a failing destination
 // opens its breaker, and what gives up is told to the administrators.
 func TestIOLane(t *testing.T) {
 	t0 := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)

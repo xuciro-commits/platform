@@ -15,7 +15,7 @@ const (
 // Process is the single declarative definition compiled to native Flow/Step.
 // Canvas positions are presentation; step IDs and typed references are logic.
 //
-// Kind says how the builder authored it (ADR-0047): a "flow" is the free
+// Kind says how the builder authored it: a "flow" is the free
 // node graph; an "automation" is the linear sentence "when a record of Object
 // reaches When, [if Condition,] run these effects" - the same steps, in a shape
 // the host checks (checkAutomation) so the card editor and the map agree.
@@ -28,7 +28,7 @@ type Process struct {
 	When   string `json:"when,omitempty" title:"Record start state"`
 	Manual bool   `json:"manual,omitempty" title:"Manual start"`
 	// Every schedules the process instead of a record state or a hand: a Go
-	// duration such as 15m, 1h or 24h, at least 1m (ADR-0038 E1). A scheduled
+	// duration such as 15m, 1h or 24h, at least 1m (E1). A scheduled
 	// process has no source record; its steps act as the member who published it.
 	Every string `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
 	// Scheduler is the member who published the schedule: scheduled runs act as them.
@@ -37,7 +37,7 @@ type Process struct {
 	InputSchema *platform.ValueSchema `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
 	Continuous  *platform.Continuous  `json:"continuous,omitempty" type:"json" title:"Continuous source intake"`
 	Steps       []ProcessStep         `json:"steps" field:"aside"`
-	// Lanes are the responsibilities the process is drawn across (ADR-0033): a
+	// Lanes are the responsibilities the process is drawn across: a
 	// step names the lane that does it. A lane carries no execution semantics, so
 	// the compiler ignores it and the canvas draws it as a band behind its steps.
 	Lanes     []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`

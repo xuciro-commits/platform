@@ -1,4 +1,4 @@
-// Package erp is the ERP app (ADR-0026): accounting first — a chart of
+// Package erp is the ERP app: accounting first — a chart of
 // accounts, journal entries posted with numbers and without gaps, reversal,
 // and periods that close. Scaffolded by capabilities/server/cmd/new-app.
 package erp
@@ -47,7 +47,7 @@ type Account struct {
 
 // Line is one line of a journal entry: an amount on the debit or the credit side of an account.
 // CostCentre names the enterprise model's organisation the amount is charged
-// to (ADR-0031): the dimension that lets the books be read by unit without
+// to: the dimension that lets the books be read by unit without
 // a second chart of cost centres.
 type Line struct {
 	Account    platform.Ref[Account] `json:"account" field:"required"`
@@ -142,14 +142,14 @@ func Actions() *platform.Catalog {
 	return platform.NewCatalog(actions...)
 }
 
-// Translations: i18n/<language>.json, keyed by the English text (ADR-0005).
+// Translations: i18n/<language>.json, keyed by the English text.
 //
 //go:embed i18n
 var languageFiles embed.FS
 
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
-// App is the ERP in one tenant; the host keeps its records (ADR-0046).
+// App is the ERP in one tenant; the host keeps its records.
 type App struct {
 	mu     sync.Mutex
 	ledger *platform.Ledger

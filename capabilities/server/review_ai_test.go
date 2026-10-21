@@ -92,7 +92,7 @@ func reviewTenant(t *testing.T) (*Tenant, func(authority, schema, typ, id string
 	return tn, submit
 }
 
-// ADR-0008, review AI-01: a run no person started (a flow's agent) reads as
+// A run no person started (a flow's agent) reads as
 // its own app, not as the host. The host holds "*" in every app, so the reads
 // used to answer with any app's records; the agent's own records stay readable,
 // another app's must not be.
@@ -149,7 +149,7 @@ func TestAutomationRunReadsItsOwnAppNotTheHost(t *testing.T) {
 	}
 }
 
-// ADR-0008: a run for a person reads as that person, so what the same agent
+// a run for a person reads as that person, so what the same agent
 // may read differs by who it runs for — the fix narrows automation, not people.
 func TestRunForAPersonStillReadsAsThatPerson(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
@@ -203,7 +203,7 @@ func TestRunForAPersonStillReadsAsThatPerson(t *testing.T) {
 	}
 }
 
-// ADR-0008, review AI-02: a model call happens outside the tenant's lock, so
+// A model call happens outside the tenant's lock, so
 // a run may be cancelled while its answer is coming. The late answer must not
 // run its tool — and what the call cost must still be metered.
 func TestLateModelAnswerCannotActAfterCancel(t *testing.T) {
@@ -245,7 +245,7 @@ func TestLateModelAnswerCannotActAfterCancel(t *testing.T) {
 	}
 }
 
-// ADR-0008, review AI-03: one answer may not ask for more than the tenant's
+// One answer may not ask for more than the tenant's
 // setting allows, and a call asking for nothing gets that ceiling rather than
 // an adapter's own larger default.
 func TestAnswersAreCapped(t *testing.T) {
@@ -285,7 +285,7 @@ func TestAnswersAreCapped(t *testing.T) {
 	}
 }
 
-// ADR-0008, review AI-03: the chat body is bounded like every other request
+// The chat body is bounded like every other request
 // body, before it is decoded.
 func TestChatBodyIsBounded(t *testing.T) {
 	tenant, _ := reviewTenant(t)
@@ -329,7 +329,7 @@ func wireAnswer(t *testing.T, content string, usage map[string]any) *http.Respon
 		Body: io.NopCloser(strings.NewReader(string(raw)))}
 }
 
-// ADR-0008, review AI-05: a provider that reports no usage must not be
+// A provider that reports no usage must not be
 // booked as spending nothing, and a provider that reports a real zero must not
 // be booked as unknown.
 func TestUnreportedUsageIsEstimatedAndZeroIsZero(t *testing.T) {
@@ -398,7 +398,7 @@ func TestUnreportedUsageIsEstimatedAndZeroIsZero(t *testing.T) {
 	}
 }
 
-// ADR-0008/D9, review AI-05: an agent run's budget counts the estimated
+// An agent run's budget counts the estimated
 // tokens of a provider that reports none, and its USD budget stops a run only
 // on cost that was actually reported.
 func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
@@ -465,7 +465,7 @@ func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 	}
 }
 
-// ADR-0008, review AI-03: a call counts against its limit from the moment
+// A call counts against its limit from the moment
 // it passes the door, so calls that start together cannot each pass it — and
 // the booking is released by the meter reading that follows the call.
 func TestCallsInFlightHoldTheirLimit(t *testing.T) {
@@ -505,7 +505,7 @@ func TestCallsInFlightHoldTheirLimit(t *testing.T) {
 	}
 }
 
-// ADR-0008, review AI-04: transcripts are kept only when the tenant keeps
+// Transcripts are kept only when the tenant keeps
 // them; 0 keeps none and forgets what was kept, and a person's own chat calls
 // are served without the per-run check that guards a run's trace.
 func TestTranscriptsAreKeptOnlyWhenAsked(t *testing.T) {

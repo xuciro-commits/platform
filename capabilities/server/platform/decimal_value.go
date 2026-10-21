@@ -51,7 +51,7 @@ func DecimalLiteral(raw json.RawMessage) (DecimalValue, bool) {
 func (v DecimalValue) Rat() *big.Rat { value, _ := new(big.Rat).SetString(v.Value); return value }
 
 // Condition is the exact comparison of a numeric field against this value,
-// evaluated on a record read by read (ADR-0014).
+// evaluated on a record read by read.
 func (value DecimalValue) Condition(field FieldInfo, op string, read func(reflect.Value) any) (func(reflect.Value) bool, error) {
 	if field.Type != "integer" && field.Type != "decimal" {
 		return nil, fmt.Errorf("decimal condition needs a numeric field")

@@ -17,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-// Decision tables (ADR-0040、ADR-0038 block E): condition columns → result
+// Decision tables (block E): condition columns → result
 // columns, first matching row wins, a default row when none does. A published
 // table is a native operation of the builder - callable from a process's
 // compute step, a page's compute widget or the capability API like any other

@@ -43,7 +43,7 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
   return { inputs, error: inputError ?? (recordError ? "A page record input is unavailable." : undefined) };
 }
 
-/** Runs a page event's effect chain in order (ADR-0047): state writes at
+/** Runs a page event's effect chain in order: state writes at
  * once, actions through the host (waiting for their form), and navigation or
  * return as the terminal effect. A refused or cancelled action stops the chain. */
 export function usePageEffects(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void, provided?: PageCall) {

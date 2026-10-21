@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// CheckReplay is the platform's replay conformance (ADR-0010、ADR-0027,
-// ADR-0004), for the tests of every composition: build makes a fresh tenant of
+// CheckReplay is the platform's replay conformance (、,
+// ), for the tests of every composition: build makes a fresh tenant of
 // the same apps, the journal is replayed into it with every outbound call
 // failing the test, and what the host shows must equal the live tenant's —
 // audit, deliveries, owned work, effects and endpoints, notifications, connector
@@ -45,7 +45,7 @@ func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tena
 	if got := observe(again); got != want {
 		t.Fatalf("replayed tenant differs from the live one:\nlive:   %s\nreplay: %s", want, got)
 	}
-	// A snapshot is a shortcut, never a different outcome (ADR-0024): taken
+	// A snapshot is a shortcut, never a different outcome: taken
 	// after any prefix of the journal, restored into a new tenant, and given
 	// the rest, it reaches the live state; saved again, it saves the same.
 	for _, k := range slices.Compact([]int{0, len(stored) / 3, len(stored) / 2, len(stored)}) {

@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// The agent app runs the agents apps declare (ADR-0054). A run is a record of
+// The agent app runs the agents apps declare. A run is a record of
 // it. The host calls the model outside the tenant's lock (Think), then journals
 // the step the model chose — tool, arguments, rationale, usage — as an entry of
 // kind agent and applies it as one decision of this app: the tool's action is
@@ -54,7 +54,7 @@ type AgentRunRecord struct {
 	Seen              string                  `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
 	OnBehalf          string                  `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of" source:"record"`
 	Acts              bool                    `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
-	Language          string                  `json:"language,omitempty" field:"readonly" source:"record"`         // the person's, which the agent answers in (ADR-0005 D6)
+	Language          string                  `json:"language,omitempty" field:"readonly" source:"record"`         // the person's, which the agent answers in
 	Flow              string                  `json:"flow,omitempty" field:"readonly" source:"record"`             // the flow instance whose step started it
 	Token             int                     `json:"token,omitempty" field:"readonly"`
 	Step              string                  `json:"step,omitempty" field:"readonly" source:"record"` // that step's name
@@ -78,7 +78,7 @@ type AgentRunRecord struct {
 }
 
 // Draft is an action an agent running for a person proposes; the person
-// confirms it, changed or not, or rejects it (ADR-0054).
+// confirms it, changed or not, or rejects it.
 type Draft struct {
 	Kind      string `json:"kind"` // action or protocol
 	Action    string `json:"action"`
@@ -89,7 +89,7 @@ type Draft struct {
 	Step      int    `json:"step"` // the run's step that drafted it
 }
 
-// Citation is a passage of knowledge a run read (ADR-0009).
+// Citation is a passage of knowledge a run read.
 type Citation struct {
 	Document string `json:"document"`
 	Title    string `json:"title" source:"record"`
@@ -97,7 +97,7 @@ type Citation struct {
 	Step     int    `json:"step"`
 }
 
-// Signal is what a person made of an agent's work (ADR-0054): a draft
+// Signal is what a person made of an agent's work: a draft
 // confirmed, changed or rejected; a proposal accepted, corrected, or bypassed
 // by someone acting meanwhile. Signals are the evaluation's reference.
 type Signal struct {
@@ -190,7 +190,7 @@ func NewAgents(tenant string) *Agents {
 func agentEntities() []platform.Entity {
 	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title",
 		// What the agent saw, read, cited, drafted and concluded came from other
-		// records, so each reader reads it only while they may read those (ADR-0009).
+		// records, so each reader reads it only while they may read those.
 		Derived: []platform.Derivation{
 			// Even a public document's association with this business task is
 			// derived from its record; reading the document is not that grant.
@@ -237,7 +237,7 @@ func rationale() map[string]any {
 	return map[string]any{"type": "string", "description": "Why you take this step, in one sentence"}
 }
 
-// def is an agent by ID. Builder-declared agents (ADR-0008) come and go with
+// def is an agent by ID. Builder-declared agents come and go with
 // publications, so the builder's are re-read whenever its stamp changes.
 func (a *Agents) def(id string) *agentDef {
 	a.refresh()
@@ -641,7 +641,7 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 }
 
 // sourcesOf are the records a run has read, cited or acted on so far: what
-// anything derived from it is checked against when it is read again (ADR-0009).
+// anything derived from it is checked against when it is read again.
 func sourcesOf(run AgentRunRecord) []string {
 	out := []string{}
 	if run.Ref != "" {

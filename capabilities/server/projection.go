@@ -21,7 +21,7 @@ import (
 )
 
 // Projection copies a tenant's records into PostgreSQL for tools outside the
-// host (ADR-0024): one schema per tenant, one table per entity type with
+// host: one schema per tenant, one table per entity type with
 // columns from its declaration, and one table of its changes. It is only a
 // copy: existing tables and history are retained at startup, with columns
 // reconciled against the current declaration, then updated after commits.
@@ -81,7 +81,7 @@ func columns(info platform.EntityInfo) []column {
 		{"archived", "boolean", func(v reflect.Value) any { return records.Header(v).Archived }},
 	}
 	for _, f := range info.Fields {
-		if len(f.Read) > 0 { // a field some roles may not read is not copied where no role applies (ADR-0038)
+		if len(f.Read) > 0 { // a field some roles may not read is not copied where no role applies
 			continue
 		}
 		read := func(v reflect.Value) reflect.Value { return v.FieldByIndex(f.Index) }

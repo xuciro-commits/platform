@@ -2,7 +2,7 @@ import { sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
-// The Workshop module (ADR-0047, D1): a project's pages, navigation,
+// The Workshop module: a project's pages, navigation,
 // header and module-level variables, edited in one Workbench. With a page in
 // hand the main view is that page's canvas (PageEditor); without one it is the
 // module itself — header and navigation as people will see them.

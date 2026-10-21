@@ -21,7 +21,7 @@ RUN apk add --no-cache tzdata
 ARG PLATFORM_REVISION
 LABEL org.opencontainers.image.revision=$PLATFORM_REVISION
 COPY --from=build /hospitality-server /usr/local/bin/hospitality-server
-# The workspace (ADR-0019), built beforehand: pnpm --dir web/apps/workspace build
+# The workspace, built beforehand: pnpm --dir web/apps/workspace build
 COPY web/apps/workspace/dist /web
 USER nobody
 ENTRYPOINT ["hospitality-server"]

@@ -18,9 +18,9 @@ const (
 	AssetAction       AssetKind = "action"
 	AssetPage         AssetKind = "page"
 	// AssetApp is an application a tenant hands to its people: a name, an icon
-	// and the pages it holds (ADR-0046).
+	// and the pages it holds.
 	AssetApp AssetKind = "app"
-	// AssetQuery is a named, pure query an app declares once (ADR-0047 21c):
+	// AssetQuery is a named, pure query an app declares once:
 	// pages and agent tools run the same declaration.
 	AssetQuery AssetKind = "query"
 	// AssetFlow is a versioned definition executed by the existing flow app.
@@ -96,7 +96,7 @@ type Page struct {
 	ListFields   []string   `json:"listFields"`
 	DetailFields []string   `json:"detailFields"`
 	Actions      []AssetRef `json:"actions"`
-	// Sections are the widgets a composed page is laid out from (ADR-0048);
+	// Sections are the widgets a composed page is laid out from;
 	// with sections, Layout is "composed" and the fields above are unused.
 	Sections []Section `json:"sections,omitempty"`
 	// Document orders these sections in a stable, nested presentation tree.
@@ -113,7 +113,7 @@ type SelectionVariable struct {
 }
 
 // Section is one place on a composed page: a widget, what it is bound to, and
-// how wide it sits (ADR-0048). A table outputs the record someone selects; a
+// how wide it sits. A table outputs the record someone selects; a
 // detail and the actions read it.
 type PageFacet struct {
 	Field    string `json:"field"`
@@ -259,7 +259,7 @@ type Section struct {
 	// Relation is the named inverse (FieldInfo.Inverse) of Object's reference to
 	// the parent selection's object: the section shows its related records
 	// through it, or a form supplies that reference when creating a related
-	// record (ADR-0047 21b D3). Empty: no declared relation binding.
+	// record. Empty: no declared relation binding.
 	Relation string `json:"relation,omitempty"`
 	// Query is a named query (AssetQuery) the section lists instead of all of
 	// Object: its conditions, and the selected record when it takes one (21c).
@@ -282,13 +282,13 @@ type Section struct {
 	Inputs       map[string]Binding `json:"inputs,omitempty"`    // compute inputs or form fields supplied by constants/parent record paths
 }
 
-// Widgets are the widget kinds a composed page may hold (ADR-0048).
+// Widgets are the widget kinds a composed page may hold.
 // A filter outputs the page's second variable — the records it narrows to —
 // which the table, chart and metric over the same object read (16b).
 // Filterable are the field types a filter widget offers: values that repeat.
 var Filterable = []string{"choice", "boolean", "reference"}
 
-// Application is what someone in this tenant hands to its people (ADR-0046): a
+// Application is what someone in this tenant hands to its people: a
 // name, an icon from the platform's set, and the pages it holds in order. It
 // grants nothing; each page is offered to whoever may read what it shows.
 type Application struct {
@@ -306,7 +306,7 @@ type Application struct {
 	// Icon is one of Icons: the workspace draws it in the launcher and the navigation.
 	Icon  string   `json:"icon,omitempty"`
 	Pages []string `json:"pages"` // page names, in the order people see them
-	// Groups are headings in its navigation (ADR-0046 17b), each over some of
+	// Groups are headings in its navigation, each over some of
 	// Pages in its own order; a page in no group sits under the application's name.
 	Groups []AppGroup `json:"groups,omitempty"`
 	// Resources are shared owner references included in the release closure.
@@ -427,8 +427,8 @@ func (a Application) CheckGroups() error {
 	return nil
 }
 
-// IconName reports whether a name is one the kit may draw (ADR-0046,
-// ADR-0031). The vocabulary belongs to the kit, which owns the glyphs and
+// IconName reports whether a name is one the kit may draw.
+// The vocabulary belongs to the kit, which owns the glyphs and
 // their words; the host only keeps names shaped like names, so the set can grow
 // without every host having to learn it first. A client that does not know a
 // name yet draws its default glyph.

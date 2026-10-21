@@ -68,7 +68,7 @@ func TestPatternsGraft(t *testing.T) {
 	}
 }
 
-// TestViews pins the five description views (ADR-0031): the profile's whole
+// TestViews pins the five description views: the profile's whole
 // palette is answered by exactly one view's slice, and every view offers only
 // relationships the contracts admit among its own elements.
 func TestViews(t *testing.T) {

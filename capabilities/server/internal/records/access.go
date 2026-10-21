@@ -14,7 +14,7 @@ type ScopeDirectory interface {
 	Below(units []string, structure string, day platform.Date) []string
 }
 
-// FieldView is a type as m may see it (ADR-0038): without the fields m's role
+// FieldView is a type as m may see it: without the fields m's role
 // in the app may not read, so search, filters, sort, grouping and forms never
 // reach them; the rows are shared. hidden are those fields.
 func FieldView(m platform.Member, source platform.EntityInfo) (view platform.EntityInfo, hidden []platform.FieldInfo) {
@@ -90,7 +90,7 @@ func scoped(directory ScopeDirectory, m platform.Member, info platform.EntityInf
 	case platform.ScopeNone:
 		return func(reflect.Value) bool { return false }, nil
 	case platform.ScopeOwn:
-		if scope.Owner == platform.OwnerCreated { // whoever's decision created it (ADR-0044)
+		if scope.Owner == platform.OwnerCreated { // whoever's decision created it
 			return func(v reflect.Value) bool { return Header(v).Created.By == m.ID }, nil
 		}
 		owner := field(scope.Owner)

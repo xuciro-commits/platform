@@ -1,4 +1,4 @@
-// Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0016、ADR-0006).
+// Settings: the apps a tenant runs, their capability matrix and protocols.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
@@ -142,7 +142,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
 
 // Capability names are tags apps put on their actions (platform/actions.go
 // Capabilities()); they have no title of their own, so the workspace names
-// them (ADR-0005). An unknown tag reads as written, capitalised.
+// them. An unknown tag reads as written, capitalised.
 const capabilityTitles: Record<string, string> = {
   account: "Account", applications: "Applications", approvals: "Approvals", apps: "Apps and protocols", automation: "Automation",
   comments: "Comments", compute: "Compute", delegation: "Delegation", documents: "Documents", elements: "Enterprise elements",
@@ -164,7 +164,7 @@ function Facts({ items }: { items: [label: string, value: React.ReactNode][] }) 
 const Mono = ({ items }: { items: string[] }) => items.length ? <span className="font-mono text-[11px] leading-5">{items.join(", ")}</span> : null;
 const Chips = ({ items }: { items: string[] }) => items.length ? <span className="flex flex-wrap gap-1">{items.map((x) => <Tag key={x} label={x} />)}</span> : null;
 
-/** One module of the matrix: what it provides on the left, what it uses on the right (ADR-0005). */
+/** One module of the matrix: what it provides on the left, what it uses on the right. */
 function ModuleCard({ app: a }: { app: AppInfo }) {
   return <Panel title={<span className="flex flex-wrap items-baseline gap-2">{a.title || a.id}<span className="font-mono text-xs font-normal text-muted">{a.id} · v{a.version}</span></span>}>
     <div className="grid gap-4 md:grid-cols-2">
@@ -208,7 +208,7 @@ export function Matrix() {
   );
 }
 
-// Protocols (ADR-0006): apps meet through them, not through each other.
+// Protocols: apps meet through them, not through each other.
 export function Protocols() {
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const { decide } = useHost();

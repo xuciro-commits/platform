@@ -15,8 +15,8 @@ import (
 	"platformserver/platform"
 )
 
-// An evaluation re-runs an agent's past runs dry against a candidate model
-// (ADR-0054). Its reference is what people made of each run — the signals:
+// An evaluation re-runs an agent's past runs dry against a candidate model.
+// Its reference is what people made of each run — the signals:
 // a confirmed or accepted decision should come again, a rejected or corrected
 // one should not. The candidate sees what the run saw (its context at the
 // start, what its reads answered); reads it makes anew read the records as
@@ -43,10 +43,10 @@ type Evaluation struct {
 	Score   float64 `json:"score" field:"readonly"` // agrees and avoids, of the cases
 	Tokens  int     `json:"tokens" field:"readonly"`
 	// Cost is the USD the providers reported for the whole evaluation; calls
-	// whose cost was not reported are not counted here (ADR-0008).
+	// whose cost was not reported are not counted here.
 	Cost  float64    `json:"cost,omitempty" field:"readonly" title:"Model cost, USD"`
 	Cases []EvalCase `json:"cases" field:"readonly"`
-	// Suite runs the agent's declared cases instead of its past runs (ADR-0008 D6).
+	// Suite runs the agent's declared cases instead of its past runs.
 	Suite            bool              `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
 	Candidate        string            `json:"candidate,omitempty" field:"readonly" title:"Release candidate"`
 	DefinitionDigest string            `json:"definitionDigest,omitempty" field:"readonly" title:"Evaluated definition"`
@@ -63,7 +63,7 @@ type EvaluationInput struct {
 const suiteRuns = 3 // each declared case, as models vary
 
 // EvalCase is one past run and what the candidate made of it, or one of the
-// agent's declared cases run three times (ADR-0008 D6).
+// agent's declared cases run three times.
 type EvalCase struct {
 	Case      string  `json:"case,omitempty"`   // the declared case's name
 	Passes    int     `json:"passes,omitempty"` // of Runs
@@ -126,7 +126,7 @@ func normal(s string) string {
 
 // evalBudget is what a whole evaluation of planned runs may spend: the
 // definition's budget once per run, so a suite cannot run past what its runs
-// were each allowed (ADR-0008, review AI-05).
+// were each allowed.
 func evalBudget(b platform.Budget, planned int) platform.Budget {
 	b.Steps, b.Tokens, b.Cost = b.Steps*planned, b.Tokens*planned, b.Cost*float64(planned)
 	return b
@@ -405,7 +405,7 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model platform.AIModel, 
 }
 
 // suite runs each of the agent's declared cases three times, dry, and counts
-// the runs that pass (ADR-0008 D6): a case passes when every run does, varies
+// the runs that pass: a case passes when every run does, varies
 // when some do, and fails when none does. The score is the runs that pass.
 func (a *Agents) suite(ev Evaluation, d *agentDef, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*Evaluation) bool) Evaluation {
 	ceiling, spent := evalBudget(d.Budget, len(d.Cases)*suiteRuns), platform.Budget{}

@@ -11,7 +11,7 @@ import (
 	"production"
 )
 
-// Production orders (ADR-0026 7c): a planner releases an order to make a
+// Production orders: a planner releases an order to make a
 // finished product; the plant executes it and confirms what it made and lost
 // through production.orders/1, which the ERP provides. Accepting a
 // confirmation issues the components, receives the yield and writes off the
@@ -74,7 +74,7 @@ func producing() []platform.Entity {
 					Description: "Cancel an order the plant has not confirmed."}}}}}
 }
 
-// Provision is how the ERP provides production.orders/1 (ADR-0006).
+// Provision is how the ERP provides production.orders/1.
 func Provision() platform.Provision {
 	return platform.Provision{Protocol: production.Protocol(),
 		Actions: map[string]string{"confirm": SchemaProduction},

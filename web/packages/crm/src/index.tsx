@@ -1,8 +1,8 @@
-// The CRM's UI (ADR-0019): accounts and opportunities, composed from the
+// The CRM's UI: accounts and opportunities, composed from the
 // platform's lists and record pages. An account's page lists its opportunities
 // (a reference); an opportunity's page lists the stays linked to it from
 // whichever app provides the lodging protocol, and what the provider told about
-// them (ADR-0006) — the platform's, not the CRM's (#129).
+// them — the platform's, not the CRM's (#129).
 import "./i18n";
 import { RecordDetail, Records, defineApp } from "@platform/app";
 import { t } from "@platform/ui";
@@ -16,7 +16,7 @@ export default defineApp({
   title: t("CRM"),
   icon: <Handshake />,
   home: { view: "accounts" },
-  // The pipeline within what the member may see: a sales rep's own opportunities, a manager's all (ADR-0024).
+  // The pipeline within what the member may see: a sales rep's own opportunities, a manager's all.
   dashboards: [{ id: "pipeline", title: t("Pipeline"), description: t("Opportunities you may see, by stage, owner and month."), charts: [
     { title: t("Open opportunities"), data: { ...opportunities, domain: [["stage", "=", "open"]] }, mark: "kpi", encoding: { y: count } },
     { title: t("Group rooms confirmed"), data: { ...opportunities, domain: [["block", "=", "confirmed"]] }, mark: "kpi", encoding: { y: { field: "rooms", aggregate: "sum", type: "quantitative" } } },

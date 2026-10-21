@@ -14,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0048: someone defines an object in the tenant, publishes it, and people
+// someone defines an object in the tenant, publishes it, and people
 // work with its records on the machinery that is already there — generated
 // actions, the record store's scope and search, aggregates, the journal. The
 // object then gains a field and its records keep what they had.
@@ -111,7 +111,7 @@ func TestTenantDefinedObject(t *testing.T) {
 	if found := tn.Search(&reader, "Turing", now); len(found) != 1 || found[0].Type != visit {
 		t.Errorf("the tenant's own object is not in search: %+v", found)
 	}
-	// Its page is an asset like a code page's (ADR-0020).
+	// Its page is an asset like a code page's.
 	defs := tn.Definitions(member("eli"))
 	if !slices.ContainsFunc(defs, func(d platform.Definition) bool {
 		return d.Ref.Kind == platform.AssetPage && d.Ref.Name == "visit" && d.Page != nil && d.Page.Object.Name == visit && d.Source == "tenant"
@@ -186,7 +186,7 @@ func TestTenantDefinedObject(t *testing.T) {
 	if again := composedPage("eli", "visits"); again == nil || len(again.ListFields) != 2 {
 		t.Errorf("a refused composition changed the page people open: %+v", again)
 	}
-	// A page laid out from widgets (ADR-0048): what the host takes, and what it
+	// A page laid out from widgets: what the host takes, and what it
 	// refuses, with the reason.
 	sections := []map[string]any{
 		{"widget": "table", "width": "full", "title": "Visits", "fields": []string{"guest", "kind"}},
@@ -247,7 +247,7 @@ func TestTenantDefinedObject(t *testing.T) {
 	}
 	shared := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: visit}
 	private := platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.privateasset"}
-	// An application handed to the people it was built for (ADR-0046): a name,
+	// An application handed to the people it was built for: a name,
 	// an icon and the pages it holds, offered to whoever may open one of them.
 	if got := do("dana", construction.AppType+".create", construction.AppType, "A-1",
 		map[string]any{"name": "frontdesk", "title": "Front desk", "icon": "clipboard", "pages": []string{"visits"}, "resources": []platform.AssetRef{shared, private}}); got != "ok" {

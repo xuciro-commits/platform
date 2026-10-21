@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# Dependency boundaries across all apps (#103, #104 G1; Platform.md "Platform model"):
+# Dependency boundaries across all apps (see docs/Architecture.md):
 #   1. an app never depends on another app; a protocol depends on no app;
 #   2. an app's and a protocol's own packages import the app API
 #      (platformserver/platform) and never the host runtime (platformserver):
 #      the runtime is reachable only through platform.Runtime, which the host
 #      hands each caller. Their binaries (cmd/) compose tenants and may import
 #      it, and so may test harnesses (packages named *test, like httptest);
-#   3. every app has one shape (ADR-0016): apps/<id>/server is the Go module
+#   3. every app has one shape: apps/<id>/server is the Go module
 #      <id> with <id>.go, <id>_test.go, i18n/zh-CN.json and a development host
 #      cmd/<id>-server; its UI, when it has one, is web/packages/<id> with
 #      src/index.tsx and src/i18n.ts;
 #   4. the host's own apps (capabilities/server/apps/*) import the app API and
-#      internal/host, never the host runtime (ADR-0016);
+#      internal/host, never the host runtime;
 #   5. code outside platform never touches .Changes or .changes directly: all
 #      reads and decisions go through locked methods (RecordsFor, Receive, etc.).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
 
-# ADR-0037 W3: AST inspection covers all production source, including files
+# AST inspection covers all production source, including files
 # omitted by current OS/build tags. No count allowance or migration exception.
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 
@@ -42,7 +42,7 @@ for x in "${apps[@]}"; do
   dir=${x%%:*} id=${x#*:}
   [[ $dir == apps/$id/server ]] || fail "$dir holds the module $id: an app's directory, module and ID share one name"
   for f in "$id.go" "${id}_test.go" i18n/zh-CN.json "cmd/$id-server/main.go"; do
-    [[ -f $dir/$f ]] || fail "$dir has no $f (ADR-0016)"
+    [[ -f $dir/$f ]] || fail "$dir has no $f"
   done
   ui=web/packages/$id
   [[ ! -d $ui ]] || [[ -f $ui/src/index.tsx && -f $ui/src/i18n.ts ]] || fail "$ui has no src/index.tsx and src/i18n.ts"
@@ -53,11 +53,11 @@ hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " 
 leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" apps/ protocols/ capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
 [[ -z $leaks ]] || fail "code outside platform touches change log directly without ledger lock:"$'\n'"$leaks"
 
-# ADR-0037: probing is a private decision mode, never a tenant-wide switch.
+# probing is a private decision mode, never a tenant-wide switch.
 probe=$(sed -n '/^type Tenant struct {$/,/^}$/p' capabilities/server/host.go | grep -E '^[[:space:]]+probing[[:space:]]' || true)
 [[ -z $probe ]] || fail "Tenant has a shared probing mode; use platform.Runtime.ProbeDecision"
 
-# ADR-0037: caller capabilities belong to named Runtime roles.
+# caller capabilities belong to named Runtime roles.
 anonymous=$(grep -nE 'c\.rt\.\(interface' capabilities/server/platform/*.go | grep -v '_test.go:' || true)
 [[ -z $anonymous ]] || fail "Caller probes anonymous Runtime capabilities:"$'\n'"$anonymous"
 selection=$(grep -nE 'type (ResultApp|AcceptedActionApp|AcceptedWorker) interface|func .*acceptsGenerated' capabilities/server/platform/*.go capabilities/server/host.go || true)

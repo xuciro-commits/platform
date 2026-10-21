@@ -1,8 +1,5 @@
-// Command hcm-server runs HCM alone on a development host (docs/Apps.md step
-// 6; ADR-0016) with a small organisation: an employee, their manager and
-// the company's head, who approve leave. With -web the host serves the
-// workspace's build; the development tokens "employee", "manager", "head" and
-// "hr" sign in.
+// Command hcm-server runs HCM on a development host. With -web it serves
+// the workspace build using the configured development identities.
 package main
 
 import (

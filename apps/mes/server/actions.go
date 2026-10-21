@@ -2,7 +2,7 @@ package mes
 
 import "platformserver/platform"
 
-// Actions is the plant's action catalog (ADR-0057): screens, integrations and AI
+// Actions is the plant's action catalog: screens, integrations and AI
 // agents receive the part their role may call; line conditions stay in allowed.
 func Actions() *platform.Catalog {
 	minimum := 1.0
@@ -20,7 +20,7 @@ func Actions() *platform.Catalog {
 				{Name: "quantity", Type: "integer", Required: true, Default: platform.Raw(1), Description: "Units to make", Constraints: &platform.InputConstraints{Min: &minimum}},
 				{Name: "sfcs", Type: "integer", Required: true, Default: platform.Raw(1), Description: "Number of SFCs (lots), at most the quantity", Constraints: &platform.InputConstraints{Min: &minimum, Before: "quantity", Inclusive: true}},
 				{Name: "planned", Type: "string", From: "available-planned-orders", Key: "erpId", Label: "number", Description: "ERP planned order ID"},
-				{Name: "place", Type: "string", Ref: "enterprise.element", Stereotypes: []string{"ActualLocation", "ActualOrganization"}, Description: "The place in the enterprise model this order runs at — a plant, line, workshop or warehouse (optional; ADR-0034)"}},
+				{Name: "place", Type: "string", Ref: "enterprise.element", Stereotypes: []string{"ActualLocation", "ActualOrganization"}, Description: "The place in the enterprise model this order runs at — a plant, line, workshop or warehouse (optional)"}},
 			Roles: roles(Supervisor)},
 	}...), platform.EntityActions(Entities(nil)[1])...),
 		platform.Action{Schema: SchemaReason, Target: DowntimeType, Capability: "downtime-reasons", Title: "Assign downtime reason",

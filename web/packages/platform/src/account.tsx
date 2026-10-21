@@ -1,4 +1,4 @@
-// My account (ADR-0028 §4): a member's own profile — how the platform
+// My account: a member's own profile — how the platform
 // addresses them, their language, timezone and formats, notifications and
 // where the workspace opens. Every value is a decision (platform.profile.update);
 // an empty value returns to the tenant's default. Administrators see the same
@@ -177,7 +177,7 @@ export function MyAccount() {
   );
 }
 
-// Hand what I hold in an app to someone else until a day (ADR-0027 §3.3).
+// Hand what I hold in an app to someone else until a day.
 function Delegate() {
   const { me, decide, can } = useHost();
   const apps = Object.keys(me.profile.roles ?? {});
@@ -205,7 +205,7 @@ function Delegate() {
   );
 }
 
-// Personal tokens (ADR-0028 §5): a credential for scripts that acts as me,
+// Personal tokens: a credential for scripts that acts as me,
 // within the permissions I name. The secret is collected once, right after
 // the decision; the host never shows it again.
 function Tokens() {
@@ -258,7 +258,7 @@ function Tokens() {
   );
 }
 
-// Sessions (ADR-0028 §5): the credentials this host has seen act as me.
+// Sessions: the credentials this host has seen act as me.
 function Sessions() {
   const { client } = useHost();
   const sessions = useRead<Session[]>("/v1/sessions");

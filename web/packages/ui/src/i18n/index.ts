@@ -1,4 +1,4 @@
-// Languages of the workspace (ADR-0005). The page's language is chosen once,
+// Languages of the workspace. The page's language is chosen once,
 // kept per browser, and set as <html lang>, which the edge client sends to the
 // host as Accept-Language so declarations arrive translated. Every package
 // registers its own dictionary, keyed by the English source text: a missing

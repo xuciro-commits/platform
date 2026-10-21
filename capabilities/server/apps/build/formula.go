@@ -145,7 +145,7 @@ func computeRulesOf(o construction.Object, lookup func(string) (platform.EntityI
 	}
 }
 
-// validateOf is the entity hook of an extension object (ADR-0020 A3): one
+// validateOf is the entity hook of an extension object (A3): one
 // extension record per base record, so the base type's pages can merge the
 // extension's fields as if they were its own.
 func validateOf(o construction.Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {

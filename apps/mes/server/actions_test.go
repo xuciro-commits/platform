@@ -29,7 +29,7 @@ func TestCatalogPerCaller(t *testing.T) {
 	p := newPlant(t)
 	assistant := member("agent-l1", Assistant, "L1")
 	read, lang := platformserver.SchemaNotificationRead, platformserver.SchemaProfileUpdate
-	// Every member may call the platform's declared operations (ADR-0016 §13).
+	// Every member may call the platform's declared operations.
 	call := platformserver.SchemaOperationCall
 	delegate, issue, revoke := platformserver.SchemaDelegate, platformserver.SchemaTokenIssue, platformserver.SchemaTokenRevoke
 	for _, c := range []struct {
@@ -69,7 +69,7 @@ func TestAssistantActsWithinItsGrant(t *testing.T) {
 
 // Releasing can place the order in the enterprise model: the ref payload field
 // is checked by the kernel — an element the model does not name never reaches
-// the plant — and the decision keeps the place on the record (ADR-0034).
+// the plant — and the decision keeps the place on the record.
 func TestReleasePlacesOrderInModel(t *testing.T) {
 	p := newPlant(t)
 	// DemoOrganization's units — the plant and its lines — are model elements.

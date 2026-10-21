@@ -7,7 +7,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// Assignment asks people to do something about a record (ADR-0007): a task in
+// Assignment asks people to do something about a record: a task in
 // their inbox, due by a time, escalated when it is late. To lists who may take
 // it; Key keeps one open task per app and key.
 type Assignment struct {

@@ -9,8 +9,8 @@ import (
 	"platformserver/platform"
 )
 
-// Transcript is one model call in full: what was sent and what came back
-// (ADR-0009, ADR-0054). It may hold personal data, so it stays outside
+// Transcript is one model call in full: what was sent and what came back.
+// It may hold personal data, so it stays outside
 // the journal, for as many days as the agent app's setting keeps it.
 const (
 	SettingTranscriptDays = "transcript-days"
@@ -22,7 +22,7 @@ var purgeAll = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 
 // transcriptDays is how many days transcripts are kept, and whether any are
 // kept at all: 0 or less keeps none, so the setting is a switch, not only a
-// period (ADR-0008, review AI-04).
+// period.
 func (t *Tenant) transcriptDays() int {
 	days, err := strconv.Atoi(t.setting(t.automation(AgentApp, false), SettingTranscriptDays))
 	if err != nil {

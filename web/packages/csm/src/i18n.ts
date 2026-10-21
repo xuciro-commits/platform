@@ -1,4 +1,4 @@
-// Simplified Chinese for this package (ADR-0005), keyed by the English source text.
+// Simplified Chinese for this package, keyed by the English source text.
 import { register } from "@platform/ui";
 
 register("zh-CN", {

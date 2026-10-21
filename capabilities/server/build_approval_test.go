@@ -18,7 +18,7 @@ import (
 )
 
 // A tenant-authored step uses the work app's approval and inbox, including
-// rejection, rather than a second process runtime (ADR-0044 18c).
+// rejection, rather than a second process runtime.
 func TestTenantDefinedApproval(t *testing.T) {
 	for _, accepted := range []bool{false, true} {
 		t.Run(fmt.Sprint("accepted=", accepted), func(t *testing.T) {

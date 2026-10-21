@@ -13,8 +13,8 @@ import (
 	"platformserver/platform"
 )
 
-// Tenant words (ADR-0005): the tenant's own dictionary, one more layer on
-// the platform's and the apps' (ADR-0005). An administrator says what a
+// Tenant words: the tenant's own dictionary, one more layer on
+// the platform's and the apps'. An administrator says what a
 // declaration text — above all one the tenant defined in Build: an object
 // type, a field, a state, an action, an application — reads as in each
 // language; the host then serves it like any shipped translation. Names are
@@ -116,7 +116,7 @@ type WordsView struct {
 	Words     []Word   `json:"words"`
 }
 
-// Words lists an app's declaration texts (ADR-0005 Texts, plus the tenant's
+// Words lists an app's declaration texts ( Texts, plus the tenant's
 // installed definitions for Build) with what every language says for each.
 func (t *Tenant) Words(app string) WordsView {
 	view := WordsView{App: app, Apps: []string{}, Languages: t.i18n.languages(), Words: []Word{}}

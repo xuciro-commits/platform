@@ -12,7 +12,7 @@ import (
 
 // routesAI serves model calls and the AI catalog.
 func (h *Host) routesAI(rt *routes) {
-	rt.handle(Route{Pattern: "POST /v1/ai/chat", Summary: "Call a model the caller may use; the call is metered (ADR-0008)", Body: ChatRequest{}, Answer: ChatAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(Route{Pattern: "POST /v1/ai/chat", Summary: "Call a model the caller may use; the call is metered", Body: ChatRequest{}, Answer: ChatAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req ChatRequest
 		// A chat body carries a conversation and its tool declarations; the
 		// platform bounds it like every other request body (review AI-03).
@@ -20,7 +20,7 @@ func (h *Host) routesAI(rt *routes) {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
-		if req.Stream { // server-sent events: delta, then done or error (ADR-0008 D2)
+		if req.Stream { // server-sent events: delta, then done or error
 			flusher, _ := w.(http.Flusher)
 			started := false
 			event := func(name string, v any) {

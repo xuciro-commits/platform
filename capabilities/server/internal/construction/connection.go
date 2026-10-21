@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-// Connections (ADR-0023、ADR-0062 I-A): how the tenant reaches one external
+// Connections (I-A): how the tenant reaches one external
 // system - a kind, an address and the *name* of a secret in the host's store.
 // Sources read through a connection; the credential itself never enters a
 // record, a candidate or a release, so the same definition promotes to another
@@ -34,7 +34,7 @@ type Connection struct {
 	// Secret names the credential in the host's secret store: the Authorization header's value for http/odata, the password for postgres.
 	Secret       string `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential" source:"record"`
 	AllowPrivate bool   `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
-	// Marking classifies everything read through it (ADR-0025); datasets loaded from it are marked at least as high.
+	// Marking classifies everything read through it; datasets loaded from it are marked at least as high.
 	Marking   string           `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking" help:"What is read through it is at least this: internal, confidential or restricted"`
 	State     string           `json:"state" field:"readonly" source:"record"`
 	Requested bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`

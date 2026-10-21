@@ -9,10 +9,10 @@ import (
 )
 
 // The member a caller sees: the stored seat projected through today's profile,
-// grants, teams and projects (ADR-0027 §3.3, ADR-0028).
+// grants, teams and projects.
 func (d *Console) currentMember(m *platform.Member) platform.Member {
 	out := clone(m)
-	if p := d.profiles[m.ID]; p != nil { // language and timezone are the profile's (ADR-0028); Member carries them for callers
+	if p := d.profiles[m.ID]; p != nil { // language and timezone are the profile's; Member carries them for callers
 		out.Language, out.Timezone = p.Language, p.Timezone
 	}
 	if out.Timezone == "" {
@@ -35,19 +35,19 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 	if out.Status == platform.MemberInvited && !d.lastSeen[out.ID].IsZero() {
 		out.Status = "" // signing in accepts the invitation
 	}
-	if !out.Active() { // suspended or left: holds nothing (ADR-0028 §4)
+	if !out.Active() { // suspended or left: holds nothing
 		out.Grants, out.Roles = nil, map[string]string{}
 		return out
 	}
 	d.migrateGrants(&out)
-	out.Grants = append(slices.Clone(out.Grants), d.teamGrants(out.ID)...) // teams' grants are held as long as one belongs (ADR-0027 §3.3)
+	out.Grants = append(slices.Clone(out.Grants), d.teamGrants(out.ID)...) // teams' grants are held as long as one belongs
 	out.Grants = append(out.Grants, d.projectGrantsLocked(out.ID)...)      // a project's editors build within it (#141)
 	d.deriveRoles(&out, today)
 	out.Grants = slices.DeleteFunc(slices.Clone(out.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	return out
 }
 
-// migrateGrants turns a legacy member's Roles into grants (ADR-0027 §3.3):
+// migrateGrants turns a legacy member's Roles into grants:
 // before grants existed, Roles was what they held.
 func (d *Console) migrateGrants(m *platform.Member) {
 	if len(m.Grants) > 0 {

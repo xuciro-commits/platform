@@ -8,7 +8,7 @@ import (
 )
 
 // EffectKind declares an effect an app sends to whatever endpoint the tenant
-// binds to it (ADR-0004).
+// binds to it.
 type EffectKind struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
@@ -56,7 +56,7 @@ type Outcome struct {
 	Digest        string          `json:"digest,omitempty"`
 	Answer        json.RawMessage `json:"answer,omitempty"` // the receiver's body, for app effects (up to 64 KiB of JSON)
 	// Staged references the sealed per-call result channel when an operation's
-	// result exceeds its inline budget (ADR-0016 §13.3): Answer then carries
+	// result exceeds its inline budget: Answer then carries
 	// the handle, and the bytes live in the host's sealed artifact.
 	Staged     *StagedResult `json:"staged,omitempty"`
 	Generation uint32        `json:"generation,omitempty"` // rejects stale internal compute completions

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// The application API owns this build-time UI contract (ADR-0015). The same
+// The application API owns this build-time UI contract. The same
 // bytes generate the browser registry; they describe presentation, not grants
 // or new business execution capabilities.
 //

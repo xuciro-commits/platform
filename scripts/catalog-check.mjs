@@ -7,7 +7,7 @@ export const ownerPackage = (owner) => owner.startsWith("@") ? owner : owner ===
 export const ownerDirectory = (owner) => `web/packages/${owner}`;
 export const dictionaryFile = (owner) => `${ownerDirectory(owner)}/src/${owner === "ui" ? "i18n/zh-CN.ts" : "i18n.ts"}`;
 
-/** ADR-0049: configuration belongs to applications; domain pages cannot enter
+/** configuration belongs to applications; domain pages cannot enter
  * the generic presentation owner by changing their import path. */
 export function professionalViewGate({source, owner="@platform/app", configurations=[]}) {
   const errors=[];

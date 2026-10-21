@@ -16,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0007 10c: one trace follows a submission through the delivery that
+// one trace follows a submission through the delivery that
 // starts a flow, whose step causes an effect, to the effect's attempt.
 func TestTraceFollowsWork(t *testing.T) {
 	spans := tracetest.NewInMemoryExporter()

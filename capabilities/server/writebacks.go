@@ -68,7 +68,7 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	return out, nil
 }
 
-// Writebacks (ADR-0024) ride the ADR-0004 outbox: an accepted decision that a
+// Writebacks ride the  outbox: an accepted decision that a
 // published writeback listens for becomes an effect addressed to the
 // connection ("connection:<id>"), frozen with its request while the decision is
 // still private, so replay rebuilds the same intent. The dispatcher sends it in

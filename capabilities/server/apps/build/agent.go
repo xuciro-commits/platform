@@ -17,10 +17,10 @@ import (
 const AgentType = "build.agent"
 const SchemaAgentPublish = AgentType + ".publish"
 
-// Agent is an AI agent a builder declares over the ontology (ADR-0008): what
+// Agent is an AI agent a builder declares over the ontology: what
 // it is for, its instructions, the published actions and queries it may use,
 // its budget, who takes over when it stops, and the cases it must pass. The
-// host runs it as any code-declared agent (ADR-0054): every step journaled,
+// host runs it as any code-declared agent: every step journaled,
 // irreversible effects drafted for a person to confirm, evaluations archived
 // against its version.
 type Agent struct {
@@ -45,7 +45,7 @@ type Agent struct {
 	Versions    []string    `json:"versions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// AgentCase is one test of the agent (ADR-0008 D6), as data: a goal about a
+// AgentCase is one test of the agent, as data: a goal about a
 // record, and what a dry run must come to.
 type AgentCase struct {
 	Name   string   `json:"name"`

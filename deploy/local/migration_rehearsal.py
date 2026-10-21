@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ADR-0045's shared HTTP route; invoked by make rehearse, never an executor."""
+"""'s shared HTTP route; invoked by make rehearse, never an executor."""
 import argparse
 import base64
 import json

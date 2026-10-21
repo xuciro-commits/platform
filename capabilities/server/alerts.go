@@ -10,8 +10,8 @@ import (
 	"platformserver/platform"
 )
 
-// raiseAlerts tells people about a record that came to match an alert rule
-// (ADR-0008). It runs after every accepted decision on a builder object;
+// raiseAlerts tells people about a record that came to match an alert rule.
+// It runs after every accepted decision on a builder object;
 // notices are keyed, so a replay or a second look tells nobody twice.
 func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
 	s := e.Record.GetSubmission()

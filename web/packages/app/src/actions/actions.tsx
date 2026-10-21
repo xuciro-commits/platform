@@ -82,14 +82,14 @@ function ReadPicker({ id, field, app, value, onChange, onUnit }: { id: string; f
 }
 
 /** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
- * field tagged ref:"enterprise.element" (ADR-0022 D8) — read through the typed query and
- * resolve contracts (ADR-0034), never the whole graph. The model is every member's to read. */
+ * field tagged ref:"enterprise.element" — read through the typed query and
+ * resolve contracts, never the whole graph. The model is every member's to read. */
 function ElementPicker({id,stereotype,stereotypes,value,onChange}:{id:string;stereotype?:string;stereotypes?:string[];value:string;onChange:(id:string)=>void}) {
  const {source}=useHost();
  return <RecordLookup id={id} source={source} type="enterprise.element" value={value} stereotypes={[...(stereotype?[stereotype]:[]),...(stereotypes??[])]} onChange={id=>onChange(id??"")} />;
 }
 
-/** A list of the records of a type the member may read, for a payload field that names one (ADR-0038). */
+/** A list of the records of a type the member may read, for a payload field that names one. */
 function RecordPicker({ id, type, value, onChange }: { id: string; type: string; value: string; onChange: (id: string) => void }) {
   const { source } = useHost();
   return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} />;
@@ -235,7 +235,7 @@ export function useNewRecord(type: string, onCreated?: (target: { type: string; 
 /** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
 export function RecordActions({ type, record, allowed, steps: withSteps = false }: {
   type: string; record: EntityRecord; allowed?: string[];
-  /** Also the lifecycle's steps from where the record stands — where no status bar shows them (a composed page's actions, ADR-0044). */
+  /** Also the lifecycle's steps from where the record stands — where no status bar shows them (a composed page's actions). */
   steps?: boolean;
 }) {
   const { catalog, source } = useHost();
@@ -268,7 +268,7 @@ export function useTransition(type: string) {
   return { take, dialog };
 }
 
-/** An action taken as one effect of a page event chain (ADR-0047): at once
+/** An action taken as one effect of a page event chain: at once
  * when it takes no input, through its form otherwise. Resolves true when the
  * host accepted it, false when the person cancelled, so the chain can stop. */
 export function useActionEffect() {

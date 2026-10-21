@@ -1,4 +1,4 @@
-// Bounded page composition (ADR-0020 13b). The descriptor comes from the
+// Bounded page composition. The descriptor comes from the
 // host's installed definition registry. Live operation and the local preview
 // use the same list/detail layout and the UI kit's record components.
 import {
@@ -24,7 +24,7 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   const [selected, setSelected] = useState<string>();
   const page = definition.page;
   const allowed = page.actions.map((ref) => ref.name);
-  if (isComposed(page)) { // laid out from sections someone composed (ADR-0048)
+  if (isComposed(page)) { // laid out from sections someone composed
     return <>
       <PageHeader title={page.title} description={page.description} />
       <ComposedPage page={page} definitionKey={`${definition.ref.app}/${definition.ref.name}@${definition.version}`} />

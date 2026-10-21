@@ -290,7 +290,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 }
 
 // published is a definition as it was published: what is installed, kept on the
-// record so a restore installs that and not a draft written since (ADR-0048).
+// record so a restore installs that and not a draft written since.
 func published[T any](definition T) string {
 	// A published definition is one version, not a recursive copy of every
 	// preceding publication. Keeping the old Published string inside the new
@@ -337,7 +337,7 @@ func published[T any](definition T) string {
 
 // Reinstall installs every published object and page again, objects first: the
 // host calls it when a tenant is restored from a snapshot, before the records
-// of the types they define (ADR-0048). It installs what was published, so a
+// of the types they define. It installs what was published, so a
 // draft written since stays a draft.
 func (b *Build) Reinstall() error {
 	if err := restoreDefinitionPublications(b, b.propertyTypeInventory, SchemaPropertyType); err != nil {

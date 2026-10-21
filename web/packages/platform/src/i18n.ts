@@ -1,4 +1,4 @@
-// Simplified Chinese for this package (ADR-0005), keyed by the English source text.
+// Simplified Chinese for this package, keyed by the English source text.
 import { register } from "@platform/ui";
 
 register("zh-CN", {
@@ -1063,7 +1063,7 @@ register("zh-CN", {
   "UAF's general resource association. UAF constrains its informationSource and realizes properties, not the ends, so the profile states them: an organisation under an organisation, a place inside a place, a resource inside a resource, a resource at a place.": "UAF 的通用资源关联。UAF 约束的是它的 informationSource 与 realizes 属性而不是两端，所以由本 profile 明确：组织隶属于组织、场所嵌套于场所、资源嵌套于资源、资源位于某场所。",
   "A slot, not a relationship: a party in an organisation. The party may also be an account of this tenant (member:<id>) — accounts are not elements. UAF's owningInstance rule («ActualOrganization») names the organisation end.": "这是槽而不是关系：组织中的一方。这一方也可以是本租户的账号（member:<id>）——账号不是元素。UAF 的 owningInstance 规则（«ActualOrganization»）规定的就是组织那一端。",
   "The platform's instance-to-type link, not UAF.": "平台自己的“实例→类型”链接，不是 UAF。",
-  "UAF's own pairs are conditional and relate performers to the activities, functions and services they perform — never to a Capability. The profile's meaning (an organisation or resource has a capability) is «Exhibits», which the profile offers beside this; this pair stays accepted so models made before ADR-0031 keep working.": "UAF 自己的配对是有条件的，讲的是执行者与它执行的活动、功能、服务——从不指向「能力」。本 profile 想表达的“组织或资源具备某能力”用的是 «Exhibits»，它就在旁边；这一对仍然接受，好让 ADR-0031 之前的模型继续可用。",
+  "UAF's own pairs are conditional and relate performers to the activities, functions and services they perform — never to a Capability. The profile's meaning (an organisation or resource has a capability) is «Exhibits», which the profile offers beside this; this pair stays accepted so models made before  keep working.": "UAF 自己的配对是有条件的，讲的是执行者与它执行的活动、功能、服务——从不指向「能力」。本 profile 想表达的“组织或资源具备某能力”用的是 «Exhibits»，它就在旁边；这一对仍然接受，好让  之前的模型继续可用。",
   "An organisation answers for what it holds: its posts, the places it runs, its systems and resources, and the goals it is set. UAF's supplier names projects, responsibilities and milestones; the profile adds these four.": "组织对它持有的东西负责：它的岗位、它运营的场所、它的系统与资源，以及认领的目标。UAF 规定的 supplier 是项目、职责与里程碑；本 profile 增加了这几类。",
   "Start with an empty view": "从空视图开始",
   "Relationship kind": "关系结构",

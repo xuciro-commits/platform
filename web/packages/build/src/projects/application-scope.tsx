@@ -1,4 +1,4 @@
-// The application a studio editor was opened from (ADR-0016 §6.2, M2): the
+// The application a studio editor was opened from (M2): the
 // editor keeps the application in scope, so the way back and the asset's
 // membership stay visible without rebuilding the asset or its route.
 import { createContext, useContext, type ReactNode } from "react";

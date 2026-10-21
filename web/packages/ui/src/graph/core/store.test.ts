@@ -1,4 +1,4 @@
-// A reader's arrangement of a drawing (ADR-0035): kept per drawing, bounded,
+// A reader's arrangement of a drawing: kept per drawing, bounded,
 // and never fatal when storage is unavailable.
 import { expect, test } from "vitest";
 import { readCanvasPositions, writeCanvasPositions } from "./store";

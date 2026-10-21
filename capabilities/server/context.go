@@ -12,11 +12,11 @@ import (
 	"platformserver/platform"
 )
 
-// The context graph (ADR-0054): one read that grounds a person or an agent
+// The context graph: one read that grounds a person or an agent
 // in a record — its fields and history, the records it references and that
 // reference it, its links across apps, the flows and the tasks about it.
 // Within the reader's scope: a person reads with their own grants, an app's
-// automation reads its own app (ADR-0008). There is no host fallback — a
+// automation reads its own app. There is no host fallback — a
 // read without a reader answers nothing, so a flow's agent can never quietly
 // read as the host did before the review (AI-01).
 
@@ -47,7 +47,7 @@ type TaskSummary struct {
 
 // host reads everything: every app's roles, tenant scope. It is the host's own
 // view for indexing and maintenance, not a reader: reads taken for a person or
-// an agent are taken as that person or as the agent's own app (ADR-0008).
+// an agent are taken as that person or as the agent's own app.
 func (t *Tenant) host() platform.Member {
 	m := platform.Member{ID: "host:maintenance", Tenant: t.ID, Roles: map[string]string{}}
 	for _, a := range t.apps {
@@ -59,7 +59,7 @@ func (t *Tenant) host() platform.Member {
 // appReader is the member an app's automation reads as: exactly that app's
 // records, and none of any other app's. It is a strict subset of host(): the
 // same roles for the app's own types, no role in any other app. An agent a
-// flow runs reads as its app (ADR-0008, review AI-01).
+// flow runs reads as its app.
 func (t *Tenant) appReader(app string) *platform.Member {
 	return &platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{app: platform.AnyMember}}
 }
@@ -138,7 +138,7 @@ type Hit struct {
 
 // Search finds records of every type the reader may read by text: the global
 // search of the workspace and an agent's search tool. Without a reader it
-// finds nothing (ADR-0008).
+// finds nothing.
 func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []Hit {
 	if reader == nil || reader.Tenant != t.ID {
 		return nil
@@ -153,7 +153,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 			continue
 		}
 		query := platform.Query{Search: q, Limit: 5}
-		if rest, named := t.names(info, q); named { // "open opportunities" searches opportunities for "open" (ADR-0005 D1)
+		if rest, named := t.names(info, q); named { // "open opportunities" searches opportunities for "open"
 			query.Search = rest
 		}
 		page, err := t.recordsRead(m, info.Type, query, now)

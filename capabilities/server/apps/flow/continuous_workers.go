@@ -7,7 +7,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// Partition workers for one continuous batch (ADR-0016 §13.3): a declaration
+// Partition workers for one continuous batch: a declaration
 // of concurrency 8 means real partition work, not a number in a declaration.
 // One partition is one job, so its state is read and folded by exactly one
 // worker at a time; the caller merges the workers' results in the batch's own

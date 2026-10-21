@@ -45,7 +45,7 @@ type ChatRequest struct {
 	// PromptCache opts into an explicit cache breakpoint for providers that
 	// require one. It does not disable providers' automatic prompt caching.
 	PromptCache bool `json:"promptCache,omitempty"`
-	// Stream answers token by token as server-sent events (ADR-0008 D2);
+	// Stream answers token by token as server-sent events;
 	// usage is journaled once, when the call ends.
 	Stream   bool                  `json:"stream,omitempty"`
 	Run      string                `json:"-"` // the agent run or evaluation the call is for, on its transcript

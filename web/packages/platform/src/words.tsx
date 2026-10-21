@@ -1,4 +1,4 @@
-// Control Panel: the tenant's words (ADR-0005). Everything the tenant
+// Control Panel: the tenant's words. Everything the tenant
 // defined in Build — object types, fields, states, actions, applications,
 // pages — is written once in one language; here an administrator says what it
 // reads as in each other language, and the host serves it translated like any

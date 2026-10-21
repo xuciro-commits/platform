@@ -7,7 +7,7 @@ import (
 	"platformserver/platform"
 )
 
-// Patterns (ADR-0022 D6, ADR-0022): reusable pieces of an enterprise on a
+// Patterns: reusable pieces of an enterprise on a
 // four-level backbone that every organisation, whatever its industry, can be
 // read against:
 //

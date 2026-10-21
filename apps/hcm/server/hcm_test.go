@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// ADR-0007: leave requests approved along the organisation. Alice works in
+// leave requests approved along the organisation. Alice works in
 // sales; Bob manages sales; Carol heads the company above it; Dave works in
 // HR; a bot is an AI agent with Alice's rights in HR.
 func TestLeaveApprovals(t *testing.T) {
@@ -109,7 +109,7 @@ func TestLeaveApprovals(t *testing.T) {
 	expect("levels", fmt.Sprint(len(a1.Levels), a1.Levels[0].Approvers), "1 [bob bot]")
 	expect("bob's inbox", fmt.Sprint(inbox("bob")), "[Approve: Submit for approval hcm.leave/L1]")
 	expect("the agent approves", do("bot", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
-	// carol is no approver, so the request is not hers to read or to act on (ADR-0044 18b).
+	// carol is no approver, so the request is not hers to read or to act on.
 	expect("carol approves", do("carol", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
 	expect("bob approves", do("bob", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "work.approval.approve")
 	expect("after approval", leave("L1").State+" "+request("L1").State, "approved approved")
@@ -204,7 +204,7 @@ func TestLeaveApprovals(t *testing.T) {
 	expect("probe", do("dave", SchemaSubmit, LeaveType, "L6", struct{}{}), "ERROR_CODE_POLICY_DENIED")
 
 	// An overdue task tells its approvers once: due in two working days, a
-	// Thursday's request is late on Monday morning (ADR-0038).
+	// Thursday's request is late on Monday morning.
 	do("alice", SchemaSubmit, LeaveType, "L6", struct{}{})
 	tn.Work(now.Add(72 * time.Hour)) // Sunday: not yet
 	notes, _ := tn.Read(member("bob"), "notifications")

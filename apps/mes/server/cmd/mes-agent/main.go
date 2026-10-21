@@ -1,5 +1,5 @@
 // Command mes-agent is the thin adapter an AI agent (or a script) uses to act on
-// the plant (ADR-0057): it lists the caller's own action catalog and submits one
+// the plant: it lists the caller's own action catalog and submits one
 // of those actions through the kernel's submission path. It knows no action
 // itself; what the caller may do comes from the server.
 //

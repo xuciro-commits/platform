@@ -61,7 +61,7 @@ func (h *Host) routesIntegration(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.public(Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card (ADR-0009)"}, func(w http.ResponseWriter, r *http.Request) {
+	rt.public(Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card"}, func(w http.ResponseWriter, r *http.Request) {
 		tenants := h.currentTenants()
 		i := slices.IndexFunc(tenants, func(t *Tenant) bool { return t.ID == r.PathValue("tenant") })
 		if i < 0 || !tenants[i].published(r.PathValue("agent")) {

@@ -1,8 +1,8 @@
 import type { EntityInfo } from "@platform/ui";
 
-/** Studio owns template identities and controlled draft products (ADR-0014).
- *  The five module shapes an enterprise app is made of (ADR-0048, after the
- *  Fiori floorplans): list report, object page with items, worklist, wizard,
+/** Studio owns template identities and controlled draft products.
+ *  The module shapes used by enterprise applications, following
+ *  Fiori floorplans: list report, object page with items, worklist, wizard,
  *  board. Each produces the existing build.page payload. */
 export type TemplateId = "build/list-report" | "build/object-page" | "build/worklist" | "build/wizard" | "build/board" | "build/record-handling";
 

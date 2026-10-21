@@ -109,7 +109,7 @@ func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
 }
 
 // invoke calls a protocol action for a consumer: a flow's step, an agent, or a
-// decision's request once it is accepted (ADR-0006).
+// decision's request once it is accepted.
 func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time, original ...string) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 	if !t.consumes(c, protocol) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{app} does not consume {protocol}", c.App, protocol)

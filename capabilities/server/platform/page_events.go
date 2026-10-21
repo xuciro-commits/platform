@@ -24,7 +24,7 @@ type PageOverlay struct {
 	OpenVariable string                   `json:"openVariable"`
 }
 
-// A presentation event runs an ordered chain of effects (ADR-0047). Each
+// A presentation event runs an ordered chain of effects. Each
 // effect is exactly one of: a typed scalar state write, an ontology action
 // taken on a record variable (or a creating action), a page navigation, or a
 // return to the caller. Navigation and return end the chain.
@@ -40,7 +40,7 @@ type PageEffect struct {
 	Target string          `json:"target,omitempty"`
 	Value  json.RawMessage `json:"value,omitempty"`
 	// From names the variable a set effect copies instead of a literal Value
-	// (ADR-0047 assignment; v2.108): same type, readable where the event is.
+	// (assignment; v2.108): same type, readable where the event is.
 	From     string            `json:"from,omitempty"`
 	Action   *PageActionEffect `json:"action,omitempty"`
 	Navigate *PageNavigation   `json:"navigate,omitempty"`
@@ -50,7 +50,7 @@ type PageActionEffect struct {
 	Ref            AssetRef `json:"ref"`
 	RecordVariable string   `json:"recordVariable,omitempty"`
 	// Inputs prefill the action's parameters from page variables or literals
-	// (ADR-0047; v2.108). The form still opens when the action has one; a
+	// (v2.108). The form still opens when the action has one; a
 	// member may change what was prefilled before it commits.
 	Inputs map[string]PageValue `json:"inputs,omitempty"`
 }

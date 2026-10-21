@@ -44,7 +44,7 @@ func member(id string, role Role, in ...string) platform.Caller {
 }
 
 // testPlant sends every input through a tenant on the platform host, so it is
-// journaled as in production (ADR-0016).
+// journaled as in production.
 type testPlant struct {
 	*Plant
 	tenant  *platformserver.Tenant
@@ -62,7 +62,7 @@ func (p *testPlant) DeliverStates(who platform.Caller, b StateBatch, now time.Ti
 	return fact, err
 }
 
-// Orders and SFCs are the plant's records, as the supervisor reads them (ADR-0046).
+// Orders and SFCs are the plant's records, as the supervisor reads them.
 func (p *testPlant) Orders() []Order { return records[Order](p, OrderType) }
 func (p *testPlant) SFCs() []SFC     { return records[SFC](p, SFCType) }
 
@@ -106,7 +106,7 @@ func plantTenantOf(t *testing.T, seed []platform.Membership, disable ...string) 
 }
 
 // newPlant journals every accepted input; when the test ends, a second plant
-// replays the journal and must show the same state and kernel logs (ADR-0010).
+// replays the journal and must show the same state and kernel logs.
 func newPlant(t *testing.T) *testPlant {
 	seed := slices.Clone(units)
 	plant, tn := plantTenantOf(t, seed)
@@ -195,7 +195,7 @@ func sfc(p *testPlant, id string) SFC {
 
 // A shop order moves through its routing. Without a provider of
 // production.orders/1 the plant knows no planned order and confirms to no ERP
-// (the plant solution's tests have one, ADR-0026).
+// (the plant solution's tests have one).
 func TestOrderThroughRouting(t *testing.T) {
 	p := newPlant(t)
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-0", releasePayload{Product: "P-100", Quantity: 2, SFCs: 2, Planned: "PO-9001"}), "ERROR_CODE_INVALID_ARGUMENT")
@@ -270,7 +270,7 @@ func TestDispositionNeedsTwoSignatures(t *testing.T) {
 
 // A lot reads the routing version it was released against, not the newest version
 // of its product's routing: that is the whole of what "released against" buys, and
-// why revising a routing cannot move a lot already on the floor (ADR-0032).
+// why revising a routing cannot move a lot already on the floor.
 func TestLotReadsItsOwnRoutingVersion(t *testing.T) {
 	p := New(tenant, DemoMaster())
 	at := func(version, number int) string {
@@ -394,7 +394,7 @@ func TestDowntimeReasonSurvivesRecomputation(t *testing.T) {
 }
 
 // #97: a downtime that starts tells the supervisors of its line; one still
-// without a reason reminds them once, after the plant's setting (ADR-0027).
+// without a reason reminds them once, after the plant's setting.
 func TestDowntimeTellsSupervisors(t *testing.T) {
 	p := newPlant(t)
 	inbox := func(who platform.Caller) []string {
@@ -445,7 +445,7 @@ func TestConnectors(t *testing.T) {
 	expect(t, views[0].ID+" "+views[0].Health, "gateway-l1 stale")
 }
 
-// The MES reads in Chinese (ADR-0005 6a): a title or description without a
+// The MES reads in Chinese: a title or description without a
 // translation fails here.
 func TestChinese(t *testing.T) {
 	_, tn := plantTenant(t)

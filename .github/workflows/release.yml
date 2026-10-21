@@ -1,6 +1,6 @@
 # Runs only when a version is fixed: pushing a v* tag (make tag VERSION=vX.Y.Z)
 # or by hand. Day-to-day pushes run nothing here; `make check` and `make verify`
-# are the developer's layers (ADR-0029). The job is the same `make verify`, then
+# are the developer's layers. The job is the same `make verify`, then
 # the artifacts: the workspace build and the two solution hosts for linux
 # amd64/arm64, attached to the GitHub Release of the tag, and the solution
 # images pushed to GHCR under the tag.

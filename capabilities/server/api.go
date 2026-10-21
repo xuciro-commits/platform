@@ -20,7 +20,7 @@ import (
 	"platformserver/platform"
 )
 
-// The host API contract (ADR-0005 D7). The Go types are the source: each
+// The host API contract. The Go types are the source: each
 // route is declared once with its handler, the body it takes and the answer
 // it gives, and the host describes them as OpenAPI 3.1 at /v1/openapi.json.
 // The TypeScript types of the web edge are generated from the same document
@@ -47,11 +47,11 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/packages", Summary: "Administrators read the package index; application builders discover installed blueprints", Answer: []PackageView{}},
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},
 	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles and profiles (administrators)", Answer: []MemberView{}},
-	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors; ADR-0027)", Answer: []AppPermissions{}},
+	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors)", Answer: []AppPermissions{}},
 	{Pattern: "GET /v1/projects", Summary: "The tenant's projects: the members and assets each covers; editors of a live project build within it (administrators, auditors; #141)", Answer: []BuildProject{}},
-	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors; ADR-0027)", Answer: AccessConfig{}},
-	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member; ADR-0027)", Answer: TenantRecord{}},
-	{Pattern: "GET /v1/account", Summary: "The caller's profile over the tenant's defaults (ADR-0028)", Answer: Account{}},
+	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors)", Answer: AccessConfig{}},
+	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member)", Answer: TenantRecord{}},
+	{Pattern: "GET /v1/account", Summary: "The caller's profile over the tenant's defaults", Answer: Account{}},
 	{Pattern: "GET /v1/audit", Summary: "Accepted inputs, newest first, rebuilt from the journal (administrators)", Answer: []AuditEntry{}},
 	{Pattern: "GET /v1/deliveries", Summary: "Delivery attempts of events to subscribers (administrators)", Answer: []Delivery{}},
 	{Pattern: "GET /v1/work", Summary: "Owned work: deliveries and jobs (administrators)", Answer: []Task{}},
@@ -59,14 +59,14 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/settings", Summary: "Every app's settings with their values, in the caller's language (administrators)", Answer: []AppSettings{}},
 	{Pattern: "GET /v1/endpoints", Summary: "Outbound endpoints (administrators)", Answer: []EndpointView{}},
 	{Pattern: "GET /v1/effects", Summary: "Outbound effects and their state (administrators)", Answer: []platform.Effect{}},
-	{Pattern: "GET /v1/personal-reads", Summary: "Who read which records' personal data, newest first (administrators, ADR-0038)", Answer: []PersonalRead{}},
+	{Pattern: "GET /v1/personal-reads", Summary: "Who read which records' personal data, newest first (administrators)", Answer: []PersonalRead{}},
 	{Pattern: "GET /v1/health", Summary: "How the tenant's work stands: queues, failed work, deferral, breakers, failing connectors and endpoints (administrators)", Answer: TenantHealth{}},
 	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []InboxTask{}},
 	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []platform.ApprovalRequest{}},
 	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []platform.SavedView{}},
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []AgentInfo{}},
-	{Pattern: "GET /v1/agent-overview", Summary: "Every agent, declared and outside, with what it did, what it cost, what people made of it and whether it is suspended (ADR-0008)", Answer: []AgentOverview{}},
-	{Pattern: "GET /v1/ai-limits", Summary: "Members', agents' and apps' own AI limits (ADR-0008)", Answer: []platform.AILimit{}},
+	{Pattern: "GET /v1/agent-overview", Summary: "Every agent, declared and outside, with what it did, what it cost, what people made of it and whether it is suspended", Answer: []AgentOverview{}},
+	{Pattern: "GET /v1/ai-limits", Summary: "Members', agents' and apps' own AI limits", Answer: []platform.AILimit{}},
 	{Pattern: "GET /v1/runs", Summary: "Agent runs on the caller's behalf", Answer: []AgentRunRecord{}},
 	{Pattern: "GET /v1/memories", Summary: "What agents remember about the caller", Answer: []Memory{}},
 	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []platform.AIProvider{}},
@@ -120,9 +120,9 @@ type MeView struct {
 	Language    string          `json:"language"`            // the language the host serves this member in; "" is English
 	Languages   []string        `json:"languages"`           // the languages the tenant has dictionaries for
 	Preferred   string          `json:"preferred,omitempty"` // the member's own choice
-	Currency    string          `json:"currency"`            // the tenant's, the default of amounts people enter (ADR-0026)
-	Account     Account         `json:"account"`             // the member's profile over the tenant's defaults (ADR-0028)
-	Tenant      TenantRecord    `json:"tenant"`              // the tenant's record (ADR-0027)
+	Currency    string          `json:"currency"`            // the tenant's, the default of amounts people enter
+	Account     Account         `json:"account"`             // the member's profile over the tenant's defaults
+	Tenant      TenantRecord    `json:"tenant"`              // the tenant's record
 }
 
 // SignIn tells the workspace how to sign in: an OpenID issuer and client, or
@@ -193,7 +193,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	return map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{"title": "Platform host API", "version": "v1",
-			"description": "Generated from the host's Go types (ADR-0005 D7). Decisions are submissions of the kernel contract (contract/proto, in their Protobuf JSON form); their meaning is contract/spec."},
+			"description": "Generated from the host's Go types. Decisions are submissions of the kernel contract (contract/proto, in their Protobuf JSON form); their meaning is contract/spec."},
 		"paths": paths,
 		"components": map[string]any{"schemas": s.defs,
 			"securitySchemes": map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer",
@@ -460,7 +460,7 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 	}
 	slices.Sort(names)
 	var b strings.Builder
-	b.WriteString("// Generated by capabilities/server/cmd/api-types from the host's Go types (ADR-0005 D7). Do not edit:\n")
+	b.WriteString("// Generated by capabilities/server/cmd/api-types from the host's Go types. Do not edit:\n")
 	b.WriteString("// change the Go types, then run `go run ./cmd/api-types` in capabilities/server.\n")
 	imports := map[string][]string{}
 	for _, name := range names {
@@ -491,10 +491,10 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 		}
 		fmt.Fprintf(&b, "\nexport type %s = %s;\n", name, tsOf(d, 0))
 	}
-	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts (ADR-0015). */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
+	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts. */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
 	b.WriteString("\n/** Authoring narrows manifest-owned properties and ports by widget; Section retains the installed wire format. */\nexport type { PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor } from '../widget-authoring';\n")
 	limits, _ := json.Marshal(map[string]int{"maxRegions": platform.MaxImageRegions, "maxLabelBytes": platform.MaxImageRegionLabelBytes, "maxIDBytes": platform.MaxImageRegionIDBytes})
-	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds (ADR-0015). */\nexport const imageRegionLimits = %s as const;\n", limits)
+	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds. */\nexport const imageRegionLimits = %s as const;\n", limits)
 	return b.String()
 }
 

@@ -1,4 +1,4 @@
-// Package hcm is human capital management (ADR-0016, ADR-0007), modelled
+// Package hcm is human capital management, modelled
 // on SAP SuccessFactors' absence management: people's leave requests,
 // approved along the organisation — the manager, and the department head above
 // five days. It is mostly declarations: the entity, its lifecycle and its
@@ -17,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-// languages translate the app's titles and descriptions (ADR-0005).
+// languages translate the app's titles and descriptions.
 //
 //go:embed i18n
 var languageFiles embed.FS
@@ -33,7 +33,7 @@ const (
 	Employee     = "employee"
 	HR           = "hr"
 	// Structure is where approvers are found: a manager of the requester's
-	// unit, a head of it or of a unit above (ADR-0022).
+	// unit, a head of it or of a unit above.
 	Structure = "management"
 )
 
@@ -47,7 +47,7 @@ type Leave struct {
 	Days     int    `json:"days" field:"readonly"`
 	Note     string `json:"note,omitempty" type:"longtext"`
 	// Health is the medical reason of a sick leave: HR alone reads it, and its
-	// reads are audited (ADR-0038, D4); the employee gives it when drafting.
+	// reads are audited; the employee gives it when drafting.
 	Health string `json:"health,omitempty" type:"longtext" title:"Medical reason" read:"hr" personal:"health" help:"Why a sick leave was taken; only HR reads it"`
 	State  string `json:"state" field:"readonly" choices:"draft,pending,approved,rejected,canceled"`
 }
@@ -114,7 +114,7 @@ func New(tenant string) *App {
 	return &App{tenant: tenant, ledger: platform.NewLedger(tenant, ID, Actions(), LeaveType)}
 }
 
-// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
+// Snapshot and Restore: its records are the host's; the ledger is its own.
 func (a *App) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (a *App) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }

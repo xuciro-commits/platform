@@ -13,7 +13,7 @@ import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
 import { useAuthoringModel } from "./authoring-model";
 
-// Pipelines (ADR-0024): a dataset in, declared steps in order, expectations on
+// Pipelines: a dataset in, declared steps in order, expectations on
 // the result, and a dataset or an object out. The host runs a published
 // pipeline when its input gains a version, on a period, or on request; rows
 // that fail an expectation are quarantined on the run, never written.
@@ -22,7 +22,7 @@ type Step = { kind: string; columns?: string[]; from?: string; to?: string; colu
 type Expectation = { column: string; rule: string; value?: string };
 type Run = { merged?: number; at: string; inputVersion: number; rows: number; written: number; quarantined: number; failed: number; error?: string; outputVersion?: number;
   quarantine?: { reason: string; row: Record<string, unknown> }[]; failures?: { id: string; outcome: string }[] };
-// ADR-0022: rows land in the enterprise model as elements owned on the source system's behalf.
+// rows land in the enterprise model as elements owned on the source system's behalf.
 type EnterpriseTarget = { source: string; stereotype: string; id: string; name: string; shortName?: string; kind?: string; parent?: string; root?: string; in?: string; relation?: string; at?: string; atKind?: string; from?: string; until?: string; properties?: string[] };
 const STEREOTYPES = ["ActualOrganization", "ActualPost", "ActualPerson", "ActualLocation", "ActualResource", "ActualProject"];
 const AT_KINDS = ["ResponsibleFor", "FillsPost", "ActualOrganizationRole", "IsCapableToPerform"];

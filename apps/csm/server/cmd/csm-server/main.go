@@ -1,8 +1,5 @@
-// Command csm-server runs customer service alone on a development host
-// (docs/Apps.md step 6; ADR-0016): tickets, their service levels and the
-// triage agent, with no CRM beside it. With -web the host serves the
-// workspace's build; the development tokens "desk" and "lead" sign in; the
-// lead administers the platform, AI and agents.
+// Command csm-server runs CSM on a development host: tickets, service levels,
+// and the original helpdesk workflows.
 package main
 
 import (

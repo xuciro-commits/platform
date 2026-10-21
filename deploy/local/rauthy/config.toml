@@ -1,4 +1,4 @@
-# Rauthy for local development (docs/ADR/0007). Every secret here is local-only;
+# Rauthy for local development . Every secret here is local-only;
 # a real deployment passes its own through the environment variables Rauthy
 # documents (HQL_SECRET_RAFT, HQL_SECRET_API, ENC_KEYS, BOOTSTRAP_ADMIN_PASSWORD_PLAIN …).
 

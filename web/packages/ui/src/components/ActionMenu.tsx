@@ -1,4 +1,4 @@
-// A button that opens a list of commands (ADR-0018 §4: one "Open in…" and
+// A button that opens a list of commands (: one "Open in…" and
 // one overflow menu across the platform, instead of a row of ad-hoc buttons).
 import { DropdownMenu } from 'radix-ui';
 import type { ReactNode } from 'react';

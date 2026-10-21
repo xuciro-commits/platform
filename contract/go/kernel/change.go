@@ -124,7 +124,7 @@ func (l *ChangeLog) lastTime(tenant string) time.Time {
 
 // Fork gives one decision a private change-log view. Accepted records are
 // immutable; the maps and slices that SubmitChecked extends are independent.
-// The host can discard this view when a durable append fails (ADR-0010 19a).
+// The host can discard this view when a durable append fails.
 func (l *ChangeLog) Fork() *ChangeLog {
 	copy := &ChangeLog{schemas: l.schemas, logs: make(map[string][]*pb.ChangeRecord, len(l.logs)),
 		byKey: make(map[string]map[string]*pb.ChangeRecord, len(l.byKey)), byID: make(map[string]map[string]bool, len(l.byID)), revs: make(map[[3]string]uint32, len(l.revs)), next: l.next, Facts: l.Facts, archive: l.archive, archived: map[string]int{}, last: map[string]time.Time{}, tail: map[string]*pb.ChangeRecord{}}
@@ -161,7 +161,7 @@ func (l *ChangeLog) Fork() *ChangeLog {
 // ApplyAccepted advances a log from the saved decision, without running its
 // policy or business rules. It rejects a missing predecessor or conflicting
 // receipt; reapplying the same saved record is a no-op. The host calls this
-// only after the result's durable append or while recovering it (ADR-0010).
+// only after the result's durable append or while recovering it.
 func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	if saved == nil || saved.GetSubmission() == nil || saved.GetRecordedTime() == nil || saved.GetValidTime() == nil {
 		return false, fmt.Errorf("accepted change is incomplete")

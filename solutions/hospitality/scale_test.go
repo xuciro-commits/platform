@@ -12,7 +12,7 @@ import (
 	"platformserver"
 )
 
-// ADR-0024: a large tenant restarts from a snapshot in seconds, and
+// a large tenant restarts from a snapshot in seconds, and
 // decisions barely wait while one is taken. Slow and memory-hungry, so on
 // request: PLATFORM_SCALE=1000000 go test -run TestSnapshotAtScale -v -timeout 20m
 // (measured on 2026-09-25: full replay 22 s, restore 5.5 s, a decision waited

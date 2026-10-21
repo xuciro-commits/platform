@@ -14,14 +14,14 @@ import (
 	"platformserver/platform"
 )
 
-// The books (ADR-0026、ADR-0062 Ⅱ): the transaction skeleton SAP keeps in
+// The books (Ⅱ): the transaction skeleton SAP keeps in
 // code, as shared configuration every application posts into. A chart of
 // accounts, fiscal periods that open and close, and journal entries - the
 // double-entry record of what happened in money. Applications do not write
 // journals by hand: a builder action declares what it posts (apps/build
 // Journal), and the host lands one balanced entry per accepted decision,
 // idempotent by the decision's change id. Stock, receivables and payables
-// stay subledgers on the applications' own balances (ADR-0039); the journal
+// stay subledgers on the applications' own balances; the journal
 // is the general ledger they summarise into.
 const (
 	AccountType = "core.account"

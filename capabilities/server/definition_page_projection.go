@@ -80,7 +80,7 @@ func (projection pageDefinitionProjection) page(def platform.Definition) (platfo
 	page.DetailFields = slices.DeleteFunc(slices.Clone(page.DetailFields), func(name string) bool { return !visibleFields[name] })
 	page.Actions = slices.DeleteFunc(slices.Clone(page.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 	// A composed page's widgets are trimmed the same way: a field or an
-	// action this member may not have is not on the page (ADR-0048).
+	// action this member may not have is not on the page.
 	if len(page.Sections) > 0 {
 		sections := make([]platform.Section, 0, len(page.Sections))
 		for _, section := range page.Sections {

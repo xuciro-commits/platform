@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-// AggregateQuery groups and measures the records of one type (ADR-0024),
+// AggregateQuery groups and measures the records of one type,
 // like Odoo's read_group: the list's domain, search and scope, then groups and
 // measures.
 //   - Groups: a field ("stage"), or a date's bucket ("checkIn:month"; day, week,

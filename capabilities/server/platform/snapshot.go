@@ -10,7 +10,7 @@ import (
 )
 
 // Snapshotter is an app whose state the host can save at a journal position
-// and restore instead of replaying the entries before it (ADR-0024). Every
+// and restore instead of replaying the entries before it. Every
 // app of a tenant must be one for the tenant to use snapshots; CheckReplay
 // checks, for every app, that a snapshot plus the entries after it equals a
 // full replay. Restore is given a new app, composed as at start-up.
@@ -28,7 +28,7 @@ type SnapshotFormatOwner interface {
 }
 
 // Snapshot saves the ledger's change log: an app whose other state lives in
-// the host's records (ADR-0046) snapshots with this alone.
+// the host's records snapshots with this alone.
 func (l *Ledger) Snapshot() (json.RawMessage, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

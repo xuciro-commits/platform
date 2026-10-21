@@ -1,4 +1,4 @@
-// The Host every app reads through (ADR-0019): the member's catalog of
+// The Host every app reads through: the member's catalog of
 // actions, the entity types and definitions the host projects for them, the
 // record source, the decision path (K5 outbox, idempotent send) and the
 // `opens` map from record types to the view that shows them.
@@ -43,7 +43,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   const entityQuery = read<EntityInfo[]>("/v1/entities");
   const entities = entityQuery.data ?? [];
   // The installed assets, so an app's navigation can offer the pages it has —
-  // a code page, or one someone composed in this tenant (ADR-0020、ADR-0048).
+  // a code page, or one someone composed in this tenant.
   const definitionQuery = read<Definition[]>("/v1/definitions");
   const definitions = definitionQuery.data ?? [];
   const initialMetadata = useRef({ scope: "", ready: false });
@@ -65,7 +65,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
 
   const decide = useCallback<Host["decide"]>(async (schema, target, payload, options = {}) => {
     // A type this client has no authority for is one the tenant declared while
-    // it was open — an object someone published (ADR-0048). Learn it, then decide.
+    // it was open — an object someone published. Learn it, then decide.
     if (!client.authorities.authorityOf(client.connection.tenant, target.type)) {
       await client.refreshDeclarations().catch(() => undefined);
     }
@@ -100,7 +100,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     for (const entry of answered) {
       const ok = entry.state === "SUBMISSION_STATE_CONFIRMED", own = entry.submission.tenantId === client.connection.tenant && entry.submission.idempotencyKey === key;
       const declared = actions?.find((a) => a.schema === entry.submission.schema?.name);
-      const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree (ADR-0007)
+      const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree
       const outcomeText = ok ? done : humanizeKernelError(entry.reason ?? entry.outcome);
       if (!ok && own) options.onRefused?.(outcomeText);
       if ((!ok && !(own && options.onRefused)) || (ok && !options.quiet)) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? entry.submission.schema?.name ?? schema, target: entry.submission.target?.id ?? target.id, outcome: outcomeText }));

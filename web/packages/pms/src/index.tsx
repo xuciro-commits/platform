@@ -8,7 +8,7 @@ import { z } from "zod";
 
 export type Stay = { roomType: string; checkIn: string; checkOut: string };
 export type Reservation = Stay & { id: string; guest: string; revision: number; status: "held" | "booked" | "canceled" | "released"; until?: string };
-/** A room type as the host keeps it (ADR-0046): records a manager maintains. */
+/** A room type as the host keeps it: records a manager maintains. */
 export type RoomType = { id: string; name: string; rooms: number; overbooking: number; hourly?: boolean; minUnits?: number; archived?: boolean };
 
 export const reservationStatuses = defineStatuses({

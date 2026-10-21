@@ -12,7 +12,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// Action declares one business action a domain offers (ADR-0057): the submission
+// Action declares one business action a domain offers: the submission
 // schema that carries it, what it acts on, the capability it belongs to, and a
 // description that screens and automation callers (AI agents included) read.
 // Roles say who may call it; attribute conditions stay in the domain's policy.
@@ -30,9 +30,9 @@ type Action struct {
 	Payload       []Field           `json:"payload"`
 	Roles         []string          `json:"-"`
 	// Uses names protocol actions this one invokes (ProtocolAction); a caller
-	// is offered it only when it may call the bound provider's (ADR-0006).
+	// is offered it only when it may call the bound provider's.
 	Uses []string `json:"uses,omitempty"`
-	// Approval holds the action until its approvers agree (ADR-0007).
+	// Approval holds the action until its approvers agree.
 	Approval *Approval `json:"-"`
 	// NeedsApproval tells callers the action waits for approval (set by NewCatalog).
 	NeedsApproval bool `json:"needsApproval,omitempty"`
@@ -50,7 +50,7 @@ type Action struct {
 	DeferRequired bool `json:"-"`
 }
 
-// Approval is the chain of approvers an action waits for (ADR-0007–D4):
+// Approval is the chain of approvers an action waits for (–D4):
 // levels in order; the last approval runs the held submission again, and its
 // rules decide at that time.
 type Approval struct {
@@ -85,7 +85,7 @@ type ApprovalLevel struct {
 	When            func(c Caller, s *pb.Submission) bool
 	Due             time.Duration
 	// WorkingDays, when set, is the due time in working days of the
-	// requester's calendar instead (ADR-0038).
+	// requester's calendar instead.
 	WorkingDays int
 }
 
@@ -97,11 +97,11 @@ type Field struct {
 	Description string `json:"description"`
 	// Choices are the values the field takes; Ref, the entity type whose
 	// record's ID it names. The host refuses others, and forms offer a list or
-	// a picker of the records the member may read (ADR-0038, F-36).
+	// a picker of the records the member may read (F-36).
 	Choices []string `json:"choices,omitempty"`
 	Ref     string   `json:"ref,omitempty"`
 	// Stereotype narrows a reference to the enterprise model (Ref
-	// "enterprise.element") to one UAF stereotype (ADR-0022 D8).
+	// "enterprise.element") to one UAF stereotype.
 	Stereotype string `json:"stereotype,omitempty"`
 	// Stereotypes accepts any of the named enterprise-model families.
 	Stereotypes []string `json:"stereotypes,omitempty"`
@@ -121,7 +121,7 @@ type Field struct {
 	Manual bool `json:"manual,omitempty"`
 }
 
-// InputConstraints are pure input checks, applied after authorization (ADR-0036).
+// InputConstraints are pure input checks, applied after authorization.
 type InputConstraints struct {
 	Min          *float64 `json:"min,omitempty"`
 	Max          *float64 `json:"max,omitempty"`
@@ -170,13 +170,13 @@ type InputOption struct {
 // deployment (start-up configuration, not runtime installation).
 type Catalog struct {
 	// mu guards both: an app may declare an action after composition (the
-	// generated actions of an object a tenant published, ADR-0048) while
+	// generated actions of an object a tenant published) while
 	// members read their catalog.
 	mu       sync.RWMutex
 	actions  []Action
 	disabled map[string]bool
-	custom   map[string][]string   // tenant-defined roles → the schemas they may call (ADR-0027 §3.3)
-	policies func() []authz.Policy // the tenant's policies, asked at decision time (ADR-0027 §3.4)
+	custom   map[string][]string   // tenant-defined roles → the schemas they may call
+	policies func() []authz.Policy // the tenant's policies, asked at decision time
 }
 
 // DefineRole declares a tenant's custom role: a name and the enabled actions
@@ -253,7 +253,7 @@ func (c *Catalog) Disable(capability string) bool {
 }
 
 // Add declares actions after composition: the generated actions of an object a
-// tenant defined and published (ADR-0048). An action already declared is
+// tenant defined and published. An action already declared is
 // replaced, so publishing an object again keeps one declaration of each.
 func (c *Catalog) Add(actions ...Action) {
 	c.mu.Lock()
@@ -326,13 +326,13 @@ func (c *Catalog) Permits(role, schema string) bool {
 	return slices.ContainsFunc(c.For(role), func(a Action) bool { return a.Schema == schema })
 }
 
-// PermitsAny reports whether any of roles may call schema (a member with several grants, ADR-0027).
+// PermitsAny reports whether any of roles may call schema (a member with several grants).
 func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 	return slices.ContainsFunc(c.ForRoles(roles), func(a Action) bool { return a.Schema == schema })
 }
 
-// Decide asks the engine whether the caller's roles let them call schema
-// (ADR-0027 §3.4); a disabled capability is no action at all. Modern recovery
+// Decide asks the engine whether the caller's roles let them call schema;
+// a disabled capability is no action at all. Modern recovery
 // applies saved results, while owner automation still passes the engine.
 func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
 	return c.DecideOn(caller, schema, "")
@@ -411,7 +411,7 @@ func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (au
 	if policies != nil {
 		rules = policies()
 	}
-	if !caller.InScope(schema) { // a personal token reaches only what it was issued for (ADR-0028 §5)
+	if !caller.InScope(schema) { // a personal token reaches only what it was issued for
 		rules = append([]authz.Policy{{ID: "token-scope", Effect: "deny", Permission: schema}}, rules...)
 	}
 	return authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent, Automation: caller.Automation},

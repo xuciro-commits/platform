@@ -1,4 +1,4 @@
-// Package mes is the manufacturing execution system (ADR-0016; #83),
+// Package mes is the manufacturing execution system (#83),
 // modelled on Opcenter Execution and SAP ME: shop orders release SFCs that move
 // through a routing's operations on work centers; nonconformances hold an SFC
 // until quality signs a disposition; equipment states arrive from a gateway and
@@ -158,10 +158,10 @@ const (
 	Assistant  Role = "assistant" // an AI agent acting within the lines it is granted
 )
 
-// holds reports whether the caller holds role in this app (any of their roles, ADR-0027).
+// holds reports whether the caller holds role in this app (any of their roles).
 func holds(c platform.Caller, role Role) bool { return c.Holds(c.App, string(role)) }
 
-// SiteStructure is the organisation structure the plant's rules read (ADR-0022):
+// SiteStructure is the organisation structure the plant's rules read:
 // a member works on the lines it belongs to there, directly or through the plant.
 const SiteStructure = "site"
 
@@ -179,7 +179,7 @@ type Signature struct {
 	By      string `json:"by"`
 }
 
-// SFC is a lot moving through its product's routing (ADR-0046、ADR-0007): its
+// SFC is a lot moving through its product's routing: its
 // lifecycle is start, complete, nonconformance and signed disposition.
 type SFC struct {
 	platform.Record
@@ -367,7 +367,7 @@ func (p *Plant) resourceLine(resource string) string {
 }
 
 // allowed is the policy hook (K6 T3): the catalog decides which roles may call an
-// action (ADR-0057); the plant hierarchy (lines) is context the domain reads, and
+// action; the plant hierarchy (lines) is context the domain reads, and
 // the kernel never sees it.
 func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bool {
 	scope := who.Units(SiteStructure, now)
@@ -403,8 +403,8 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 func (p *Plant) Disable(capability string) bool { return p.ledger.Catalog.Disable(capability) }
 
 // Submit receives a decision in the kernel's order (K6 T2) with the plant's
-// attribute conditions and rules; roles are the catalog's (ADR-0057). The SFC's
-// transitions are generated from its lifecycle (ADR-0007).
+// attribute conditions and rules; roles are the catalog's. The SFC's
+// transitions are generated from its lifecycle.
 func (p *Plant) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -429,7 +429,7 @@ type releasePayload struct {
 	Quantity int    `json:"quantity"`
 	SFCs     int    `json:"sfcs"`
 	Planned  string `json:"planned,omitempty"` // the ERP planned order it fulfils
-	Place    string `json:"place,omitempty"`   // the enterprise model's place this order runs at (ADR-0034)
+	Place    string `json:"place,omitempty"`   // the enterprise model's place this order runs at
 }
 
 // sfcPayload acts on the SFC's current operation; a stale screen is refused by
@@ -567,8 +567,8 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }
 
-// Entities declares the plant's types (ADR-0046) and the SFC's lifecycle
-// (ADR-0007): its transitions are the operator's and quality's actions, with
+// Entities declares the plant's types and the SFC's lifecycle
+// its transitions are the operator's and quality's actions, with
 // the plant's rules in Do and what follows (the order's completion, its
 // confirmation to the ERP) in After. p may be nil for the catalog alone.
 func Entities(p *Plant) []platform.Entity {
@@ -680,7 +680,7 @@ func Entities(p *Plant) []platform.Entity {
 // Reads.
 
 // Master serves the plant's master data with each operation's `capable` list
-// computed on the way out (ADR-0032): the floor screens read which equipment can
+// computed on the way out: the floor screens read which equipment can
 // process a step instead of re-deriving it, and `start` refuses by the same rule.
 func (p *Plant) Master() MasterData {
 	served := p.master
@@ -706,14 +706,14 @@ func compare(a, b string) int {
 	return 0
 }
 
-// languages translate the app's titles and descriptions (ADR-0005).
+// languages translate the app's titles and descriptions.
 //
 //go:embed i18n
 var languageFiles embed.FS
 
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
-// Settings of the plant (ADR-0027), set by administrators in Settings.
+// Settings of the plant, set by administrators in Settings.
 const (
 	SettingNotifyDowntime = "notify-downtime"
 	SettingReasonMinutes  = "reason-reminder-minutes"
@@ -722,7 +722,7 @@ const (
 
 // Snapshot and Restore: the plant's facts (gateway batches), the
 // identities and redirects of downtime events, the derived downtime and the
-// decisions; orders and SFCs are the host's records (ADR-0024).
+// decisions; orders and SFCs are the host's records.
 type plantState struct {
 	Facts     json.RawMessage       `json:"facts"`
 	Identity  kernel.IdentityState  `json:"identity"`
@@ -757,10 +757,10 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 	return platform.RestoreFacts(p.facts, p.tenant, s.Facts)
 }
 
-// Manifest declares the plant as the "mes" app (ADR-0016): its actions, its
+// Manifest declares the plant as the "mes" app: its actions, its
 // reads, its connector input (batches, journaled; the host keeps the
-// connectors), its settings, its scheduled job (ADR-0027), its flow (ADR-0007),
-// and the protocol it reaches an ERP through (ADR-0026).
+// connectors), its settings, its scheduled job, its flow,
+// and the protocol it reaches an ERP through.
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "MES", Version: "1", Actions: p.ledger.Catalog, Queries: queries, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
 		Functions: []platform.AIFunction{platform.RecordAdviceFunction(OrderType, []string{"product", "quantity", "status"}, []string{string(Supervisor)})},
@@ -825,7 +825,7 @@ func (p *Plant) Input(c platform.Caller, name string, body []byte, now time.Time
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }
 
-// queries are MES's named queries, shared by pages and agents (ADR-0047 21c).
+// queries are MES's named queries, shared by pages and agents.
 var queries = []platform.NamedQuery{{Name: "released-orders", Title: "Released orders",
 	Description: "Shop orders released to the floor and not yet completed.", Object: OrderType,
 	Domain: json.RawMessage(`[["status","=","released"]]`), Sort: []string{"id"}}}

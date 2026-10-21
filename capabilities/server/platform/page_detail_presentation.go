@@ -7,7 +7,7 @@ type PageDetailPresentation struct {
 	Columns  int  `json:"columns"`
 	HideNull bool `json:"hideNull,omitempty"`
 	// Barcode names a text field also drawn as a Code 128 barcode, and Print
-	// offers the detail as a printable label (ADR-0038).
+	// offers the detail as a printable label.
 	Barcode string `json:"barcode,omitempty"`
 	Print   bool   `json:"print,omitempty"`
 }

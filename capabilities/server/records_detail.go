@@ -14,7 +14,7 @@ import (
 
 // RecordView is one record with its history, newest first, the records of
 // the app's other types that refer to it, and the processes about it the
-// member may read (ADR-0006 D4).
+// member may read.
 type RecordView struct {
 	Effective   *bool                  `json:"effective,omitempty"`
 	Values      map[string]any         `json:"values,omitempty"`
@@ -25,8 +25,8 @@ type RecordView struct {
 	Processes   []any                  `json:"processes"`
 	Approvals   []any                  `json:"approvals"` // requests to move it, newest first (F-38)
 	Tasks       []any                  `json:"tasks"`     // open tasks about it the member may take, to answer from its page
-	Files       []any                  `json:"files"`     // attached to it (ADR-0038)
-	Comments    []any                  `json:"comments"`  // on it, oldest first (ADR-0038)
+	Files       []any                  `json:"files"`     // attached to it
+	Comments    []any                  `json:"comments"`  // on it, oldest first
 	Following   bool                   `json:"following"` // the member follows it
 	Linked      []Related              `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
 	Activity    []any                  `json:"activity"`  // what apps told about it through protocols (platform.RelationNote), oldest first
@@ -35,7 +35,7 @@ type RecordView struct {
 type Related struct {
 	Type  string `json:"type"`
 	Field string `json:"field"`
-	// Relation is the reference field's declared inverse name, when it has one (ADR-0047 21b).
+	// Relation is the reference field's declared inverse name, when it has one.
 	Relation string `json:"relation,omitempty"`
 	Title    string `json:"title"`
 	Records  []any  `json:"records"`
@@ -191,7 +191,7 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 	return out, activity
 }
 
-// PersonalRead is one read of personal data (ADR-0038): who read which
+// PersonalRead is one read of personal data: who read which
 // records' personal fields, and when. Kept outside the journal, like transcripts.
 type PersonalRead struct {
 	At     time.Time `json:"at"`

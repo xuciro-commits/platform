@@ -1,4 +1,4 @@
-// The flow family's one layout brain (ADR-0035): the canvas's tidy-up, the
+// The flow family's one layout brain: the canvas's tidy-up, the
 // read-only step paths and the scenes that pre-compute positions all ask the
 // same function, so a kind's declared size is honoured everywhere at once.
 import { expect, test } from "vitest";

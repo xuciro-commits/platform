@@ -2,7 +2,7 @@ import { sourceFieldInput } from "@platform/app";
 import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
-// Automations (ADR-0047): a rule reads as one sentence - when a record of
+// Automations: a rule reads as one sentence - when a record of
 // an object type reaches a state, [if a condition holds,] run these effects.
 // An automation is a build.process authored as `kind: "automation"`: the host
 // holds it to that linear shape (checkAutomation), the Automate app shows it as

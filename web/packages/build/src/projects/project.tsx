@@ -4,7 +4,7 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
-// ADR-0047: one application, five workspaces and builder-named concepts.
+// one application, five workspaces and builder-named concepts.
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, pageUIProfile, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";

@@ -299,7 +299,7 @@ export function MasterDetail() {
   const [selected, setSelected] = useState<string>();
   return <RecordWorkspace title={t("Records")} source={demoSource} type={demoInfo.type} selected={selected} onSelect={setSelected} detail={(id) => <RecordPage source={demoSource} type={demoInfo.type} id={id} />} />;
 }
-// The shell with every region the platform uses (ADR-0018): rail, application
+// The shell with every region the platform uses: rail, application
 // switcher, context pane, dock. Synthetic applications; nothing is authorized here.
 function ShellHome() {
   const { applications, recent, favorites, open } = useWorkspace();

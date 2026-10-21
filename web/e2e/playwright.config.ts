@@ -1,4 +1,4 @@
-// The routes of docs/Testing.md as browser smoke tests (F-35): a development
+// Browser tasks against development
 // hosts of the hospitality and manufacturing solutions, on development tokens, serving
 // the workspace's build. `scripts/verify.sh web` builds the workspace first.
 import process from "node:process";

@@ -399,7 +399,7 @@ func ReadProcessImage(image []byte) (Process, error) {
 	return latest, nil
 }
 
-// checkAutomation holds an automation to its sentence (ADR-0047): it starts
+// checkAutomation holds an automation to its sentence: it starts
 // from a record reaching a state, never by hand; at most one condition, first,
 // whose false path ends the run; then effects - actions, AI and compute steps -
 // one after another, each leading to the next, the last to nothing. Anything

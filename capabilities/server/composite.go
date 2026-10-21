@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// Composite edits (ADR-0016 §11, ordered by the owner on 2026-10-05): one
+// Composite edits (ordered by the owner on 2026-10-05): one
 // command that edits several of an application's assets as a unit.
 //
 // Every edit is staged on a private fork of the tenant's records and

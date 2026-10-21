@@ -13,12 +13,12 @@ import (
 )
 
 // translator is the component that says declaration texts and messages in a
-// language (ADR-0005): the dictionaries merged from the platform's and the
+// language: the dictionaries merged from the platform's and the
 // apps' in the order the tenant runs them, and the patterns derived from them,
 // both built once per language. It needs nothing of the tenant but its apps.
 type translator struct {
 	apps         func() []platform.App
-	tenant       func() map[string]map[string]string // the tenant's own words (ADR-0005), last
+	tenant       func() map[string]map[string]string // the tenant's own words, last
 	dictionaries sync.Map                            // language → map[string]string
 	patternCache sync.Map                            // language → []pattern
 }
@@ -99,7 +99,7 @@ func (x *translator) reset() {
 }
 
 // SayInApp says a text in a language, looking up the app's own dictionary
-// first (ADR-0005 D1), then falling back to Say across all dictionaries.
+// first, then falling back to Say across all dictionaries.
 func (x *translator) SayInApp(app, lang, s string) string {
 	if app != "" && lang != "" && s != "" && x.apps != nil {
 		for _, a := range x.apps() {

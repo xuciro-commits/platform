@@ -26,7 +26,7 @@ type Metamodel struct {
 	Enumerations map[string]*uaf.Enumeration `json:"enumerations"`
 	Views        []Viewpoint                 `json:"views"`
 	// Contracts are the relationship stereotypes as the host checks them
-	// (ADR-0031 D2): what each end accepts, the standard's text it comes from,
+	//what each end accepts, the standard's text it comes from,
 	// and what this profile adds. The modeler offers exactly these.
 	Contracts []Contract `json:"contracts"`
 }

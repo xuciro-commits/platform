@@ -1,4 +1,4 @@
-// The Applications portal's structure (ADR-0018 §3): categories in display
+// The Applications portal's structure: categories in display
 // order, and the three workspace projections a member may switch between.
 // Everything here is presentation grouping; who may open what is decided by
 // the host (`/v1/me`, actions) and projected by the packages' own `for`/role checks.

@@ -100,7 +100,7 @@ func CompileObjectShape(o Object) platform.Entity {
 		withheld = "rulewithheld"
 		fields = append(fields, reflect.StructField{Name: "RuleWithheld", Type: reflect.TypeFor[bool](), Tag: reflect.StructTag(`json:"rulewithheld,omitempty" field:"readonly,aside"`)})
 	}
-	if len(o.States) > 0 { // where a record stands, which only its actions move (ADR-0044)
+	if len(o.States) > 0 { // where a record stands, which only its actions move
 		names := make([]string, 0, len(o.States))
 		for _, st := range o.States {
 			names = append(names, st.Name)
@@ -140,7 +140,7 @@ func GoName(name string) string {
 }
 
 // CompileObjectPage is the list and detail page a defined object comes with: the same
-// descriptor a code page has (ADR-0048).
+// descriptor a code page has.
 func CompileObjectPage(o Object) platform.Page {
 	names := []string{}
 	for _, f := range o.Fields {

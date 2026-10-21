@@ -1,6 +1,6 @@
 // Package uaf describes the OMG Unified Architecture Framework from generated
 // standard data. Original XMI remains the source; parsing is a generation step
-// and never runs while an enterprise model is read or decided (ADR-0064).
+// and never runs while an enterprise model is read or decided.
 package uaf
 
 import "sort"

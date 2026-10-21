@@ -16,7 +16,7 @@ type KnowledgeDocument struct {
 	Apps   []string `json:"apps,omitempty" title:"Read by members of"` // the apps whose members may read it; none: every member
 }
 
-// Term is a word of the tenant's own glossary (ADR-0005 D1): what it means
+// Term is a word of the tenant's own glossary: what it means
 // here, other words for it, and the declaration it refers to. It is layered on
 // top of the model: agents read it and search expands by it, but it never
 // renames, retitles or redefines a declaration.

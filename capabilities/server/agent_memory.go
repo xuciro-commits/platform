@@ -14,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-// Agent memory (ADR-0009): short facts an agent keeps across runs, as
+// Agent memory: short facts an agent keeps across runs, as
 // records people see, keep and forget. An agent writes one with its remember
 // tool; people's corrections propose one, which counts only once a person
 // keeps it. Memories expire unless kept; the relevant ones go into the prompt.
@@ -38,14 +38,14 @@ type Memory struct {
 	State   string    `json:"state" field:"readonly" choices:"proposed,active,forgotten"`
 	Expires time.Time `json:"expires,omitzero" field:"readonly"` // none: kept
 	// Withheld is set for a reader who may no longer read what the fact came
-	// from; it is never journaled (ADR-0009).
+	// from; it is never journaled.
 	Withheld bool `json:"withheld,omitempty" field:"readonly" title:"Part of this is no longer readable to you"`
 }
 
 func memoryEntity() platform.Entity {
 	people := []string{AgentAdmin, platform.AnyMember}
 	return platform.Entity{Type: MemoryType, Title: "Agent memory", Model: Memory{}, Display: "fact",
-		// A fact was taken from what the run read (ADR-0009).
+		// A fact was taken from what the run read.
 		Derived:  []platform.Derivation{{From: "sources", Fields: []string{"fact", "sources"}}},
 		Withheld: "withheld",
 		Scope:    platform.Scope{Participants: func(record any) []string { return []string{record.(Memory).For} }},

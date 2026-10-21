@@ -1,11 +1,11 @@
-// Settings: flows (ADR-0007), agents and their evaluations (ADR-0054).
+// Settings: flows, agents and their evaluations.
 import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
 
-// Flows (ADR-0007): the flows the tenant's apps declare, their instances, and
+// Flows: the flows the tenant's apps declare, their instances, and
 // one instance drawn with the path it took and why; administrators retry,
 // skip, cancel or move stuck and running instances.
 export function Flows() {
@@ -33,7 +33,7 @@ export function Flows() {
   );
 }
 
-// Agents (ADR-0054): the agents the apps declare with their tools and budgets,
+// Agents: the agents the apps declare with their tools and budgets,
 // every run with its trace, and evaluations of a candidate model against what
 // people confirmed or corrected.
 export function Agents() {
@@ -96,7 +96,7 @@ export function Evaluations() {
 
 const switches = defineStatuses({ working: { label: t("Working"), tone: "success" }, suspended: { label: t("Suspended"), tone: "danger" } });
 
-// Every agent, declared and outside (ADR-0008 D4, D5): what it did, what it
+// Every agent, declared and outside: what it did, what it
 // cost, what people made of its work, and the switch that stops it.
 function AgentsOverview() {
   const { decide, can } = useHost();

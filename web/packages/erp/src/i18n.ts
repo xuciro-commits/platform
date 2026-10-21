@@ -1,4 +1,4 @@
-// Simplified Chinese for the ERP's UI (ADR-0005), keyed by the English source text.
+// Simplified Chinese for the ERP's UI, keyed by the English source text.
 import { register } from "@platform/ui";
 
 register("zh-CN", {

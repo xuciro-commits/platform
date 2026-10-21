@@ -7,9 +7,9 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-// OIDC verifies access tokens signed by an OpenID provider (docs/ADR/0007) and
+// OIDC verifies access tokens signed by an OpenID provider and
 // returns the caller's subject. The provider proves who is calling; the tenant's
-// directory says what that caller is there (K6, ADR-0016). Subjects are
+// directory says what that caller is there (K6). Subjects are
 // "user:<verified email>" for people and "client:<client id>" for machines
 // (client-credentials tokens carry no user). keys is the provider's JWKS URL,
 // given apart from the issuer so a server can reach the provider on an internal

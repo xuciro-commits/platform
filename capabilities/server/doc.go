@@ -1,6 +1,6 @@
 // Package platformserver is the host: it composes a tenant's apps, takes
 // members' submissions through the accepted-result pipeline, runs the owned
-// work and effects they cause, and serves the tenant API (ADR-0062 layout).
+// work and effects they cause, and serves the tenant API.
 //
 // A Tenant (host.go) is an identity, the submit pipeline, and holders for
 // components that each own their state and, where reads cross the pipeline,
@@ -22,7 +22,7 @@
 //	i18n             translator.go         dictionaries and patterns
 //	memStore         journal/memory.go     the Store without one
 //
-// W3 consumer boundaries (ADR-0037): internal/host names the role each
+// Consumer boundaries: internal/host names the role each
 // compiled owner receives; Host is only the composition aggregate. Console
 // and Agents own their state and receive ConsoleHost/AgentHost, never Tenant.
 // Pure construction and enterprise declarations live in internal/construction

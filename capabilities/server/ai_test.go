@@ -80,7 +80,7 @@ func TestModelUsageDistinguishesUnreportedAndZeroCost(t *testing.T) {
 	}
 }
 
-// ADR-0008: an administrator adds a local provider and enables models, each
+// an administrator adds a local provider and enables models, each
 // with its access; members call them through the host, and every call's usage
 // is journaled and replayed without calling the model again.
 func TestAIProviders(t *testing.T) {
@@ -206,7 +206,7 @@ func TestAIProviders(t *testing.T) {
 	}
 }
 
-// The Anthropic adapter (ADR-0008 point 3): the official SDK against a stand-in
+// The Anthropic adapter: the official SDK against a stand-in
 // of the Messages and Models APIs, reached through the host's client.
 func TestAnthropicProvider(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +288,7 @@ func TestAnthropicProvider(t *testing.T) {
 	}
 }
 
-// ADR-0008 D1, D2: limits at the door every call passes — a person's tokens a
+// Limits at the door every call passes — a person's tokens a
 // day, anyone's calls a minute, a model's cap for the tenant, and one
 // member's own limit — and an answer streamed as it comes, metered once.
 func TestAILimits(t *testing.T) {

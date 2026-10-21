@@ -7,7 +7,7 @@ import (
 	"platformkernel/kernel"
 )
 
-// The organisation's vocabulary (ADR-0022): units of any kind, in any number of
+// The organisation's vocabulary: units of any kind, in any number of
 // structures, with memberships of members or of other units, all with valid
 // time. Apps seed it and ask for a member's units; the org app owns the chart.
 
@@ -31,7 +31,7 @@ type Unit struct {
 	From     Date     `json:"from,omitempty"`
 	Until    Date     `json:"until,omitempty"`
 	Closed   string   `json:"closed,omitempty"` // why it ended: dissolved, merged into <unit> …
-	// Calendar is the unit's working calendar (ADR-0038); empty: the one
+	// Calendar is the unit's working calendar; empty: the one
 	// found above it in any structure, else the tenant's first.
 	Calendar string `json:"calendar,omitempty"`
 }
@@ -112,7 +112,7 @@ type OrgSeed struct {
 
 // Units are the units c's member belongs to in structure on the input's day
 // (now), with all units below them: the scope a rule reads from a named
-// structure (ADR-0022). A replay passes the recorded time, so it scopes alike.
+// structure. A replay passes the recorded time, so it scopes alike.
 func (c Caller) Units(structure string, now time.Time) []string {
 	if c.rt == nil {
 		return nil
@@ -121,7 +121,7 @@ func (c Caller) Units(structure string, now time.Time) []string {
 }
 
 // ElementInfo is what an app learns about an element of the enterprise model
-// (ADR-0022 D3) without owning it: enough to type a reference and label it.
+// without owning it: enough to type a reference and label it.
 type ElementInfo struct {
 	ID         string `json:"id"`
 	Stereotype string `json:"stereotype"`
@@ -131,7 +131,7 @@ type ElementInfo struct {
 }
 
 // Enterprise is the caller's window on the tenant's enterprise model
-// (ADR-0022 D3): the one place apps ask who sits where, what a site holds and
+// the one place apps ask who sits where, what a site holds and
 // what an organisation can do. Day is the input's day (now), so replays agree.
 type Enterprise struct{ c Caller }
 
@@ -196,7 +196,7 @@ func (e Enterprise) Related(element, stereotype string, outgoing bool, now time.
 }
 
 // Capable are the capabilities an organisation or resource has: «Exhibits»
-// (UAF 1.3's pair, ADR-0031 D2) and the older «IsCapableToPerform» models kept.
+// (UAF 1.3's pair) and the older «IsCapableToPerform» models kept.
 func (e Enterprise) Capable(element string, now time.Time) []string {
 	out := e.Related(element, "Exhibits", true, now)
 	for _, cap := range e.Related(element, "IsCapableToPerform", true, now) {

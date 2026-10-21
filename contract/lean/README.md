@@ -60,7 +60,7 @@ These are host integration evidence, not additional Lean theorems.
 - The `allowed` input abstracts a business check. `checked` distinguishes the
   branch that invokes it from replay/conflict. No business rule is proved.
   `allowed` 抽象业务检查结果；`checked` 区分调用检查与重放/冲突，不证明任何业务规则。
-- K4 refusal leaves the change key free. ADR-0010's **host accepted-result**
+- K4 refusal leaves the change key free. The **host accepted-result**
   journal can retain a refused answer for an identical request; it is a separate
   layer and is outside this model. Persistence, crash recovery, policy and
   external exactly-once behavior are also outside this proof.

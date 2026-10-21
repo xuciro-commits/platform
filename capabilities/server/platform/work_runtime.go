@@ -56,7 +56,7 @@ type ApprovalRequest struct {
 	Outcome    string         `json:"outcome,omitempty" field:"readonly" source:"user-input"` // refusal or the approver's note
 	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by" source:"record"`
 	// Release is the tenant's active release when the request opened; a later
-	// activation may not change the held action under it (ADR-0011 D4).
+	// activation may not change the held action under it.
 	Release         string `json:"release,omitempty" field:"readonly" source:"record"`
 	RedirectAction  string `json:"redirectAction,omitempty" field:"readonly" source:"record" title:"Redirect action"`
 	RedirectRelease string `json:"redirectRelease,omitempty" field:"readonly" source:"record" title:"Redirect release"`
@@ -72,7 +72,7 @@ type ApprovalStep struct {
 	Approved  []string  `json:"approved"`
 	Due       time.Time `json:"due,omitzero"`
 	// Delegates may decide for an approver away on the request's day
-	// (delegate → approver); DecidedBy says who did (approver → delegate) (ADR-0038).
+	// (delegate → approver); DecidedBy says who did (approver → delegate).
 	Delegates map[string]string `json:"delegates,omitempty"`
 	DecidedBy map[string]string `json:"decidedBy,omitempty"`
 }

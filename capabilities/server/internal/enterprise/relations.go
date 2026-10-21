@@ -1,6 +1,6 @@
 package enterprise
 
-// The relationship contracts of the Enterprise Core Profile (ADR-0031 D2).
+// The relationship contracts of the Enterprise Core Profile.
 //
 // UAF 1.3 states, for most of its relationship stereotypes, which ends are
 // allowed: "Value for the client metaproperty must be stereotyped
@@ -108,7 +108,7 @@ func platformContracts() []Contract {
 			Extension: []Pair{{"*", "*"}},
 		},
 		{
-			Stereotype: Performs, Platform: true, Note: "UAF's own pairs are conditional and relate performers to the activities, functions and services they perform — never to a Capability. The profile's meaning (an organisation or resource has a capability) is «Exhibits», which the profile offers beside this; this pair stays accepted so models made before ADR-0031 keep working.",
+			Stereotype: Performs, Platform: true, Note: "UAF's own pairs are conditional and relate performers to the activities, functions and services they perform — never to a Capability. The profile's meaning (an organisation or resource has a capability) is «Exhibits», which the profile offers beside this; this pair stays accepted so models made before  keep working.",
 			Extension: []Pair{{"*", Capability}},
 		},
 		{

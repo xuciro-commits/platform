@@ -17,9 +17,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Telemetry (ADR-0007 D5): traces and metrics through OpenTelemetry. A trace
-// follows an input — a submission, a connector input — through its requests
-// (ADR-0006), the deliveries it causes and the flow steps they take, to the
+// Telemetry: traces and metrics through OpenTelemetry. A trace
+// follows an input — a submission, a connector input — through its requests,
+// the deliveries it causes and the flow steps they take, to the
 // effects they send; model calls carry the GenAI attributes. Without an OTLP
 // endpoint (OTEL_EXPORTER_OTLP_ENDPOINT) the providers are OpenTelemetry's
 // no-ops. Replay makes no spans: it happened before.

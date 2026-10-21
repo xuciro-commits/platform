@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// MigrationProgram contains only programs compiled by ADR-0040. The host
+// MigrationProgram contains only programs compiled by the shared rule engine. The host
 // supplies captured source values and commits the resulting images separately.
 type MigrationProgram struct {
 	Plan        MigrationPlan
@@ -282,7 +282,7 @@ func (p *MigrationProgram) Transform(index int, typ string, raw json.RawMessage,
 }
 
 // MigrationPlan binds explicit transformations to two immutable releases.
-// It is a declaration, never an executable tenant script (ADR-0045).
+// It is a declaration, never an executable tenant script.
 type MigrationPlan struct {
 	From  string         `json:"from"`
 	To    string         `json:"to"`
@@ -494,7 +494,7 @@ func (p MigrationPlan) Check() error {
 				return fail("retirement retains the original field and its values")
 			}
 			if slices.Contains([]string{"default", "split", "merge", "retype", "extract"}, step.Kind) && field.Expr == nil && step.Expr == nil {
-				return fail("conversion requires an explicit ADR-0040 expression")
+				return fail("conversion requires an explicit rule expression")
 			}
 		}
 		if step.Kind == "retype" && step.OnFailure == "" {

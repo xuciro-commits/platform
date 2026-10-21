@@ -6,7 +6,7 @@ import {actionDestinations,actionResultEdges,actionStateInput,setActionDestinati
 import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
-// The object's process editor (ADR-0044): its states and the actions people
+// The object's process editor: its states and the actions people
 // take on its records. The main tables and map own selection; the Inspector
 // edits that selection, without a second copy in a structure sidebar.
 // It writes the object's own record through its own action; the host checks
@@ -205,7 +205,7 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
     ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!actionStateInput(a),label:actionStateInput(a)})),
   ]);
-  // One layout brain decides where a state or an action sits (ADR-0035): the
+  // One layout brain decides where a state or an action sits: the
   // same arrangement the canvas's own tidy-up would choose, sizes included.
   const places = useFlowArrangement([
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, position: { x: 0, y: 0 } })),
@@ -353,7 +353,7 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
 const reads = { all: () => t("Every record"), below: () => t("Those of their units and the units below"), unit: () => t("Those of their own units"), own: () => t("Only their own"), none: () => t("Not at all") };
 const readLevels = ["all", "below", "unit", "own", "none"] as const;
 
-/** Which fields place a record for the row scopes above (ADR-0044): owner for "own", unit + structure for "unit" and "below". */
+/** Which fields place a record for the row scopes above: owner for "own", unit + structure for "unit" and "below". */
 function ScopeFields({ process, onChange }: { process: Process; onChange: (scope: ObjectScope) => void }) {
   const scope = process.scope ?? {};
   const candidates = process.fields.filter((f) => f.type === "text" || f.type === "reference");

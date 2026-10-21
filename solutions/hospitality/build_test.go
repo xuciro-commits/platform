@@ -38,7 +38,7 @@ func TestTheHotelTestsASavedObjectWithoutProductionRows(t *testing.T) {
 	platformserver.CheckReplay(t, w.tenant, w.journal, func() *platformserver.Tenant { return newWorld(t, hotelProvider).tenant })
 }
 
-// ADR-0048 in a solution that is already running: the hotel's manager defines an
+// In a solution that is already running, the hotel's manager defines an
 // object the platform never heard of, publishes it, and the front desk keeps its
 // records — in the same tenant as the CRM, the PMS and their flows, with nothing
 // installed or restarted.
@@ -83,7 +83,7 @@ func TestTheHotelDefinesItsOwnObject(t *testing.T) {
 	}
 
 	// A page the hotel composes over the CRM's own object, with the CRM's own
-	// action on it (ADR-0048, #132): the platform's page, the CRM's execution.
+	// action on it (#132): the platform's page, the CRM's execution.
 	w.expect(w.submit("manager", build.ID, build.PageType+".create", build.PageType, "P-OFF", "lf-5",
 		map[string]any{"name": "offsites", "title": "Group offsites", "object": crm.OpportunityType,
 			"list": []string{"title", "stage"}, "detail": []string{"title", "account", "stage"}, "actions": []string{crm.SchemaClose}}), "ok")

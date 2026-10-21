@@ -12,7 +12,7 @@ import (
 )
 
 // tick starts the current period of every scheduled flow that has not started
-// it yet (ADR-0038 E1). The period's start time is the instance key, so a
+// it yet (E1). The period's start time is the instance key, so a
 // restart, a replay or a slow tick never doubles a period; a period missed
 // entirely is not made up.
 func (f *Flows) tick(c platform.Caller, now time.Time) *kernel.Error {

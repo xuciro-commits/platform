@@ -189,7 +189,7 @@ func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ stri
 	w := t.narrowerIn(s, m, now, true)
 	for i, v := range page {
 		out.Records[i] = records.Mask(et.info, v, hidden)
-		if et.info.HasReadSources() || len(et.info.VersionPins) > 0 { // checked against its sources again (ADR-0009)
+		if et.info.HasReadSources() || len(et.info.VersionPins) > 0 { // checked against its sources again
 			narrowed, _ := w.derive(et, reflect.ValueOf(out.Records[i]))
 			out.Records[i] = narrowed.Interface()
 		}

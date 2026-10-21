@@ -13,8 +13,7 @@ import (
 	"platformserver/platform/authz"
 )
 
-// Access configuration a tenant adds over what the apps declare (ADR-0027
-// §3.3–3.4): custom roles, policies and teams, each a record the console
+// Access configuration a tenant adds over what the apps declare: custom roles, policies and teams, each a record the console
 // decides, kept in the directory's state, applied to the apps' catalogs.
 const (
 	RoleType         = "platform.role"
@@ -185,7 +184,7 @@ func (d *Console) decideAccess(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 }
 
 // decideDelegate gives the target member the caller's roles in an app until a
-// day (ADR-0027 §3.3): a grant by the caller, bounded, revocable like any.
+// day: a grant by the caller, bounded, revocable like any.
 func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct{ App, Until, Reason string }

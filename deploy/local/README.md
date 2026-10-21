@@ -1,12 +1,12 @@
 # 本地环境
 
-这里是本地环境的全部资料：怎么启动、地址、账号密码、服务账号、接入外部系统要填什么。测试路线和测试方法在 [docs/Testing.md](../../docs/Testing.md)。
+这里维护本地启动、地址、演示账号、外部配置、更新、演练与备份操作。系统结构见 [Architecture](../../docs/Architecture.md)，检查选择与交付纪律见 [AGENTS](../../AGENTS.md)，实际浏览器任务在 [web/e2e/tests](../../web/e2e/tests/)。
 
 本页的密码和密钥都只用于本地环境，而且早已写在仓库的其他文件里（Rauthy 的初始数据、`rehearse.sh`）。**唯一不进仓库的是真实供应商的 API Key**，比如 OpenRouter：它放在 `deploy/local/.env`，该文件已被 git 忽略。
 
 ## 日常开发（不打镜像）
 
-一键切换（ADR-0029），两种模式都使用酒店 `http://localhost:8495`、制造 `http://localhost:8490`：
+两种模式都使用酒店 `http://localhost:8495`、制造 `http://localhost:8490`：
 
 ```bash
 make local   # 停 Docker 宿主；启动基础设施/计算容器，两台 Go 宿主由 Air 重启，Vite 提供前端 HMR
@@ -27,7 +27,7 @@ PostgreSQL 仍使用原 18 主版本和 `pgdata` 数据卷，镜像由 `Dockerfi
 
 需要先有 Docker（OrbStack：`orb start`）。
 
-每个主机自己提供工作台页面（ADR-0019），所以先构建一次工作台：
+容器模式下每个主机自己提供工作台页面，首次启动前先构建工作台：
 
 ```bash
 pnpm --dir web/apps/workspace build
@@ -57,8 +57,8 @@ cd deploy/local && docker compose ps
 
 - 停止：`docker compose stop`。数据保存在 Docker 卷 `pgdata` 和 `rauthy` 里，下次启动会重放日志，数据还在。
 - 只重建主机：`docker compose up -d --build manufacturing-server hospitality-server webhook-sink`。改了前端要先重新构建工作台。
-- 计算能力（ADR-0013）：`wasm-worker` 与 `code-builder` 共用私有 `compute-sockets` 卷，没有公开端口、业务数据库或自有队列。主机通过 `PLATFORM_WASM_WORKER_SOCKET` / `PLATFORM_CODE_BUILDER_SOCKET` 委托执行与编译。只有固定命令的构建 driver 持有 Docker daemon socket；业务主机、Wasm worker、租户编译容器均不挂载它。worker 无网络、只读根、2 GiB RSS/2 CPU 限额；编译容器无网络、只读根、65534 用户及 CPU/RSS/进程限额。源码经内存 tar 输入，Wasm 与构建元数据走现有制品存储和发布。
-- **在 8495/8490 验收本次代码时**：先运行 `pnpm --dir web/apps/workspace build`，再在 `deploy/local` 运行 `docker compose up -d --no-deps --build hospitality-server`（或对应的 `manufacturing-server`），最后刷新浏览器。`scripts/verify.sh web` 的浏览器路线使用一次性的内存酒店主机 `18496`；它通过也不会自动更新你正在看的 8495 容器。两者的测试数据和登录方式也不同，视觉验收应以你实际使用的容器地址为准。
+- 计算能力：`wasm-worker` 与 `code-builder` 共用私有 `compute-sockets` 卷，没有公开端口、业务数据库或自有队列。主机通过 `PLATFORM_WASM_WORKER_SOCKET` / `PLATFORM_CODE_BUILDER_SOCKET` 委托执行与编译。只有固定命令的构建 driver 持有 Docker daemon socket；业务主机、Wasm worker、租户编译容器均不挂载它。worker 无网络、只读根、2 GiB RSS/2 CPU 限额；编译容器无网络、只读根、65534 用户及 CPU/RSS/进程限额。源码经内存 tar 输入，Wasm 与构建元数据走现有制品存储和发布。
+- **更新 8495/8490 的代码**：在根目录运行 `deploy/local/update.sh`，沿用当前本地或容器模式，更新两台宿主并校验实际版本、健康和页面资源，报告位于 `.build/local-update/<revision>.json`。保留原数据卷、密钥与租户配置。临时浏览器宿主 `18496/18497` 的测试不会更新这两个日常入口；视觉检查以实际使用的入口为准。
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
 - 灌酒店业演示数据：`./seed-hospitality.sh`。可以重复执行，结果不变。
 - 完整演练：在仓库根目录运行 `make rehearse`（即 `scripts/verify.sh deploy`）。它用另一组端口和一套全新的数据，不会动你的本地数据；需 Docker、Node/pnpm 与 Google Chrome（或在 `CI=1` 下已安装的 Playwright Chromium）。两行业 OIDC 浏览器会在发布前及 PostgreSQL 恢复后执行共同函数/页面/Flow 路线，自动截图保存在 `web/e2e/test-results/deploy-*`；脚本结束后移除一次性容器。
@@ -70,9 +70,9 @@ cd deploy/local && docker compose ps
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-主机按名字取密钥（ADR-0004 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
+主机按名字取密钥：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
 
-## 轻量 profile（无 Docker 的单机运行，ADR-0017）
+## 轻量 profile（无 Docker 的单机运行）
 
 同一套语义可以在小设备上用一个二进制加一个数据目录跑起来：没有 Docker、没有 PostgreSQL、没有对象存储、没有外部身份服务。profile 是**声明**的，缺依赖就失败退出，不会悄悄回退到另一个 profile 的存储或身份。
 
@@ -103,9 +103,9 @@ TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mi
 
 ## 地址
 
-- 文件（ADR-0038）：存在 RustFS（S3 兼容），S3 接口 `http://127.0.0.1:9000`，管理界面 `http://127.0.0.1:9001`，账号 `platform`，密码 `platform-files-local-only`。日志里只记文件的哈希，备份时 RustFS 的卷要和 PostgreSQL 一起备份。
+- 文件：存在 RustFS（S3 兼容），S3 接口 `http://127.0.0.1:9000`，管理界面 `http://127.0.0.1:9001`，账号 `platform`，密码 `platform-files-local-only`。日志里只记文件的哈希，备份时 RustFS 的卷要和 PostgreSQL 一起备份。
 - 健康检查：`http://127.0.0.1:8490/healthz`、`http://127.0.0.1:8495/healthz`（进程是否活着）；租户的健康（队列、放弃的工作、超配额、熔断器）是管理员的 `/v1/health`，也显示在 设置 → 自动化。租户被隔离时，先查明并修复其权威日志或依赖；仅该租户管理员可在工作区的恢复提示中重试，或以同一身份调用 `POST /v1/recovery/retry`。该操作从完整日志创建新租户代际，验证成功后才替换旧代际并修复派生快照；失败仍保持隔离，不会修复损坏的权威日志。`/healthz` 仍可能显示共享进程在线，不能代替该租户的 `/v1/health`。
-- 链路和指标（ADR-0007）：给主机设环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`（如 `http://otel-collector:4318`）就会按 OTLP 导出；不设则不导出。本地环境**没有**装采集器（Jaeger、Grafana 这类），所以现在没有地址可填、也没有界面可看；不装也不影响任何功能，平台里能看的是 设置 → 自动化 的健康状态和运行、流程页上的调用链。要看完整链路时再加一个采集器（需要新的镜像，先确认）。
+- 调用关系和指标：给主机设环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`（如 `http://otel-collector:4318`）就会按 OTLP 导出；不设则不导出。本地环境没有配置采集器；不配置时仍可在设置与运行页面查看宿主提供的健康状态和执行记录。需要外部遥测时配置实际采集地址。
 
 | 服务 | 地址 | 说明 |
 |---|---|---|
@@ -119,15 +119,11 @@ TOKEN=$(/tmp/hospitality-server -profile lightweight -data /var/lib/platform -mi
 
 账号登录到不属于自己的宿主时，提示页提供“退出并切换账号”，结束当前身份提供商会话并回到登录页；无需清理浏览器数据。退出同时清除该工作台记住的开发身份与租户选择。
 
-**本地 Rauthy 已经运行过的话**：它只在第一次启动时读取初始数据，所以还不认识新的登录客户端 `platform-web`，登录会报找不到客户端。重建一次身份认证的数据卷即可（里面只有测试账号，会按 `rauthy/bootstrap` 重新生成，账号密码不变）：
+已有 Rauthy 不会重新导入初始化账号。需要干净的测试身份时，按下文“从干净数据开始”使用新的数据命名空间，保留当前身份、业务数据卷与签名密钥；不要为增加演示账号删除现有卷。
 
-```bash
-cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy
-```
+## 报表工具直连数据库
 
-## 报表工具直连数据库（ADR-0024）
-
-两个主机启动时会把各自租户的记录复制到 PostgreSQL，每个租户一个 schema（`tenant_hotel_a`、`tenant_plant_sz`），每个实体类型一张表（如 `crm_opportunity`），变更历史在 `<表名>_changes`。这些只是副本，主机每次启动会按日志重建，所以不要往里写，备份也只需要日志表 `journal`。
+面向报表的记录投影位于各租户的 schema（`tenant_hotel_a`、`tenant_plant_sz`），每个实体类型一张表（如 `crm_opportunity`），变更历史在 `<表名>_changes`。这些是可重建的只读投影，不是业务写入入口。正式当前记录、接受结果和恢复位置另存于同一数据库的运行状态表；备份整个数据库及配套文件存储，不要仅导出报表表或 `journal` 表。
 
 每个租户有一个只读角色（`tenant_hotel_a_reader`、`tenant_plant_sz_reader`），默认不能登录。要让 Metabase、Power BI、Excel 这类工具连进来，先给它开登录：
 
@@ -161,8 +157,8 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 - 本地 Rauthy 走 HTTP，所以 `rauthy/config.toml` 里设了 `[access] cookie_mode = 'danger-insecure'`：不设的话，Safari 会丢掉 Rauthy 的安全 cookie，浏览器登录会显示密码错误（密码其实是对的）。只用于本地。
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 每个人只担一份职责，测试时换人登录就能看到权限的差别；要同时看两个人，用一个普通窗口加一个无痕窗口分别登录。
-- 新加的账号要 Rauthy 重新初始化才有（本地数据可丢）：`cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy`，再重建两个主机。
-- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`（ADR-0027）；模板在 `deploy/templates/`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
+- 初始化账号只在首次创建身份库时导入。新增真实成员走原身份管理与平台授权；需要重新导入演示身份时使用新的数据命名空间，不删除日常身份卷。
+- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`；模板在 `deploy/templates/`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
 ## 服务账号与 AI 代理（client credentials）
 
@@ -171,7 +167,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | client_id | 密钥 | 成员 | 用途 |
 |---|---|---|---|
 | `mes-gateway` | `gatewayLocalOnly000000000000000000000000000000000000000000000000` | `gateway-l1` | 产线网关，推送设备状态（`cmd/gateway-sim`） |
-| `mes-assistant` | `assistantLocalOnly0000000000000000000000000000000000000000000000` | `agent-l1` | **AI 代理**：产线 L1 的助手；它做的不可撤回外发要人批准（D6）；它在 ERP 没有角色，所以 ERP 会拒绝它发起的确认 |
+| `mes-assistant` | `assistantLocalOnly0000000000000000000000000000000000000000000000` | `agent-l1` | **AI 代理**：产线 L1 的助手；它做的不可撤回外发要人批准；它在 ERP 没有角色，所以 ERP 会拒绝它发起的确认 |
 | `platform-cli` | `cliLocalOnly0000000000000000000000000000000000000000000000000000` | — | 脚本用密码模式为人员换令牌（`rehearse.sh`、`seed-hospitality.sh`） |
 
 以 AI 助手身份操作：
@@ -193,7 +189,7 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 | 酒店业：CRM、PMS、HCM、CSM | `solutions/hospitality`：`go run ./cmd/hospitality-server` | 8496 | `workspace-hospitality` | `manager`、`sales`、`sales-only`、`desk` |
 | 制造业：MES、ERP | `solutions/manufacturing`：`go run ./cmd/manufacturing-server` | 8491 | `workspace-manufacturing` | `supervisor`（也是 ERP 主管会计）、`accountant`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`assistant-l1`（AI 代理） |
 
-**每个应用单独运行**（ADR-0016：每个应用先能自己干，不依赖别的应用和外部系统）：在 `apps/<应用>/server` 下运行 `go run ./cmd/<应用>-server -web ../../../web/apps/workspace/dist`，端口都是 8499（一次起一个），启动配置 `workspace-app`：
+**每个应用单独运行**：参考应用可独立启动，不以其他应用或外部系统在线为前提。在 `apps/<应用>/server` 下运行 `go run ./cmd/<应用>-server -web ../../../web/apps/workspace/dist`，端口都是 8499（一次起一个），启动配置 `workspace-app`：
 
 | 应用 | 开发令牌 |
 |---|---|
@@ -206,17 +202,24 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 
 右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。
 
-制造内存演示宿主的 `operator-l1`、`operator-l2` 同时持有 `build.user`，用于路线 43 的对象操作与人工收件箱探针；它们不能编辑构建器定义。此演示角色不修改 OIDC 部署的角色绑定。
+制造内存演示宿主的 `operator-l1`、`operator-l2` 同时持有 `build.user`，用于对象操作与人工收件箱的开发验证；它们不能编辑构建器定义。此演示角色不修改 OIDC 部署的角色绑定。
 
 ### WMS 与应用工作台的部署关系
 
-本地只有两个业务工作区入口：酒店 solution `http://localhost:8495/`、制造 solution `http://localhost:8490/`。各自的宿主容器提供 API 与工作区；共同使用本地 PostgreSQL、RustFS、Rauthy 和计算服务，记录/日志/权限按租户隔离，不是两套独立的物理基础设施。
+本地只有两个业务工作区入口：酒店 solution `http://localhost:8495/`、制造 solution `http://localhost:8490/`。各自的宿主提供 API 与工作区；共同使用本地 PostgreSQL、RustFS、Rauthy 和计算服务，记录/日志/权限按租户隔离，不是两套独立的物理基础设施。
 
-WMS 是在应用工作台保存并发布的 `build.app` 与对象/页面/流程/代码定义，复用所在 solution 的宿主、域名和端口，不启动 WMS 专用服务。酒店工作区可从 Projects 新建 WMS；保存为草稿后可在设计台继续编辑，交付后业务成员从应用门户打开。制造工作区同样可以创建受控应用。
-
-旧 `18505` 内存走查宿主已停止，误建的第三个 `wms-review` 容器和配置已撤回；本地不再把它作为入口。酒店和制造共用一个数据命名空间；日常更新保留当前命名空间的数据卷。装配探针命令与所需身份/角色见 [Apps](../../docs/Apps.md#工作台中的-wms)，`PLATFORM_URL` 指向这两个正式本地入口之一。
+WMS 是工作台中保存并发布的 `build.app` 与对象/页面/流程/代码定义，复用所属宿主，不另建应用容器或端口。构建者在 Applications 创建应用，复用 `core.material`、`core.location` 等主数据，配置对象、动作、页面与流程，在发布工作台保存封存候选后激活；业务成员从应用门户进入。原共同应用构建任务可用 `make e2e SPEC=workspaces` 在独立开发宿主执行；它不代表现场 WMS 已交付。
 
 每次更新 main 后运行 `deploy/local/update.sh`：构建工作区、重建两台宿主、校验 Git 版本标记、健康及实际提供的页面资源。原数据卷和租户配置保留。
+
+### 从行业包构建供暖应用
+
+1. 运行 `make packages`，在 Packages 明确安装协议包与 `industry.heating`，选择 **Create application drafts**。安装本身不发布应用、不授予成员权限、不导入业务记录。
+2. 在应用的 Integrations 配置 `heatingfield` 的网关地址、密钥引用和设备点表，再 Check；模拟配置见 `deploy/examples/heating/harbin.json` 与 `jinan.json`。`propertyfeed` 配置独立 HTTP 接收方并 Check，告警路径为 `alarms`。
+3. 配置并启用 AI 提供方的 `heating/health` 模型；在发布审阅运行 `heatingadvicequality` 评估，查看合成样本与业务测试计划后保存候选并激活。未配置模型时不把合成结果当成真实诊断。
+4. 普通成员从应用门户进入楼宇、设备、告警、门禁与健康页面。阀位申请需原审批；投递成功不代表设备完成，必须由匹配的新鲜观测或授权人工证据确认。通行证独立于平台角色，设备 profile 未开放的开门操作不会出现。
+
+原模拟构建任务为 `make e2e SPEC=heating-application`，协议安装与同版重装任务为 `make e2e SPEC=protocol-packages`。包卸载前先准备并等待在途工作结束，卸载保留应用、业务数据与历史；原版本内容一致才可重新安装。真实地址、现场参数、设备兼容性、模型质量与生产容量仍需在目标环境验证。
 
 ### 从干净数据开始
 
@@ -224,7 +227,7 @@ WMS 是在应用工作台保存并发布的 `build.app` 与对象/页面/流程/
 
 先构建工作区，带 `PLATFORM_REVISION=$(git rev-parse HEAD)` 运行 `docker compose -f deploy/local/compose.yaml up -d --build`，再运行 `deploy/local/seed-hospitality.sh`、`deploy/local/seed-manufacturing.sh` 与 `deploy/local/update.sh`。Rauthy 按已提交的测试身份重新初始化，两个宿主从初始配置重新建租户，不恢复旧 WMS/APP-01 草稿。`tenants.json` 不在数据卷中，仍保留当前配置。
 
-酒店宿主内的 `hotel-test` 是晋级目标，与 `hotel-a` 共用 `8495` 入口；租户之间隔离记录与权限。用 `manager@hotel.test` 的 Host Console 开目标成员支持会话后晋级；更改存储的 v2 先不激活地晋级，再在目标租户发布工作台审阅其升级计划。`8490` 制造宿主是另一进程，不是这条同宿主晋级路线的目标。走查步骤归 [Testing](../../docs/Testing.md)。
+酒店宿主内的 `hotel-test` 是晋级目标，与 `hotel-a` 共用 `8495` 入口；租户之间隔离记录与权限。用 `manager@hotel.test` 的 Host Console 开目标成员支持会话后晋级；更改存储的 v2 先不激活地晋级，再在目标租户发布工作台审阅其升级计划。`8490` 制造宿主是另一进程，不是这条同宿主晋级路线的目标。在目标 Host Console 选择源环境与原候选，晋级后切到目标租户的发布工作台检查封存内容和升级计划，再显式激活。晋级不会把源租户的业务记录或成员授权一并复制；需要搬迁记录时使用原迁移任务并核对原行结果。
 
 `deploy/local/rehearse.sh` 不受这个前缀影响：它把 `PLATFORM_DATA_NAMESPACE` 固定为 `platform-rehearsal`，用自己的卷并在结束时删除，不会碰走查数据卷；`scripts/verify.sh` 不带参数时也不再包含 `deploy` 步骤，排演需显式 `scripts/verify.sh deploy`。
 
@@ -241,7 +244,7 @@ WMS 是在应用工作台保存并发布的 `build.app` 与对象/页面/流程/
 |---|---|---|---|
 | 通用 webhook | `http://webhook-sink:8080/hook` | `sink` | 勾"内部地址"；事件任选，如 `lodging.booking/1#canceled` |
 
-sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址；接外部 ERP 见 [docs/Testing.md](../../docs/Testing.md) 场景 P2-1。
+sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址。外部 ERP 通过 Connection、Writeback 和 Confirmation 声明请求、回读与结果映射；HTTP 成功不等于业务确认。原失败恢复任务为 `make e2e SPEC=business-confirmation`，完整来源到业务应用任务为 `make e2e SPEC=integration-fabric`。
 
 **邮件接收地址**（Integrations → Add endpoint → Email）
 
@@ -261,7 +264,7 @@ sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://
 | 本地模型：LM Studio / Ollama / llama.cpp | `http://host.docker.internal:1234/v1`、`:11434/v1`、`:8080/v1` | 可留空 |
 | 本地替身（无需安装） | `http://webhook-sink:8080/v1`，模型 `echo` | 留空 |
 
-- 添加后点 Models 读取模型目录。勾 "free only" 只看免费模型：OpenRouter 目前有约 20 个免费模型，常被上游限流（429），换一个就行。
+- 添加后点 Models 读取模型目录。勾 "free only" 只看免费模型：可用模型与限流由上游实时返回；遇到 429 时按实际答复重试或选择其他已授权模型。
 - 选 everyone 或 ai users 启用，然后在 Playground 调用，在 Usage 看用量。
 - 没有 `ai` 角色的成员（例如 AI 助手 `agent-l1`）只能用开放给 everyone 的模型。
 

@@ -39,7 +39,7 @@ export function rewriteLayout(layout: SerializedDockview, map: (route: Route, pa
     return children.length ? { ...data, data: children } : undefined;
   };
   let root = node(layout.grid.root) ?? { type: "branch" as const, data: [] };
-  // Floating is retired (ADR-0019 D1). Keep its old tabs readable, but
+  // Floating is retired. Keep its old tabs readable, but
   // restore them as ordinary grid groups rather than resurrecting that UI.
   for (const entry of layout.floatingGroups ?? []) {
     const data = entry.data && group(entry.data);

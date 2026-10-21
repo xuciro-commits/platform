@@ -2,7 +2,7 @@
 
 面向 FDE 与客户构建者，提供数据接入、语义建模、动作/流程/AI、操作界面、受控发布与后续修改。语言中立的内核契约在 contract/，Go 宿主在 capabilities/server/，Web 工作区在 web/；apps/ 是原生参考应用，solutions/ 负责组合宿主。
 
-产品宗旨见 [Intent](docs/Intent.md)，架构与支持范围见 [Platform](docs/Platform.md)，当前工作见 [WorkQueue](docs/WorkQueue.md)。开发从 [AGENTS](AGENTS.md) 与 [ADR-0062](docs/ADR/0062-platform-consolidation.md) 开始。
+产品宗旨见 [Intent](docs/Intent.md)，系统结构与边界见 [Architecture](docs/Architecture.md)，当前工作见 [WorkQueue](docs/WorkQueue.md)。开发从 [AGENTS](AGENTS.md) 开始；内核语义与一致性向量从 [契约入口](contract/README.md) 查阅。
 
 ## 快速启动
 
@@ -42,4 +42,4 @@ make test-go PKG=./platform RUN=TestName
 make e2e SPEC=page-notice
 ~~~
 
-命令定义归 [Makefile](Makefile)，检查范围和结果含义归 [Testing](docs/Testing.md)。应用使用与构建步骤见 [Apps](docs/Apps.md)；发布、演练和备份见 [本地环境指南](deploy/local/README.md)。架构决定按 [ADR-0062 的主题入口](docs/ADR/0062-platform-consolidation.md#12-现行主题入口) 查阅。
+命令定义归 [Makefile](Makefile)，检查选择与分支交付规则归 [AGENTS](AGENTS.md)。发布、应用构建入口、演练和备份见 [本地环境指南](deploy/local/README.md)；浏览器任务位于 [web/e2e/tests](web/e2e/tests/)，宿主组件地图见 [doc.go](capabilities/server/doc.go)。

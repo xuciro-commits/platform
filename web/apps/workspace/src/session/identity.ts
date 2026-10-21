@@ -1,9 +1,9 @@
 // Who is signed in and which tenant they opened, remembered for this browser
-// session only (ADR-0019). Development identities come from the host's
+// session only. Development identities come from the host's
 // `/v1/sign-in`; a production session comes from the identity provider.
 import type { Api } from "@platform/kernel";
 
-/** A development identity of a host on development tokens (GET /v1/sign-in); generated from the host (ADR-0005). */
+/** A development identity of a host on development tokens (GET /v1/sign-in); generated from the host. */
 export type Identity = Api.Identity;
 
 export const IDENTITY_KEY = "workspace:identity";

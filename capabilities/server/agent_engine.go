@@ -18,7 +18,7 @@ import (
 	"platformserver/platform"
 )
 
-// stepBody is an agent entry: what the model chose at one step (ADR-0054).
+// stepBody is an agent entry: what the model chose at one step.
 type stepBody struct {
 	Run       string           `json:"run"`
 	Calls     []ToolCall       `json:"calls,omitempty"`  // complete new model response; Tool remains the legacy single-call encoding
@@ -30,7 +30,7 @@ type stepBody struct {
 	Failure   string           `json:"failure,omitempty"` // the model did not answer
 	Stop      string           `json:"stop,omitempty"`    // the host stopped the run before calling a model
 	// Observation is what a knowledge search found, made outside the lock like
-	// the model's answer and applied from here on replay (ADR-0009).
+	// the model's answer and applied from here on replay.
 	Observation json.RawMessage `json:"observation,omitempty"`
 	// Evaluation is a checkpoint or final report; Run is then its ID.
 	Evaluation *Evaluation `json:"evaluation,omitempty"`
@@ -45,12 +45,12 @@ type AgentTurn struct {
 }
 type turn = AgentTurn
 
-// Think gives each running agent its next model turn (ADR-0054). The host
+// Think gives each running agent its next model turn. The host
 // wakes it with owned work, with a periodic fallback: model calls are slow and
 // happen outside the tenant's lock; each answer is then journaled and applied.
 func (t *Tenant) Think(now time.Time) { onLane(t.turns(now)) }
 
-// turns are the agents' due turns, to run on the I/O lane (ADR-0007 D2): each
+// turns are the agents' due turns, to run on the I/O lane: each
 // calls its model outside the tenant's lock.
 func (t *Tenant) turns(now time.Time) []func() {
 	if t.agents == nil || t.quarantined() {
@@ -69,7 +69,7 @@ func (t *Tenant) turns(now time.Time) []func() {
 
 // stillRunning reports whether this run is still the running turn that was
 // snapshotted before its model call: a cancel, or a stop from any other cause,
-// ends the run and the late answer must not become a step (ADR-0008). It
+// ends the run and the late answer must not become a step. It
 // also clears the turn's busy mark, so a run stopped in flight is no longer
 // held out of the scheduler.
 func (t *Tenant) stillRunning(id string) bool {
@@ -108,7 +108,7 @@ func (t *Tenant) take(x turn, now time.Time) {
 		// The call above is the one place a run waits on the outside, and the
 		// tenant's lock is not held while it does: the run may have been
 		// cancelled, stopped or suspended in the meantime. A late answer must
-		// not run its tool then (ADR-0008, review AI-02). What it cost is
+		// not run its tool then. What it cost is
 		// still journaled and metered, so spend stays accounted for.
 		if !t.stillRunning(x.Run.ID) {
 			t.meter(t.agents.AgentPrincipal(x.Run.Agent), answer.Usage)
@@ -209,9 +209,9 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 		case len(run.Pending) == 0 && agents.SpentOut(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost):
 			// A run at its budget is not given another model call: the reply
 			// that crossed the budget already happened, and one more would
-			// only spend more (ADR-0008, review AI-05).
+			// only spend more.
 			x.Stop = agents.BudgetReason(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost)
-		case h.AgentSuspended("agent:" + run.Agent): // the off switch (ADR-0008 D4)
+		case h.AgentSuspended("agent:" + run.Agent): // the off switch
 			sw, _ := h.Record(SwitchType + "/agent:" + run.Agent)
 			x.Stop = "suspended by " + sw.(Switch).By
 		default:
@@ -223,7 +223,7 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 				x.Stop = "the model " + name + " is not enabled"
 				break
 			}
-			if why := h.ReserveAgentModel(a.AgentPrincipal(run.Agent), model, now); why != "" { // the door every call passes (ADR-0008 D1)
+			if why := h.ReserveAgentModel(a.AgentPrincipal(run.Agent), model, now); why != "" { // the door every call passes
 				x.Stop = why
 				break
 			}
@@ -283,7 +283,7 @@ func (a *Agents) reader(run AgentRunRecord) *platform.Member {
 // readsAs is who a run's reads happen as: the person it runs for, or its own
 // app when no person started it (a flow's agent). An app's automation reads
 // its own app's records only — never the host's view of every app, which the
-// reads used to fall back to (ADR-0008, review AI-01).
+// reads used to fall back to.
 func (a *Agents) readsAs(run AgentRunRecord) *platform.Member {
 	if m := a.reader(run); m != nil {
 		return m
@@ -330,7 +330,7 @@ func (t *Tenant) applyAgentStep(b stepBody, now time.Time, releaseTurn bool) boo
 	} else if !known || run.State != "running" {
 		// The fence at the end of the outside call, and here in the step's own
 		// decision: a model answer that arrives after the run was cancelled or
-		// stopped never runs its tool (ADR-0008, review AI-02).
+		// stopped never runs its tool.
 		return false
 	}
 	if b.CallID != "" && (len(run.Pending) == 0 || run.Pending[0].ID != b.CallID) {
@@ -419,7 +419,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		run.StepsUsed++
 	}
 	run.TokensUsed += step.Tokens
-	if b.Usage.CostReported { // a cost nobody reported is not 0, it is unknown (ADR-0008)
+	if b.Usage.CostReported { // a cost nobody reported is not 0, it is unknown
 		run.Cost += b.Usage.Cost
 	}
 	run.Model = cmp.Or(b.Usage.Model, run.Model)
@@ -452,7 +452,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		stop(step.Outcome)
 	case run.StepsUsed > d.Budget.Steps || run.TokensUsed > d.Budget.Tokens || d.Budget.Cost > 0 && run.Cost > d.Budget.Cost:
 		// The reply that crossed the budget: what it cost is kept, and no
-		// further call is made for this run (ADR-0008, review AI-05).
+		// further call is made for this run.
 		step.Outcome = "over budget"
 		stop(agents.BudgetReason(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost))
 	case b.Tool == "": // a text answer ends the run with it
@@ -587,7 +587,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	if run.ActionsUsed >= d.Budget.Actions {
 		return fmt.Sprintf("refused: its budget of %d actions is spent", d.Budget.Actions), nil
 	}
-	if tool.kind == "effect" { // sent to the endpoints bound to it, an external agent's answer awaited (ADR-0009)
+	if tool.kind == "effect" { // sent to the endpoints bound to it, an external agent's answer awaited
 		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
 		sender := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.app, true)
 		endRun := h.ScopeAgentRun(run.ID)
@@ -699,7 +699,7 @@ func (a *Agents) recipients(c platform.Caller, d *agentDef, run AgentRunRecord) 
 }
 
 // stop ends a run that cannot go on: a flow's run goes back to its flow; any
-// other goes to a person as a task (ADR-0054).
+// other goes to a person as a task.
 func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord, why string, now time.Time) {
 	run.State, run.Stopped, run.Draft = "stopped", why, nil
 	finishPendingCalls(run, now)

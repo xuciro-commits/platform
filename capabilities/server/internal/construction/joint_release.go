@@ -6,7 +6,7 @@ import (
 	"platformserver/platform"
 )
 
-// JointDraftRef names one saved draft in a joint candidate (ADR-0011).
+// JointDraftRef names one saved draft in a joint candidate.
 type JointDraftRef struct {
 	Kind platform.AssetKind `json:"kind"`
 	ID   string             `json:"id"`

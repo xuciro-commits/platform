@@ -9,7 +9,7 @@ import (
 
 // A restored change log answers as the one it was saved from: a repeated
 // submission gets its original record, revisions continue, and new change IDs
-// follow the restored ones (ADR-0024).
+// follow the restored ones.
 func TestChangeLogRestore(t *testing.T) {
 	schemas := NewSchemaRegistry([]*pb.SchemaRef{{Name: "s", Version: 1}}, nil)
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)

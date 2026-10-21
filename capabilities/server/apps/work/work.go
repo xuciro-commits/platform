@@ -1,6 +1,6 @@
-// Package work is the platform's work app (ADR-0007): approval requests for
+// Package work is the platform's work app: approval requests for
 // actions that wait for approvers, and tasks for people, with one inbox. A
-// platform app on the app API and internal/host (ADR-0016).
+// platform app on the app API and internal/host.
 package work
 
 import (
@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 )
 
-// Approval requests and tasks are entity types (ADR-0046) with lifecycles, so
+// Approval requests and tasks are entity types with lifecycles, so
 // they get lists, record pages and history, and replay like any records.
 const (
 	ID           = platform.WorkApp
@@ -28,7 +28,7 @@ const (
 	Admin        = "admin"
 	// SchemaRequest holds a submission for approval; the host submits it for the requester.
 	SchemaRequest = platform.WorkApprovalRequestSchema
-	// A member's saved views of a list (ADR-0024): their data, not configuration.
+	// A member's saved views of a list: their data, not configuration.
 	DelegationType   = "work.delegation"
 	SchemaDelegate   = "work.delegation.add"
 	SchemaUndelegate = "work.delegation.end"
@@ -41,7 +41,7 @@ const (
 type ApprovalRequest = platform.ApprovalRequest
 
 // ApprovalStep is one level: who may approve, and who did. Count is how many
-// distinct approvals close the level (ADR-0016 §11): 0 keeps the level's own
+// distinct approvals close the level: 0 keeps the level's own
 // rule of one, or all when All is set.
 type ApprovalStep = platform.ApprovalStep
 
@@ -63,7 +63,7 @@ type Delegation = platform.WorkDelegation
 type WorkTask = platform.WorkTask
 
 // SavedView is a member's view of an entity type's list: its search, grouping,
-// pivot or chart (ADR-0024), kept as the kit's state. Only its owner sees it.
+// pivot or chart, kept as the kit's state. Only its owner sees it.
 type SavedView = platform.SavedView
 
 type Work struct {
@@ -183,7 +183,7 @@ func (w *Work) entities() []platform.Entity {
 	}
 }
 
-// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0024).
+// Snapshot and Restore: its records are the host's; the ledger is its own.
 func (w *Work) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (w *Work) Snapshot() (json.RawMessage, error) { return w.ledger.Snapshot() }
@@ -230,7 +230,7 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 
 // request opens an approval request for the held submission in the payload,
 // on behalf of the requester it names; the approvers of each level are
-// resolved now, on the request's day (ADR-0022).
+// resolved now, on the request's day.
 func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
@@ -257,13 +257,13 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} // nobody could approve it
 		}
 		step := ApprovalStep{Title: level.Title, Approvers: approvers, All: level.All, Approved: []string{}, Delegates: w.delegates(c, approvers, now)}
-		// A tenant policy may ask several distinct members for this action
-		// (ADR-0016 §11); the count is fixed now, with the approvers.
+		// A tenant policy may ask several distinct members for this action;
+		// the count is fixed now, with the approvers.
 		step.Count = CountFor(step, level.All, w.PolicyCount(c, app, declared.Schema), len(approvers))
 		if level.Due > 0 {
 			step.Due = now.Add(level.Due)
 		}
-		if level.WorkingDays > 0 { // in the requester's working days (ADR-0038)
+		if level.WorkingDays > 0 { // in the requester's working days
 			cal := w.host.Calendar("member:"+requester.ID, now.UTC().Format(time.DateOnly))
 			step.Due = cal.After(now, level.WorkingDays)
 		}
@@ -341,7 +341,7 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 }
 
 // decider refuses a caller who is not an approver of the current level, the
-// requester, or an AI agent (a person decides, ADR-0004 D6).
+// requester, or an AI agent (a person decides).
 func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	a := record.(*ApprovalRequest)
 	step := a.Levels[a.Level]
@@ -621,7 +621,7 @@ func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignme
 }
 
 // Close cancels an open task as part of the decision r: a flow's wait
-// ended another way, or its path stopped (ADR-0007).
+// ended another way, or its path stopped.
 func (w *Work) Close(c platform.Caller, r *pb.ChangeRecord, id string) {
 	work := w.host.Automation(c, ID)
 	if task, ok := platform.Get[WorkTask](work, id); ok && task.State == "open" {
@@ -656,7 +656,7 @@ func approvalActingFor(s ApprovalStep, member string) string {
 	return s.Delegates[member]
 }
 
-// delegates are those standing in on now's day for any of approvers (ADR-0038).
+// delegates are those standing in on now's day for any of approvers.
 func (w *Work) delegates(c platform.Caller, approvers []string, now time.Time) map[string]string {
 	day := now.UTC().Format(time.DateOnly)
 	all, _, _ := platform.Find[Delegation](w.host.Automation(c, ID), platform.Query{Limit: 1000})

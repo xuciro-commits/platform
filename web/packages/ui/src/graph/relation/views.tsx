@@ -14,7 +14,7 @@ export type RelationShapeNode = Node<RelationNodeData>;
 export type RelationLineEdge = Edge<RelationEdge & { route?: Route; quiet?: boolean } & Record<string, unknown>>;
 
 /** The four sides an element can be joined from; the line picks the two that face
- * each other, so the owner's source/target meaning never changes (ADR-0031 D5). */
+ * each other, so the owner's source/target meaning never changes. */
 function Sides({ data }: { data: RelationNodeData }) {
   return <>
     {[Position.Top, Position.Right, Position.Bottom, Position.Left].map((side) => <Handle key={side} id={side} type="source" position={side}

@@ -13,7 +13,7 @@ import (
 	"production"
 )
 
-// Confirming to the ERP (#101, ADR-0026 7d): when the last SFC of an order is
+// Confirming to the ERP (#101): when the last SFC of an order is
 // done or scrapped, the plant confirms the order to the ERP, as SAP's production
 // order confirmation does, through production.orders/1 (production.go). A
 // refusal reaches the line's supervisors, and the confirmation flow asks them,
@@ -36,7 +36,7 @@ func (p *Plant) finishOrder(c platform.Caller, r *pb.ChangeRecord, order string,
 }
 
 // confirmation is the plant's flow from a completed order to the ERP's
-// acceptance (ADR-0007): confirm it, wait for the ERP's answer; when the ERP
+// acceptance: confirm it, wait for the ERP's answer; when the ERP
 // refuses, ask the line's supervisors to correct and resend it and wait again;
 // when the ERP is silent for an hour, tell them.
 func (p *Plant) confirmation() platform.Flow {
@@ -54,7 +54,7 @@ func (p *Plant) confirmation() platform.Flow {
 	}
 	return platform.Flow{Name: "erp-confirmation", Title: "Confirm to the ERP", Version: 1, Owners: []string{string(Supervisor)}, Subject: OrderType,
 		// It starts when a decision first completes an order — the last SFC's
-		// completion or signed disposition — with an ERP to confirm to (ADR-0038).
+		// completion or signed disposition — with an ERP to confirm to.
 		Start: platform.Start{Type: OrderType, When: func(c platform.Caller, record any) bool {
 			o := record.(Order)
 			_, erp := erpOrders(c)
@@ -75,8 +75,8 @@ func (p *Plant) confirmation() platform.Flow {
 					return verdict(c, r)
 				}},
 			{Name: "record", Title: "Record the ERP's answer", Act: &platform.Act{Action: SchemaAnswer, Target: id}, Choose: verdict},
-			// The plant's agent looks for the planned order the order fulfils
-			// (ADR-0054); a supervisor approves its proposal before it is resent.
+			// The plant's agent looks for the planned order the order fulfils;
+			// a supervisor approves its proposal before it is resent.
 			// Stopped, or without a proposal, the supervisors correct it themselves.
 			{Name: "propose", Title: "The agent looks for the planned order", Fault: "correct",
 				Agent: &platform.AgentStep{Agent: "erp-fixer", To: supervisors,
@@ -147,7 +147,7 @@ func (p *Plant) confirmation() platform.Flow {
 		}}
 }
 
-// fixer is the plant's agent for refused confirmations (ADR-0054): it reads the
+// fixer is the plant's agent for refused confirmations: it reads the
 // planned orders and proposes the one the order fulfils; it takes no action,
 // the flow asks a supervisor.
 func (p *Plant) fixer() platform.Agent {
@@ -178,7 +178,7 @@ func (p *Plant) orderLine(o Order) string {
 // EffectLeadTime asks a supplier's agent, over A2A, how soon it can deliver.
 const EffectLeadTime = "lead-time"
 
-// planner is the plant's planning agent (ADR-0009 (3)): it asks the
+// planner is the plant's planning agent ( (3)): it asks the
 // supplier's agent — an external A2A agent the tenant binds to the lead-time
 // effect — and answers with what it said.
 func (p *Plant) planner() platform.Agent {
@@ -189,7 +189,7 @@ func (p *Plant) planner() platform.Agent {
 		Budget:       platform.Budget{Steps: 6, Actions: 2}}
 }
 
-// The plant's one path to an ERP is production.orders/1 (ADR-0026 7c, 7d):
+// The plant's one path to an ERP is production.orders/1:
 // the provider's orders are the planned orders supervisors release shop orders
 // against, and a completed shop order is confirmed through the protocol in the
 // rules of the plant's own decision (K4 C10). The ERP app decides at once; the
@@ -287,7 +287,7 @@ func (p *Plant) made(who platform.Caller, o Order) (yield, scrap int) {
 }
 
 // confirm confirms o to the provider of its planned order once the plant's
-// decision is accepted (ADR-0006 D2): refused at once when there is nothing to
+// decision is accepted: refused at once when there is nothing to
 // confirm against, otherwise sent, and the provider's answer comes back to
 // mes.order.answer.
 func (p *Plant) confirm(who platform.Caller, s *pb.Submission, o Order, now time.Time) func(*pb.ChangeRecord) {

@@ -25,7 +25,7 @@ import (
 	"platformserver/platform"
 )
 
-// Model calls (ADR-0008 point 6): the host checks the caller's access, calls
+// Model calls: the host checks the caller's access, calls
 // the provider outside the tenant's lock, and journals the call's usage as an
 // entry of kind usage. Replay applies usage and never calls a model; prompts
 // and answers are the caller's and are not kept.
@@ -36,7 +36,7 @@ const aiTimeout = 120 * time.Second
 // system, user or assistant turn, an assistant's tool calls, or a tool's result.
 type Message = platform.Message
 
-// Tool is a function the model may call (ADR-0054): a name, what it does, and
+// Tool is a function the model may call: a name, what it does, and
 // its parameters as JSON Schema properties.
 type Tool = platform.Tool
 
@@ -50,7 +50,7 @@ type ChatRequest = platform.ChatRequest
 type ChatAnswer = platform.ChatAnswer
 
 // AIError is a call the provider did not answer or refused, or one a limit
-// kept from the provider (Quota, ADR-0008 D1).
+// kept from the provider (Quota).
 type AIError = platform.AIError
 
 // unavailable is a failure that says the provider is down or overloaded, not
@@ -74,7 +74,7 @@ type models interface {
 	Quota(platform.Member, platform.AIDefaults, time.Time) platform.AIQuota
 }
 
-// limits are the defaults a member without its own takes (ADR-0008 D1).
+// limits are the defaults a member without its own takes.
 func (t *Tenant) limits() platform.AIDefaults {
 	number := func(app, name string) int {
 		n, _ := strconv.Atoi(t.setting(t.automation(app, false), name))
@@ -87,8 +87,7 @@ func (t *Tenant) limits() platform.AIDefaults {
 // reserve takes the door every model call passes — members', agents',
 // evaluations' and embeddings': it refuses with why, or lets the call start
 // and counts it in flight until its usage is metered, both under one lock.
-// Calls that start together would each pass the same limit without it
-// (ADR-0008, review AI-03).
+// Calls that start together would each pass the same limit without it.
 func (t *Tenant) reserve(m platform.Member, model platform.AIModel, now time.Time) string {
 	if t.ai == nil {
 		return ""
@@ -105,7 +104,7 @@ func (t *Tenant) mostTokens() int {
 
 // Chat calls a model for m. A refusal of access is a kernel error; a provider
 // failure is an AIError, and its usage is journaled as failed. delta, when
-// given, receives the answer as it comes (ADR-0008 D2).
+// given, receives the answer as it comes.
 func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta ...func(string)) (ChatAnswer, *kernel.Error, *AIError) {
 	if t.ai == nil {
 		return ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
@@ -179,7 +178,7 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 		// A provider that says nothing about usage must not be booked as
 		// spending nothing: the platform books a conservative estimate of the
 		// request and the answer, marked as one, so daily caps and run budgets
-		// still bite (ADR-0008, review AI-05).
+		// still bite.
 		request, _ := json.Marshal(req)
 		said := answer.Content
 		for _, c := range answer.ToolCalls {
@@ -217,7 +216,7 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 
 // estimateTokens is a conservative estimate of the tokens in text: about a
 // third of its bytes, and 0 only for text that is not there. It is used when,
-// and only when, a provider reports no usage (ADR-0008, review AI-05).
+// and only when, a provider reports no usage.
 func estimateTokens(text string) int {
 	if text == "" {
 		return 0
@@ -602,7 +601,7 @@ type cachedCatalog struct {
 }
 
 // ProviderModels reads a provider's catalog live (GET /models), cached ten
-// minutes; it is volatile, never journaled (ADR-0008 point 5). Administrators only.
+// minutes; it is volatile, never journaled. Administrators only.
 func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool) ([]CatalogModel, *kernel.Error, *AIError) {
 	if t.ai == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
@@ -663,7 +662,7 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	return models, nil, nil
 }
 
-// Apps' model requests (ADR-0008 D3). An accepted decision's Request of a
+// Apps' model requests. An accepted decision's Request of a
 // model becomes owned work of the built-in model destination: kept in the
 // outbound queue with the effects, sent on the I/O lane through the door every
 // call passes (as the app, within its limits), retried when the provider is

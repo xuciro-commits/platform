@@ -1,9 +1,9 @@
-// Package lodging is the lodging booking protocol (ADR-0006): what any app that
+// Package lodging is the lodging booking protocol: what any app that
 // sells stays provides — hotels, serviced apartments, coworking spaces — and what
 // any app that needs stays consumes, without either knowing the other. It follows
 // the core of OpenTravel/HTNG reservations: reserve, change and cancel a stay of
 // a room type, and read the bookings. A consumer that needs rooms before it is
-// sure holds them until a date, then confirms or releases them (ADR-0006 D3);
+// sure holds them until a date, then confirms or releases them;
 // the provider releases a hold whose date has passed.
 package lodging
 

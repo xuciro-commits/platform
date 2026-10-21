@@ -26,7 +26,7 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	for _, et := range t.records.types {
 		roles := m.RolesIn(et.info.App)
 		if len(roles) > 0 && et.info.Scope.LevelFor(roles) == platform.ScopeNone && et.info.Scope.Participants == nil {
-			continue // a type none of these roles sees at all (ADR-0044 18b)
+			continue // a type none of these roles sees at all
 		}
 		if len(roles) > 0 || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
 			view, _ := viewOf(m, et)
@@ -45,7 +45,7 @@ func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bo
 
 func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
-	if typ == "enterprise.element" && t.directory != nil { // the model is every member's to read (ADR-0022 D3)
+	if typ == "enterprise.element" && t.directory != nil { // the model is every member's to read
 		_, ok := t.directory.Element(id, now.UTC().Format(time.DateOnly))
 		return ok
 	}

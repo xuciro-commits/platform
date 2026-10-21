@@ -1,4 +1,4 @@
-// The default renderer (ADR-0024): compiles the platform's visualization spec
+// The default renderer: compiles the platform's visualization spec
 // into Apache ECharts 6 options. Only this file knows ECharts' option format.
 import type { EChartsCoreOption } from "echarts/core";
 import { columnOf, markOf, type AggregateColumn, type ChartSpec, type Encoding } from "./spec";

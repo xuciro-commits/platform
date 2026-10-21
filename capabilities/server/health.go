@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// TenantHealth is how a tenant's work stands (ADR-0007 D6), for its
+// TenantHealth is how a tenant's work stands, for its
 // administrators and for metrics: its queues, what gave up, what waits past a
 // quota, its breakers, and its connectors and endpoints.
 type TenantHealth struct {

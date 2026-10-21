@@ -19,40 +19,40 @@ import (
 	"platformkernel/kernel"
 )
 
-// Member is a person, service or AI agent of a tenant (ADR-0016). Grants are
-// what they hold (ADR-0027 §3.3): roles in apps, each optionally bounded to a
+// Member is a person, service or AI agent of a tenant. Grants are
+// what they hold: roles in apps, each optionally bounded to a
 // unit and a time. Roles is derived from the active grants by the host — the
 // primary role per app (the app's first declared role the member holds) —
 // for the many places that ask for one; RolesIn answers with all of them.
-// What a rule scopes by is the member's organisation (ADR-0022).
+// What a rule scopes by is the member's organisation.
 type Member struct {
 	AIContext bool              `json:"-"` // trusted read narrowing, never a grant or request field
 	ID        string            `json:"id"`
 	Tenant    string            `json:"tenant"`
 	Roles     map[string]string `json:"roles"`
 	Grants    []Grant           `json:"grants,omitempty"`
-	// Status is the member's standing (ADR-0028 §4): "" active, invited
+	// Status is the member's standing: "" active, invited
 	// (added, not yet signed in), suspended (holds nothing until resumed),
 	// left (offboarded: no subjects, no grants; the record stays for history).
 	Status string `json:"status,omitempty"`
-	// Scopes bound a caller signed in with a personal token (ADR-0028 §5):
+	// Scopes bound a caller signed in with a personal token:
 	// permission patterns (exact, or a prefix ending in *); nil is unbounded.
 	Scopes []string `json:"scopes,omitempty"`
 	// Agent marks an AI agent: an irreversible effect it causes waits for a
-	// person's approval, and it cannot give one (ADR-0004 D6).
+	// person's approval, and it cannot give one.
 	Agent bool `json:"agent,omitempty"`
-	// Language is the member's own choice (ADR-0005 6b, ADR-0028), such as
+	// Language is the member's own choice, such as
 	// "zh-CN", derived from their profile when the host hands a member to an
 	// app; empty: the tenant's default, else what the browser asks for.
 	Language string `json:"language,omitempty"`
-	// Timezone is the IANA zone the member works in (ADR-0028 §3), derived
+	// Timezone is the IANA zone the member works in, derived
 	// from their profile over the tenant's default when the host hands a
 	// member to an app; empty: UTC. Every "today" a decision defaults for
 	// the member is this zone's day.
 	Timezone string `json:"timezone,omitempty"`
 }
 
-// Grant is one role a member holds in an app (ADR-0027 §3.3): everywhere in
+// Grant is one role a member holds in an app: everywhere in
 // the app, or within a unit of a structure; from a day, until a day; given by
 // someone for a reason. Dates are YYYY-MM-DD, inclusive from, exclusive until.
 type Grant struct {
@@ -89,7 +89,7 @@ func (m Member) RolesIn(app string) []string {
 // Holds reports whether the member holds role in app, among any of their roles.
 func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(app), role) }
 
-// May asks the engine (ADR-0027 §3.4) whether the member may exercise a
+// May asks the engine whether the member may exercise a
 // permission of app that names roles: any role they hold there suffices.
 func (m Member) May(app, permission string, roles []string) authz.Verdict {
 	return authz.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
@@ -105,7 +105,7 @@ func (m Member) InScope(permission string) bool {
 	})
 }
 
-// Member standings (ADR-0028 §4).
+// Member standings.
 const (
 	MemberInvited   = "invited"
 	MemberSuspended = "suspended"
@@ -126,7 +126,7 @@ func (m Member) Location() *time.Location {
 func (m Member) Today(now time.Time) string { return now.In(m.Location()).Format(time.DateOnly) }
 
 // Caller is a member as one app sees it. Replaying marks the journal replay:
-// who could act was decided when the input was accepted (ADR-0057). Automation
+// who could act was decided when the input was accepted. Automation
 // marks an app acting on its own (a subscribed event, a job, an effect's
 // answer), as member "app:<id>"; its manifest is its grant.
 type Caller struct {
@@ -399,25 +399,25 @@ type Runtime interface {
 	Links(c Caller, entity string) []string
 	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error
 	Deliver(c Caller, dataClass, from, to string, now time.Time) *kernel.Error
-	// Records of the app's entity types (ADR-0046).
+	// Records of the app's entity types.
 	Put(c Caller, r *pb.ChangeRecord, entity any) *kernel.Error
 	Get(c Caller, t reflect.Type, id string) (any, bool)
 	Find(c Caller, t reflect.Type, q Query) ([]any, int, *kernel.Error)
 	Check(c Caller, entity any) *kernel.Error
-	// Work (ADR-0007): tasks for people, and whether decisions are only probed.
+	// Work: tasks for people, and whether decisions are only probed.
 	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *kernel.Error
 	Probing() bool
 	// Readable reports whether c's member may read the record ref ("<type>/<id>").
 	Readable(c Caller, ref string) bool
-	// Next numbers a document of an accepted decision (ADR-0026).
+	// Next numbers a document of an accepted decision.
 	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
 }
 
-// Manifest declares an app (ADR-0016). Names of actions, reads and inputs are
+// Manifest declares an app. Names of actions, reads and inputs are
 // unique within a tenant; the host routes by them.
 type Manifest struct {
 	ID      string
-	Title   string // the app's name in the workspace's launcher (ADR-0019)
+	Title   string // the app's name in the workspace's launcher
 	Version string
 	Actions *Catalog
 	Reads   []string
@@ -425,36 +425,36 @@ type Manifest struct {
 	// configuration or retained definitions. Copied/generated business content
 	// instead declares source/from on its fields (from names a Go ref field,
 	// optionally followed by #sourceField). Registered records always
-	// retain their own row, field and derivation checks (ADR-0044 D4).
+	// retain their own row, field and derivation checks.
 	ReadSources map[string]string
 	Inputs      map[string]bool // connector inputs; true: accepted result before live application
 	// Subscribes names its own actions, or events of protocols it consumes
 	// ("<protocol id>#<event>"), delivered to Handle after commit. Apps know no
-	// other app: they reach each other through protocols only (ADR-0006).
+	// other app: they reach each other through protocols only.
 	Subscribes    []string
-	Provides      []Provision   // protocols this app implements (ADR-0006)
+	Provides      []Provision   // protocols this app implements
 	Consumes      []Consumption // protocols this app uses; the host binds a provider
 	Everyone      []string      // reads any member may use; the app filters by caller
-	Jobs          []Job         // scheduled work (Runner), ADR-0027
-	Retry         *Retry        // how events delivered to it are retried; nil: the host's (ADR-0007 D4)
+	Jobs          []Job         // scheduled work (Runner),
+	Retry         *Retry        // how events delivered to it are retried; nil: the host's
 	Settings      []Setting     // typed values administrators set in Settings
-	Emits         []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0004)
-	Entities      []Entity      // entity types whose records the host keeps (ADR-0046)
-	Pages         []Page        // bounded code page descriptors over those records/actions (ADR-0020 13b)
+	Emits         []EffectKind  // outbound effects it sends to endpoints the tenant binds
+	Entities      []Entity      // entity types whose records the host keeps
+	Pages         []Page        // bounded code page descriptors over those records/actions
 	LinkTypes     []LinkType
 	PropertyTypes []PropertyType
-	Interfaces    []Interface             // shapes several entity types share (ADR-0020 A2)
-	Queries       []NamedQuery            // named pure queries pages and agents share (ADR-0047 21c)
-	Functions     []AIFunction            // typed, bounded inference through existing model effects (ADR-0054)
-	Operations    []Operation             // typed native or controlled Wasm computation (ADR-0013)
-	Observations  []ObservationDefinition // external summaries and result-only business decisions (ADR-0058)
-	Flows         []Flow                  // long-running processes the host runs for the app (ADR-0007)
-	Agents        []Agent                 // AI agents the host runs for the app (ADR-0054)
-	Sequences     []Sequence              // numbers of its documents, without gaps (ADR-0026)
+	Interfaces    []Interface             // shapes several entity types share (A2)
+	Queries       []NamedQuery            // named pure queries pages and agents share
+	Functions     []AIFunction            // typed, bounded inference through existing model effects
+	Operations    []Operation             // typed native or controlled Wasm computation
+	Observations  []ObservationDefinition // external summaries and result-only business decisions
+	Flows         []Flow                  // long-running processes the host runs for the app
+	Agents        []Agent                 // AI agents the host runs for the app
+	Sequences     []Sequence              // numbers of its documents, without gaps
 	// Roles are roles that grant no action but open something else, such as
-	// models (ADR-0008); the roles its actions grant need not be listed.
+	// models; the roles its actions grant need not be listed.
 	Roles []string
-	// Languages translate the app's titles and descriptions (ADR-0005).
+	// Languages translate the app's titles and descriptions.
 	Languages Languages
 }
 
@@ -494,12 +494,12 @@ type InputReceiver interface {
 type Event struct {
 	App    string
 	Record *pb.ChangeRecord
-	// Changed are the records ("<type>/<id>") the decision put, whichever it named (ADR-0038).
+	// Changed are the records ("<type>/<id>") the decision put, whichever it named.
 	Changed []string
 }
 
 // Subscriber is an app that handles the events its manifest subscribes to, as
-// owned work after the input (ADR-0027). A refusal is retried, then recorded as
+// owned work after the input. A refusal is retried, then recorded as
 // a failed delivery; the event's decision stands. Handle must depend only on
 // tenant state: a replay runs it again and must reach the same outcome.
 type Subscriber interface {

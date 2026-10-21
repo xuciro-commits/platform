@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-// Traces across agents (ADR-0008 D6): the chain a run or a flow instance
+// Traces across agents: the chain a run or a flow instance
 // belongs to — the record the flow is about, the flow and the flows it called,
 // the agent runs its steps started, and the effects those runs caused (a held
 // reply, a question to another agent over A2A) — from what the records

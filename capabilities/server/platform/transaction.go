@@ -18,7 +18,7 @@ const TxnMaxSteps = 256
 const TxnMaxIterations = 1000
 
 // BusinessTxn is a bounded, single-authority decision. Guards, assignments and
-// iteration predicates all use the original ADR-0040 evaluator.
+// iteration predicates all use the original  evaluator.
 type BusinessTxn struct {
 	Subject      string        `json:"subject"`
 	Steps        []TxnStep     `json:"steps"`

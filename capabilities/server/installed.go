@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// Objects a tenant defines are installed into the running host (ADR-0048):
+// Objects a tenant defines are installed into the running host:
 // the record store keeps their records, the host routes their generated
 // actions to the app that owns them, and the asset registry offers the object,
 // its actions and its page. From then on they are ordinary entity types — the
@@ -77,7 +77,7 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 
 // install declares a type, or declares it again: the rows are carried into the
 // new Go type through their JSON, so a record keeps the value of every field
-// that is still there (ADR-0048).
+// that is still there.
 func (s *recordStore) install(info platform.EntityInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -166,7 +166,7 @@ func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 }
 
 // installDefinitions puts the installed object, its actions and its pages in
-// the asset registry, so code and builder discover one set of assets (ADR-0020).
+// the asset registry, so code and builder discover one set of assets.
 func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error {
 	var describeErr error
 	put := func(def platform.Definition) {
@@ -236,7 +236,7 @@ func (t *Tenant) reinstall() error {
 
 // InstallPage offers a page an app composed at runtime: it must name an object
 // this tenant has, fields that object declares and actions about it, so the
-// workspace can always open what the registry offers (ADR-0048, #132). The
+// workspace can always open what the registry offers (#132). The
 // member's own reads and catalog still decide what they see on it.
 func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	return t.installPage(app, p, true)
@@ -253,7 +253,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) er
 	p = p.EffectiveModelPage(t.entity)
 	id := app.Manifest().ID
 	if p.Name == "" || (p.Layout != "list-detail" && p.Layout != "composed") {
-		return fmt.Errorf("page %q: a page is list-detail, or composed of sections (ADR-0048)", p.Name)
+		return fmt.Errorf("page %q: a page is list-detail, or composed of sections", p.Name)
 	}
 	if p.Document != nil && p.Layout != "composed" {
 		return fmt.Errorf("page %s: a structured layout needs composed sections", p.Name)
@@ -325,8 +325,8 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) er
 var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
 // checkSections holds a composed page to what this tenant has: a widget it
-// knows, an object, the fields, actions and measures that object declares
-// (ADR-0048). What the registry offers must open.
+// knows, an object, the fields, actions and measures that object declares.
+// What the registry offers must open.
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
 	p = p.EffectiveModelPage(t.entity)
 	if err := p.Document.Check(p.Sections); err != nil {
@@ -909,7 +909,7 @@ func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
 }
 
 // InstallApplication offers an application a tenant handed to its people: a
-// name over pages that are already installed (ADR-0046). It grants nothing —
+// name over pages that are already installed. It grants nothing —
 // the registry offers each page to whoever may read what it shows, and an
 // application to whoever may open one of its pages.
 func (t *Tenant) InstallApplication(app platform.App, a platform.Application) error {

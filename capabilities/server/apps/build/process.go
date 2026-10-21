@@ -152,7 +152,7 @@ func (b *Build) checkFlowOn(p construction.Process, entity platform.Entity, obje
 }
 
 // installProcesses installs every published version of every process, oldest
-// first, after the objects they run on (a restore, ADR-0048).
+// first, after the objects they run on (a restore).
 func (b *Build) installProcesses() error {
 	procs := b.host.BuildProcesses()
 	list, err := b.processInventory()

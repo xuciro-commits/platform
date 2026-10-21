@@ -8,7 +8,7 @@ import { useAuthoringModel } from "./authoring-model";
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Input, PageHeader, Panel, Select, t } from "@platform/ui";
 
-// Matching rules (ADR-0024): when rows from different systems are one party,
+// Matching rules: when rows from different systems are one party,
 // material or site, and whose value wins per field. Applied wherever rows land
 // in the object - a source's pull, a pipeline's run - so one real thing stays
 // one record.

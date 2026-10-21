@@ -3,7 +3,7 @@ import { widgetContract } from "@platform/app";
 import { useState } from "react";
 import { WidgetGlyph } from "./WidgetGlyph";
 
-/** The widget library (ADR-0047): every registered widget by category;
+/** The widget library: every registered widget by category;
  * drag one onto the canvas or click to add it to the selected container. */
 export function WidgetLibrary({ widgets, widgetTitles, onAdd }: { widgets: readonly string[]; widgetTitles: Record<string, () => string>; onAdd: (widget: string) => void }) {
   const [search, setSearch] = useState("");

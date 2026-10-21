@@ -1,4 +1,4 @@
-// Original asset owners and editor routes. ADR-0047 organizes navigation
+// Original asset owners and editor routes.  organizes navigation
 // by application business concepts; asset kinds remain compilation identities.
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";

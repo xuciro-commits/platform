@@ -156,7 +156,7 @@ func (b *Build) checkName(name, id string) error {
 
 // fieldKnown answers whether a reference names an object this tenant can
 // compose against: an installed one, one selected as a draft in the candidate
-// being built, or another saved draft object (ADR-0011). Delivery still
+// being built, or another saved draft object. Delivery still
 // proves the object installs.
 func (b *Build) fieldKnown(ref string) bool {
 	if ref == "enterprise.element" {
@@ -204,7 +204,7 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 
 // install declares the object in the running host: the record store keeps its
 // records, the ledger takes its generated actions, and the asset registry
-// offers it and its page (ADR-0048). Installed again, it takes its new
+// offers it and its page. Installed again, it takes its new
 // fields and its records come with it (D3).
 func (b *Build) install(c platform.Caller, o construction.Object) *kernel.Error {
 	if c.Staging() {
@@ -240,11 +240,11 @@ func (b *Build) install(c platform.Caller, o construction.Object) *kernel.Error 
 }
 
 // Entity is the declaration a defined object amounts to: a Go type built now,
-// with the tags a developer would have written (ADR-0048).
+// with the tags a developer would have written.
 func Entity(o construction.Object) platform.Entity { return entityWith(o, nil, nil) }
 
 // entity is the declaration as installed: its actions may create related
-// records through this builder's host (ADR-0047 21c).
+// records through this builder's host.
 func (b *Build) entity(o construction.Object) platform.Entity {
 	return entityWith(o, b, b.conditionLookup)
 }

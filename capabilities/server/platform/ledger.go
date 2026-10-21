@@ -15,7 +15,7 @@ import (
 
 // Ledger is one business package's decisions in one tenant: the kernel's change
 // log and authority for the package's data classes, received in the kernel's
-// order with the package's action catalog as the role check (ADR-0057). The
+// order with the package's action catalog as the role check. The
 // package supplies attribute conditions and its rules; it never wires the kernel.
 type Ledger struct {
 	mu           sync.Mutex
@@ -26,7 +26,7 @@ type Ledger struct {
 	changes      *kernel.ChangeLog
 	authorities  *kernel.Authorities
 	// schemas is the change log's registry, kept so the package can teach it a
-	// schema that did not exist when it started (K7 S7, ADR-0048).
+	// schema that did not exist when it started (K7 S7).
 	schemas *kernel.SchemaRegistry
 	Catalog *Catalog
 }
@@ -52,7 +52,7 @@ func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *L
 }
 
 // Extend declares data classes and actions after composition: what an object a
-// tenant defined and published needs of its app's ledger (ADR-0048). The
+// tenant defined and published needs of its app's ledger. The
 // kernel takes the new schemas and the authority over the new classes.
 // It is called from inside a decision of this ledger — the transition that
 // publishes the definition — so the ledger's own lock is already held and is
@@ -107,7 +107,7 @@ func (l *Ledger) HistoricalSchemas(schemas ...*pb.SchemaRef) *kernel.Error {
 func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declarations }
 
 // ApplyAcceptedChange advances the kernel log from a durable result. It does
-// not run current catalog policy, rules or a generated action (ADR-0010 19a).
+// not run current catalog policy, rules or a generated action.
 // The boolean says whether this result was new to the log, so the host can
 // avoid applying its record images twice after a retry or partial recovery.
 func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
@@ -169,10 +169,10 @@ func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 
 // Receive accepts s from c or refuses it: an action outside the enabled catalog
 // is UNKNOWN_SCHEMA; c's role must be granted and allowed (attribute conditions,
-// may be nil) must hold, except in a replay (ADR-0057); rules (may be nil)
+// may be nil) must hold, except in a replay; rules (may be nil)
 // returns how to apply the decision, which runs with the new record only when
 // it is accepted (an idempotent replay applies nothing); a new decision is then
-// published to the tenant's subscribers (ADR-0016).
+// published to the tenant's subscribers.
 func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
 	catalog := l.catalogFor(c)
@@ -196,7 +196,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	refused := false // the kernel's policy step said no
 	var decision AuthzDecision
 	changes := l.changes
-	// ADR-0010 19a: a host-owned decision view may use a private change log.
+	// a host-owned decision view may use a private change log.
 	// Ordinary callers and replay retain the existing authoritative path.
 	if draft, ok := c.rt.(StagedRuntime); ok {
 		changes = draft.DraftChanges(l, l.changes.Fork)
@@ -266,7 +266,7 @@ func (l *Ledger) catalogFor(c Caller) *Catalog {
 }
 
 // checked puts before rules the check of the payload's declared choices and
-// references (ADR-0038): after the policy, as the kernel's order has it
+// references: after the policy, as the kernel's order has it
 // (K6 T2); a replay does not check again.
 func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Catalog, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
 	declared, _ := catalog.Action(s.GetSchema().GetName())
@@ -313,8 +313,7 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Cat
 }
 
 // Generated decides the actions entity declarations generate: standard
-// create, edit and archive (ADR-0046) and lifecycle transitions (ADR-0007
-// D1); ok is false for any other schema. allowed (may be nil) adds the app's
+// create, edit and archive and lifecycle transitions; ok is false for any other schema. allowed (may be nil) adds the app's
 // conditions to the catalog's role check.
 func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *kernel.Error, bool) {
 	schema := s.GetSchema().GetName()
@@ -560,8 +559,8 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 	}, nil
 }
 
-// inScope says whether the caller may act on a record: only one they may read
-// (ADR-0044 18b). A generated action on a record outside the member's scope is
+// inScope says whether the caller may act on a record: only one they may read.
+// A generated action on a record outside the member's scope is
 // refused as if it were not there, as a read is. Replay, the app's own
 // automation and an approval taking a held step act for the app, not a reader.
 func inScope(c Caller, typ, id string) bool {

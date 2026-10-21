@@ -58,7 +58,7 @@ export { Workspace, useWorkspace, useViewCall, useViewTitle, useUnsavedChanges, 
 export { navigationLinks, type NavItem, type NavLink } from "./shell/Navigation";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
-// One drawing surface, two families (ADR-0033): a process joins activities through
+// One drawing surface, two families: a process joins activities through
 // typed ports and reads as BPMN; a relationship joins things and does not.
 export { type CanvasAction, type CanvasBox, type CanvasDirection, type CanvasPosition } from "./graph/core/types";
 export { useCanvasLayout } from "./graph/core/layout/use-layout";

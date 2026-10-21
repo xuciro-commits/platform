@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 )
 
-// Pipelines (ADR-0024、ADR-0062 I-D): a declared, closed set of steps from
+// Pipelines (I-D): a declared, closed set of steps from
 // datasets to a dataset or to an object. No script: every step is data the
 // builder can read back, every row that fails an expectation is quarantined
 // with its reason, and a run is an ordinary journaled input like a pull.
@@ -35,9 +35,9 @@ type Pipeline struct {
 	OutputDataset string `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject  string `json:"outputObject,omitempty" title:"Output object"`
 	Key           string `json:"key,omitempty" title:"Record id column"`
-	// Marking (ADR-0025) is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
+	// Marking is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
 	Marking string `json:"marking,omitempty" field:"readonly" title:"Marking"`
-	// OutputEnterprise lands the rows in the enterprise model instead (ADR-0022): one element per row.
+	// OutputEnterprise lands the rows in the enterprise model instead: one element per row.
 	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
 	// Every is a period, or empty: run when an input gains a version, or on request.
 	Every     string       `json:"every,omitempty" title:"Run every"`
@@ -57,7 +57,7 @@ type Pipeline struct {
 //	rename     From → To
 //	cast       Column, Type (string, number, boolean, date)
 //	filter     Column, Op (=, !=, <, <=, >, >=, contains, empty, notempty), Value
-//	compute    To, Formula (the ADR-0040 arithmetic over number columns)
+//	compute    To, Formula (the  arithmetic over number columns)
 //	lookup     Dataset, Column (here) = Match (there), take Columns (prefixed with As)
 //	join       Dataset, Column = Match, inner unless Outer; the other side's columns prefixed with As
 //	dedupe     Columns (the key; first row wins after Sort)
@@ -104,8 +104,8 @@ type PipelineRun struct {
 	Input             int                   `json:"inputVersion"`
 	Rows              int                   `json:"rows"`              // rows after the steps
 	Written           int                   `json:"written"`           // rows written to the output
-	Marking           string                `json:"marking,omitempty"` // the highest marking of the inputs (ADR-0025)
-	Merged            int                   `json:"merged,omitempty"`  // rows merged into matched records (ADR-0024)
+	Marking           string                `json:"marking,omitempty"` // the highest marking of the inputs
+	Merged            int                   `json:"merged,omitempty"`  // rows merged into matched records
 	Quarantined       int                   `json:"quarantined"`
 	Failed            int                   `json:"failed"` // rows the output refused
 	Error             string                `json:"error,omitempty"`

@@ -1,4 +1,4 @@
-// The browser tests' kit (docs/Testing.md "测试规范"): every spec imports
+// The browser tests' kit (see AGENTS.md): every spec imports
 // `test` and `expect` from here, never from @playwright/test directly, and
 // never re-implements signing in, making an object, a page, a release or the
 // runtime. A spec reads as the route a person would walk; the kit is the

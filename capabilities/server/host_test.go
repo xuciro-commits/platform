@@ -231,7 +231,7 @@ func TestHostHTTPAndConsole(t *testing.T) {
 	}
 }
 
-// ADR-0019: one sign-in reaches every tenant the person is a member of on this
+// one sign-in reaches every tenant the person is a member of on this
 // host; /v1/me names the apps they may open; the host serves the workspace.
 func TestWorkspaceSurface(t *testing.T) {
 	one, _, _ := setup(t, nil)

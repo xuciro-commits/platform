@@ -51,7 +51,7 @@ type RelationNote struct {
 	Text   string    `json:"text"`
 }
 
-// Links are the entities linked to entity ("<type>/<id>") that c sees (ADR-0006).
+// Links are the entities linked to entity ("<type>/<id>") that c sees.
 func (c Caller) Links(entity string) []string {
 	if c.rt == nil {
 		return nil

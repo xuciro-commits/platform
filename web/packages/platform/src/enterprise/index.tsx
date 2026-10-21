@@ -1,4 +1,4 @@
-// The enterprise modeler (ADR-0022 D7, ADR-0031, ADR-0031): one
+// The enterprise modeler: one
 // tenant's enterprise drawn through five description views — who and where,
 // what it holds, what it can do, what it offers, how it is run. A view of the
 // model is a drawing over the whole of it: the viewpoint says where to start,
@@ -22,8 +22,8 @@ import { allowedRelationships, autoLayout, childrenOf, contractNote, viewpointEl
 
 type Decide = (schema: string, target: { type: string; id: string }, payload: unknown) => Promise<boolean>;
 
-/** One view being drawn: its id is its identity (ADR-0031 D1), its elements,
- * where they sit, and the records pinned on it (ADR-0031 D3). */
+/** One view being drawn: its id is its identity, its elements,
+ * where they sit, and the records pinned on it. */
 type Draft = { view: string; elements: string[]; layout: Positions; name: string; viewpoint: string; pins: Pin[]; context: string[]; kind: string; asOf: string; dirty: boolean };
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
 const makeID = (prefix: string, name: string) => `${prefix}-${slug(name)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -46,7 +46,7 @@ export function Enterprise({ element, section }: { element?: string; section?: s
   return <Modeler model={model.data} meta={meta} decide={decide} admin={admin} initialElement={element} initialSection={section} />;
 }
 
-// --- The wizard: three to five questions, then a template (ADR-0022 D6).
+// --- The wizard: three to five questions, then a template.
 function SeedWizard({ decide, admin }: { decide: Decide; admin: boolean }) {
   const [v, setV] = useState({ name: "", headcount: "500", sites: "", legalEntities: "", industry: "manufacturing" });
   const patterns = useRead<PatternInfo[]>("/v1/enterprise-patterns").data ?? [];
@@ -170,7 +170,7 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
   const laidOut = working.layout;
   const shownIds = new Set(shownElements.map((e) => e.id));
   // Every placement the view's elements have, whatever its kind: a diagram may
-  // show a legal structure and a site structure together (ADR-0031 D2).
+  // show a legal structure and a site structure together.
   const shownRels = m.relationships.filter((r) => shownIds.has(r.source) && shownIds.has(r.target) && live(r, day) && (r.stereotype !== PLACEMENT || r.kind === placementKind || working.context.includes(r.source) || working.context.includes(r.target)));
   // A pin's place is the pin's; an element's is the view's layout.
   const movePositions = (next: Positions) => {
@@ -185,7 +185,7 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
   };
   const unpinRecord = (ref: string) => setWorking({ pins: working.pins.filter((p) => p.ref !== ref) });
   const title = (st: string) => t(meta.profile.find((p) => p.stereotype === st)?.title ?? relationshipTitles[st] ?? st.replace(/^Actual/, ""));
-  /** The host profile's icon for a stereotype (ADR-0033) — one lookup for
+  /** The host profile's icon for a stereotype — one lookup for
    * every place the view draws an element's picture. */
   const profileIcon = (st: string) => meta.profile.find((p) => p.stereotype === st)?.icon;
   const relLabel = (r: Relationship) => r.stereotype === PLACEMENT ? t(r.relation || "part of") : r.stereotype === MEMBERSHIP ? (r.role || t("member")) : r.stereotype === FILLS_POST ? t("fills") : title(r.stereotype);
@@ -233,7 +233,7 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
     if (id === activeId) openView(m.views.find((v) => v.id !== id)?.id ?? "");
   };
 
-  // The selected element's operations, on the canvas (ADR-0031). Hiding is a
+  // The selected element's operations, on the canvas. Hiding is a
   // view decision; closing and ending are model decisions with a date.
   const nodeActions = (id: string): CanvasAction[] => {
     if (id.startsWith("record:")) return host.can("enterprise.view.save") ? [{ id: "unpin", label: t("Unpin"), run: () => unpinRecord(id) }] : [];
@@ -438,7 +438,7 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
   </>;
 }
 
-// --- The construction catalogue (ADR-0031, ADR-0031): what the UAF offers
+// --- The construction catalogue: what the UAF offers
 // as elements, with the reason anything the current viewpoint does not draw is
 // not offered first — never a silent filtering. It lives on the canvas now,
 // dragged from or clicked in place.
@@ -450,7 +450,7 @@ function AddPane({ meta, viewpoint, admin, onAdd }: {
   const rows = meta.profile.map((p) => {
     const st = meta.stereotypes[p.stereotype];
     // A drawing may hold any of the profile's elements; the cell is where this
-    // view starts, and says so instead of refusing (ADR-0031 D2).
+    // view starts, and says so instead of refusing.
     const here = (viewpoint?.elements ?? []).some((e) => e === p.stereotype);
     const views = meta.views.filter((v) => (v.elements ?? []).some((e) => e === p.stereotype)).map((v) => v.id).join(", ");
     const hint = !here ? t("Usually drawn in {views}; drawable here too.", { views: views || "—" })
@@ -485,7 +485,7 @@ function AddPane({ meta, viewpoint, admin, onAdd }: {
   </div>;
 }
 
-// --- The framework itself (ADR-0031, ADR-0031): what the build's whole
+// --- The framework itself: what the build's whole
 // stereotype registry carries, so a reader can tell what the profile offers,
 // what is merely loadable, and why. The domain×aspect matrix gave way to the
 // five description views; the registry itself still explains the vocabulary.
@@ -511,7 +511,7 @@ function RegistryPane({ meta }: { meta: Metamodel }) {
   </Disclosure>;
 }
 
-// --- People, posts and the connection to accounts (ADR-0031).
+// --- People, posts and the connection to accounts.
 // An account is how someone signs in; a person is who they are in the model; a
 // post is the job; filling a post joins the two, and the placement joins the
 // post to its organisation. The panel says all four out loud so nobody has to
@@ -574,7 +574,7 @@ function People({ element: el, model: m, day, admin, decide, post, setPost, hold
   </div>;
 }
 
-// --- Who points at an element (ADR-0031). Records that name it follow the
+// --- Who points at an element. Records that name it follow the
 // model: their reference reads the element's current name, and closing it stops
 // new decisions from naming it while history still resolves. The list is built
 // by asking the entity types that declare such a reference, so nothing else has
@@ -622,7 +622,7 @@ function UsedBy({ element: el, onPin }: { element: Element; onPin?: (ref: string
   </div>;
 }
 
-// The records pinned beside this element on the open view (ADR-0031 D3): a
+// The records pinned beside this element on the open view: a
 // drawing may hold the apps that work with the model, and unpinning takes them
 // off the picture without touching them.
 function PinnedRecords({ element: el, view, onUnpin }: { element: Element; view: { pins: Pin[] }; onUnpin?: (ref: string) => void }) {
@@ -699,8 +699,7 @@ function LinkDialog({ source, target, meta, kinds, defaultKind, title, existing,
   onSubmit: (v: { stereotype: string; kind?: string; role?: string; relation?: string; share?: number }) => Promise<void>;
 }) {
   // The contracts of the metamodel, not the cell's recommendation: the same
-  // rule the host validates with, so this list cannot offer what it refuses
-  // (ADR-0031 D2).
+  // rule the host validates with, so this list cannot offer what it refuses.
   const admitted = allowedRelationships(meta, source.stereotype, target.stereotype);
   const allowed = admitted;
   const [v, setV] = useState({ stereotype: existing && allowed.includes(existing.stereotype) ? existing.stereotype : allowed[0] ?? "",

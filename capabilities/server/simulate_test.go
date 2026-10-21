@@ -20,7 +20,7 @@ import (
 )
 
 // A builder tries an action as a user: the dry run shows what it would write
-// or why it is refused, and nothing of it is kept (ADR-0047 21d).
+// or why it is refused, and nothing of it is kept.
 func TestSimulateIsDiscarded(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	seat := func(id, role string) Seat {

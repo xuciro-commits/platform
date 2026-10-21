@@ -1,7 +1,6 @@
-// Command crm-server runs the CRM alone on a development host (docs/Apps.md
-// step 6; ADR-0016): no lodging provider, so stays cannot be booked. With
-// -web the host serves the workspace's build; the development tokens "sales"
-// and "manager" sign in.
+// Command crm-server runs CRM alone on a development host, without a lodging
+// provider: stays cannot be booked. With -web it serves the workspace build;
+// the development tokens "sales" and "manager" sign in.
 package main
 
 import (

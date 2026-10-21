@@ -11,7 +11,7 @@ import {PageEmbeddingBoundary} from "../widgets/EmbeddedPage";
 import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "../widgets/context-views";
 import {searchInputObjects} from "../widgets/search-input";
 import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "../runtime/decimal";
-// A composed page (ADR-0048): sections laid out in order, each holding one
+// A composed page: sections laid out in order, each holding one
 // widget bound to what this tenant has. A table says which record is selected;
 // a detail and the actions read it. Every widget renders through the owner that
 // already has it — the kit's record list and record page, the action catalog,
@@ -52,7 +52,7 @@ const parentTypeOf = (page: Page, section: Section) => section.parentSelection
 const selectionKey = recordSlot;
 
 /** The reference that ties a section's object to the page's selected record:
- *  the declared relation when the section names one (ADR-0047 21b), else the
+ *  the declared relation when the section names one, else the
  *  first reference to the page's object. */
 const relatedField = (fields: { name: string; title: string; type: string; ref?: string; inverse?: string; readOnly?: boolean }[] | undefined, page: Page, section: Section) =>
   section.model ? fields?.find(f=>f.name===section.model?.relation?.field) : fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
@@ -415,5 +415,5 @@ function OverlayBody({ children, session, sectionIDs, owner }: { children: React
   return <div className="@container grid min-w-0 grid-cols-1 gap-3">{children}</div>;
 }
 
-/** Whether a page is composed of sections (ADR-0048) rather than the list-detail shorthand. */
+/** Whether a page is composed of sections rather than the list-detail shorthand. */
 export const isComposed = (page: Page) => page.layout === "composed";

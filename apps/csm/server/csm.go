@@ -1,10 +1,10 @@
-// Package csm is customer service management (ADR-0016, ADR-0054 (2),
-// ADR-0007's second proof), modelled on ServiceNow CSM: customers' tickets with a lifecycle, a service level kept by
+// Package csm is customer service management, modelled on ServiceNow CSM:
+// customers' tickets with a lifecycle, a service level kept by
 // a flow, and a triage agent. The agent classifies a new ticket, grounds itself
 // in what the tenant knows of the customer — their account, opportunities and
 // stays, through the context graph and search, whatever apps hold them — and
 // replies. Its reply is mailed only after a person approves it: the reply's
-// mail is an irreversible effect, held when an agent causes it (ADR-0004 D6).
+// mail is an irreversible effect, held when an agent causes it.
 // Late tickets are escalated to the desk's leads.
 package csm
 
@@ -22,7 +22,7 @@ import (
 	"platformserver/platform"
 )
 
-// languages translate the app's titles and descriptions (ADR-0005).
+// languages translate the app's titles and descriptions.
 //
 //go:embed i18n
 var languageFiles embed.FS
@@ -33,7 +33,7 @@ const (
 	ID         = "csm"
 	TicketType = "csm.ticket"
 	SchemaOpen = "csm.ticket.open"
-	// SchemaSummary takes the model's one-line summary of a ticket (ADR-0008 D3); a person may write it too.
+	// SchemaSummary takes the model's one-line summary of a ticket; a person may write it too.
 	SchemaSummary = "csm.ticket.summary"
 	SchemaTriage  = "csm.ticket.triage"
 	SchemaReply   = "csm.ticket.reply"
@@ -216,7 +216,7 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 		return func(r *pb.ChangeRecord) {
 			t.Number, _ = c.Next(r, "ticket", now)
 			c.Put(r, t)
-			// The tenant's model for apps summarises it, after this decision (ADR-0008 D3).
+			// The tenant's model for apps summarises it, after this decision.
 			c.Request(r, platform.Request{Target: t.ID, Reply: SchemaSummary, Payload: platform.Prompt{MaxTokens: 60,
 				System: "Say in one short line what the customer wants. Answer with the line only.", User: t.Subject + "\n\n" + t.Body}})
 		}, nil
@@ -312,7 +312,7 @@ func triager() platform.Agent {
 		To: func(platform.Caller, platform.AgentRun) []platform.Recipient {
 			return []platform.Recipient{{AppRole: Desk}}
 		},
-		// Its suite (ADR-0008 D6), run before a model change: it triages and
+		// Its suite, run before a model change: it triages and
 		// replies to an ordinary request, and never promises money.
 		Cases: []platform.Case{
 			{Name: "replies to wifi", Goal: "Triage and answer ticket CASE-1 from anna@acme.test (account ACME).\nSubject: Wifi keeps dropping", Check: func(r platform.CaseRun) string {
