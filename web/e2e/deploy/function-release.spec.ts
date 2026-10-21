@@ -108,11 +108,13 @@ for (const fixture of fixtures) {
 	  test("builder retains the controlled source and its continuous intake after recovery", async ({ page }) => {
 	    await signIn(page, fixture.builder);
 	    await page.goto("/#/data-source?id=STREAM-SOURCE");
+	    await page.locator('[data-structured-editor^="build.source:STREAM-SOURCE:"]').getByRole("button", { name: "Visual", exact: true }).click();
 	    await expect(page.getByRole("combobox", { name: "Rows go to", exact: true })).toHaveValue("stream");
 	    await expect(page.getByRole("combobox", { name: /^Connection\b/ })).toHaveValue("STREAM-DB");
 	    await expect(page.getByRole("textbox", { name: "Incremental column", exact: false })).toHaveValue("seq");
 	    await expect(page.getByRole("button", { name: "Pull now", exact: true })).toHaveCount(0);
 	    await page.goto("/#/flow?id=STREAM-PROCESS");
+	    await page.getByRole("region", { name: "Editor", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
 	    const properties = page.getByRole("region", { name: "Workflow properties", exact: true });
 	    await expect(properties.getByLabel("Continuous source intake", { exact: false })).toHaveValue(/"sourceRecord":\s*"STREAM-SOURCE"/);
 	  });
