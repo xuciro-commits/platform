@@ -13,13 +13,13 @@
 | **X2 构建者工作台分职责** | `web/packages/build/src/workshop/module-import/compile.ts` 882 行、`workshop/editor.tsx` 718 行混合解析、映射、诊断与渲染 | 编译与诊断可单测，不经 React；编辑器的草稿/撤销仍只有一份 | `compile.test.mjs` 已存在，可作回归基线 |
 | **X3 外壳与记录视图** | `ui/shell/Workspace.tsx` 935 行（Rail、页签、布局持久化、命令面板、未保存保护）；`ui/records/Records.tsx` 865 行 | 每个职责一个模块；`Workspace.test.tsx`（377 行）不改断言即通过 | 现有测试即 oracle |
 | **X4 宿主平铺包分组** | `capabilities/server` 423 个文件同层（10 万行） | 按协调职责分组（接受、记录、发布、运行、协议），先搬再改；`boundaries.sh` 与 `escapes.sh` 不变松 | `doc.go` 的组件地图即目标分组 |
-| **X6 死代码与死词条** | 本轮删 40 条无引用词条（≥21 字符、键内无引号、全仓无字面量，含 `.go`/JSON/生成物）；短词条与 `t(变量)` 仍需逐条核对 | 删除前给出该词条的唯一可达路径或确认不可达 | 口径：长度下限 + 全仓字面量检索；动态键误判见下条 |
+| **X6 死代码与死词条** | 本轮删 195 条无引用词条（40 条长词条 + 155 条短词条；口径：键内无引号、无 `{占位符}`、全仓无字面量，检索覆盖 `.go`/JSON/生成物/文档） | 删除前给出该词条的唯一可达路径或确认不可达 | 反例：`"{name}" mixes…` 因键内含引号被排除，`pageWidgetRegistry` 一类只被生成器读到的名字必须整仓检索 |
 | **X7 前端性能** | 首页排序已改预计算名次；其余热点：记录表全量重渲、`useRead` 轮询粒度、画布布局重算 | 有前后测量才声称改善，否则写"未测量" | `ui/records`、`graph/*/layout` |
 | **X8 E 的交付验证** | PostgreSQL 按需工作集代码已实现，完整交付验证未完成 | 真实 PG 上的整块恢复与两宿主演练 | ADR-0010、ADR-0064 §8 |
 
 X6 有用户可见收益，优先；X2–X4 是结构性减量主体；X8 是既有承诺，不能被新块挤掉。
 
-**本轮预算数字（2026-10-20）**：`code.tsProduction` 56,974 → 56,950 行，`code.largestTs` 3,974 → 3,972 行；入口三项同步下降（见下条）。上限已用 `--update` 按下调后的实测值写入，没有为 X1 的增长上调任何一项。
+**本轮预算数字（2026-10-20）**：`code.tsProduction` 56,974 → 56,795 行，`code.largestTs` 3,974 → 3,872 行（`build/i18n.ts`），入口三项同步下降（见下条）。上限已用 `--update` 按下调后的实测值写入：X1 新增的 `extendApp` 由同批删掉的词条抵掉，没有为它上调任何一项。
 
 **X1 已移出（2026-10-20）**：`data-connection` 与 `agents` 的身份只在 `web/packages/platform/src/index.tsx` 各声明一次；`web/packages/build/src/index.tsx` 改用 `extendApp(id, {serves, for, home, views, nav, opens})`，只追加视图与菜单。`@platform/app` 的 `extendApp` 与 `defineApp` 共用同一层视图作用域（`scopedViews`），扩展的视图不会绕开输入草稿与提交守卫。`composeApplications` 按贡献顺序分组：扩展不成门户入口，找不到宿主的扩展被丢弃而不是凭空造一个应用（两条都有单测）。**行为保持**靠三件事：`serves`（`build`）、逐视图的 `referenceContext` 包装、以及分组顺序仍按包加载次序而非「宿主优先」，因此构建者的菜单顺序与默认首页不变。`ui.definitions` 21 → 19，`ui.navItems` 132 → 118，`ui.views` 105 → 94，`ui.apps` 仍为 18；`pnpm -r typecheck`、`catalog:check`、`node scripts/budget.mjs` 通过，ui/workspace/build/catalog/kernel/platform/apps/catalog 测试全绿。`packages/app` 的用例需要 Go 编译的规则 WASM，本沙箱无 Go，未运行（见下条环境限制）。
 
