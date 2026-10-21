@@ -38,7 +38,7 @@ func (d *PageDocument) checkDateInput(s Section) error {
 		return fmt.Errorf("datetime input needs its profile and explicit offset; civil date cannot carry an offset")
 	}
 	v := d.Variables[s.DateVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.DateInput.RequiredUIProfile) || s.DateVariable == "" || v.Type != "string" || v.Mode != "state" || v.Scope != "page" && v.Scope != "overlay" || s.DateLabel != nil && len(*s.DateLabel) > 1024 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.DateInput.RequiredUIProfile) || s.DateVariable == "" || v.Type != "string" || v.Mode != "state" || v.Scope != "page" && v.Scope != "overlay" || s.DateLabel != nil && len(*s.DateLabel) > 1024 || hasBusinessBindings(s) {
 		return fmt.Errorf("date input needs original scoped text state and bounded label")
 	}
 	return nil

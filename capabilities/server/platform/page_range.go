@@ -24,7 +24,7 @@ func (d *PageDocument) checkRangeInput(s Section) error {
 		return nil
 	}
 	r := s.RangeInput
-	if r == nil || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RangeInput.RequiredUIProfile) || s.RangeMinVariable == "" || s.RangeMaxVariable == "" || s.RangeMinVariable == s.RangeMaxVariable || len(r.Label) > 1024 || len(r.Unit) > 64 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if r == nil || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RangeInput.RequiredUIProfile) || s.RangeMinVariable == "" || s.RangeMaxVariable == "" || s.RangeMinVariable == s.RangeMaxVariable || len(r.Label) > 1024 || len(r.Unit) > 64 || hasBusinessBindings(s) {
 		return fmt.Errorf("range needs two distinct string states and bounded presentation")
 	}
 	lower, upper := d.Variables[s.RangeMinVariable], d.Variables[s.RangeMaxVariable]

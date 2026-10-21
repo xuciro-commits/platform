@@ -23,7 +23,7 @@ func (d *PageDocument) checkChoiceInput(s Section) error {
 	}
 	c := s.ChoiceInput
 	limits := pageWidgets.Runtime.ChoiceInput
-	if c == nil || !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || !slices.Contains(limits.Variants, c.Variant) || c.Options == nil || len(c.Options) > limits.MaxOptions || c.Label != nil && len(*c.Label) > 1024 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if c == nil || !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || !slices.Contains(limits.Variants, c.Variant) || c.Options == nil || len(c.Options) > limits.MaxOptions || c.Label != nil && len(*c.Label) > 1024 || hasBusinessBindings(s) {
 		return fmt.Errorf("choice input needs scoped text state, bounded static options and a supported presentation")
 	}
 	indexed := c.Variant == "steps" || c.Variant == "tabs"

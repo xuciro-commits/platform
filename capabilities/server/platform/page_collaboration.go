@@ -17,7 +17,7 @@ func (d *PageDocument) checkCollaboration(s Section) error {
 		return nil
 	}
 	v := d.Variables[s.RecordVariable]
-	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Collaboration.RequiredUIProfile) || v.Type != "record" || !(v.Mode == "resource" || s.Widget == "scene-3d" && d.sharedTelemetryRecord(s.RecordVariable)) || v.Source == nil || !(v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || s.Widget == "scene-3d" && d.sharedTelemetryRecord(s.RecordVariable)) || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.RecordSetVariable != "" || s.Relation != "" || s.ParentSelection != "" || s.Query.Name != "" || s.InlineEdit != nil {
+	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Collaboration.RequiredUIProfile) || v.Type != "record" || !(v.Mode == "resource" || s.Widget == "scene-3d" && d.sharedTelemetryRecord(s.RecordVariable)) || v.Source == nil || !(v.Source.Kind == "record" && slices.Contains([]string{"page", "overlay"}, v.Scope) || s.Widget == "scene-3d" && d.sharedTelemetryRecord(s.RecordVariable)) || hasBusinessBindings(s) || s.SelectionVariable != "" || s.SelectionSetVariable != "" || s.RecordSetVariable != "" || s.Relation != "" || s.ParentSelection != "" || s.Query.Name != "" || s.InlineEdit != nil {
 		return fmt.Errorf("collaboration needs its original scoped record resource without independent business bindings")
 	}
 	var scalar, mode string

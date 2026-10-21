@@ -13,7 +13,7 @@ func (d *PageDocument) checkBooleanInput(s Section) error {
 		return nil
 	}
 	v := d.Variables[s.BooleanVariable]
-	if s.BooleanVariable == "" || v.Type != "boolean" || v.Mode != "state" || v.Scope != "page" && v.Scope != "overlay" || s.BooleanLabel != nil && len(*s.BooleanLabel) > 1024 || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if s.BooleanVariable == "" || v.Type != "boolean" || v.Mode != "state" || v.Scope != "page" && v.Scope != "overlay" || s.BooleanLabel != nil && len(*s.BooleanLabel) > 1024 || hasBusinessBindings(s) {
 		return fmt.Errorf("boolean input needs an original page or overlay boolean state and bounded label")
 	}
 	if s.BooleanVariant != "" && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.BooleanInput.RequiredUIProfile) || !slices.Contains(pageWidgets.Runtime.BooleanInput.Variants, s.BooleanVariant)) {

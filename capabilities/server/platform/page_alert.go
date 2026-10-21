@@ -21,7 +21,7 @@ func (d *PageDocument) checkAlertBanner(s Section) error {
 	limits := pageWidgets.Runtime.AlertBanner
 	c := s.AlertBanner
 	v := d.Variables[s.AlertValueVariable]
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || s.AlertValueVariable == "" || v.Type != "decimal" || v.Scope != "page" && v.Scope != "overlay" || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || s.AlertValueVariable == "" || v.Type != "decimal" || v.Scope != "page" && v.Scope != "overlay" || hasBusinessBindings(s) {
 		return fmt.Errorf("alert needs its profile, original scoped decimal value and configuration")
 	}
 	threshold, err := ParseDecimal(c.Threshold)
