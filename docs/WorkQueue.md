@@ -2,20 +2,26 @@
 
 只放当前要交付的工作。整个项目的收敛范围与文档分工归 [ADR-0062](ADR/0062-platform-consolidation.md)；产品宗旨归 [Intent](Intent.md)，应用构建方向与边界归 [ADR-0038](ADR/0038-build-the-capability-to-build.md)，第一次真实交付归 [ADR-0060](ADR/0060-first-real-delivery.md)，能力现状归 [Platform](Platform.md)。本队列不复制各 ADR 的实现记录，不保存完成记录。
 
-## 当前主线：架构减法与代码职责重整
+## 当前主线：XXXL 重构（总纲见 ADR-0064 §10）
 
-范围、逐项审计结论、具体替代设计与删除条件归 [ADR-0064](ADR/0064-architecture-subtraction-and-code-organization.md)。当前从 PostgreSQL 按需工作集继续，已有实现不重做，不以目录搬迁、行数或检查数量代替完成。
+每一块按"量基线 → 合并实现 → 迁移调用方 → 删旧路径 → 检查 → 预算锁数字"走完，**做完才移出**。块内不新增 ADR，范围只在本队列与 ADR-0064 §10 各写一次。
 
-复杂度预算已生效（[ADR-0064 §9](ADR/0064-architecture-subtraction-and-code-organization.md#9-复杂度预算)）：`make budget` 进入 `make check`，入口、菜单项、ADR 与文档字数只减不增。**新增任何入口、菜单项或文档前，先在同一次改动里删掉等量的东西。**
+复杂度预算已生效：`make budget`（含于 `make check`）守入口、菜单项、ADR 份数与文档字数，只减不增；**新增任何入口、菜单项或文档前，先删等量**。
 
-按以下顺序每次完成一整块，完成后移除，不在本队列保存完成记录：
+| 块 | 目标 | 接受标准 | 起手证据 |
+|---|---|---|---|
+| **X1 一个应用一处身份** | `data-connection`、`agents` 由两个包各声明一次，运行期按 id 合并；构建者看到 13 项 / 4 组，且「Connections」（数据连接）与「Connectors」（事件连接器）并列 | 身份字段只声明一次，另一包只贡献视图与菜单；两个连接概念不再同名；`workspaces.spec.ts:217` 同批更新；`ui.definitions` 降到 18 | `web/packages/build/src/index.tsx:128`、`web/packages/platform/src/index.tsx:125` |
+| **X2 构建者工作台分职责** | `web/packages/build/src/workshop/module-import/compile.ts` 882 行、`workshop/editor.tsx` 718 行混合解析、映射、诊断与渲染 | 编译与诊断可单测，不经 React；编辑器的草稿/撤销仍只有一份 | `compile.test.mjs` 已存在，可作回归基线 |
+| **X3 外壳与记录视图** | `ui/shell/Workspace.tsx` 935 行（Rail、页签、布局持久化、命令面板、未保存保护）；`ui/records/Records.tsx` 865 行 | 每个职责一个模块；`Workspace.test.tsx`（377 行）不改断言即通过 | 现有测试即 oracle |
+| **X4 宿主平铺包分组** | `capabilities/server` 423 个文件同层（10 万行） | 按协调职责分组（接受、记录、发布、运行、协议），先搬再改；`boundaries.sh` 与 `escapes.sh` 不变松 | `doc.go` 的组件地图即目标分组 |
+| **X5 别名与转发层退出** | `apps/build/public.go` 249 行纯别名；宿主内 `internal/*` 单层再导出 | 消费者直连唯一模型，`public.go` 只保留真实公开面 | 先统计包外引用面 |
+| **X6 死代码与死词条** | 已删 526 条无引用词条（本轮）；剩余短词条需与动态 `t(变量)` 现场逐一核对 | 删除前给出该词条的唯一可达路径或确认不可达 | 本轮脚本口径：21+ 字符且全仓无字面量 |
+| **X7 前端性能** | 首页排序已改预计算名次；其余热点：记录表全量重渲、`useRead` 轮询粒度、画布布局重算 | 有前后测量才声称改善，否则写"未测量" | `ui/records`、`graph/*/layout` |
+| **X8 E 的交付验证** | PostgreSQL 按需工作集代码已实现，完整交付验证未完成 | 真实 PG 上的整块恢复与两宿主演练 | ADR-0063、ADR-0064 §8 |
 
-1. **E SQL 按需工作集（当前）：**按需当前记录、一致读视图、私有覆盖、SQL 派生索引及常规启动转型。
-2. **F 旧实现退出与完整任务：**删除失去职责的包装、配置、依赖及词条，补数据映射和复杂编辑具体缺口，检查完整构建任务。
+X1 与 X6 有用户可见收益，优先；X2–X4 是结构性减量主体；X8 是既有承诺，不能被新块挤掉。
 
-**已定位、未入库的 UI 阻碍（F 块内做，不另起专项）：** `data-connection` 同一应用在两个包里各定义一次（`web/packages/build/src/index.tsx` 与 `web/packages/platform/src/index.tsx`），运行期按 id 与菜单标题合并，构建者实际看到 13 项、四个分组，其中「Connections」（数据连接）与「Connectors」（事件连接器）相邻且含义不同；`web/e2e/tests/workspaces.spec.ts:217` 固化了这份合并结果。收敛方向：一个应用一处定义、分组标题不跨包重名、两个连接概念改名到不再混淆；改完同批更新该 spec。判据是构建者不看文档能否说清两者区别。
-
-E 依赖 C/D 的记录和变化边界，但不阻塞 B 及其他整理。保留现有公开入口、数据、历史、权限、发布和在途实例；替代者可用后同批删除旧普通路径。MES 与供暖承诺继续保留，不能为了减量提前删除有效行业能力或跳过原确认条件。
+**已知环境限制（不因此漏做）**：本仓 Go 模块需要 `go.opentelemetry.io` 等域名，Arena 沙箱只能访问 GitHub/npm/PyPI，因此 `go build` 仅在 `internal/acceptance` 可跑。Go 侧减量必须以 CI 或本地集成代理的编译结果为准，未编译的删除不得计为完成。
 
 ## 保留交付：MES 工单旧界面退出
 

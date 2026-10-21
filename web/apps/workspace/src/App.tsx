@@ -138,6 +138,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       if (selected) remember(`${selectionScope}:${selected.surface ?? "work"}`, selected.id);
     }
   }, [selectionScope]);
+  // One way into a route: a typed Route in, the URL out. Commands and search results
+  // name a view; none of them builds a hash by hand.
+  const navigate = useCallback((route: Route) => { location.hash = routeToHash(route); }, []);
   const { setScheme } = useTheme();
   const homeOpened = useRef<string | undefined>(undefined);
   useEffect(() => { // the member's own appearance and start page follow them to any browser (ADR-0028 §3)
@@ -237,20 +240,20 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           ...(app?.id === "core" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
-          { id: "inbox", label: t("Inbox"), group: t("My work"), run: () => { location.hash = "#/inbox"; } },
-          { id: "requests", label: t("My requests"), group: t("My work"), run: () => { location.hash = "#/requests"; } },
+          { id: "inbox", label: t("Inbox"), group: t("My work"), run: () => navigate({ view: "inbox" }) },
+          { id: "requests", label: t("My requests"), group: t("My work"), run: () => navigate({ view: "requests" }) },
           { id: "active-release", label: t("Last activated release"), run: () => setReleaseOpen(true) },
-          { id: "search", label: t("Search"), run: () => { location.hash = "#/search"; } },
-          { id: "observations", label: t("Read observations"), group: t("Ontology"), run: () => { location.hash = "#/observations"; } },
-          { id: "explorer", label: t("Object Explorer"), group: t("Ontology"), run: () => { location.hash = "#/explorer"; } },
+          { id: "search", label: t("Search"), run: () => navigate({ view: "search" }) },
+          { id: "observations", label: t("Read observations"), group: t("Ontology"), run: () => navigate({ view: "observations" }) },
+          { id: "explorer", label: t("Object Explorer"), group: t("Ontology"), run: () => navigate({ view: "explorer" }) },
           ...(host.role("build") === "builder" ? [
-            { id: "lineage", label: t("Lineage"), group: t("Ontology"), run: () => { location.hash = "#/lineage"; } },
-            { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
-            { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },
+            { id: "lineage", label: t("Lineage"), group: t("Ontology"), run: () => navigate({ view: "lineage" }) },
+            { id: "records", label: t("Browse all records"), run: () => navigate({ view: "records" }) },
+            { id: "definitions", label: t("Browse definitions"), run: () => navigate({ view: "definitions" }) },
           ] : []), ...(app?.commands?.(host) ?? [])]}
         search={async (text) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
           .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
-            open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
+            open: () => { const view = host?.opens.get(h.type); navigate(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
         status={<div className="flex items-center gap-2 text-xs text-muted">
           {connectionUnavailable && <span role="status" title={String(meQuery.error)}>{t("Live updates unavailable")}</span>}
           <span className="max-lg:hidden">{me!.tenantId}</span>

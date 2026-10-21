@@ -1,16 +1,16 @@
 {
   "docs.adr": 64,
-  "docs.adrChars": 690783,
+  "docs.adrChars": 686339,
   "docs.longestAdr": 123190,
   "docs.statusLine": 353,
   "docs.topLevel": 7,
-  "docs.chars": 926223,
+  "docs.chars": 921779,
   "ui.definitions": 21,
   "ui.apps": 18,
   "ui.navItems": 132,
   "ui.navItemsMax": 32,
   "ui.views": 105,
   "code.largestGo": 1343,
-  "code.largestTs": 4300,
+  "code.largestTs": 3974,
   "code.fullestPackage": 423
 }

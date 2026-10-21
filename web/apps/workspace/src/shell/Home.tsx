@@ -30,7 +30,8 @@ export function Home() {
   const starred = apps.filter((a) => favorites.includes(a.id));
   // One list: the applications this member may open, business first. The portal
   // is the same list with search and grouping; there is no second list here.
-  const ordered = [...apps].sort((a, b) => categories.findIndex((c) => c.id === a.category) - categories.findIndex((c) => c.id === b.category));
+  const rank = new Map<string, number>(categories.map((c, at) => [c.id, at]));
+  const ordered = [...apps].sort((a, b) => (rank.get(a.category) ?? rank.size) - (rank.get(b.category) ?? rank.size));
   const title = (id: string) => apps.find((a) => a.id === id)?.title;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t("Good morning, {name}") : hour < 18 ? t("Good afternoon, {name}") : t("Good evening, {name}");
