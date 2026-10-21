@@ -32,6 +32,21 @@ apps/crm、csm、erp、hcm、mes、pms 仍有有效业务与历史责任。ERP �
 
 新构建产物使用普通记录 Versioning、固定映射和有效期查询；不另造版本对象、最新版查找器或时间模型。原生行业数据的接管及历史单据责任沿 [ADR-0042](ADR/0042-business-version-and-time.md) 与 ADR-0053。
 
+## 6a. 架构激进简化（ADR-0065 XXXL / 0066–0072 XXL）
+
+本轮确立以 **ADR-0065** 为总纲、7 份 XXL 为专项的激进简化路线，目标手写生产代码净减 1/3（~160k→~107k 行）。范围、依赖方向与分阶段目录重整归 ADR-0065 §2；七项分工为：转接层消除（0066）、接受结果封套统一（0067）、知识索引合并（0068）、Tenant God Object 拆解（0069）、页面 Widget 分组（0070）、Workshop 单管线（0071）、Journal 存储统一（0072）。
+
+首批已交付（b96793a → 本提交）：
+
+| 内容 | 变更 | 行数/文件影响 |
+|---|---|---|
+| `internal/host` 碎接口文件 | 6 文件 → 1 (`roles.go`) | -77 行头尾，文件数 13→8 |
+| `aicall.go` 平台别名 | 删除 6 个 `type X = platform.X` 转接，调用处改为 `platform.X` | -18 行别名，+0 新逻辑 |
+| `platform/page_*.go` 重复守卫 | 新增 `page_validation.go` 并收敛 4 个 widget 的 `hasBusinessBindings(s)` | 示范 ADR-0070，80 处待收敛 |
+| 文档 | 新增 ADR-0065（XXXL 总纲）+ 7 份 XXL 专项 | ~2,500 行决策记录，替代零散口头约定 |
+
+后续按 ADR-0065 §2.2 分阶段实施：每阶段迁移即删旧实现，不双写；每阶段后通过 `composition-static` 与受影响测试。
+
 ## 7. 已合并的实现
 
 | 已删除的重复职责 | 当前归属与保留范围 |

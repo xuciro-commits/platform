@@ -15,7 +15,7 @@ func (d *PageDocument) checkSeparator(s Section) error {
 	}
 	c := s.Separator
 	limits := pageWidgets.Runtime.Separator
-	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.Label != nil && len(*c.Label) > limits.MaxLabelBytes || len(s.Fields) > 0 || len(s.Actions) > 0 || s.CollectionVariable != "" || s.Selection != "" {
+	if !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) || c == nil || c.Label != nil && len(*c.Label) > limits.MaxLabelBytes || hasBusinessBindings(s) {
 		return fmt.Errorf("separator needs its profile and bounded plain label without business bindings")
 	}
 	return nil
