@@ -155,8 +155,9 @@ for (const fixture of [
         await editor.release(async () => {
           await expect(page.getByRole("list", { name: "Joint selection", exact: true })).toContainText(receiving.id);
           await expect(page.getByRole("list", { name: "Joint selection", exact: true })).toContainText(flowID);
-          await page.getByRole("button", { name: "Candidate identity", exact: true }).click();
-          candidate = await page.getByRole("term").filter({ hasText: /^Saved candidate$/ }).locator("..").getByRole("definition").locator("code").innerText();
+          const selectedCandidate = page.getByRole("combobox", { name: "Saved candidate", exact: true });
+          await expect(selectedCandidate).not.toHaveValue("");
+          candidate = await selectedCandidate.inputValue();
           const saved = await request.get(`/v1/releases/candidates/${candidate}`, { headers });
           expect(saved.ok()).toBe(true);
           const review = await saved.json();
