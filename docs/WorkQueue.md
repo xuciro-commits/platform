@@ -2,10 +2,6 @@
 
 只放当前要交付的工作。完成即移除；被替代的条目删除，不留记录。为什么做归 [Intent](Intent.md)，系统结构归 [Architecture](Architecture.md)，行为约定归 [OpenSpec 模块规范](../openspec/README.md)，工作方式归 [AGENTS](../AGENTS.md)。OpenSpec change 只分解已授权的一块工作，不另排项目优先级。
 
-## 当前：平台凭据与提供方编辑
-
-落实 `manage-platform-credentials`：通用凭据加密托管与使用绑定、提供方编辑和检查、前后端入口、架构文档及本地交付。
-
 ## 1. 楼宇供暖与既有平台整理
 
 围绕现有供暖应用的构建、发布、运行和维护任务修复实际阻碍与重复职责，不横向增加资产种类或新的工作台。
